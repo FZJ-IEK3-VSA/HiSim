@@ -82,7 +82,7 @@ class SimpleStorageConfig(ConfigBase):
     ) -> "SimpleStorageConfig":
         """Gets a default Simple Storage."""
         if component_id is None:
-            component_id = ComponentID(name="Simple Thermal Storage")
+            component_id = ComponentID(name="SimpleThermalStorage")
         return SimpleStorageConfig(
             component_id=component_id,
             loadtype=lt.LoadTypes.WARM_WATER,
@@ -94,11 +94,11 @@ class SimpleStorageConfig(ConfigBase):
 class SimpleStorage(Component):
     """A class to simulate the Simple Storage."""
 
-    ChargingAmount: str = "Charging Amount"
-    DischargingAmount: str = "Discharging Amount"
-    ActualStorageDelta: str = "Actual Storage Delta"
-    CurrentFillLevel: str = "Current Fill Level Absolute"
-    CurrentFillLevelPercent: str = "Current Fill Level Percent"
+    ChargingAmount: str = "ChargingAmount"
+    DischargingAmount: str = "DischargingAmount"
+    ActualStorageDelta: str = "ActualStorageDelta"
+    CurrentFillLevel: str = "CurrentFillLevelAbsolute"
+    CurrentFillLevelPercent: str = "CurrentFillLevelPercent"
 
     def __init__(
         self,

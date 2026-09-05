@@ -43,7 +43,7 @@ class TransformerConfig(ConfigBase):
     def get_default_transformer_config(cls) -> TransformerConfig:
         """Gets a default ``TransformerConfig`` instance."""
         return TransformerConfig(
-            component_id=ComponentID(name="Generic Transformer and rectifier Unit"), efficiency=0.95
+            component_id=ComponentID(name="GenericTransformerAndRectifier"), efficiency=0.95
         )
 
 

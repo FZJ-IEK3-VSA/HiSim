@@ -51,7 +51,7 @@ class ComponentNameConfig(ConfigBase):
     ) -> "ComponentNameConfig":
         """Gets a default ComponentName."""
         if component_id is None:
-            component_id = ComponentID(name="ComponentName default")
+            component_id = ComponentID(name="ComponentNameDefault")
         return ComponentNameConfig(
             component_id=component_id,
             loadtype=loadtypes.LoadTypes.ELECTRICITY,

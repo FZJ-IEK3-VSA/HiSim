@@ -183,7 +183,7 @@ class MpcController(cp.Component):
     # weather
     TemperatureOutside = "TemperatureOutside"
     # building
-    TemperatureMean = "Residence Temperature"
+    TemperatureMean = "ResidenceTemperature"
 
     # Outputs
     TemperatureMeanStateSpace = "TemperatureMeanStateSpace"

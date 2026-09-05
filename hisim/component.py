@@ -66,7 +66,18 @@ class ComponentOutput:  # noqa: too-few-public-methods
         The identity is deliberately REQUIRED (keyword-only): an output without an owner would
         silently fall into the default building group and corrupt per-building KPIs, so a
         missing identity must fail at construction rather than at aggregation.
+
+        The field name is held to the same identifier rule as the component name, and for the
+        same reason: a declarative energy-system file addresses a producing port as the dotted
+        half of ``from: <component>.<port>``, and that grammar accepts an identifier and nothing
+        else. Checking it here rather than in the recorder means a port nobody could reference
+        fails the moment the class declaring it is built, instead of years later when something
+        first tries to write that system down.
+
+        Raises:
+            ValueError: If ``field_name`` is not a well-formed identifier.
         """
+        cfg.NameSyntax.require_identifier(field_name, "component output")
         self.full_name: str = object_name + " # " + field_name
         self.component_name: str = object_name
         self.field_name: str = field_name
@@ -121,7 +132,15 @@ class ComponentInput:  # noqa: too-few-public-methods
                 this for mandatory inputs whose source output may legitimately
                 not exist (e.g. a heat pump's DHW electrical power output when
                 domestic hot water preparation is disabled).
+
+        Raises:
+            ValueError: If ``field_name`` is not a well-formed identifier. An input is written
+                as its own key in a declarative energy-system file rather than behind a dot, so
+                the grammar does not force the rule on it the way it does on an output; it is
+                enforced anyway, because an input and an output of the same flow that spelled
+                their names by different rules would be a trap for every reader of both.
         """
+        cfg.NameSyntax.require_identifier(field_name, "component input")
         self.fullname: str = object_name + " # " + field_name
         self.component_name: str = object_name
         self.field_name: str = field_name
@@ -207,7 +226,32 @@ class Component:
         my_config: cfg.ConfigBase,
         my_display_config: cfg.DisplayConfig,
     ) -> None:
-        """Initializes the component class."""
+        """Initializes the component class.
+
+        Args:
+            name: The unique runtime name of this component, normally
+                ``config.component_id.key``. It becomes the prefix of every output name and
+                therefore of every result column, and it is the key a declarative
+                energy-system file addresses this component by, so it has to be a plain
+                identifier.
+            my_simulation_parameters: The simulation-wide parameters (time range, resolution,
+                post-processing options) the component reads and is stepped with.
+            my_config: The component's own configuration; it must be a
+                :class:`~hisim.config.ConfigBase` and must no longer carry any unresolved
+                ``AUTO`` field.
+            my_display_config: How this component is presented in postprocessing, the report
+                and the webtool.
+
+        Raises:
+            ValueError: If ``name`` is not a usable identifier, if ``my_simulation_parameters``
+                is ``None``, or if ``my_config`` is not a ``ConfigBase``.
+            ConfigSizingError: If ``my_config`` still has fields awaiting sizing.
+        """
+        # The single choke point where a component's runtime name becomes real. Enforcing the
+        # identifier rule here catches a name typed in a setup and a name that arrived from a
+        # config class's own default alike, which a check on the declarative file's keys would
+        # never see: a defaulted identity is one nobody has to write down.
+        cfg.NameSyntax.require_identifier(name, "component")
         self.component_name: str = name
         self.inputs: List[ComponentInput] = []
         self.outputs: List[ComponentOutput] = []

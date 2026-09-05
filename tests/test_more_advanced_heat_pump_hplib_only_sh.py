@@ -70,7 +70,7 @@ def test_heat_pump_hplib_new() -> None:
 
     # Initialize component
     heatpump_config = MoreAdvancedHeatPumpHPLibConfig(
-        component_id=ComponentID(name="Heat Pump"),
+        component_id=ComponentID(name="HeatPump"),
         model=model,
         fluid_primary_side="air",
         group_id=group_id,

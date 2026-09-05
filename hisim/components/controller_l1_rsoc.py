@@ -91,7 +91,7 @@ class RsocControllerConfig(ConfigBase):
         """
 
         if component_id is None:
-            component_id = ComponentID(name="rSCO l1 Controller")
+            component_id = ComponentID(name="RscoL1Controller")
         if config_json is None:
             config_json = cls.read_config(rsoc_name)
         config = RsocControllerConfig(
@@ -127,8 +127,8 @@ class RsocController(Component):
     PowerVsDemand: ClassVar[str] = "PowerVsDemand"
     CurtailedLoad: ClassVar[str] = "CurtailedLoad"
     CurtailedPower: ClassVar[str] = "CurtailedPower"
-    TotalOffCount: ClassVar[str] = "# of times the system was switched off"
-    TotalStandbyCount: ClassVar[str] = "# of times the system was to standby mode"
+    TotalOffCount: ClassVar[str] = "TotalOffCount"
+    TotalStandbyCount: ClassVar[str] = "TotalStandbyCount"
     SwitchCount: ClassVar[str] = "SwitchCount"
 
     def __init__(

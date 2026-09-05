@@ -6,7 +6,9 @@ hashable value object, that it survives a JSON round trip as a nested object ins
 configuration, and that the derived name no longer depends on the ``multiple_buildings``
 simulation parameter. They also cover the postprocessing grouping helpers that replaced the
 former name-substring matching, so that a district-style setup can be verified without
-running a full district simulation.
+running a full district simulation. A final section covers the identifier rule the runtime
+name has to satisfy, and that the declarative file format enforces the very same rule from
+the very same definition.
 """
 
 # clean
@@ -20,8 +22,9 @@ from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, NameSyntax
 from hisim.components import example_component
+from hisim.energy_system.model import NameRules
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -212,11 +215,11 @@ def test_default_factories_produce_building_less_identities() -> None:
     """
     config = example_component.ExampleComponentConfig.get_default_example_component()
     assert config.component_id.building is None
-    assert config.component_id.key == "Example Component"
+    assert config.component_id.key == "ExampleComponent"
 
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
-    assert component.get_component_name() == "Example Component"
+    assert component.get_component_name() == "ExampleComponent"
     assert component.component_id is config.component_id
 
 
@@ -225,7 +228,7 @@ def test_outputs_carry_the_identity_of_their_component() -> None:
     """Every output records the identity of the component that produced it."""
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     config = example_component.ExampleComponentConfig.get_default_example_component(
-        component_id=ComponentID(name="Example Component", building="BUI2")
+        component_id=ComponentID(name="ExampleComponent", building="BUI2")
     )
     component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
     assert component.outputs
@@ -269,9 +272,9 @@ def test_district_style_setup_groups_by_building() -> None:
     """
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     identities = [
-        ComponentID(name="Example Component", building="BUI1"),
-        ComponentID(name="Example Component", building="BUI2"),
-        ComponentID(name="Example Component", building=lt.DistrictNames.DISTRICT.value),
+        ComponentID(name="ExampleComponent", building="BUI1"),
+        ComponentID(name="ExampleComponent", building="BUI2"),
+        ComponentID(name="ExampleComponent", building=lt.DistrictNames.DISTRICT.value),
     ]
     components = [
         example_component.ExampleComponent(
@@ -282,9 +285,9 @@ def test_district_style_setup_groups_by_building() -> None:
     ]
 
     assert [component.get_component_name() for component in components] == [
-        "BUI1_Example Component",
-        "BUI2_Example Component",
-        "District_Example Component",
+        "BUI1_ExampleComponent",
+        "BUI2_ExampleComponent",
+        "District_ExampleComponent",
     ]
 
     building_objects = {component.component_id.building_label for component in components}
@@ -296,3 +299,60 @@ def test_district_style_setup_groups_by_building() -> None:
     for component in components:
         for output in component.outputs:
             assert output.building_label == component.component_id.building
+
+
+# --------------------------------------------------------------------------- #
+# The identifier rule on the runtime name
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.base
+def test_a_component_refuses_a_runtime_name_that_is_not_an_identifier() -> None:
+    """Constructing a component with a name that is not a plain identifier fails immediately.
+
+    The runtime name is the prefix of every result column and the key a declarative
+    energy-system file addresses the component by, so a name with a space or a hyphen in it
+    cannot be expressed by a file at all. ``Component.__init__`` is the one place that name
+    becomes real, and rejecting there means the mistake surfaces where it was made rather
+    than as an unwritable recording much later.
+    """
+    sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = example_component.ExampleComponentConfig.get_default_example_component(
+        component_id=ComponentID(name="Example Component")
+    )
+    with pytest.raises(ValueError) as rejection:
+        example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
+    assert "Example Component" in str(rejection.value)
+    assert "component name" in str(rejection.value)
+
+
+@pytest.mark.base
+def test_the_identifier_rule_names_the_specific_mistake() -> None:
+    """Each way of getting a name wrong is reported as itself, not as one generic message.
+
+    A glob pattern and a filesystem path are deliberate acts, not typos, so telling their
+    author that patterns and paths are not part of the vocabulary is far more useful than
+    repeating which characters an identifier may contain.
+    """
+    NameSyntax.require_identifier("Pv_South_1", "component")
+    with pytest.raises(ValueError, match="wildcards are not part of this vocabulary"):
+        NameSyntax.require_identifier("pv_*", "component")
+    with pytest.raises(ValueError, match="never a path"):
+        NameSyntax.require_identifier("../pv", "component")
+    with pytest.raises(ValueError, match="must not be empty"):
+        NameSyntax.require_identifier("", "component")
+    with pytest.raises(ValueError, match="must be a string"):
+        NameSyntax.require_identifier(3, "component")
+
+
+@pytest.mark.base
+def test_the_file_format_and_the_component_runtime_share_one_identifier_rule() -> None:
+    """The energy-system format's name grammar is the same object the component runtime uses.
+
+    Two copies of one regular expression would drift, and a name accepted at construction but
+    refused as a file key — or the reverse — is exactly the failure the shared definition
+    exists to make impossible.
+    """
+    assert NameRules.IDENTIFIER_PATTERN is NameSyntax.IDENTIFIER_PATTERN
+    assert NameRules.WILDCARD_CHARACTERS == NameSyntax.WILDCARD_CHARACTERS
+    assert NameRules.PATH_CHARACTERS == NameSyntax.PATH_CHARACTERS

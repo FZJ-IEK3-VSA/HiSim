@@ -29,7 +29,7 @@ def test_get_default_transformer_config_returns_config_with_documented_defaults(
     config = TransformerConfig.get_default_transformer_config()
     assert isinstance(config, TransformerConfig)
     assert config.component_id.building is None
-    assert config.component_id.name == "Generic Transformer and rectifier Unit"
+    assert config.component_id.name == "GenericTransformerAndRectifier"
     assert config.efficiency == pytest.approx(0.95)
 
 

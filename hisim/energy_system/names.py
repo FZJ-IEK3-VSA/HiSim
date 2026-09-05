@@ -16,9 +16,9 @@ therefore rejected here, at the one place a name or a reference enters the model
 
 from __future__ import annotations
 
-import re
 from typing import Any, ClassVar, Optional, Pattern, Tuple
 
+from hisim.config import NameSyntax
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemFormatError
 
 
@@ -38,16 +38,16 @@ class NameRules:
 
     #: The one identifier syntax of the format, used for component names, group names,
     #: variant and option names, fact names and port names alike.
-    IDENTIFIER_PATTERN: ClassVar[Pattern[str]] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+    IDENTIFIER_PATTERN: ClassVar[Pattern[str]] = NameSyntax.IDENTIFIER_PATTERN
 
     #: Characters that only appear in wildcard or glob syntax. Their presence is always a
     #: rejection rather than a name failing the identifier pattern: the author meant a
     #: pattern, and patterns are not part of this format version.
-    WILDCARD_CHARACTERS: ClassVar[str] = "*?[]"
+    WILDCARD_CHARACTERS: ClassVar[str] = NameSyntax.WILDCARD_CHARACTERS
 
     #: Characters that only appear in filesystem paths. A reference addresses a component
     #: by name, never by location, so any of them means a path was written instead.
-    PATH_CHARACTERS: ClassVar[str] = "/\\"
+    PATH_CHARACTERS: ClassVar[str] = NameSyntax.PATH_CHARACTERS
 
     #: The separator between the two halves of a reference.
     REFERENCE_SEPARATOR: ClassVar[str] = "."
@@ -73,7 +73,7 @@ class NameRules:
             EnergySystemFormatError: ``EF-08`` if the value is not a string or does not
                 match the identifier pattern.
         """
-        if not isinstance(value, str) or cls.IDENTIFIER_PATTERN.match(value) is None:
+        if not NameSyntax.is_identifier(value):
             raise EnergySystemFormatError(
                 EnergySystemErrorId.INVALID_NAME,
                 location,
@@ -119,7 +119,7 @@ class NameRules:
             expected = "'<component>.<fact>'" if require_member else "'<component>' or '<component>.<Output>'"
             raise cls._reference_error(location, value, f"a reference is written {expected}")
         for part in parts:
-            if cls.IDENTIFIER_PATTERN.match(part) is None:
+            if not NameSyntax.is_identifier(part):
                 raise cls._reference_error(location, value, f"'{part}' is not a usable name")
         return parts[0], parts[1] if len(parts) == 2 else None
 

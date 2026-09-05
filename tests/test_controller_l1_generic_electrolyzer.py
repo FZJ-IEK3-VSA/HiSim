@@ -16,7 +16,7 @@ def test_electrolyzer_controller() -> None:
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
 
-    name: str = "Test-Controller"
+    name: str = "TestController"
     nom_load: float = 800.0  # [kW]
     min_load: float = 300.0  # [kW]
     max_load: float = 1000.0  # [kW]
@@ -46,7 +46,7 @@ def test_electrolyzer_controller() -> None:
     # Set Fake Inputs
     load_input = cp.ComponentOutput(
         "FakeProvidedLoad",
-        "Provided Load",
+        "ProvidedLoad",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.KILOWATT,
         component_id=ComponentID("FakeProvidedLoad"),

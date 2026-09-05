@@ -15,14 +15,21 @@ survives only in a conversation. Items are removed when done, not ticked and kep
   the blocking golden gate on the YAML path — and "golden suites green on recorded files" is P3's exit
   criterion in the plan. Builds on `p3_recorded_fleet` (needs the twins); the week references for the
   whole fleet come from the `golden_week_coverage` branch, so the gate covers 15 setups from day one.
-- [ ] **Golden coverage stage 2: the KPI repair list becomes coverage work.** Each fix joins the setup
-  to the golden week gate with a fresh blessing in the same PR: `household_gas_solar_thermal` (grid
-  import 21.72 kWh above total consumption 10.9 kWh — an energy-balance defect worth fixing regardless;
-  fix BEFORE blessing, never bless the wrong numbers), `basic_household_only_heating` (`NoneType *
-  float` in KPI computation), `dynamic_components` and `electrolyzer_with_renewables` (CHP1 and
-  transformer/rectifier have no KPI method), `simple_air_conditioner_household_building_sizer`
-  (division by zero on a January window). Decide the two toys (`simple_system_setup_one`/`_two`):
-  trivial KPI methods so all 22 are gated, or the plan's "exclude rather than implement" and 20.
+- [ ] **Golden coverage stage 2: the last two setups.** A fresh scan (2026-09-05) showed five of the
+  seven 2026-08-28 repair items healed themselves — the toys via #616's models-no-device answers, the
+  heating-only and air-conditioner crashes gone, and `household_gas_solar_thermal`'s doubled grid
+  import fixed by #617 (verified: grid import equals consumption to the watt-hour) — so all five are
+  in the week gate with fresh blessings. Remaining: `dynamic_components` (CHP KPIs implemented on
+  the `chp_kpis` branch; joins the gate with a blessing once merged — its CHPs idle through the
+  probe window, so their KPIs are honest zeros) and `electrolyzer_with_renewables` (the
+  transformer/rectifier still needs `get_component_kpi_entries`; expect the next KPI-less component
+  in that setup to surface after it).
+- [ ] **Multi-instance KPI collision (found 2026-09-05 while implementing the CHP KPIs).** Two
+  components of one class in one building collapse into a single flattened KPI group: the two
+  batteries of `dynamic_components` report one `BUI1.Battery.*` set, one instance silently
+  overwriting the other, and the two CHPs now do the same. Pre-existing and systemic — the flatten
+  key is building.tag.name and ignores the entry's source component. Fixing it renames KPIs and
+  therefore re-blesses references; its own PR, after the gate has settled.
 
 ## Documentation drift (fix on the stack branches before their PRs merge)
 

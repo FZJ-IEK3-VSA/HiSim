@@ -65,6 +65,14 @@ survives only in a conversation. Items are removed when done, not ticked and kep
   and origin) — the parity/templating halves are ported.
 - [ ] AC-P3.4's cross-machine byte-identity is proven the first time CI's `energy-system-freshness`
   job goes green on twins recorded on the development box; note the date here and drop the item.
+- [ ] **Extract the shared child-recorder helper once #636 and #638 are both merged** (decided
+  2026-09-05, #638 review round). `scripts/record_all_setups.py::Recorder` and
+  `hisim/energy_system/recording/probe_session.py::ProbeRunner` both build the identical child
+  command (`-m hisim.cli energy-system record`), strip the same `HISIM_LOCAL_LPG_CALC_INDEX`
+  variable and run the same subprocess shape — deliberate duplication while the two lived on
+  different stack branches (#636 parallelized the fleet driver mid-flight). The helper's home is
+  the recording package, with the script importing it; extracting before both merge would have
+  meant a cross-branch conflict for a refactor.
 - [ ] **Flip `energy-system-freshness` from advisory to blocking after its burn-in** (decided
   2026-09-05, #636 review round). The gate merges with `continue-on-error: true` because
   byte-identical re-recording is proven by test for one setup and only by design for the other

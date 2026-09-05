@@ -220,6 +220,24 @@ class ResolvedDynamicConnection:
     dispatch: Optional[ResolvedDispatch] = None
     adopted_dispatch_output: Optional[str] = None
 
+    def __post_init__(self) -> None:
+        """Refuses a dangling adoption right where it would be constructed.
+
+        An adopted port only means anything for a dispatching connection: with ``dispatch`` unset
+        the two name properties both answer ``None`` and the adopted name would sit on the record
+        invisible to every reader — neither an error nor a port. The planner always keeps the pair
+        together; this guards the ``dataclasses.replace`` escape hatch every frozen dataclass has.
+
+        Raises:
+            ValueError: If ``adopted_dispatch_output`` is set while ``dispatch`` is ``None``.
+        """
+        if self.adopted_dispatch_output is not None and self.dispatch is None:
+            raise ValueError(
+                f"The connection from '{self.source_name}' adopted the dispatch output "
+                f"'{self.adopted_dispatch_output}' but carries no dispatch block; an adoption "
+                "without a dispatch is unreadable by every consumer of this record."
+            )
+
     @property
     def tags(self) -> Tuple[ConnectionTag, ...]:
         """The combined tag list stored on the created port, component type first.

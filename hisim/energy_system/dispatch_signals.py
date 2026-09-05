@@ -25,7 +25,10 @@ Two signals count as one when their tag sets are equal, not when one merely cont
 even though the runtime search tests containment. That is exact for everything the format can
 produce — a dispatch output's tags are the channel's dispatch tags plus the participant's component
 type and nothing else, so one channel gives one tag set per component type — and it keeps the rule
-something a reader can check against the ports in front of them.
+something a reader can check against the ports in front of them. The exactness is enforced rather
+than assumed: a published port at the claimed weight whose tags strictly contain the claimed set is
+refused, because the runtime's containment search would find that port *and* whatever this claim
+produces, which is the very two-answers ambiguity this module exists to prevent.
 """
 
 # clean
@@ -34,10 +37,13 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Any, ClassVar, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemWiringError
 from hisim.energy_system.resolution import ResolvedDynamicConnection
+
+#: The planner is the module's one shared surface; the signal records are its private vocabulary.
+__all__ = ["DispatchSignalPlanner"]
 
 #: The identity a runtime dispatch lookup matches a control output on: the sorted names of its
 #: tags — sorted so that two declarations listing the same tags in a different order produce one
@@ -85,36 +91,25 @@ class DispatchSignalPlanner:
     claimed. The planner runs before the aggregator is asked to create anything, so a refusal
     leaves the component exactly as it was.
 
-    It reaches into the aggregator through the well-known attribute names below and reads nothing
-    else, so this module — like the port checks it runs beside — imports no component code.
+    It reaches into the aggregator's ``my_component_outputs`` bookkeeping by plain attribute
+    access and reads nothing else, so this module — like the port checks it runs beside — imports
+    no component code. The access is deliberately strict: a target without the bookkeeping, or a
+    bookkeeping entry missing a field, raises immediately rather than reading as "no published
+    signals", because that silent reading is how a renamed field would grow duplicate ports.
     """
-
-    #: Attribute through which a dynamic component publishes the bookkeeping of the outputs it has
-    #: grown, which is the same list its own tag-and-weight lookups search.
-    DYNAMIC_OUTPUTS_ATTRIBUTE: ClassVar[str] = "my_component_outputs"
-
-    #: Attribute on one entry of that bookkeeping holding the port's field name.
-    OUTPUT_NAME_ATTRIBUTE: ClassVar[str] = "source_output_field_name"
-
-    #: Attribute holding the tags the port carries.
-    OUTPUT_TAGS_ATTRIBUTE: ClassVar[str] = "source_tags"
-
-    #: Attribute holding the port's weight.
-    OUTPUT_WEIGHT_ATTRIBUTE: ClassVar[str] = "source_weight"
-
-    #: Attribute holding the participant class the port was created for, if the creator named one.
-    OUTPUT_CLASS_ATTRIBUTE: ClassVar[str] = "source_component_class"
 
     def __init__(self, target_name: str, target: Any) -> None:
         """Reads the signals one aggregator already publishes.
 
         Args:
             target_name: Name of the aggregator in the file, quoted in messages.
-            target: The aggregator component, read but never modified.
+            target: The aggregator component, read but never modified. It must carry the
+                dynamic-output bookkeeping every aggregator has; anything else here is a bug in
+                the caller, not a component without signals.
         """
         self.target_name = target_name
         self.published: Dict[SignalKey, List[PublishedSignal]] = {}
-        for entry in getattr(target, self.DYNAMIC_OUTPUTS_ATTRIBUTE, ()) or ():
+        for entry in target.my_component_outputs:
             signal = self._published_signal(entry)
             self.published.setdefault(signal.key, []).append(signal)
 
@@ -142,15 +137,58 @@ class DispatchSignalPlanner:
                 continue
             key = self.signal_key(connection.dispatch.tags, connection.weight)
             self._refuse_if_claimed(connection, key, claimed)
+            self._refuse_containment_overlap(connection, key)
             adopted = self._adoptable(connection, key)
             settled = (
                 connection
                 if adopted is None
                 else dataclasses.replace(connection, adopted_dispatch_output=adopted)
             )
-            claimed[key] = settled.dispatch_output_name or ""
+            dispatch_port = settled.dispatch_output_name
+            # The property answers None only for a connection without a dispatch block, and
+            # those were filtered out above; the assertion narrows the Optional for the checker.
+            assert dispatch_port is not None  # nosec B101 - unreachable by the filter above
+            claimed[key] = dispatch_port
             planned.append(settled)
         return planned
+
+    def _refuse_containment_overlap(self, connection: ResolvedDynamicConnection, key: SignalKey) -> None:
+        """Refuses a claim when a published port would also answer it by containment.
+
+        The planner's identity is exact tag-set equality, but the aggregator's runtime lookup
+        matches by containment: a published port at the claimed weight whose tags strictly
+        contain the claimed set is found by that lookup alongside whatever this claim adopts or
+        grows, and the paired lists come out one entry too long — the exact failure this module
+        exists to prevent. No port the format itself produces has such tags, so meeting one means
+        an imperative constructor built it; the refusal names both tag sets so the two can be
+        reconciled deliberately.
+
+        Args:
+            connection: The dispatching connection being planned.
+            key: The signal it claims.
+
+        Raises:
+            EnergySystemWiringError: ``EF-2B`` naming the overlapping port and both tag sets.
+        """
+        claimed_tags = set(key[0])
+        for signals in self.published.values():
+            for signal in signals:
+                signal_tags = set(signal.key[0])
+                if signal.key[1] == key[1] and claimed_tags < signal_tags:
+                    raise EnergySystemWiringError(
+                        EnergySystemErrorId.AMBIGUOUS_DISPATCH_SIGNAL,
+                        f"components.{self.target_name}.inputs",
+                        f"the dispatch block of {connection.describe()} claims the control signal "
+                        f"tagged {sorted(claimed_tags)} at weight {key[1]}, and '{self.target_name}' "
+                        f"already publishes '{signal.name}' tagged {sorted(signal_tags)} at that "
+                        "weight. The runtime finds a signal by tag containment, so it would answer "
+                        "this claim with that port and with the one the claim produces, and the "
+                        "aggregator could not tell the two apart.",
+                        remedy=(
+                            "Rank the two at different weights, or align the published port's tags "
+                            "with the claim so the two are one signal."
+                        ),
+                    )
 
     @classmethod
     def signal_key(cls, tags: Iterable[Any], weight: int) -> SignalKey:
@@ -179,13 +217,14 @@ class DispatchSignalPlanner:
         Returns:
             What the planner needs to know about that output.
         """
+        # Some imperative call sites hand the participant class over as the class object rather
+        # than its name; stored verbatim it would never equal a class-name string and the port
+        # would silently refuse every adoption, so the identity is normalised to the name here.
+        raw_class = entry.source_component_class
         return PublishedSignal(
-            name=str(getattr(entry, cls.OUTPUT_NAME_ATTRIBUTE)),
-            key=cls.signal_key(
-                getattr(entry, cls.OUTPUT_TAGS_ATTRIBUTE, ()),
-                int(getattr(entry, cls.OUTPUT_WEIGHT_ATTRIBUTE)),
-            ),
-            component_class=getattr(entry, cls.OUTPUT_CLASS_ATTRIBUTE, None),
+            name=str(entry.source_output_field_name),
+            key=cls.signal_key(entry.source_tags, int(entry.source_weight)),
+            component_class=raw_class.__name__ if isinstance(raw_class, type) else raw_class,
         )
 
     def _adoptable(self, connection: ResolvedDynamicConnection, key: SignalKey) -> Optional[str]:
@@ -201,15 +240,28 @@ class DispatchSignalPlanner:
         Raises:
             EnergySystemWiringError: ``EF-2B`` when a port answers this signal but was created for
                 another participant class, so that growing a second one would leave the aggregator
-                with two ports it cannot tell apart.
+                with two ports it cannot tell apart — or when *several* published ports answer it,
+                because the aggregator already cannot tell those apart and adopting the first
+                would bless the ambiguity instead of refusing it.
         """
         candidates = self.published.get(key, [])
         if not candidates:
             return None
         participant_class = connection.source_component.get_classname()
-        for candidate in candidates:
-            if candidate.serves(participant_class):
-                return candidate.name
+        serving = [candidate for candidate in candidates if candidate.serves(participant_class)]
+        if len(serving) > 1:
+            raise EnergySystemWiringError(
+                EnergySystemErrorId.AMBIGUOUS_DISPATCH_SIGNAL,
+                f"components.{self.target_name}.inputs",
+                f"the dispatch block of {connection.describe()} claims the control signal tagged "
+                f"{list(key[0])} at weight {key[1]}, and '{self.target_name}' already publishes "
+                f"{len(serving)} ports answering it ({', '.join(repr(signal.name) for signal in serving)}). "
+                "The aggregator finds a participant's signal by those tags and that weight, so it "
+                "already cannot tell these ports apart, and adopting one would bless the ambiguity.",
+                remedy="Remove or re-tag the duplicate port in the aggregator's constructor.",
+            )
+        if serving:
+            return serving[0].name
         raise EnergySystemWiringError(
             EnergySystemErrorId.AMBIGUOUS_DISPATCH_SIGNAL,
             f"components.{self.target_name}.inputs",

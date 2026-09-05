@@ -252,9 +252,6 @@ def test_a_dispatch_block_adopts_a_signal_the_aggregator_already_publishes(tmp_p
     assert resolved.dispatch is not None
     assert lt.InandOutputType.ELECTRICITY_TARGET in resolved.dispatch.tags
     assert lt.ComponentType.RESIDENTS in resolved.dispatch.tags
-    assert resolved.adopted_dispatch_output == "ElectricityToOrFromGridOfUtspLpgConnector_Output8"
-    assert resolved.dispatch_output_name == resolved.adopted_dispatch_output
-    assert resolved.created_dispatch_output_name is None
     served = [
         entry
         for entry in cast(DynamicComponent, ems).my_component_outputs
@@ -263,6 +260,13 @@ def test_a_dispatch_block_adopts_a_signal_the_aggregator_already_publishes(tmp_p
         and lt.ComponentType.RESIDENTS in entry.source_tags
     ]
     assert len(served) == 1, "the aggregator must publish exactly one signal per participant"
+    # The adopted port is exactly the one the runtime's tag-and-weight lookup finds — the
+    # cross-check that matters. Its numeric suffix is an internal output counter, so the name is
+    # pinned by its stable prefix rather than by the counter's current value.
+    assert resolved.adopted_dispatch_output == served[0].source_output_field_name
+    assert resolved.adopted_dispatch_output is not None
+    assert resolved.adopted_dispatch_output.startswith("ElectricityToOrFromGridOfUtspLpgConnector_")
+    assert resolved.created_dispatch_output_name is None
 
 
 @pytest.mark.base

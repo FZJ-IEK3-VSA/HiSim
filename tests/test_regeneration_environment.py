@@ -28,7 +28,7 @@ from typing import ClassVar, Dict, List
 import pytest
 
 from hisim.components.pylpg_workspace import LpgBaseIndexPool, PylpgWorkspace
-from scripts.regenerate_scenario_jsons import REPO_ROOT, regenerate_one
+from scripts.regenerate_scenario_jsons import CONVERTER, REPO_ROOT, regenerate_one
 
 
 class PathProbe:
@@ -113,29 +113,45 @@ def test_a_script_started_by_path_cannot_import_from_its_working_directory(tmp_p
 
 
 class RecordedChild:
-    """A stand-in for :func:`subprocess.run` that keeps the environment it was handed.
+    """A stand-in for :func:`subprocess.run` that keeps the environment the converter was handed.
 
     The environment is the part of the driver's contract with its children that this test file is
     about (the argument vector, working directory and log routing are the rest), and it is captured
     whole -- so recording it is enough here, and the test never pays for a simulation.
+
+    The tests install this by patching ``scripts.regenerate_scenario_jsons.subprocess.run`` -- which
+    is the one global ``subprocess`` module, so the patch catches every ``subprocess.run`` call in
+    the process, not only the driver's. Anything that is not the converter invocation is therefore
+    handed to the real ``subprocess.run``: the stray-file guard, for one, runs ``git status`` at
+    teardown, and depending on fixture ordering that can happen while the patch is still active.
     """
 
     def __init__(self) -> None:
-        """Start out having seen nothing."""
+        """Start out having seen nothing, remembering the real ``subprocess.run`` for passing through.
+
+        Constructed before the patch is installed, so ``subprocess.run`` is still the real one here.
+        """
         self.environments: List[Dict[str, str]] = []
+        self._real_run = subprocess.run
 
     def __call__(self, *args, **kwargs) -> subprocess.CompletedProcess:
-        """Record the environment and report success without running anything.
+        """Record the converter call's environment; hand any other call to the real ``subprocess.run``.
 
         Args:
-            *args: The argument vector the driver built; ignored.
+            *args: The positional arguments; the first is the argument vector, which says whether
+                this is the driver's converter invocation.
             **kwargs: The keyword arguments, of which ``env`` is what this test is about.
 
         Returns:
-            A finished process with return code zero.
+            A finished process with return code zero for the converter, or whatever the real
+            ``subprocess.run`` returns for anything else.
         """
+        vector = args[0] if args else kwargs.get("args", [])
+        if str(CONVERTER) not in [str(part) for part in vector]:
+            # The caller's own kwargs decide check= and everything else; forwarding must not add to them.
+            return self._real_run(*args, **kwargs)  # pylint: disable=subprocess-run-check
         self.environments.append(dict(kwargs["env"]))
-        return subprocess.CompletedProcess(args=args[0] if args else [], returncode=0)
+        return subprocess.CompletedProcess(args=vector, returncode=0)
 
 
 @pytest.mark.base
@@ -184,3 +200,25 @@ def test_the_child_is_handed_the_borrowed_base_index(tmp_path: Path, monkeypatch
     assert len(recorded.environments) == 1
     handed = recorded.environments[0].get(PylpgWorkspace.INDEX_ENVIRONMENT_VARIABLE)
     assert handed == "1", f"the borrowed base index did not reach the child: {handed!r}"
+
+
+@pytest.mark.base
+def test_the_recorded_child_hands_unrelated_calls_to_the_real_subprocess(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """While the recorder is installed, a call that is not the converter reaches the real ``subprocess.run``.
+
+    The patch replaces ``run`` on the one global ``subprocess`` module, so it catches every caller in
+    the process. Catches: the stray-file guard's ``git status`` at teardown -- which fixture ordering
+    can place inside the patch's lifetime -- being answered by the recorder and failing on the missing
+    ``env`` keyword instead of running.
+    """
+    recorded = RecordedChild()
+    monkeypatch.setattr("scripts.regenerate_scenario_jsons.subprocess.run", recorded)
+
+    completed = subprocess.run(  # nosec B603 - fixed argument vector, no shell
+        [sys.executable, "-c", "print('passed through')"], capture_output=True, text=True, check=False
+    )
+
+    assert completed.stdout.strip() == "passed through"
+    assert not recorded.environments, "an unrelated call must not be recorded as a converter child"

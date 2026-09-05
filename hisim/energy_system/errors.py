@@ -51,8 +51,9 @@ class EnergySystemErrorId(enum.Enum):
 
     Three bands run past ten members and continue with letters rather than renumbering the
     ones already in use: ``EF-1A``/``EF-1B`` close the entry band with the two conditions
-    a value in a ``config`` block can hit, ``EF-2A`` closes the connection band with a tag
-    name no enum knows, and ``EF-4A`` … ``EF-4H`` wrap the eight failure modes of the sizing
+    a value in a ``config`` block can hit, ``EF-2A``/``EF-2B`` close the connection band with a
+    tag name no enum knows and two participants claiming one control signal, and ``EF-4A`` …
+    ``EF-4H`` wrap the eight failure modes of the sizing
     kernel one-to-one, with ``EF-4X`` for a kernel failure that matches none of them. The
     ``EF-6x`` band closes the list with the two ways writing a run record can fail, neither
     of which an author can cause: a record that is not fully concrete, and a re-execution
@@ -98,6 +99,7 @@ class EnergySystemErrorId(enum.Enum):
     NO_CHANNEL_MATCH = "EF-28"
     DISPATCH_RULE_VIOLATED = "EF-29"
     UNKNOWN_TAG = "EF-2A"
+    AMBIGUOUS_DISPATCH_SIGNAL = "EF-2B"
     PORT_TYPE_MISMATCH = "EF-30"
     UNCONNECTED_MANDATORY_INPUT = "EF-31"
     PORT_NAME_COLLISION = "EF-32"

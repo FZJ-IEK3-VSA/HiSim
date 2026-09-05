@@ -343,8 +343,8 @@ class KpiPreparation:
 
             # compute self consumption rate and autarkie rate. A system can produce without
             # consuming anything -- a bare generation chain feeding a converter, like the
-            # electrolyzer setup -- and a rate over zero consumption is not a number; it is
-            # reported as zero, matching the no-production branch below.
+            # electrolyzer setup -- and a rate over zero consumption would raise a
+            # ZeroDivisionError; it is reported as zero, matching the no-production branch below.
             self_consumption_rate_in_percent = 100 * (
                 self_consumption_in_kilowatt_hour / electricity_production_in_kilowatt_hour
             )

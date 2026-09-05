@@ -69,6 +69,12 @@ class CSVLoader(cp.Component):
     load profile relevant to the applied setup
     function.
 
+    The loader declares :attr:`~hisim.component.Component.MODELS_NO_DEVICE`, so cost and KPI
+    computation treat it as a data source with nothing to buy and nothing to report. Do not use
+    it to stand in for a real, costed device — a generator or a metered appliance replayed
+    through it would silently contribute zero cost and zero indicators to the system totals
+    instead of failing loudly.
+
 
     Parameters
     ----------

@@ -5,6 +5,8 @@ green hydrogen production via electrolysis. Tests verify hydrogen flow rate calc
 based on electrical load input and activation state.
 """
 
+import json
+
 import pandas as pd
 import pytest
 
@@ -135,23 +137,37 @@ def test_electrolyzer_kpi_entries_read_the_final_cumulative_values() -> None:
     must read the last value rather than sum the column -- summing a cumulative series
     double-counts, which is exactly what a wrong implementation would do and what the hand-picked
     monotone series here would expose.
+
+    A foreign component's column is prepended the way the real caller hands the whole run's
+    outputs over: the component_name filter is what keeps this electrolyzer from reading another
+    device's values, and the prepend also moves its own columns off index zero.
     """
     electrolyzer = _build_electrolyzer()
+    foreign = cp.ComponentOutput(
+        "PVSystem",
+        "TotalEnergyConsumed",
+        lt.LoadTypes.ELECTRICITY,
+        lt.Units.KWH,
+        component_id=ComponentID(name="PVSystem"),
+    )
     outputs = [
+        foreign,
         electrolyzer.total_hydrogen,
         electrolyzer.total_energy_consumed,
         electrolyzer.operating_time,
     ]
-    frame = pd.DataFrame({0: [1.0, 2.5], 1: [40.0, 90.0], 2: [0.5, 1.25]})
+    frame = pd.DataFrame({0: [7000.0, 8000.0], 1: [1.0, 2.5], 2: [40.0, 90.0], 3: [0.5, 1.25]})
 
     entries = {e.name: e for e in electrolyzer.get_component_kpi_entries(outputs, frame)}
 
     assert entries["Hydrogen produced"].value == pytest.approx(2.5)
     assert entries["Electrical energy consumed"].value == pytest.approx(90.0)
     assert entries["Operating time"].value == pytest.approx(1.25)
-    assert all(isinstance(e.value, float) for e in entries.values()), (
-        "a numpy scalar here would crash the KPI json writer"
+    assert all(e.name_of_source_component == electrolyzer.component_name for e in entries.values()), (
+        "the source component is the disambiguator a future multi-instance collision fix keys on"
     )
+    for entry in entries.values():
+        json.dumps(entry.to_dict())  # the webtool writer serializes exactly this; it must not raise
 
 
 @pytest.mark.base
@@ -161,3 +177,23 @@ def test_electrolyzer_kpi_entries_refuse_a_missing_output() -> None:
 
     with pytest.raises(ValueError, match="Hydrogen produced"):
         electrolyzer.get_component_kpi_entries([electrolyzer.total_energy_consumed], pd.DataFrame({0: [1.0]}))
+
+
+@pytest.mark.base
+def test_electrolyzer_kpi_entries_refuse_nan_instead_of_misreading() -> None:
+    """A NaN in a cumulative column raises instead of becoming the reported final value.
+
+    The KPIs read the last row, so a NaN there would be reported verbatim as the indicator, and a
+    NaN earlier in the series marks a column that was not written every timestep -- either way the
+    value cannot be trusted, and a wrong number that looks real is worse than a loud refusal.
+    """
+    electrolyzer = _build_electrolyzer()
+    outputs = [
+        electrolyzer.total_hydrogen,
+        electrolyzer.total_energy_consumed,
+        electrolyzer.operating_time,
+    ]
+    frame = pd.DataFrame({0: [1.0, float("nan")], 1: [40.0, 90.0], 2: [0.5, 1.25]})
+
+    with pytest.raises(ValueError, match="Hydrogen produced"):
+        electrolyzer.get_component_kpi_entries(outputs, frame)

@@ -16,8 +16,8 @@ what makes a full factorial sweep a matter of milliseconds per cell.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, Optional
+from dataclasses import asdict, dataclass, field, fields
+from typing import Any, Dict, Mapping, Optional
 
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.timeline import discount_factor
@@ -132,3 +132,45 @@ class EconomicParameters:
         the per-carrier and per-asset-class rate dicts keep JSON-compatible string keys.
         """
         return asdict(self)
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> "EconomicParameters":
+        """Rebuilds a parameter record from the mapping :meth:`to_dict` wrote.
+
+        The counterpart of `to_dict`, and the reason a stored evaluation can be re-priced at all:
+        `economic_inputs.json` and a hand-written `--parameters` file both arrive as plain JSON,
+        and the two rate dictionaries key on enums that JSON can only carry as strings. Those keys
+        are converted back here; every other field is a scalar that survives the round trip
+        unchanged, and a field the mapping omits keeps its documented default, so a subset is a
+        legitimate input.
+
+        An unknown key is refused rather than ignored: at this level a key that no field claims is
+        a typo in a hand-written assumption file, and silently dropping it would price the run
+        with a default the author believed they had overridden.
+
+        Args:
+            raw: The mapping to read, as produced by `to_dict` or parsed from JSON.
+
+        Returns:
+            The reconstructed parameter record, validated by `__post_init__`.
+
+        Raises:
+            ValueError: If the mapping carries a key that is not a field of this class.
+        """
+        known = {field_info.name for field_info in fields(cls)}
+        values = dict(raw)
+        unknown = sorted(set(values) - known)
+        if unknown:
+            raise ValueError(
+                f"unknown economic parameter(s) {', '.join(unknown)}; the record accepts "
+                f"{', '.join(sorted(known))}."
+            )
+        for key, enum_class in (
+            ("energy_price_escalation_rates", EnergyCarrier),
+            ("investment_price_escalation_rates", ComponentType),
+        ):
+            if values.get(key):
+                values[key] = {
+                    enum_class(member): float(rate) for member, rate in values[key].items()
+                }
+        return cls(**values)

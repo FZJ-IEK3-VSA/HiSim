@@ -538,8 +538,7 @@ class ElectricityMeter(DynamicComponent):
         )
 
         if lt.DistrictNames.is_district(self.config.component_id.building):
-            # Literal on purpose: the buildings tag narrows the production channel and no channel
-            # declares it. See roadmap/p3_cleanup_todos.md, the aggregator-lookup migration item.
+            # Literal on purpose: subset matching, see the CHANNELS docstring.
             production_inputs_building = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION, lt.ComponentType.BUILDINGS])
 
             building_electricity_surplus_unused = (
@@ -550,8 +549,7 @@ class ElectricityMeter(DynamicComponent):
                 building_electricity_surplus_unused,
             )
 
-            # Literal on purpose, for the same reason as the production query above: the buildings
-            # tag narrows the consumption channel and no channel declares it.
+            # Literal on purpose: subset matching, see the CHANNELS docstring.
             consumption_inputs_building = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED, lt.ComponentType.BUILDINGS])
 
             consumption_of_buildings = (

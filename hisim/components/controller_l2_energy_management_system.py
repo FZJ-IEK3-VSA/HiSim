@@ -191,6 +191,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     #: former while an ordinary controllable consumer — a heat pump, whose extra descriptive tag
     #: no channel consumes — falls to the latter. That mirrors the ranking code's existing
     #: "is this participant a battery" branch instead of inventing a new tag value for it.
+    #:
+    #: One runtime lookup deliberately reads no channel: the ranking code's per-participant
+    #: dispatch-output query, whose first tag is that one participant's component type, so it
+    #: names no fixed tag set — and it reads outputs, for which no channel-key accessor exists.
+    #: A dispatch-side accessor would be a design of its own, not a near-match to force onto
+    #: :meth:`~hisim.dynamic_component.DynamicComponent.get_channel_inputs`.
     CHANNELS: Tuple[DynamicConnectionChannel, ...] = (
         DynamicConnectionChannel(
             key=PRODUCTION_CHANNEL,
@@ -641,9 +647,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         outputs_sorted = []
 
         for ind, source_weight in enumerate(source_weights):
-            # Literal on purpose: the first tag is this one participant's component type, so the
-            # query names no fixed channel tag set and the dispatch side has no channel-key
-            # accessor yet. See roadmap/p3_cleanup_todos.md, the aggregator-lookup migration item.
+            # Literal on purpose: a per-participant dispatch-output query, see the CHANNELS docstring.
             outputs = self.get_all_dynamic_outputs(
                 tags=[
                     component_types_sorted[ind],

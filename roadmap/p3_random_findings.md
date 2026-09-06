@@ -256,6 +256,26 @@ Removing the duplicate occupancy feed from `household_gas_solar_thermal.py` (F-4
 regeneration ran. Regenerated. *The gates exist for exactly this: a setup and its twins move together, and a
 human will forget.*
 
+### F-36 — the imperative wiring path checks tags but never units **[reported]**
+The two build paths now share one participant vocabulary — every aggregator's ``CHANNELS``
+declaration — but only the declarative path enforces the whole declaration. A feed resolved from an
+energy-system file passes ``ChannelMatcher.match_and_validate``, which checks tags, carrier *and
+unit*: a power output feeding an energy channel is refused with ``EF-30``
+(``tests/test_meter_channels.py::test_the_matcher_refuses_a_feed_in_the_wrong_unit`` pins exactly
+that — a ``WATT`` feed into ``FuelMeter``'s ``WATT_HOUR`` consumption channel). The imperative
+path checks none of it: ``add_component_input_and_connect`` records tags and unit on the created
+port, and ``get_channel_inputs`` selects participants by tag subset alone, so the byte-identical
+wiring that the declarative path refuses is silently accepted when a setup writes it by hand.
+Concretely, using the repository's own pinned example: wire a heat source whose output is
+``HEAT_CONSUMPTION``-tagged but denominated in ``WATT`` into the fuel meter imperatively, and
+``i_simulate`` sums watts as watt-hours — at a 60-second resolution the priced fuel energy is
+overstated sixty-fold, a plausible-looking number that means nothing, which is precisely the
+failure mode the channel declarations were introduced to end. *To be fixed later, as its own
+change: the natural seam is unit/carrier validation at imperative wiring time (where the matched
+channel is known), not inside ``get_channel_inputs`` — a lookup that silently drops mismatched
+inputs would trade a wrong sum for a silently smaller one. The blast radius over existing setups
+is unknown until tried, which is why it is a finding and not a patch.*
+
 ### F-34 — a failed recording leaves an unbuildable file in the tree **[verified]**
 `record_all_setups.py` writes the file and then verifies it builds, and on failure leaves it "in place for
 inspection" — so after a failed run an untracked `energy_systems/<stem>.energy_system.yaml` sits there that

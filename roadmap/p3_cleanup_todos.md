@@ -92,12 +92,16 @@ survives only in a conversation. Items are removed when done, not ticked and kep
   participant lookups in the five aggregators — the EMS and the electricity, fuel, gas and heating
   meters — now go through `DynamicComponent.get_channel_inputs(key)`, so the `CHANNELS` declaration
   is the single source of truth for validation and for simulation alike and the two cannot drift.
-  Three lookups stay literal and say so in a comment, because their tag set matches no channel
-  exactly and forcing a near-match would change what they sum: the electricity meter's two
-  per-building queries, which narrow a channel with a buildings tag no channel declares, and the
-  EMS's per-participant dispatch-output query, whose first tag is the participant's own component
-  type. Both carve-outs want channels of their own, not a wider helper. Remove this entry once the
-  branch is on main; the two code comments point here, so retarget them in the same edit.
+  Three lookups stay literal and say so in a one-line comment pointing at their class's
+  ``CHANNELS`` docstring, because their tag set matches no channel exactly and forcing a
+  near-match would change what they sum. The electricity meter's two per-building queries are a
+  settled design, not a debt: the meter's ``CHANNELS`` docstring is the canonical statement that
+  they need no channel of their own, since subset matching lets a feed carrying the buildings tag
+  select the channel while the tag survives on the created port. The EMS's per-participant
+  dispatch-output query is the genuine remainder — its first tag is the participant's own
+  component type, and the output side has no channel-key accessor; a dispatch accessor is a
+  candidate design of its own, not a decided follow-up. Remove this entry once the branch is on
+  main; the code comments point at the class docstrings, so nothing dangles.
 
 ## Deferred by design (not P3's debt, listed so it is findable)
 

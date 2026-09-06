@@ -11,11 +11,12 @@ loaded and checked to contain finite numeric KPI values, including the
 tests verify real post-processing output rather than only that the run did not
 crash.
 
-Two test families in this file run no simulation at all. Every building-sizer setup
+Three test families in this file run no simulation at all. Every building-sizer setup
 refuses a zero rooftop photovoltaic share while the energy manager is switched on, and
 every one of them refuses an LPG household name the profile registry does not define
-instead of quietly dropping it. Both refusals are raised before any component is built,
-so each is checked by initializing every setup once and catching the error.
+instead of quietly dropping it; one setup also stands in for the fleet in refusing a
+module-config path it cannot read. All three refusals are raised before any component is
+built, so each is checked by initializing the setup once and catching the error.
 """
 # clean
 import json
@@ -401,3 +402,32 @@ def test_building_sizer_setup_refuses_an_unknown_lpg_household(
     message = str(refusal.value)
     assert "CHR01_Couple_both_at_Wrok" in message
     assert "utspclient.helpers.lpgdata.Households" in message
+
+
+@pytest.mark.base
+def test_building_sizer_setup_refuses_a_module_config_path_it_cannot_read(tmp_path: Path) -> None:
+    """Test that a setup handed a module-config path that does not exist refuses the run.
+
+    This is the headline behaviour of the fail-loud reader seen from where it matters: a run
+    driven through ``initialize_from_python`` with a typo'd module-config path used to simulate
+    the setup's shipped default household with only a warning, so the caller got a complete,
+    plausible result for a configuration that had never been read. The refusal happens on the
+    first statement of the setup, before any component is built, so no simulation runs here.
+
+    The heat-pump sizer stands in for all thirteen callers: the reading is done by the shared
+    ``read_in_configs``, not per setup, and the per-reason messages are covered directly in
+    ``tests/building_sizer_utils/test_modular_household_config.py``.
+    """
+    missing_config_path = tmp_path / "typo_in_the_path.json"
+    assert not missing_config_path.exists()
+
+    setup_path = Path(__file__).resolve().parents[1] / "system_setups" / "household_heatpump_building_sizer.py"
+    with pytest.raises(ValueError) as refusal:
+        hisim_main.initialize_from_python(
+            str(setup_path),
+            my_simulation_parameters=SimulationParameters.one_day_only(2021, 60 * 15),
+            my_module_config=str(missing_config_path),
+        )
+    message = str(refusal.value)
+    assert str(missing_config_path) in message
+    assert "Could not open" in message

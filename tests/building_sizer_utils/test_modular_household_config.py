@@ -246,7 +246,17 @@ UNREADABLE_CONFIGS: list[tuple[str, str | None, list[str]]] = [
     (
         "both_modules_missing",
         "{}",
-        ["declares neither an energy system config nor an archetype config"],
+        ["declares no energy_system_config_ and no archetype_config_"],
+    ),
+    (
+        "archetype_missing",
+        '{"energy_system_config_": {}}',
+        ["declares no archetype_config_"],
+    ),
+    (
+        "energy_system_missing",
+        '{"archetype_config_": {}}',
+        ["declares no energy_system_config_"],
     ),
 ]
 
@@ -262,11 +272,12 @@ def test_read_in_configs_refuses_a_config_it_cannot_read(
 ) -> None:
     """A named config that cannot be read raises and names both the path and the reason.
 
-    A missing file, a syntax error, a payload of the wrong shape and a config declaring neither of
-    its two modules used to be indistinguishable from "no config given": all four answered ``None``
-    and the calling setup then simulated its shipped default household with only a warning. Each is
-    now a refusal that quotes the path so the caller can see which file was rejected, plus the
-    underlying reason so they can tell a typo'd path from a stray comma.
+    A missing file, a syntax error, a payload of the wrong shape and a config missing one or both of
+    its two halves used to be indistinguishable from "no config given": all of them answered ``None``
+    and the calling setup then simulated its shipped default household with only a warning -- or, for
+    a half-filled config, died on a bare assertion naming neither the file nor the missing half. Each
+    is now a refusal that quotes the path so the caller can see which file was rejected, plus the
+    underlying reason so they can tell a typo'd path from a stray comma from a missing half.
     """
     config_path = tmp_path / f"{case_name}.json"
     if file_body is not None:
@@ -339,25 +350,40 @@ def test_read_in_configs_answers_none_when_no_config_was_given(
 
 
 @pytest.mark.base
-def test_read_in_configs_accepts_an_already_decoded_config_dict() -> None:
-    """A configuration handed over as a dictionary is decoded instead of being refused.
+def test_read_in_configs_refuses_a_file_whose_bytes_are_not_utf8(tmp_path: Path) -> None:
+    """A config file that is not UTF-8 is refused with the same shape as the other read failures.
 
-    Nine of the building-sizer setups write the configuration they used back into
-    ``Simulator.my_module_config`` -- the very attribute that is passed to ``read_in_configs`` -- so
-    a second setup call on the same simulator hands over a decoded mapping rather than a path.
+    The decoding happens while the file is being read, so the ``UnicodeDecodeError`` escaped both
+    the missing-file and the invalid-JSON handler and reached the caller raw, naming no path.
     """
-    written = ModularHouseholdConfig.get_default_config_for_household_oil()
+    config_path = tmp_path / "not_utf8.json"
+    config_path.write_bytes(b"\xff\xfe garbage")
 
-    read_back = read_in_configs(written.to_dict())
+    with pytest.raises(ValueError) as refusal:
+        read_in_configs(str(config_path))
 
-    assert read_back is not None
-    assert read_back.to_dict() == written.to_dict()
+    message = str(refusal.value)
+    assert str(config_path) in message
+    assert "not valid UTF-8" in message
 
 
 @pytest.mark.base
-def test_read_in_configs_refuses_an_empty_config_dict() -> None:
-    """An empty mapping is a config that declares nothing, so it is refused rather than defaulted."""
-    with pytest.raises(ValueError) as refusal:
-        read_in_configs({})
+@pytest.mark.parametrize(
+    "not_a_path",
+    [{}, {"energy_system_config_": {}}, 5, ["a_path.json"]],
+    ids=["empty_dict", "config_dict", "number", "list"],
+)
+def test_read_in_configs_refuses_anything_that_is_not_a_path(not_a_path: object) -> None:
+    """A config has to be named by a path string; an already-decoded object is a caller error.
 
-    assert "declares neither an energy system config nor an archetype config" in str(refusal.value)
+    ``Simulator.my_module_config`` is declared ``Optional[str]`` and the setups that read it split
+    it on ``"/"`` to build their result path, so a decoded configuration cannot travel that route
+    end to end. Accepting one here would have hidden that, which is why the reader refuses it
+    outright and names the forms it does accept.
+    """
+    with pytest.raises(TypeError) as refusal:
+        read_in_configs(not_a_path)  # type: ignore[arg-type]
+
+    message = str(refusal.value)
+    assert "path string" in message
+    assert "None for no config" in message

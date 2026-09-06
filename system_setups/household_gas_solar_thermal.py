@@ -71,7 +71,7 @@ def setup_function(
     if my_config is None:
         my_config = ModularHouseholdConfig().get_default_config_for_household_gas_solar_thermal()
         log.warning(
-            "No modular household config was given. Using the gas ans solar thermal household default config instead."
+            "No modular household config was given. Using the gas and solar thermal household default config instead."
         )
     assert my_config.archetype_config_ is not None
     assert my_config.energy_system_config_ is not None

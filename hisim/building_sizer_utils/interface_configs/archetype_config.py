@@ -143,7 +143,10 @@ class ArcheTypeConfig:
         ...     building_code="DE.N.MFH.05.Gen.ReEx.001.002",
         ...     conditioned_floor_area_in_m2=300.0,
         ...     number_of_dwellings_per_building=2,
-        ...     lpg_households=["CHR01_Couple_both_at_Work", "CHR03_Family"],
+        ...     lpg_households=[
+        ...         "CHR01_Couple_both_at_Work",
+        ...         "CHR03_Family_1_child_both_at_work",
+        ...     ],
         ... )
 
     """
@@ -202,11 +205,11 @@ class ArcheTypeConfig:
         The names in ``lpg_households`` are attribute names of the Load Profile Generator's
         ``Households`` registry; the occupancy component needs the ``JsonReference`` objects behind
         them. A single configured name resolves to one reference, several names resolve to a list of
-        references that the occupancy component stacks into one building. Every building-sizer setup
-        calls this instead of resolving the names itself, so an unknown name is refused the same way
-        everywhere: the loop in those setups used to skip a name the registry did not know without
-        any diagnostic, which quietly built a household with fewer occupants than the configuration
-        asked for.
+        references that the occupancy component stacks into one building. The eleven building-sizer
+        setups call this instead of resolving the names themselves, so an unknown name is refused
+        the same way everywhere: the loop in those setups used to skip a name the registry did not
+        know without any diagnostic, which quietly built a household with fewer occupants than the
+        configuration asked for.
 
         A minimal usage example::
 
@@ -224,7 +227,8 @@ class ArcheTypeConfig:
             ValueError: If ``lpg_households`` is empty, or if it names a household the registry does
                 not define. The refusal quotes the unknown name, names the registry that holds the
                 legal ones, and lists the closest known names when there are any.
-            TypeError: If ``lpg_households`` is not a list of strings.
+            TypeError: If ``lpg_households`` is not a list, or if any of its entries is not a
+                string. The refusal names the offending index and value.
         """
         if not isinstance(self.lpg_households, list):
             raise TypeError(
@@ -235,13 +239,25 @@ class ArcheTypeConfig:
                 "Config list with lpg household is empty. Name at least one household from "
                 f"{self.LPG_HOUSEHOLD_REGISTRY} in 'lpg_households'."
             )
+        for index, entry in enumerate(self.lpg_households):
+            if not isinstance(entry, str):
+                raise TypeError(
+                    f"lpg_households[{index}] is {entry!r}, of type {type(entry).__name__}. Every entry has "
+                    "to be a household profile name. Should be List[str]."
+                )
 
-        resolved = [self._resolve_one_lpg_household(name) for name in self.lpg_households]
+        # A bare string reaches this field as a list of its characters: dataclasses_json coerces
+        # "CHR01_..." into ["C", "H", "R", ...] rather than refusing it, and every character then
+        # looks like an unknown household. Detect the shape here so the refusal can say so.
+        looks_like_a_split_string = all(len(entry) == 1 for entry in self.lpg_households)
+        resolved = [
+            self._resolve_one_lpg_household(name, looks_like_a_split_string) for name in self.lpg_households
+        ]
         if len(resolved) == 1:
             return resolved[0]
         return resolved
 
-    def _resolve_one_lpg_household(self, household_name: str) -> JsonReference:
+    def _resolve_one_lpg_household(self, household_name: str, looks_like_a_split_string: bool) -> JsonReference:
         """Look one LPG household profile name up in the registry, or refuse it.
 
         Split out of :meth:`resolve_lpg_households` so the single-name and the multi-name case
@@ -251,6 +267,9 @@ class ArcheTypeConfig:
         Args:
             household_name: The configured profile name, an attribute name of the LPG ``Households``
                 registry such as ``"CHR01_Couple_both_at_Work"``.
+            looks_like_a_split_string: Whether every configured entry is a single character, which
+                is what a household name given as a bare string rather than a list decodes to. The
+                refusal then says so instead of complaining about each character on its own.
 
         Returns:
             JsonReference: The registry entry the name stands for.
@@ -262,6 +281,11 @@ class ArcheTypeConfig:
         if household_name not in known_names:
             suggestions = difflib.get_close_matches(household_name, known_names, n=3, cutoff=0.5)
             hint = f" Did you mean {', '.join(suggestions)}?" if suggestions else ""
+            if looks_like_a_split_string:
+                hint = (
+                    " This looks like one household name given as a bare string rather than a list of names,"
+                    " split into one entry per character."
+                )
             raise ValueError(
                 f"Unknown LPG household '{household_name}' in 'lpg_households'. The legal names are the "
                 f"{len(known_names)} household profiles defined in {self.LPG_HOUSEHOLD_REGISTRY}, for example "

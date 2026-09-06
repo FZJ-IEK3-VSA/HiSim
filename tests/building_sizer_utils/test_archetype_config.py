@@ -107,6 +107,55 @@ def test_non_list_household_field_is_refused_as_a_type_error(configured_value: A
 
 
 @pytest.mark.base
+@pytest.mark.parametrize(
+    "configured_names, offending_index, offending_repr",
+    [
+        ([5], 0, "5"),
+        ([None], 0, "None"),
+        (["CHR01_Couple_both_at_Work", 5], 1, "5"),
+        ([["CHR01_Couple_both_at_Work"]], 0, "['CHR01_Couple_both_at_Work']"),
+    ],
+    ids=["number", "none", "number_after_a_name", "nested_list"],
+)
+def test_non_string_entry_is_refused_as_a_type_error(
+    configured_names: list[Any], offending_index: int, offending_repr: str
+) -> None:
+    """A list carrying a non-string entry is a ``TypeError`` naming the index and the value.
+
+    The container check alone let ``[5]`` through into the registry lookup, where it died as
+    ``'int' object is not iterable`` from inside ``difflib`` -- a message about the diagnostics
+    machinery rather than about the configuration. The entries are checked up front instead, which
+    is also what the method's ``Raises`` section promises.
+    """
+    with pytest.raises(TypeError) as refusal:
+        ArcheTypeConfig(lpg_households=configured_names).resolve_lpg_households()
+
+    message = str(refusal.value)
+    assert f"lpg_households[{offending_index}]" in message
+    assert offending_repr in message
+    assert "List[str]" in message
+
+
+@pytest.mark.base
+def test_a_bare_string_split_into_characters_says_so() -> None:
+    """A household name that arrived as a bare string is diagnosed as such, not per character.
+
+    ``dataclasses_json`` coerces a bare ``"CHR01_..."`` in a JSON config into a list of its
+    characters rather than refusing it, so the type checks above never see it and every single
+    character then looks like an unknown household. The refusal names that shape outright.
+    """
+    split_name = list("CHR01_Couple_both_at_Work")
+    assert len(split_name) > 1 and all(len(character) == 1 for character in split_name)
+
+    with pytest.raises(ValueError) as refusal:
+        ArcheTypeConfig(lpg_households=split_name).resolve_lpg_households()
+
+    message = str(refusal.value)
+    assert "Unknown LPG household 'C'" in message
+    assert "bare string rather than a list" in message
+
+
+@pytest.mark.base
 def test_default_configuration_resolves() -> None:
     """The dataclass default names a household the registry defines.
 

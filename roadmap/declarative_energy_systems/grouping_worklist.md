@@ -60,7 +60,9 @@ config, ignores all four of its fields, and reads one archetype value
   the typo, the registry that holds the legal names and the closest known spellings.
 - [ ] **Nine sizers mutate `my_sim.my_module_config` to a dict on the fallback path**; the two
   heat-pump sizers do not, so downstream readers see a different type depending on the sibling.
-  One behavior for all eleven.
+  One behavior for all eleven. `read_in_configs` is string-only by decision (review round of
+  2026-09-06: it refuses a non-string with a `TypeError`), so this repair has to settle what the
+  attribute is allowed to hold rather than widening the reader to accept both.
 - [ ] **Four sizers ignore `weather_filepath`/`weather_datasource`**
   (gas_solar_thermal_building_sizer, heatpump_car, heatpump_solar_thermal, hydrogen): the same
   archetype config yields a different weather source across the fleet. Either read them or refuse

@@ -54,7 +54,7 @@ from __future__ import annotations
 
 # clean
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Optional
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -339,91 +339,104 @@ def write_config(config: ModularHouseholdConfig) -> None:
         file.write(config.to_json())  # type: ignore
 
 
-def read_in_configs(pathname: Optional[Union[str, Dict[str, Any]]]) -> Optional[ModularHouseholdConfig]:
+def read_in_configs(pathname: Optional[str]) -> Optional[ModularHouseholdConfig]:
     """Read a :class:`ModularHouseholdConfig` from a JSON file, or answer ``None`` if none was given.
 
     The two outcomes are kept apart on purpose. *No config given* -- ``pathname`` is ``None``, an
     empty string or a string of whitespace -- returns ``None``, which every calling system setup
     reads as "use my own default household". *A config was given but cannot be read* -- the file is
-    missing or unreadable, its content is not valid JSON, it does not decode into a
-    :class:`ModularHouseholdConfig`, or it decodes into one that declares neither an energy system
-    nor an archetype -- raises :class:`ValueError` naming the path and the underlying reason. The
+    missing or unreadable, its bytes are not UTF-8, its content is not valid JSON, it does not
+    decode into a :class:`ModularHouseholdConfig`, or it decodes into one that is missing either of
+    its two halves -- raises :class:`ValueError` naming the path and the underlying reason. The
     reader used to swallow every one of those failures and answer ``None``, so a typo'd path or a
     stray comma silently simulated the shipped default household instead of the configured one and
     the caller never learned that its configuration had not been read.
 
-    A ``dict`` is accepted in place of a path because the calling setups store the configuration
-    they used back into the very attribute that is handed here (``Simulator.my_module_config``), so
-    a second setup call on the same simulator passes an already-decoded configuration rather than a
-    path. Such a mapping is decoded directly and refused, with the same messages, when it does not
-    describe a usable configuration.
+    The config is named by a path, never handed over as an already-decoded object:
+    ``Simulator.my_module_config`` is declared ``Optional[str]`` and the setups that read it split
+    it on ``"/"`` to build their result path, so anything but a string is a caller error and is
+    refused as one rather than being decoded on the quiet.
 
     Args:
         pathname: Path to the JSON file holding a serialized :class:`ModularHouseholdConfig`
             (surrounding whitespace, carriage returns and newlines are stripped before opening), or
-            an already-decoded configuration mapping, or ``None``/``""`` for "no config given".
+            ``None``/``""`` for "no config given".
 
     Returns:
         Optional[ModularHouseholdConfig]: The configuration that was read, or ``None`` when no
         configuration was given at all.
 
     Raises:
+        TypeError: If ``pathname`` is neither a string nor ``None``.
         ValueError: If a configuration was given but cannot be read -- missing or unreadable file,
-            invalid JSON, a payload that does not decode into a :class:`ModularHouseholdConfig`, or
-            a configuration carrying neither an energy system nor an archetype config. The message
-            names the source and the underlying reason.
+            bytes that are not UTF-8, invalid JSON, a payload that does not decode into a
+            :class:`ModularHouseholdConfig`, or a configuration missing its energy system config,
+            its archetype config or both. The message names the source and the underlying reason.
     """
-    if pathname is None or (isinstance(pathname, str) and not pathname.strip()):
+    if pathname is None:
         log.information("No modular household config was given; the calling setup uses its own default config.")
         return None
 
-    if isinstance(pathname, dict):
-        source = "the modular household config handed over as a dictionary"
-        household_config = _decode_module_config(pathname, source)
-    else:
-        # use strip() in order to remove \r or \n signs from path
-        stripped_pathname = pathname.strip()
-        source = f"the modular household config at '{stripped_pathname}'"
-        try:
-            with open(stripped_pathname, encoding="utf8") as config_file:
-                household_config_dict = json.load(config_file)
-        except OSError as error:
-            raise ValueError(
-                f"Could not open {source}: {error}. A module config was named, so the run refuses instead of "
-                "silently simulating the setup's default household. Fix the path, or pass no module config at "
-                "all to ask for the default on purpose."
-            ) from error
-        except json.JSONDecodeError as error:
-            raise ValueError(
-                f"Could not parse {source}: it is not valid JSON ({error}). A module config was named, so the "
-                "run refuses instead of silently simulating the setup's default household."
-            ) from error
-        household_config = _decode_module_config(household_config_dict, source)
-        log.information(f"Read modular household config from {stripped_pathname}")
+    if not isinstance(pathname, str):
+        raise TypeError(
+            f"A modular household config is named by a path string, or None for no config; got "
+            f"{type(pathname).__name__}. Simulator.my_module_config holds a path, not a decoded "
+            "configuration, so a config that already exists in memory has to be written to a file before "
+            "it can be read back."
+        )
 
+    # use strip() in order to remove \r or \n signs from path
+    stripped_pathname = pathname.strip()
+    if not stripped_pathname:
+        log.information("No modular household config was given; the calling setup uses its own default config.")
+        return None
+
+    source = f"the modular household config at '{stripped_pathname}'"
+    try:
+        with open(stripped_pathname, encoding="utf8") as config_file:
+            household_config_dict = json.load(config_file)
+    except OSError as error:
+        raise ValueError(
+            f"Could not open {source}: {error}. A module config was named, so the run refuses instead of "
+            "silently simulating the setup's default household. Fix the path, or pass no module config at "
+            "all to ask for the default on purpose."
+        ) from error
+    except UnicodeDecodeError as error:
+        raise ValueError(
+            f"Could not read {source}: its bytes are not valid UTF-8 ({error}). A module config was named, "
+            "so the run refuses instead of silently simulating the setup's default household."
+        ) from error
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            f"Could not parse {source}: it is not valid JSON ({error}). A module config was named, so the "
+            "run refuses instead of silently simulating the setup's default household."
+        ) from error
+
+    household_config = _decode_module_config(household_config_dict, source)
+    log.information(f"Read modular household config from {stripped_pathname}")
     return household_config
 
 
 def _decode_module_config(household_config_dict: Any, source: str) -> ModularHouseholdConfig:
     """Turn an already-parsed JSON payload into a usable :class:`ModularHouseholdConfig`.
 
-    Shared by the file branch and the dictionary branch of :func:`read_in_configs` so both refuse a
-    payload that cannot be used with the same wording. A payload is usable only when it decodes into
-    a :class:`ModularHouseholdConfig` that declares at least one of its two modules; a configuration
-    with neither is indistinguishable from no configuration at all once the setups read it, which is
-    exactly the confusion this reader exists to prevent.
+    Split out of :func:`read_in_configs` so that reading the file and judging what was read stay
+    separate. A payload is usable only when it decodes into a :class:`ModularHouseholdConfig` that
+    carries *both* of its halves: every calling system setup asserts both are present immediately
+    after reading, so a half-filled config used to die on a bare ``AssertionError`` that named
+    neither the file nor the missing half.
 
     Args:
         household_config_dict: The parsed JSON payload, normally a mapping of the two module fields.
         source: Human-readable description of where the payload came from, used verbatim in the
-            refusal messages so the caller can tell which file or object was rejected.
+            refusal messages so the caller can tell which file was rejected.
 
     Returns:
-        ModularHouseholdConfig: The decoded configuration.
+        ModularHouseholdConfig: The decoded configuration, with both halves present.
 
     Raises:
         ValueError: If the payload does not decode into a :class:`ModularHouseholdConfig`, or the
-            decoded configuration carries neither an energy system nor an archetype config.
+            decoded configuration is missing its energy system config, its archetype config or both.
     """
     household_config: ModularHouseholdConfig
     try:
@@ -434,12 +447,19 @@ def _decode_module_config(household_config_dict: Any, source: str) -> ModularHou
             "the run refuses instead of silently simulating the setup's default household."
         ) from error
 
-    if household_config is None or (
-        household_config.energy_system_config_ is None and household_config.archetype_config_ is None
-    ):
+    missing_halves = [
+        field_name
+        for field_name, value in (
+            ("energy_system_config_", household_config.energy_system_config_),
+            ("archetype_config_", household_config.archetype_config_),
+        )
+        if value is None
+    ]
+    if missing_halves:
         raise ValueError(
-            f"Read {source}, but it declares neither an energy system config nor an archetype config, so there "
-            "is nothing to simulate from it. Fill in at least one of 'energy_system_config_' and "
-            "'archetype_config_', or pass no module config at all to ask for the setup's default on purpose."
+            f"Read {source}, but it declares no {' and no '.join(missing_halves)}. A modular household config "
+            "needs both halves -- the energy system to build and the archetype to build it for -- and every "
+            f"system setup asserts both right after reading. Fill in {' and '.join(missing_halves)}, or pass "
+            "no module config at all to ask for the setup's default on purpose."
         )
     return household_config

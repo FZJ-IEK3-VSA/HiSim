@@ -2,17 +2,19 @@
 
 # clean
 from pathlib import Path
-from typing import Optional, List, Any
+from typing import Any, Dict, List, Optional
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from scipy.interpolate import interp1d
 import numpy as np
+import pandas as pd
 
 # Import modules from HiSim
 from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim import loadtypes as lt
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 
@@ -208,7 +210,7 @@ class Electrolyzer(cp.Component):
         # =================================================================================================================================
         # Input channels
         self.load_input: ComponentInput = self.add_input(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.LoadInput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
@@ -217,7 +219,7 @@ class Electrolyzer(cp.Component):
 
         # get the state from the controller
         self.input_state: ComponentInput = self.add_input(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.InputState,
             lt.LoadTypes.ACTIVATION,
             lt.Units.ANY,
@@ -227,7 +229,7 @@ class Electrolyzer(cp.Component):
         # Output channels
 
         self.current_load: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.CurrentLoad,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,  # for EMS
@@ -235,7 +237,7 @@ class Electrolyzer(cp.Component):
         )
 
         self.total_energy_consumed: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.TotalEnergyConsumed,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KWH,
@@ -244,7 +246,7 @@ class Electrolyzer(cp.Component):
 
         # Set total ramp-up time output
         self.total_ramp_up_time: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.TotalRampUpTime,
             lt.LoadTypes.TIME,
             lt.Units.SECONDS,
@@ -253,7 +255,7 @@ class Electrolyzer(cp.Component):
 
         # Set total ramp-down time output
         self.total_ramp_down_time: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.TotalRampDownTime,
             lt.LoadTypes.TIME,
             lt.Units.SECONDS,
@@ -262,7 +264,7 @@ class Electrolyzer(cp.Component):
 
         # Set state output
         self.electrolyzer_state: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.ElectrolyzerState,
             lt.LoadTypes.ACTIVATION,
             lt.Units.ANY,
@@ -271,7 +273,7 @@ class Electrolyzer(cp.Component):
 
         # current hydrogen output
         self.hydrogen_flow_rate: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.CurrentHydrogenFlowRate,
             lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG_PER_SEC,
@@ -279,7 +281,7 @@ class Electrolyzer(cp.Component):
         )
         # Total hydrogen produced
         self.total_hydrogen: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.TotalHydrogenProduced,
             lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG,
@@ -287,7 +289,7 @@ class Electrolyzer(cp.Component):
         )
         # current oxygen output
         self.oxygen_flow_rate: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.CurrentOxygenFlowRate,
             lt.LoadTypes.OXYGEN,
             lt.Units.KG_PER_SEC,
@@ -295,7 +297,7 @@ class Electrolyzer(cp.Component):
         )
         # Total oxygen produced
         self.total_oxygen: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.TotalOxygenProduced,
             lt.LoadTypes.OXYGEN,
             lt.Units.KG,
@@ -303,7 +305,7 @@ class Electrolyzer(cp.Component):
         )
         # current water demand
         self.water_flow_rate: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.CurrentWaterFlowRate,
             lt.LoadTypes.WATER,
             lt.Units.KG_PER_SEC,
@@ -311,7 +313,7 @@ class Electrolyzer(cp.Component):
         )
         # Total water demand
         self.total_water: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.TotalWaterDemand,
             lt.LoadTypes.WATER,
             lt.Units.KG,
@@ -319,7 +321,7 @@ class Electrolyzer(cp.Component):
         )
         # Current efficiency
         self.current_efficiency_state: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.CurrentEfficiency,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
@@ -328,7 +330,7 @@ class Electrolyzer(cp.Component):
 
         # Total operating time
         self.operating_time: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.OperatingTime,
             lt.LoadTypes.TIME,
             lt.Units.HOURS,
@@ -760,6 +762,68 @@ class Electrolyzer(cp.Component):
             stsv.set_output_value(self.current_efficiency_state, current_sys_eff_soec)
         else:
             stsv.set_output_value(self.current_efficiency_state, current_eff)
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the electrolyzer and returns all KPI entries as a list.
+
+        Three indicators describe what the unit did over the simulated period, each read as the
+        final value of one of the electrolyzer's own cumulative outputs -- the component already
+        integrates them per timestep, so summing here would double-count: the hydrogen it
+        produced, the electrical energy it consumed doing so, and how long it actually operated.
+
+        Args:
+            all_outputs: every output column of the run, searched for this component's outputs
+                by name.
+            postprocessing_results: the per-timestep values of those columns.
+
+        Returns:
+            List[KpiEntry]: the three entries, tagged as Electrolyzer.
+
+        Raises:
+            ValueError: if one of the three columns is missing, empty or carries NaN — a value
+                pandas would otherwise drop silently — so a KPI is either read from complete
+                values or refused by name, never reported wrongly in silence.
+        """
+        wanted = {
+            Electrolyzer.TotalHydrogenProduced: ("Hydrogen produced", "kg", lt.Units.KG),
+            Electrolyzer.TotalEnergyConsumed: ("Electrical energy consumed", "kWh", lt.Units.KWH),
+            Electrolyzer.OperatingTime: ("Operating time", "h", lt.Units.HOURS),
+        }
+        found: Dict[str, float] = {}
+        for index, output in enumerate(all_outputs):
+            if output.component_name != self.component_name or output.field_name not in wanted:
+                continue
+            name, _, expected_unit = wanted[output.field_name]
+            if output.unit == expected_unit:
+                column = postprocessing_results.iloc[:, index]
+                if column.empty or bool(column.isna().any()):
+                    raise ValueError(
+                        f"The electrolyzer output for the KPI '{name}' of {self.component_name} is "
+                        f"{'empty' if column.empty else 'carrying NaN'}; the KPI would be silently "
+                        "wrong rather than absent, so it is refused instead."
+                    )
+                found[output.field_name] = float(column.iat[-1])
+        missing = [name for field, (name, _, _) in wanted.items() if field not in found]
+        if missing:
+            raise ValueError(
+                f"The electrolyzer outputs for the KPI(s) {missing} were not found for "
+                f"{self.component_name}; they cannot be reported as absent silently."
+            )
+        return [
+            KpiEntry(
+                name=name,
+                unit=unit,
+                value=found[field],
+                tag=KpiTagEnumClass.ELECTROLYZER,
+                description=self.component_name,
+                name_of_source_component=self.component_name,
+            )
+            for field, (name, unit, _) in wanted.items()
+        ]
 
     def write_to_report(self) -> List[str]:
         """Writes a report."""

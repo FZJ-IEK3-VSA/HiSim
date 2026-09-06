@@ -404,20 +404,30 @@ class StructuralValidator:
         """
         for entry in self.entries:
             name = entry.name
-            self._scan_for_absolute_paths(entry.config, f"components.{name}.config")
+            self.scan_for_absolute_paths(entry.config, f"components.{name}.config")
             if entry.constructor is not None:
-                self._scan_for_absolute_paths(
+                self.scan_for_absolute_paths(
                     entry.constructor.arguments,
                     f"components.{name}.constructor.{entry.constructor.name}",
                 )
 
     @classmethod
-    def _scan_for_absolute_paths(cls, block: Mapping[str, Any], location: str) -> None:
+    def scan_for_absolute_paths(cls, block: Mapping[str, Any], location: str) -> None:
         """Walks a config block and rejects an absolute path under a path-valued key.
 
         Only keys that name a location are inspected, because an arbitrary string field may
         legitimately start with a slash. Nested mappings and lists are followed so that a
         path buried in a sub-block is found as well.
+
+        Public because it has two consumers, and they must decide the rule identically: this
+        validator applies it when a file is loaded, and the recorder's
+        :class:`~hisim.energy_system.recording.builder.PortablePathGuard` applies it to a block
+        it is about to write, so that the refusal names the setup and the component rather than
+        arriving later as a load failure of a file nobody has read yet.
+
+        Args:
+            block: The config or constructor-argument block to walk.
+            location: Dotted key path of that block, grown as the walk descends.
 
         Raises:
             EnergySystemFormatError: ``EF-05`` naming the key path of the value.
@@ -425,11 +435,11 @@ class StructuralValidator:
         for key, value in block.items():
             child = f"{location}.{key}"
             if isinstance(value, dict):
-                cls._scan_for_absolute_paths(value, child)
+                cls.scan_for_absolute_paths(value, child)
             elif isinstance(value, list):
                 for index, item in enumerate(value):
                     if isinstance(item, dict):
-                        cls._scan_for_absolute_paths(item, f"{child}[{index}]")
+                        cls.scan_for_absolute_paths(item, f"{child}[{index}]")
                     elif cls._is_absolute_path(key, item):
                         raise cls._absolute_path_error(f"{child}[{index}]", item)
             elif cls._is_absolute_path(key, value):

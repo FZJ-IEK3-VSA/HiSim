@@ -15,6 +15,7 @@ from hisim.component import Component, SingleTimeStepValues, ComponentInput, Com
 from hisim import loadtypes as lt
 
 from hisim.components.configuration import PhysicsConfig
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
@@ -639,6 +640,122 @@ class CHP(Component):
 
         stsv.set_output_value(self.gas_demand_target_channel, gas_demand_target)  # CHP runs with
         stsv.set_output_value(self.gas_demand_real_used_channel, gas_demand_real_used)  # ThermalPowerOutput
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List[ComponentOutput],
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the CHP and returns all KPI entries as a list.
+
+        Four indicators describe what the unit did over the simulated period: the electrical
+        and thermal energy it produced, integrated from its power outputs; the fuel mass it
+        actually burned, integrated from the real fuel draw (not the requested one, which can
+        differ when the storage cannot deliver); and how many on/off cycles it went through,
+        read as the final value of its cumulative cycle counter. Cycles are an indicator of
+        their own because wear grows with switching, not with runtime.
+
+        Args:
+            all_outputs: every output column of the run, searched for this component's by name.
+            postprocessing_results: the per-timestep values of those columns.
+
+        Returns:
+            List[KpiEntry]: the four entries, tagged as CHP.
+
+        Raises:
+            ValueError: When one of the four output columns is not found for this component, is
+                empty, or carries NaN — pandas would silently drop NaN from a sum and an all-NaN
+                column would report zero, so a KPI is either computed from complete values or
+                refused by name, never reported wrongly in silence.
+        """
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        electrical_energy_in_kilowatt_hour = None
+        thermal_energy_in_kilowatt_hour = None
+        fuel_consumed_in_kg = None
+        number_of_cycles = None
+        for index, output in enumerate(all_outputs):
+            if output.component_name != self.component_name:
+                continue
+            column = postprocessing_results.iloc[:, index]
+            if output.field_name == self.ElectricityOutput and output.unit == lt.Units.WATT:
+                electrical_energy_in_kilowatt_hour = self._energy_in_kilowatt_hour(
+                    self._checked_column(column, "Electrical energy produced"), seconds_per_timestep
+                )
+            elif output.field_name == self.ThermalOutputPower and output.unit == lt.Units.WATT:
+                thermal_energy_in_kilowatt_hour = self._energy_in_kilowatt_hour(
+                    self._checked_column(column, "Thermal energy produced"), seconds_per_timestep
+                )
+            elif output.field_name == self.GasDemandReal and output.unit == lt.Units.KG_PER_SEC:
+                fuel_consumed_in_kg = round(
+                    float(self._checked_column(column, "Fuel consumed").sum()) * seconds_per_timestep, 6
+                )
+            elif output.field_name == self.NumberofCycles and output.unit == lt.Units.ANY:
+                number_of_cycles = float(self._checked_column(column, "Number of activation cycles").iloc[-1])
+
+        entries = [
+            ("Electrical energy produced", "kWh", electrical_energy_in_kilowatt_hour),
+            ("Thermal energy produced", "kWh", thermal_energy_in_kilowatt_hour),
+            ("Fuel consumed", "kg", fuel_consumed_in_kg),
+            ("Number of activation cycles", "-", number_of_cycles),
+        ]
+        for name, unit, value in entries:
+            if value is None:
+                raise ValueError(
+                    f"The CHP output for the KPI '{name}' was not found among the run's columns for "
+                    f"{self.component_name}; the KPI cannot be reported as absent silently."
+                )
+        return [
+            KpiEntry(
+                name=name,
+                unit=unit,
+                value=value,
+                tag=KpiTagEnumClass.CHP,
+                description=self.component_name,
+                name_of_source_component=self.component_name,
+            )
+            for name, unit, value in entries
+        ]
+
+    def _checked_column(self, column: pd.Series, kpi_name: str) -> pd.Series:
+        """Returns a KPI's column only when every value in it is real.
+
+        pandas drops NaN from a sum by default, so an output that was present but never written
+        would report zero energy instead of failing, and a NaN in the last row would make the
+        cycle count literally NaN — both are the silent absence the missing-output guard exists
+        to prevent, arriving through the values instead of through the column list.
+
+        Args:
+            column: The output's per-timestep values.
+            kpi_name: The KPI the column feeds, for the refusal.
+
+        Returns:
+            The column, unchanged.
+
+        Raises:
+            ValueError: When the column is empty or carries NaN.
+        """
+        if column.empty or bool(column.isna().any()):
+            raise ValueError(
+                f"The CHP output for the KPI '{kpi_name}' of {self.component_name} is "
+                f"{'empty' if column.empty else 'carrying NaN'}; the KPI would be silently wrong "
+                "rather than absent, so it is refused instead."
+            )
+        return column
+
+    @staticmethod
+    def _energy_in_kilowatt_hour(column: pd.Series, seconds_per_timestep: int) -> float:
+        """Integrates one power column to energy, through the one shared conversion.
+
+        Args:
+            column: The power values in watt, one per timestep.
+            seconds_per_timestep: The constant timestep length.
+
+        Returns:
+            The energy in kilowatt-hours, rounded to the three decimals the entries declare.
+        """
+        return round(
+            KpiHelperClass.compute_total_energy_from_power_timeseries(column, seconds_per_timestep), 3
+        )
 
     def write_to_report(self) -> List[str]:
         """Write to report."""

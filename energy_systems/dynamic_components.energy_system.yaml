@@ -170,5 +170,6 @@ components:
       predictive: false
       predictive_control: false
       prediction_horizon: null
+      weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
     inputs:
       - Weather

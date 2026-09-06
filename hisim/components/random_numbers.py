@@ -23,7 +23,9 @@ class RandomNumbersConfig(ConfigBase):
     Holds the range to draw from and the seed that fixes which numbers are drawn. The seed is part
     of the configuration rather than an argument because a system description has to be able to say
     what a run will do: two runs of one configuration produce the same series, which is what lets a
-    recorded energy-system file reproduce the setup it was recorded from.
+    recorded energy-system file reproduce the setup it was recorded from. The same property cuts
+    the other way inside a single system: two instances sharing a seed produce byte-identical
+    series, so give every instance of a system its own seed — the shipped setups use 1 and 2.
 
     How many values are drawn is deliberately *not* configured. That count is the length of the
     simulation, which belongs to the simulation parameters, and writing it here would pin a
@@ -39,6 +41,25 @@ class RandomNumbersConfig(ConfigBase):
     minimum: float
     maximum: float
     seed: int
+
+    def __post_init__(self) -> None:
+        """Rejects a range whose two bounds are the wrong way round.
+
+        A swapped pair does not fail anywhere later: the generator would quietly draw from the
+        inverted interval while :meth:`RandomNumbers.write_to_report` prints the bounds the
+        configuration claims, so the run and its report would disagree without anything saying so.
+        Refusing at construction also covers the deserialising path, because ``from_dict`` routes
+        through ``__init__`` like every other way of building the configuration.
+
+        Raises:
+            ValueError: If ``maximum`` is below ``minimum``, naming both values and the component.
+        """
+        if self.maximum < self.minimum:
+            raise ValueError(
+                f"RandomNumbers '{self.component_id.name}' is configured with minimum "
+                f"{self.minimum} above maximum {self.maximum}; the bounds are the wrong way "
+                "round."
+            )
 
     @classmethod
     def get_default_config(cls) -> "RandomNumbersConfig":

@@ -95,6 +95,10 @@ def setup_function(
     heating_reference_temperature = heating_reference_temperatures.set_index("Location").loc[
         "ES", "HeatingReferenceTemperature"
     ]
+    # The weather config is created first: the building config copies its identity (weather_identity)
+    # and must have it before the building is built. The weather component is still added below.
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.SEVILLE)
+
     my_building_config = building.BuildingConfig(
         component_id=ComponentID(name="Building"),
         building_code="ES.ME.SFH.04.Gen.ReEx.001.003",
@@ -125,6 +129,7 @@ def setup_function(
         subsidy_as_percentage_of_investment_costs=None,
         lifetime_in_years=None,
     )
+    my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(
         config=my_building_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -141,7 +146,6 @@ def setup_function(
     my_sim.add_component(my_occupancy)
 
     """Weather"""
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.SEVILLE)
 
     my_weather = weather.Weather(
         config=my_weather_config,
@@ -177,6 +181,7 @@ def setup_function(
         predictive_control=False,
         prediction_horizon=None,
     )
+    my_photovoltaic_system_config.weather_identity = my_weather_config.identity()
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,

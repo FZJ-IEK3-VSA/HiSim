@@ -66,6 +66,7 @@ components:
       predictive: false
       predictive_control: false
       prediction_horizon: null
+      weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
     inputs:
       - Weather
   ElectricityMeter:
@@ -94,6 +95,8 @@ components:
   Building:
     class: hisim.components.building.building.Building
     preset: standard
+    config:
+      weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
     inputs:
       - Weather
       - UTSPConnector

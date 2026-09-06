@@ -82,8 +82,9 @@ or the whole fleet at once, which is what regenerates this directory:
 python scripts/record_all_setups.py
 ```
 
-The recorder observes a finished run — it never parses the setup's source — so a twin states what
-the setup actually constructed rather than what its code appears to say. Every value is concrete,
+The recorder observes the prepared, connected system the setup built — it never parses the setup's
+source and never runs the timesteps — so a twin states what the setup actually constructed rather
+than what its code appears to say. Every value is concrete,
 a class that carries a preset is written as that preset plus whatever the setup changed, and the
 file names no sizing sources, no groups and no variants: those are judgements about intent, and one
 run cannot be asked about intent. Before the command returns, the file it wrote is loaded back
@@ -97,12 +98,13 @@ directory and fails on any difference, which is what the `energy-system-freshnes
 every pull request, so a setup cannot change without its twin.
 
 There is no skip list. A setup that cannot be recorded is a defect in the setup or a gap in the
-format, and the driver names every one it could not record and exits non-zero. Two setups are in
-that state today: `household_gas_solar_thermal`, whose electricity meter is wired to the occupancy
-twice — once explicitly and once through the meter's own declared default — so the format refuses
-the duplicate feed the setup really does build; and `household_heatpump_car_building_sizer`, whose
-`Car` components need a data dictionary computed from the occupancy instance at setup time, which
-is a constructor argument the declarative path has no way to supply.
+format, and the driver names every one it could not record and exits non-zero. Every setup in the
+repository records today, and the rule has already done its work twice rather than never:
+`household_gas_solar_thermal` could not be recorded until its doubled meter feed — wired to the
+occupancy once explicitly and once through the meter's own declared default — was fixed in the
+setup, and `household_heatpump_car_building_sizer` could not be recorded until the `Car`
+occupancy-data spelling the declarative path can supply existed. Both were repaired rather than
+skipped, which is the point of having no list.
 
 ## Simulation-parameters files are shared, never duplicated
 

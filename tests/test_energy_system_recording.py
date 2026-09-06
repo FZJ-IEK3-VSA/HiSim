@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Tuple
 
 import pytest
+import yaml
 
 from hisim.cli import ExitCodes, main
 from hisim.config import ComponentID, ConfigBase, preset_provenance
@@ -35,18 +36,25 @@ from hisim.energy_system.executor import (
     write_records,
 )
 from hisim.energy_system.loader import dump_energy_system, load_energy_system
+from hisim.energy_system.metadata import RunMetadata
 from hisim.energy_system.model import AggregatorFeed, DefaultInputs, ExplicitWire
 from hisim.energy_system.parity import ResolvedWire, WiringSnapshot
 from hisim.energy_system.record import assert_no_sentinels
 from hisim.energy_system.recording import (
     InputItemWriter,
     ObservedComponent,
+    ObservedDispatch,
+    ObservedFeed,
+    ParameterFileLibrary,
+    ParameterFileWriter,
+    PortablePathGuard,
     RecordedSystem,
     RecordingResult,
     build,
     observe,
     record_setup,
 )
+from hisim.energy_system.recording.parameters import ParameterNormalisation
 from hisim.energy_system.recording.session import RecordedFileWriter, RecordingSession
 from hisim.energy_system.resolution import ResolvedDynamicConnection
 from hisim.simulationparameters import SimulationParameters
@@ -129,6 +137,15 @@ class Synthetic:
     #: The class the consumer declares its defaults for, matching the producer's own class name.
     SOURCE_CLASS: ClassVar[str] = "Producer"
 
+    #: Name of the aggregator in the observations that exercise the back-channel pairing.
+    AGGREGATOR: ClassVar[str] = "Aggregator"
+
+    #: The input port the aggregator grew for its one participant.
+    GROWN_PORT: ClassVar[str] = "GrownInput"
+
+    #: The producer output that feeds that port.
+    MEASURED_OUTPUT: ClassVar[str] = "Power"
+
     @classmethod
     def config(cls, name: str) -> ConfigBase:
         """Builds the smallest configuration a component entry can carry.
@@ -181,6 +198,65 @@ class Synthetic:
         return RecordedSystem(
             setup="tests/synthetic.py",
             components=(producer, consumer),
+            wiring=snapshot,
+            simulation_parameters=SimulationParameters.one_day_only(2021, 900),
+        )
+
+    @classmethod
+    def aggregator(cls, feed_weight: int, dispatch_weights: Tuple[int, ...]) -> RecordedSystem:
+        """Builds an observation of one producer feeding an aggregator that grew a port for it.
+
+        The aggregator carries one feed and as many unread control outputs as ``dispatch_weights``
+        names, which is the shape the back-channel pairing has to decide: none of them names a
+        consumer, so the pairing falls back to the participant's class and the feed's weight.
+
+        Args:
+            feed_weight: The weight of the aggregator's feed from the producer.
+            dispatch_weights: One weight per control output the aggregator grew, all of them
+                created for the producer's class and read by nobody.
+
+        Returns:
+            The observation, with the aggregator second so that it is the component asked.
+        """
+        producer = ObservedComponent(
+            name=cls.SOURCE,
+            class_path="tests.Producer",
+            class_name=cls.SOURCE_CLASS,
+            config=cls.config(cls.SOURCE),
+            connect_automatically=False,
+            default_connections={},
+        )
+        aggregator = ObservedComponent(
+            name=cls.AGGREGATOR,
+            class_path="tests.Aggregator",
+            class_name="Aggregator",
+            config=cls.config(cls.AGGREGATOR),
+            connect_automatically=False,
+            default_connections={},
+            feeds=(
+                ObservedFeed(
+                    port_label=cls.GROWN_PORT, source_output=cls.MEASURED_OUTPUT, tags=(), weight=feed_weight
+                ),
+            ),
+            dispatches=tuple(
+                ObservedDispatch(
+                    port_label=f"Dispatch{index}",
+                    weight=weight,
+                    source_component_class=cls.SOURCE_CLASS,
+                    consumer=None,
+                    target_input=None,
+                )
+                for index, weight in enumerate(dispatch_weights, start=1)
+            ),
+        )
+        snapshot = WiringSnapshot(
+            components=(cls.SOURCE, cls.AGGREGATOR),
+            wires=(ResolvedWire(cls.AGGREGATOR, cls.GROWN_PORT, cls.SOURCE, cls.MEASURED_OUTPUT),),
+            unconnected_inputs=(),
+        )
+        return RecordedSystem(
+            setup="tests/synthetic.py",
+            components=(producer, aggregator),
             wiring=snapshot,
             simulation_parameters=SimulationParameters.one_day_only(2021, 900),
         )
@@ -239,6 +315,14 @@ def recordings_fixture(tmp_path_factory: pytest.TempPathFactory) -> Dict[str, Re
     time, which costs real seconds; the assertions afterwards cost none. Recording into a temporary
     directory rather than over the committed twins is what lets one of the tests compare the two.
 
+    Recording three setups in one interpreter is exactly the case ``session.py`` warns about: a
+    setup mutates module state, singletons and the local LPG calculation index, so two of them in
+    one process can record each other's leftovers. It is acceptable here for one reason — the
+    byte comparison against the committed twins runs in this same module, so a recording carrying
+    a previous setup's leftovers would fail it rather than pass quietly — and fleet-wide recording,
+    where the risk is real and the twins are the output rather than the reference, is driven one
+    process per setup.
+
     Args:
         tmp_path_factory: pytest's per-module temporary directory factory.
 
@@ -249,12 +333,7 @@ def recordings_fixture(tmp_path_factory: pytest.TempPathFactory) -> Dict[str, Re
     results: Dict[str, RecordingResult] = {}
     for setup in Fixtures.RECORDED:
         parameters = Fixtures.parameters(directory / "results" / setup)
-        results[setup] = record_setup(
-            Fixtures.SETUPS / f"{setup}.py",
-            parameters,
-            directory,
-            parameters_path=Fixtures.PARAMETERS,
-        )
+        results[setup] = record_setup(Fixtures.SETUPS / f"{setup}.py", parameters, directory)
     return results
 
 
@@ -344,19 +423,23 @@ def test_a_preset_appears_as_a_preset_and_an_unconverted_class_as_a_full_block(
 
 
 @pytest.mark.base
-def test_a_preset_the_setup_did_not_touch_is_written_without_a_config_block(
+def test_a_preset_the_setup_did_not_touch_is_written_as_the_preset_plus_what_it_left_open(
     recordings: Dict[str, RecordingResult],
 ) -> None:
     """Catches the sparse diff degenerating into a full dump under a preset name.
 
     An entry whose configuration is the preset verbatim is complete with the preset alone, and
     writing the block anyway would make every future preset change invisible in the diff — which is
-    exactly what the per-batch re-recording of the conversion work is supposed to show.
+    exactly what the per-batch re-recording of the conversion work is supposed to show. One field is
+    the deliberate exception: the preset leaves ``weather_identity`` open because no preset can know
+    which weather component a system carries, the setup realizes it before construction, and an
+    override of a field the preset left open is auditable by decision — so the sparse diff writes
+    exactly that field and nothing else. A second key appearing here means the diff started dumping.
     """
     entry = recordings["basic_household"].model.all_components()["Building"]
 
     assert entry.preset == "standard"
-    assert entry.config == {}
+    assert set(entry.config) == {"weather_identity"}
 
 
 @pytest.mark.base
@@ -461,14 +544,8 @@ def test_recording_the_same_setup_twice_produces_the_same_bytes(tmp_path: Path) 
     freshness job compares across machines, so the cheapest approximation of it is two recordings.
     """
     setup = Fixtures.SETUPS / "dynamic_components.py"
-    first = record_setup(
-        setup, Fixtures.parameters(tmp_path / "one" / "results"), tmp_path / "one",
-        parameters_path=Fixtures.PARAMETERS,
-    )
-    second = record_setup(
-        setup, Fixtures.parameters(tmp_path / "two" / "results"), tmp_path / "two",
-        parameters_path=Fixtures.PARAMETERS,
-    )
+    first = record_setup(setup, Fixtures.parameters(tmp_path / "one" / "results"), tmp_path / "one")
+    second = record_setup(setup, Fixtures.parameters(tmp_path / "two" / "results"), tmp_path / "two")
 
     assert RecordedFileWriter.split(first.text)[1] == RecordedFileWriter.split(second.text)[1]
     for value in first.model.all_components()["Battery1"].config.values():
@@ -485,12 +562,24 @@ def test_the_realized_record_of_a_recording_re_executes_unchanged(
     Building a file proves it is legal; re-executing its own realized record proves it decides
     nothing on the second run. A recording that left one field for the sizing kernel would pass
     every other test here and quietly produce a different number a year later.
+
+    The production ``EF-61`` check inside ``write_records`` already compares the re-run against
+    the record it was handed, but a test that relies on it alone asserts nothing of its own and
+    would keep passing if that check were weakened or skipped. So the two written records are
+    compared here as well, on the part that decides reproduction: the component entries, with
+    every value the second run realized. The two ``source_`` metadata keys are excluded, because
+    the second run legitimately started from a different file than the first.
     """
     built = build_energy_system(recordings["basic_household"].path, Fixtures.parameters(tmp_path / "results"))
     record_path, _, _ = write_records(built, str(tmp_path / "record"))
 
     rerun = build_energy_system(Path(record_path), Fixtures.parameters(tmp_path / "again"), rerun=True)
-    write_records(rerun, str(tmp_path / "record-again"))
+    rerun_path, _, _ = write_records(rerun, str(tmp_path / "record-again"))
+
+    first = load_energy_system(Path(record_path))
+    second = load_energy_system(Path(rerun_path))
+    assert second.all_components() == first.all_components()
+    assert RunMetadata.without_sources(second.metadata) == RunMetadata.without_sources(first.metadata)
 
 
 @pytest.mark.base
@@ -528,6 +617,114 @@ def test_a_component_carrying_a_building_identity_is_refused() -> None:
 
     assert failure.value.error_id.value == "EF-R2"
     assert "BUI2" in str(failure.value)
+
+
+@pytest.mark.base
+def test_two_control_outputs_the_weight_cannot_tell_apart_are_refused_rather_than_guessed() -> None:
+    """Catches an arbitrary pairing wiring one participant's control signal to another.
+
+    An aggregator that grew two control outputs for one participant class names neither of their
+    consumers when nobody reads them, so the feed's weight is the only thing left to tell them
+    apart. Where it does not, writing whichever came first would produce a twin that loads, builds
+    and controls the wrong device, and writing no back-channel at all would turn a controlled
+    participant into a measured one. Both are silent, so the recording stops instead.
+    """
+    system = Synthetic.aggregator(feed_weight=1, dispatch_weights=(1, 1))
+
+    with pytest.raises(EnergySystemRecordingError) as failure:
+        InputItemWriter(system)
+
+    assert failure.value.error_id.value == "EF-R11"
+    assert Synthetic.AGGREGATOR in str(failure.value)
+    assert Synthetic.SOURCE in str(failure.value)
+
+
+@pytest.mark.base
+def test_a_feed_with_no_control_output_at_all_is_recorded_as_a_measured_participant() -> None:
+    """Catches the ambiguity refusal swallowing the participant an aggregator only measures.
+
+    Nothing to pair is not the same as too much to pair: an aggregator that publishes no control
+    output for a participant really does only measure it, whatever the feed's weight says, and the
+    format spells that as a feed without a dispatch block. Refusing it would make every such system
+    unrecordable.
+    """
+    system = Synthetic.aggregator(feed_weight=1, dispatch_weights=())
+
+    items = InputItemWriter(system).items(system.components[1])
+
+    assert len(items) == 1
+    feed = items[0]
+    assert isinstance(feed, AggregatorFeed)
+    assert feed.source == Synthetic.SOURCE
+    assert feed.weight == 1
+    assert feed.dispatch is None
+
+
+@pytest.mark.base
+def test_an_absolute_path_under_a_path_named_key_is_refused_naming_the_setup_and_component() -> None:
+    """Catches the recorder writing a file that resolves on the machine that produced it alone.
+
+    Symbolisation turns every path below a registered root into its ``${var}`` spelling, so a value
+    still absolute afterwards lies below no root and would make the twin unusable everywhere else.
+    The guard runs the structural validator's own scan, so this also catches the two coming to
+    disagree about which keys name a location; what it adds is the setup and the component, which
+    a person re-recording a fleet needs and a load-time failure cannot give.
+    """
+    with pytest.raises(EnergySystemRecordingError) as failure:
+        PortablePathGuard.check(
+            {"nested": {"cache_directory": "/scratch/somewhere"}}, "Battery", "tests/synthetic.py"
+        )
+
+    assert failure.value.error_id.value == "EF-R3"
+    assert "tests/synthetic.py" in str(failure.value)
+    assert "Battery" in str(failure.value)
+    assert "/scratch/somewhere" in str(failure.value)
+
+
+@pytest.mark.base
+def test_a_recording_refuses_to_overwrite_a_file_it_did_not_write(tmp_path: Path) -> None:
+    """Catches a hand-authored energy system being destroyed by a recording that shares its stem.
+
+    Re-recording a twin over its predecessor has to keep working, because that is how the fleet is
+    refreshed, and the recorder's own header line is what tells the two cases apart. A file without
+    it is somebody's own system, and it cannot be brought back by re-recording anything.
+    """
+    session = RecordingSession(Fixtures.SETUPS / "basic_household.py", tmp_path)
+    session.path.parent.mkdir(parents=True, exist_ok=True)
+    session.path.write_text("# a system somebody wrote\nschema_version: 1\n", encoding="utf-8")
+
+    with pytest.raises(EnergySystemRecordingError) as failure:
+        session.refuse_to_overwrite_a_hand_authored_file()
+
+    assert failure.value.error_id.value == "EF-R12"
+    assert str(session.path) in str(failure.value)
+
+    session.path.write_text(
+        RecordedFileWriter.header("system_setups/basic_household.py", "p.simulation.yaml", tmp_path),
+        encoding="utf-8",
+    )
+    session.refuse_to_overwrite_a_hand_authored_file()
+
+
+@pytest.mark.base
+def test_a_written_parameter_file_reads_its_country_back_as_the_string_it_was(tmp_path: Path) -> None:
+    """Catches a string scalar being written bare and coming back as a different type.
+
+    YAML resolves an unquoted scalar by its spelling, so a country of ``none`` comes back as
+    ``None`` and one of ``2022`` as an integer. The recorder compares a run's normalised parameters
+    against those of every file beside it to decide whether it may share one, and a file that does
+    not read back as what was written would never match itself: every recording would write another
+    copy of the same parameters.
+    """
+    for country in ("none", "DE"):
+        parameters = SimulationParameters.one_day_only(2021, 900)
+        parameters.country = country
+        normalised = ParameterNormalisation.normalise(parameters)
+        path = tmp_path / f"{country}.simulation.yaml"
+        path.write_text(ParameterFileWriter.text(normalised), encoding="utf-8")
+
+        assert yaml.safe_load(path.read_text(encoding="utf-8"))["country"] == country
+        assert ParameterFileLibrary.read(path) == normalised
 
 
 @pytest.mark.base

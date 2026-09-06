@@ -453,10 +453,9 @@ class EnergySystemCommands:
         """
         del error_stream  # every command shares one signature; a refusal propagates to main()
         module = Path(arguments.setup)
-        parameters_path = Path(arguments.simulation_parameters)
         directory = Path(arguments.out) if arguments.out else RecordingSession.default_output_directory(module)
-        parameters = SimulationParametersReader.read(parameters_path)
-        result = record_setup(module, parameters, directory, parameters_path=parameters_path)
+        parameters = SimulationParametersReader.read(Path(arguments.simulation_parameters))
+        result = record_setup(module, parameters, directory)
         origin = "wrote" if result.parameters.written else "referenced"
         print(
             f"Recorded {result.setup} as {result.path} "

@@ -40,7 +40,7 @@ import yaml
 
 from hisim import log
 from hisim.config.introspection import SizableFieldKind
-from hisim.config.sizing import AUTO, _AutoSize  # pylint: disable=protected-access
+from hisim.config.sizing import AUTO, _encode_sizable  # pylint: disable=protected-access
 from hisim.config.laws import SizingLaw
 from hisim.energy_system.audit_records import (
     AuditRecord,
@@ -222,7 +222,9 @@ class AuditBuilder:
             a law, and the plain form of anything else.
         """
         if value is AUTO:
-            return _AutoSize.WIRE_SPELLING
+            # The one mapping from the sentinel to its wire spelling lives in the sizing layer;
+            # rendering it here through the same encoder keeps a future respelling in one place.
+            return _encode_sizable(value)
         if isinstance(value, SizingLaw):
             return value.describe()
         return ConfigBlockWriter.plain(value, name, field)

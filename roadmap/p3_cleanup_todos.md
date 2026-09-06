@@ -86,6 +86,14 @@ survives only in a conversation. Items are removed when done, not ticked and kep
   twenty-one; after a week of green runs on main, delete that one line (the workflow header
   carries the same instruction) and the gate blocks. This subsumes the AC-P3.4 item above — the
   first green run is the evidence, the week of them is the confidence.
+- [ ] **Migrate every aggregator's `i_simulate` lookup onto its channel declarations** (decided
+  2026-09-05, #634 review round). All five aggregators — the EMS and the electricity, fuel, gas and
+  heating meters — still query participants by hard-coded tag literals through
+  `get_dynamic_inputs(tags=[...])`, while `DynamicComponent.get_channel_inputs(key)` was built to
+  make the `CHANNELS` declaration the single source of truth and has zero call sites. One dedicated
+  PR after the stack lands switches all five (behaviour-preserving by construction, per the
+  helper's own docstring), with the golden gates verifying. The electricity meter's per-building
+  queries carry extra tags no channel covers yet; they stay literal or get their own channels.
 
 ## Deferred by design (not P3's debt, listed so it is findable)
 

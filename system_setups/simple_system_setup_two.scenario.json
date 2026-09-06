@@ -11,9 +11,9 @@
                     "building": null,
                     "unit": null
                 },
-                "timesteps": 525600,
                 "minimum": 100,
-                "maximum": 200
+                "maximum": 200,
+                "seed": 1
             },
             "config_full_classname": "hisim.components.random_numbers.RandomNumbersConfig",
             "inputs": [],
@@ -28,9 +28,9 @@
                     "building": null,
                     "unit": null
                 },
-                "timesteps": 525600,
                 "minimum": 10,
-                "maximum": 20
+                "maximum": 20,
+                "seed": 2
             },
             "config_full_classname": "hisim.components.random_numbers.RandomNumbersConfig",
             "inputs": [],

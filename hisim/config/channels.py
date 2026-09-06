@@ -15,6 +15,11 @@ other end of the same conversation — one participant, fully classified, handed
 aggregator so it can create the ports the participant needs — and it carries the derived port
 names that end up in result files.
 
+Beside the two sits the small predicate both of them and the port-to-port wire checks consult
+about whether two load types or two units agree, :class:`PortTypeCompatibility`. It lives here
+because the wire checks may import this layer while this layer may not import theirs, and putting
+it anywhere else would mean writing the wildcard rule down twice.
+
 Neither half knows anything about files. The rule that *picks* a channel for a written feed, the
 decoding of the tag names a document spells, and every check that can reject a document live in
 :mod:`hisim.energy_system`, which imports this module rather than the other way round. That
@@ -62,6 +67,71 @@ class ChannelDeclarationError(Exception):
 #: feed and are recombined into one set for matching, which is what keeps the combined list
 #: component-type-first by construction rather than by author discipline.
 ConnectionTag = Union[lt.ComponentType, lt.InandOutputType]
+
+
+class PortTypeCompatibility:
+    """The one spelling of "these two port types agree", shared by every path that asks.
+
+    Two places decide whether a load type or a unit on one end of a connection is compatible with
+    the one on the other end: the port-to-port wire checks of :mod:`hisim.energy_system` and the
+    channel matcher that classifies an aggregator feed. Both ask the same question, so both ask
+    it here, and the two cannot drift apart into a wire that is legal by hand but refused as a
+    feed — or the reverse.
+
+    The answer is equality, widened by one wildcard per vocabulary. A port declared as the
+    wildcard says "this carries whatever the other end carries", which is how HiSim expresses a
+    generic signal — a control percentage, a state flag — that has no physical type of its own.
+    A *channel* declared as the wildcard says the same thing for the same reason: a fuel meter is
+    the case that needs it, because the boiler types its energy-demand outputs by carrier, so the
+    same channel sees oil, pellets or wood chips depending on the household, and district heating
+    feeds the same channel space-heating and hot-water energy in one system. Units get the same
+    treatment, for symmetry rather than because an aggregator needs it.
+    """
+
+    #: Load types that are compatible with any counterpart, on a port and on a channel alike.
+    WILDCARD_LOAD_TYPES: ClassVar[Tuple[lt.LoadTypes, ...]] = (lt.LoadTypes.ANY,)
+
+    #: Units that are compatible with any counterpart, for the same reason.
+    WILDCARD_UNITS: ClassVar[Tuple[lt.Units, ...]] = (lt.Units.ANY,)
+
+    @classmethod
+    def load_types_agree(cls, first: lt.LoadTypes, second: lt.LoadTypes) -> bool:
+        """Reports whether two load types may sit on the two ends of one connection.
+
+        The rule is deliberately symmetric: it does not matter which of the two is the port and
+        which is the channel or the counterpart port, because a wildcard on either side means the
+        other side decides. Two *differing concrete* values are the mismatch this predicate is
+        written to catch.
+
+        Args:
+            first: One of the two load types.
+            second: The other.
+
+        Returns:
+            ``True`` when the two are equal or either one is the wildcard.
+        """
+        return (
+            first == second
+            or first in cls.WILDCARD_LOAD_TYPES
+            or second in cls.WILDCARD_LOAD_TYPES
+        )
+
+    @classmethod
+    def units_agree(cls, first: lt.Units, second: lt.Units) -> bool:
+        """Reports whether two units may sit on the two ends of one connection.
+
+        Symmetric in the same way and for the same reason as :meth:`load_types_agree`, and kept
+        separate from it only because the two vocabularies are separate enumerations with their
+        own wildcard member.
+
+        Args:
+            first: One of the two units.
+            second: The other.
+
+        Returns:
+            ``True`` when the two are equal or either one is the wildcard.
+        """
+        return first == second or first in cls.WILDCARD_UNITS or second in cls.WILDCARD_UNITS
 
 
 @enum.unique
@@ -128,6 +198,40 @@ class DynamicConnectionChannel:
                 f"{sorted(tag.name for tag in self.dispatch_tags)}; drop the tags, or make the "
                 "rule OPTIONAL or REQUIRED."
             )
+
+    def accepts_load_type(self, load_type: lt.LoadTypes) -> bool:
+        """Reports whether a participant's port may carry this load type into the channel.
+
+        A channel naming a concrete load type accepts that one, and additionally any port that
+        itself carries the wildcard — which mirrors exactly what a hand-written wire between the
+        same two ports already allows. A channel naming the wildcard accepts every carrier,
+        because the flows it aggregates are the same quantity under different names and the
+        aggregator's own configuration, not the channel, decides which. The strictness that
+        catches a temperature summed into an energy balance is therefore the one between two
+        concrete, differing values.
+
+        Args:
+            load_type: Load type of the participant's output port.
+
+        Returns:
+            ``True`` when the two agree or either side is the wildcard.
+        """
+        return PortTypeCompatibility.load_types_agree(load_type, self.load_type)
+
+    def accepts_unit(self, unit: lt.Units) -> bool:
+        """Reports whether a participant's port may carry this unit into the channel.
+
+        The unit is the half of the port description that stays strict in practice: a channel
+        summing watt-hours means watt-hours whatever the carrier is, so the wildcard exists here
+        for symmetry with the load type rather than because an aggregator needs it.
+
+        Args:
+            unit: Unit of the participant's output port.
+
+        Returns:
+            ``True`` when the two agree or either side is the wildcard.
+        """
+        return PortTypeCompatibility.units_agree(unit, self.unit)
 
     def matches(self, feed_tags: Iterable[ConnectionTag]) -> bool:
         """Reports whether this channel's tags are a subset of a feed's effective tags.

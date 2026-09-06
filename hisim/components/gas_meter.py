@@ -7,7 +7,7 @@ post-processing cost and emission computation.
 
 # clean
 from dataclasses import dataclass
-from typing import ClassVar, List, Optional
+from typing import ClassVar, List, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -17,6 +17,12 @@ from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim.component import ComponentInput, ComponentOutput, OpexCostDataClass, CapexCostDataClass
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config.channels import (
+    DispatchRule,
+    DynamicConnectionChannel,
+    PortTypeCompatibility,
+    ResolvedDynamicConnection,
+)
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
@@ -92,6 +98,44 @@ class GasMeter(DynamicComponent):
     GasProduction: ClassVar[str] = "GasProduction"
     CumulativeConsumption: ClassVar[str] = "CumulativeConsumption"
     CumulativeProduction: ClassVar[str] = "CumulativeProduction"
+
+    #: Stable key of the channel carrying gas a participant feeds into the system.
+    PRODUCTION_CHANNEL: ClassVar[str] = "production"
+
+    #: Stable key of the channel carrying gas a participant burned.
+    CONSUMPTION_UNCONTROLLED_CHANNEL: ClassVar[str] = "consumption_uncontrolled"
+
+    #: The two flows this meter understands, declared so that an energy-system file can address a
+    #: gas burner or a gas producer at it. The consumption channel's tag, unit and monitored-only
+    #: weight are the ones :meth:`get_default_connections_from_generic_gas_heater` already builds
+    #: and :meth:`i_simulate` already queries; the production channel's are queried by
+    #: :meth:`i_simulate` alone, since no default connection builds a producer and an explicit
+    #: energy-system file is the only thing that wires one today. Declaring both adds no wiring
+    #: and changes none.
+    #:
+    #: The load type is the wildcard on both, because which gas this meter measures is the
+    #: meter's own ``gas_loadtype`` and the burner's own carrier — natural gas in one household,
+    #: green hydrogen in the next — and not a property of the flow the channel describes. The
+    #: unit stays strict: both sums are in watt-hours whichever gas it is.
+    #:
+    #: Dispatch is forbidden on both. A meter is a pure aggregator: it has no control authority
+    #: and no per-participant output to send a signal on.
+    CHANNELS: Tuple[DynamicConnectionChannel, ...] = (
+        DynamicConnectionChannel(
+            key=PRODUCTION_CHANNEL,
+            tags=frozenset({lt.InandOutputType.GAS_PRODUCTION}),
+            load_type=lt.LoadTypes.ANY,
+            unit=lt.Units.WATT_HOUR,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+        DynamicConnectionChannel(
+            key=CONSUMPTION_UNCONTROLLED_CHANNEL,
+            tags=frozenset({lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED}),
+            load_type=lt.LoadTypes.ANY,
+            unit=lt.Units.WATT_HOUR,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+    )
 
     def __init__(
         self,
@@ -185,6 +229,61 @@ class GasMeter(DynamicComponent):
         )
 
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_gas_heater())
+
+    def resolve_dynamic_connections(self, connections: List[ResolvedDynamicConnection]) -> None:
+        """Checks the carrier of every feed against this meter's own, then creates the ports.
+
+        Both channels this meter declares wildcard the load type, because they are class-level
+        declarations and a class cannot know which gas the instance in a given household was
+        configured for. The instance does know: :meth:`get_cost_opex` prices and books emissions
+        for ``config.gas_loadtype`` alone. Nothing between the two would notice a green-hydrogen
+        feed arriving at a meter configured for natural gas — the numbers would be summed, priced
+        as natural gas and reported without a word — so the mismatch is refused here, where the
+        configured carrier and the feed's carrier are both in hand for the first time.
+
+        The check runs over the whole batch before a single port is created, so a file this meter
+        refuses leaves the component exactly as it was rather than half grown.
+
+        Args:
+            connections: The resolved feeds, already validated against this component's channels
+                by the energy-system resolver.
+
+        Raises:
+            ValueError: If a feed carries a concrete load type this meter is not configured to
+                measure. The resolver turns it into a located energy-system error.
+        """
+        self._check_feeds_carry_the_configured_gas(connections)
+        super().resolve_dynamic_connections(connections)
+
+    def _check_feeds_carry_the_configured_gas(
+        self, connections: List[ResolvedDynamicConnection]
+    ) -> None:
+        """Refuses a feed whose carrier this meter would measure but price as something else.
+
+        The legacy default connections type their source by this meter's own ``gas_loadtype``, so
+        a setup building them by hand never produced this mismatch. An energy-system file
+        addresses feeds at the meter by tag alone and can therefore hand it any gas burner or
+        producer in the system, which is exactly the freedom that has to be paid for with this
+        check. A source port typed as the wildcard stays accepted, because that is what the
+        wildcard is for: the meter's configuration, not the port, decides the carrier.
+
+        Args:
+            connections: The resolved feeds to check, in resolution order.
+
+        Raises:
+            ValueError: On the first feed whose carrier disagrees with ``config.gas_loadtype``,
+                naming the participant, its output and both carriers.
+        """
+        for connection in connections:
+            carrier = connection.source_port.load_type
+            if PortTypeCompatibility.load_types_agree(carrier, self.config.gas_loadtype):
+                continue
+            raise ValueError(
+                f"the feed '{connection.source_name}.{connection.source_output}' carries "
+                f"'{carrier.name}', but this meter is configured to measure and price "
+                f"'{self.config.gas_loadtype.name}' (gas_loadtype); configure the meter for the "
+                "carrier it meters, or feed it the matching source."
+            )
 
     def get_default_connections_from_generic_gas_heater(
         self,

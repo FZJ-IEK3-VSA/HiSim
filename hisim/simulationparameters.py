@@ -211,17 +211,27 @@ class SimulationParameters:
 
     @classmethod
     def one_week_july(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
-        """Generates a parameter set for the first week of July, the summer counterpart of one_week_only.
+        """Generates a parameter set whose dates are the first week of July. It does not yet deliver July.
 
-        Every other short-horizon parameter set of this class starts on the first of January,
-        which puts them in the coldest, darkest week of the year. That window measures a cooling
+        The intent was a summer counterpart to ``one_week_only``: every other short-horizon
+        parameter set of this class starts on the first of January, which measures a cooling
         device, a solar-thermal collector or an air conditioner at its annual minimum, and a
-        component that does nothing for the whole run proves nothing about itself. (The
-        air-conditioner setup's KPI division by zero has a different cause — it has no occupancy
-        and no generation in any season — but its cooling path, too, only moves in summer.) This
-        set answers with the same seven days shifted into July, so a comparison that runs both
-        windows exercises the heating side once and the cooling side once; the parity rig of the
-        recording migration is that comparison.
+        component that does nothing for the whole run proves nothing about itself. Shifting the
+        same seven days into July was meant to exercise the cooling side.
+
+        **It does not do that today, and a caller must not assume it does.** HiSim has never
+        supported a mid-year start date. Every profile-driven component — the weather sources, the
+        PV model, the building, the LoadProfileGenerator occupancy, the cars, the smart devices,
+        the CSV loader, the price signal, the seasonal gates of the heat pump and the CHP — indexes
+        its year-long profile by the timestep number, so timestep 0 is read as the 1st of January
+        whatever this start date says. A run over these dates therefore reproduces January for
+        every component that reads a profile, and pairs a July sun position with January irradiance
+        in the few that do compute from the date, such as a solar-thermal collector's geometry.
+
+        The set is kept, and only the parity rig used it: the rig has fenced its July window
+        (``scripts/p3_parity_matrix.py``) until the mid-year-start epic makes the profiles follow
+        the start date, at which point this becomes the window it was meant to be. Until then it
+        belongs in nothing that reports physics.
 
         Args:
             year: Calendar year the week is taken from.

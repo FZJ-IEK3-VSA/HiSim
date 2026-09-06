@@ -2,16 +2,18 @@
 """Run one Python setup and its recorded twin side by side and prove they are the same simulation.
 
 TEMPORARY — this script is the P3 migration parity rig (requirements R11) and is deleted together
-with the rest of the rig in phase P6 (R11.8 amended and AC-P3.20 deferred to P6, 2026-08-31). It is not the permanent golden gate,
-it produces no reference and it blesses nothing: its only question is whether the declarative file
-recorded from a setup reproduces that setup.
+with the rest of the rig in phase P6 (R11.8 amended and AC-P3.20 deferred to P6, 2026-08-31). It is
+not the permanent golden gate, it produces no reference and it blesses nothing: its only question is
+whether the declarative file recorded from a setup reproduces that setup.
 
 Every requested ``(setup, window)`` triple is run through the three comparisons of R11.3 in order;
-one invocation covers the whole requested set — the entire fleet over both windows by default —
-and prints one table over all of it. First the component set and the wire set, through the
-declared port-renaming table, because two systems wired differently have nothing worth comparing
-numerically. Then **every** column of the result frame — the content of ``all_results.csv`` —
-since a difference the KPI layer happens to average away is still a difference. Then
+one invocation covers the whole requested set — the entire fleet over every runnable window by
+default, which is the January week alone while the July window is fenced (see
+``p3_parity_matrix.MatrixPaths.FENCED_WINDOWS``) — and prints one table over all of it. First the
+component set and the wire set, through the declared port-renaming table, because two systems
+wired differently have nothing worth comparing numerically. Then **every** column of the result
+frame — the content of ``all_results.csv`` — since a difference the KPI layer happens to average
+away is still a difference. Then
 ``all_kpis.json``, where KPI computation succeeds; a setup that crashes in that layer still
 receives a named verdict from the first two comparisons rather than an error, but its unavailable
 KPI stage fails the triple, so a new KPI regression cannot read green (R11.4 as amended
@@ -30,7 +32,7 @@ two runs themselves in ``p3_parity_runs.py``; what is here is the comparison and
 Examples
 --------
     python scripts/p3_parity_check.py --setup basic_household --window january
-    python scripts/p3_parity_check.py --setup household_gas_building_sizer --window july --rel-tol 1e-12
+    python scripts/p3_parity_check.py --setup household_gas_building_sizer --rel-tol 1e-12
 """
 
 from __future__ import annotations
@@ -53,7 +55,7 @@ from hisim.energy_system.parity import (
 )
 
 try:  # importable both as ``scripts.p3_parity_check`` (tests) and as a script from ``scripts/``
-    from p3_parity_matrix import covered_setups  # type: ignore[import-not-found]
+    from p3_parity_matrix import MatrixPaths, covered_setups  # type: ignore[import-not-found]
     from p3_parity_renamings import DeclaredPortRenamings  # type: ignore[import-not-found]
     from p3_parity_runs import (  # type: ignore[import-not-found]
         ColumnDifference,
@@ -73,7 +75,7 @@ try:  # importable both as ``scripts.p3_parity_check`` (tests) and as a script f
         last_line,
     )
 except ModuleNotFoundError:  # pragma: no cover - depends on how scripts/ is on the path
-    from scripts.p3_parity_matrix import covered_setups
+    from scripts.p3_parity_matrix import MatrixPaths, covered_setups
     from scripts.p3_parity_renamings import DeclaredPortRenamings
     from scripts.p3_parity_runs import (
         ColumnDifference,
@@ -425,11 +427,13 @@ def parse_arguments(argv: Optional[Sequence[str]]) -> argparse.Namespace:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--setup", nargs="+", metavar="STEM", help="cover only these setups")
+    # Fenced windows stay valid choices so that asking for one is answered with the reason it is
+    # fenced rather than with argparse's bare "invalid choice"; main() refuses them before any run.
     parser.add_argument(
         "--window",
         nargs="+",
         choices=list(ParityWindows.names()),
-        help="cover only these windows (default: both)",
+        help=f"cover only these windows (default: {' '.join(ParityWindows.runnable())})",
     )
     parser.add_argument(
         "--rel-tol",
@@ -472,8 +476,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     Returns:
         ``0`` when every triple reached parity, ``1`` otherwise.
+
+    Raises:
+        SystemExit: If a fenced window was asked for. The refusal happens here, before the first
+            setup is imported, so that it costs nothing and cannot be mistaken for a run.
     """
     arguments = parse_arguments(argv)
+    try:
+        MatrixPaths.refuse_fenced(arguments.window or ())
+    except ValueError as refusal:
+        raise SystemExit(str(refusal)) from refusal
     if arguments.summarize is not None:
         table, covered, without_parity = Report.summarize(arguments.summarize)
         print(table)
@@ -485,7 +497,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     tolerance = Tolerance(arguments.rel_tol, arguments.abs_tol)
     checker = ParityChecker(tolerance, DeclaredPortRenamings.port_renaming())
     stems = discover(arguments.setup)
-    windows = list(arguments.window or ParityWindows.names())
+    windows = list(arguments.window or ParityWindows.runnable())
     print(f"Comparing {len(stems)} setup(s) over {len(windows)} window(s) at {tolerance.describe()}.\n")
 
     verdicts: List[TripleVerdict] = []

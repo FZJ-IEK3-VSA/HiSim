@@ -211,6 +211,15 @@ extension of the golden gate and it blesses nothing.
 - R11.5 **Two windows.** Every triple runs a January week and a July week — `one_week_only` and a new `one_week_july`,
   both at 60 s. A single window measures the cooling and solar-thermal setups at their annual minimum, and the
   January-only window is why the air-conditioner setup divides by zero in the scan.
+  `[amended 2026-09-06]` **The July window is fenced; the rig runs the January week only.** HiSim has never supported
+  a mid-year start date: every profile-driven component (all six weather sources and both cache branches, PV, the
+  building, the LPG occupancy, the cars, the smart devices, the CSV loader, the price signal, the seasonal heat-pump
+  and CHP gates) indexes its year-long profile from timestep 0 as if that were the 1st of January, so a July triple
+  compares two runs that both simulate January — byte-identical to the January triple for every setup without a
+  solar-thermal collector, and physically incoherent for the four with one, whose sun position follows the date while
+  its irradiance does not. `one_week_july` and the window name are kept and the fence is one refusal in
+  `scripts/p3_parity_matrix.py`; the mid-year-start epic (`roadmap/midyear_start_epic.md`) fixes the profiles
+  fleet-wide and unfences the window, at which point this requirement is met as first written.
 - R11.6 **One configuration axis.** The configurations are R10's probe list, so the rig, the grouping table and the
   recorded files share one definition of the configurations a setup has.
 - R11.7 **Manual, aggregated and loud.** `workflow_dispatch` only, with filters for setup, window and configuration; a
@@ -264,7 +273,7 @@ extension of the golden gate and it blesses nothing.
 | AC-P3.14 | The prefilled workbook marks a component absent, identical or differing against the baseline, and the importer rejects a workbook with a differing component that carries no assignment, naming it. | R10.2, R10.3 |
 | AC-P3.15 | `<stem>.grouping.yaml` is committed and the workbook is not; regenerating the workbook from the probe runs and re-importing it yields the identical `.grouping.yaml`. | R10.4 |
 | AC-P3.16 | The grouping report lists the `override` differences as consumer knobs and names the fork combinations the probe list never exercised. | R10.5, R10.7 |
-| AC-P3.17 | One dispatch of the rig covers every in-scope (setup, configuration, window) triple and prints them as one table; the January and July windows both appear for every triple. | R11.1, R11.5, R11.7 |
+| AC-P3.17 `[amended 2026-09-06]` | One dispatch of the rig covers every in-scope (setup, configuration, window) triple and prints them as one table; every runnable window appears for every triple. That is the January window alone while the July one is fenced (R11.5 as amended, because a July window reads January's profiles today); a dispatch that asks for July is refused with that reason rather than quietly given January. The criterion returns to "both windows" when the mid-year-start epic unfences it. | R11.1, R11.5, R11.7 |
 | AC-P3.18 | Changing one config value in a recorded file makes its triple fail and the report names the columns or KPIs that moved; the comparison is exact, so no threshold can hide it. | R11.2, R11.3 |
 | AC-P3.19 `[amended 2026-09-05]` | The seven KPI-broken setups return a structural verdict — component set and wire set compared, KPI stage reported as unavailable — rather than an error. The unavailable stage fails the triple in the summary table (R11.4 as amended); what the criterion pins is that the failure is a named verdict with both structural comparisons made, never an exception. | R11.4, R11.3 |
 | AC-P3.20 `[deferred to P6, 2026-08-31]` | The phase-6 teardown deletes the workflow, its configuration and its scripts, and the repository contains no reference to them afterwards. It is an acceptance criterion of P6, not of P3 — P3 ships the rig, P6 removes it. | R11.8 |

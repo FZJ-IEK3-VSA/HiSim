@@ -2,9 +2,15 @@
 #
 # For the duration of the P3 setup migration this workflow answers one question: does the
 # declarative file recorded from a Python setup reproduce that setup? It runs both paths inside
-# one container, at exact equality, over a January week and a July week, and it needs no golden
-# reference, so it covers the thirteen setups the permanent gate has no entry for and the seven
-# whose KPI layer crashes today (R11.1, R11.4).
+# one container, at exact equality, over every runnable window, and it needs no golden reference,
+# so it covers the thirteen setups the permanent gate has no entry for and the seven whose KPI
+# layer crashes today (R11.1, R11.4).
+#
+# R11.5 asked for a January week and a July week. Only the January week runs: HiSim has never
+# supported a mid-year start — every profile-driven component reads its year-long profile from
+# timestep 0 as if that were the 1st of January — so a July triple would compare two runs that
+# both simulate January. The July window is therefore fenced in scripts/p3_parity_matrix.py and
+# is not offered below; the mid-year-start epic (roadmap/midyear_start_epic.md) unfences it.
 #
 # It is dispatched by hand and never on push (R11.7). It blesses nothing and gates nothing.
 #
@@ -24,14 +30,13 @@ on:
         required: false
         default: ""
       window:
-        description: "Which window to run"
+        description: "Which window to run; 'all' is every window that is not fenced"
         required: false
-        default: "both"
+        default: "all"
         type: choice
         options:
-          - both
+          - all
           - january
-          - july
       rel_tol:
         description: "Relative slack; 0 demands exact equality, and any other value is a finding"
         required: false
@@ -62,7 +67,7 @@ jobs:
         run: |
           ARGS=""
           if [ -n "${{ inputs.setup }}" ]; then ARGS="$ARGS --setup ${{ inputs.setup }}"; fi
-          if [ "${{ inputs.window }}" != "both" ]; then ARGS="$ARGS --window ${{ inputs.window }}"; fi
+          if [ "${{ inputs.window }}" != "all" ]; then ARGS="$ARGS --window ${{ inputs.window }}"; fi
           echo "matrix=$(python3 scripts/p3_parity_matrix.py $ARGS)" >> "$GITHUB_OUTPUT"
 
   parity:

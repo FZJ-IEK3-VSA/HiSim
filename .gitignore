@@ -207,3 +207,7 @@ component_connections.json
 *.backup
 *.bak
 results/
+
+# throwaway directory of "record_all_setups.py --check"; removed by the script itself,
+# ignored here so an interrupted run cannot leave the working tree looking dirty
+.record-check-*/

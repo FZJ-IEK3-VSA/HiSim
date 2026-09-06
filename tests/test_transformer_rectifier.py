@@ -8,6 +8,8 @@ simulation, no I/O.
 
 # clean
 
+import json
+
 import pandas as pd
 import pytest
 
@@ -30,7 +32,7 @@ def test_get_default_transformer_config_returns_config_with_documented_defaults(
     config = TransformerConfig.get_default_transformer_config()
     assert isinstance(config, TransformerConfig)
     assert config.component_id.building is None
-    assert config.component_id.name == "Generic Transformer and rectifier Unit"
+    assert config.component_id.name == "GenericTransformerAndRectifier"
     assert config.efficiency == pytest.approx(0.95)
 
 
@@ -181,51 +183,74 @@ def test_transformer_simulate_scales_input_by_efficiency() -> None:
 
 
 @pytest.mark.base
-def test_transformer_simulate_zero_efficiency_produces_zero_output() -> None:
-    """An efficiency of 0 produces a zero output regardless of the input power."""
-    mysim = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
-    config = TransformerConfig(component_id=ComponentID(name="Transformer"), efficiency=0.0)
-    transformer = Transformer(my_simulation_parameters=mysim, config=config)
+def test_transformer_config_refuses_an_efficiency_outside_the_fraction_range() -> None:
+    """An efficiency that is not a fraction in (0, 1] is refused at construction, by value.
 
-    source_output = ComponentOutput(
-        object_name="Source",
-        field_name="Input1",
-        load_type=lt.LoadTypes.ELECTRICITY,
-        unit=lt.Units.KILOWATT,
-        output_description="Source power",
-        component_id=ComponentID("Source"),
-    )
-    transformer.electricity_input.source_output = source_output
-
-    number_of_outputs = fft.get_number_of_outputs([transformer, source_output])
-    stsv = SingleTimeStepValues(number_of_outputs)
-    fft.add_global_index_of_components([transformer, source_output])
-
-    stsv.values[source_output.global_index] = 42.0
-    transformer.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
-    assert stsv.values[transformer.electricity_output.global_index] == pytest.approx(0.0)
+    A percentage (95) would silently scale the output a hundredfold, a zero would make the
+    conversion-loss indicator divide by zero, and a negative value would invert the power flow --
+    all three used to run as plausible simulations and could only be discovered in the numbers.
+    The configuration is where they stop.
+    """
+    for wrong in (0.0, -0.5, 1.5, 95.0):
+        with pytest.raises(ValueError, match="fraction"):
+            TransformerConfig(component_id=ComponentID(name="Transformer"), efficiency=wrong)
+    assert TransformerConfig(component_id=ComponentID(name="Transformer"), efficiency=1.0).efficiency == 1.0
 
 
 @pytest.mark.base
 def test_transformer_kpi_entries_integrate_output_and_derive_losses() -> None:
     """The two transformer KPIs integrate the delivered kilowatts and derive the losses from the efficiency.
 
-    Two timesteps of 60 s at 100 kW are 100*2*60/3600 kWh delivered; with the default 95 %
-    efficiency the losses are delivered*(1/0.95 - 1). Both are computed here by hand, so a broken
-    integration or a losses formula reading the wrong field cannot agree with itself.
+    Two timesteps of 60 s at 100 kW are 3.333 kWh delivered; at 80 % efficiency one quarter of
+    the delivered energy was lost on the way (1/0.8 - 1 = 0.25), so the losses are 0.833 kWh.
+    Both are hand-derived literals over an explicit non-default efficiency, so a wrong-but-
+    consistent losses formula, or a drifted config default, cannot agree with the test.
+
+    A foreign component's kilowatt column is prepended the way the real caller hands the whole
+    run's outputs over, so the component_name filter is load-bearing here too.
     """
     mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    transformer = Transformer(my_simulation_parameters=mysim, config=TransformerConfig.get_default_transformer_config())
-    frame = pd.DataFrame({0: [100.0, 100.0]})
-
-    entries = {e.name: e for e in transformer.get_component_kpi_entries([transformer.electricity_output], frame)}
-
-    delivered = round(100.0 * 2 * 60 / 3600, 3)
-    assert entries["Electrical energy delivered"].value == pytest.approx(delivered)
-    assert entries["Conversion losses"].value == pytest.approx(round(delivered * (1 / 0.95 - 1), 3))
-    assert all(isinstance(e.value, float) for e in entries.values()), (
-        "a numpy scalar here would crash the KPI json writer"
+    config = TransformerConfig(component_id=ComponentID(name="Transformer"), efficiency=0.8)
+    transformer = Transformer(my_simulation_parameters=mysim, config=config)
+    foreign = ComponentOutput(
+        object_name="OtherUnit",
+        field_name="TransformerOutput",
+        load_type=lt.LoadTypes.ELECTRICITY,
+        unit=lt.Units.KILOWATT,
+        output_description="a stranger's output",
+        component_id=ComponentID(name="OtherUnit"),
     )
+    frame = pd.DataFrame({0: [999.0, 999.0], 1: [100.0, 100.0]})
+
+    entries = {
+        e.name: e
+        for e in transformer.get_component_kpi_entries([foreign, transformer.electricity_output], frame)
+    }
+
+    assert entries["Electrical energy delivered"].value == pytest.approx(3.333)
+    assert entries["Conversion losses"].value == pytest.approx(0.833)
+    assert all(e.name_of_source_component == transformer.component_name for e in entries.values()), (
+        "the source component is the disambiguator a future multi-instance collision fix keys on"
+    )
+    for entry in entries.values():
+        json.dumps(entry.to_dict())  # the webtool writer serializes exactly this; it must not raise
+
+
+@pytest.mark.base
+def test_transformer_kpi_entries_refuse_nan_instead_of_understating() -> None:
+    """A NaN in the output column raises instead of being silently dropped from the sum.
+
+    pandas sums with skipna by default, so a NaN timestep would understate the delivered energy
+    and the derived losses while looking exactly like a real figure; a KPI is either computed
+    from complete values or refused by name.
+    """
+    mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = TransformerConfig(component_id=ComponentID(name="Transformer"), efficiency=0.8)
+    transformer = Transformer(my_simulation_parameters=mysim, config=config)
+    frame = pd.DataFrame({0: [100.0, float("nan")]})
+
+    with pytest.raises(ValueError, match="NaN"):
+        transformer.get_component_kpi_entries([transformer.electricity_output], frame)
 
 
 @pytest.mark.base

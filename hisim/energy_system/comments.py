@@ -29,13 +29,15 @@ from __future__ import annotations
 import io
 from typing import Any, ClassVar, List, Optional, Tuple, Type
 
+import numpy as np
+
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.representer import RoundTripRepresenter
 
 from hisim.config.introspection import SizableFieldKind
 from hisim.energy_system.audit_records import AuditRecord, BuiltFrom, ComponentAudit
-from hisim.energy_system.emitter import EnergySystemEmitter
+from hisim.energy_system.emitter import CanonicalDumper, EnergySystemEmitter
 from hisim.energy_system.loader import EnergySystemReader, dump_energy_system
 from hisim.energy_system.model import ComponentEntry, EnergySystemFile
 from hisim.energy_system.metadata import RunMetadata
@@ -51,8 +53,14 @@ class CanonicalRepresenter(RoundTripRepresenter):
     YAML version this format's reader uses — is quoted, which the round-trip representer does not
     do on its own because it follows a later version of the specification.
 
-    Neither habit is invented here: the quoting question is put to the canonical writer's own
-    resolver, so the two answers cannot drift apart as that resolver changes.
+    Beyond the two habits it registers the numeric conversions the canonical dumper makes: a numpy
+    integer, float, boolean or array arriving from a configuration value is written as the plain
+    number it stands for. Those are not a style of this writer but a spelling both writers have to
+    share, since an annotated file and a plain one of the same document must be the same bytes.
+
+    Nothing here is invented: the quoting question is put to the canonical writer's own resolver
+    and the numeric representers are that writer's own, so the two cannot drift apart as either
+    changes.
     """
 
     #: Tag under which a null is written.
@@ -69,17 +77,23 @@ class CanonicalRepresenter(RoundTripRepresenter):
 
     @classmethod
     def configured(cls) -> Type["CanonicalRepresenter"]:
-        """Registers the two overrides on this class and returns it.
+        """Register this class's representers and return the class.
 
-        Registration happens here rather than at import time so that importing this module has
-        no side effect, and it is idempotent: registering the same function for the same type
-        twice is the same as registering it once.
+        Two are the spellings described above (``null``, quoted strings). The rest convert numpy scalars and
+        arrays to plain values, borrowed from :class:`CanonicalDumper` so that the annotated writer and the
+        plain writer render a numpy value identically -- a test holds the two writers to the same bytes.
+        Registration is done here instead of at import time so importing this module has no side effect;
+        calling it twice is harmless.
 
         Returns:
-            This class, ready to be handed to a YAML instance.
+            This class, ready to be assigned as a YAML instance's ``Representer``.
         """
         cls.add_representer(type(None), cls.represent_canonical_null)
         cls.add_representer(str, cls.represent_canonical_string)
+        cls.add_multi_representer(np.integer, CanonicalDumper.represent_numpy_integer)
+        cls.add_multi_representer(np.floating, CanonicalDumper.represent_numpy_float)
+        cls.add_multi_representer(np.bool_, CanonicalDumper.represent_numpy_bool)
+        cls.add_representer(np.ndarray, CanonicalDumper.represent_numpy_array)
         return cls
 
     @staticmethod

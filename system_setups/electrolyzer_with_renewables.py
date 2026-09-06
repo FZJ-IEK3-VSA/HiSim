@@ -64,7 +64,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     multiplier = 1  # Multiplier factor for amplification (if needed)
 
     # Set transformer and rectifier parameter
-    name = "Standard transformer and rectifier unit"
+    name = "StandardTransformerAndRectifier"
     efficiency = 0.95  # from literature
     loadtype = lt.LoadTypes.ELECTRICITY
     unit = lt.Units.KILOWATT

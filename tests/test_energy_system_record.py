@@ -25,17 +25,27 @@ Each test states the failure mode it catches.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import re
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Tuple
 
+import numpy as np
 import pytest
+import yaml
+from ruamel.yaml import YAML
 
 from hisim.energy_system.audit import AuditWriter, build_audit
 from hisim.energy_system.classes import validate_classes
-from hisim.energy_system.comments import AnnotatedEmitter, ProvenanceComments, strip_comments
+from hisim.energy_system.comments import (
+    AnnotatedEmitter,
+    CanonicalRepresenter,
+    ProvenanceComments,
+    strip_comments,
+)
+from hisim.energy_system.emitter import EnergySystemEmitter
 from hisim.energy_system.errors import EnergySystemFormatError, EnergySystemRecordError
 from hisim.energy_system.executor import (
     SimulationParametersReader,
@@ -45,7 +55,7 @@ from hisim.energy_system.executor import (
 )
 from hisim.energy_system.loader import dump_energy_system, load_energy_system
 from hisim.energy_system.metadata import RunMetadata
-from hisim.energy_system.record import realize
+from hisim.energy_system.record import ConfigBlockWriter, realize
 from hisim.energy_system.sizing_bridge import sizing_sources_bridge
 
 
@@ -567,6 +577,93 @@ def test_the_annotated_writer_agrees_with_the_canonical_writer_on_a_record(chain
 
 
 @pytest.mark.base
+def test_both_writers_spell_a_numpy_number_as_a_plain_one() -> None:
+    """Catches a document becoming unwritable because one of its numbers is in a numpy box.
+
+    A field annotated ``float`` does not have to hold one. Anything a setup derives from a sized
+    building, a pandas table or a pvlib call arrives as a numpy scalar, and a YAML writer with no
+    representer for that type refuses the whole document -- so the document cannot be written down
+    at all, which reads as the format being unable to express it when it is only the writer being
+    unable to spell the number. ``air_conditioned_house`` is the setup this really happened to: its
+    scaled air-conditioner config takes a scale factor from the building's thermal demand, and the
+    writer died on the value below rather than on anything about the setup.
+
+    What this covers is the emitters, which is not the same as covering a recording. The two are
+    fed here directly, and a document reaching them that way comes from an annotated write or from
+    a model a loader built, where a numpy box can still be present. On the recording path every
+    configuration value passes ``ConfigBlockWriter.plain()`` first, and that refuses ``np.float32``,
+    ``np.int64``, ``np.bool_`` and ``np.ndarray`` with ``EF-60`` before any representer runs: only
+    ``np.float64``, which is an instance of ``float``, ever reaches a writer during a recording.
+    The sibling test below pins that half.
+
+    Both writers are covered, because the record writer runs on a second YAML library: teaching one
+    and not the other would trade a crash for the two of them disagreeing about the same document,
+    which is the drift the tests above exist to prevent. What each must produce is a *plain* number,
+    so that the file stays ordinary YAML rather than something only a numpy-aware reader can load.
+
+    Catches: a write that dies on a number it could have written, and one writer learning to spell
+    it while the other does not.
+    """
+    document = {
+        "single": np.float32(0.5),
+        "double": np.float64(0.5364243908677532),
+        "integer": np.int64(7),
+        "boolean": np.bool_(True),
+        "array": np.array([1.5, 2.5]),
+    }
+    expected = {
+        "single": 0.5,
+        "double": 0.5364243908677532,
+        "integer": 7,
+        "boolean": True,
+        "array": [1.5, 2.5],
+    }
+
+    canonical = EnergySystemEmitter.render(dict(document))
+
+    annotated_stream = io.StringIO()
+    annotated_writer = YAML()
+    annotated_writer.Representer = CanonicalRepresenter.configured()
+    annotated_writer.dump(dict(document), annotated_stream)
+
+    for written, writer in ((canonical, "canonical"), (annotated_stream.getvalue(), "annotated")):
+        loaded = yaml.safe_load(written)
+        assert loaded == expected, f"the {writer} writer changed the values: {loaded}"
+        assert [type(loaded[key]) for key in ("single", "double", "integer", "boolean")] == [
+            float,
+            float,
+            int,
+            bool,
+        ], f"the {writer} writer left a value in a type a plain YAML reader would not produce"
+
+
+@pytest.mark.base
+def test_only_a_numpy_double_survives_the_recording_path_and_the_other_boxes_are_refused() -> None:
+    """Catches the emitters' numpy coverage being read as a promise the recording path keeps.
+
+    A configuration value is reduced by ``ConfigBlockWriter.plain()`` before any writer sees it,
+    and that reduction accepts a value only if it is already plain data. ``np.float64`` passes
+    because it really is a ``float`` and comes out as one; ``np.int64``, ``np.float32``,
+    ``np.bool_`` and ``np.ndarray`` are none of Python's plain types and are refused with
+    ``EF-60`` naming the component and the field. That refusal is deliberate — a record has to
+    state values a reader can check, not values a numpy-aware writer happens to be able to spell —
+    so this test exists to keep it from being weakened on the strength of the test above.
+
+    Catches: ``plain()`` growing a numpy branch, and ``np.float64`` losing its way through.
+    """
+    reduced = ConfigBlockWriter.plain(np.float64(0.5364243908677532), "Battery", "value")
+
+    assert reduced == 0.5364243908677532
+    assert isinstance(reduced, float)
+
+    with pytest.raises(EnergySystemRecordError) as refusal:
+        ConfigBlockWriter.plain(np.int64(7), "Battery", "value")
+
+    assert refusal.value.error_id.value == "EF-60"
+    assert "Battery" in str(refusal.value)
+
+
+@pytest.mark.base
 def test_a_disabled_group_records_exactly_what_deleting_it_by_hand_would(tmp_path: Path) -> None:
     """Catches an off switch leaving a trace in the record of the system it removed.
 
@@ -681,3 +778,34 @@ def test_a_re_run_that_does_not_reproduce_its_record_is_reported(tmp_path: Path)
 
     assert failure.value.error_id.value == "EF-61"
     assert "minimal_thermal_power_in_watt" in str(failure.value)
+
+
+@pytest.mark.base
+def test_an_override_of_a_field_the_preset_left_open_is_auditable(tmp_path: Path) -> None:
+    """Catches the audit refusing to describe the most interesting kind of override.
+
+    A preset that leaves a power band for a law to compute holds the ``AUTO`` sentinel in that
+    field, and an entry that pins such a field is exactly the override a reader wants explained.
+    The plain-data writer rightly refuses to put a sentinel into a record, so the audit has to
+    spell it through the sizing layer's own encoder instead — and before it did, this file, which
+    is legal by every schema rule, crashed the audit rendering of an otherwise successful build.
+    """
+    source = Fixtures.MINIMAL.read_text(encoding="utf-8")
+    pinned = source.replace(
+        "    preset: condensing_gas",
+        "    preset: condensing_gas\n    config:\n      maximal_thermal_power_in_watt: 5000.0",
+        1,
+    )
+    assert pinned != source
+    overriding = tmp_path / "pinned_boiler.energy_system.yaml"
+    overriding.write_text(pinned, encoding="utf-8")
+
+    built = Fixtures.build(overriding, tmp_path)
+    audit = build_audit(built)
+    rendered = AnnotatedEmitter.render(realize(built), audit)
+
+    boiler = next(component for component in audit.components if component.name == "boiler")
+    override = next(entry for entry in boiler.overrides if entry.field == "maximal_thermal_power_in_watt")
+    assert override.preset_default == "AUTO"
+    assert override.value == 5000.0
+    assert "maximal_thermal_power_in_watt: 5000.0" in rendered

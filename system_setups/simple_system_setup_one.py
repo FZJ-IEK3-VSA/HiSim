@@ -34,10 +34,10 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     # Create first RandomNumbers object and adds to simulator
     my_rn1 = RandomNumbers(
         config=RandomNumbersConfig(
-            component_id=ComponentID(name="Random numbers 100-200"),
-            timesteps=my_simulation_parameters.timesteps,
+            component_id=ComponentID(name="RandomNumbers100To200"),
             minimum=100,
             maximum=200,
+            seed=1,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -46,10 +46,10 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     # Create second RandomNumbers object and adds to simulator
     my_rn2 = RandomNumbers(
         config=RandomNumbersConfig(
-            component_id=ComponentID(name="Random numbers 10-20"),
-            timesteps=my_simulation_parameters.timesteps,
+            component_id=ComponentID(name="RandomNumbers10To20"),
             minimum=10,
             maximum=20,
+            seed=2,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )

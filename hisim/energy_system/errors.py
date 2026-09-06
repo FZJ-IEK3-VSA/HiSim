@@ -51,12 +51,19 @@ class EnergySystemErrorId(enum.Enum):
 
     Three bands run past ten members and continue with letters rather than renumbering the
     ones already in use: ``EF-1A``/``EF-1B`` close the entry band with the two conditions
-    a value in a ``config`` block can hit, ``EF-2A`` closes the connection band with a tag
-    name no enum knows, and ``EF-4A`` … ``EF-4H`` wrap the eight failure modes of the sizing
+    a value in a ``config`` block can hit, ``EF-2A``/``EF-2B`` close the connection band with a
+    tag name no enum knows and two participants claiming one control signal, and ``EF-4A`` …
+    ``EF-4H`` wrap the eight failure modes of the sizing
     kernel one-to-one, with ``EF-4X`` for a kernel failure that matches none of them. The
     ``EF-6x`` band closes the list with the two ways writing a run record can fail, neither
     of which an author can cause: a record that is not fully concrete, and a re-execution
     that did not reproduce the record it was handed.
+
+    The ``EF-Rx`` band is the odd one out and is described on
+    :class:`EnergySystemRecordingError`: its subject is a Python setup and the two authored
+    files that describe how that setup is probed, not an energy-system file. ``EF-R8`` is
+    deliberately absent — the implementation specification reserves it for two simulation
+    parameter files that normalise equal, which the fleet driver checks without raising.
 
     Not every member is reachable from the loader and the structural validator alone:
     the identifiers covering presets, config fields, ports and channels can only be
@@ -98,6 +105,7 @@ class EnergySystemErrorId(enum.Enum):
     NO_CHANNEL_MATCH = "EF-28"
     DISPATCH_RULE_VIOLATED = "EF-29"
     UNKNOWN_TAG = "EF-2A"
+    AMBIGUOUS_DISPATCH_SIGNAL = "EF-2B"
     PORT_TYPE_MISMATCH = "EF-30"
     UNCONNECTED_MANDATORY_INPUT = "EF-31"
     PORT_NAME_COLLISION = "EF-32"
@@ -125,6 +133,17 @@ class EnergySystemErrorId(enum.Enum):
     COMPONENT_IN_TWO_VARIANTS = "EF-57"
     RECORD_NOT_CONCRETE = "EF-60"
     RERUN_NOT_REPRODUCED = "EF-61"
+    RECORDED_NAME_INVALID = "EF-R1"
+    RECORDED_QUALIFIED_IDENTITY = "EF-R2"
+    RECORDED_ABSOLUTE_PATH = "EF-R3"
+    RECORDED_PRESET_GONE = "EF-R4"
+    RECORDED_FILE_REJECTED = "EF-R5"
+    GROUPING_UNASSIGNED_DIFFERENCE = "EF-R6"
+    GROUPING_UNKNOWN_OPTION = "EF-R7"
+    PROBE_LIST_MALFORMED = "EF-R9"
+    GROUPING_NOT_REPRODUCED = "EF-R10"
+    RECORDED_DISPATCH_AMBIGUOUS = "EF-R11"
+    RECORDED_WOULD_OVERWRITE = "EF-R12"
 
 
 class EnergySystemError(Exception):
@@ -365,4 +384,35 @@ class EnergySystemRecordError(EnergySystemCatalogueError):
     The message names the component and the field involved, because that is where a breach of
     either promise is diagnosed: a configuration whose dump is not plain data, or a value that
     the record and its re-execution disagree about.
+    """
+
+
+class EnergySystemRecordingError(EnergySystemCatalogueError):
+    """A Python setup could not be recorded as an energy-system file.
+
+    The ``EF-Rx`` band is the only one whose subject is a Python setup rather than a file. A
+    component whose runtime name is not an identifier, a component carrying a building or a unit
+    in its identity, an absolute path that survived re-symbolisation, a preset provenance naming a
+    builder the class no longer has, and a recorded file that does not load and build again: each
+    of them means the observed system cannot be written down faithfully, and each is a defect in
+    the setup or in a component class rather than something an author typed.
+
+    Two further refusals guard the recording itself rather than the setup. An aggregator whose
+    control outputs for one participant cannot be told apart is refused (``EF-R11``) instead of
+    paired arbitrarily, because the arbitrary pairing would wire a control signal to the wrong
+    participant and the twin would still load. And a recording that would overwrite a file the
+    recorder did not produce is refused (``EF-R12``) instead of writing, because a hand-authored
+    energy-system file is nobody's regenerable artifact and destroying one is not a recording.
+
+    The distinction from :class:`EnergySystemRecordError` matters to a caller. That class means the
+    machinery broke its promise about a record it wrote; this one means the input it was asked to
+    record cannot be expressed in the format, which is a finding about the setup and is reported
+    naming the setup module, the component and the rule.
+
+    The grouping pass adds four more of them, and they are the same kind of finding one step
+    further out: a probe list that cannot be read, a component that differs between two probes
+    without anybody having said what that difference means, a configuration selecting an option no
+    assignment ever created, and a grouped file that does not reproduce one of the flat recordings
+    it was built from. All four are about the authored description of a setup's configurations
+    rather than about a file somebody will run.
     """

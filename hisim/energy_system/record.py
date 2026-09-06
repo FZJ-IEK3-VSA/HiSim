@@ -329,12 +329,33 @@ def assert_fully_concrete(record: EnergySystemFile) -> None:
                 f"the record of '{name}' still names a preset or a constructor instead of the "
                 "configuration it produced.",
             )
+    assert_no_sentinels(record)
+
+
+def assert_no_sentinels(record: EnergySystemFile) -> None:
+    """Verifies that no value of a generated file still asks to be sized, and raises when one does.
+
+    The weaker half of :func:`assert_fully_concrete`, separated because two kinds of generated file
+    need it and only one of them may also be checked for presets. A realized record must state its
+    configurations in full, so a preset in it is a breach. A file recorded from a Python setup must
+    do the opposite and name the preset a configuration was built from, and it is exactly that
+    naming which lets a later conversion shrink the file. What both must satisfy is this: a value
+    still spelled ``AUTO`` would be computed again on the next run instead of reproduced.
+
+    Args:
+        record: The generated file about to be written.
+
+    Raises:
+        EnergySystemRecordError: ``EF-60`` naming the entry and the path of the value inside its
+            configuration block.
+    """
+    for name, entry in record.all_components().items():
         for path in _sentinel_paths(entry.config, ()):
             raise EnergySystemRecordError(
                 EnergySystemErrorId.RECORD_NOT_CONCRETE,
                 f"components.{name}.config.{'.'.join(path)}",
-                f"the record of '{name}' still says '{_AutoSize.WIRE_SPELLING}', so re-running "
-                "it would size that field again instead of reproducing this run.",
+                f"the generated file for '{name}' still says '{_AutoSize.WIRE_SPELLING}', so "
+                "re-running it would size that field again instead of reproducing this run.",
             )
 
 

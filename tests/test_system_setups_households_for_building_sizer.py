@@ -10,6 +10,11 @@ loaded and checked to contain finite numeric KPI values, including the
 ``Total electricity consumption`` KPI that every household setup produces, so the
 tests verify real post-processing output rather than only that the run did not
 crash.
+
+One test in this file runs no simulation at all: the heat pump setup refuses a
+zero rooftop photovoltaic share while the energy manager is switched on, and that
+refusal is raised before any component is built, so it is checked by initializing
+the setup and catching the error.
 """
 # clean
 import json
@@ -24,6 +29,10 @@ import pytest
 from hisim import hisim_main
 from hisim import log
 from hisim import utils
+from hisim.building_sizer_utils.interface_configs.modular_household_config import (
+    ModularHouseholdConfig,
+    read_in_configs,
+)
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 from tests.testing_utils import TestingUtils
@@ -280,3 +289,39 @@ def test_household_heatpump_car(building_sizer_result_directory: str) -> None:
     hisim_main.main(path, _make_building_sizer_simulation_parameters(building_sizer_result_directory))
     log.information(os.getcwd())
     _assert_kpi_artefacts_written(building_sizer_result_directory, path)
+
+
+@pytest.mark.base
+def test_household_heatpump_refuses_zero_pv_share_with_energy_manager(tmp_path: Path) -> None:
+    """Test that a zero rooftop share combined with the energy manager is refused up front.
+
+    ``share_of_maximum_pv_potential = 0`` used to switch off the battery and the energy management
+    system as a side effect, so the run quietly became the metered household while the module
+    configuration still asked for the managed one. The setup now refuses the combination before it
+    builds a single component, which is why this test needs no simulation: it hands
+    ``initialize_from_python`` a module configuration with the zero share and the manager left on and
+    asserts that the refusal arrives and names both fields the caller has to decide between.
+    """
+    household_config = ModularHouseholdConfig.get_default_config_for_household_heatpump()
+    assert household_config.energy_system_config_ is not None
+    household_config.energy_system_config_.share_of_maximum_pv_potential = 0.0
+    household_config.energy_system_config_.use_battery_and_ems = True
+    config_path = tmp_path / "zero_pv_share_with_ems.json"
+    config_path.write_text(json.dumps(household_config.to_dict()), encoding="utf8")
+
+    # read_in_configs answers None for anything it cannot parse and the setup then falls back to the
+    # class defaults, which would make this test pass its configuration to nobody.
+    written_config = read_in_configs(str(config_path))
+    assert written_config is not None and written_config.energy_system_config_ is not None
+    assert written_config.energy_system_config_.share_of_maximum_pv_potential == 0.0
+
+    setup_path = Path(__file__).resolve().parent.parent / "system_setups" / "household_heatpump_building_sizer.py"
+    with pytest.raises(ValueError) as refusal:
+        hisim_main.initialize_from_python(
+            str(setup_path),
+            my_simulation_parameters=SimulationParameters.one_day_only(2021, 60 * 15),
+            my_module_config=str(config_path),
+        )
+    message = str(refusal.value)
+    assert "share_of_maximum_pv_potential" in message
+    assert "use_battery_and_ems" in message

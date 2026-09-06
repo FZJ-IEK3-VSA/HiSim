@@ -50,7 +50,7 @@ class FuelCellControllerConfig(ConfigBase):
     ) -> Any:
         """Get a default electrolyzer controller config."""
         if component_id is None:
-            component_id = ComponentID(name="Default fuel cell controller")
+            component_id = ComponentID(name="DefaultFuelCellController")
         config = FuelCellControllerConfig(
             component_id=component_id,
             nom_output=100.0,
@@ -80,7 +80,7 @@ class FuelCellControllerConfig(ConfigBase):
         """Initializes the config variables based on the JSON-file."""
 
         if component_id is None:
-            component_id = ComponentID(name="Fuel Cell Controller")
+            component_id = ComponentID(name="FuelCellController")
         config_json = cls.read_config(fuel_cell_name)
 
         config = FuelCellControllerConfig(

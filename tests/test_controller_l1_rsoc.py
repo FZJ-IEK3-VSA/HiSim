@@ -47,7 +47,7 @@ def test_config_rsoc_from_in_memory_dict() -> None:
         rsoc_name="RSOC_TEST", config_json=_make_rsoc_config_dict()
     )
     assert config.component_id.building is None
-    assert config.component_id.name == "rSCO l1 Controller"
+    assert config.component_id.name == "RscoL1Controller"
     assert config.nom_load_soec == 40.0
     assert config.min_load_soec == 2.315
     assert config.max_load_soec == 49.64
@@ -67,7 +67,7 @@ def test_config_rsoc_building_override_and_defaults() -> None:
     """config_rsoc forwards the component identity and applies defaults for missing keys."""
     config = controller_l1_rsoc.RsocControllerConfig.config_rsoc(
         rsoc_name="RSOC_TEST",
-        component_id=ComponentID(name="rSCO l1 Controller", building="BUI2"),
+        component_id=ComponentID(name="RscoL1Controller", building="BUI2"),
         config_json={"nom_load_soec": 40.0},
     )
     assert config.component_id.building == "BUI2"

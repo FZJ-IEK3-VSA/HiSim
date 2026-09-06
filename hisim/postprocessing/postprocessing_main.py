@@ -383,35 +383,23 @@ class PostProcessor:
         report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Makes special plots for debugging if only a single day was calculated."""
+        # A special-case arm once compared full_name against a hard-coded "Dummy" component
+        # that nothing in the repository constructs; the branch could never fire and was
+        # removed rather than have its magic string maintained through every rename.
         chart_single_day_class = _load_attribute("hisim.postprocessing.chart_singleday", "ChartSingleDay")
         for index, output in enumerate(ppdt.all_outputs):
-            if output.full_name == "Dummy # Residence Temperature":
-                my_days = chart_single_day_class(
-                    output=output.full_name,
-                    component_name=output.component_name,
-                    units=output.unit,
-                    directory_path=ppdt.simulation_parameters.result_directory,
-                    time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
-                    data_with_units=ppdt.results.iloc[:, index],
-                    day=0,
-                    month=0,
-                    output2_with_units=ppdt.results.iloc[:, 11],
-                    output_description=output.output_description,
-                    figure_format=ppdt.simulation_parameters.figure_format,
-                )
-            else:
-                my_days = chart_single_day_class(
-                    output=output.full_name,
-                    component_name=output.component_name,
-                    units=output.unit,
-                    directory_path=ppdt.simulation_parameters.result_directory,
-                    time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
-                    data_with_units=ppdt.results.iloc[:, index],
-                    day=0,
-                    month=0,
-                    output_description=output.output_description,
-                    figure_format=ppdt.simulation_parameters.figure_format,
-                )
+            my_days = chart_single_day_class(
+                output=output.full_name,
+                component_name=output.component_name,
+                units=output.unit,
+                directory_path=ppdt.simulation_parameters.result_directory,
+                time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
+                data_with_units=ppdt.results.iloc[:, index],
+                day=0,
+                month=0,
+                output_description=output.output_description,
+                figure_format=ppdt.simulation_parameters.figure_format,
+            )
             my_entry = my_days.plot(close=True)
             report_image_entries.append(my_entry)
 

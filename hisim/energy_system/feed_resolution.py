@@ -13,6 +13,11 @@ the file says and never on the order its lines happen to be written in. The deri
 the sorted feeds produce are defined on the resolved connection itself, next door in
 :mod:`hisim.energy_system.resolution`.
 
+Between the sorting and the creation sits one decision this module delegates rather than makes:
+which port each dispatch block's control signal comes out of. An aggregator often already publishes
+the signal a feed asks for, and growing a second one would leave it unable to tell the two apart, so
+:mod:`hisim.energy_system.dispatch_signals` settles that per feed before any port is created.
+
 The module reaches into components by duck typing over two well-known names — a ``CHANNELS``
 class attribute and a ``resolve_dynamic_connections`` method — and imports no component module
 at all, which is what keeps a component free to import the resolved-connection record without
@@ -29,6 +34,7 @@ from hisim import loadtypes as lt
 from hisim.energy_system.aggregator_ports import AggregatorPortChecker
 from hisim.energy_system.channel_matching import ChannelMatcher
 from hisim.energy_system.channels import DynamicConnectionChannel, FeedRequest
+from hisim.energy_system.dispatch_signals import DispatchSignalPlanner
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemWiringError
 from hisim.energy_system.resolution import (
     ResolvedDispatch,
@@ -207,23 +213,41 @@ class DynamicConnectionResolver:
     ) -> List[ResolvedDynamicConnection]:
         """Resolves the feeds addressed at one aggregator and creates its ports.
 
+        A component's resolution hook may refuse the batch it is handed by raising a
+        ``ValueError``. That is the escape hatch for an instance-level condition only the
+        component itself can decide — the fuel and gas meters cross-check the carrier of every
+        feed against the one their configuration prices, which no class-level channel declaration
+        could express. Such a refusal is caught here and re-raised as the located wiring error the
+        rest of the catalogue uses, so the author reads it in the terms of the file they wrote
+        rather than as a traceback out of a component.
+
         Args:
             target_name: Name of the aggregator in the file.
             feeds: The feeds addressed at it.
 
         Returns:
-            The resolved connections in deterministic order.
+            The resolved connections in deterministic order, each dispatching one carrying the
+            control port it was assigned.
 
         Raises:
-            EnergySystemWiringError: On any feed condition of the error catalogue.
+            EnergySystemWiringError: On any feed condition of the error catalogue, and on a
+                refusal the target's own resolution hook raised.
         """
         target = self.components_by_name[target_name]
         channels = self._require_channels(target_name, target, len(feeds))
         resolved = [self._resolve_feed(target_name, target, channels, feed) for feed in feeds]
         AggregatorPortChecker.check_participant_ports_are_unique(target_name, resolved)
         resolved.sort(key=lambda connection: connection.sort_key())
+        resolved = DispatchSignalPlanner(target_name, target).plan(resolved)
         created = AggregatorPortChecker.check_port_names_are_free(target_name, target, resolved)
-        getattr(target, self.RESOLUTION_HOOK)(list(resolved))
+        try:
+            getattr(target, self.RESOLUTION_HOOK)(list(resolved))
+        except ValueError as error:
+            raise EnergySystemWiringError(
+                EnergySystemErrorId.PORT_TYPE_MISMATCH,
+                f"components.{target_name}.inputs",
+                str(error),
+            ) from error
         AggregatorPortChecker.check_ports_were_created(target_name, target, resolved)
         self.resolved_by_target[target_name] = resolved
         self.created_ports.setdefault(target_name, []).extend(created)

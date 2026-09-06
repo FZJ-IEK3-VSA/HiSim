@@ -291,22 +291,22 @@ class ExtendedController(Component):
     """Extended Controller class."""
 
     # inputs
-    ElectricityDemand: str = "Electricity Demand"  # W
-    PV_Production: str = "PV Production"  # W
+    ElectricityDemand: str = "ElectricityDemand"  # W
+    PV_Production: str = "PVProduction"  # W
 
     # temperatures (input)
-    Temperature0Percent: str = "Temperature 0 Percent"  # °C
-    Temperature20Percent: str = "Temperature 20 Percent"  # °C
-    Temperature40Percent: str = "Temperature 40 Percent"  # °C
-    Temperature60Percent: str = "Temperature 60 Percent"  # °C
-    Temperature80Percent: str = "Temperature 80 Percent"  # °C
-    Temperature100Percent: str = "Temperature 100 Percent"  # °C
+    Temperature0Percent: str = "Temperature0Percent"  # °C
+    Temperature20Percent: str = "Temperature20Percent"  # °C
+    Temperature40Percent: str = "Temperature40Percent"  # °C
+    Temperature60Percent: str = "Temperature60Percent"  # °C
+    Temperature80Percent: str = "Temperature80Percent"  # °C
+    Temperature100Percent: str = "Temperature100Percent"  # °C
 
     # Output
-    ControllerCHP: str = "Controller CHP"
-    ControllerGasHeater: str = "Controller Gas Heater"
-    PowerToElectrolyzer: str = "Power To Electrolyzer"
-    PowerFromOrToGrid: str = "Power From Or To Grid"
+    ControllerCHP: str = "ControllerCHP"
+    ControllerGasHeater: str = "ControllerGasHeater"
+    PowerToElectrolyzer: str = "PowerToElectrolyzer"
+    PowerFromOrToGrid: str = "PowerFromOrToGrid"
 
     RuntimeCounterCHP: str = "RuntimeCounterCHP"
     RuntimeCounterGasHeater: str = "RuntimeCounterGasHeater"

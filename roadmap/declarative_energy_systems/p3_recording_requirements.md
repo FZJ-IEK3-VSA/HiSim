@@ -141,6 +141,37 @@ R10 adds a second pass in which a person makes that judgement once per setup, in
   assertion holds for the combinations the probe list contains and nowhere else. A probe list that toggles each fork
   alone therefore proves nothing about two forks together, and the report says so, naming the untested combinations.
 
+**`[amended 2026-08-31, while implementing R10]`** Four things R10 did not say, decided the way the implementation
+needed them and recorded here rather than left as silent deviations.
+
+1. *R10.2, the diff the cells are computed from.* A probe that does not have a component at all does not record any
+   reference to it either — a building lists the energy manager among its sources in the configurations that have one
+   and not in the ones that do not. Turning the format's own switch off does exactly the same thing to those
+   references, so a difference consisting only of such dropped references is not a difference between the two
+   configurations. The comparison therefore removes references to components the column lacks from the baseline side
+   before comparing, and such a row reads `=`. Without this, every consumer of a switched component would be a `≠` row
+   and the judgement would spread over the whole file. A component the *baseline* lacks has nothing to be compared
+   with, so every column that has it reads `≠`.
+2. *R10.3, the two spellings of a variant assignment.* `variant:<name>/<option>` cannot express the row R10.2 calls
+   load-bearing: the meter exists in every world and is written out in full in each option (R10.3's own sentence), so
+   it belongs to no single option. The bare form `variant:<name>` means exactly that — the component is in every
+   option, with the entry each option's column recorded — and the `/<option>` form means the component exists only in
+   that option. Both are checked against observation.
+3. *R10.3, a `—` row with no assignment.* R10.3 makes an unassigned `≠` row an error and says nothing about an
+   unassigned `—` row, which is equally incoherent: a component cannot both stay an ordinary always-on part and be
+   absent from a configuration. It is refused under the same code, EF-R6.
+4. *R10.5 against R10.6.* The two cannot both hold literally: R10.5 drops an `override` difference from the file, and
+   R10.6 then asks the realization of that column to equal a recording that carries the dropped value. The reading
+   taken is that "the selections the configurations sheet gives C" includes the values of C's knobs, so a column is
+   realized from the file *plus its knobs* — which is what "a base file a consumer sets knobs on" means. The knob
+   values are computed from the recordings, so a column with knobs proves less than one without, and the report prints
+   the count per column and the full knob list for exactly that reason. R10.6 would be worth restating in those terms.
+
+One further note, not an amendment. A recorded file's header spells the schema reference relative to the file's own
+directory, so "byte for byte" depends on how deep the file sits. The probes are therefore recorded into a throwaway
+directory one level under the repository root — the depth `energy_systems/` has — which is what makes the baseline
+column's flat file the committed twin down to its first line.
+
 ### R11 — The migration parity rig `[decided 2026-08-28; Q-P3.7]`
 For the duration of P3 the project runs a second gate whose only question is whether the Python path and the recorded
 file produce the same simulation. It is dispatched by hand, never on push, and it is deleted when P3 ends. It is not an
@@ -170,7 +201,13 @@ extension of the golden gate and it blesses nothing.
   `household_gas_solar_thermal` (grid import above total consumption) — measured by
   `scripts/golden_validate.py --scan-all` on 2026-08-28. R11.3's first two comparisons need no KPIs, so those setups
   are covered anyway and the crash is recorded as a known state rather than counted as a parity failure. Repairing
-  them is its own workstream and does not gate P3.
+  them is its own workstream and does not gate P3. `[amended 2026-09-05]` The first spelling let an unavailable KPI
+  stage *pass* its triple, which made a new KPI regression indistinguishable from a known-broken setup — both read
+  green. The KPI repair workstream has since covered the fleet (the golden week gate compares every setup's KPIs
+  against blessed references), so the expectation flipped: the KPI stage is still reported as UNAVAILABLE rather than
+  as a parity failure, with a note naming which side crashed and why, but a triple with an unavailable stage no longer
+  counts as parity. What survives of the first spelling is the part that matters: a KPI crash never turns into an
+  exception, and the wiring and result comparisons are still made and reported.
 - R11.5 **Two windows.** Every triple runs a January week and a July week — `one_week_only` and a new `one_week_july`,
   both at 60 s. A single window measures the cooling and solar-thermal setups at their annual minimum, and the
   January-only window is why the air-conditioner setup divides by zero in the scan.
@@ -179,12 +216,23 @@ extension of the golden gate and it blesses nothing.
 - R11.7 **Manual, aggregated and loud.** `workflow_dispatch` only, with filters for setup, window and configuration; a
   summary job prints one table covering every triple; a failing triple uploads both KPI sets, both result CSVs and the
   wire diff.
-- R11.8 **Removal is part of P3.** The workflow, its configuration and its scripts are deleted in P3's last PR — a
-  checkbox in the plan, not an intention. What survives is whatever earned a place in the permanent gate: the six
-  setups the scan already clears (`household_heatpump_solar_thermal_building_sizer`,
-  `household_heatpump_car_building_sizer`, `household_gas_solar_thermal_building_sizer`,
-  `automatic_default_connections`, `basic_household`, `default_connections`) are the candidates, decided at the end of
-  P3 on the rig's evidence rather than before it.
+- R11.8 **Removal is its own phase, P6** `[amended 2026-08-31]`. The workflow, its configuration and its scripts are
+  deleted once the whole energy-systems stack is merged — a checkbox in the plan, not an intention. The first spelling
+  of this rule put the teardown in P3's last PR, which was written before P4's shape was clear and is wrong: **P4
+  re-records the fleet on every batch** (Q-P3.1, and P4's own assumption A1 reviews each batch against the recorded
+  file diff), so the rig is the only thing proving a re-recorded file still reproduces its setup while 88 config
+  classes change how those files are written. The permanent golden gate cannot stand in for it — it watches 8 setups
+  against blessed references, the rig watches every recorded setup (22 today, 44 triples) across two windows and needs none, and 8 of those setups have no KPI
+  oracle at all. Deleting the rig at the end of P3 would retire the migration's safety net exactly as the migration
+  reached its largest change.
+  What survives the teardown is whatever earned a place in the permanent gate: the six setups the scan already clears
+  (`household_heatpump_solar_thermal_building_sizer`, `household_heatpump_car_building_sizer`,
+  `household_gas_solar_thermal_building_sizer`, `automatic_default_connections`, `basic_household`,
+  `default_connections`) are the candidates, decided in P6 on the evidence the rig accumulated rather than before it.
+- R11.9 `[added 2026-08-31]` **The cost of keeping it** is stated so the phase is not deferred by inertia: the rig is
+  `workflow_dispatch` only, so it costs nothing per pull request, but every batch that re-records should dispatch it,
+  and its hand-authored renaming tables (R11.3) must be kept current as P4 renames the legacy aggregator ports. That
+  maintenance is itself an argument for finishing P4 rather than for keeping the rig indefinitely.
 
 ## 9. Constraints, Invariants and Assumptions
 
@@ -196,7 +244,7 @@ extension of the golden gate and it blesses nothing.
 - C-P3.6 `[decided 2026-08-28; R10]` No group and no variant is ever inferred. Observation supplies the three-state matrix; the assignment of a difference to membership or to an override is a person's, recorded in the table, reviewed as a diff of `<stem>.grouping.yaml`.
 - C-P3.7 `[decided 2026-08-28; R10.7]` A grouped file's guarantees reach exactly as far as its probe list. Combinations never probed are untested, named as such in the report, and are not a claim the file makes.
 - A1 `[proposed]` Post-construction recording is acceptable (see §4).
-- A2 `[decided 2026-08-28; Q-P3.7]` The 13 setups with no numeric oracle get one for the duration of the migration through R11, not by joining `golden_config.json`. A temporary A/B rig needs no references, covers the seven setups whose KPI layer crashes, and compares more strictly than the permanent gate can. Which of them join the permanent gate afterwards is decided at the end of P3 (R11.8).
+- A2 `[decided 2026-08-28; Q-P3.7]` The 13 setups with no numeric oracle get one for the duration of the migration through R11, not by joining `golden_config.json`. A temporary A/B rig needs no references, covers the seven setups whose KPI layer crashes, and compares more strictly than the permanent gate can. Which of them join the permanent gate afterwards is decided in P6, when the rig is retired (R11.8).
 
 ## 10. Acceptance Criteria
 
@@ -218,8 +266,8 @@ extension of the golden gate and it blesses nothing.
 | AC-P3.16 | The grouping report lists the `override` differences as consumer knobs and names the fork combinations the probe list never exercised. | R10.5, R10.7 |
 | AC-P3.17 | One dispatch of the rig covers every in-scope (setup, configuration, window) triple and prints them as one table; the January and July windows both appear for every triple. | R11.1, R11.5, R11.7 |
 | AC-P3.18 | Changing one config value in a recorded file makes its triple fail and the report names the columns or KPIs that moved; the comparison is exact, so no threshold can hide it. | R11.2, R11.3 |
-| AC-P3.19 | The seven KPI-broken setups return a structural verdict — component set and wire set compared, KPI stage reported as unavailable — rather than an error. | R11.4, R11.3 |
-| AC-P3.20 | P3's final PR deletes the workflow, its configuration and its scripts, and the repository contains no reference to them afterwards. | R11.8 |
+| AC-P3.19 `[amended 2026-09-05]` | The seven KPI-broken setups return a structural verdict — component set and wire set compared, KPI stage reported as unavailable — rather than an error. The unavailable stage fails the triple in the summary table (R11.4 as amended); what the criterion pins is that the failure is a named verdict with both structural comparisons made, never an exception. | R11.4, R11.3 |
+| AC-P3.20 `[deferred to P6, 2026-08-31]` | The phase-6 teardown deletes the workflow, its configuration and its scripts, and the repository contains no reference to them afterwards. It is an acceptance criterion of P6, not of P3 — P3 ships the rig, P6 removes it. | R11.8 |
 | AC-P3.21 | Recording a setup whose parameters equal a shipped `energy_systems/*.simulation.yaml` writes no parameter file and references that one; changing one option makes it write exactly one new file. | R8.2, R8.3 |
 | AC-P3.22 | Recording two setups with identical parameters that match nothing shipped produces one shared file, not two, and both recordings reference it. | R8.3, R8.5 |
 | AC-P3.23 | Two setups differing only in `cache_dir_path` produce the same parameter file, and no written file contains a machine-specific path. | R8.4 |

@@ -55,7 +55,7 @@ from hisim.energy_system.executor import (
 )
 from hisim.energy_system.loader import dump_energy_system, load_energy_system
 from hisim.energy_system.metadata import RunMetadata
-from hisim.energy_system.record import realize
+from hisim.energy_system.record import ConfigBlockWriter, realize
 from hisim.energy_system.sizing_bridge import sizing_sources_bridge
 
 
@@ -578,23 +578,31 @@ def test_the_annotated_writer_agrees_with_the_canonical_writer_on_a_record(chain
 
 @pytest.mark.base
 def test_both_writers_spell_a_numpy_number_as_a_plain_one() -> None:
-    """Catches a setup becoming unrecordable because one of its numbers is in a numpy box.
+    """Catches a document becoming unwritable because one of its numbers is in a numpy box.
 
     A field annotated ``float`` does not have to hold one. Anything a setup derives from a sized
     building, a pandas table or a pvlib call arrives as a numpy scalar, and a YAML writer with no
-    representer for that type refuses the whole document -- so the setup cannot be written down at
-    all, which reads as the format being unable to express it when it is only the writer being
+    representer for that type refuses the whole document -- so the document cannot be written down
+    at all, which reads as the format being unable to express it when it is only the writer being
     unable to spell the number. ``air_conditioned_house`` is the setup this really happened to: its
     scaled air-conditioner config takes a scale factor from the building's thermal demand, and the
-    recorder died on the value below rather than on anything about the setup.
+    writer died on the value below rather than on anything about the setup.
+
+    What this covers is the emitters, which is not the same as covering a recording. The two are
+    fed here directly, and a document reaching them that way comes from an annotated write or from
+    a model a loader built, where a numpy box can still be present. On the recording path every
+    configuration value passes ``ConfigBlockWriter.plain()`` first, and that refuses ``np.float32``,
+    ``np.int64``, ``np.bool_`` and ``np.ndarray`` with ``EF-60`` before any representer runs: only
+    ``np.float64``, which is an instance of ``float``, ever reaches a writer during a recording.
+    The sibling test below pins that half.
 
     Both writers are covered, because the record writer runs on a second YAML library: teaching one
     and not the other would trade a crash for the two of them disagreeing about the same document,
     which is the drift the tests above exist to prevent. What each must produce is a *plain* number,
     so that the file stays ordinary YAML rather than something only a numpy-aware reader can load.
 
-    Catches: a recording run that dies on a number it could have written, and one writer learning
-    to spell it while the other does not.
+    Catches: a write that dies on a number it could have written, and one writer learning to spell
+    it while the other does not.
     """
     document = {
         "single": np.float32(0.5),
@@ -627,6 +635,32 @@ def test_both_writers_spell_a_numpy_number_as_a_plain_one() -> None:
             int,
             bool,
         ], f"the {writer} writer left a value in a type a plain YAML reader would not produce"
+
+
+@pytest.mark.base
+def test_only_a_numpy_double_survives_the_recording_path_and_the_other_boxes_are_refused() -> None:
+    """Catches the emitters' numpy coverage being read as a promise the recording path keeps.
+
+    A configuration value is reduced by ``ConfigBlockWriter.plain()`` before any writer sees it,
+    and that reduction accepts a value only if it is already plain data. ``np.float64`` passes
+    because it really is a ``float`` and comes out as one; ``np.int64``, ``np.float32``,
+    ``np.bool_`` and ``np.ndarray`` are none of Python's plain types and are refused with
+    ``EF-60`` naming the component and the field. That refusal is deliberate — a record has to
+    state values a reader can check, not values a numpy-aware writer happens to be able to spell —
+    so this test exists to keep it from being weakened on the strength of the test above.
+
+    Catches: ``plain()`` growing a numpy branch, and ``np.float64`` losing its way through.
+    """
+    reduced = ConfigBlockWriter.plain(np.float64(0.5364243908677532), "Battery", "value")
+
+    assert reduced == 0.5364243908677532
+    assert isinstance(reduced, float)
+
+    with pytest.raises(EnergySystemRecordError) as refusal:
+        ConfigBlockWriter.plain(np.int64(7), "Battery", "value")
+
+    assert refusal.value.error_id.value == "EF-60"
+    assert "Battery" in str(refusal.value)
 
 
 @pytest.mark.base

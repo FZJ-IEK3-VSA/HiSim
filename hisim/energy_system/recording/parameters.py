@@ -27,6 +27,7 @@ invented: two runs of the recorder on the same fleet must produce the same file 
 from __future__ import annotations
 
 import datetime
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -298,7 +299,9 @@ class ParameterFileWriter:
     """The text of a newly written simulation-parameters file.
 
     Written by hand rather than through a YAML dumper because the file is four keys and a list,
-    and because every byte of it has to be the same on two machines: the dates quoted, the options
+    and because every byte of it has to be the same on two machines: every string quoted so that
+    the reader gives it back as the string it was rather than as whatever its spelling resolves
+    to, the options
     in the sorted order the comparison uses, no trailing whitespace and no key whose value came
     from this machine. A dumper would give the same result today and no guarantee of it tomorrow.
 
@@ -307,7 +310,7 @@ class ParameterFileWriter:
     one without opening either.
     """
 
-    #: Keys written as plain scalars, in this order, ahead of the option list.
+    #: Keys written as single scalars, in this order, ahead of the option list.
     SCALAR_KEYS: ClassVar[Tuple[str, ...]] = ("seconds_per_timestep", "country", "logging_level")
 
     #: The comment line a generated file opens with.
@@ -316,6 +319,25 @@ class ParameterFileWriter:
         "# HiSim energy-system recorder because no file beside it said the same thing; it is\n"
         "# shared by every recording whose parameters normalise to this content.\n"
     )
+
+    @classmethod
+    def scalar(cls, value: Any) -> str:
+        """Spells one scalar value the way YAML reads it back as the type it came in as.
+
+        A string is quoted and every other value is written as it prints. Quoting matters because
+        YAML's untyped scalars are resolved by their spelling: a ``country`` of ``"2022"`` written
+        bare comes back as the integer 2022 and a ``country`` of ``"none"`` as ``None``, and the
+        normalisation comparison that decides whether a recording may share a parameter file would
+        then never match the file it just wrote. The quoting is JSON's, which is a subset of YAML's
+        double-quoted style, so a value containing a quote or a backslash survives too.
+
+        Args:
+            value: The normalised value to write.
+
+        Returns:
+            The value's spelling, without the key or the separator.
+        """
+        return json.dumps(value) if isinstance(value, str) else str(value)
 
     @classmethod
     def text(cls, normalised: Mapping[str, Any]) -> str:
@@ -337,7 +359,7 @@ class ParameterFileWriter:
             f'start_date: "{normalised["start_date"]}"',
             f'end_date: "{normalised["end_date"]}"',
         ]
-        lines += [f"{key}: {normalised[key]}" for key in cls.SCALAR_KEYS]
+        lines += [f"{key}: {cls.scalar(normalised[key])}" for key in cls.SCALAR_KEYS]
         lines.append(f"{ParameterNormalisation.OPTIONS_KEY}:{'' if options else ' []'}")
         lines += [f"  - {name}" for name in options]
         return header + "\n".join(lines) + "\n"

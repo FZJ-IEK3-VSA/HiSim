@@ -28,6 +28,7 @@ from typing import ClassVar, Dict, List, Optional, Sequence, Set, Tuple
 
 from hisim import loadtypes as lt
 from hisim.energy_system.channels import FeedRequest
+from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemRecordingError
 from hisim.energy_system.model import AggregatorFeed, AnyInputItem, DefaultInputs, DispatchSpec, ExplicitWire
 from hisim.energy_system.parity import ResolvedWire
 from hisim.energy_system.recording.names import RecordedNames
@@ -56,6 +57,10 @@ class InputItemWriter:
 
         Args:
             recorded: The observation, whose component index and wiring snapshot are read.
+
+        Raises:
+            EnergySystemRecordingError: ``EF-R11`` when an aggregator's control outputs cannot be
+                paired with the feeds they belong to.
         """
         self.recorded = recorded
         self.by_name = recorded.by_name()
@@ -95,6 +100,10 @@ class InputItemWriter:
         described — writing it again at the participant would make the aggregator create the port
         and then find it occupied. An output nobody reads names no consumer, so it is matched on the
         participant *class* it was created for, and on the weight when a class has more than one.
+
+        Raises:
+            EnergySystemRecordingError: ``EF-R11`` when neither matching settles which of several
+                candidate outputs belongs to a feed.
         """
         for aggregator in self.recorded.components:
             if not aggregator.feeds:
@@ -128,11 +137,16 @@ class InputItemWriter:
             weight: The feed's weight, used to tell two outputs of one class apart.
 
         Returns:
-            The back-channel, or ``None``.
+            The back-channel, or ``None`` when this participant is one the aggregator only
+            measures and no control output was created for it at all.
+
+        Raises:
+            EnergySystemRecordingError: ``EF-R11`` when several control outputs are candidates for
+                one feed and the weight does not single one of them out.
         """
         read = [entry for entry in aggregator.dispatches if entry.consumer == participant]
         if read:
-            return self._narrowed(read, weight)
+            return self._narrowed(read, weight, aggregator, participant)
         if weight == self.MEASURED_ONLY_WEIGHT:
             return None
         producer = self.by_name.get(participant)
@@ -143,27 +157,60 @@ class InputItemWriter:
             if entry.consumer is None
             and entry.source_component_class in (None, participant_class)
         ]
-        return self._narrowed(unread, weight)
+        return self._narrowed(unread, weight, aggregator, participant)
 
     @classmethod
-    def _narrowed(cls, candidates: Sequence[ObservedDispatch], weight: int) -> Optional[ObservedDispatch]:
+    def _narrowed(
+        cls,
+        candidates: Sequence[ObservedDispatch],
+        weight: int,
+        aggregator: ObservedComponent,
+        participant: str,
+    ) -> Optional[ObservedDispatch]:
         """Picks the one candidate of a class, using the weight to break a tie.
 
         A participant class an aggregator controls in two ways — space heating and hot water on one
         heat pump — has one output per way, and the feed's weight is what tells them apart. Where
-        the weight does not single one out either, no back-channel is written at all rather than an
-        arbitrary one: a wrong pairing would wire a control signal to the wrong participant.
+        the weight does not single one out either, the recording is refused rather than resolved:
+        a wrong pairing would wire a control signal to the wrong participant, and writing no
+        back-channel at all would turn a controlled participant into a measured one, so both of the
+        quiet answers change the system the twin describes.
+
+        No candidate at all is a different case and stays silent. An aggregator that publishes
+        nothing for a participant really does only measure it, whatever the feed's weight says, and
+        that is a system the format expresses.
 
         Args:
             candidates: The outputs still in the running.
             weight: The feed's weight.
+            aggregator: The aggregator, named in the refusal.
+            participant: Runtime name of the participant, named in the refusal.
 
         Returns:
-            The single match, or ``None`` when there is none or more than one.
+            The single match, or ``None`` when there is no candidate.
+
+        Raises:
+            EnergySystemRecordingError: ``EF-R11`` naming the aggregator, the participant, the
+                candidate outputs and the weight, when more than one candidate remains or the
+                weight filter removed all of several.
         """
-        if len(candidates) > 1:
-            candidates = [entry for entry in candidates if entry.weight == weight]
-        return candidates[0] if len(candidates) == 1 else None
+        if len(candidates) <= 1:
+            return candidates[0] if candidates else None
+        matching = [entry for entry in candidates if entry.weight == weight]
+        if len(matching) == 1:
+            return matching[0]
+        raise EnergySystemRecordingError(
+            EnergySystemErrorId.RECORDED_DISPATCH_AMBIGUOUS,
+            f"{aggregator.name}:{participant}",
+            f"'{aggregator.name}' has {len(candidates)} control outputs that could belong to the "
+            f"feed from '{participant}' — {[entry.port_label for entry in candidates]} — and the "
+            f"feed's weight {weight} singles out {len(matching)} of them.",
+            remedy=(
+                "An arbitrary pairing would wire a control signal to the wrong participant, so "
+                "the recording refuses rather than guess. Give the aggregator's feeds distinct "
+                "weights, or record a setup in which each participant has one control output."
+            ),
+        )
 
     def _bare_sources(self, observed: ObservedComponent, wires: Sequence[ResolvedWire]) -> List[str]:
         """Names the sources whose wires are exactly this component's declared defaults for them.

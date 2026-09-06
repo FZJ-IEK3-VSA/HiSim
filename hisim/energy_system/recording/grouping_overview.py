@@ -1,4 +1,4 @@
-"""The human-readable overview of every grouping decision this repository has committed.
+"""The human-readable overview of every setup this repository has recorded, grouped or not.
 
 The grouping pass leaves four files per setup behind — a probe list, a decision table, a grouped
 energy system and the flat twin it is checked against — and none of them reads as an answer to the
@@ -7,6 +7,14 @@ and why was each difference called what it was called*. Answering it means holdi
 by side and counting, which is exactly the kind of work that is done once, written down, and then
 quietly goes stale. So it is generated instead, from the committed files, by one command.
 
+The page covers the whole recorded fleet rather than only the grouped part of it, because "which
+setups have structure yet" is a question about the setups that do not have it too. A setup with a
+flat twin and no decision gets a row and a section like any other; what its section says is only
+what its twin says — where it was recorded from, what it is called, and which components it has —
+and the page states plainly that this is all it can say. A fleet table listing one setup would
+otherwise leave the other twenty-one to be counted by hand, which is the work this page exists to
+stop.
+
 The page is therefore a rendering and never a source. Every number on it is counted, every name is
 read out of a file and every judgement note is the note the grouping table carries, unfolded. What
 is fixed prose is only what is true of the format rather than of a setup: what the ``Overrides``
@@ -14,11 +22,12 @@ column counts, what a shared ``components:`` section is, what makes the baseline
 committed twin. That split is what lets the page be regenerated on every change and compared byte
 for byte in a test, the same way the recorded twins are.
 
-Three orderings carry the whole determinism of the output, and all three are file order rather than
-sorted order or set order. The setups come in the order their ``*.grouping.yaml`` files sort by
-name; the variant groups, their options and the members of each come in the order the grouped file
-writes them; and the overrides come in the order the shared ``components:`` section writes them.
-Nothing here iterates a set into the page.
+Four orderings carry the whole determinism of the output, and only the last of them is sorted rather
+than read. The grouped setups come in the order their ``*.grouping.yaml`` files sort by name; the
+variant groups, their options and the members of each come in the order the grouped file writes
+them; the overrides come in the order the shared ``components:`` section writes them; and the
+ungrouped setups, which have no file order to inherit because they have only one file each, follow
+alphabetically. Nothing here iterates a set into the page.
 """
 
 # clean
@@ -156,11 +165,12 @@ class Prose:
 
 
 class Markdown:
-    """The two escapes and the one table shape the page uses, in one place.
+    """The escapes, the anchors and the one table shape the page uses, in one place.
 
-    Nothing here is a Markdown library. The page writes exactly one kind of table and exactly one
-    kind of code span, and the only character that can break either is the pipe inside a cell, so
-    the whole of the formatting knowledge is these few methods rather than a dependency.
+    Nothing here is a Markdown library. The page writes exactly one kind of table, one kind of code
+    span and one kind of internal link, and the only character that can break a table is the pipe
+    inside a cell, so the whole of the formatting knowledge is these few methods rather than a
+    dependency.
     """
 
     #: What a cell holds when there is nothing to say in it.
@@ -168,6 +178,48 @@ class Markdown:
 
     #: How a table separates one line of a cell from the next; a Markdown cell is one line.
     LINE_BREAK: ClassVar[str] = "<br/>"
+
+    #: The characters a heading keeps when it becomes an anchor; everything alphanumeric is kept
+    #: as well, and a space becomes the separator below.
+    ANCHOR_KEPT: ClassVar[str] = "-_ "
+
+    #: What a space in a heading becomes in its anchor.
+    ANCHOR_SEPARATOR: ClassVar[str] = "-"
+
+    @classmethod
+    def anchor(cls, heading: str) -> str:
+        """Derives the fragment a heading can be linked to, the way GitHub derives it.
+
+        The rule is GitHub's and is short enough to state: lower-case the heading, drop every
+        character that is neither alphanumeric nor a hyphen, an underscore or a space, then turn
+        the spaces into hyphens. A section titled with a code span therefore anchors to the bare
+        name inside the backticks, which is what makes the fleet table double as the index.
+
+        Args:
+            heading: The heading's text, without its leading hashes.
+
+        Returns:
+            The fragment, without its leading ``#``.
+        """
+        kept = "".join(
+            character
+            for character in heading.lower()
+            if character.isalnum() or character in cls.ANCHOR_KEPT
+        )
+        return kept.strip().replace(" ", cls.ANCHOR_SEPARATOR)
+
+    @classmethod
+    def link(cls, text: str, heading: str) -> str:
+        """Links one piece of text to the section carrying a heading.
+
+        Args:
+            text: What the link reads as, already rendered.
+            heading: The heading it points at, without its leading hashes.
+
+        Returns:
+            The Markdown link.
+        """
+        return f"[{text}](#{cls.anchor(heading)})"
 
     @classmethod
     def code(cls, text: str) -> str:
@@ -235,6 +287,10 @@ class FleetCensus:
     #: How a probe recording's header line opens, taken from the writer for the same reason.
     PROBE_MARKER: ClassVar[str] = RecordedFileWriter.PROBE_LINE.partition("{")[0]
 
+    #: What follows the setup's own name on the recorder's origin line, taken from that line so
+    #: that the reader below and the writer cannot come to disagree about where the name ends.
+    ORIGIN_TAIL: ClassVar[str] = RecordedFileWriter.ORIGIN_LINE.partition("{setup}")[2].partition("{")[0]
+
     @classmethod
     def flat_twins(cls, directory: Path) -> Tuple[Path, ...]:
         """The recorded flat twins of one directory, in sorted file-name order.
@@ -255,6 +311,28 @@ class FleetCensus:
         return tuple(found)
 
     @classmethod
+    def recorded_from(cls, text: str) -> str:
+        """The setup one recorded file's header says it was recorded from.
+
+        The header is the only place a twin names its own setup: the body names the system, which
+        is the setup's stem and not the module a person opens. So an ungrouped setup's section
+        gets its "recorded from" line from here, exactly as a grouped setup's gets it from the
+        decision that names the same module.
+
+        Args:
+            text: The whole file.
+
+        Returns:
+            The repository-relative setup path, or the empty string when the header carries none.
+        """
+        header, _ = RecordedFileWriter.split(text)
+        for line in header.splitlines():
+            if line.startswith(RecordedFileWriter.MARKER):
+                named = line[len(RecordedFileWriter.MARKER):]
+                return named.partition(cls.ORIGIN_TAIL)[0].strip()
+        return ""
+
+    @classmethod
     def _is_flat_twin(cls, text: str) -> bool:
         """Whether one file's header says it is the plain recording of one setup.
 
@@ -269,6 +347,57 @@ class FleetCensus:
         header, _ = RecordedFileWriter.split(text)
         lines = header.splitlines()
         return not any(line.startswith((cls.GROUPED_MARKER, cls.PROBE_MARKER)) for line in lines)
+
+
+@dataclass(frozen=True)
+class RecordedSetup:
+    """One setup that has a flat twin and nothing else: the shape the page can state and no more.
+
+    Twenty-one of the twenty-two recorded setups are in this state, and the page is honest about
+    what that means rather than leaving them out. A recording observes one run, so a twin says which
+    components the setup built and how they were wired on that one run; it cannot say which of its
+    differences are structure, because it has no second run to differ from. So this value carries
+    the twin and nothing else, and every renderer that takes one produces an inventory rather than
+    a judgement.
+
+    The setup module is read out of the twin's header rather than guessed from its name. The header
+    is where the recorder writes it, it is the same string a grouping decision would name, and a
+    stem-plus-suffix guess would quietly invent a path for a twin whose setup moved.
+    """
+
+    stem: str
+    setup: str
+    system: EnergySystemFile
+
+    @classmethod
+    def read(cls, twin: Path) -> "RecordedSetup":
+        """Reads one recorded flat twin.
+
+        Args:
+            twin: The ``<stem>.energy_system.yaml`` the recorder wrote.
+
+        Returns:
+            The setup, with its energy system loaded through the same reader every consumer of the
+            format uses.
+
+        Raises:
+            EnergySystemFormatError: When the twin is not a valid energy-system file.
+        """
+        system = load_energy_system(twin)
+        return cls(
+            stem=system.name,
+            setup=FleetCensus.recorded_from(twin.read_text(encoding="utf-8", errors="replace")),
+            system=system,
+        )
+
+    @property
+    def components(self) -> Tuple[str, ...]:
+        """Every component the twin writes down, in the order it writes them.
+
+        Returns:
+            One name per component of the recorded system.
+        """
+        return tuple(self.system.all_components())
 
 
 @dataclass(frozen=True)
@@ -466,6 +595,11 @@ class MermaidShape:
     unopenable at fifty, and it would say nothing the assignments table below does not already say
     better; a node per role says the one thing only a picture says, which is how few places there
     are for a component to be.
+
+    A setup with no decision gets the same picture with one box, because a twin knows only one role.
+    Keeping that in this class rather than in a second one is what keeps the two diagrams the same
+    kind of diagram: the same fence, the same direction, the same joined labels and the same rule
+    that a box is a role and never a component.
     """
 
     #: The fence the block is written in; artifact and repository renderers both know it.
@@ -479,9 +613,16 @@ class MermaidShape:
     FIXED_NODE: ClassVar[str] = "fixed"
     KNOBS_NODE: ClassVar[str] = "knobs"
 
+    #: The one box an ungrouped setup's diagram has, holding its whole inventory.
+    INVENTORY_NODE: ClassVar[str] = "components"
+
     #: How the two shared boxes are titled, the count being what the reader wants first.
     FIXED_TITLE: ClassVar[str] = "fixed in every configuration ({count})"
     KNOBS_TITLE: ClassVar[str] = "knobs, stated at the baseline value ({count})"
+
+    #: How the single box of an ungrouped setup is titled. It says nothing about switching,
+    #: because a twin says nothing about switching.
+    INVENTORY_TITLE: ClassVar[str] = "components ({count})"
 
     #: How a variant group's own box is titled.
     GROUP_TITLE: ClassVar[str] = "variant group: {name}"
@@ -545,6 +686,30 @@ class MermaidShape:
         return lines
 
     @classmethod
+    def render_inventory(cls, setup: RecordedSetup) -> List[str]:
+        """Renders the block for a setup that has a twin and no decision.
+
+        One box, because a twin offers exactly one distinction — being a component of this setup —
+        and drawing a node per component would say the same thing in a picture nobody can read.
+        The members are joined into the box's label the way every other role box joins them, so the
+        two kinds of diagram on the page read as one kind.
+
+        Args:
+            setup: The recorded setup to draw.
+
+        Returns:
+            The block's lines, opening and closing fence included.
+        """
+        members = setup.components
+        lines = [cls.FENCE, cls.HEADER, f"    {cls._node(cls.SETUP_NODE, [setup.stem])}"]
+        if members:
+            title = cls.INVENTORY_TITLE.format(count=len(members))
+            lines.append(f"    {cls._node(cls.INVENTORY_NODE, [title, *members])}")
+            lines.extend(["", f"    {cls._edge(cls.SETUP_NODE, cls.INVENTORY_NODE)}"])
+        lines.append("```")
+        return lines
+
+    @classmethod
     def _node(cls, node: str, label_lines: Sequence[str]) -> str:
         """Declares one box, its members joined into a single label.
 
@@ -590,7 +755,12 @@ class MermaidShape:
 
 
 class OverviewPage:
-    """The whole page: a fleet table, then one section per grouped setup.
+    """The whole page: a fleet table over every recorded setup, then one section per setup.
+
+    Grouped setups come first and carry everything the pass knows about them; the setups that have
+    only a twin follow, alphabetically, and carry their inventory and the statement that this is all
+    there is. Both kinds get a row and a section, and every row links to its section, so the table
+    is the index of the page as well as its summary.
 
     Everything is assembled as a list of lines and joined once, with Unix line endings and a single
     trailing newline, because the page is compared byte for byte against its committed copy the way
@@ -608,22 +778,23 @@ class OverviewPage:
     HEADER_COMMENT: ClassVar[Tuple[str, ...]] = (
         "<!--",
         "Generated by `hisim energy-system grouping overview` from the committed `*.grouping.yaml`",
-        "files and the grouped energy-system files they produced. Do not edit by hand: every number,",
-        "name and note on this page is read out of those files, and an edit here is lost the next time",
-        "the command runs. To change what this page says, change the grouping table or re-record.",
+        "files, the grouped energy-system files they produced and the recorded flat twins. Do not",
+        "edit by hand: every number, name and note on this page is read out of those files, and an",
+        "edit here is lost the next time the command runs. To change what this page says, change the",
+        "grouping table or re-record.",
         "-->",
     )
 
     #: The page's title and the line under it.
     TITLE: ClassVar[str] = "# Grouping overview"
     SUBTITLE: ClassVar[str] = (
-        "*Generated from the committed grouping tables and grouped energy-system files by "
-        "`hisim energy-system grouping overview`. Do not edit by hand.*"
+        "*Generated from the committed grouping tables, grouped energy-system files and recorded "
+        "twins by `hisim energy-system grouping overview`. Do not edit by hand.*"
     )
 
-    #: The fleet table's columns, and the footnote that says what the bold option means.
+    #: The fleet table's columns, and the footnotes that say what the bold option and the order mean.
     FLEET_HEADINGS: ClassVar[Tuple[str, ...]] = (
-        "Setup",
+        "Setup[^order]",
         "Variant groups",
         "Options",
         "Components per option",
@@ -634,11 +805,20 @@ class OverviewPage:
         "[^baseline]: The option in bold is the one the grouped file selects, which is the option the "
         "baseline probe column realizes. A grouped file's `variants:` section names it as `selected:`."
     )
+    ORDER_FOOTNOTE: ClassVar[str] = (
+        "[^order]: The grouped setups come first, in the order their grouping tables sort by file name; "
+        "the rest follow alphabetically, having no file order of their own to inherit. Every name links "
+        "to that setup's own section below, so this table is the index of the page as well as its "
+        "summary."
+    )
     OVERRIDES_NOTE: ClassVar[str] = (
         "The `Overrides` column counts the components the grouping table assigns `override`, not the "
         "individual values the pass reports as consumer knobs; one override component can carry several "
         "knobbed values, and a component that belongs to a variant option can carry knobbed values too."
     )
+
+    #: How the page says, in one spelling everywhere, that a setup has a twin and no decision.
+    NOT_GROUPED: ClassVar[str] = "not grouped yet"
 
     #: How one group's options and per-option counts are separated from the next group's.
     GROUP_SEPARATOR: ClassVar[str] = "; "
@@ -678,14 +858,18 @@ class OverviewPage:
         "the probe list. Columns are in the order the probe list declares them."
     )
 
-    def __init__(self, setups: Sequence[GroupedSetup], recorded: int) -> None:
+    def __init__(
+        self, grouped: Sequence[GroupedSetup], ungrouped: Sequence[RecordedSetup], recorded: int
+    ) -> None:
         """Prepares one rendering.
 
         Args:
-            setups: The grouped setups, in the order their sections should appear.
+            grouped: The setups that have a committed decision, in the order their sections appear.
+            ungrouped: The setups that have only a flat twin, likewise.
             recorded: How many flat twins the repository holds, which is the fleet denominator.
         """
-        self.setups = tuple(setups)
+        self.grouped = tuple(grouped)
+        self.ungrouped = tuple(ungrouped)
         self.recorded = recorded
 
     def render(self) -> str:
@@ -696,9 +880,12 @@ class OverviewPage:
         """
         lines: List[str] = [*self.HEADER_COMMENT, "", self.TITLE, "", self.SUBTITLE, ""]
         lines.extend(self._fleet())
-        for setup in self.setups:
+        for setup in self.grouped:
             lines.append("")
             lines.extend(self._setup(setup))
+        for recorded in self.ungrouped:
+            lines.append("")
+            lines.extend(self._recorded_setup(recorded))
         return "\n".join(lines) + "\n"
 
     def _fleet(self) -> List[str]:
@@ -707,16 +894,17 @@ class OverviewPage:
         Returns:
             The section's lines.
         """
-        rows = [self._fleet_row(setup) for setup in self.setups]
+        rows = [self._fleet_row(setup) for setup in self.grouped]
+        rows.extend(self._recorded_row(recorded) for recorded in self.ungrouped)
         lines = ["## Fleet", ""]
         lines.extend(Markdown.table(self.FLEET_HEADINGS, rows))
-        if any(setup.group_names for setup in self.setups):
+        if any(setup.group_names for setup in self.grouped):
             lines.extend(["", self.BASELINE_FOOTNOTE])
-        lines.extend(["", self.OVERRIDES_NOTE, "", self._census()])
+        lines.extend(["", self.ORDER_FOOTNOTE, "", self.OVERRIDES_NOTE, "", self._census()])
         return lines
 
     def _fleet_row(self, setup: GroupedSetup) -> List[str]:
-        """Renders one setup's row of the fleet table.
+        """Renders one grouped setup's row of the fleet table.
 
         Args:
             setup: The setup the row is about.
@@ -736,12 +924,45 @@ class OverviewPage:
             options.append(", ".join(rendered))
             counts.append(", ".join(str(len(setup.option_members(group, option))) for option in setup.options(group)))
         return [
-            Markdown.code(setup.stem),
+            self._setup_link(setup.stem),
             Markdown.cell(", ".join(groups)),
             Markdown.cell(self.GROUP_SEPARATOR.join(options)),
             Markdown.cell(self.GROUP_SEPARATOR.join(counts)),
             str(len(setup.overrides)),
         ]
+
+    def _recorded_row(self, setup: RecordedSetup) -> List[str]:
+        """Renders one ungrouped setup's row of the fleet table.
+
+        Every column but the name is a question the setup's one file cannot answer, so all four
+        say so rather than reading as a zero: no variant group is not the same as none decided yet.
+
+        Args:
+            setup: The setup the row is about.
+
+        Returns:
+            The row's five cells.
+        """
+        return [
+            self._setup_link(setup.stem),
+            f"*{self.NOT_GROUPED}*",
+            Markdown.EMPTY,
+            Markdown.EMPTY,
+            Markdown.EMPTY,
+        ]
+
+    @classmethod
+    def _setup_link(cls, stem: str) -> str:
+        """Links one setup's name in the fleet table to its own section.
+
+        Args:
+            stem: The setup's name, which is also its section's heading.
+
+        Returns:
+            The linked code span.
+        """
+        heading = Markdown.code(stem)
+        return Markdown.link(heading, heading)
 
     def _census(self) -> str:
         """The one sentence pair about how much of the fleet this page can speak for.
@@ -749,8 +970,8 @@ class OverviewPage:
         Returns:
             How many recorded setups are grouped, and what the rest are.
         """
-        grouped = len(self.setups)
-        rest = max(self.recorded - grouped, 0)
+        grouped = len(self.grouped)
+        rest = len(self.ungrouped)
         opening = (
             f"One of the {self.recorded} recorded setups is grouped so far."
             if grouped == 1
@@ -759,18 +980,59 @@ class OverviewPage:
         if not rest:
             return f"{opening} Every recorded setup this repository holds has a grouping table."
         tail = (
-            "The other one has a flat twin only: a single recorded energy-system file, with no probe "
-            "list, no grouping table and no `variants:` section, so nothing on this page can be said "
-            "about it yet."
+            "The other one has a flat twin only — a single recorded energy-system file, with no probe "
+            "list, no grouping table and no `variants:` section — so its section below states its "
+            "inventory and nothing else."
             if rest == 1
-            else f"The other {rest} have flat twins only: a single recorded energy-system file per "
-            "setup, with no probe list, no grouping table and no `variants:` section, so nothing on "
-            "this page can be said about them yet."
+            else f"The other {rest} have flat twins only — a single recorded energy-system file per "
+            "setup, with no probe list, no grouping table and no `variants:` section — so their "
+            "sections below state their inventories and nothing else."
         )
         return f"{opening} {tail}"
 
+    def _recorded_setup(self, setup: RecordedSetup) -> List[str]:
+        """Renders the section of a setup that has a twin and no decision.
+
+        The section is deliberately short: an introduction and one diagram, and no assignments or
+        probe-configurations table, because both would be empty and an empty table reads as a
+        finding rather than as an absence.
+
+        Args:
+            setup: The setup to render.
+
+        Returns:
+            The section's lines, opening with its heading.
+        """
+        lines = [f"## {Markdown.code(setup.stem)}", "", self._recorded_introduction(setup), "", "### Shape", ""]
+        lines.extend(MermaidShape.render_inventory(setup))
+        return lines
+
+    @classmethod
+    def _recorded_introduction(cls, setup: RecordedSetup) -> str:
+        """The paragraph of a setup whose twin is everything the page has of it.
+
+        Args:
+            setup: The setup being introduced.
+
+        Returns:
+            The paragraph, ending in the statement of what this page cannot say about it.
+        """
+        described = Prose.sentence(setup.system.description or "")
+        opening = f"Recorded from {Markdown.code(setup.setup)}" if setup.setup else f"Recorded as {setup.stem}"
+        opening += f', described in the recorded twin as "{described}"' if described else ", with no description"
+        count = len(setup.components)
+        inventory = (
+            "Its one component is listed below." if count == 1 else f"Its {count} components are listed below."
+        )
+        paragraph = f"{opening} {inventory}" if described else f"{opening}. {inventory}"
+        marker = cls.NOT_GROUPED[:1].upper() + cls.NOT_GROUPED[1:]
+        return (
+            f"{paragraph} {marker}: a single recorded configuration, no probe list, so the page can "
+            "state its inventory and nothing else."
+        )
+
     def _setup(self, setup: GroupedSetup) -> List[str]:
-        """Renders one setup's whole section.
+        """Renders one grouped setup's whole section.
 
         Args:
             setup: The setup to render.
@@ -997,12 +1259,17 @@ class OverviewPage:
 
 
 class OverviewSweep:
-    """Finding every committed grouping decision and rendering the page from all of them.
+    """Finding every recorded setup of one directory and rendering the page from all of them.
 
-    The sweep is what makes the page a fleet document rather than a per-setup one: a second setup
-    gains a grouping table and the page grows a section without anybody editing it. It sorts the
-    decisions by file name so that the order of the sections is a property of the repository rather
-    than of the filesystem that listed it.
+    The sweep is what makes the page a fleet document rather than a per-setup one: a setup gains a
+    twin or a grouping table and the page grows a row and a section without anybody editing it. It
+    sorts both halves — the decisions by file name, the twins that have no decision by setup name —
+    so that the order of the sections is a property of the repository rather than of the filesystem
+    that listed it.
+
+    A grouped setup's own flat twin is not a second setup. The baseline probe records the very file
+    the plain recorder writes, which is why that twin exists at all, so a twin whose setup already
+    has a decision is dropped here rather than being listed twice under two different headings.
     """
 
     #: Where the committed decisions and the recorded twins both live.
@@ -1032,7 +1299,7 @@ class OverviewSweep:
 
     @classmethod
     def page(cls, directory: Path, root: Optional[Path] = None) -> OverviewPage:
-        """Reads every grouped setup of one directory and prepares the page for them.
+        """Reads every recorded setup of one directory and prepares the page for them.
 
         Args:
             directory: The directory holding the decisions and the recorded twins.
@@ -1043,8 +1310,14 @@ class OverviewSweep:
             The page, ready to render.
         """
         anchor = root if root is not None else cls.root()
-        setups = [GroupedSetup.read(path, anchor) for path in cls.decisions(directory)]
-        return OverviewPage(setups, len(FleetCensus.flat_twins(directory)))
+        grouped = [GroupedSetup.read(path, anchor) for path in cls.decisions(directory)]
+        twins = FleetCensus.flat_twins(directory)
+        decided = {setup.stem for setup in grouped}
+        recorded = [RecordedSetup.read(twin) for twin in twins]
+        ungrouped = sorted(
+            (setup for setup in recorded if setup.stem not in decided), key=lambda setup: setup.stem
+        )
+        return OverviewPage(grouped, ungrouped, len(twins))
 
 
 def render_overview(directory: Path, root: Optional[Path] = None) -> str:
@@ -1052,7 +1325,8 @@ def render_overview(directory: Path, root: Optional[Path] = None) -> str:
 
     Args:
         directory: The directory holding the ``*.grouping.yaml`` decisions, their grouped energy
-            systems and the recorded flat twins that are the fleet denominator.
+            systems and the recorded flat twins, which are both the fleet denominator and the one
+            source for the setups that have no decision yet.
         root: The repository root the decisions' probe-list paths are relative to; the checkout
             this module lies in when omitted.
 
@@ -1084,4 +1358,4 @@ def write_overview(directory: Path, path: Path, root: Optional[Path] = None) -> 
     page = OverviewSweep.page(directory, root)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(page.render(), encoding="utf-8", newline="\n")
-    return path, len(page.setups), page.recorded
+    return path, len(page.grouped), page.recorded

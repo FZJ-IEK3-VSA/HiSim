@@ -166,12 +166,15 @@ a setup that grew a component is asked about that row and no other.
 The fourth step answers the question the four files per setup do not: which setups have structure
 yet, what that structure is, and why each difference was called what it was called. `hisim
 energy-system grouping overview` sweeps every committed `*.grouping.yaml`, reads the grouped files
-they produced, and writes
-[`roadmap/declarative_energy_systems/grouping_overview.md`](../roadmap/declarative_energy_systems/grouping_overview.md)
-— a fleet table, and per setup a diagram of where the grouped file puts each component, every
-judgement note in full, and what each probe column stands for. The page is generated and committed,
-like the twins themselves: a test re-renders it and compares it byte for byte, so it is re-run
-whenever a decision or a grouped file changes rather than edited by hand.
+they produced and the recorded twin of every setup, and writes
+[`roadmap/declarative_energy_systems/grouping_overview.md`](../roadmap/declarative_energy_systems/grouping_overview.md).
+It covers the whole recorded fleet rather than the grouped part of it: a fleet table with one row
+per setup, linking to that setup's own section, then a section per setup — for a grouped one a
+diagram of where the grouped file puts each component, every judgement note in full and what each
+probe column stands for; for a setup that has only a twin, its inventory and the plain statement
+that this is all the page can say about it yet. The page is generated and committed, like the twins
+themselves: a test re-renders it and compares it byte for byte, so it is re-run whenever a decision,
+a grouped file or a twin changes rather than edited by hand.
 
 ## Simulation-parameters files are shared, never duplicated
 

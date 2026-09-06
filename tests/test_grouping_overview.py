@@ -22,16 +22,18 @@ Each test states the failure mode it catches.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, Sequence
 
 import pytest
 
 from hisim.cli import main as cli_main
 from hisim.energy_system.loader import load_energy_system
 from hisim.energy_system.recording.grouping import Assignment, AssignmentKind, Grouping
+from hisim.energy_system.recording.grouping_io import dump_grouping
 from hisim.energy_system.recording.grouping_overview import (
     FleetCensus,
     GroupedSetup,
+    Markdown,
     MermaidShape,
     OverviewPage,
     OverviewSweep,
@@ -170,19 +172,26 @@ probes:
       config_.heater: Gas Boiler
 """
 
+    #: The setup's own name, which its three files and its section heading all carry.
+    STEM: ClassVar[str] = "two_groups"
+
     @classmethod
-    def decision(cls) -> Grouping:
+    def decision(cls, probes: str = "energy_systems/two_groups.probes.yaml") -> Grouping:
         """The grouping table of that setup, written in an order no renderer may keep.
 
         The assignments are deliberately listed in an order that is neither the grouped file's nor
         the rule's: if the page ever rendered the table in table order, this fixture would say so.
+
+        Args:
+            probes: Where the decision says its probe list is, relative to the root it is read
+                against; a test writing the three files into a temporary directory names it there.
 
         Returns:
             The decision.
         """
         return Grouping(
             setup="system_setups/two_groups.py",
-            probes="energy_systems/two_groups.probes.yaml",
+            probes=probes,
             assignments=(
                 Assignment(component="pv", kind=AssignmentKind.OVERRIDE, note="A number a consumer picks."),
                 Assignment(
@@ -224,10 +233,33 @@ probes:
             The grouped setup, its decision, probe list and grouped file all in memory.
         """
         return GroupedSetup(
-            stem="two_groups",
+            stem=cls.STEM,
             grouping=cls.decision(),
             probes=ProbeList.read(cls.PROBES),
             system=load_energy_system(cls.GROUPED),
+        )
+
+    @classmethod
+    def commit(cls, directory: Path) -> None:
+        """Writes the four files a grouped setup has into one directory.
+
+        The flat twin is written too, because a grouped setup has one and the sweep has to drop it
+        rather than list the setup a second time under its own name.
+
+        Args:
+            directory: Where the files go; it is also the root the decision's paths are read
+                against, so the probe list is named without a directory of its own.
+        """
+        (directory / f"{cls.STEM}.probes.yaml").write_text(cls.PROBES, encoding="utf-8")
+        (directory / f"{cls.STEM}{Grouping.SUFFIX}").write_text(
+            dump_grouping(cls.decision(probes=f"{cls.STEM}.probes.yaml")), encoding="utf-8"
+        )
+        (directory / f"{cls.STEM}.grouped.energy_system.yaml").write_text(
+            Headers.ORIGIN.format(stem=cls.STEM) + Headers.GROUPED_BY.format(stem=cls.STEM) + cls.GROUPED,
+            encoding="utf-8",
+        )
+        (directory / f"{cls.STEM}.energy_system.yaml").write_text(
+            Headers.twin(cls.STEM, "A setup with two variant groups.", ("weather", "pv")), encoding="utf-8"
         )
 
 
@@ -238,22 +270,51 @@ class Headers:
     accepts and every difference that matters is in the comment lines above them.
     """
 
+    #: The recorder's own origin line, which is what makes a file a twin at all.
+    ORIGIN: ClassVar[str] = (
+        "# Recorded from system_setups/{stem}.py with energy_systems/one_day_15min.simulation.yaml "
+        "by the HiSim energy-system recorder v1.\n"
+    )
+
+    #: The extra header line a grouped file carries, which is what keeps the census from counting
+    #: a setup's second file as a second setup.
+    GROUPED_BY: ClassVar[str] = (
+        "# Grouped by {stem}.grouping.yaml from the probe configurations of {stem}.probes.yaml.\n"
+    )
+
     #: A hand-authored energy system: no recorder line at all, so no twin of anything.
     HAND_WRITTEN: ClassVar[str] = "# The reference system of this directory.\nschema_version: 3\nname: exemplar\n"
 
     #: A flat twin, which is the only shape the census counts.
-    FLAT: ClassVar[str] = (
-        "# Recorded from system_setups/flat.py with energy_systems/one_day_15min.simulation.yaml "
-        "by the HiSim energy-system recorder v1.\nschema_version: 3\nname: flat\n"
-    )
+    FLAT: ClassVar[str] = ORIGIN.format(stem="flat") + "schema_version: 3\nname: flat\n"
 
     #: The grouped second file of a setup the flat twin already stands for.
     GROUPED: ClassVar[str] = (
-        "# Recorded from system_setups/flat.py with energy_systems/one_day_15min.simulation.yaml "
-        "by the HiSim energy-system recorder v1.\n"
-        "# Grouped by energy_systems/flat.grouping.yaml from the probe configurations of "
-        "energy_systems/flat.probes.yaml.\nschema_version: 3\nname: flat\n"
+        ORIGIN.format(stem="flat") + GROUPED_BY.format(stem="flat") + "schema_version: 3\nname: flat\n"
     )
+
+    #: The class every component of a synthetic twin is given; the page never imports it, so any
+    #: class the reader accepts will do and one is easier to read than five.
+    COMPONENT_CLASS: ClassVar[str] = "hisim.components.electricity_meter.ElectricityMeter"
+
+    @classmethod
+    def twin(cls, stem: str, description: str, components: Sequence[str]) -> str:
+        """Builds a whole recorded flat twin, header included.
+
+        Args:
+            stem: The setup's name, which the header and the body both carry.
+            description: The one line the recorder copies out of the setup's docstring.
+            components: The component names, in the order the twin should write them.
+
+        Returns:
+            The file's text.
+        """
+        body = ["schema_version: 3", f"name: {stem}", f"description: {description}", "components:"]
+        for weight, name in enumerate(components):
+            body.extend(
+                [f"  {name}:", f"    class: {cls.COMPONENT_CLASS}", "    config:", f"      source_weight: {weight}"]
+            )
+        return cls.ORIGIN.format(stem=stem) + "\n".join(body) + "\n"
 
 
 @pytest.mark.base
@@ -362,6 +423,64 @@ def test_the_fleet_denominator_counts_recorded_flat_twins_only(tmp_path: Path) -
     (tmp_path / "flat.grouped.energy_system.yaml").write_text(Headers.GROUPED, encoding="utf-8")
     twins = FleetCensus.flat_twins(tmp_path)
     assert [path.name for path in twins] == ["flat.energy_system.yaml"]
+
+
+@pytest.mark.base
+def test_a_setup_with_only_a_twin_gets_a_row_a_section_and_a_one_box_diagram(tmp_path: Path) -> None:
+    """Catches the twenty-one ungrouped setups falling off the page again.
+
+    The page's whole claim is that it says which setups have structure *yet*, which it cannot make
+    while it lists only the ones that do. So a setup with nothing but a twin has to appear three
+    times over — a row, a section and a diagram — and its section has to state its inventory without
+    pretending to a judgement: no assignments table, no probe table, and one box rather than one node
+    per component.
+    """
+    (tmp_path / "alpha.energy_system.yaml").write_text(
+        Headers.twin("alpha", "The alpha household.", ("weather", "meter")), encoding="utf-8"
+    )
+    page = OverviewSweep.page(tmp_path, tmp_path).render()
+    assert "| [`alpha`](#alpha) | *not grouped yet* | — | — | — |" in page
+    assert "\n## `alpha`\n" in page
+    assert 'Recorded from `system_setups/alpha.py`, described in the recorded twin as "The alpha' in page
+    assert 'components["components (2)<br/>weather<br/>meter"]' in page
+    assert "### Assignments" not in page and "### Probe configurations" not in page
+
+
+@pytest.mark.base
+def test_the_fleet_table_puts_the_grouped_setups_first_and_the_rest_alphabetically(tmp_path: Path) -> None:
+    """Catches the fleet table's order becoming whatever the directory listing happened to be.
+
+    The order is stated in a footnote on the table, so it has to be a rule and not an accident. It
+    cannot be observed on the real directory, which holds one grouped setup whose name sorts in the
+    middle of the rest, so it is pinned on a directory built to disagree with every other order: a
+    grouped setup whose name sorts last, and two twins written in reverse alphabetical order.
+    """
+    TwoGroups.commit(tmp_path)
+    for stem in ("zeta", "alpha"):
+        (tmp_path / f"{stem}.energy_system.yaml").write_text(
+            Headers.twin(stem, f"The {stem} household.", ("weather",)), encoding="utf-8"
+        )
+    page = OverviewSweep.page(tmp_path, tmp_path)
+    assert [setup.stem for setup in page.grouped] == ["two_groups"]
+    assert [setup.stem for setup in page.ungrouped] == ["alpha", "zeta"]
+    assert page.recorded == 3, "the grouped setup's own twin is counted once and listed once"
+    rendered = page.render()
+    positions = [rendered.index(f"[`{stem}`](#{stem})") for stem in ("two_groups", "alpha", "zeta")]
+    assert positions == sorted(positions)
+
+
+@pytest.mark.base
+def test_a_setup_name_anchors_the_way_github_anchors_it() -> None:
+    """Catches the fleet table linking to fragments no renderer creates.
+
+    Every setup name carries underscores and every heading is a code span, so the two things the
+    derivation has to get right are that an underscore survives and that a backtick does not. A link
+    to a fragment that does not exist fails silently in a browser, which is why it is pinned here
+    rather than left to be noticed.
+    """
+    assert Markdown.anchor("`household_heatpump_building_sizer`") == "household_heatpump_building_sizer"
+    assert Markdown.link("`two_groups`", "`two_groups`") == "[`two_groups`](#two_groups)"
+    assert Markdown.anchor("Probe configurations") == "probe-configurations"
 
 
 @pytest.mark.base

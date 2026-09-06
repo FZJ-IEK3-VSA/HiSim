@@ -211,18 +211,18 @@ class GroupingCommands:
 
     @classmethod
     def overview(cls, arguments: argparse.Namespace, out: TextIO, error_stream: TextIO) -> int:
-        """Renders the committed page describing every grouping decision this repository holds.
+        """Renders the committed page describing every setup this repository has recorded.
 
         Nothing is recorded and nothing is decided: the page is read out of the committed decisions,
-        the grouped files they produced and the flat twins that are the fleet's denominator, which
-        is why running it twice on an unchanged checkout writes the same bytes.
+        the grouped files they produced and the flat twins of every setup, grouped or not, which is
+        why running it twice on an unchanged checkout writes the same bytes.
         """
         del error_stream  # every command shares one signature; a refusal propagates to main()
         path, grouped, recorded = write_overview(
             GroupingPaths.committed_directory(), GroupingPaths.overview(arguments.out)
         )
         print(
-            f"Wrote {path} from {grouped} grouped setup(s) of {recorded} recorded setup(s).",
+            f"Wrote {path}: {recorded} recorded setup(s), {grouped} of them grouped.",
             file=out,
         )
         return 0

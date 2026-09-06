@@ -86,6 +86,7 @@ from hisim.energy_system.recording.grouping_overview import (
     MermaidShape,
     OverviewPage,
     OverviewSweep,
+    RecordedSetup,
     render_overview,
     write_overview,
 )
@@ -123,6 +124,7 @@ __all__ = [
     "ProbeMatrix",
     "ProbeRecording",
     "ProbeRunner",
+    "RecordedSetup",
     "WorkbookLayout",
     "WorkbookReader",
     "WorkbookWriter",

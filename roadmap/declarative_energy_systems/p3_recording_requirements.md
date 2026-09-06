@@ -141,6 +141,37 @@ R10 adds a second pass in which a person makes that judgement once per setup, in
   assertion holds for the combinations the probe list contains and nowhere else. A probe list that toggles each fork
   alone therefore proves nothing about two forks together, and the report says so, naming the untested combinations.
 
+**`[amended 2026-08-31, while implementing R10]`** Four things R10 did not say, decided the way the implementation
+needed them and recorded here rather than left as silent deviations.
+
+1. *R10.2, the diff the cells are computed from.* A probe that does not have a component at all does not record any
+   reference to it either — a building lists the energy manager among its sources in the configurations that have one
+   and not in the ones that do not. Turning the format's own switch off does exactly the same thing to those
+   references, so a difference consisting only of such dropped references is not a difference between the two
+   configurations. The comparison therefore removes references to components the column lacks from the baseline side
+   before comparing, and such a row reads `=`. Without this, every consumer of a switched component would be a `≠` row
+   and the judgement would spread over the whole file. A component the *baseline* lacks has nothing to be compared
+   with, so every column that has it reads `≠`.
+2. *R10.3, the two spellings of a variant assignment.* `variant:<name>/<option>` cannot express the row R10.2 calls
+   load-bearing: the meter exists in every world and is written out in full in each option (R10.3's own sentence), so
+   it belongs to no single option. The bare form `variant:<name>` means exactly that — the component is in every
+   option, with the entry each option's column recorded — and the `/<option>` form means the component exists only in
+   that option. Both are checked against observation.
+3. *R10.3, a `—` row with no assignment.* R10.3 makes an unassigned `≠` row an error and says nothing about an
+   unassigned `—` row, which is equally incoherent: a component cannot both stay an ordinary always-on part and be
+   absent from a configuration. It is refused under the same code, EF-R6.
+4. *R10.5 against R10.6.* The two cannot both hold literally: R10.5 drops an `override` difference from the file, and
+   R10.6 then asks the realization of that column to equal a recording that carries the dropped value. The reading
+   taken is that "the selections the configurations sheet gives C" includes the values of C's knobs, so a column is
+   realized from the file *plus its knobs* — which is what "a base file a consumer sets knobs on" means. The knob
+   values are computed from the recordings, so a column with knobs proves less than one without, and the report prints
+   the count per column and the full knob list for exactly that reason. R10.6 would be worth restating in those terms.
+
+One further note, not an amendment. A recorded file's header spells the schema reference relative to the file's own
+directory, so "byte for byte" depends on how deep the file sits. The probes are therefore recorded into a throwaway
+directory one level under the repository root — the depth `energy_systems/` has — which is what makes the baseline
+column's flat file the committed twin down to its first line.
+
 ### R11 — The migration parity rig `[decided 2026-08-28; Q-P3.7]`
 For the duration of P3 the project runs a second gate whose only question is whether the Python path and the recorded
 file produce the same simulation. It is dispatched by hand, never on push, and it is deleted when P3 ends. It is not an

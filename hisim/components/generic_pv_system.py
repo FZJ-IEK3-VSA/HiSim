@@ -195,7 +195,13 @@ class PVSystemConfig(ConfigBase):
         component_id: Optional[ComponentID] = None,
         load_module_data: bool = False,
     ) -> "PVSystemConfig":
-        """Gets a default PV system with scaling according to rooftop area."""
+        """Gets a default PV system with scaling according to rooftop area.
+
+        The share of the maximum potential is applied exactly once, by ``size_pv_system``, which is why it
+        is not passed on to ``get_default_pv_system`` (that would multiply the power by it a second time).
+        It is instead stamped onto the finished config afterwards, so the returned configuration records
+        the share that was really applied rather than the 1.0 default of ``get_default_pv_system``.
+        """
         if component_id is None:
             component_id = ComponentID(name=name)
         total_pv_power_in_watt = cls.size_pv_system(
@@ -213,6 +219,8 @@ class PVSystemConfig(ConfigBase):
             inverter_name=inverter_name,
             inverter_database=inverter_database,
         )
+        # Stamped after the fact, not passed in above: the power already carries the share.
+        config.share_of_maximum_pv_potential = share_of_maximum_pv_potential
         config.load_module_data = load_module_data
         return config
 

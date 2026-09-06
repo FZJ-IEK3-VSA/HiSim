@@ -198,3 +198,45 @@ def test_photovoltaic_cache_roundtrip(tmp_path) -> None:
     assert my_pvs_cached.ac_power_ratios_for_all_timesteps_output == pytest.approx(
         my_pvs.ac_power_ratios_for_all_timesteps_output
     )
+
+
+@pytest.mark.base
+def test_scaled_pv_system_records_the_share_it_applied() -> None:
+    """Test that a rooftop-scaled config states the share it was sized with, applied exactly once.
+
+    ``get_scaled_pv_system`` applies ``share_of_maximum_pv_potential`` inside ``size_pv_system`` and
+    deliberately does not pass it on to ``get_default_pv_system``, which would multiply the power by
+    it a second time. The share is stamped onto the finished config afterwards instead, so this test
+    asserts both halves: a config scaled at half the rooftop potential carries ``0.5`` rather than
+    the ``1.0`` default of ``get_default_pv_system``, and its power is still the singly-applied
+    power - exactly what ``size_pv_system`` returns for the same share, and half (up to the two
+    decimals that function rounds to) of the power the same rooftop yields at a share of ``1.0``.
+    """
+    rooftop_area_in_m2 = 120.0
+    module_name = "Trina Solar TSM-435NE09RC.05"
+    module_database = generic_pv_system.PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE
+
+    half_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+        rooftop_area_in_m2=rooftop_area_in_m2,
+        share_of_maximum_pv_potential=0.5,
+        module_name=module_name,
+        module_database=module_database,
+    )
+    full_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+        rooftop_area_in_m2=rooftop_area_in_m2,
+        share_of_maximum_pv_potential=1.0,
+        module_name=module_name,
+        module_database=module_database,
+    )
+
+    assert half_config.share_of_maximum_pv_potential == 0.5
+    assert full_config.share_of_maximum_pv_potential == 1.0
+
+    expected_power_in_watt = generic_pv_system.PVSystemConfig.size_pv_system(
+        rooftop_area_in_m2=rooftop_area_in_m2,
+        share_of_maximum_pv_potential=0.5,
+        module_name=module_name,
+        module_database=module_database,
+    )
+    assert half_config.power_in_watt == expected_power_in_watt
+    assert half_config.power_in_watt == pytest.approx(full_config.power_in_watt / 2, abs=0.01)

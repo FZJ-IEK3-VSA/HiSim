@@ -23,12 +23,14 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import ClassVar, Optional
+from typing import ClassVar, Optional, Tuple
 
 import pandas as pd
 import pytest
 
+from hisim.energy_system.parity import WiringParityHarness, WiringSnapshot
 from hisim.simulationparameters import SimulationParameters
+from hisim.simulator import Simulator
 
 # The rig's shared names are imported through the checker's namespace on purpose: the scripts are
 # importable both as ``p3_parity_*`` and as ``scripts.p3_parity_*``, and those are two separate
@@ -38,6 +40,7 @@ from hisim.simulationparameters import SimulationParameters
 from scripts.p3_parity_check import (
     DeclaredPortRenamings,
     ParityChecker,
+    ParitySide,
     ParityWindows,
     Report,
     RunOutcome,
@@ -89,6 +92,30 @@ class Rig:
     #: it — so the failure the test asserts comes from the wiring comparison, not from a crash.
     RENAMED_COMPONENT: ClassVar[str] = "RenamedTransformerAndRectifier"
 
+    #: The setup the staleness canary drives. It is the only in-scope setup that steers several
+    #: participants through one energy manager and needs no load profile from the LoadProfileGenerator,
+    #: so it exercises the counter-numbered dispatch names at a cost a base test can carry.
+    CANARY: ClassVar[str] = "dynamic_components"
+
+    #: The aggregator whose port names the canary checks. Every EMS setup grows its dispatch names
+    #: through this one component, which is why one setup can stand in for all of them.
+    CANARY_AGGREGATOR: ClassVar[str] = "L2EMSElectricityController"
+
+    #: Every legacy port the canary setup's energy manager grows, as the table declares them. The
+    #: numbers are the whole point: an input carries its insertion index and a dispatch output the
+    #: controller's output counter, so both move when anything before them is added or removed.
+    CANARY_LEGACY_PORTS: ClassVar[Tuple[str, ...]] = (
+        "Input_PVSystem_ElectricityOutput_2",
+        "Input_Battery1_AcBatteryPowerUsed_3",
+        "Input_Battery2_AcBatteryPowerUsed_4",
+        "Input_CHP1_ElectricityOutput_5",
+        "Input_CHP2_ElectricityOutput_6",
+        "ElectricityTargetOutput14",
+        "ElectricityTargetOutput15",
+        "ElectricityTargetOutput16",
+        "ElectricityTargetOutput17",
+    )
+
     @classmethod
     def triple(cls, work: Path, energy_system: Optional[Path] = None) -> TripleInputs:
         """Builds the triple the real tests run.
@@ -117,6 +144,56 @@ class Rig:
             A checker demanding exact equality and carrying the declared renamings.
         """
         return ParityChecker(Tolerance(), DeclaredPortRenamings.port_renaming())
+
+    @classmethod
+    def resolved_wiring(cls, simulator: Simulator) -> WiringSnapshot:
+        """Takes a built simulator through the two steps that resolve its wiring, and snapshots it.
+
+        A port name is only final once the automatic default connections have been applied, which
+        happens in ``prepare_calculation``, and once every input has found its source, which happens
+        in ``connect_all_components``. Those two are the beginning of ``run_all_timesteps`` and are
+        run here without the timesteps that follow, because the names are what this test is about
+        and simulating a week to read them would cost minutes rather than seconds.
+
+        Args:
+            simulator: A simulator whose components have been registered and wired.
+
+        Returns:
+            The canonical wiring snapshot of that simulator.
+        """
+        simulator.prepare_calculation()
+        simulator.connect_all_components()
+        return WiringSnapshot.from_simulator(simulator)
+
+    @classmethod
+    def canary_wiring(cls, work: Path) -> Tuple[WiringSnapshot, WiringSnapshot]:
+        """Builds the canary setup both ways, far enough to name every port, and snapshots each.
+
+        Both builds are given their own result and cache directory under the test's temporary
+        directory, for the same reason the rig gives each side of a triple its own: a shared cache
+        would let the second build read what the first one wrote.
+
+        Args:
+            work: Where the two builds may write; a test's own temporary directory.
+
+        Returns:
+            The Python setup's wiring and the recorded twin's wiring, in that order.
+        """
+        from hisim.energy_system.executor import build_energy_system  # noqa: PLC0415
+        from hisim.hisim_main import initialize_from_python  # noqa: PLC0415
+
+        legacy_parameters = ParityWindows.build(cls.WINDOW, work / "python", work / "python-cache")
+        ParitySide.reset_singletons()
+        legacy = cls.resolved_wiring(
+            initialize_from_python(str(cls.SETUPS / f"{cls.CANARY}.py"), legacy_parameters, None)
+        )
+
+        declared_parameters = ParityWindows.build(cls.WINDOW, work / "declarative", work / "declarative-cache")
+        ParitySide.reset_singletons()
+        declarative = cls.resolved_wiring(
+            build_energy_system(cls.ENERGY_SYSTEMS / f"{cls.CANARY}.energy_system.yaml", declared_parameters).simulator
+        )
+        return legacy, declarative
 
 
 @pytest.mark.base
@@ -165,11 +242,48 @@ def test_the_renaming_table_declares_one_meaning_per_legacy_port() -> None:
     assert pairs, "the table declares nothing, so every aggregator port would fail literally"
     assert pairs[("ElectricityMeter", "Input_PVSystem_ElectricityOutput_0")] == "ElectricityOutputFromPVSystem"
     assert (
-        pairs[("L2EMSElectricityController", "LoadingPowerInputForBattery_Output15")]
+        pairs[("L2EMSElectricityController", "LoadingPowerInputForBattery_Output14")]
         == "DispatchToBattery_LoadingPowerInput"
     )
     renaming = DeclaredPortRenamings.port_renaming()
     assert renaming.rename("ElectricityMeter", "SomethingNobodyDeclared") == "SomethingNobodyDeclared"
+
+
+@pytest.mark.base
+def test_the_table_still_spells_the_ports_the_dynamic_components_setup_actually_grows(tmp_path: Path) -> None:
+    """Catches a renaming table that has gone stale because a dispatch counter moved.
+
+    Every legacy dynamic port name in the table carries a number the two paths do not agree on: an
+    aggregator input carries its insertion index, and a dispatch output carries the aggregator's
+    running output counter, which counts the outputs the component had already declared when the
+    setup added the dispatch. That counter is not the setup's to control — an energy manager that
+    gains or loses one declared output renumbers every dispatch output of every setup that uses it —
+    so the table can be correct when it is written and wrong a month later without anyone touching
+    it. That is exactly what happened once: retiring one of the manager's default connections moved
+    all of them down by one, the table kept claiming the old numbers, and the whole fleet's dispatch
+    failed at once with a wiring difference that was nothing but a name.
+
+    This is the canary for that class of failure. One setup is enough because all thirteen energy
+    manager setups grow their names through the same machinery, and this one has no load profile to
+    generate, so it costs a base test seconds instead of minutes. It asserts both halves: that every
+    legacy name the table declares for this setup is a port the Python build really has — a name
+    nobody grows any more can never be exercised again — and that translating the Python wiring
+    through the table yields precisely the twin's wiring, which is the claim the rig makes fleet-wide.
+    """
+    legacy, declarative = Rig.canary_wiring(tmp_path)
+    grown = (
+        {wire.target_input for wire in legacy.wires if wire.target_component == Rig.CANARY_AGGREGATOR}
+        | {wire.source_output for wire in legacy.wires if wire.source_component == Rig.CANARY_AGGREGATOR}
+        | {port for component, port in legacy.unconnected_inputs if component == Rig.CANARY_AGGREGATOR}
+    )
+    declared = DeclaredPortRenamings.pairs()
+
+    for port in Rig.CANARY_LEGACY_PORTS:
+        assert port in grown, f"'{Rig.CANARY}' no longer grows '{port}', so the table declares a name nobody uses"
+        assert (Rig.CANARY_AGGREGATOR, port) in declared, f"the table stopped declaring '{port}'"
+
+    diff = WiringParityHarness.compare(DeclaredPortRenamings.port_renaming().apply_to(legacy), declarative)
+    assert diff.is_identical(), diff.describe()
 
 
 @pytest.mark.base

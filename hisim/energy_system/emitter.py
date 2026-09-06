@@ -82,6 +82,15 @@ class CanonicalDumper(yaml.SafeDumper):
         done here instead of at import time so importing this module has no side effect; calling it twice is
         harmless.
 
+        The coverage is wider than a recording needs, and deliberately so. A configuration written
+        by the recorder passes
+        :meth:`hisim.energy_system.record.ConfigBlockWriter.plain` first, and that refuses every
+        numpy box except ``np.float64`` — which is a ``float`` and needs no representer — with
+        ``EF-60``, because a record has to state values a plain reader can check. What the
+        registrations here serve is every other document that reaches this dumper: one a caller
+        built itself, one a loader produced, and the annotated writer's, which borrows these same
+        representers so that the two writers cannot disagree about one document.
+
         Returns:
             The dumper class, ready to pass to ``yaml.dump``.
         """

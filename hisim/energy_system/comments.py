@@ -53,8 +53,14 @@ class CanonicalRepresenter(RoundTripRepresenter):
     YAML version this format's reader uses — is quoted, which the round-trip representer does not
     do on its own because it follows a later version of the specification.
 
-    Neither habit is invented here: the quoting question is put to the canonical writer's own
-    resolver, so the two answers cannot drift apart as that resolver changes.
+    Beyond the two habits it registers the numeric conversions the canonical dumper makes: a numpy
+    integer, float, boolean or array arriving from a configuration value is written as the plain
+    number it stands for. Those are not a style of this writer but a spelling both writers have to
+    share, since an annotated file and a plain one of the same document must be the same bytes.
+
+    Nothing here is invented: the quoting question is put to the canonical writer's own resolver
+    and the numeric representers are that writer's own, so the two cannot drift apart as either
+    changes.
     """
 
     #: Tag under which a null is written.

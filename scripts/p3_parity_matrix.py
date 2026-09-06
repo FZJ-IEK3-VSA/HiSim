@@ -2,7 +2,7 @@
 """Emit the GitHub Actions matrix of every (setup, window) triple the parity rig can run.
 
 TEMPORARY — this script belongs to the P3 migration parity rig (requirements R11) and is deleted
-with it in P3's last PR (R11.8, AC-P3.20).
+with it in phase P6 (R11.8 amended and AC-P3.20 deferred to P6, 2026-08-31).
 
 The matrix is derived from the files that exist rather than from a configuration list, because the
 rig's coverage is exactly "every setup that has been recorded" and a second list would be one more
@@ -137,9 +137,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     Returns:
         ``0``.
+
+    Raises:
+        SystemExit: If the matrix is empty. GitHub reports a matrix job that expanded to zero
+            cells as a success, so a dispatch over no recorded twins would otherwise turn the
+            whole workflow green while testing nothing.
     """
     arguments = parse_arguments(argv)
     matrix = build_matrix(arguments.setup, arguments.window)
+    if not matrix["include"]:
+        raise SystemExit("The matrix is empty: no setup has a recorded twin, so the rig would cover nothing.")
     print(json.dumps(matrix, separators=(",", ":")))
     return 0
 

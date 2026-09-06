@@ -2,17 +2,20 @@
 """Run one Python setup and its recorded twin side by side and prove they are the same simulation.
 
 TEMPORARY — this script is the P3 migration parity rig (requirements R11) and is deleted together
-with the rest of the rig in P3's last PR (R11.8, AC-P3.20). It is not the permanent golden gate,
+with the rest of the rig in phase P6 (R11.8 amended and AC-P3.20 deferred to P6, 2026-08-31). It is not the permanent golden gate,
 it produces no reference and it blesses nothing: its only question is whether the declarative file
 recorded from a setup reproduces that setup.
 
-One invocation covers one ``(setup, window)`` triple and makes the three comparisons of R11.3 in
-order. First the component set and the wire set, through the declared port-renaming table, because
-two systems wired differently have nothing worth comparing numerically. Then **every** column of
-the result frame — the content of ``all_results.csv`` — since a difference the KPI layer happens
-to average away is still a difference. Then ``all_kpis.json``, where KPI computation succeeds;
-seven in-scope setups crash in that layer today, and those still receive a verdict from the first
-two comparisons rather than an error (R11.4).
+Every requested ``(setup, window)`` triple is run through the three comparisons of R11.3 in order;
+one invocation covers the whole requested set — the entire fleet over both windows by default —
+and prints one table over all of it. First the component set and the wire set, through the
+declared port-renaming table, because two systems wired differently have nothing worth comparing
+numerically. Then **every** column of the result frame — the content of ``all_results.csv`` —
+since a difference the KPI layer happens to average away is still a difference. Then
+``all_kpis.json``, where KPI computation succeeds; a setup that crashes in that layer still
+receives a named verdict from the first two comparisons rather than an error, but its unavailable
+KPI stage fails the triple, so a new KPI regression cannot read green (R11.4 as amended
+2026-09-05).
 
 The comparison is **exact by default** (R11.2). Both runs happen in one process on one machine,
 where determinism is byte-exact, so the ``rel_tol = 1e-9`` of the permanent gate — which exists to
@@ -34,8 +37,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
+import traceback
 from pathlib import Path
-from typing import ClassVar, List, Optional, Sequence
+from typing import Callable, ClassVar, List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -48,6 +53,7 @@ from hisim.energy_system.parity import (
 )
 
 try:  # importable both as ``scripts.p3_parity_check`` (tests) and as a script from ``scripts/``
+    from p3_parity_matrix import covered_setups  # type: ignore[import-not-found]
     from p3_parity_renamings import DeclaredPortRenamings  # type: ignore[import-not-found]
     from p3_parity_runs import (  # type: ignore[import-not-found]
         ColumnDifference,
@@ -67,6 +73,7 @@ try:  # importable both as ``scripts.p3_parity_check`` (tests) and as a script f
         last_line,
     )
 except ModuleNotFoundError:  # pragma: no cover - depends on how scripts/ is on the path
+    from scripts.p3_parity_matrix import covered_setups
     from scripts.p3_parity_renamings import DeclaredPortRenamings
     from scripts.p3_parity_runs import (
         ColumnDifference,
@@ -141,10 +148,16 @@ class ParityChecker:
             The verdict, carrying the wire diff and the differing columns and KPIs when it failed,
             and the two run outcomes a failure's artifacts are written from.
         """
+        # A dispatch starts from a clean slate: the default work directory is a fixed path under
+        # results/, so a hand-dispatched rig would otherwise compare against a directory still
+        # holding a previous dispatch's KPI files and artifacts.
+        if triple.work_directory.exists():
+            shutil.rmtree(triple.work_directory)
         verdict = TripleVerdict(stem=triple.stem, window=triple.window, tolerated=False)
-        python_side = self.run_side(triple, "python")
-        declarative_side = self.run_side(triple, "declarative")
-        sides = (("python", python_side), ("declarative", declarative_side))
+        python_name, declarative_name = TripleInputs.SIDES
+        python_side = self.run_side(triple, python_name)
+        declarative_side = self.run_side(triple, declarative_name)
+        sides = ((python_name, python_side), (declarative_name, declarative_side))
         for name, side in sides:
             if side.fatal_error is not None:
                 verdict.wiring = Verdict.FAILED
@@ -152,10 +165,40 @@ class ParityChecker:
                 verdict.kpis = Verdict.FAILED
                 verdict.notes.append(f"the {name} run did not finish: {last_line(side.fatal_error)}")
                 return CheckedTriple(verdict=verdict, sides=sides)
-        self.compare_wiring(python_side, declarative_side, verdict)
-        self.compare_results(python_side, declarative_side, verdict)
-        self.compare_kpis(python_side, declarative_side, verdict)
+        self.compare_guarded("wiring", self.compare_wiring, python_side, declarative_side, verdict)
+        self.compare_guarded("results", self.compare_results, python_side, declarative_side, verdict)
+        self.compare_guarded("kpis", self.compare_kpis, python_side, declarative_side, verdict)
         return CheckedTriple(verdict=verdict, sides=sides)
+
+    def compare_guarded(
+        self,
+        stage: str,
+        compare: Callable[[RunOutcome, RunOutcome, TripleVerdict], None],
+        expected: RunOutcome,
+        actual: RunOutcome,
+        verdict: TripleVerdict,
+    ) -> None:
+        """Runs one comparison so that its own crash fails its stage instead of the dispatch.
+
+        The comparisons can legitimately raise — the renaming table refuses to translate two ports
+        onto one name, for instance — and an uncaught exception here would abort a whole fleet
+        dispatch on its first broken triple. R11.4's philosophy applies to the comparisons as much
+        as to the runs: a triple always receives a verdict rather than an error.
+
+        Args:
+            stage: The verdict field this comparison fills in: wiring, results or kpis.
+            compare: The comparison to run.
+            expected: The Python side.
+            actual: The declarative side.
+            verdict: The verdict being filled in.
+        """
+        try:
+            compare(expected, actual, verdict)
+        except Exception:  # noqa: BLE001 - a comparison crash must fail its triple, not the dispatch
+            setattr(verdict, stage, Verdict.FAILED)
+            verdict.notes.append(
+                f"the {stage} comparison itself failed: {last_line(traceback.format_exc())}"
+            )
 
     def run_side(self, triple: TripleInputs, side: str) -> RunOutcome:
         """Runs one side of a triple under this rig's shared parameters.
@@ -165,13 +208,19 @@ class ParityChecker:
             side: One of :attr:`TripleInputs.SIDES`.
 
         Returns:
-            What that side produced.
+            What that side produced. A side that could not even be assembled — an import error in
+            the setup module, an executor refusing the recorded file — is returned as a fatal
+            outcome rather than raised, so one broken setup fails its own triple instead of ending
+            the whole dispatch (R11.4).
         """
         results, cache = triple.side_directories(side)
         parameters = ParityWindows.build(triple.window, results, cache)
-        if side == "python":
-            return ParitySide.python(triple.setup_path, parameters)
-        return ParitySide.declarative(triple.energy_system_path, parameters)
+        try:
+            if side == TripleInputs.SIDES[0]:
+                return ParitySide.python(triple.setup_path, parameters)
+            return ParitySide.declarative(triple.energy_system_path, parameters)
+        except Exception:  # noqa: BLE001 - a side that cannot build must fail its triple only
+            return RunOutcome(fatal_error=traceback.format_exc())
 
     def compare_wiring(self, expected: RunOutcome, actual: RunOutcome, verdict: TripleVerdict) -> None:
         """Makes the first comparison: the component set and the wire set (R11.3).
@@ -256,13 +305,18 @@ class ParityChecker:
         for name in [str(column) for column in expected.columns]:
             left = expected[name].to_numpy(dtype=float)
             right = actual[name].to_numpy(dtype=float)
-            if np.array_equal(left, right):
+            accepted = self.tolerance.accepts_column(left, right)
+            if accepted.all():
                 continue
+            # The quoted row is the worst *rejected* one, not the worst-absolute one: under a
+            # relative tolerance those can differ, and probing the tolerance at the worst-absolute
+            # row alone would skip a column whose only out-of-tolerance row is a low-magnitude one.
             absolute = np.abs(left - right)
-            position = int(np.argmax(absolute))
-            if self.tolerance.accepts(float(left[position]), float(right[position])):
-                continue
-            scale = max(abs(float(left[position])), abs(float(right[position]))) or 1.0
+            absolute[np.isnan(absolute)] = np.inf
+            position = int(np.argmax(np.where(accepted, -np.inf, absolute)))
+            scale = max(abs(float(left[position])), abs(float(right[position])))
+            if not np.isfinite(scale) or scale == 0.0:
+                scale = 1.0
             found.append(
                 ColumnDifference(
                     column=name,
@@ -315,7 +369,7 @@ class ParityChecker:
             for name in sorted(left)
             if not self.tolerance.accepts(left[name], right[name])
         ]
-        exact = [name for name in left if left[name] != right[name]]
+        exact = [name for name in left if not Tolerance.equal(left[name], right[name])]
         if verdict.differences.kpis:
             verdict.kpis = Verdict.FAILED
             verdict.notes.append(f"{len(verdict.differences.kpis)} KPI(s) differ")
@@ -344,12 +398,9 @@ def discover(stems: Optional[Sequence[str]]) -> List[str]:
     Raises:
         SystemExit: If a named stem has no setup module or no recorded twin.
     """
-    available = sorted(
-        path.stem
-        for path in Paths.SETUPS.glob("*.py")
-        if path.name != "__init__.py"
-        and (Paths.ENERGY_SYSTEMS / f"{path.stem}{Paths.RECORDED_SUFFIX}").exists()
-    )
+    # The matrix emitter owns the one definition of "covered"; re-globbing here would be a second
+    # copy of it that could drift.
+    available: List[str] = covered_setups()
     if not stems:
         return available
     missing = sorted(set(stems) - set(available))
@@ -424,9 +475,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     """
     arguments = parse_arguments(argv)
     if arguments.summarize is not None:
-        table, without_parity = Report.summarize(arguments.summarize)
+        table, covered, without_parity = Report.summarize(arguments.summarize)
         print(table)
-        print(f"\n{without_parity} triple(s) did not reach parity.")
+        if covered == 0:
+            print("\nNo verdict files found. A dispatch that covered nothing is a failure, not a pass.")
+            return 1
+        print(f"\n{without_parity} of {covered} triple(s) did not reach parity.")
         return 1 if without_parity else 0
     tolerance = Tolerance(arguments.rel_tol, arguments.abs_tol)
     checker = ParityChecker(tolerance, DeclaredPortRenamings.port_renaming())

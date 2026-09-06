@@ -1274,9 +1274,14 @@ class Building(cp.Component):
             min_temperature_reached_in_celsius = float(min(indoor_temperatures_in_celsius.values))
             max_temperature_reached_in_celsius = float(max(indoor_temperatures_in_celsius.values))
 
-            # make kpi entries and append to list
+            # make kpi entries and append to list. The set temperature inside the name is a KPI
+            # *identity*, compared verbatim against blessed golden references — and the same
+            # config value arrives as int 20 from a Python setup literal but as float 20.0 from
+            # the scenario-JSON path, whose from_dict coerces to the annotation. The spelling is
+            # therefore pinned to one decimal instead of inherited from the value's runtime type,
+            # so the python and JSON gates name one KPI.
             temperature_hours_of_building_below_heating_set_temperature_entry = KpiEntry(
-                name=f"Temperature deviation of building indoor air temperature being below set temperature {self.set_heating_temperature_in_celsius} Celsius",
+                name=f"Temperature deviation of building indoor air temperature being below set temperature {self.set_heating_temperature_in_celsius:.1f} Celsius",
                 unit="°C*h",
                 value=temperature_hours_of_building_being_below_heating_set_temperature,
                 tag=KpiTagEnumClass.BUILDING,
@@ -1284,7 +1289,7 @@ class Building(cp.Component):
             )
             list_of_kpi_entries.append(temperature_hours_of_building_below_heating_set_temperature_entry)
             temperature_hours_of_building_above_cooling_set_temperature_entry = KpiEntry(
-                name=f"Temperature deviation of building indoor air temperature being above set temperature {self.set_cooling_temperature_in_celsius} Celsius",
+                name=f"Temperature deviation of building indoor air temperature being above set temperature {self.set_cooling_temperature_in_celsius:.1f} Celsius",
                 unit="°C*h",
                 value=temperature_hours_of_building_being_above_cooling_set_temperature,
                 tag=KpiTagEnumClass.BUILDING,

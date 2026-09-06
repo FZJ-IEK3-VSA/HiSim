@@ -141,14 +141,12 @@ class EnergySystemCommands:
             return GroupingCommands.record(arguments, out, error_stream)
         del error_stream  # every command shares one signature; a refusal propagates to main()
         module = Path(arguments.setup)
-        parameters_path = Path(arguments.simulation_parameters)
         directory = Path(arguments.out) if arguments.out else RecordingSession.default_output_directory(module)
-        parameters = SimulationParametersReader.read(parameters_path)
+        parameters = SimulationParametersReader.read(Path(arguments.simulation_parameters))
         result = record_setup(
             module,
             parameters,
             directory,
-            parameters_path=parameters_path,
             module_config=Path(arguments.module_config) if arguments.module_config else None,
             probe=arguments.probe,
             probes=arguments.probes,

@@ -1,0 +1,121 @@
+# YAML-vs-golden parity check (AC-P3.2): runs the recorded '.energy_system.yaml' twin
+# of each curated setup through the declarative executor with the *same* parameters as
+# the Python golden run, and compares its KPIs against the committed golden references
+# in golden_references/ (which were produced by the Python setups).
+#
+# The point is to prove the declarative path reproduces the setups it was recorded
+# from. Together with the energy-system freshness gate (the twins are what recording
+# produces) this is what lets the golden suites eventually run on files.
+#
+# The oracle is the KPI set, deliberately: the legacy and declarative paths name
+# aggregator result columns differently (C-P3.2 of the P3 requirements), so comparing
+# result columns by name would need the parity rig's renaming table. Do not "fix" this
+# by comparing CSVs. One KPI family carries a port name itself — the energy-management
+# system's "Priority for Input_..." — and is excluded from both sides of the comparison
+# (PORT_NAMED_KPIS in golden_check.py, printed per pair); the parity rig compares that
+# family exactly through its renaming table, and the exclusion dissolves when the
+# legacy aggregator ports adopt the declarative names (a P4/P5 item per C-P3.2).
+#
+# Scope:
+#   - push / pull_request to main  -> the short one-week pairs, automatically.
+#   - workflow_dispatch            -> choose horizon (week or year) for a manual,
+#                                     heavier full-year parity run.
+#
+# Gate: BLOCKING. The check fails the job on any KPI divergence or run error, so a
+# PR that breaks YAML/Python parity cannot be merged.
+
+name: golden-yaml-check
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      horizon:
+        description: "Parameter horizon to check as recorded YAML"
+        type: choice
+        default: week
+        options: [ week, year ]
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: golden-yaml-check-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  discover:
+    name: discover yaml pairs
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: gen
+        # week for automatic triggers; the chosen horizon for a manual dispatch.
+        # golden_matrix.py is stdlib-only, so no dependency install is needed here.
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            horizon="${{ inputs.horizon }}"
+          else
+            horizon="week"
+          fi
+          echo "horizon=$horizon"
+          echo "matrix=$(python3 scripts/golden_matrix.py --horizon "$horizon")" >> "$GITHUB_OUTPUT"
+
+  golden-yaml:
+    name: golden-yaml ${{ matrix.setup }} / ${{ matrix.param }}
+    needs: discover
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install HiSim package
+        run: uv pip install --system -e .
+      # The previous run's weather series and LoadProfileGenerator profiles; see the action.
+      - name: Restore the HiSim inputs cache
+        uses: ./.github/actions/hisim-cache
+        with:
+          mode: restore
+          scope: ${{ github.workflow }}-${{ matrix.setup }}-${{ matrix.param }}
+      - name: Golden KPI check (recorded YAML)
+        run: |
+          python scripts/golden_check.py \
+            --mode yaml \
+            --setup "${{ matrix.setup }}" --param "${{ matrix.param }}"
+      - name: Upload deviation report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: golden-yaml-report-${{ matrix.setup }}-${{ matrix.param }}
+          path: results/golden-ref-check/report.*
+          if-no-files-found: warn
+      # Kept even when the job failed; see the action for why that is safe.
+      - name: Save the HiSim inputs cache
+        if: always()
+        uses: ./.github/actions/hisim-cache
+        with:
+          mode: save
+          scope: ${{ github.workflow }}-${{ matrix.setup }}-${{ matrix.param }}
+
+  summary:
+    name: golden-yaml-check summary
+    needs: golden-yaml
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any YAML pair diverged
+        run: '[ "${{ needs.golden-yaml.result }}" = "success" ] || exit 1'

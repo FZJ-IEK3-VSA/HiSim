@@ -142,6 +142,8 @@ class EnergySystemErrorId(enum.Enum):
     GROUPING_UNKNOWN_OPTION = "EF-R7"
     PROBE_LIST_MALFORMED = "EF-R9"
     GROUPING_NOT_REPRODUCED = "EF-R10"
+    RECORDED_DISPATCH_AMBIGUOUS = "EF-R11"
+    RECORDED_WOULD_OVERWRITE = "EF-R12"
 
 
 class EnergySystemError(Exception):
@@ -394,6 +396,13 @@ class EnergySystemRecordingError(EnergySystemCatalogueError):
     builder the class no longer has, and a recorded file that does not load and build again: each
     of them means the observed system cannot be written down faithfully, and each is a defect in
     the setup or in a component class rather than something an author typed.
+
+    Two further refusals guard the recording itself rather than the setup. An aggregator whose
+    control outputs for one participant cannot be told apart is refused (``EF-R11``) instead of
+    paired arbitrarily, because the arbitrary pairing would wire a control signal to the wrong
+    participant and the twin would still load. And a recording that would overwrite a file the
+    recorder did not produce is refused (``EF-R12``) instead of writing, because a hand-authored
+    energy-system file is nobody's regenerable artifact and destroying one is not a recording.
 
     The distinction from :class:`EnergySystemRecordError` matters to a caller. That class means the
     machinery broke its promise about a record it wrote; this one means the input it was asked to

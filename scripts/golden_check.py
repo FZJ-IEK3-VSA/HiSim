@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -32,6 +33,7 @@ try:  # run as a script from scripts/ ...
         load_config,
         run_all,
         run_all_json,
+        run_all_yaml,
         select_pairs,
     )
 except ModuleNotFoundError:  # ... or imported as scripts.golden_check (tests)
@@ -43,8 +45,18 @@ except ModuleNotFoundError:  # ... or imported as scripts.golden_check (tests)
         load_config,
         run_all,
         run_all_json,
+        run_all_yaml,
         select_pairs,
     )
+
+#: KPI names that carry a legacy aggregator port name (``Priority for Input_<source>_<field>_<n>``).
+#: The legacy and declarative paths name aggregator ports differently (C-P3.2 of the P3
+#: requirements), and the energy-management system names its priority KPI after the port, so these
+#: KPIs differ between the two paths by NAME while their values agree. YAML mode excludes the
+#: family from both sides of the comparison -- declared here, printed per pair, and covered
+#: exactly by the parity rig through its renaming table. The exclusion dissolves when the legacy
+#: aggregator ports adopt the declarative names (a P4/P5 item per C-P3.2).
+PORT_NAMED_KPIS = re.compile(r"\.Priority for ")
 
 DEFAULT_REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG_PATH = Path(__file__).parent / "golden_config.json"
@@ -155,6 +167,7 @@ def main(
     abs_tol: float = ABS_TOL,
     run_fn: RunFn = run_all,
     advisory: bool = False,
+    ignore_kpis: Optional[re.Pattern] = None,
 ) -> int:
     """Run the (filtered) pairs and compare KPIs to committed goldens.
 
@@ -162,6 +175,10 @@ def main(
     ``nondeterministic`` pairs still pass), ``1`` otherwise. Bails **before**
     running any simulation if a required golden file is missing, so a missing
     reference never wastes compute.
+
+    ``ignore_kpis`` drops matching KPI names from both the run and the reference before
+    comparing; YAML mode passes :data:`PORT_NAMED_KPIS` for it, and every exclusion is
+    printed with its pair so a shrinking comparison is never silent.
 
     When ``advisory`` is ``True`` the full comparison still runs and the reports
     are written exactly as usual, but the process return code is forced to ``0`` so
@@ -220,7 +237,15 @@ def main(
 
         golden_path = golden_dir / golden_filename(result.setup_id, result.parameter_set_id)
         ref: dict[str, Any] = json.loads(golden_path.read_text())
-        deviations = compare(name, result.kpis, ref, rel_tol=rel_tol, abs_tol=abs_tol)
+        got = result.kpis
+        if ignore_kpis is not None:
+            got = {k: v for k, v in got.items() if not ignore_kpis.search(k)}
+            filtered_ref = {k: v for k, v in ref.items() if not ignore_kpis.search(k)}
+            excluded = (len(ref) - len(filtered_ref)) + (len(result.kpis) - len(got))
+            ref = filtered_ref
+            if excluded:
+                print(f"  ({name}: {excluded} port-named KPI(s) excluded from comparison, C-P3.2)")
+        deviations = compare(name, got, ref, rel_tol=rel_tol, abs_tol=abs_tol)
 
         if not deviations:
             status = "pass"
@@ -251,10 +276,11 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--abs-tol", type=float, default=ABS_TOL)
     parser.add_argument(
         "--mode",
-        choices=("python", "json"),
+        choices=("python", "json", "yaml"),
         default="python",
-        help="Run the '.py' setups (python) or their '.scenario.json' siblings (json). "
-        "Both compare against the same committed golden references.",
+        help="Run the '.py' setups (python), their '.scenario.json' siblings (json), or their "
+        "recorded '.energy_system.yaml' twins through the declarative executor (yaml). "
+        "All compare against the same committed golden references.",
     )
     parser.add_argument(
         "--advisory",
@@ -276,7 +302,8 @@ if __name__ == "__main__":
             param_id=args.param_id,
             rel_tol=args.rel_tol,
             abs_tol=args.abs_tol,
-            run_fn=run_all_json if args.mode == "json" else run_all,
+            run_fn={"json": run_all_json, "yaml": run_all_yaml}.get(args.mode, run_all),
             advisory=args.advisory,
+            ignore_kpis=PORT_NAMED_KPIS if args.mode == "yaml" else None,
         )
     )

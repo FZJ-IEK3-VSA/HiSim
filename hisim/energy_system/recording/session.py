@@ -85,9 +85,15 @@ class RecordedFileWriter:
     #: The editor binding, written relative to the file so that it survives a checkout anywhere.
     SCHEMA_LINE: ClassVar[str] = "# yaml-language-server: $schema={schema}"
 
+    #: How the origin line opens. It is the recorder's signature on a file: a file whose header
+    #: carries it was written by this class and may be rewritten, and a file whose header does not
+    #: was written by somebody and must not be. Kept separate from the line itself so that the
+    #: writer and the overwrite guard cannot come to disagree about the spelling.
+    MARKER: ClassVar[str] = "# Recorded from "
+
     #: The one line saying what produced the file, naming both inputs and the recorder version.
     ORIGIN_LINE: ClassVar[str] = (
-        "# Recorded from {setup} with {parameters} by the HiSim energy-system recorder v{version}."
+        MARKER + "{setup} with {parameters} by the HiSim energy-system recorder v{version}."
     )
 
     #: The extra line a probe recording carries, naming the module configuration it was recorded
@@ -148,16 +154,34 @@ class RecordedFileWriter:
             end += 1
         return "".join(lines[:end]), "".join(lines[end:])
 
+    @classmethod
+    def was_recorded(cls, text: str) -> bool:
+        """Whether a file's text carries this writer's signature in its comment header.
+
+        Only the header is inspected, because that is the only part of the file the recorder
+        writes itself; a body that happens to contain the marker inside a description would
+        otherwise pass a file off as regenerable.
+
+        Args:
+            text: The whole content of an existing file.
+
+        Returns:
+            ``True`` when one of the leading comment lines opens with :attr:`MARKER`.
+        """
+        header, _ = cls.split(text)
+        return any(line.startswith(cls.MARKER) for line in header.splitlines())
+
 
 class RecordingSession:
     """Runs one setup and writes the energy-system file that describes what it built.
 
-    A session is a small object over the three paths a recording needs — the setup, the parameters
-    file and the output directory — because all three appear in more than one step and threading
-    them through as arguments made every step's signature about bookkeeping rather than about what
-    it does.
+    A session is a small object over the two paths a recording needs — the setup and the output
+    directory — because both appear in more than one step and threading them through as arguments
+    made every step's signature about bookkeeping rather than about what it does. The parameters
+    file is not one of them: the header names the file the library resolved the run's parameters
+    to, which the recording finds for itself.
 
-    The setup is spelled relative to the repository wherever it lies inside it, and so is the
+    The setup is spelled relative to the repository wherever it lies inside it, and so is that
     parameters file, because those two strings go into the file's header and a header carrying an
     absolute path would differ between two machines recording the same setup.
     """
@@ -174,7 +198,6 @@ class RecordingSession:
     def __init__(
         self,
         module_path: Path,
-        parameters_path: Path,
         out_dir: Path,
         library: Optional[ParameterFileLibrary] = None,
         *,
@@ -184,10 +207,12 @@ class RecordingSession:
     ) -> None:
         """Prepares one recording.
 
+        The parameters file the run was started from is deliberately not among the arguments. The
+        header names the file the recording *resolved* to, which the library answers from the
+        parameters the setup ended up with, and that is not always the file the caller opened.
+
         Args:
             module_path: The ``system_setups/*.py`` module to record.
-            parameters_path: The simulation-parameters file the run is started from. It is what
-                the setup is handed, not necessarily what the recording ends up naming.
             out_dir: Directory the recorded file is written to; created when it does not exist.
             library: The parameter files this recording may reference, and where a new one goes.
                 One library shared across a fleet-wide run is what lets two setups needing the
@@ -202,7 +227,6 @@ class RecordingSession:
             probes: The probe list the column comes from, named in the header beside the column.
         """
         self.module_path = Path(module_path).resolve()
-        self.parameters_path = Path(parameters_path)
         self.out_dir = Path(out_dir)
         self.stem = self.module_path.stem
         self.library = library if library is not None else self.default_library(self.module_path, self.out_dir)
@@ -272,7 +296,10 @@ class RecordingSession:
 
         Raises:
             EnergySystemRecordingError: ``EF-R1`` … ``EF-R4`` when the observed system cannot be
-                written down, and ``EF-R5`` when the written file does not load, validate or build.
+                written down, ``EF-R5`` when the written file does not load, validate or build,
+                ``EF-R11`` when an aggregator's control outputs cannot be paired with the feeds
+                they belong to, and ``EF-R12`` when a file the recorder did not write is already
+                at the output path.
         """
         from hisim.hisim_main import get_description_from_py, initialize_from_python  # noqa: PLC0415
 
@@ -309,6 +336,12 @@ class RecordingSession:
     def write(self, model: EnergySystemFile, setup_name: str, parameters_path: Path) -> str:
         """Writes the header and the canonical body of one recorded file.
 
+        A file already at this path is overwritten only when the recorder wrote it: refreshing the
+        fleet re-records every twin over its predecessor, and that has to keep working. A file
+        without the recorder's header line is somebody's own energy system that happens to share
+        the setup's stem, and writing over it would destroy work no re-recording can bring back, so
+        it is refused instead.
+
         Args:
             model: The model to emit.
             setup_name: The setup as the header names it.
@@ -317,7 +350,12 @@ class RecordingSession:
 
         Returns:
             The text written.
+
+        Raises:
+            EnergySystemRecordingError: ``EF-R12`` naming the path when a file that the recorder
+                did not produce sits where this recording would go.
         """
+        self.refuse_to_overwrite_a_hand_authored_file()
         self.out_dir.mkdir(parents=True, exist_ok=True)
         header = RecordedFileWriter.header(
             setup_name, self.relative(parameters_path), self.out_dir, self.probe, self.probes
@@ -325,6 +363,32 @@ class RecordingSession:
         text = header + dump_energy_system(model)
         self.path.write_text(text, encoding="utf-8")
         return text
+
+    def refuse_to_overwrite_a_hand_authored_file(self) -> None:
+        """Stops the recording when the target path holds a file the recorder did not write.
+
+        Undecodable bytes are read as replacement characters rather than raised on, so a file that
+        is not text at all is refused as a file the recorder did not write, which is what it is.
+
+        Raises:
+            EnergySystemRecordingError: ``EF-R12`` naming the path, when the file exists and its
+                comment header does not carry the recorder's own origin line.
+        """
+        if not self.path.exists():
+            return
+        if RecordedFileWriter.was_recorded(self.path.read_text(encoding="utf-8", errors="replace")):
+            return
+        raise EnergySystemRecordingError(
+            EnergySystemErrorId.RECORDED_WOULD_OVERWRITE,
+            f"{self.setup_label}:{self.path}",
+            f"'{self.path}' already exists and was not produced by the recorder: its header "
+            f"carries no '{RecordedFileWriter.MARKER.strip()}' line, so it is a hand-authored "
+            "energy system that recording would silently destroy.",
+            remedy=(
+                "Delete or move the hand-authored file if it is really meant to become a recorded "
+                "twin, or record with '--out' pointing somewhere else."
+            ),
+        )
 
     def verify(self, written: int, parameters_path: Path, result_directory: str) -> None:
         """Loads the file back through the executor, builds it and prepares it for a run.
@@ -343,8 +407,10 @@ class RecordingSession:
 
         What it does not reach is worth stating, because the defect that prompted it lived there:
         a component that only reads a configuration field inside ``i_simulate`` still gets away
-        with a wrong value, and a solar-thermal collector reading its coordinates per timestep is
-        exactly that case. Closing that would mean simulating, which the recorder deliberately
+        with a wrong value, and a solar-thermal collector reading its tilt and its azimuth per
+        timestep is exactly that case — its coordinates are read while it prepares, which this
+        step does reach, but the two angles it points at the sun with are not.
+        Closing that would mean simulating, which the recorder deliberately
         does not do: it verifies that the file describes a system that can start, not that the
         system produces the same numbers, and the second question is the parity rig's and needs
         two runs to answer.
@@ -413,7 +479,6 @@ def record_setup(
     parameters: SimulationParameters,
     out_dir: Path,
     *,
-    parameters_path: Path,
     library: Optional[ParameterFileLibrary] = None,
     module_config: Optional[Path] = None,
     probe: str = "",
@@ -425,13 +490,15 @@ def record_setup(
     file that describes what the setup built. Nothing about the setup is changed and nothing about
     the file is guessed — every value comes from the objects the setup constructed.
 
+    The header's second input is not this call's ``parameters`` argument but the parameters *file*
+    the library resolved the run to: a setup may change the parameters it was handed, and what the
+    header has to name is the file describing what the setup ended up with, which may be a file
+    beside the recording, a file the recording had to write, or neither of the caller's choosing.
+
     Args:
         module_path: The ``system_setups/*.py`` module to record.
         parameters: The parameters handed to the setup.
         out_dir: Where the recorded file goes.
-        parameters_path: The parameters file the object was read from. A recording names both of
-            its inputs in the file's header, and the object alone is nameless, so the path is asked
-            for rather than reconstructed.
         library: The parameter files this recording may reference; the default searches the
             repository's own directory and the output directory. A caller recording several setups
             passes one library to all of them so that they can share a newly written file.
@@ -448,7 +515,6 @@ def record_setup(
     """
     session = RecordingSession(
         Path(module_path),
-        Path(parameters_path),
         Path(out_dir),
         library,
         module_config=module_config,

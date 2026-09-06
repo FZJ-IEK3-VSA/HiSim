@@ -27,6 +27,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 
+import numpy as np
 import pandas as pd
 
 from hisim.component import Component
@@ -141,7 +142,7 @@ class PortRenaming:
     Wiring parity is normally a plain equality of names, and for every static port it stays that
     way. Dynamic ports are the exception: the imperative add-API names an aggregator's dynamic
     input after its insertion order (``Input_<source>_<field>_<n>``) and its dynamic outputs after
-    a running counter (``LoadingPowerInputForBattery_Output15``), while the declarative path
+    a running counter (``LoadingPowerInputForBatteryOutput15``), while the declarative path
     derives both from the frozen templates of the format. The two names denote the same wire, so
     comparing them literally would report a difference where there is none — and dropping the
     comparison would hide a real one. This class makes the translation explicit and reviewable: a
@@ -190,6 +191,11 @@ class PortRenaming:
 
         Returns:
             A new snapshot in the other build's naming, canonically sorted again.
+
+        Raises:
+            ValueError: If two inputs of one component are renamed onto the same name. Both wires
+                would then land on one key of :meth:`WiringSnapshot.wires_by_target`, so one of the
+                two would vanish from the comparison rather than be compared.
         """
         wires = [
             ResolvedWire(
@@ -200,6 +206,13 @@ class PortRenaming:
             )
             for wire in snapshot.wires
         ]
+        targets = [(wire.target_component, wire.target_input) for wire in wires]
+        collapsed = sorted({target for target in targets if targets.count(target) > 1})
+        if collapsed:
+            raise ValueError(
+                f"The port renaming would map two inputs onto {collapsed}; two different inputs "
+                "of one component cannot be renamed onto one name."
+            )
         unconnected = [
             (component_name, self.rename(component_name, port_name))
             for component_name, port_name in snapshot.unconnected_inputs
@@ -224,8 +237,9 @@ class PortRenaming:
             A frame with the renamed columns, in unchanged column order.
 
         Raises:
-            ValueError: If a renaming would produce a column name the frame already has, which
-                would silently drop one of the two.
+            ValueError: If a renaming would produce a column name the frame already has, or if two
+                renamings would produce one and the same column name; either way one of the two
+                columns would silently disappear from the frame.
         """
         columns = [str(column) for column in frame.columns]
         mapping: Dict[str, str] = {}
@@ -240,6 +254,13 @@ class PortRenaming:
             raise ValueError(
                 f"The port renaming would produce column names the frame already carries: "
                 f"{clashes}. Two different outputs cannot be renamed onto one column."
+            )
+        targets = list(mapping.values())
+        collapsed = sorted({target for target in targets if targets.count(target) > 1})
+        if collapsed:
+            raise ValueError(
+                f"The port renaming would map two columns onto {collapsed}; two different "
+                "outputs cannot be renamed onto one column."
             )
         return frame.rename(columns=mapping)
 
@@ -470,6 +491,15 @@ class ResultComparison:
     #: tolerance is deliberately at the noise floor rather than at an engineering tolerance.
     DEFAULT_RELATIVE_TOLERANCE: ClassVar[float] = 1e-12
 
+    #: Absolute deviation at or below which a cell contributes no relative deviation at all. A
+    #: column whose reference value is exactly zero — a battery that never discharges, a heater
+    #: that never fires — has no scale to divide by, so the comparison divides by one instead and
+    #: a numerically negligible 1e-15 of summation noise would be reported as a relative deviation
+    #: of 1e-15/1 … which is harmless, while the same noise against a reference of 1e-15 would be
+    #: reported as 100%. The floor removes both readings and leaves the true absolute deviation to
+    #: :attr:`max_absolute_deviation`, which is not filtered.
+    DEFAULT_ABSOLUTE_TOLERANCE: ClassVar[float] = 1e-9
+
     compared_columns: int = 0
     compared_rows: int = 0
     max_absolute_deviation: float = 0.0
@@ -514,6 +544,12 @@ class ResultComparison:
         outputs in a different order still compares numerically; the order difference itself is
         reported as a structural problem, because it changes every result file downstream.
 
+        Rows, in contrast, are matched by position, which is only meaningful while both frames
+        carry the same index. Two frames of equal length whose timestamps differ are therefore
+        reported as a structural problem and not compared at all: subtracting row *n* of one run
+        from row *n* of a run that started an hour later produces numbers, and every one of them
+        would be meaningless.
+
         Args:
             expected: The reference result frame, e.g. ``Simulator.results_data_frame``.
             actual: The result frame of the system under test.
@@ -537,6 +573,15 @@ class ResultComparison:
                 f"different number of timesteps: {len(expected.index)} vs {len(actual.index)}"
             )
             return comparison
+        if not expected.index.equals(actual.index):
+            differing = np.flatnonzero(np.asarray(expected.index != actual.index))
+            first = int(differing[0]) if differing.size else 0
+            comparison.structural_problems.append(
+                f"the two frames cover different timesteps: row {first} is "
+                f"{expected.index[first]} in the expected results and {actual.index[first]} in "
+                "the actual ones"
+            )
+            return comparison
         cls._compare_columns(comparison, expected, actual, [n for n in expected_columns if n in actual_columns])
         return comparison
 
@@ -554,6 +599,14 @@ class ResultComparison:
         two separate steps: the first decides whether a comparison is meaningful at all, and only
         this one touches the values.
 
+        Two deviations are filtered out of the relative reading rather than reported. A cell both
+        runs left at NaN counts as equal, and a cell whose absolute deviation is at or below
+        :attr:`ResultComparison.DEFAULT_ABSOLUTE_TOLERANCE` counts as equal too, because a column
+        whose reference is exactly zero has no scale to divide by and would otherwise report
+        numerically negligible noise as a large relative deviation.
+        :attr:`ResultComparison.max_absolute_deviation` is not filtered and keeps reporting the
+        true worst absolute difference of every column.
+
         Args:
             comparison: The comparison being filled in; modified in place.
             expected: The reference frame.
@@ -565,9 +618,25 @@ class ResultComparison:
         for name in shared:
             left = expected[name].to_numpy(dtype=float)
             right = actual[name].to_numpy(dtype=float)
-            absolute = abs(left - right)
-            scale = pd.Series(abs(left)).combine(pd.Series(abs(right)), max).to_numpy(dtype=float)
-            relative = absolute / pd.Series(scale).replace(0.0, 1.0).to_numpy(dtype=float)
+            # NaN semantics: NaN==NaN counts as equal (a value both runs failed to produce is the
+            # same value), while NaN on one side only can never be absorbed by any tolerance, so it
+            # is a structural problem rather than a deviation — arithmetic on it would otherwise
+            # propagate NaN through max() and silently report zero deviation.
+            mismatched_nan = np.isnan(left) ^ np.isnan(right)
+            if mismatched_nan.any():
+                first = int(np.argmax(mismatched_nan))
+                comparison.structural_problems.append(
+                    f"column '{name}' is NaN on one side only in {int(mismatched_nan.sum())} "
+                    f"row(s), first at {expected.index[first]}"
+                )
+                continue
+            both_nan = np.isnan(left)
+            absolute = np.abs(left - right)
+            absolute[both_nan] = 0.0
+            scale = np.maximum(np.abs(left), np.abs(right))
+            scale[both_nan | (scale == 0.0)] = 1.0
+            relative = absolute / scale
+            relative[absolute <= cls.DEFAULT_ABSOLUTE_TOLERANCE] = 0.0
             position = int(relative.argmax()) if relative.size else 0
             if relative.size and relative[position] > comparison.max_relative_deviation:
                 comparison.max_relative_deviation = float(relative[position])

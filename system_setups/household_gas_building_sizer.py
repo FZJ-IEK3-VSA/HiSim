@@ -86,6 +86,17 @@ def setup_function(
     arche_type_config_ = my_config.archetype_config_
     energy_system_config_ = my_config.energy_system_config_
 
+    # A rooftop share of zero used to switch off the battery and the energy management system as a
+    # side effect further down, so the run silently became the metered household while the config
+    # still said otherwise. Refuse the combination here, before a single component is built.
+    if energy_system_config_.share_of_maximum_pv_potential == 0 and energy_system_config_.use_battery_and_ems:
+        raise ValueError(
+            "share_of_maximum_pv_potential is 0 while use_battery_and_ems is true. The zero share used to "
+            "switch off the battery and the energy manager as a side effect, so this configuration silently "
+            "built the metered household instead of the one it asked for. Set use_battery_and_ems to false to "
+            "build the metered household explicitly, or give share_of_maximum_pv_potential a value above zero."
+        )
+
     # Set Simulation Parameters
     default_year = 2021
     if my_simulation_parameters is None:
@@ -393,8 +404,9 @@ def setup_function(
     )
     my_sim.add_component(my_gas_meter, connect_automatically=True)
 
-    # use ems and battery only when PV is used
-    if share_of_maximum_pv_potential != 0 and energy_system_config_.use_battery_and_ems:
+    # The battery and the energy manager are one decision. A zero rooftop share can no longer reach
+    # this point with the manager switched on: it is refused at the top of the setup.
+    if energy_system_config_.use_battery_and_ems:
 
         # Build EMS
         my_electricity_controller_config = (
@@ -453,7 +465,7 @@ def setup_function(
         my_sim.add_component(my_advanced_battery)
         my_sim.add_component(my_electricity_controller, connect_automatically=True)
 
-    # when no PV is used, connect electricty meter automatically
+    # without an energy manager, connect the electricity meter automatically to every participant
     else:
         my_sim.add_component(my_electricity_meter, connect_automatically=True)
 

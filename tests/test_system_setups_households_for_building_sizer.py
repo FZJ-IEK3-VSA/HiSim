@@ -11,10 +11,10 @@ loaded and checked to contain finite numeric KPI values, including the
 tests verify real post-processing output rather than only that the run did not
 crash.
 
-One test in this file runs no simulation at all: the heat pump setup refuses a
-zero rooftop photovoltaic share while the energy manager is switched on, and that
-refusal is raised before any component is built, so it is checked by initializing
-the setup and catching the error.
+One test family in this file runs no simulation at all: every building-sizer setup
+refuses a zero rooftop photovoltaic share while the energy manager is switched on,
+and that refusal is raised before any component is built, so it is checked by
+initializing each setup once and catching the error.
 """
 # clean
 import json
@@ -292,17 +292,40 @@ def test_household_heatpump_car(building_sizer_result_directory: str) -> None:
 
 
 @pytest.mark.base
-def test_household_heatpump_refuses_zero_pv_share_with_energy_manager(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "setup_file_name, default_config_getter_name",
+    [
+        ("household_district_heating_building_sizer.py", "get_default_config_for_household_district_heating"),
+        ("household_electric_heating_building_sizer.py", "get_default_config_for_household_electric_heating"),
+        ("household_gas_building_sizer.py", "get_default_config_for_household_gas"),
+        ("household_gas_solar_thermal_building_sizer.py", "get_default_config_for_household_gas_solar_thermal"),
+        ("household_heatpump_building_sizer.py", "get_default_config_for_household_heatpump"),
+        ("household_heatpump_car_building_sizer.py", "get_default_config_for_household_heatpump"),
+        (
+            "household_heatpump_solar_thermal_building_sizer.py",
+            "get_default_config_for_household_heatpump_solar_thermal",
+        ),
+        ("household_hydrogen_boiler_building_sizer.py", "get_default_config_for_household_hydrogen"),
+        ("household_oil_building_sizer.py", "get_default_config_for_household_oil"),
+        ("household_pellets_building_sizer.py", "get_default_config_for_household_pellet"),
+        ("household_wood_chips_building_sizer.py", "get_default_config_for_household_wood_chips"),
+    ],
+)
+def test_building_sizer_setup_refuses_zero_pv_share_with_energy_manager(
+    setup_file_name: str, default_config_getter_name: str, tmp_path: Path
+) -> None:
     """Test that a zero rooftop share combined with the energy manager is refused up front.
 
     ``share_of_maximum_pv_potential = 0`` used to switch off the battery and the energy management
     system as a side effect, so the run quietly became the metered household while the module
-    configuration still asked for the managed one. The setup now refuses the combination before it
-    builds a single component, which is why this test needs no simulation: it hands
-    ``initialize_from_python`` a module configuration with the zero share and the manager left on and
-    asserts that the refusal arrives and names both fields the caller has to decide between.
+    configuration still asked for the managed one. Every building-sizer setup now refuses the
+    combination before it builds a single component, which is why this test needs no simulation: for
+    each setup it takes that setup's own default ``ModularHouseholdConfig`` (named by
+    ``default_config_getter_name``), sets the zero share and leaves the manager on, hands the written
+    file to ``initialize_from_python`` and asserts that the refusal arrives and names both fields the
+    caller has to decide between.
     """
-    household_config = ModularHouseholdConfig.get_default_config_for_household_heatpump()
+    household_config = getattr(ModularHouseholdConfig, default_config_getter_name)()
     assert household_config.energy_system_config_ is not None
     household_config.energy_system_config_.share_of_maximum_pv_potential = 0.0
     household_config.energy_system_config_.use_battery_and_ems = True
@@ -314,8 +337,9 @@ def test_household_heatpump_refuses_zero_pv_share_with_energy_manager(tmp_path: 
     written_config = read_in_configs(str(config_path))
     assert written_config is not None and written_config.energy_system_config_ is not None
     assert written_config.energy_system_config_.share_of_maximum_pv_potential == 0.0
+    assert written_config.energy_system_config_.use_battery_and_ems is True
 
-    setup_path = Path(__file__).resolve().parent.parent / "system_setups" / "household_heatpump_building_sizer.py"
+    setup_path = Path(__file__).resolve().parents[1] / "system_setups" / setup_file_name
     with pytest.raises(ValueError) as refusal:
         hisim_main.initialize_from_python(
             str(setup_path),

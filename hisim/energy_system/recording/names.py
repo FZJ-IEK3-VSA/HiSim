@@ -130,6 +130,8 @@ class RecordedNames:
                 "energy-system file cannot express: an entry's key is its whole name.",
                 remedy=(
                     "Recording a district system needs the format to carry the qualified identity "
-                    "first; until then such a setup is out of scope rather than recorded lossily."
+                    "first; until then such a setup is out of scope rather than recorded lossily. "
+                    "Revisit when a system_setups/ file starts constructing components with a "
+                    "building or unit identity."
                 ),
             )

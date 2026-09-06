@@ -49,7 +49,6 @@ from hisim.energy_system.recording.observe import (
     ObservedDispatch,
     ObservedFeed,
     RecordedSystem,
-    SystemObserver,
     observe,
 )
 from hisim.energy_system.recording.session import (
@@ -77,7 +76,6 @@ __all__ = [
     "RecordedSystem",
     "RecordingResult",
     "RecordingSession",
-    "SystemObserver",
     "build",
     "normalise_parameters",
     "observe",

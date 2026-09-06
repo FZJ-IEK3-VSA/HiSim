@@ -23,11 +23,13 @@ would then differ for a reason nobody could see in the diff.
 
 from __future__ import annotations
 
-import re
-from typing import Any, ClassVar, Dict, Mapping, Optional, Pattern, Tuple
+from typing import Any, ClassVar, Dict, Mapping, Optional
 
-from hisim.energy_system.configure import EntryConfigurator
-from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemRecordingError
+from hisim.energy_system.errors import (
+    EnergySystemErrorId,
+    EnergySystemFormatError,
+    EnergySystemRecordingError,
+)
 from hisim.energy_system.model import ComponentEntry, EnergySystemFile
 from hisim.energy_system.path_resolver import PathResolver
 from hisim.energy_system.record import ConfigBlockWriter, assert_no_sentinels
@@ -35,6 +37,7 @@ from hisim.energy_system.recording.configs import EntryConfigWriter
 from hisim.energy_system.recording.inputs import InputItemWriter
 from hisim.energy_system.recording.names import RecordedNames
 from hisim.energy_system.recording.observe import ObservedComponent, RecordedSystem
+from hisim.energy_system.validation import StructuralValidator
 
 
 class PortablePathGuard:
@@ -46,18 +49,12 @@ class PortablePathGuard:
     nowhere else, and, worse, one whose re-recording on another machine differs in a line that says
     nothing about the system.
 
-    The scan follows the same rule the structural validator applies when it reads a file: only a
-    key that names a location is inspected, because an arbitrary string field may legitimately
-    start with a slash. Catching it here rather than at load time is what lets the message name the
-    setup and the component instead of only the key path.
+    The scan is not a rule of its own: the guard runs the structural validator's own walk over the
+    block it is about to write, so the recorder cannot come to disagree with the loader about what
+    counts as an absolute path or about which keys name a location. Running it here rather than
+    leaving it to load time is what lets the refusal name the setup and the component, which is
+    what a person re-recording a fleet needs, instead of only the key path inside a file.
     """
-
-    #: Matches a Windows drive prefix, which is absolute even though it does not start with a
-    #: separator. Spelled out here so the guard does not depend on the platform it runs on.
-    WINDOWS_DRIVE: ClassVar[Pattern[str]] = re.compile(r"^[A-Za-z]:[\\/]")
-
-    #: The separators a POSIX or Windows absolute path can begin with.
-    ABSOLUTE_PREFIXES: ClassVar[Tuple[str, ...]] = ("/", "\\")
 
     @classmethod
     def check(cls, block: Mapping[str, Any], name: str, setup: str, location: str = "config") -> None:
@@ -67,58 +64,40 @@ class PortablePathGuard:
             block: The encoded configuration block about to be written.
             name: The component's runtime name, for the message.
             setup: The setup module being recorded, for the message.
-            location: Dotted key path of the block inside the entry, grown as the walk descends.
+            location: Dotted key path of the block inside the entry, which the validator's own
+                walk grows as it descends.
 
         Raises:
             EnergySystemRecordingError: ``EF-R3`` naming the setup, the component, the field and
                 the path.
         """
-        for key, value in block.items():
-            child = f"{location}.{key}"
-            if isinstance(value, Mapping):
-                cls.check(value, name, setup, child)
-            elif isinstance(value, list):
-                for index, item in enumerate(value):
-                    if isinstance(item, Mapping):
-                        cls.check(item, name, setup, f"{child}[{index}]")
-                    elif cls.is_absolute(key, item):
-                        raise cls._error(name, setup, f"{child}[{index}]", item)
-            elif cls.is_absolute(key, value):
-                raise cls._error(name, setup, child, value)
+        try:
+            StructuralValidator.scan_for_absolute_paths(block, location)
+        except EnergySystemFormatError as refusal:
+            raise cls._error(name, setup, refusal) from refusal
 
     @classmethod
-    def is_absolute(cls, key: str, value: Any) -> bool:
-        """Whether one value is an absolute filesystem path written under a location-naming key.
+    def _error(
+        cls, name: str, setup: str, refusal: EnergySystemFormatError
+    ) -> EnergySystemRecordingError:
+        """Translates the validator's load-time rejection into the recorder's own; caller raises.
 
-        Args:
-            key: The configuration field's name.
-            value: The encoded value.
-
-        Returns:
-            ``True`` when the key names a location and the value is absolute.
-        """
-        if not isinstance(value, str) or not value or not EntryConfigurator.is_path_field(key):
-            return False
-        return value.startswith(cls.ABSOLUTE_PREFIXES) or cls.WINDOWS_DRIVE.match(value) is not None
-
-    @classmethod
-    def _error(cls, name: str, setup: str, location: str, value: str) -> EnergySystemRecordingError:
-        """Builds the rejection of one absolute path; the caller raises it.
+        The validator's message names the key path and the value and nothing else, because at load
+        time there is nothing else to name. Both are carried over verbatim so that the two
+        refusals point at the same field, and the setup and the component are added in front.
 
         Args:
             name: The component's runtime name.
             setup: The setup module being recorded.
-            location: Dotted key path of the offending value inside the entry.
-            value: The absolute path.
+            refusal: The validator's ``EF-05``, whose location and problem are reused.
 
         Returns:
             The exception to raise.
         """
         return EnergySystemRecordingError(
             EnergySystemErrorId.RECORDED_ABSOLUTE_PATH,
-            f"{setup}:{name}.{location}",
-            f"'{value}' is an absolute path that lies below no registered root, so it cannot be "
-            "written portably.",
+            f"{setup}:{name}.{refusal.location}",
+            f"{refusal.problem} It lies below no registered root, so it cannot be written portably.",
             remedy=(
                 "Register the directory with the path resolver, or make the setup point the field "
                 "at a location inside the HiSim tree."

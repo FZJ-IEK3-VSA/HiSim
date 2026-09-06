@@ -912,7 +912,9 @@ class HeatDistributionControllerConfig(ConfigBase):
         rule=Size.SET_COOLING_TEMPERATURE_IN_CELSIUS
     )
     heating_load_of_building_in_watt: Sizable[float] = sized_field(rule=Size.HEATING_LOAD_IN_WATT.rounded(2))
-    specific_heating_load_of_building_in_watt_per_m2: Sizable[Optional[float]] = sized_field(rule=SPECIFIC_LOAD_LAW)
+    specific_heating_load_of_building_in_watt_per_m2: Sizable[Optional[float]] = sized_field(
+        rule=SPECIFIC_LOAD_LAW, optional=True
+    )
 
     @preset
     @classmethod

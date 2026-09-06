@@ -206,8 +206,8 @@ class PilotWireFormat:
             "set_heating_temperature_in_celsius",
             "set_cooling_temperature_in_celsius",
         ),
-        "WeatherConfig": (),
-        "UtspLpgConnectorConfig": (),
+        "WeatherConfig": ("weather_identity",),
+        "UtspLpgConnectorConfig": ("occupancy_identity",),
         "ElectricityMeterConfig": (),
         "GenericBoilerControllerConfig": (),
     }

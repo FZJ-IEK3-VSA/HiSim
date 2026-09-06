@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 # clean
-from typing import Optional, Any
+from typing import Any, ClassVar, Optional
 from pathlib import Path
 import json
 from dataclasses import dataclass
@@ -113,6 +113,12 @@ class ElectrolyzerController(Component):
     CurrentMode: str = "CurrentMode"
     CurtailedLoad: str = "CurtailedLoad"
     OffCount: str = "OffCount"
+
+    # A controller decides, it does not convert energy: there is no device behind it to
+    # buy or to run, and the indicators of the plant it controls belong to the
+    # electrolyzer itself. Declaring that is what lets a setup built from it compute
+    # costs and KPIs at all; see Component.MODELS_NO_DEVICE.
+    MODELS_NO_DEVICE: ClassVar[bool] = True
 
     def __init__(
         self,

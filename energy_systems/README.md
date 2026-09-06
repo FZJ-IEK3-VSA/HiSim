@@ -82,8 +82,9 @@ or the whole fleet at once, which is what regenerates this directory:
 python scripts/record_all_setups.py
 ```
 
-The recorder observes a finished run — it never parses the setup's source — so a twin states what
-the setup actually constructed rather than what its code appears to say. Every value is concrete,
+The recorder observes the prepared, connected system the setup built — it never parses the setup's
+source and never runs the timesteps — so a twin states what the setup actually constructed rather
+than what its code appears to say. Every value is concrete,
 a class that carries a preset is written as that preset plus whatever the setup changed, and the
 file names no sizing sources, no groups and no variants: those are judgements about intent, and one
 run cannot be asked about intent. Before the command returns, the file it wrote is loaded back

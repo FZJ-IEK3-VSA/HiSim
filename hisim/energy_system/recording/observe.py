@@ -158,10 +158,11 @@ class RecordedSystem:
 class SystemObserver:
     """Turns one wired simulator into a :class:`RecordedSystem` without touching it.
 
-    Constructed over the simulator and asked once. The class exists rather than a single function
-    because pairing an aggregator's dispatch outputs with the participants that read them needs an
-    index of the whole wiring, and building that index once per observation instead of once per
-    component is the difference between a linear and a quadratic pass over a fleet-sized system.
+    Every method is a classmethod and the class holds no state; it groups the steps of one
+    observation rather than owning anything between them. What keeps the pass linear is that the
+    reverse index of the wiring — which input reads which produced port — is built once in
+    :meth:`observe` and handed to every per-component step as an argument, instead of each
+    component searching the wiring for the readers of its own outputs.
     """
 
     @classmethod

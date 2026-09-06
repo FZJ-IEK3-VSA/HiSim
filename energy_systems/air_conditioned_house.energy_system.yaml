@@ -66,6 +66,7 @@ components:
       predictive: false
       predictive_control: false
       prediction_horizon: null
+      weather_identity: Seville/NSRDB/weather/NSRDB/Seville/Seville
     inputs:
       - Weather
   AirConditioner:
@@ -135,6 +136,7 @@ components:
       lifetime_in_years: null
       maintenance_costs_in_euro_per_year: null
       subsidy_as_percentage_of_investment_costs: null
+      weather_identity: Seville/NSRDB/weather/NSRDB/Seville/Seville
     inputs:
       - Weather
       - UTSPConnector

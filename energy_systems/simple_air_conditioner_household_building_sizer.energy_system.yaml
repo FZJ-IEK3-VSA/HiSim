@@ -10,6 +10,7 @@ components:
     config:
       number_of_apartments: 1.0
       enable_opening_windows: true
+      weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
     inputs:
       - Weather
       - input: ThermalPowerDelivered

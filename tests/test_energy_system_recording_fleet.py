@@ -372,7 +372,6 @@ def test_recording_the_same_setup_twice_is_byte_identical(tmp_path: Path) -> Non
         parameters.result_directory = str(directory / "results")
         session = RecordingSession(
             setup,
-            Fleet.ONE_DAY,
             directory,
             ParameterFileLibrary(search=(Fleet.ENERGY_SYSTEMS, directory), write_to=directory),
         )

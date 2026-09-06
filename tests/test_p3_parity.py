@@ -28,7 +28,6 @@ from typing import ClassVar, Optional
 import pandas as pd
 import pytest
 
-from hisim.energy_system.parity import PortRenaming, ResultComparison
 from hisim.simulationparameters import SimulationParameters
 
 # The rig's shared names are imported through the checker's namespace on purpose: the scripts are
@@ -225,16 +224,26 @@ def test_an_indicator_quoting_an_undeclared_port_still_fails_literally() -> None
 
 
 @pytest.mark.base
-def test_a_kpi_broken_setup_gets_a_structural_verdict(tmp_path: Path) -> None:
+def test_a_kpi_broken_setup_gets_a_structural_verdict(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Catches a rig that turns a broken KPI layer into an exception instead of a verdict (T-21).
 
-    Seven in-scope setups crash inside KPI computation after the simulation has finished. R11.4
-    requires them to be covered anyway: the first two comparisons need no KPIs, so the triple must
-    still report on the wiring and on every result column, and the third stage must say it was
-    unavailable rather than raising. Since the 2026-09-05 amendment an unavailable stage fails the
-    triple — a new KPI regression must not read green — so the verdict is a named failure, never
-    an error and never a pass.
+    Setups used to crash inside KPI computation after the simulation had finished — seven of them
+    when this test was written — and R11.4 requires them to be covered anyway: the first two
+    comparisons need no KPIs, so the triple must still report on the wiring and on every result
+    column, and the third stage must say it was unavailable rather than raising. The real crashes
+    heal as components gain their KPI entries — the fixture's transformer got its own, which is
+    the point of the rule — so the crash is synthesized here at the very seam a real one hits: the
+    postprocessor's KPI step, raising after the run produced its results. Since the 2026-09-05
+    amendment an unavailable stage fails the triple — a new KPI regression must not read green —
+    so the verdict is a named failure, never an error and never a pass.
     """
+    from hisim.postprocessing.postprocessing_main import PostProcessor  # noqa: PLC0415
+
+    def crash_in_kpi_computation(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("synthesized KPI crash: a component's KPI entries divide by zero")
+
+    monkeypatch.setattr(PostProcessor, "compute_kpis_and_write_to_report_and_to_ppdt", crash_in_kpi_computation)
+
     verdict = Rig.checker().check(Rig.triple(tmp_path)).verdict
     assert verdict.wiring == Verdict.OK
     assert verdict.results == Verdict.OK
@@ -291,37 +300,14 @@ def test_a_structurally_changed_recorded_file_fails_the_wiring_comparison(tmp_pa
 
 
 @pytest.mark.base
-def test_a_column_nan_on_one_side_only_is_a_structural_problem() -> None:
-    """Catches the exact comparison silently passing a run that produced NaN where the other did not.
+def test_the_exact_tolerance_treats_nan_for_nan_as_equal_and_nan_for_a_number_as_not() -> None:
+    """Catches the rig's own tolerance disagreeing with the frame comparison about NaN.
 
-    NaN propagates through every arithmetic reduction as "no deviation" — ``max(0.0, nan)`` keeps
-    0.0 — so before this was a structural problem, a column NaN on one side and finite on the other
-    was reported as zero deviation and the triple passed. That is the one difference an exact rig
-    must never absorb, and no tolerance may absorb it either.
+    A value both runs failed to produce is the same value, and a value only one run failed to
+    produce can never be absorbed: the frame comparison's half of both rules is pinned in
+    ``tests/test_energy_system_parity.py`` beside the comparison itself, and this is the KPI
+    tolerance's half, so the two modes cannot come to disagree about identical values again.
     """
-    expected = pd.DataFrame({"X": [1.0, float("nan"), 3.0]})
-    actual = pd.DataFrame({"X": [1.0, 5.0, 3.0]})
-
-    comparison = ResultComparison.between(expected, actual)
-
-    assert any("NaN on one side only" in problem for problem in comparison.structural_problems)
-    assert not comparison.is_identical()
-
-
-@pytest.mark.base
-def test_identical_nan_columns_compare_equal() -> None:
-    """Catches the comparison inventing a difference out of two identical NaN columns.
-
-    A value both runs failed to produce is the same value: a recorded twin that reproduces its
-    setup NaN for NaN must pass, in the frame comparison and under the exact KPI tolerance alike,
-    or every setup with an undefined indicator would fail parity while being byte-identical.
-    """
-    frame = pd.DataFrame({"X": [float("nan"), 2.0]})
-
-    comparison = ResultComparison.between(frame, frame.copy())
-
-    assert not comparison.structural_problems
-    assert comparison.max_absolute_deviation == 0.0
     assert Tolerance().accepts(float("nan"), float("nan"))
     assert not Tolerance().accepts(float("nan"), 1.0)
 
@@ -380,19 +366,3 @@ def test_an_unavailable_stage_fails_its_triple_and_a_negative_tolerance_is_refus
     assert not verdict.passed
     with pytest.raises(ValueError):
         Tolerance(relative=-1.0)
-
-
-@pytest.mark.base
-def test_two_ports_renamed_onto_one_column_are_refused() -> None:
-    """Catches a renaming table collapsing two result columns into one without an error.
-
-    The KPI translation already refuses to map two indicators onto one key; the frame translation
-    only refused a rename landing on an *untouched* column, so two renames landing on the same new
-    name produced a frame with duplicate column labels that the comparison then mis-indexed. Both
-    halves of the table now enforce the same invariant.
-    """
-    frame = pd.DataFrame({"Agg - PortA [Power - W]": [1.0], "Agg - PortB [Power - W]": [2.0]})
-    renaming = PortRenaming(renamings={("Agg", "PortA"): "Same", ("Agg", "PortB"): "Same"})
-
-    with pytest.raises(ValueError, match="onto"):
-        renaming.apply_to_results(frame)

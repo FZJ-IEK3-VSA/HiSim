@@ -913,13 +913,18 @@ def test_the_grouping_probe_verb_drives_the_shared_recorder_child(monkeypatch: p
 
     monkeypatch.setattr("hisim.energy_system.recording.probe_session.subprocess.run", fake_run)
 
+    # Absolute paths, because the continuous-integration job runs pytest from tests/ and a
+    # working-directory-relative fixture path would make the verb refuse with EF-03 before the
+    # child is ever driven — a nonzero exit for the wrong reason, which is what this test caught
+    # the hard way on its first CI run.
+    root = Path(__file__).resolve().parents[1]
     exit_code = cli_main(
         [
             "energy-system",
             "grouping",
             "probe",
-            "system_setups/household_heatpump_building_sizer.py",
-            "energy_systems/household_heatpump_building_sizer.probes.yaml",
+            str(root / "system_setups" / "household_heatpump_building_sizer.py"),
+            str(root / "energy_systems" / "household_heatpump_building_sizer.probes.yaml"),
         ]
     )
 

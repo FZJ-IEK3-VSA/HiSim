@@ -423,19 +423,23 @@ def test_a_preset_appears_as_a_preset_and_an_unconverted_class_as_a_full_block(
 
 
 @pytest.mark.base
-def test_a_preset_the_setup_did_not_touch_is_written_without_a_config_block(
+def test_a_preset_the_setup_did_not_touch_is_written_as_the_preset_plus_what_it_left_open(
     recordings: Dict[str, RecordingResult],
 ) -> None:
     """Catches the sparse diff degenerating into a full dump under a preset name.
 
     An entry whose configuration is the preset verbatim is complete with the preset alone, and
     writing the block anyway would make every future preset change invisible in the diff — which is
-    exactly what the per-batch re-recording of the conversion work is supposed to show.
+    exactly what the per-batch re-recording of the conversion work is supposed to show. One field is
+    the deliberate exception: the preset leaves ``weather_identity`` open because no preset can know
+    which weather component a system carries, the setup realizes it before construction, and an
+    override of a field the preset left open is auditable by decision — so the sparse diff writes
+    exactly that field and nothing else. A second key appearing here means the diff started dumping.
     """
     entry = recordings["basic_household"].model.all_components()["Building"]
 
     assert entry.preset == "standard"
-    assert entry.config == {}
+    assert set(entry.config) == {"weather_identity"}
 
 
 @pytest.mark.base

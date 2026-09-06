@@ -41,6 +41,7 @@ from hisim.cli_render import DescriptionRenderer, FactsRenderer
 from hisim.energy_system.errors import EnergySystemError
 from hisim.energy_system.executor import run_energy_system
 from hisim.energy_system.executor import SimulationParametersReader
+from hisim.energy_system.recording.grouping_overview import OverviewPage
 from hisim.energy_system.recording.session import RecordingSession, record_setup
 from hisim.energy_system.schema_classes import ComponentClassScan
 from hisim.energy_system.schema_export import default_schema_path, export_schema
@@ -161,11 +162,15 @@ class EnergySystemCommands:
 
     @classmethod
     def grouping(cls, arguments: argparse.Namespace, out: TextIO, error_stream: TextIO) -> int:
-        """Dispatches the two grouping verbs, which are a workflow rather than a single command."""
-        actions = {"probe": GroupingCommands.probe, "import": GroupingCommands.import_workbook}
+        """Dispatches the three grouping verbs, which are a workflow rather than a single command."""
+        actions = {
+            "probe": GroupingCommands.probe,
+            "import": GroupingCommands.import_workbook,
+            "overview": GroupingCommands.overview,
+        }
         action = actions.get(getattr(arguments, "action", None) or "")
         if action is None:
-            print("Usage: hisim energy-system grouping {probe,import} ...", file=error_stream)
+            print("Usage: hisim energy-system grouping {probe,import,overview} ...", file=error_stream)
             return ExitCodes.USAGE
         return action(arguments, out, error_stream)
 
@@ -258,6 +263,11 @@ def build_parser() -> argparse.ArgumentParser:
     importer = actions.add_parser("import", help="normalise a filled-in workbook into the committed file")
     importer.add_argument("workbook", metavar="WORKBOOK", help="the filled-in *.grouping.xlsx")
     importer.add_argument("--out", default=None, help="where the *.grouping.yaml goes")
+
+    overview = actions.add_parser("overview", help="render the committed page describing every decision")
+    overview.add_argument(
+        "--out", default=None, help=f"where the page goes (default: the repository's {OverviewPage.DEFAULT_OUTPUT})"
+    )
 
     run = verbs.add_parser("run", help="run a file over a simulation period")
     run.add_argument("energy_system", metavar="ENERGY_SYSTEM", help="the *.energy_system.yaml file")

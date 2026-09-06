@@ -129,6 +129,9 @@ hisim energy-system grouping import energy_systems/household_heatpump_building_s
 hisim energy-system record system_setups/household_heatpump_building_sizer.py \
     energy_systems/one_day_15min.simulation.yaml \
     --grouping energy_systems/household_heatpump_building_sizer.grouping.yaml
+
+# 4. re-render the page that says what all of this came to
+hisim energy-system grouping overview
 ```
 
 The workbook has two sheets. `components` has one row per component in the union of the probe runs
@@ -159,6 +162,16 @@ its own has tested no two of them together, so the report names every combinatio
 The workbook is a scratch artefact and is git-ignored; the probe list and the grouping decision are
 committed and reviewed. Re-probing a setup carries the committed decision back into the workbook, so
 a setup that grew a component is asked about that row and no other.
+
+The fourth step answers the question the four files per setup do not: which setups have structure
+yet, what that structure is, and why each difference was called what it was called. `hisim
+energy-system grouping overview` sweeps every committed `*.grouping.yaml`, reads the grouped files
+they produced, and writes
+[`roadmap/declarative_energy_systems/grouping_overview.md`](../roadmap/declarative_energy_systems/grouping_overview.md)
+— a fleet table, and per setup a diagram of where the grouped file puts each component, every
+judgement note in full, and what each probe column stands for. The page is generated and committed,
+like the twins themselves: a test re-renders it and compares it byte for byte, so it is re-run
+whenever a decision or a grouped file changes rather than edited by hand.
 
 ## Simulation-parameters files are shared, never duplicated
 

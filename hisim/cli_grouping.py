@@ -3,10 +3,12 @@
 The grouping pass is the one part of the recorder that has a person in the middle of it, so it is
 the one part whose command line is a workflow rather than a single command. ``grouping probe`` runs
 the setup once per module configuration and writes the workbook that asks the question; a person
-answers it; ``grouping import`` normalises the answer into the file that is committed; and
-``record --grouping`` builds the grouped energy system from it and proves it against every probe.
+answers it; ``grouping import`` normalises the answer into the file that is committed;
+``record --grouping`` builds the grouped energy system from it and proves it against every probe;
+and ``grouping overview`` renders the committed page that says, for the whole fleet, which setups
+have structure yet and what each judgement was.
 
-The three live here rather than in :mod:`hisim.cli` for a plain reason: they are a third as much
+The four live here rather than in :mod:`hisim.cli` for a plain reason: they are a third as much
 code again as everything else that module does, and the module is already long. What stays there is
 the parser and the dispatch, so the shape of the command line is still readable in one place.
 
@@ -27,6 +29,7 @@ from typing import ClassVar, Optional, TextIO
 
 from hisim.energy_system.recording.grouping import Grouping
 from hisim.energy_system.recording.grouping_io import dump_grouping, read_grouping
+from hisim.energy_system.recording.grouping_overview import OverviewPage, OverviewSweep, write_overview
 from hisim.energy_system.recording.probe_session import GroupingPass, ProbeRunner
 from hisim.energy_system.recording.probes import ProbeList
 from hisim.energy_system.repository import RepositoryLayout
@@ -42,6 +45,10 @@ class GroupingPaths:
     the recorded twin, which is what lets every command take the setup and work the rest out. The
     exception is deliberate rather than an oversight: the workbook is a scratch artefact and is
     listed in the repository's ignore file, so it lives beside the others but never joins them.
+
+    The overview page is the one path here that belongs to no single setup. It is generated from
+    every committed decision at once, so it is named for the pass rather than for a stem and lives
+    with the rest of the pass's documentation instead of among the files the tools read.
     """
 
     #: Where the probe list, the decision, the workbook and the grouped file live.
@@ -117,14 +124,39 @@ class GroupingPaths:
         """
         return Path(given) if given else cls.directory(setup) / f"{setup.stem}{Grouping.SUFFIX}"
 
+    @classmethod
+    def overview(cls, given: Optional[str]) -> Path:
+        """Where the generated overview of every committed decision goes.
+
+        Args:
+            given: What the caller asked for, or ``None``.
+
+        Returns:
+            The caller's path, or the committed page inside the checkout this HiSim belongs to.
+        """
+        return Path(given) if given else OverviewSweep.root() / OverviewPage.DEFAULT_OUTPUT
+
+    @classmethod
+    def committed_directory(cls) -> Path:
+        """The ``energy_systems/`` of the checkout this HiSim belongs to.
+
+        The sweep has no setup to walk up from, unlike every other path here, so the checkout is
+        found from this installation itself — the same answer for an editable checkout and for an
+        installed package, because both walk up to the markers the shared layout names.
+
+        Returns:
+            The directory the committed grouping files live in.
+        """
+        return OverviewSweep.root() / cls.DIRECTORY
+
 
 class GroupingCommands:
-    """The two ``grouping`` verbs and the body of ``record --grouping``.
+    """The three ``grouping`` verbs and the body of ``record --grouping``.
 
     Each takes the parsed arguments and the two streams, does one thing and returns an exit code,
     exactly like the verbs next door. None of them decides anything about a system: the first asks
-    a question, the second writes an answer down, and the third applies it and reports both what it
-    proved and what it could not.
+    a question, the second writes an answer down, the third applies it and reports both what it
+    proved and what it could not, and the fourth only re-reads what the other three committed.
     """
 
     @classmethod
@@ -173,6 +205,24 @@ class GroupingCommands:
         print(
             f"Imported {workbook} as {path}: {len(decision.assignments)} assignment(s) over "
             f"{len(decision.configurations)} configuration(s). The workbook is not committed.",
+            file=out,
+        )
+        return 0
+
+    @classmethod
+    def overview(cls, arguments: argparse.Namespace, out: TextIO, error_stream: TextIO) -> int:
+        """Renders the committed page describing every grouping decision this repository holds.
+
+        Nothing is recorded and nothing is decided: the page is read out of the committed decisions,
+        the grouped files they produced and the flat twins that are the fleet's denominator, which
+        is why running it twice on an unchanged checkout writes the same bytes.
+        """
+        del error_stream  # every command shares one signature; a refusal propagates to main()
+        path, grouped, recorded = write_overview(
+            GroupingPaths.committed_directory(), GroupingPaths.overview(arguments.out)
+        )
+        print(
+            f"Wrote {path} from {grouped} grouped setup(s) of {recorded} recorded setup(s).",
             file=out,
         )
         return 0

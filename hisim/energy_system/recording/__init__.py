@@ -36,7 +36,10 @@ to the three-state table a person is asked about;
 :mod:`~hisim.energy_system.recording.grouping` is the answer as a value, with its committed form in
 ``grouping_io`` and its consistency rules in ``grouping_checks``; and
 :mod:`~hisim.energy_system.recording.regrouping` applies it, producing the grouped file and proving
-it against every recording the probes produced.
+it against every recording the probes produced. What all of that came to across the whole fleet is
+rendered as one committed page by
+:mod:`~hisim.energy_system.recording.grouping_overview`, which reads those files and writes nothing
+back into them.
 
 This subpackage is deliberately not re-exported by :mod:`hisim.energy_system`. Reading a file must
 stay possible without importing HiSim's component tree, and a recorder necessarily imports it.
@@ -77,6 +80,15 @@ from hisim.energy_system.recording.grouping import (
 )
 from hisim.energy_system.recording.grouping_checks import check_grouping
 from hisim.energy_system.recording.grouping_io import dump_grouping, read_grouping
+from hisim.energy_system.recording.grouping_overview import (
+    FleetCensus,
+    GroupedSetup,
+    MermaidShape,
+    OverviewPage,
+    OverviewSweep,
+    render_overview,
+    write_overview,
+)
 from hisim.energy_system.recording.grouping_report import ColumnVerdict, CombinationSpace, GroupingReport
 from hisim.energy_system.recording.matrix import CellState, ComponentRow, ProbeMatrix, ProbeRecording
 from hisim.energy_system.recording.probe_session import GroupingPass, ProbeRunner
@@ -95,12 +107,17 @@ __all__ = [
     "ComponentRow",
     "ConfigurationSelection",
     "EnergySystemBuilder",
+    "FleetCensus",
+    "GroupedSetup",
     "GroupedSystemBuilder",
     "Grouping",
     "GroupingPass",
     "GroupingReport",
     "Knob",
+    "MermaidShape",
     "ModuleConfigMaterialiser",
+    "OverviewPage",
+    "OverviewSweep",
     "ProbeConfiguration",
     "ProbeList",
     "ProbeMatrix",
@@ -114,6 +131,8 @@ __all__ = [
     "dump_grouping",
     "read_grouping",
     "read_workbook",
+    "render_overview",
+    "write_overview",
     "write_workbook",
     "EntryConfigWriter",
     "InputItemWriter",

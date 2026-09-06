@@ -1,0 +1,143 @@
+# TEMPORARY — the P3 migration parity rig (requirements R11).
+#
+# For the duration of the P3 setup migration this workflow answers one question: does the
+# declarative file recorded from a Python setup reproduce that setup? It runs both paths inside
+# one container, at exact equality, over a January week and a July week, and it needs no golden
+# reference, so it covers the thirteen setups the permanent gate has no entry for and the seven
+# whose KPI layer crashes today (R11.1, R11.4).
+#
+# It is dispatched by hand and never on push (R11.7). It blesses nothing and gates nothing.
+#
+# THIS FILE IS DELETED IN PHASE P6, together with scripts/p3_parity_check.py,
+# scripts/p3_parity_runs.py, scripts/p3_parity_verdicts.py, scripts/p3_parity_renamings.py,
+# scripts/p3_parity_matrix.py and tests/test_p3_parity.py (R11.8 amended and AC-P3.20 deferred
+# to P6, 2026-08-31). Whatever earns a place in the permanent gate moves into golden_config.json
+# at that point; nothing here is meant to survive.
+
+name: p3-parity
+
+on:
+  workflow_dispatch:
+    inputs:
+      setup:
+        description: "Setup stems to cover, space separated; empty covers every recorded setup"
+        required: false
+        default: ""
+      window:
+        description: "Which window to run"
+        required: false
+        default: "both"
+        type: choice
+        options:
+          - both
+          - january
+          - july
+      rel_tol:
+        description: "Relative slack; 0 demands exact equality, and any other value is a finding"
+        required: false
+        default: "0"
+      abs_tol:
+        description: "Absolute slack; 0 demands exact equality, and any other value is a finding"
+        required: false
+        default: "0"
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: p3-parity-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    name: discover triples
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: gen
+        # p3_parity_matrix.py is stdlib-only, so no dependency install is needed here.
+        run: |
+          ARGS=""
+          if [ -n "${{ inputs.setup }}" ]; then ARGS="$ARGS --setup ${{ inputs.setup }}"; fi
+          if [ "${{ inputs.window }}" != "both" ]; then ARGS="$ARGS --window ${{ inputs.window }}"; fi
+          echo "matrix=$(python3 scripts/p3_parity_matrix.py $ARGS)" >> "$GITHUB_OUTPUT"
+
+  parity:
+    name: parity ${{ matrix.setup }} / ${{ matrix.window }}
+    needs: discover
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install HiSim package
+        run: uv pip install --system -e .
+      - name: Compare the Python setup with its recorded twin
+        run: |
+          python scripts/p3_parity_check.py \
+            --setup "${{ matrix.setup }}" \
+            --window "${{ matrix.window }}" \
+            --rel-tol "${{ inputs.rel_tol }}" \
+            --abs-tol "${{ inputs.abs_tol }}" \
+            --json "verdicts/${{ matrix.setup }}-${{ matrix.window }}.json"
+      - name: Upload this triple's verdict
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: p3-parity-verdict-${{ matrix.setup }}-${{ matrix.window }}
+          path: verdicts/
+          if-no-files-found: warn
+      # Both KPI sets, both result CSVs and the wire diff, which is what R11.7 asks a failing
+      # triple to leave behind.
+      - name: Upload the evidence of a failing triple
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: p3-parity-artifacts-${{ matrix.setup }}-${{ matrix.window }}
+          path: results/p3-parity/${{ matrix.setup }}/${{ matrix.window }}/artifacts/
+          if-no-files-found: warn
+
+  summary:
+    name: p3-parity summary
+    needs: parity
+    if: always()
+    runs-on: ubuntu-latest
+    # The same container as the matrix jobs, because the table is rendered by the checker itself
+    # rather than by a second copy of the row format, and the checker imports HiSim.
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install HiSim package
+        run: uv pip install --system -e .
+      - name: Collect every triple's verdict
+        uses: actions/download-artifact@v6
+        with:
+          pattern: p3-parity-verdict-*
+          path: verdicts
+          merge-multiple: false
+      - name: Print one table covering every triple
+        # pipefail keeps the checker's own exit code — the summarize path returns 1 when any
+        # triple missed parity or when no verdicts were collected at all, and `tee` would
+        # otherwise replace that with its own 0.
+        run: |
+          set -o pipefail
+          python3 scripts/p3_parity_check.py --summarize verdicts | tee "$GITHUB_STEP_SUMMARY"
+      - name: Fail if any triple did not reach parity
+        run: '[ "${{ needs.parity.result }}" = "success" ] || exit 1'

@@ -7,7 +7,8 @@ assignments:
     assign: override
     note: Only the installed peak power moves, and only with the rooftop share. Nothing
       appears or disappears, so this is a number a consumer picks, not a part of the
-      household.
+      household. A share of zero is refused when the setup is built, so the knob's
+      range is (0, 1] and no value it can take flips the household into another variant.
   HeatDistributionController:
     assign: override
     note: Radiators change the flow temperature curve this controller is built from.
@@ -18,8 +19,25 @@ assignments:
       controller above.
   HeatDistributionSystem:
     assign: override
-    note: Radiator or floor heating is one enum plus the mass flow and area derived
-      from it. The emitter is present either way.
+    note: Radiator or floor heating is one enum plus the water mass flow rate derived
+      from it; the emitter area comes from the building's conditioned floor area and
+      does not move with the emitter type. The emitter is present either way.
+  Building:
+    assign: override
+    note: Only the TABULA code moves. The envelope behind it - the U-values, the
+      areas, the heat capacity class - is looked up by the component itself and never
+      written into the file, so one archetype instead of another is a value a consumer
+      picks and the component and its wiring are the same either way.
+  MoreAdvancedHeatPumpHPLib:
+    assign: override
+    note: Its set thermal output power is the building's heating load, so a better
+      insulated envelope buys a smaller pump. Same pump, same wiring, a different
+      rating.
+  SimpleHotWaterStorage:
+    assign: override
+    note: The buffer volume is fifty litres per kilowatt of heat pump output, so it
+      follows the same heating load one step further down. A number the building
+      determines, not a component that comes or goes.
   ElectricityMeter:
     assign: variant:electricity_management
     note: 'Present in every configuration and wired differently: fed by the energy
@@ -47,5 +65,8 @@ configurations:
     variants:
       electricity_management: ems_with_battery
   radiator:
+    variants:
+      electricity_management: ems_with_battery
+  nineties_building:
     variants:
       electricity_management: ems_with_battery

@@ -13,7 +13,7 @@ the command runs. To change what this page says, change the grouping table or re
 
 | Setup | Variant groups | Options | Components per option | Overrides |
 | --- | --- | --- | --- | --- |
-| `household_heatpump_building_sizer` | `electricity_management` | **`ems_with_battery`** [^baseline], `metered_directly` | 3, 1 | 4 |
+| `household_heatpump_building_sizer` | `electricity_management` | **`ems_with_battery`** [^baseline], `metered_directly` | 3, 1 | 7 |
 
 [^baseline]: The option in bold is the one the grouped file selects, which is the option the baseline probe column realizes. A grouped file's `variants:` section names it as `selected:`.
 
@@ -23,15 +23,15 @@ One of the 22 recorded setups is grouped so far. The other 21 have flat twins on
 
 ## `household_heatpump_building_sizer`
 
-Recorded from `system_setups/household_heatpump_building_sizer.py`, described in the grouped file as "Basic household new system setup." 11 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Four of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
+Recorded from `system_setups/household_heatpump_building_sizer.py`, described in the grouped file as "Basic household new system setup." 11 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["household_heatpump_building_sizer"]
-    fixed["fixed in every configuration (7)<br/>Building<br/>UTSPConnector<br/>Weather<br/>HeatPumpControllerDHW<br/>MoreAdvancedHeatPumpHPLib<br/>DHWStorage<br/>SimpleHotWaterStorage"]
-    knobs["knobs, stated at the baseline value (4)<br/>PVSystem<br/>HeatDistributionController<br/>MoreAdvancedHeatPumpHPLibControllerSH<br/>HeatDistributionSystem"]
+    fixed["fixed in every configuration (4)<br/>UTSPConnector<br/>Weather<br/>HeatPumpControllerDHW<br/>DHWStorage"]
+    knobs["knobs, stated at the baseline value (7)<br/>Building<br/>PVSystem<br/>HeatDistributionController<br/>MoreAdvancedHeatPumpHPLibControllerSH<br/>MoreAdvancedHeatPumpHPLib<br/>SimpleHotWaterStorage<br/>HeatDistributionSystem"]
     group1["variant group: electricity_management"]
     optA["ems_with_battery (selected)<br/>ElectricityMeter<br/>Battery<br/>L2EMSElectricityController"]
     optB["metered_directly<br/>ElectricityMeter"]
@@ -46,7 +46,7 @@ flowchart TD
     class optA selected;
 ```
 
-`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — eleven components, of which the four knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
+`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — eleven components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
 
 ### Assignments
 
@@ -55,10 +55,13 @@ flowchart TD
 | `ElectricityMeter` | `variant:electricity_management` | Present in every configuration and wired differently: fed by the energy manager's grid balance when there is one, and by every participant directly when there is not. A group can add and remove a component but cannot rewire one that survives, so this is the row that forces a variant. Written out in full in both options. |
 | `Battery` | `variant:electricity_management/ems_with_battery` | Exists only in the world that has an energy manager; the setup builds the two together and there is no battery-without-manager mode. Its capacity also follows the rooftop share, which stays a knob on top of the membership. |
 | `L2EMSElectricityController` | `variant:electricity_management/ems_with_battery` | The other half of that world, and the component the meter's two wirings are about. |
-| `PVSystem` | `override` | Only the installed peak power moves, and only with the rooftop share. Nothing appears or disappears, so this is a number a consumer picks, not a part of the household. |
+| `Building` | `override` | Only the TABULA code moves. The envelope behind it - the U-values, the areas, the heat capacity class - is looked up by the component itself and never written into the file, so one archetype instead of another is a value a consumer picks and the component and its wiring are the same either way. |
+| `PVSystem` | `override` | Only the installed peak power moves, and only with the rooftop share. Nothing appears or disappears, so this is a number a consumer picks, not a part of the household. A share of zero is refused when the setup is built, so the knob's range is (0, 1] and no value it can take flips the household into another variant. |
 | `HeatDistributionController` | `override` | Radiators change the flow temperature curve this controller is built from. Same component, same wiring, different numbers - a knob, not a switch. |
 | `MoreAdvancedHeatPumpHPLibControllerSH` | `override` | Follows the distribution system's temperatures for the same reason as the controller above. |
-| `HeatDistributionSystem` | `override` | Radiator or floor heating is one enum plus the mass flow and area derived from it. The emitter is present either way. |
+| `MoreAdvancedHeatPumpHPLib` | `override` | Its set thermal output power is the building's heating load, so a better insulated envelope buys a smaller pump. Same pump, same wiring, a different rating. |
+| `SimpleHotWaterStorage` | `override` | The buffer volume is fifty litres per kilowatt of heat pump output, so it follows the same heating load one step further down. A number the building determines, not a component that comes or goes. |
+| `HeatDistributionSystem` | `override` | Radiator or floor heating is one enum plus the water mass flow rate derived from it; the emitter area comes from the building's conditioned floor area and does not move with the emitter type. The emitter is present either way. |
 
 Ordering rule: variant assignments first, then overrides. Within the variant assignments, groups in the order the grouped file's `variants:` section lists them; within a group, the members assigned to the group as a whole before the members assigned to a single option, then the options in the order that section lists them, and within each option the order that option's `components:` block lists them. Within the overrides, the order the shared `components:` section lists them. The judgement text is the note from the grouping table in full, with the YAML line wrapping undone.
 
@@ -70,5 +73,6 @@ Ordering rule: variant assignments first, then overrides. Within the variant ass
 | `no_battery_ems` | `energy_system_config_.use_battery_and_ems = false` | `metered_directly` | The one structural fork this setup has. |
 | `half_pv` | `energy_system_config_.share_of_maximum_pv_potential = 0.5` | `ems_with_battery` | Half the rooftop potential. |
 | `radiator` | `energy_system_config_.heat_distribution_system = Conventional Radiator` | `ems_with_battery` | Radiators instead of floor heating. |
+| `nineties_building` | `archetype_config_.building_code = DE.N.SFH.09.Gen.ReEx.001.002` | `ems_with_battery` | A 1995-2001 single-family house instead of a 1958-1968 one: the same TABULA archetype, one construction-year band later. |
 
 The `What it varies` column is the probe's `module_config` overlay, one `field = value` per line; the baseline column has no overlay at all, which is what "class defaults" means. The `Gist` column is the first sentence of the probe's description; the full description stays in the probe list. Columns are in the order the probe list declares them.

@@ -929,3 +929,107 @@ def test_the_grouping_probe_verb_drives_the_shared_recorder_child(monkeypatch: p
     assert argv[1:5] == ["-m", "hisim.cli", "energy-system", "record"]
     assert argv[5].endswith("household_heatpump_building_sizer.py")
     assert "--out" in argv
+
+
+class SparseBlock:
+    """Two worlds differing in one configuration field the baseline's block does not carry.
+
+    The fixture exists for one property: a knob may set a field that is written nowhere in the file
+    it is applied to. A recorded ``config`` block is sparse - it holds what the run set and leaves
+    everything the preset or the class already gives at its default - so a column that moves such a
+    field produces a difference at a path the grouped file has no line for, and re-applying it adds
+    a key rather than changing one.
+
+    ``location`` is declared before ``power_in_watt`` in ``PVSystemConfig``, which is what makes the
+    two worlds tell the realizer apart: a realization that appends the added key writes the block in
+    the other order and cannot reproduce the recording, even though every value in it is right.
+    """
+
+    #: The baseline world, whose array block states only its power.
+    BASELINE: ClassVar[str] = """
+schema_version: 3
+name: sparse_block
+components:
+  pv:
+    class: hisim.components.generic_pv_system.PVSystem
+    config:
+      power_in_watt: 9000.0
+"""
+
+    #: The other world, whose array stands somewhere else and therefore states a field the
+    #: baseline's block omits, in the position its configuration class declares it.
+    RELOCATED: ClassVar[str] = """
+schema_version: 3
+name: sparse_block
+components:
+  pv:
+    class: hisim.components.generic_pv_system.PVSystem
+    config:
+      location: Munich
+      power_in_watt: 9000.0
+"""
+
+    #: The probe list the two worlds stand for.
+    PROBES: ClassVar[str] = """
+setup: system_setups/sparse_block.py
+defaults: tests.test_energy_system_grouping.Defaults.build
+probes:
+  - column: baseline
+    description: the class defaults
+  - column: relocated
+    module_config:
+      energy_system_config_.use_battery_and_ems: false
+"""
+
+    @classmethod
+    def matrix(cls) -> ProbeMatrix:
+        """Builds the three-state table of the two hand-written worlds.
+
+        Returns:
+            The matrix, baseline first.
+        """
+        recordings = {
+            column: Fork.recording(column, text)
+            for column, text in (("baseline", cls.BASELINE), ("relocated", cls.RELOCATED))
+        }
+        return ProbeMatrix.of(
+            dataclasses.replace(ProbeList.read(cls.PROBES), origin="energy_systems/sparse_block.probes.yaml"),
+            recordings,
+        )
+
+    @classmethod
+    def decision(cls) -> Grouping:
+        """The judgement a person would make: where the array stands is a value, not a structure.
+
+        Returns:
+            The array as an override, both columns positioned on no switch at all.
+        """
+        return Grouping(
+            setup="system_setups/sparse_block.py",
+            probes="energy_systems/sparse_block.probes.yaml",
+            assignments=(Assignment("pv", AssignmentKind.OVERRIDE, note="where it stands is a value"),),
+            configurations=(ConfigurationSelection("baseline"), ConfigurationSelection("relocated")),
+            origin="sparse_block.grouping.yaml",
+        )
+
+
+@pytest.mark.base
+def test_a_knob_adding_a_field_writes_it_in_the_configuration_class_field_order() -> None:
+    """Catches a realization that appends a knob's key instead of putting it where a writer would.
+
+    Applying a difference to a document sets a path, and a mapping puts a key it does not already
+    have last. A recorded block writes its fields in the configuration class's declaration order, so
+    a knob on a field the grouped file leaves unstated would come out in the wrong place and the
+    column would fail to reproduce over key order alone, with every value correct. Both halves are
+    asserted: the order of the realized block, and the byte equality that order is needed for.
+    """
+    matrix = SparseBlock.matrix()
+    decision = SparseBlock.decision()
+    check_grouping(decision, matrix)
+    builder = GroupedSystemBuilder(decision, matrix)
+    realizer = ColumnRealizer(builder.build(), builder)
+
+    document = realizer.document("relocated")
+
+    assert list(document["components"]["pv"]["config"]) == ["location", "power_in_watt"]
+    assert realizer.text("relocated", "") == matrix.recordings["relocated"].text

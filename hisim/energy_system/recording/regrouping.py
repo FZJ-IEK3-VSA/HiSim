@@ -26,9 +26,11 @@ less than one with none, and the report says how many each has so that nobody ha
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, Mapping, Optional, Tuple
 
+from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.emitter import EnergySystemEmitter
 from hisim.energy_system.groups import GroupExpander
 from hisim.energy_system.model import ComponentEntry, EnergySystemFile, Group, Variant, VariantOption
@@ -47,6 +49,10 @@ class Knob:
     a list a reader can check against the consumers.
     """
 
+    #: How the line reads for a knob on a field the file's own block does not carry, in place of
+    #: the internal marker such a value is held as.
+    UNSTATED: ClassVar[str] = "the file does not state it"
+
     component: str
     path: str
     stated: Any
@@ -55,12 +61,17 @@ class Knob:
     def describe(self) -> str:
         """Renders the knob as one line of the report.
 
+        A knob may sit on a field the file leaves at the default its preset gives it, which is
+        written nowhere; the value is then the differ's absence marker rather than anything a reader
+        would recognise, so the line says so in words instead of printing the marker.
+
         Returns:
             The component and path, the value the file states, and the value of every column that
             sets it to something else.
         """
         settings = ", ".join(f"{column}={value!r}" for column, value in self.values.items())
-        return f"{self.component}.{self.path}: the file states {self.stated!r}; {settings}."
+        stated = self.UNSTATED if self.stated == DocumentDifference.ABSENT else f"the file states {self.stated!r}"
+        return f"{self.component}.{self.path}: {stated}; {settings}."
 
 
 class GroupedSystemBuilder:
@@ -291,10 +302,11 @@ class GroupedSystemBuilder:
 class ColumnRealizer:
     """Puts one grouped file's switches where a column stands and writes out the plain system.
 
-    Realizing is the format's own expansion followed by two steps the format does not have: enabled
-    groups are dissolved into the top level, because a flat recording has no groups to compare
-    against, and the column's knobs are applied. Both are part of what "the same system" means when
-    a structured file and a flat recording are held against each other.
+    Realizing is the format's own expansion followed by three steps the format does not have:
+    enabled groups are dissolved into the top level, because a flat recording has no groups to
+    compare against, the column's knobs are applied, and every block a knob touched is put back into
+    the key order a writer would have emitted it in. All three are part of what "the same system"
+    means when a structured file and a flat recording are held against each other.
 
     The result is the document rather than the model, because the comparison is on bytes and going
     back through the model would only add a conversion that could differ from the one the recorder
@@ -303,6 +315,10 @@ class ColumnRealizer:
 
     #: The keys of an expanded file that the flat form must not carry.
     EMPTIED: ClassVar[Tuple[str, ...]] = ("groups", "variants")
+
+    #: The entry key holding the configuration block, which is the one block a knob can add a key
+    #: to and therefore the one that has to be put back into field order after a knob is applied.
+    CONFIG_KEY: ClassVar[str] = "config"
 
     def __init__(self, grouped: EnergySystemFile, builder: GroupedSystemBuilder) -> None:
         """Prepares the realizer for one grouped file.
@@ -355,7 +371,7 @@ class ColumnRealizer:
         return expanded.model_copy(update={"components": components, "groups": {}, "variants": {}})
 
     def document(self, column: str) -> Dict[str, Any]:
-        """The realized document of one column, knobs applied.
+        """The realized document of one column, knobs applied and each patched block reordered.
 
         Args:
             column: The probe column to realize.
@@ -363,13 +379,56 @@ class ColumnRealizer:
         Returns:
             The plain nested mapping the flat recording of that column should equal.
         """
-        document = EnergySystemEmitter.to_document(self.flat_model(column))
+        model = self.flat_model(column)
+        document = EnergySystemEmitter.to_document(model)
         entries = document.get("components", {})
         for component in list(entries):
             differences = self.builder.differences(component, column)
             if differences:
-                entries[component] = DocumentDifference.apply(entries[component], differences)
+                patched = DocumentDifference.apply(entries[component], differences)
+                entries[component] = self.in_field_order(component, model.components.get(component), patched)
         return document
+
+    @classmethod
+    def in_field_order(cls, name: str, entry: Optional[ComponentEntry], document: Dict[str, Any]) -> Dict[str, Any]:
+        """Restores one patched entry's ``config`` block to its configuration class's field order.
+
+        A knob may introduce a key the block does not carry. The ``config`` block of an entry that
+        names a preset is sparse — it holds only the fields the run set to something the preset does
+        not give them — so a field that happens to equal the preset in the baseline is written
+        nowhere, and a column that changes it produces a difference at a path the file has no line
+        for. Re-applying that difference sets the key, and a mapping puts a new key last.
+
+        Last is the wrong place. Every writer of this format emits a ``config`` block in the
+        configuration class's declaration order, because that is the order ``to_dict`` walks a
+        dataclass in, so a flat recording carrying the same field carries it in field position. The
+        two would then differ in key order alone and the column would fail to reproduce over
+        nothing. Ordering is the realizer's job and not the differ's: a difference is a set of paths
+        and values that has to survive being written down and read back, and it has no business
+        knowing which class the document it will be applied to came from.
+
+        Only the top level of the block is reordered, and only for a component some knob touched.
+        That is enough because the sparseness is per top-level key: the recorder keeps or drops a
+        whole field, so a nested mapping is either written complete or not written at all, and a
+        difference reaching into one can only change a key that block already has.
+
+        Args:
+            name: The component's name, which is the entry's key, for the class lookup's message.
+            entry: The entry as the realized model holds it, or ``None`` when the model has none
+                under that name, in which case the block is left exactly as it is.
+            document: The patched entry document.
+
+        Returns:
+            The same document with its ``config`` block in field order; the argument itself when
+            there is no block to order.
+        """
+        block = document.get(cls.CONFIG_KEY)
+        if entry is None or not isinstance(block, dict):
+            return document
+        declared = tuple(field.name for field in dataclasses.fields(ClassBinder.config_class_of(name, entry)))
+        ordered = {key: block[key] for key in declared if key in block}
+        ordered.update({key: value for key, value in block.items() if key not in ordered})
+        return {key: (ordered if key == cls.CONFIG_KEY else value) for key, value in document.items()}
 
     def text(self, column: str, header: str) -> str:
         """The realized file of one column, ready to be compared with its flat recording.

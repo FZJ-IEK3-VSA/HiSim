@@ -86,39 +86,39 @@ files do, and it answers the RenoVisor requirement in code rather than on paper.
 
 ## P3 — Recording & setup migration
 
-Requirements: `p3_recording_requirements.md` (in review 2026-08-28, all questions decided; inventory in
-`p3_setup_inventory.md`). Implementation: `p3_implementation_spec.md` (draft 2026-08-28; PR-1 … PR-6 in its §10, the teardown moved to P6,
-five open design questions in its §13).
+Requirements: `p3_recording_requirements.md` (accepted 2026-09-06 with the stack's review rounds; inventory in
+`p3_setup_inventory.md`). Implementation: `p3_implementation_spec.md` (accepted 2026-09-06; PR-1 … PR-6 in its §10, the teardown moved to P6,
+its §13 design questions all decided during the rounds).
 
 - [x] All requirements questions decided *(2026-08-28: Q-P3.1 record now and re-record per P4 batch · Q-P3.2 KPI parity is the oracle · Q-P3.3 the semi-manual grouping pass R10 · Q-P3.4 files live in `energy_systems/` · Q-P3.5 the three unrecordable setups are deleted, not excluded — **amended 2026-09-02**, see the removal item below: two were retired independently and the third became recordable · Q-P3.6 parameters emitted only when new, never duplicated · Q-P3.7 the temporary parity rig R11)*
-- [ ] Requirements document accepted at review
+- [x] Requirements document accepted at review *(2026-09-06: every stack PR #632–#638 went through a 19-reviewer round, findings verified, decided and answered in the PRs' commits)*
 - [x] Implementation spec written; DQ1–DQ5 decided *(2026-08-28: subpackage · rename the illegal names and enforce the rule in `Component.__init__` · guard `component_id` now and decide in P5 · hand-authored renaming table · the rig compares every result column through it, R11.3 and C-P3.2 amended)*
-- [ ] Implementation spec accepted at review
+- [x] Implementation spec accepted at review *(2026-09-06, same rounds)*
 - [x] P2.1 first (see above), then the removal commit (R5.2) — *what R5.2 asked for happened, but only partly by this branch's hand.* `simple_weather_data_import.py` and `basic_household_with_weather_data_request.py` were moved to `obsolete/` on main by #596, so the deletion half of the commit is a no-op on rebase. `air_conditioned_house.py` **stays**: R5.2 named it because it deleted every file in `hisim/inputs/cache` before building, and #605 removed exactly that call and gave the setup a passing one-day KPI test, so the premise for deleting it is gone and the fleet policy that replaced it — every setup is made to work rather than dropped — applies instead. It is recorded like any other setup and the fleet is twenty-two, not twenty-one. What the commit still does is empty the freshness `--exclude` list and delete the option, which is now better justified than when it was written: the two names it excluded are no longer in `system_setups/` at all. After this the recorder needs no skip list.
-- [ ] Rename the five illegal component-name literals in three setups and the `ExampleTransformer` class default; regenerate the three v1 twins; then enforce the identifier rule in `Component.__init__` (own commit). No golden reference is affected
-- [ ] Port `json_v2:parity.py` (wiring snapshot, port renaming, result comparison) and the preset half of `json_v2:templating.py`
-- [ ] Recorder: run a `setup_function` under a recording simulator, emit an energy-system file in canonical style
-- [ ] Every setup recorded flat; recorded files checked in to `energy_systems/<stem>.energy_system.yaml`
-- [ ] Parameter files emitted only where the setup's parameters match nothing shipped, deduplicated by normalised content, named for what they are (R8)
-- [ ] Golden suites run on recorded files; setups themselves kept until P5 confirms no consumer needs them
-- [ ] Grouping pass (R10), after the flat files exist: probe list per setup, prefilled workbook, `grouping import` to a committed `<stem>.grouping.yaml`, second recorder pass building groups and variants
-- [ ] Every probe column asserted byte for byte against its flat recording (R10.6) — the grouping pass needs no new golden runs
+- [x] Rename the five illegal component-name literals in three setups and the `ExampleTransformer` class default; regenerate the three v1 twins; then enforce the identifier rule in `Component.__init__` (own commit). No golden reference is affected *(2026-09-05, #632)*
+- [x] Port `json_v2:parity.py` (wiring snapshot, port renaming, result comparison) and the preset half of `json_v2:templating.py` *(2026-09-06, #635; the comparison semantics hardened — NaN, index, rename collisions, a zero-reference noise floor — in the same round)*
+- [x] Recorder: run a `setup_function` under a recording simulator, emit an energy-system file in canonical style *(2026-09-06, #635)*
+- [x] Every setup recorded flat; recorded files checked in to `energy_systems/<stem>.energy_system.yaml` *(2026-09-06, #636: all twenty-two, no skip list, freshness-gated; first green freshness run on main the same day — the AC-P3.4 cross-machine evidence)*
+- [x] Parameter files emitted only where the setup's parameters match nothing shipped, deduplicated by normalised content, named for what they are (R8) *(2026-09-06, #636)*
+- [x] Golden suites run on recorded files; setups themselves kept until P5 confirms no consumer needs them *(2026-09-06: the golden-yaml check shipped with #636; #642 gated the full fleet, 22 of 22 at week resolution or better)*
+- [x] Grouping pass (R10), after the flat files exist: probe list per setup, prefilled workbook, `grouping import` to a committed `<stem>.grouping.yaml`, second recorder pass building groups and variants *(2026-09-06, #638: machinery complete, the heat-pump sizer grouped as the exemplar; the fleet-wide grouping worklist landed with #643)*
+- [x] Every probe column asserted byte for byte against its flat recording (R10.6) — the grouping pass needs no new golden runs *(2026-09-06, #638; five probe columns on the exemplar, including the building-code cascade)*
 
 Migration parity rig (R11) — temporary, `workflow_dispatch` only, exists to make the migration safe and is removed with it:
 
-- [ ] `one_week_july` parameter set next to `one_week_only`, so cooling and solar-thermal setups are measured somewhere other than their annual minimum
-- [ ] Rig: run each (setup, probe configuration, window) triple twice in one container — Python path and recorded file — and compare component set, wire set, shared result columns and KPIs at **exact equality** (same machine, so no tolerance is needed)
-- [ ] Structural verdict for the seven setups whose KPI layer crashes today, so they are covered without waiting for repairs
-- [ ] One dispatch prints one table of every triple; failures upload both KPI sets, both CSVs and the wire diff
+- [x] `one_week_july` parameter set next to `one_week_only`, so cooling and solar-thermal setups are measured somewhere other than their annual minimum *(2026-09-06, #637)*
+- [x] Rig: run each (setup, probe configuration, window) triple twice in one container — Python path and recorded file — and compare component set, wire set, shared result columns and KPIs at **exact equality** (same machine, so no tolerance is needed) *(2026-09-06, #637)*
+- [x] Structural verdict for the seven setups whose KPI layer crashes today, so they are covered without waiting for repairs *(2026-09-06, #637; amended 2026-09-05 — an unavailable stage fails its triple, and the crashes have since healed, so the case is pinned synthetically)*
+- [x] One dispatch prints one table of every triple; failures upload both KPI sets, both CSVs and the wire diff *(2026-09-06, #637; the fleet-wide baseline dispatch, AC-P3.17, is still to run)*
 - [ ] The rig stays until **P6** (R11.8, amended 2026-08-31): P4 re-records the fleet on every batch, so the rig is what proves a re-recorded file still reproduces its setup
 
 Not blocking P3 — the KPI-layer repair list found by `golden_validate.py --scan-all` (2026-08-28):
 
-- [ ] `dynamic_components` (CHP1) and `electrolyzer_with_renewables` (transformer/rectifier): components with no KPI method
-- [ ] `basic_household_only_heating`: `NoneType * float` inside KPI computation
-- [ ] `simple_air_conditioner_household_building_sizer`: division by zero on a January window
-- [ ] `household_gas_solar_thermal`: grid import 21.72 kWh above total consumption 10.9 kWh — an energy-balance inconsistency, worth fixing on its own merits
-- [ ] `simple_system_setup_one`/`_two`: toy examples whose components will never carry meaningful KPIs — exclude rather than implement
+- [x] `dynamic_components` (CHP1) and `electrolyzer_with_renewables` (transformer/rectifier): components with no KPI method *(2026-09-06: CHP KPIs #640, the electrolyzer setup's four components #641; both setups gated with #642)*
+- [x] `basic_household_only_heating`: `NoneType * float` inside KPI computation *(healed by the intervening repairs; the 2026-09-05 re-scan found it gone and the setup is week-gated with a fresh blessing)*
+- [x] `simple_air_conditioner_household_building_sizer`: division by zero on a January window *(healed; 2026-09-05 re-scan, week-gated)*
+- [x] `household_gas_solar_thermal`: grid import 21.72 kWh above total consumption 10.9 kWh — an energy-balance inconsistency, worth fixing on its own merits *(fixed by #617's duplicate-feed refusal; verified 2026-09-05, grid import equals consumption to the watt-hour)*
+- [x] `simple_system_setup_one`/`_two`: toy examples whose components will never carry meaningful KPIs — exclude rather than implement *(resolved the opposite way: #616 let a component that models no device answer for itself, so the toys are gated rather than excluded)*
 
 ## P4 — Component sweep (batches; each a mechanical PR)
 

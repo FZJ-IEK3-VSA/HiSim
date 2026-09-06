@@ -184,25 +184,44 @@ class SimulationParameters:
         return simulation_parameters
 
     @classmethod
-    def one_week_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
-        """Generates a parameter set for a single week, primarily for unit testing."""
+    def _first_week_of(cls, year: int, month: int, seconds_per_timestep: int) -> SimulationParameters:
+        """Builds the parameter set of the first seven days of one month.
+
+        The one spelling of "a week starting on the first", shared by the January and the July
+        window so an off-by-one fixed in one cannot survive in the other.
+
+        Args:
+            year: Calendar year the week is taken from.
+            month: The month whose first week is covered.
+            seconds_per_timestep: Resolution of the simulation in seconds.
+
+        Returns:
+            Parameters covering the 1st to the 8th of that month.
+        """
         return cls(
-            datetime.datetime(year, 1, 1),
-            datetime.datetime(year, 1, 8),
+            datetime.datetime(year, month, 1),
+            datetime.datetime(year, month, 8),
             seconds_per_timestep,
         )
+
+    @classmethod
+    def one_week_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
+        """Generates a parameter set for a single week, primarily for unit testing."""
+        return cls._first_week_of(year, 1, seconds_per_timestep)
 
     @classmethod
     def one_week_july(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """Generates a parameter set for the first week of July, the summer counterpart of one_week_only.
 
-        Every short-horizon parameter set of this class starts on the first of January, which puts
-        each of them in the coldest, darkest week of the year. That window measures a cooling
+        Every other short-horizon parameter set of this class starts on the first of January,
+        which puts them in the coldest, darkest week of the year. That window measures a cooling
         device, a solar-thermal collector or an air conditioner at its annual minimum, and a
-        component that does nothing for the whole run proves nothing about itself: the
-        air-conditioner setup divides by zero in the KPI layer for exactly that reason. This set
-        answers with the same seven days shifted into July, so a comparison that runs both windows
-        exercises the heating side once and the cooling side once.
+        component that does nothing for the whole run proves nothing about itself. (The
+        air-conditioner setup's KPI division by zero has a different cause — it has no occupancy
+        and no generation in any season — but its cooling path, too, only moves in summer.) This
+        set answers with the same seven days shifted into July, so a comparison that runs both
+        windows exercises the heating side once and the cooling side once; the parity rig of the
+        recording migration is that comparison.
 
         Args:
             year: Calendar year the week is taken from.
@@ -211,11 +230,7 @@ class SimulationParameters:
         Returns:
             Parameters covering the 1st to the 8th of July of that year.
         """
-        return cls(
-            datetime.datetime(year, 7, 1),
-            datetime.datetime(year, 7, 8),
-            seconds_per_timestep,
-        )
+        return cls._first_week_of(year, 7, seconds_per_timestep)
 
     @classmethod
     def one_week_with_only_plots(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:

@@ -31,8 +31,8 @@ from dataclasses import dataclass
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim import log
-from hisim import loadtypes as lt
 from hisim.component import Component, ComponentInput, ComponentOutput
+from hisim.config.channels import PortTypeCompatibility
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemWiringError
 
 
@@ -77,16 +77,11 @@ class WiringChecker:
 
     Built from the system's components and the plan, so that every check can look a port up on
     the object that owns it. The checks are separate methods because each has its own failure
-    mode and its own message, and :meth:`check_all` fixes the order they run in.
+    mode and its own message, and :meth:`check_all` fixes the order they run in. Whether the two
+    ends of a wire agree on load type and unit is not decided here but asked of
+    :class:`~hisim.config.channels.PortTypeCompatibility`, which is the same predicate the channel
+    matcher uses, so a wire and a feed can never disagree about what the wildcard permits.
     """
-
-    #: Load types that are compatible with any counterpart. A port declared this way says "this
-    #: carries whatever the other end carries", which is how HiSim expresses a generic signal —
-    #: a control percentage, a state flag — that has no physical load type of its own.
-    WILDCARD_LOAD_TYPES: Tuple[lt.LoadTypes, ...] = (lt.LoadTypes.ANY,)
-
-    #: Units that are compatible with any counterpart, for the same reason.
-    WILDCARD_UNITS: Tuple[lt.Units, ...] = (lt.Units.ANY,)
 
     def __init__(
         self,
@@ -215,11 +210,7 @@ class WiringChecker:
             output = find_output(self.components_by_name[wire.source_name], wire.source_output)
             target_input = find_input(self.components_by_name[wire.target_name], wire.target_input)
             assert output is not None and target_input is not None  # nosec - checked before
-            if (
-                output.load_type != target_input.loadtype
-                and output.load_type not in self.WILDCARD_LOAD_TYPES
-                and target_input.loadtype not in self.WILDCARD_LOAD_TYPES
-            ):
+            if not PortTypeCompatibility.load_types_agree(output.load_type, target_input.loadtype):
                 raise EnergySystemWiringError(
                     EnergySystemErrorId.PORT_TYPE_MISMATCH,
                     f"components.{wire.target_name}.inputs",
@@ -228,11 +219,7 @@ class WiringChecker:
                     f"'{target_input.loadtype.name}'.",
                     remedy="Align the two port declarations, or wire a different pair of ports.",
                 )
-            if (
-                output.unit != target_input.unit
-                and output.unit not in self.WILDCARD_UNITS
-                and target_input.unit not in self.WILDCARD_UNITS
-            ):
+            if not PortTypeCompatibility.units_agree(output.unit, target_input.unit):
                 raise EnergySystemWiringError(
                     EnergySystemErrorId.PORT_TYPE_MISMATCH,
                     f"components.{wire.target_name}.inputs",

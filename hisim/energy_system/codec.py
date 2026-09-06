@@ -260,7 +260,58 @@ class ConfigValueCodec:
                 return self._decode_enum(candidate, value, location, name, field_name)
         if value is None:
             return None
+        rebuilt = self._rebuild_nested_dataclass(candidates, value, location, name, field_name)
+        if rebuilt is not None:
+            return rebuilt
         return self._decode_scalar(candidates, value, location, name, field_name)
+
+    @classmethod
+    def _rebuild_nested_dataclass(
+        cls, candidates: Tuple[Any, ...], value: Any, location: str, name: str, field_name: str
+    ) -> Optional[Any]:
+        """Rebuilds a mapping written onto a dataclass-typed field through that class itself.
+
+        A complete ``config`` block is deserialized by the configuration class as a whole, which
+        is what keeps its nested objects objects. A sparse override took the other road — its
+        values were written onto the instance one field at a time — so a nested mapping would
+        land as a plain dict and flatten the very object the class had rebuilt. This gives the
+        override the same treatment the block gets: the field's own class reads its mapping.
+
+        Args:
+            candidates: The types the field admits.
+            value: The written value.
+            location: The dotted key path, for the message.
+            name: The component's name, for the message.
+            field_name: The field being overridden, for the message.
+
+        Returns:
+            The rebuilt object, or ``None`` when the field is not a dataclass taking a mapping —
+            the scalar path then decides.
+
+        Raises:
+            EnergySystemBindingError: ``EF-1A`` when the mapping does not fit the nested class.
+        """
+        if not isinstance(value, Mapping):
+            return None
+        nested = [
+            candidate
+            for candidate in candidates
+            if isinstance(candidate, type) and dataclasses.is_dataclass(candidate)
+        ]
+        if len(nested) != 1:
+            return None
+        try:
+            from_dict = getattr(nested[0], "from_dict", None)
+            if callable(from_dict):
+                return from_dict(dict(value))
+            return nested[0](**dict(value))
+        except Exception as error:  # pylint: disable=broad-except
+            raise EnergySystemBindingError(
+                EnergySystemErrorId.UNDECODABLE_VALUE,
+                location,
+                f"'{name}' sets '{field_name}' to a mapping that does not fit "
+                f"{nested[0].__name__}: {error}",
+            ) from error
 
     @classmethod
     def _candidate_types(cls, annotation: Any) -> Tuple[Any, ...]:

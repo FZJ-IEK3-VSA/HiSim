@@ -75,8 +75,12 @@ class ComponentOutput:  # noqa: too-few-public-methods
         first tries to write that system down.
 
         Raises:
-            ValueError: If ``field_name`` is not a well-formed identifier.
+            ValueError: If ``field_name`` or ``object_name`` is not a well-formed identifier.
+                The prefix is normally the already-validated component name, but a direct
+                construction can pass anything, and an unusable prefix would defeat the rule
+                on the very column name it exists for.
         """
+        cfg.NameSyntax.require_identifier(object_name, "component")
         cfg.NameSyntax.require_identifier(field_name, "component output")
         self.full_name: str = object_name + " # " + field_name
         self.component_name: str = object_name
@@ -134,12 +138,14 @@ class ComponentInput:  # noqa: too-few-public-methods
                 domestic hot water preparation is disabled).
 
         Raises:
-            ValueError: If ``field_name`` is not a well-formed identifier. An input is written
-                as its own key in a declarative energy-system file rather than behind a dot, so
-                the grammar does not force the rule on it the way it does on an output; it is
-                enforced anyway, because an input and an output of the same flow that spelled
-                their names by different rules would be a trap for every reader of both.
+            ValueError: If ``field_name`` or ``object_name`` is not a well-formed identifier.
+                An input is written as its own key in a declarative energy-system file rather
+                than behind a dot, so the grammar does not force the rule on it the way it does
+                on an output; it is enforced anyway, because an input and an output of the same
+                flow that spelled their names by different rules would be a trap for every
+                reader of both.
         """
+        cfg.NameSyntax.require_identifier(object_name, "component")
         cfg.NameSyntax.require_identifier(field_name, "component input")
         self.fullname: str = object_name + " # " + field_name
         self.component_name: str = object_name
@@ -275,7 +281,9 @@ class Component:
                     f"The config of component '{my_config.component_id.key}' "
                     f"({type(my_config).__name__}) still requires sizing in "
                     f"{len(unresolved)} field(s):\n{cfg.describe_auto_fields(my_config)}\n"
-                    "Call .resolve(ctx) with a SizingContext or set the fields explicitly."
+                    "Call .resolve(ctx) with a SizingContext or set the fields explicitly -- for an "
+                    "identity field, from its provider, e.g. "
+                    "config.weather_identity = my_weather_config.identity()."
                 )
             # Subclasses read their concrete config's fields off this base-typed slot; that
             # works for the type checker because ConfigBase carries a checking-only

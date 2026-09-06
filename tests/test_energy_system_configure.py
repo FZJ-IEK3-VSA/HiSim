@@ -45,8 +45,10 @@ from hisim.energy_system import (
     EnergySystemSizingError,
     expand_groups,
 )
+from hisim.energy_system.codec import ConfigValueCodec
 from hisim.energy_system.configure import configure_energy_system
 from hisim.energy_system.document import RawDocument
+from hisim.components.solar_thermal_system import SolarThermalSystemConfig
 from hisim.energy_system.loader import EnergySystemReader
 from hisim.energy_system.sizing_bridge import KernelFailure, sizing_sources_bridge
 
@@ -65,6 +67,39 @@ class Systems:
     BOILER: ClassVar[str] = """  boiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas
+"""
+
+    #: A solar-thermal collector written as a complete ``config`` block. It is the fixture of
+    #: the two block-entry regressions below: its ``coordinates`` field holds a nested
+    #: dataclass, and a block entry is the one origin that is also the configuration itself.
+    COLLECTOR: ClassVar[str] = """  collector:
+    class: hisim.components.solar_thermal_system.SolarThermalSystem
+    config:
+      coordinates:
+        latitude_in_degrees: 50.78
+        longitude_in_degrees: 6.08
+      azimuth: 180.0
+      tilt: 30.0
+      area_m2: 4.0
+      eta_0: 0.78
+      a_1_w_m2_k: 3.2
+      a_2_w_m2_k: 0.015
+      old_solar_pump: false
+      device_co2_footprint_in_kg: null
+      investment_costs_in_euro: null
+      lifetime_in_years: null
+      maintenance_costs_in_euro_per_year: null
+      subsidy_as_percentage_of_investment_costs: null
+      source_weight: 1
+      delta_temperature_n_k: 10.0
+"""
+
+    #: The weather every building is computed against. A building records which weather that is as a
+    #: sized field, so a fixture with a building needs one weather in it -- exactly one, so that the
+    #: fact binds without a source line and the fixtures stay about the relation they were written for.
+    WEATHER: ClassVar[str] = """  weather:
+    class: hisim.components.weather.Weather
+    preset: standard
 """
 
     @classmethod
@@ -264,9 +299,9 @@ def test_a_system_of_converted_classes_is_configured_and_sized() -> None:
     the ordinary case actually goes through: the boiler's power band has to come out as the
     number the building's heating load implies.
     """
-    system = Systems.configure(Systems.building("building") + Systems.BOILER)
+    system = Systems.configure(Systems.WEATHER + Systems.building("building") + Systems.BOILER)
 
-    assert [name for name, _ in system.configs] == ["building", "boiler"]
+    assert [name for name, _ in system.configs] == ["weather", "building", "boiler"]
     boiler = system.config_of("boiler")
     assert isinstance(boiler.maximal_thermal_power_in_watt, float)
     assert boiler.maximal_thermal_power_in_watt > 0.0
@@ -282,7 +317,7 @@ def test_two_providers_of_one_fact_are_refused_with_the_candidates_and_a_paste_r
     the rule turns a working file into a puzzle the moment a second provider is added.
     """
     with pytest.raises(EnergySystemSizingError) as raised:
-        Systems.configure(Systems.building("house_a") + Systems.building("house_b") + Systems.BOILER)
+        Systems.configure(Systems.WEATHER + Systems.building("house_a") + Systems.building("house_b") + Systems.BOILER)
 
     message = str(raised.value)
     assert raised.value.error_id is EnergySystemErrorId.SIZING_AMBIGUOUS
@@ -300,7 +335,8 @@ def test_a_source_line_settles_the_ambiguity_the_two_providers_created() -> None
     having no effect at all.
     """
     system = Systems.configure(
-        Systems.building("house_a")
+        Systems.WEATHER
+        + Systems.building("house_a")
         + Systems.building("house_b")
         + """  boiler:
     class: hisim.components.generic_boiler.GenericBoiler
@@ -340,7 +376,8 @@ def test_a_source_naming_a_component_that_does_not_provide_the_fact_is_refused()
     """
     with pytest.raises(EnergySystemSizingError) as raised:
         Systems.configure(
-            Systems.building("building")
+            Systems.WEATHER
+            + Systems.building("building")
             + """  hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
     preset: standard
@@ -369,7 +406,8 @@ def test_a_list_written_for_a_fact_a_law_reads_once_is_refused() -> None:
     """
     with pytest.raises(EnergySystemSizingError) as raised:
         Systems.configure(
-            Systems.building("building")
+            Systems.WEATHER
+            + Systems.building("building")
             + """  boiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas
@@ -486,14 +524,16 @@ def test_auto_in_a_config_block_reopens_a_field_the_preset_had_pinned() -> None:
     than as the preset's fixed one.
     """
     pinned = Systems.configure(
-        Systems.building("building")
+        Systems.WEATHER
+        + Systems.building("building")
         + """  boiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas_12kw
 """
     ).config_of("boiler")
     reopened = Systems.configure(
-        Systems.building("building")
+        Systems.WEATHER
+        + Systems.building("building")
         + """  boiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas_12kw
@@ -517,7 +557,8 @@ def test_a_value_that_does_not_fit_its_field_is_refused_naming_the_entry() -> No
     """
     with pytest.raises(EnergySystemBindingError) as raised:
         Systems.configure(
-            Systems.building("building")
+            Systems.WEATHER
+            + Systems.building("building")
             + """  boiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas
@@ -563,7 +604,7 @@ def test_a_fact_nobody_reads_produces_a_warning_and_not_a_refusal() -> None:
     group switched off — but it is also what a misspelled source line looks like from outside,
     so the run says it and continues.
     """
-    system = Systems.configure(Systems.building("building") + Systems.BOILER)
+    system = Systems.configure(Systems.WEATHER + Systems.building("building") + Systems.BOILER)
 
     assert any("conditioned_floor_area_in_m2" in line for line in system.warnings)
     assert all("building" in line or "boiler" in line for line in system.warnings)
@@ -678,29 +719,7 @@ def test_a_complete_config_block_keeps_the_nested_objects_its_class_rebuilt() ->
     The solar-thermal collector is the case that has one: its coordinates are a dataclass, and it
     only reads them when it prepares a run.
     """
-    entries = """  collector:
-    class: hisim.components.solar_thermal_system.SolarThermalSystem
-    config:
-      coordinates:
-        latitude_in_degrees: 50.78
-        longitude_in_degrees: 6.08
-      azimuth: 180.0
-      tilt: 30.0
-      area_m2: 4.0
-      eta_0: 0.78
-      a_1_w_m2_k: 3.2
-      a_2_w_m2_k: 0.015
-      old_solar_pump: false
-      device_co2_footprint_in_kg: null
-      investment_costs_in_euro: null
-      lifetime_in_years: null
-      maintenance_costs_in_euro_per_year: null
-      subsidy_as_percentage_of_investment_costs: null
-      source_weight: 1
-      delta_temperature_n_k: 10.0
-"""
-
-    configured = Systems.configure(entries)
+    configured = Systems.configure(Systems.COLLECTOR)
 
     coordinates = configured.config_of("collector").coordinates
     assert isinstance(coordinates, Coordinates), (
@@ -708,3 +727,70 @@ def test_a_complete_config_block_keeps_the_nested_objects_its_class_rebuilt() ->
     )
     assert coordinates.latitude_in_degrees == 50.78
     assert coordinates.longitude_in_degrees == 6.08
+
+
+@pytest.mark.base
+def test_a_sparse_override_rebuilds_a_nested_dataclass_through_its_own_class() -> None:
+    """Catches a sparse override flattening the one field a mapping is an object for.
+
+    A complete ``config`` block goes through the configuration class's own deserializer, which
+    rebuilds nested dataclasses; a sparse override is decoded value by value instead. Before the
+    codec learned to route a mapping through the nested field's own class, the dict was written
+    onto the instance verbatim, and the component crashed on an attribute read during simulation
+    preparation — as far from the override that caused it as the failure can land.
+    """
+    codec = ConfigValueCodec(SolarThermalSystemConfig)
+
+    decoded = codec.decode(
+        "coordinates",
+        {"latitude_in_degrees": 50.78, "longitude_in_degrees": 6.08},
+        "components.collector.config.coordinates",
+        "collector",
+    )
+
+    assert isinstance(decoded, Coordinates)
+    assert decoded.latitude_in_degrees == 50.78
+    assert decoded.longitude_in_degrees == 6.08
+
+
+@pytest.mark.base
+def test_a_mapping_that_does_not_fit_its_nested_class_is_refused_with_the_field_named() -> None:
+    """Catches a wrong nested mapping surviving decoding and failing somewhere later.
+
+    The rebuild routes the mapping through the nested class itself, so a key that class does not
+    know must come back as the located EF-1A refusal every other override failure produces —
+    naming the component, the field and the class — rather than as that class's bare traceback.
+    """
+    codec = ConfigValueCodec(SolarThermalSystemConfig)
+
+    with pytest.raises(EnergySystemBindingError) as caught:
+        codec.decode(
+            "coordinates",
+            {"latitude_in_degrees": 50.78, "elevation_in_m": 200.0},
+            "components.collector.config.coordinates",
+            "collector",
+        )
+
+    assert caught.value.error_id is EnergySystemErrorId.UNDECODABLE_VALUE
+    assert "coordinates" in str(caught.value)
+    assert "Coordinates" in str(caught.value)
+
+
+@pytest.mark.base
+def test_a_block_entrys_origin_is_not_the_configuration_the_run_mutates() -> None:
+    """Catches the audit's preset default aliasing the configuration of a block entry.
+
+    For a preset entry the origin and the configuration are two objects by construction; for a
+    complete ``config`` block they used to be the same instance, and path expansion mutates the
+    configuration in place — so the origin, which the audit reports as "what the author wrote",
+    would quietly show the expanded value instead of the file's own spelling. The configuring
+    stage now hands the block entry a copy, and this pins the two apart.
+    """
+    configured = Systems.configure(Systems.COLLECTOR)
+
+    origin = configured.origin_of("collector")
+    config = configured.config_of("collector")
+
+    assert origin is not config
+    assert origin == config
+    assert origin.coordinates == config.coordinates

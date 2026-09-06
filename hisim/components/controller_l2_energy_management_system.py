@@ -641,6 +641,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         outputs_sorted = []
 
         for ind, source_weight in enumerate(source_weights):
+            # Literal on purpose: the first tag is this one participant's component type, so the
+            # query names no fixed channel tag set and the dispatch side has no channel-key
+            # accessor yet. See roadmap/p3_cleanup_todos.md, the aggregator-lookup migration item.
             outputs = self.get_all_dynamic_outputs(
                 tags=[
                     component_types_sorted[ind],
@@ -656,13 +659,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     raise ValueError("Dynamic input is not connected to dynamic output")
         outputs_sorted = list(OrderedDict.fromkeys(outputs_sorted))
 
-        production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
-        consumption_uncontrolled_inputs = self.get_dynamic_inputs(
-            tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
-        )
-        consumption_ems_controlled_inputs = self.get_dynamic_inputs(
-            tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
-        )
+        production_inputs = self.get_channel_inputs(self.PRODUCTION_CHANNEL)
+        consumption_uncontrolled_inputs = self.get_channel_inputs(self.CONSUMPTION_UNCONTROLLED_CHANNEL)
+        consumption_ems_controlled_inputs = self.get_channel_inputs(self.CONSUMPTION_CONTROLLED_CHANNEL)
 
         return (
             inputs_sorted,

@@ -232,7 +232,8 @@ class DynamicComponent(Component):
             key: The stable channel identifier.
 
         Returns:
-            The dynamic inputs on that channel, in creation order.
+            The dynamic inputs on that channel, in the summation order
+            :meth:`get_dynamic_inputs` defines.
         """
         channel = self.get_channel(key)
         return self.get_dynamic_inputs(tags=sorted(channel.tags, key=lambda tag: tag.name))
@@ -520,16 +521,61 @@ class DynamicComponent(Component):
         return new_connections
 
     def get_dynamic_inputs(self, tags: List[Union[lt.ComponentType, lt.InandOutputType]]) -> List[ComponentInput]:
-        """Returns inputs from all dynamic inputs with component type and weight."""
-        inputs = []
+        """Returns the dynamic inputs carrying all of the given tags, in a path-independent order.
 
-        # check if component of component type is available
-        for _, element in enumerate(self.my_component_inputs):  # loop over all inputs
-            if tags_search_and_compare(tags_to_search=tags, tags_of_component=element.source_tags):
-                inputs.append(getattr(self, element.source_component_class))
-            else:
-                continue
-        return inputs
+        Every caller of this method sums the ports it returns, so the order of the returned list
+        is the order the participants are added up in. That order used to be the order the inputs
+        were created in, which differs between the two ways a system can be built: a Python setup
+        creates them in its own add sequence (every explicit ``add_component_input_and_connect``
+        before every default connection), while the declarative executor creates them sorted by
+        :meth:`hisim.config.channels.ChannelConnection.sort_key`. The same house therefore summed
+        the same participants in two different orders, and IEEE-754 addition is not associative,
+        so the two runs disagreed in the last bits — enough to fail an exact comparison of the two
+        paths against each other.
+
+        The fix is to give "the order participants are summed in" a single definition on both
+        paths: the key the executor already sorts by, namely weight, then the name of the source
+        component, then the name of the source output. Weight and source output live on the
+        bookkeeping entry; the source component's name lives on the created port, which the
+        wiring stage has filled in long before any component simulates. Only the returned list is
+        sorted — ``my_component_inputs`` keeps its creation order, because other code reads it
+        positionally.
+
+        Example: a meter fed by ``pv.ElectricityOutput`` (weight 1) and ``chp.ElectricityOutput``
+        (weight 1) sums the CHP before the PV whichever way the house was written down.
+
+        Args:
+            tags: The tags an input must all carry to be returned.
+
+        Returns:
+            The matching dynamic input ports, sorted by (weight, source component name, source
+            output name).
+        """
+        matches = [
+            element
+            for element in self.my_component_inputs
+            if tags_search_and_compare(tags_to_search=tags, tags_of_component=element.source_tags)
+        ]
+        matches.sort(key=self.summation_sort_key)
+        return [getattr(self, element.source_component_class) for element in matches]
+
+    def summation_sort_key(self, element: DynamicConnectionInput) -> Tuple[int, str, str]:
+        """The deterministic ordering key of one dynamic input, mirroring the executor's key.
+
+        :meth:`hisim.config.channels.ChannelConnection.sort_key` returns ``(weight, source_name,
+        source_output)``. The bookkeeping entry carries the weight and the source output name
+        directly; the source component's name is only on the created port, where the wiring stage
+        recorded it. An input that was allowed to stay unconnected has no source name and sorts as
+        the empty string, so the key stays total.
+
+        Args:
+            element: The bookkeeping entry of one dynamic input.
+
+        Returns:
+            Weight, source component name and source output name, in that priority.
+        """
+        created_input: ComponentInput = getattr(self, element.source_component_class)
+        return (element.source_weight, created_input.src_object_name or "", element.source_component_field_name)
 
     def get_first_dynamic_output(
         self,

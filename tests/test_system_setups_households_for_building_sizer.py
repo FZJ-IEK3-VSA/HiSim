@@ -11,10 +11,11 @@ loaded and checked to contain finite numeric KPI values, including the
 tests verify real post-processing output rather than only that the run did not
 crash.
 
-One test family in this file runs no simulation at all: every building-sizer setup
-refuses a zero rooftop photovoltaic share while the energy manager is switched on,
-and that refusal is raised before any component is built, so it is checked by
-initializing each setup once and catching the error.
+Two test families in this file run no simulation at all. Every building-sizer setup
+refuses a zero rooftop photovoltaic share while the energy manager is switched on, and
+every one of them refuses an LPG household name the profile registry does not define
+instead of quietly dropping it. Both refusals are raised before any component is built,
+so each is checked by initializing every setup once and catching the error.
 """
 # clean
 import json
@@ -291,25 +292,34 @@ def test_household_heatpump_car(building_sizer_result_directory: str) -> None:
     _assert_kpi_artefacts_written(building_sizer_result_directory, path)
 
 
+#: The eleven building-sizer setups paired with the ``ModularHouseholdConfig`` factory whose
+#: heating system each one accepts. Every setup refuses a heating system other than its own before
+#: it reaches anything else, so a test that wants to drive a setup past that check has to start
+#: from this setup's own default configuration. Shared by the two configuration-refusal tests
+#: below so a new setup is added to both at once.
+BUILDING_SIZER_SETUPS_AND_DEFAULT_CONFIGS: list[tuple[str, str]] = [
+    ("household_district_heating_building_sizer.py", "get_default_config_for_household_district_heating"),
+    ("household_electric_heating_building_sizer.py", "get_default_config_for_household_electric_heating"),
+    ("household_gas_building_sizer.py", "get_default_config_for_household_gas"),
+    ("household_gas_solar_thermal_building_sizer.py", "get_default_config_for_household_gas_solar_thermal"),
+    ("household_heatpump_building_sizer.py", "get_default_config_for_household_heatpump"),
+    ("household_heatpump_car_building_sizer.py", "get_default_config_for_household_heatpump"),
+    (
+        "household_heatpump_solar_thermal_building_sizer.py",
+        "get_default_config_for_household_heatpump_solar_thermal",
+    ),
+    ("household_hydrogen_boiler_building_sizer.py", "get_default_config_for_household_hydrogen"),
+    ("household_oil_building_sizer.py", "get_default_config_for_household_oil"),
+    ("household_pellets_building_sizer.py", "get_default_config_for_household_pellet"),
+    ("household_wood_chips_building_sizer.py", "get_default_config_for_household_wood_chips"),
+]
+
+
 @pytest.mark.base
 @pytest.mark.parametrize(
     "setup_file_name, default_config_getter_name",
-    [
-        ("household_district_heating_building_sizer.py", "get_default_config_for_household_district_heating"),
-        ("household_electric_heating_building_sizer.py", "get_default_config_for_household_electric_heating"),
-        ("household_gas_building_sizer.py", "get_default_config_for_household_gas"),
-        ("household_gas_solar_thermal_building_sizer.py", "get_default_config_for_household_gas_solar_thermal"),
-        ("household_heatpump_building_sizer.py", "get_default_config_for_household_heatpump"),
-        ("household_heatpump_car_building_sizer.py", "get_default_config_for_household_heatpump"),
-        (
-            "household_heatpump_solar_thermal_building_sizer.py",
-            "get_default_config_for_household_heatpump_solar_thermal",
-        ),
-        ("household_hydrogen_boiler_building_sizer.py", "get_default_config_for_household_hydrogen"),
-        ("household_oil_building_sizer.py", "get_default_config_for_household_oil"),
-        ("household_pellets_building_sizer.py", "get_default_config_for_household_pellet"),
-        ("household_wood_chips_building_sizer.py", "get_default_config_for_household_wood_chips"),
-    ],
+    BUILDING_SIZER_SETUPS_AND_DEFAULT_CONFIGS,
+    ids=[setup_file_name for setup_file_name, _ in BUILDING_SIZER_SETUPS_AND_DEFAULT_CONFIGS],
 )
 def test_building_sizer_setup_refuses_zero_pv_share_with_energy_manager(
     setup_file_name: str, default_config_getter_name: str, tmp_path: Path
@@ -332,8 +342,9 @@ def test_building_sizer_setup_refuses_zero_pv_share_with_energy_manager(
     config_path = tmp_path / "zero_pv_share_with_ems.json"
     config_path.write_text(json.dumps(household_config.to_dict()), encoding="utf8")
 
-    # read_in_configs answers None for anything it cannot parse and the setup then falls back to the
-    # class defaults, which would make this test pass its configuration to nobody.
+    # read_in_configs now refuses a config it cannot read instead of answering None, but a config it
+    # reads only partially would still leave the setup with different values than this test wrote.
+    # Reading the file back confirms the two fields under test really reach the setup.
     written_config = read_in_configs(str(config_path))
     assert written_config is not None and written_config.energy_system_config_ is not None
     assert written_config.energy_system_config_.share_of_maximum_pv_potential == 0.0
@@ -349,3 +360,44 @@ def test_building_sizer_setup_refuses_zero_pv_share_with_energy_manager(
     message = str(refusal.value)
     assert "share_of_maximum_pv_potential" in message
     assert "use_battery_and_ems" in message
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "setup_file_name, default_config_getter_name",
+    BUILDING_SIZER_SETUPS_AND_DEFAULT_CONFIGS,
+    ids=[setup_file_name for setup_file_name, _ in BUILDING_SIZER_SETUPS_AND_DEFAULT_CONFIGS],
+)
+def test_building_sizer_setup_refuses_an_unknown_lpg_household(
+    setup_file_name: str, default_config_getter_name: str, tmp_path: Path
+) -> None:
+    """Test that a misspelled LPG household name is refused instead of quietly dropped.
+
+    The occupancy block of every building-sizer setup used to skip any name the LPG household
+    registry did not define, so a config asking for two households and misspelling one of them
+    built a one-household building without a word about it. The name is now resolved by
+    ``ArcheTypeConfig.resolve_lpg_households`` for all eleven setups, which refuses the unknown
+    name. The refusal is raised before any component is built, so this test needs no simulation:
+    it takes each setup's own default config (its heating system is checked first, and a foreign
+    one would be refused before the households are read), adds a misspelled household beside a
+    real one, and asserts the refusal names the typo and the registry the legal names live in.
+    """
+    household_config = getattr(ModularHouseholdConfig, default_config_getter_name)()
+    assert household_config.archetype_config_ is not None
+    household_config.archetype_config_.lpg_households = [
+        "CHR01_Couple_both_at_Work",
+        "CHR01_Couple_both_at_Wrok",
+    ]
+    config_path = tmp_path / "unknown_lpg_household.json"
+    config_path.write_text(json.dumps(household_config.to_dict()), encoding="utf8")
+
+    setup_path = Path(__file__).resolve().parents[1] / "system_setups" / setup_file_name
+    with pytest.raises(ValueError) as refusal:
+        hisim_main.initialize_from_python(
+            str(setup_path),
+            my_simulation_parameters=SimulationParameters.one_day_only(2021, 60 * 15),
+            my_module_config=str(config_path),
+        )
+    message = str(refusal.value)
+    assert "CHR01_Couple_both_at_Wrok" in message
+    assert "utspclient.helpers.lpgdata.Households" in message

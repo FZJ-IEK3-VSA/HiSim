@@ -66,13 +66,12 @@ def setup_function(
     year = 2021
     seconds_per_timestep = 60 * 15
 
-    config_filename = my_sim.my_module_config
     # try reading energ system and archetype configs
     my_config = read_in_configs(my_sim.my_module_config)
     if my_config is None:
         my_config = ModularHouseholdConfig().get_default_config_for_household_gas_solar_thermal()
         log.warning(
-            f"Could not read the modular household config from path '{config_filename}'. Using the gas ans solar thermal household default config instead."
+            "No modular household config was given. Using the gas ans solar thermal household default config instead."
         )
     assert my_config.archetype_config_ is not None
     assert my_config.energy_system_config_ is not None

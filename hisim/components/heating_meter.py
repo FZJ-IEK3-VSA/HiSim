@@ -306,8 +306,8 @@ class HeatingMeter(DynamicComponent):
         """
 
         if timestep == 0:
-            self.production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_DELIVERED])
-            self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_CONSUMPTION])
+            self.production_inputs = self.get_channel_inputs(self.PRODUCTION_CHANNEL)
+            self.consumption_uncontrolled_inputs = self.get_channel_inputs(self.CONSUMPTION_UNCONTROLLED_CHANNEL)
 
         # get sum of production and consumption for all inputs for each iteration
         production_in_watt = (

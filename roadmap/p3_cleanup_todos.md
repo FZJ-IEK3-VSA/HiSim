@@ -87,14 +87,21 @@ survives only in a conversation. Items are removed when done, not ticked and kep
   twenty-one; after a week of green runs on main, delete that one line (the workflow header
   carries the same instruction) and the gate blocks. This subsumes the AC-P3.4 item above — the
   first green run is the evidence, the week of them is the confidence.
-- [ ] **Migrate every aggregator's `i_simulate` lookup onto its channel declarations** (decided
-  2026-09-05, #634 review round). All five aggregators — the EMS and the electricity, fuel, gas and
-  heating meters — still query participants by hard-coded tag literals through
-  `get_dynamic_inputs(tags=[...])`, while `DynamicComponent.get_channel_inputs(key)` was built to
-  make the `CHANNELS` declaration the single source of truth and has zero call sites. One dedicated
-  PR after the stack lands switches all five (behaviour-preserving by construction, per the
-  helper's own docstring), with the golden gates verifying. The electricity meter's per-building
-  queries carry extra tags no channel covers yet; they stay literal or get their own channels.
+- [x] **Migrate every aggregator's `i_simulate` lookup onto its channel declarations — done
+  2026-09-06 on `p3_channel_migration`** (decided 2026-09-05, #634 review round). All ten
+  participant lookups in the five aggregators — the EMS and the electricity, fuel, gas and heating
+  meters — now go through `DynamicComponent.get_channel_inputs(key)`, so the `CHANNELS` declaration
+  is the single source of truth for validation and for simulation alike and the two cannot drift.
+  Three lookups stay literal and say so in a one-line comment pointing at their class's
+  ``CHANNELS`` docstring, because their tag set matches no channel exactly and forcing a
+  near-match would change what they sum. The electricity meter's two per-building queries are a
+  settled design, not a debt: the meter's ``CHANNELS`` docstring is the canonical statement that
+  they need no channel of their own, since subset matching lets a feed carrying the buildings tag
+  select the channel while the tag survives on the created port. The EMS's per-participant
+  dispatch-output query is the genuine remainder — its first tag is the participant's own
+  component type, and the output side has no channel-key accessor; a dispatch accessor is a
+  candidate design of its own, not a decided follow-up. Remove this entry once the branch is on
+  main; the code comments point at the class docstrings, so nothing dangles.
 
 ## Deferred by design (not P3's debt, listed so it is findable)
 

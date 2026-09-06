@@ -355,7 +355,7 @@ class FuelMeter(DynamicComponent):
         """
 
         if timestep == 0:
-            self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_CONSUMPTION])
+            self.consumption_uncontrolled_inputs = self.get_channel_inputs(self.CONSUMPTION_UNCONTROLLED_CHANNEL)
 
         # get sum of consumptions of all inputs
         consumption_uncontrolled_in_watt_hour = sum(

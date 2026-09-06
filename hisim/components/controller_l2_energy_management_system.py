@@ -191,6 +191,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     #: former while an ordinary controllable consumer — a heat pump, whose extra descriptive tag
     #: no channel consumes — falls to the latter. That mirrors the ranking code's existing
     #: "is this participant a battery" branch instead of inventing a new tag value for it.
+    #:
+    #: One runtime lookup deliberately reads no channel: the ranking code's per-participant
+    #: dispatch-output query, whose first tag is that one participant's component type, so it
+    #: names no fixed tag set — and it reads outputs, for which no channel-key accessor exists.
+    #: A dispatch-side accessor would be a design of its own, not a near-match to force onto
+    #: :meth:`~hisim.dynamic_component.DynamicComponent.get_channel_inputs`.
     CHANNELS: Tuple[DynamicConnectionChannel, ...] = (
         DynamicConnectionChannel(
             key=PRODUCTION_CHANNEL,
@@ -641,6 +647,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         outputs_sorted = []
 
         for ind, source_weight in enumerate(source_weights):
+            # Literal on purpose: a per-participant dispatch-output query, see the CHANNELS docstring.
             outputs = self.get_all_dynamic_outputs(
                 tags=[
                     component_types_sorted[ind],
@@ -656,13 +663,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     raise ValueError("Dynamic input is not connected to dynamic output")
         outputs_sorted = list(OrderedDict.fromkeys(outputs_sorted))
 
-        production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
-        consumption_uncontrolled_inputs = self.get_dynamic_inputs(
-            tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
-        )
-        consumption_ems_controlled_inputs = self.get_dynamic_inputs(
-            tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
-        )
+        production_inputs = self.get_channel_inputs(self.PRODUCTION_CHANNEL)
+        consumption_uncontrolled_inputs = self.get_channel_inputs(self.CONSUMPTION_UNCONTROLLED_CHANNEL)
+        consumption_ems_controlled_inputs = self.get_channel_inputs(self.CONSUMPTION_CONTROLLED_CHANNEL)
 
         return (
             inputs_sorted,

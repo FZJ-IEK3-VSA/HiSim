@@ -346,10 +346,8 @@ class GasMeter(DynamicComponent):
         """Simulate the grid energy balancer."""
 
         if timestep == 0:
-            self.production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.GAS_PRODUCTION])
-            self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(
-                tags=[lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED]
-            )
+            self.production_inputs = self.get_channel_inputs(self.PRODUCTION_CHANNEL)
+            self.consumption_uncontrolled_inputs = self.get_channel_inputs(self.CONSUMPTION_UNCONTROLLED_CHANNEL)
 
         # GAS #
 

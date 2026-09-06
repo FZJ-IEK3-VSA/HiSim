@@ -526,10 +526,8 @@ class ElectricityMeter(DynamicComponent):
         """Simulate the grid energy balancer."""
 
         if timestep == 0:
-            self.production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
-            self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(
-                tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
-            )
+            self.production_inputs = self.get_channel_inputs(self.PRODUCTION_CHANNEL)
+            self.consumption_uncontrolled_inputs = self.get_channel_inputs(self.CONSUMPTION_UNCONTROLLED_CHANNEL)
 
         # ELECTRICITY #
 
@@ -540,6 +538,7 @@ class ElectricityMeter(DynamicComponent):
         )
 
         if lt.DistrictNames.is_district(self.config.component_id.building):
+            # Literal on purpose: subset matching, see the CHANNELS docstring.
             production_inputs_building = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION, lt.ComponentType.BUILDINGS])
 
             building_electricity_surplus_unused = (
@@ -550,6 +549,7 @@ class ElectricityMeter(DynamicComponent):
                 building_electricity_surplus_unused,
             )
 
+            # Literal on purpose: subset matching, see the CHANNELS docstring.
             consumption_inputs_building = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED, lt.ComponentType.BUILDINGS])
 
             consumption_of_buildings = (

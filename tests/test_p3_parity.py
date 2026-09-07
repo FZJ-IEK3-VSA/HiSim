@@ -21,9 +21,10 @@ Each test states the failure mode it catches.
 
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
-from typing import ClassVar, Optional, Tuple
+from typing import ClassVar, Optional, Set, Tuple
 
 import pandas as pd
 import pytest
@@ -195,6 +196,40 @@ class Rig:
         )
         return legacy, declarative
 
+    @classmethod
+    def scenario_port_spellings(cls) -> Set[Tuple[str, str]]:
+        """Every ``(component name, port name)`` pair a committed scenario file spells out.
+
+        The ``.scenario.json`` files are regenerated from live builds of the Python setups
+        (``scripts/regenerate_scenario_jsons.py``), and every connection endpoint in them names its
+        component and its port — the same two strings that key the renaming table. Collecting the
+        endpoints of all of them therefore yields the fleet's legacy port names without building a
+        single setup, which is what lets a base test cross-check the whole table in milliseconds.
+
+        The walk is structural rather than schema-bound: any mapping that carries both a
+        ``component_name`` and a ``field_name`` string is an endpoint, wherever the file nests it,
+        so the collection survives a scenario format that moves its connection list.
+
+        Returns:
+            The set of ``(component_name, field_name)`` pairs found in all scenario files.
+        """
+        spellings: Set[Tuple[str, str]] = set()
+
+        def walk(node: object) -> None:
+            if isinstance(node, dict):
+                component, field = node.get("component_name"), node.get("field_name")
+                if isinstance(component, str) and isinstance(field, str):
+                    spellings.add((component, field))
+                for value in node.values():
+                    walk(value)
+            elif isinstance(node, list):
+                for item in node:
+                    walk(item)
+
+        for path in sorted(cls.SETUPS.glob("*.scenario.json")):
+            walk(json.loads(path.read_text(encoding="utf-8")))
+        return spellings
+
 
 @pytest.mark.base
 def test_one_week_july_is_the_first_week_of_july() -> None:
@@ -251,24 +286,28 @@ def test_the_renaming_table_declares_one_meaning_per_legacy_port() -> None:
 
 @pytest.mark.base
 def test_the_table_still_spells_the_ports_the_dynamic_components_setup_actually_grows(tmp_path: Path) -> None:
-    """Catches a renaming table that has gone stale because a dispatch counter moved.
+    """Catches a renaming table whose dispatch counter no longer matches the controller's build.
 
     Every legacy dynamic port name in the table carries a number the two paths do not agree on: an
     aggregator input carries its insertion index, and a dispatch output carries the aggregator's
     running output counter, which counts the outputs the component had already declared when the
     setup added the dispatch. That counter is not the setup's to control — an energy manager that
-    gains or loses one declared output renumbers every dispatch output of every setup that uses it —
-    so the table can be correct when it is written and wrong a month later without anyone touching
-    it. That is exactly what happened once: retiring one of the manager's default connections moved
-    all of them down by one, the table kept claiming the old numbers, and the whole fleet's dispatch
-    failed at once with a wiring difference that was nothing but a name.
+    gains or loses one declared output renumbers every dispatch output of every setup that uses
+    it — so a hand-authored number can be wrong without any setup changing. Exactly that once
+    failed the whole fleet's dispatch at once, with a wiring difference that was nothing but a
+    name; the table's own comment on the battery dispatch tells that story.
 
-    This is the canary for that class of failure. One setup is enough because all thirteen energy
-    manager setups grow their names through the same machinery, and this one has no load profile to
-    generate, so it costs a base test seconds instead of minutes. It asserts both halves: that every
-    legacy name the table declares for this setup is a port the Python build really has — a name
-    nobody grows any more can never be exercised again — and that translating the Python wiring
-    through the table yields precisely the twin's wiring, which is the claim the rig makes fleet-wide.
+    This is the canary for the counter class of that failure. One setup is enough for it because
+    the counter is the controller's: all twelve energy manager setups start their dispatch numbers
+    from the same thirteen constructor-declared outputs, so a shift moves this setup's names
+    exactly as it moves every other's. This setup also needs no load profile, so it costs a base
+    test seconds instead of minutes. The per-setup insertion indices of the setups the canary does
+    not build are outside its net; those are cross-checked against the recorded scenario files by
+    the next test and verified against live builds only by the fleet workflow. The canary asserts
+    both halves: that every legacy name the table declares for this setup is a port the Python
+    build really has — a name nobody grows any more can never be exercised again — and that
+    translating the Python wiring through the table yields precisely the twin's wiring, which is
+    the claim the rig makes fleet-wide.
     """
     legacy, declarative = Rig.canary_wiring(tmp_path)
     grown = (
@@ -284,6 +323,29 @@ def test_the_table_still_spells_the_ports_the_dynamic_components_setup_actually_
 
     diff = WiringParityHarness.compare(DeclaredPortRenamings.port_renaming().apply_to(legacy), declarative)
     assert diff.is_identical(), diff.describe()
+
+
+@pytest.mark.base
+def test_every_declared_legacy_port_is_spelled_by_a_committed_scenario_file() -> None:
+    """Catches a table entry whose legacy spelling no committed scenario file carries.
+
+    The canary above builds one setup live, so it can only vouch for that setup's ports; the
+    entries of every other setup — above all their insertion indices, which are per-setup and move
+    whenever a setup reorders its participants — would otherwise be guarded only by the manually
+    dispatched fleet workflow. This test closes that gap statically: every ``(aggregator, legacy
+    port)`` key the table declares must appear verbatim as a connection endpoint in some committed
+    ``.scenario.json``, because those files are regenerated from live builds and spell the exact
+    names the legacy add-API grew. A typo in a newly authored entry fails here immediately, and an
+    entry gone stale fails as soon as the scenario files are regenerated — cheaper and earlier than
+    the fleet workflow, though only that workflow proves an entry against a live build.
+    """
+    spelled = Rig.scenario_port_spellings()
+    assert spelled, "no scenario file spells any connection endpoint, so the cross-check checks nothing"
+    for key in DeclaredPortRenamings.pairs():
+        assert key in spelled, (
+            f"the table declares '{key[0]}.{key[1]}', but no committed scenario file spells that port — "
+            "either the entry has a typo, or the fleet stopped growing it and the entry is dead"
+        )
 
 
 @pytest.mark.base

@@ -185,11 +185,15 @@ class DeclaredPortRenamings:
             # The battery target of the ten EMS sizers that pass this prefix. The legacy name is
             # that prefix, 'LoadingPowerInputForBattery_', plus the controller's fourteenth
             # output: the controller declares thirteen outputs before any setup adds a dispatch —
-            # seven of its own plus one per dynamic default connection it carries — so the first
-            # dispatch a setup adds is number fourteen. That count is the controller's, not the
-            # setup's: retiring one of those default connections moved every name here down by one
-            # (it read 'Output15' until the heat pump the retired connection served went away), and
-            # a test asserts the numbers against a live build so the next such move is caught here.
+            # seven of its own plus six grown by its default connections (one each for the
+            # occupancy and the solar-thermal pump, two each for the heat pump and the electric
+            # heater, none for PV or the battery) — so the first dispatch a setup adds is number
+            # fourteen. That count is the controller's, not the setup's, and this row was authored
+            # stale: retiring the old advanced heat pump (#604) had already removed one of those
+            # outputs when the table was first written, yet the row spelled the pre-retirement
+            # 'Output15', so every EMS setup failed the parity comparison from the table's first
+            # day. A test now asserts the numbers against a live build, so a wrong counter — born
+            # stale or moved later — is caught there instead of failing the whole fleet.
             "LoadingPowerInputForBattery_Output14": "DispatchToBattery_LoadingPowerInput",
             # The dynamic-components example steers four participants and names all four targets
             # 'ElectricityTargetOutput', so in the legacy spelling only the counter tells them

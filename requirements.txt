@@ -9,6 +9,8 @@ openpyxl
 pytest
 sphinx
 sphinx-rtd-theme
+# Documentation build (docs/conf.py extensions): renders the ```mermaid blocks
+sphinxcontrib-mermaid
 dataclasses_json
 hplib==1.9
 bslib==0.6

@@ -167,6 +167,8 @@ class ElectricityMeter(DynamicComponent):
 
         self.production_inputs: List[ComponentInput] = []
         self.consumption_uncontrolled_inputs: List[ComponentInput] = []
+        self.production_inputs_building: List[ComponentInput] = []
+        self.consumption_inputs_building: List[ComponentInput] = []
 
         self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
         # Component has states
@@ -528,6 +530,16 @@ class ElectricityMeter(DynamicComponent):
         if timestep == 0:
             self.production_inputs = self.get_channel_inputs(self.PRODUCTION_CHANNEL)
             self.consumption_uncontrolled_inputs = self.get_channel_inputs(self.CONSUMPTION_UNCONTROLLED_CHANNEL)
+            # The building-tagged subsets are as constant over a run as the two lists above, so
+            # they are resolved here once rather than re-filtered and re-sorted on every step of
+            # every convergence iteration in the district branch below. Literal on purpose:
+            # subset matching, see the CHANNELS docstring.
+            self.production_inputs_building = self.get_dynamic_inputs(
+                tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION, lt.ComponentType.BUILDINGS]
+            )
+            self.consumption_inputs_building = self.get_dynamic_inputs(
+                tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED, lt.ComponentType.BUILDINGS]
+            )
 
         # ELECTRICITY #
 
@@ -538,22 +550,16 @@ class ElectricityMeter(DynamicComponent):
         )
 
         if lt.DistrictNames.is_district(self.config.component_id.building):
-            # Literal on purpose: subset matching, see the CHANNELS docstring.
-            production_inputs_building = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION, lt.ComponentType.BUILDINGS])
-
             building_electricity_surplus_unused = (
-                sum([stsv.get_input_value(component_input=elem) for elem in production_inputs_building]))
+                sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs_building]))
 
             stsv.set_output_value(
                 self.surplus_electricity_unused_to_district_ems_from_building_ems_output,
                 building_electricity_surplus_unused,
             )
 
-            # Literal on purpose: subset matching, see the CHANNELS docstring.
-            consumption_inputs_building = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED, lt.ComponentType.BUILDINGS])
-
             consumption_of_buildings = (
-                sum([stsv.get_input_value(component_input=elem) for elem in consumption_inputs_building]))
+                sum([stsv.get_input_value(component_input=elem) for elem in self.consumption_inputs_building]))
 
             stsv.set_output_value(
                 self.electricity_consumption_building_uncontrolled_in_watt_channel,

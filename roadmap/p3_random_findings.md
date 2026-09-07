@@ -1,6 +1,6 @@
 # P3 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-08-28 · **Last entry:** 2026-08-31 (34 findings)
+**Status:** living document · **Opened:** 2026-08-28 · **Last entry:** 2026-09-06 (35 findings)
 **Context:** things that surfaced while implementing `roadmap/declarative_energy_systems/p3_implementation_spec.md`
 and were **not** what the work set out to do. Kept separately so the requirements and the spec stay about the
 design, and so nothing found on the way is lost when the branch merges.
@@ -303,6 +303,33 @@ output back out of a CSV. That masks a real configuration difference *and*, beca
 bit-exact, invents a fake one. Each side now gets its own empty cache, and both run the same post-processing
 option set regardless of what the setup appended.
 *Generalises beyond the rig: any A/B comparison of two HiSim runs on one machine has this hazard.*
+
+### F-35 — the order an aggregator sums its participants in was path-dependent **[verified]**
+`household_heatpump_car_building_sizer` failed the rig in both windows by about `2e-12` at 2 of 10080
+timesteps, and nowhere else. The cause is not a difference in what is summed but in what order.
+`DynamicComponent.get_dynamic_inputs` was an unfiltered walk over `my_component_inputs`, so it handed the
+EMS its participants in the order their ports were *created*; the EMS freezes that list at timestep 0 and
+sums it every step thereafter. A Python setup creates them in its own add sequence — every explicit
+`add_component_input_and_connect` before every default connection — while the declarative executor creates
+them sorted by `ResolvedDynamicConnection.sort_key()`, i.e. `(weight, source_name, source_output)`. In this
+house the EV input is first on one path and fourth on the other, four operands are simultaneously non-zero and
+two of them cancel exactly, and IEEE-754 addition is not associative, so the two orders genuinely produce
+different doubles. Fixed by sorting the list `get_dynamic_inputs` returns by the executor's own key — defined
+once, on `ResolvedDynamicConnection.order_key`, and delegated to from both paths — leaving the
+creation-ordered bookkeeping untouched. That `dynamic_components` and `basic_household` stay byte-identical in
+January was confirmed by re-running both, not inferred: their weight-ascending creation order alone would not
+prove it, since the key also tiebreaks by source name and output within a weight.
+*The near-miss is the part worth keeping: `automatic_default_connections` feeds its electricity meter three
+participants in exactly the reverse order on the two paths and passed anyway, purely because two of the three
+are never non-zero at the same time. It was one wiring change away from the same failure, and it would have
+read as a mysterious last-bit difference rather than as an ordering bug. "Which order do we add these up in"
+is a contract of the component model, not a cosmetic detail, and it now has one definition.*
+*Still path-dependent and deliberately left alone: the EMS's `sort_source_weights_and_components` sorts
+surplus recipients by weight with a stable sort, so participants sharing a weight are still dispatched in
+creation order. That is a semantic order — who gets the surplus first — not a summation, and no fleet setup
+currently ties. The revisit trigger is concrete: the first fleet setup that gives two surplus recipients one
+weight makes the dispatch order ambiguous across paths, and that setup's PR extends the weight sort with the
+shared `order_key` tiebreakers.*
 
 ## 6. Process
 

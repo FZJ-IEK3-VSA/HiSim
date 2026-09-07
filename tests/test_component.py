@@ -840,6 +840,101 @@ def test_add_component_input_and_connect_propagates_allow_unconnected() -> None:
 
 
 @pytest.mark.base
+def test_get_dynamic_inputs_returns_participants_in_sorted_order() -> None:
+    """Test that get_dynamic_inputs sorts by weight, source component name and source output.
+
+    The returned list is the order an aggregator sums its participants in, and IEEE-754 addition
+    is not associative, so that order has to be the same whichever way the house was written
+    down. Here the inputs are created in an order that is wrong on all three parts of the key at
+    once, and the accessor is expected to hand them back in the executor's order while leaving
+    the creation-ordered bookkeeping untouched.
+    """
+    from hisim.dynamic_component import DynamicComponent
+
+    sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = ConfigBase(component_id=ComponentID(name="TestDynamic"))
+    dyn_component = DynamicComponent(
+        my_component_inputs=[],
+        my_component_outputs=[],
+        name="TestDynamic",
+        my_simulation_parameters=sim_params,
+        my_config=config,
+        my_display_config=DisplayConfig(),
+    )
+
+    creation_order = [
+        ("zebra", "ElectricityOutput", 2),
+        ("alpha", "SecondOutput", 1),
+        ("alpha", "FirstOutput", 1),
+        ("beta", "ElectricityOutput", 1),
+    ]
+    for source_object_name, source_component_output, source_weight in creation_order:
+        dyn_component.add_component_input_and_connect(
+            source_component_output=source_component_output,
+            source_object_name=source_object_name,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
+            source_weight=source_weight,
+        )
+
+    returned = dyn_component.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
+    assert [(item.src_object_name, item.src_field_name) for item in returned] == [
+        ("alpha", "FirstOutput"),
+        ("alpha", "SecondOutput"),
+        ("beta", "ElectricityOutput"),
+        ("zebra", "ElectricityOutput"),
+    ]
+
+    # The bookkeeping itself is read positionally elsewhere and must keep its creation order.
+    assert [
+        (entry.source_component_field_name, entry.source_weight) for entry in dyn_component.my_component_inputs
+    ] == [(output, weight) for _, output, weight in creation_order]
+
+
+@pytest.mark.base
+def test_get_dynamic_inputs_only_returns_inputs_carrying_all_tags() -> None:
+    """Test that sorting did not change which inputs get_dynamic_inputs selects.
+
+    Sorting the result must not widen or narrow the tag match: an input still has to carry every
+    requested tag, and one carrying only some of them stays out of the list no matter where the
+    sort key would have placed it.
+    """
+    from hisim.dynamic_component import DynamicComponent
+
+    sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = ConfigBase(component_id=ComponentID(name="TestDynamic"))
+    dyn_component = DynamicComponent(
+        my_component_inputs=[],
+        my_component_outputs=[],
+        name="TestDynamic",
+        my_simulation_parameters=sim_params,
+        my_config=config,
+        my_display_config=DisplayConfig(),
+    )
+
+    dyn_component.add_component_input_and_connect(
+        source_component_output="Consumed",
+        source_object_name="aaa_consumer",
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=1,
+    )
+    dyn_component.add_component_input_and_connect(
+        source_component_output="Produced",
+        source_object_name="zzz_producer",
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
+        source_weight=1,
+    )
+
+    returned = dyn_component.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
+    assert [item.src_object_name for item in returned] == ["zzz_producer"]
+
+
+@pytest.mark.base
 def test_electricity_meter_dhw_connection_allow_unconnected() -> None:
     """Test that the electricity meter marks the DHW heat-pump connection as allow_unconnected_mandatory."""
     from hisim.components.electricity_meter import ElectricityMeter

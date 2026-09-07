@@ -1,50 +1,21 @@
 # P3 — what is still open before and after the stack merges
 
-**Date:** 2026-09-05 · **Owner:** Noah Pflugradt
+**Date:** 2026-09-05 · **Updated:** 2026-09-07 · **Owner:** Noah Pflugradt
 **Context:** #598 was split into seven stacked PRs (`p3_identifier_names` → `p3_declarative_fixes` →
 `p3_recordable_components` → `p3_recorder_core` → `p3_recorded_fleet` → `p3_parity_rig` →
-`p3_grouping_pass`), each based on the previous branch and merged in that order. This file collects
-everything the split, the spec check of 2026-09-05 and the golden-coverage work left open, so nothing
-survives only in a conversation. Items are removed when done, not ticked and kept.
+`p3_grouping_pass`), each based on the previous branch and merged in that order — all seven are on
+main as of 2026-09-07, with the follow-up rounds #644–#647 merged and #648/#649 in review. This
+file collects everything the split, the spec check of 2026-09-05 and the golden-coverage work left
+open, so nothing survives only in a conversation. Items are removed when done, not ticked and kept.
 
 ## Missing deliverables (code)
 
-- [x] **The golden-YAML gate (AC-P3.2, R3.1) — shipped 2026-09-05 on `p3_recorded_fleet`.**
-  `golden-yaml-check.yml` runs the golden setups from their recorded twins through the executor
-  against the unchanged `golden_references/`, with the port-named EMS priority KPIs excluded on
-  both comparison sides by a declared pattern (`PORT_NAMED_KPIS`, unit-tested as load-bearing).
-  Merges with the stack; remove this entry once it is on main.
-- [x] **Golden coverage stage 2: the last two setups — complete, 22 of 22 (2026-09-05, pending
-  merges).** A fresh scan showed five of the seven 2026-08-28 repair items healed themselves — the
-  toys via #616's models-no-device answers, the heating-only and air-conditioner crashes gone, and
-  `household_gas_solar_thermal`'s doubled grid import fixed by #617 (verified: grid import equals
-  consumption to the watt-hour) — so all five are in the week gate with fresh blessings. The last
-  two followed: `dynamic_components` via the CHP KPIs (`chp_kpis` branch; its CHPs idle through the
-  probe window, so their KPIs are honest zeros) and `electrolyzer_with_renewables` via the
-  transformer/rectifier and electrolyzer KPIs (`electrolyzer_setup_kpis` branch). Both are blessed
-  and gated on `golden_gate_full_fleet`, which merges after #639 and the two KPI PRs. Every setup
-  in the repository is now golden-gated at week resolution or better.
 - [ ] **Multi-instance KPI collision (found 2026-09-05 while implementing the CHP KPIs).** Two
   components of one class in one building collapse into a single flattened KPI group: the two
   batteries of `dynamic_components` report one `BUI1.Battery.*` set, one instance silently
   overwriting the other, and the two CHPs now do the same. Pre-existing and systemic — the flatten
   key is building.tag.name and ignores the entry's source component. Fixing it renames KPIs and
   therefore re-blesses references; its own PR, after the gate has settled.
-
-## Documentation drift (fix on the stack branches before their PRs merge)
-
-- [ ] **`plan.md` §P3 checkboxes are stale.** The work is done but unchecked: rename+enforce, the
-  parity port, the recorder, the fleet recorded, parameter dedup (R8), `one_week_july`, the rig, the
-  structural verdicts, the heat-pump grouping. Tick them with dates; tick "implementation spec accepted
-  at review" when the stack review concludes.
-- [ ] **`p3_recording_requirements.md` R5.2 / AC-P3.1 / AC-P3.11 contradict reality.** The plan carries
-  the 2026-09-02 amendment (two setups retired independently by #596, `air_conditioned_house` stays
-  because #605 removed the cache wipe, the fleet is twenty-two) but the requirements doc still says all
-  three are deleted and counts 21. Amend the three places.
-- [x] **The rig's own files contradict R11.8 — fixed 2026-09-05 on `p3_parity_rig`** (the #637
-  review round found all seven stale headers, not two): every rig file and the workflow now say
-  phase P6, the workflow's deletion list gained `p3_parity_verdicts.py`, and the coverage counts
-  read 22 setups / 44 triples. Remove this entry once #637 is on main.
 
 ## Decision needed (owner)
 
@@ -57,15 +28,12 @@ survives only in a conversation. Items are removed when done, not ticked and kep
 ## Operational, after the stack merges
 
 - [ ] **Dispatch the parity rig once over the whole fleet** (AC-P3.17) and keep the verdict table as
-  the baseline — the "known state" for the seven KPI-broken setups.
-- [ ] **When #625 (weather identity) merges: one fleet re-record plus one scenario regeneration.** Both
-  freshness gates will name exactly what moved; commit the artifacts.
-- [ ] **Retarget each stacked PR to `main` as its predecessor squash-merges** (`gh pr edit <n> --base
-  main`), or delete merged branches so GitHub retargets automatically.
-- [ ] **Close #598** with a comment pointing at the stack; **delete the `json_v2` spike branch** (local
-  and origin) — the parity/templating halves are ported.
-- [ ] AC-P3.4's cross-machine byte-identity is proven the first time CI's `energy-system-freshness`
-  job goes green on twins recorded on the development box; note the date here and drop the item.
+  the baseline — the "known state" for the seven KPI-broken setups. The dispatch covers the January
+  window only while July is fenced (R11.5 as amended 2026-09-06; `roadmap/midyear_start_epic.md`).
+- [ ] **Retarget #649 to `main` once #648 squash-merges** (`gh pr edit 649 --base main`), or delete
+  the merged branch so GitHub retargets automatically.
+- [ ] **Delete the `json_v2` spike branch** (local and origin) — the parity/templating halves are
+  ported. (#598 itself was closed 2026-09-07.)
 - [ ] **Give the Electrolyzer and the Transformer cost models** (noted 2026-09-05, #641 review
   round). A bare `hisim_main.py electrolyzer_with_renewables.py` falls back to
   `full_year_all_options`, and COMPUTE_OPEX/COMPUTE_CAPEX run before COMPUTE_KPIS — both
@@ -73,35 +41,20 @@ survives only in a conversation. Items are removed when done, not ticked and kep
   `get_cost_capex`, so the stock all-options run still dies before the new KPIs compute.
   Pre-existing, and the golden gate runs the setup KPI-only; fixing it means real cost data for
   both devices, its own small PR.
-- [ ] **Extract the shared child-recorder helper once #636 and #638 are both merged** (decided
-  2026-09-05, #638 review round). `scripts/record_all_setups.py::Recorder` and
+- [ ] **Extract the shared child-recorder helper** (decided 2026-09-05, #638 review round; both
+  #636 and #638 are on main, so this is unblocked). `scripts/record_all_setups.py::Recorder` and
   `hisim/energy_system/recording/probe_session.py::ProbeRunner` both build the identical child
   command (`-m hisim.cli energy-system record`), strip the same `HISIM_LOCAL_LPG_CALC_INDEX`
   variable and run the same subprocess shape — deliberate duplication while the two lived on
-  different stack branches (#636 parallelized the fleet driver mid-flight). The helper's home is
-  the recording package, with the script importing it; extracting before both merge would have
-  meant a cross-branch conflict for a refactor.
+  different stack branches. The helper's home is the recording package, with the script importing
+  it.
 - [ ] **Flip `energy-system-freshness` from advisory to blocking after its burn-in** (decided
-  2026-09-05, #636 review round). The gate merges with `continue-on-error: true` because
+  2026-09-05, #636 review round). The gate merged with `continue-on-error: true` because
   byte-identical re-recording is proven by test for one setup and only by design for the other
-  twenty-one; after a week of green runs on main, delete that one line (the workflow header
-  carries the same instruction) and the gate blocks. This subsumes the AC-P3.4 item above — the
-  first green run is the evidence, the week of them is the confidence.
-- [x] **Migrate every aggregator's `i_simulate` lookup onto its channel declarations — done
-  2026-09-06 on `p3_channel_migration`** (decided 2026-09-05, #634 review round). All ten
-  participant lookups in the five aggregators — the EMS and the electricity, fuel, gas and heating
-  meters — now go through `DynamicComponent.get_channel_inputs(key)`, so the `CHANNELS` declaration
-  is the single source of truth for validation and for simulation alike and the two cannot drift.
-  Three lookups stay literal and say so in a one-line comment pointing at their class's
-  ``CHANNELS`` docstring, because their tag set matches no channel exactly and forcing a
-  near-match would change what they sum. The electricity meter's two per-building queries are a
-  settled design, not a debt: the meter's ``CHANNELS`` docstring is the canonical statement that
-  they need no channel of their own, since subset matching lets a feed carrying the buildings tag
-  select the channel while the tag survives on the created port. The EMS's per-participant
-  dispatch-output query is the genuine remainder — its first tag is the participant's own
-  component type, and the output side has no channel-key accessor; a dispatch accessor is a
-  candidate design of its own, not a decided follow-up. Remove this entry once the branch is on
-  main; the code comments point at the class docstrings, so nothing dangles.
+  twenty-one; after a week of green runs on main (first green run 2026-09-06, so due around
+  2026-09-13), delete that one line (the workflow header carries the same instruction) and the
+  gate blocks. That first green run on development-box twins is also AC-P3.4's cross-machine
+  evidence; the week of them is the confidence.
 
 ## Deferred by design (not P3's debt, listed so it is findable)
 
@@ -110,3 +63,11 @@ survives only in a conversation. Items are removed when done, not ticked and kep
 - v1 scenario JSONs, `json_executor.py` and `scenario-json-freshness.yml` retire in P5 (Q-P3.4).
 - The `cars` field on `UtspLpgConnectorConfig` is dead (declared, read by nothing) — removal is a small
   serialization change with a scenario regeneration, noted 2026-09-05 during the #625 review.
+
+## Done and removed (dates only, so the removals are auditable)
+
+Golden-YAML gate and full-fleet golden coverage: on main with #636/#642. plan.md §P3 ticks: #644.
+Rig headers say P6: #637. Channel migration: #645. Requirements doc R5.1/R5.2/R5.3, AC-P3.1,
+AC-P3.10, AC-P3.11 and Q-P3.5 amended to the twenty-two-setup reality: 2026-09-07, this commit.
+The #625 fleet re-record: satisfied by #636 recording all twenty-two after #625, first freshness
+run green on main 2026-09-06. AC-P3.4 evidence: same run. #598 closed: 2026-09-07.

@@ -10,9 +10,6 @@ sizer workflows for scenario evaluation.
 from typing import Optional, Any, Union, List
 import re
 import os
-from utspclient.helpers.lpgdata import (
-    Households,
-)
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim.simulator import SimulationParameters
 from hisim.config import SizingContext
@@ -112,7 +109,7 @@ def setup_function(
         my_config = ModularHouseholdConfig().get_default_config_for_household_district_heating()
         my_sim.my_module_config = my_config.to_dict()
         log.warning(
-            f"Could not read the modular household config from path '{config_filename}'. Using the district heating household default config instead."
+            "No modular household config was given. Using the district heating household default config instead."
         )
     assert my_config.archetype_config_ is not None
     assert my_config.energy_system_config_ is not None
@@ -220,21 +217,7 @@ def setup_function(
         cache_dir_path_utsp = None
 
     # get household attribute jsonreferences from list of strings
-    lpg_households: Union[JsonReference, List[JsonReference]]
-    if isinstance(arche_type_config_.lpg_households, list):
-        if len(arche_type_config_.lpg_households) == 1:
-            lpg_households = getattr(Households, arche_type_config_.lpg_households[0])
-        elif len(arche_type_config_.lpg_households) > 1:
-            lpg_households = []
-            for household_string in arche_type_config_.lpg_households:
-                if hasattr(Households, household_string):
-                    lpg_household = getattr(Households, household_string)
-                    lpg_households.append(lpg_household)
-                    print(lpg_household)
-        else:
-            raise ValueError("Config list with lpg household is empty.")
-    else:
-        raise TypeError(f"Type {type(arche_type_config_.lpg_households)} is incompatible. Should be List[str].")
+    lpg_households: Union[JsonReference, List[JsonReference]] = arche_type_config_.resolve_lpg_households()
 
     # =================================================================================================================================
     # Build Basic Components

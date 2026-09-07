@@ -72,10 +72,13 @@ thermal model follows EN ISO 13790 (implemented in
 :class:`~hisim.components.building.Building`).
 """
 
+import difflib
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import ClassVar, List, Optional, Union
 
 from dataclasses_json import dataclass_json
+from utspclient.helpers.lpgdata import Households
+from utspclient.helpers.lpgpythonbindings import JsonReference
 
 
 @dataclass_json
@@ -140,7 +143,10 @@ class ArcheTypeConfig:
         ...     building_code="DE.N.MFH.05.Gen.ReEx.001.002",
         ...     conditioned_floor_area_in_m2=300.0,
         ...     number_of_dwellings_per_building=2,
-        ...     lpg_households=["CHR01_Couple_both_at_Work", "CHR03_Family"],
+        ...     lpg_households=[
+        ...         "CHR01_Couple_both_at_Work",
+        ...         "CHR03_Family_1_child_both_at_work",
+        ...     ],
         ... )
 
     """
@@ -188,3 +194,103 @@ class ArcheTypeConfig:
     window_area_in_m2: Optional[float] = None
     door_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
     door_area_in_m2: Optional[float] = None
+
+    #: Module path of the registry that defines every legal ``lpg_households`` entry, quoted in the
+    #: refusal below so a caller who mistyped a name is told where the valid ones live.
+    LPG_HOUSEHOLD_REGISTRY: ClassVar[str] = "utspclient.helpers.lpgdata.Households"
+
+    def resolve_lpg_households(self) -> Union[JsonReference, List[JsonReference]]:
+        """Turn the configured ``lpg_households`` profile names into LPG household references.
+
+        The names in ``lpg_households`` are attribute names of the Load Profile Generator's
+        ``Households`` registry; the occupancy component needs the ``JsonReference`` objects behind
+        them. A single configured name resolves to one reference, several names resolve to a list of
+        references that the occupancy component stacks into one building. The eleven building-sizer
+        setups call this instead of resolving the names themselves, so an unknown name is refused
+        the same way everywhere: the loop in those setups used to skip a name the registry did not
+        know without any diagnostic, which quietly built a household with fewer occupants than the
+        configuration asked for.
+
+        A minimal usage example::
+
+            >>> from hisim.building_sizer_utils.interface_configs.archetype_config import (
+            ...     ArcheTypeConfig,
+            ... )
+            >>> ArcheTypeConfig().resolve_lpg_households()  # doctest: +ELLIPSIS
+            JsonReference(...)
+
+        Returns:
+            Union[JsonReference, List[JsonReference]]: The single reference for a one-name
+            configuration, or the list of references, in configured order, for several names.
+
+        Raises:
+            ValueError: If ``lpg_households`` is empty, or if it names a household the registry does
+                not define. The refusal quotes the unknown name, names the registry that holds the
+                legal ones, and lists the closest known names when there are any.
+            TypeError: If ``lpg_households`` is not a list, or if any of its entries is not a
+                string. The refusal names the offending index and value.
+        """
+        if not isinstance(self.lpg_households, list):
+            raise TypeError(
+                f"Type {type(self.lpg_households)} is incompatible. Should be List[str]."
+            )
+        if not self.lpg_households:
+            raise ValueError(
+                "Config list with lpg household is empty. Name at least one household from "
+                f"{self.LPG_HOUSEHOLD_REGISTRY} in 'lpg_households'."
+            )
+        for index, entry in enumerate(self.lpg_households):
+            if not isinstance(entry, str):
+                raise TypeError(
+                    f"lpg_households[{index}] is {entry!r}, of type {type(entry).__name__}. Every entry has "
+                    "to be a household profile name. Should be List[str]."
+                )
+
+        # A bare string reaches this field as a list of its characters: dataclasses_json coerces
+        # "CHR01_..." into ["C", "H", "R", ...] rather than refusing it, and every character then
+        # looks like an unknown household. Detect the shape here so the refusal can say so.
+        looks_like_a_split_string = all(len(entry) == 1 for entry in self.lpg_households)
+        resolved = [
+            self._resolve_one_lpg_household(name, looks_like_a_split_string) for name in self.lpg_households
+        ]
+        if len(resolved) == 1:
+            return resolved[0]
+        return resolved
+
+    def _resolve_one_lpg_household(self, household_name: str, looks_like_a_split_string: bool) -> JsonReference:
+        """Look one LPG household profile name up in the registry, or refuse it.
+
+        Split out of :meth:`resolve_lpg_households` so the single-name and the multi-name case
+        cannot drift apart: both go through this lookup and therefore produce the same refusal for
+        an unknown name.
+
+        Args:
+            household_name: The configured profile name, an attribute name of the LPG ``Households``
+                registry such as ``"CHR01_Couple_both_at_Work"``.
+            looks_like_a_split_string: Whether every configured entry is a single character, which
+                is what a household name given as a bare string rather than a list decodes to. The
+                refusal then says so instead of complaining about each character on its own.
+
+        Returns:
+            JsonReference: The registry entry the name stands for.
+
+        Raises:
+            ValueError: If the registry defines no household of that name.
+        """
+        known_names = [name for name in vars(Households) if not name.startswith("_")]
+        if household_name not in known_names:
+            suggestions = difflib.get_close_matches(household_name, known_names, n=3, cutoff=0.5)
+            hint = f" Did you mean {', '.join(suggestions)}?" if suggestions else ""
+            if looks_like_a_split_string:
+                hint = (
+                    " This looks like one household name given as a bare string rather than a list of names,"
+                    " split into one entry per character."
+                )
+            raise ValueError(
+                f"Unknown LPG household '{household_name}' in 'lpg_households'. The legal names are the "
+                f"{len(known_names)} household profiles defined in {self.LPG_HOUSEHOLD_REGISTRY}, for example "
+                f"'{known_names[0]}'.{hint} An unknown name used to be skipped without a word, which built a "
+                "household with fewer occupants than the configuration asked for."
+            )
+        registry_entry: JsonReference = getattr(Households, household_name)
+        return registry_entry

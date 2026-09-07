@@ -49,17 +49,20 @@ config, ignores all four of its fields, and reads one archetype value
   the battery and the energy manager as a side effect — existed verbatim in all eleven large
   sizers. Fixed for the heat pump first, then replicated across the other ten with one
   parametrized refusal test; done on this branch.
-- [ ] **The module-config probe swallows every read error.** `read_in_configs`
-  (`hisim/building_sizer_utils/interface_configs/modular_household_config.py`, the
-  catch-everything fallback) makes a missing file, a typo'd path, a JSON syntax error and a schema
-  mismatch indistinguishable from "no config given": the run silently simulates the shipped
-  default household with only a warning between them. Narrow it to "no config given" and let a
-  config that exists but cannot be read refuse.
-- [ ] **`hasattr(Households, name)` drops a typo'd LPG household silently** (sizer skeleton), so a
-  misspelled name quietly builds a smaller household. Refuse the unknown name instead.
+- [x] **The module-config probe swallows every read error** (fixed 2026-09-06). `read_in_configs`
+  now answers `None` only for "no config given" (`None`, `""`, whitespace) and raises `ValueError`
+  naming the source and the reason for a missing or unreadable file, invalid JSON, a payload that
+  does not decode, and a config declaring neither module; a config handed over as a dict is read
+  rather than refused. The thirteen setups' fallback warning no longer claims a failed read.
+- [x] **`hasattr(Households, name)` drops a typo'd LPG household silently** (fixed 2026-09-06).
+  The whole resolution moved to `ArcheTypeConfig.resolve_lpg_households`, beside the
+  `lpg_households` field it reads; all eleven sizers call it, and an unknown name is refused with
+  the typo, the registry that holds the legal names and the closest known spellings.
 - [ ] **Nine sizers mutate `my_sim.my_module_config` to a dict on the fallback path**; the two
   heat-pump sizers do not, so downstream readers see a different type depending on the sibling.
-  One behavior for all eleven.
+  One behavior for all eleven. `read_in_configs` is string-only by decision (review round of
+  2026-09-06: it refuses a non-string with a `TypeError`), so this repair has to settle what the
+  attribute is allowed to hold rather than widening the reader to accept both.
 - [ ] **Four sizers ignore `weather_filepath`/`weather_datasource`**
   (gas_solar_thermal_building_sizer, heatpump_car, heatpump_solar_thermal, hydrogen): the same
   archetype config yields a different weather source across the fleet. Either read them or refuse
@@ -70,6 +73,12 @@ config, ignores all four of its fields, and reads one archetype value
 - [ ] **`air_conditioned_house` duplicates its location** (a `"Seville"` string for the PV beside
   `LocationEnum.SEVILLE` for the weather); one edit without the other silently desynchronizes the
   two. One spelling, one place.
+
+- [ ] **`ModularHouseholdConfig.get_hash()` is not round-trip stable** (found 2026-09-06 while
+  testing the reader). `pv_azimuth: float = 180` and `pv_tilt: float = 30` hold ints in memory and
+  come back as floats from any JSON round trip, so a config built from defaults and the same config
+  read from its own file hash differently — and the building sizer hashes configs. Normalise in
+  `get_hash()` (or make the defaults floats) and pin the round trip.
 
 ## Environment couplings a recording has to pin, not fix
 

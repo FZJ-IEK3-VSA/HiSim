@@ -56,7 +56,7 @@ def setup_function(
     if my_config is None:
         my_config = ModularHouseholdConfig().get_default_config_for_household_heatpump()
         log.warning(
-            f"Could not read the modular household config from path '{config_filename}'. "
+            "No modular household config was given. "
             "Using the heatpump household default config instead."
         )
     assert my_config.archetype_config_ is not None

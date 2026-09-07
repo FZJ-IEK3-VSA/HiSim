@@ -113,6 +113,12 @@ def test_a_parameter_set_factory_outside_the_vocabulary_is_refused() -> None:
     A factory without a horizon resolves to None, and ``None in horizons`` is False — restricted
     setups would silently skip the parameter set while unrestricted ones run it. A new factory
     has to enter the vocabulary consciously instead.
+
+    ``one_week_july`` is the example precisely because it is a factory the golden gate must not
+    gain today: a mid-year start date changes no profile in HiSim, so a July parameter set would
+    bless January's numbers under a summer name (R11.5 as amended, and the fence in
+    ``scripts/p3_parity_matrix.py``). The refusal here is about the vocabulary rather than about
+    that defect, and the two do not contradict each other — both refuse the factory.
     """
     config = _config()
     config["parameter_sets"].append({"id": "july_60s", "factory": "one_week_july"})

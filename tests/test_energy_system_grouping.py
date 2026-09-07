@@ -845,19 +845,41 @@ probes:
         assert realizer.text(column, "") == matrix.recordings[column].text, column
 
 
+def committed_grouped_stems() -> tuple:
+    """The setups this repository has a committed grouped file for, in file order.
+
+    The list is read off the directory rather than written down, so a setup grouped tomorrow joins
+    the check without anybody remembering to add it, and a grouped file deleted by accident makes
+    the count drop rather than leaving a stale name behind.
+
+    Returns:
+        One stem per committed ``*.grouped.energy_system.yaml``, sorted by file name.
+    """
+    directory = Path(__file__).resolve().parents[1] / "energy_systems"
+    suffix = ".grouped.energy_system.yaml"
+    return tuple(sorted(path.name[: -len(suffix)] for path in directory.glob(f"*{suffix}")))
+
+
 @pytest.mark.base
-def test_the_committed_grouped_sizer_realizes_the_committed_twin() -> None:
+@pytest.mark.parametrize("stem", committed_grouped_stems())
+def test_the_committed_grouped_sizer_realizes_the_committed_twin(stem: str) -> None:
     """Catches drift between the three committed grouping artifacts and the committed flat twin.
 
-    The grouped heat-pump-sizer file's whole claim is that, at its committed switch positions, it
-    is the flat twin with structure added. The full per-column proof needs live probe runs, but the
-    baseline half of it is a pure file computation: expand the committed grouped file, lay the
-    components out in the twin's own order, and the emitted body must equal the committed twin's
-    body byte for byte.
+    A grouped file's whole claim is that, at its committed switch positions, it is the flat twin
+    with structure added. The full per-column proof needs live probe runs, but the baseline half of
+    it is a pure file computation: expand the committed grouped file, lay the components out in the
+    twin's own order, and the emitted body must equal the committed twin's body byte for byte.
+
+    Every setup with a committed grouped file is checked, not only the heat-pump exemplar. The
+    parametrization is read off ``energy_systems/`` for that reason: the fleet was grouped setup by
+    setup, and a check naming one of them would have gone on passing while the other twelve drifted.
+
+    Args:
+        stem: The setup whose committed artifacts are held against each other.
     """
     root = Path(__file__).resolve().parents[1]
-    grouped = parse_energy_system(root / "energy_systems/household_heatpump_building_sizer.grouped.energy_system.yaml")
-    twin_path = root / "energy_systems/household_heatpump_building_sizer.energy_system.yaml"
+    grouped = parse_energy_system(root / f"energy_systems/{stem}.grouped.energy_system.yaml")
+    twin_path = root / f"energy_systems/{stem}.energy_system.yaml"
     twin = parse_energy_system(twin_path)
 
     expanded, _ = GroupExpander(grouped).expand()

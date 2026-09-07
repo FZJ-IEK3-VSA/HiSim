@@ -1,0 +1,13 @@
+# The grouping decision for system_setups/household_gas_solar_thermal.py: what each difference between its probe
+# configurations means. Edited through the workbook, committed in this form.
+setup: system_setups/household_gas_solar_thermal.py
+probes: energy_systems/household_gas_solar_thermal.probes.yaml
+assignments:
+  DHWStorage:
+    assign: override
+    note: The storage volume and its heat loss are scaled per dwelling, so the one
+      field this setup reads out of its module configuration lands here and nowhere
+      else. Same storage, same wiring, a different size - a number a consumer picks.
+configurations:
+  baseline: {}
+  two_dwellings: {}

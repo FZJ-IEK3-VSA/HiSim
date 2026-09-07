@@ -10,9 +10,9 @@ import pytest
 
 from hisim import hisim_main
 from hisim.result_path_provider import ResultPathProviderSingleton
-from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 
+from tests.functions_for_testing import SetupTestParameters
 from tests.testing_utils import TestingUtils
 
 
@@ -55,17 +55,10 @@ def fixture_isolated_result_directory() -> Iterator[str]:
             shutil.rmtree(directory)
 
 
-# This setup cannot yet be run with the KPI and cost options that
-# tests.functions_for_testing.SetupTestParameters switches on, and the omission is recorded here
-# rather than left as an absence. The transformer and rectifier unit refuses to report operating costs, and refusing is
-# correct: the cost exists and has not been modelled, so answering zero would understate the system
-# total silently. Component.MODELS_NO_DEVICE is only for components that genuinely have none.
-# Switch this test over once that cost model is written -- see the family-A entry in the setup
-# sweep.
 @pytest.mark.system_setups
 @utils.measure_execution_time
 def test_electrolyzer_with_renewables(isolated_result_directory: str) -> None:
-    """Test the electrolyzer with renewables system setup for a single day.
+    """Test the electrolyzer with renewables system setup for a single day, costs and KPIs included.
 
     Runs the system setup defined in ``system_setups/electrolyzer_with_renewables.py``
     using one-day simulation parameters (year=2021, 60 seconds per timestep) and verifies
@@ -74,10 +67,18 @@ def test_electrolyzer_with_renewables(isolated_result_directory: str) -> None:
     without explicit assertions a silent no-op would still pass; pinning the result
     directory, the ``finished.flag`` completion marker and the simulation log turns this
     into a real smoke test of the full run.
+
+    The parameters come from :class:`tests.functions_for_testing.SetupTestParameters`, which
+    switches on COMPUTE_OPEX, COMPUTE_CAPEX and the two KPI options. That matters here
+    specifically: those three run *before* the KPIs in post-processing, and until the
+    transformer/rectifier and the electrolyzer had cost models a stock all-options run of this
+    setup died in COMPUTE_OPEX before any KPI was computed. The cost tables asserted below are
+    what catches that regression -- the log and the flag alone would not, because they are
+    written even by a run whose cost stage was never asked to answer.
     """
     path = ELECTROLYZER_SETUP_PATH
 
-    sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    sim_params = SetupTestParameters.one_day_with_kpis(year=2021, seconds_per_timestep=60)
     # Route results into the isolated, test-scoped directory provided by the fixture so
     # that stale artefacts from a previous run cannot mask a regression and so the test
     # cleans up after itself.
@@ -98,12 +99,25 @@ def test_electrolyzer_with_renewables(isolated_result_directory: str) -> None:
     # The simulator always writes a simulation log (hisim_simulation.log) via
     # log.logger.setup at the start of run_all_timesteps, so its presence confirms the run
     # produced concrete output artifacts rather than merely not crashing.
-    # Note: CSV/JSON exports are gated behind post-processing options
-    # (EXPORT_TO_CSV / WRITE_KPIS_TO_JSON / ...) that SimulationParameters.one_day_only
-    # does not enable, so they cannot be asserted on here.
     assert (results_dir / "hisim_simulation.log").is_file(), (
         f"hisim_simulation.log missing in results directory: {results_dir}"
     )
     assert any(results_dir.iterdir()), (
         f"Result directory is empty: {results_dir}"
+    )
+    # The cost stages write one table each, and only if they were reached and answered. Both
+    # devices have to appear by name: a component whose cost model went missing again would
+    # either raise or drop out of the table, and this is what tells the two apart from a run
+    # that merely finished.
+    operational_costs = (results_dir / "operational_costs_co2_footprint.csv").read_text(encoding="utf-8")
+    investment_costs = (results_dir / "investment_cost_co2_footprint.csv").read_text(encoding="utf-8")
+    for table_name, table in (
+        ("operational_costs_co2_footprint.csv", operational_costs),
+        ("investment_cost_co2_footprint.csv", investment_costs),
+    ):
+        for component in ("StandardTransformerAndRectifier", "Electrolyzer"):
+            assert component in table, f"{component} is missing from {table_name}"
+    # WRITE_KPIS_TO_JSON is on, so the KPI stage after the cost stages ran too.
+    assert (results_dir / "all_kpis.json").is_file(), (
+        f"all_kpis.json missing in results directory: {results_dir}"
     )

@@ -8,6 +8,12 @@ components:
     class: hisim.components.transformer_rectifier.Transformer
     config:
       efficiency: 0.95
+      rated_power_in_kilowatt: 1028.225
+      device_co2_footprint_in_kg: null
+      investment_costs_in_euro: null
+      lifetime_in_years: null
+      maintenance_costs_in_euro_per_year: null
+      subsidy_as_percentage_of_investment_costs: null
     inputs:
       - input: Input1
         from: CSV.CSVProfile
@@ -46,6 +52,11 @@ components:
       i_cell_nom: 2.0
       ramp_up_rate: 0.03
       ramp_down_rate: 0.25
+      device_co2_footprint_in_kg: null
+      investment_costs_in_euro: null
+      lifetime_in_years: null
+      maintenance_costs_in_euro_per_year: null
+      subsidy_as_percentage_of_investment_costs: null
     inputs:
       - input: InputState
         from: L1ElectrolyzerController.CurrentMode

@@ -213,11 +213,11 @@ extension of the golden gate and it blesses nothing.
   January-only window is why the air-conditioner setup divides by zero in the scan.
   `[amended 2026-09-06]` **The July window is fenced; the rig runs the January week only.** HiSim has never supported
   a mid-year start date: every profile-driven component (all six weather sources and both cache branches, PV, the
-  building, the LPG occupancy, the cars, the smart devices, the CSV loader, the price signal, the seasonal heat-pump
-  and CHP gates) indexes its year-long profile from timestep 0 as if that were the 1st of January, so a July triple
-  compares two runs that both simulate January — byte-identical to the January triple for every setup without a
-  solar-thermal collector, and physically incoherent for the four with one, whose sun position follows the date while
-  its irradiance does not. `one_week_july` and the window name are kept and the fence is one refusal in
+  building, the LPG occupancy, the cars, the smart devices, the CSV loader, the seasonal heat-pump and CHP gates)
+  indexes its year-long profile from timestep 0 as if that were the 1st of January, so a July triple compares two
+  runs that both simulate January — the January triple's numbers under July timestamps for every setup without a
+  solar-thermal collector, and physically incoherent for the three with one, whose sun position follows the date
+  while its irradiance does not. `one_week_july` and the window name are kept and the fence is one refusal in
   `scripts/p3_parity_matrix.py`; the mid-year-start epic (`roadmap/midyear_start_epic.md`) fixes the profiles
   fleet-wide and unfences the window, at which point this requirement is met as first written.
 - R11.6 **One configuration axis.** The configurations are R10's probe list, so the rig, the grouping table and the

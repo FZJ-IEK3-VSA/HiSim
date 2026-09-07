@@ -59,10 +59,10 @@ class MatrixPaths:
 
     #: The windows whose definition is kept but which the rig refuses to run. Mid-year start dates
     #: do not work anywhere in HiSim: every profile-driven component — weather, PV, building, the
-    #: LPG occupancy, cars, smart devices, the CSV loader, the price signal — indexes its year-long
-    #: profile from timestep 0 as if that were the 1st of January, whatever the start date says. A
-    #: July run therefore either reproduces January exactly or, where a component does honour the
-    #: date (a solar-thermal collector's sun position), pairs July sun with January irradiance. The
+    #: LPG occupancy, cars, smart devices, the CSV loader — indexes its year-long profile from
+    #: timestep 0 as if that were the 1st of January, whatever the start date says. A July run
+    #: therefore either reproduces January's numbers or, where a component does honour the date
+    #: (a solar-thermal collector's sun position), pairs July sun with January irradiance. The
     #: fence is a fence rather than a deletion because the mid-year-start epic removes it again.
     FENCED_WINDOWS = ("july",)
 
@@ -97,7 +97,7 @@ class MatrixPaths:
         if not fenced:
             return
         raise ValueError(
-            f"The window(s) {fenced} are fenced out of the parity rig: a July window reads "
+            f"The window(s) {fenced} are fenced out of the parity rig: a mid-year window reads "
             "January's profiles today, because every profile-driven component indexes its "
             "year-long profile from timestep 0 as if that were the 1st of January, whatever the "
             "start date says. The window definitions are kept for the mid-year-start epic, which "

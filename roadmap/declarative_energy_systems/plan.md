@@ -171,7 +171,8 @@ eight setups that have no KPI oracle at all.
 **Entry condition: P1, P2, P2.1, P3, P4 and P5 are all merged.** Until then the rig is dispatched by every
 batch that re-records, and its renaming tables are kept current as P4 renames the legacy aggregator ports.
 
-- [ ] Confirm the whole stack is green with the rig still in place, over both windows
+- [ ] Confirm the whole stack is green with the rig still in place, over every runnable window
+      (July is fenced pending `roadmap/midyear_start_epic.md`; R11.5 as amended 2026-09-06)
 - [ ] Decide which setups earned a place in the permanent gate, on the rig's accumulated evidence — the six the
       2026-08-28 scan cleared are the candidates, not the answer
 - [ ] Add those to `scripts/golden_config.json` and bless their references

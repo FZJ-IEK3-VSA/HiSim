@@ -478,14 +478,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         ``0`` when every triple reached parity, ``1`` otherwise.
 
     Raises:
-        SystemExit: If a fenced window was asked for. The refusal happens here, before the first
-            setup is imported, so that it costs nothing and cannot be mistaken for a run.
+        SystemExit: If a fenced window was asked for, or if the window list came out empty. The
+            refusal happens before the first setup is imported, so that it costs nothing and
+            cannot be mistaken for a run — and only on the run path, because ``--summarize`` runs
+            no window and reads only what an earlier dispatch wrote.
     """
     arguments = parse_arguments(argv)
-    try:
-        MatrixPaths.refuse_fenced(arguments.window or ())
-    except ValueError as refusal:
-        raise SystemExit(str(refusal)) from refusal
     if arguments.summarize is not None:
         table, covered, without_parity = Report.summarize(arguments.summarize)
         print(table)
@@ -494,10 +492,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 1
         print(f"\n{without_parity} of {covered} triple(s) did not reach parity.")
         return 1 if without_parity else 0
+    try:
+        MatrixPaths.refuse_fenced(arguments.window or ())
+    except ValueError as refusal:
+        raise SystemExit(str(refusal)) from refusal
     tolerance = Tolerance(arguments.rel_tol, arguments.abs_tol)
     checker = ParityChecker(tolerance, DeclaredPortRenamings.port_renaming())
     stems = discover(arguments.setup)
     windows = list(arguments.window or ParityWindows.runnable())
+    if not windows:
+        # The matrix guards its empty product the same way: zero triples exiting 0 would read as
+        # a green table over coverage nobody checked.
+        raise SystemExit("No runnable window: every window is fenced, so this dispatch would cover nothing.")
     print(f"Comparing {len(stems)} setup(s) over {len(windows)} window(s) at {tolerance.describe()}.\n")
 
     verdicts: List[TripleVerdict] = []

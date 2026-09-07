@@ -160,6 +160,20 @@ splits perfectly:
 - **The memoryless column set is discovered, not maintained:** run the full-year reference twice
   with a perturbed initial-state seed; the columns whose difference is identically zero ARE the
   exact-comparable set. Self-calibrating as components change.
+- **The seeded restart is the end state — the report tier exists to shrink to nothing.** Run the
+  full year once, read every stateful component's state at the window start (the battery's SOC on
+  the 1st of July, the storage temperatures, the thermal-mass temperature, the controllers' modes
+  and timers), hand those to the window run as startup values, and the *whole* comparison becomes
+  an exact gate: with its complete mid-cycle state handed over, even a bang-bang controller
+  continues on the very limit cycle the year run was on, so the one column no warm-up could ever
+  buy back joins the gate too. What that costs is completeness — a partially seeded component just
+  re-imports its transient — and not every component can express its state as configuration today
+  (controller idle timers, the meters' cumulative sums, the EMS's internals are not config
+  fields). So the seeded tier grows component by component: a column moves from the report to the
+  exact gate the moment its component's full state is expressible as startup configuration, and
+  the cumulative meter columns move immediately, gated on first differences instead of levels.
+  This is checkpoint handover at the configuration level, which is why it shares its
+  prerequisites with the `i_save_state` repairs below.
 
 The harness: `scripts/midyear_oracle.py`, modelled on the parity rig (per-run empty cache
 directory, one process, one printed verdict table, a tolerance flag that shouts when nonzero),
@@ -167,8 +181,9 @@ reusing `ResultComparison` verbatim — its index check refuses a misaligned sli
 both frames carry `start_date`-built indexes. Plus four unit anchors in `tests/`: first-timestep
 identity against the source's own labels; the DST phase pins (260 550 / 260 610 / 260 640, and a
 December mirror); each weather reader's `index[0]` pinned (the six sources use three different
-anchors — Berlin 00:30, Berlin 00:00 after padding, UTC 00:00 — which is exactly why "resolve
-against the delivered frame" is the rule); and the cold-then-warm cache equality assertion.
+anchors — Berlin 00:30, Berlin 00:00 after the padding row ``Weather.interpolate`` prepends,
+UTC 00:00 — which is exactly why "resolve against the delivered frame" is the rule); and the
+cold-then-warm cache equality assertion.
 
 ## The PR plan
 
@@ -184,14 +199,21 @@ PR1 (window contract; YEARLYFORECAST→window renames; plot labels; delete dead 
      │             or a July window heats the house)                          [epoch bump]
      └─ PR6 (solar thermal: drop its naive-UTC duplicate sun, consume the
              weather's published window — 3 solar-thermal goldens move)       [epoch bump]
-          └─ PR7 (lift the fence in its five sites; invert the fence test into
-                  "July differs from January"; bless the July goldens)
+          └─ PR7 (lift the fence in its five sites — the workflow's hand-kept window
+                  options among them, which nothing derives from the code; invert the
+                  fence test into "July differs from January"; bless the July goldens)
+              └─ PR8+ (startup-state configuration: every stateful component learns to
+                       express its complete state as startup values, one component per
+                       PR, and its columns move from the oracle's report tier to the
+                       seeded exact gate as it lands)
 ```
 
 Blast-radius rules: PR2 and PR4+5 must not move a single January golden (offset 0 on 1 January —
 each PR's own cheapest proof); PR3 is the deliberate January re-bless and ships alone so the
 golden diff has exactly one cause; PR7 adds the `july_week` parameter set to the golden config and
-blesses the first true July references.
+blesses the first true July references. The PR8+ series moves no golden at all: startup values
+default to today's constants, and each PR's proof is its component's columns going exactly to zero
+in the seeded oracle.
 
 ## Independent repairs surfaced by the analyses
 

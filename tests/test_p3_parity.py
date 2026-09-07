@@ -245,7 +245,8 @@ def test_one_week_july_is_the_first_week_of_july() -> None:
     assert (parameters.start_date.month, parameters.start_date.day) == (7, 1)
     assert (parameters.end_date.month, parameters.end_date.day) == (7, 8)
     assert parameters.seconds_per_timestep == 60
-    assert parameters.timesteps == SimulationParameters.one_week_only(2021, 60).timesteps
+    # The literal, not one_week_only's count: a length bug both factories share must still fail.
+    assert parameters.timesteps == 7 * 24 * 60
 
 
 @pytest.mark.base
@@ -280,23 +281,28 @@ def test_the_july_window_is_fenced_out_of_every_default_dispatch() -> None:
     """
     assert "july" in MatrixPaths.WINDOWS, "the definition is kept; only the running of it is fenced"
     assert "july" in MatrixPaths.FENCED_WINDOWS
+    assert set(MatrixPaths.FENCED_WINDOWS) <= set(MatrixPaths.WINDOWS), (
+        "a fenced window that is not a defined window is a typo the fence would silently ignore"
+    )
     assert "july" not in MatrixPaths.runnable_windows()
     assert "july" not in ParityWindows.runnable()
     assert {entry["window"] for entry in build_matrix()["include"]} == {"january"}
 
 
 @pytest.mark.base
-def test_asking_for_the_fenced_window_is_refused_with_the_reason_and_the_pointer() -> None:
+def test_asking_for_the_fenced_window_is_refused_with_the_reason_and_the_pointer(tmp_path: Path) -> None:
     """Catches a fenced window being silently dropped, or refused without saying why.
 
     Silently running fewer triples than were asked for would report a green table over coverage
     nobody checked, and a bare "unknown window" would send whoever asked for July looking for a
     typo instead of at the defect. Every entry point is checked, because each of them is somebody's
-    first contact with the fence, and the last of them refuses before a simulation is started.
+    first contact with the fence, and the last of them refuses before a simulation is started. The
+    build call gets throwaway directories: the refusal fires before they are used today, but the
+    day the epic unfences July this test is edited, not allowed to write into the checkout.
     """
     for refused in (
         lambda: build_matrix(windows=["july"]),
-        lambda: ParityWindows.build("july", Rig.ROOT / "results" / "unused", Rig.ROOT / "results" / "unused"),
+        lambda: ParityWindows.build("july", tmp_path / "results", tmp_path / "cache"),
     ):
         with pytest.raises(ValueError, match="midyear_start_epic"):
             refused()

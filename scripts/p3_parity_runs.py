@@ -42,14 +42,15 @@ except ModuleNotFoundError:  # pragma: no cover - depends on how scripts/ is on 
 class ParityWindows:
     """The simulation windows every triple is defined over, which of them may run, and how.
 
-    R11.5 asked for two windows rather than one because every short parameter set HiSim ships
-    starts on the first of January, which measures each cooling device, air conditioner and
-    solar-thermal collector in the darkest week of the year, and the July week was meant to be the
-    answer. It is not one yet: HiSim has never supported a mid-year start, so every profile-driven
-    component reads its year-long profile from timestep 0 as if that were the 1st of January. A
-    July triple therefore compares two runs that both simulate January — byte-identical to the
-    January triple for most setups, and physically incoherent for the four with a solar-thermal
-    collector, whose sun position follows the date while its irradiance does not. The July window
+    R11.5 asked for two windows rather than one because every week- and day-sized parameter set
+    HiSim ships starts on the first of January, which measures each cooling device, air conditioner
+    and solar-thermal collector in the darkest week of the year, and the July week was meant to be
+    the answer. It is not one yet: HiSim has never supported a mid-year start, so every
+    profile-driven component reads its year-long profile from timestep 0 as if that were the 1st of
+    January. A July triple therefore compares two runs that both simulate January — the January
+    triple's numbers under July timestamps for most setups, and physically incoherent for the three
+    with a solar-thermal collector, whose sun position follows the date while its irradiance does
+    not. The July window
     is consequently **fenced**: its definition stays here for the mid-year-start epic that will fix
     the profiles and unfence it, and :meth:`runnable` is what a dispatch actually covers.
 
@@ -85,10 +86,14 @@ class ParityWindows:
     def runnable(cls) -> Tuple[str, ...]:
         """The window names a dispatch may actually ask for.
 
+        Delegates to :meth:`MatrixPaths.runnable_windows` rather than re-deriving the filter, so
+        the fence has exactly one implementation; the mirror test that keeps :meth:`names` equal
+        to ``MatrixPaths.WINDOWS`` is what makes the delegation safe.
+
         Returns:
             The defined names minus the fenced ones, in the same order.
         """
-        return tuple(name for name in cls.FACTORIES if name not in MatrixPaths.FENCED_WINDOWS)
+        return cast(Tuple[str, ...], MatrixPaths.runnable_windows())
 
     @classmethod
     def build(cls, window: str, result_directory: Path, cache_directory: Path) -> SimulationParameters:

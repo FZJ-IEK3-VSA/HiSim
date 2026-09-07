@@ -873,6 +873,7 @@ class GenericBoiler(Component):
             value=total_thermal_energy_delivered_in_kilowatt_hour,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
+            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(thermal_energy_delivered_entry)
 
@@ -882,6 +883,7 @@ class GenericBoiler(Component):
             value=sh_thermal_energy_delivered_in_kilowatt_hour,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
+            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(sh_thermal_energy_delivered_entry)
         dhw_thermal_energy_delivered_entry = KpiEntry(
@@ -890,6 +892,7 @@ class GenericBoiler(Component):
             value=dhw_thermal_energy_delivered_in_kilowatt_hour,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
+            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(dhw_thermal_energy_delivered_entry)
 
@@ -899,6 +902,7 @@ class GenericBoiler(Component):
             value=opex_dataclass.total_consumption_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
+            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(energy_consumption)
 
@@ -908,6 +912,7 @@ class GenericBoiler(Component):
             value=opex_dataclass.consumption_for_space_heating_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
+            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(sh_energy_consumption)
 
@@ -917,6 +922,7 @@ class GenericBoiler(Component):
             value=opex_dataclass.consumption_for_domestic_hot_water_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
+            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(dhw_energy_consumption)
 
@@ -926,6 +932,7 @@ class GenericBoiler(Component):
             value=self.fuel_consumption_in_liter,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
+            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(fuel_consumption_l)
 
@@ -935,6 +942,7 @@ class GenericBoiler(Component):
             value=self.fuel_consumption_in_kg,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
+            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(fuel_consumption_kg)
 
@@ -945,6 +953,7 @@ class GenericBoiler(Component):
             value=capex_dataclass.capex_investment_cost_in_euro,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
+            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(capex)
 
@@ -954,6 +963,7 @@ class GenericBoiler(Component):
             value=capex_dataclass.device_co2_footprint_in_kg,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
+            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(co2_footprint_capex)
 
@@ -963,6 +973,7 @@ class GenericBoiler(Component):
             value=opex_dataclass.opex_energy_cost_in_euro,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
+            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(opex)
 
@@ -972,6 +983,7 @@ class GenericBoiler(Component):
             value=opex_dataclass.opex_maintenance_cost_in_euro,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
+            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(maintenance_costs)
 
@@ -981,6 +993,7 @@ class GenericBoiler(Component):
             value=opex_dataclass.co2_footprint_in_kg,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
+            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(co2_footprint)
 
@@ -992,6 +1005,7 @@ class GenericBoiler(Component):
             + opex_dataclass.opex_maintenance_cost_in_euro,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
+            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(total_costs)
 
@@ -1001,6 +1015,7 @@ class GenericBoiler(Component):
             value=capex_dataclass.device_co2_footprint_for_simulated_period_in_kg + opex_dataclass.co2_footprint_in_kg,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
+            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(total_co2_footprint)
         return list_of_kpi_entries

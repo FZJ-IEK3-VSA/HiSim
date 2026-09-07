@@ -242,7 +242,12 @@ def test_house(
 
     opex_costs_for_heating_in_euro = jsondata["Fuel Meter"]["OPEX - Energy costs"].get("value")
 
-    co2_footprint_due_to_heating_use_in_kg = jsondata["Fuel Meter"]["OPEX - CO2 Footprint"].get("value")
+    # Qualified by its source component: the oil boiler of this setup reports an
+    # "OPEX - CO2 Footprint" of its own, and a KPI name two components share is keyed per
+    # component so neither entry overwrites the other.
+    co2_footprint_due_to_heating_use_in_kg = jsondata["Fuel Meter"][
+        f"OPEX - CO2 Footprint ({my_fuel_meter.component_name})"
+    ].get("value")
 
     log.information(
         f"Total {my_fuel_meter_config.fuel_loadtype.value} consumption [kWh] {oil_consumption_in_kilowatt_hour}"

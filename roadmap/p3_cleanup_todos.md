@@ -24,12 +24,16 @@ survives only in a conversation. Items are removed when done, not ticked and kep
   transformer/rectifier and electrolyzer KPIs (`electrolyzer_setup_kpis` branch). Both are blessed
   and gated on `golden_gate_full_fleet`, which merges after #639 and the two KPI PRs. Every setup
   in the repository is now golden-gated at week resolution or better.
-- [ ] **Multi-instance KPI collision (found 2026-09-05 while implementing the CHP KPIs).** Two
-  components of one class in one building collapse into a single flattened KPI group: the two
-  batteries of `dynamic_components` report one `BUI1.Battery.*` set, one instance silently
-  overwriting the other, and the two CHPs now do the same. Pre-existing and systemic — the flatten
-  key is building.tag.name and ignores the entry's source component. Fixing it renames KPIs and
-  therefore re-blesses references; its own PR, after the gate has settled.
+- [x] **Multi-instance KPI collision — fixed 2026-09-07 on `kpi_multi_instance`.** Component KPI
+  entries are keyed by `KpiPreparation.keyed_component_entries`: where several components of one
+  building share an entry name, each keys as `"<name> (<source component>)"`, and a collision
+  whose colliders do not all name a source is refused rather than silently overwritten. Every
+  `KpiEntry` of the seven components that shared names across classes now carries its
+  `component_name`, `Building`'s duplicate emission is hoisted out of its per-output loop, and the
+  fuel/gas/electricity-meter lookup in `read_opex_and_capex_costs_from_results` matches an entry's
+  own `name` instead of the collection key, so qualification cannot zero a general KPI. Seven
+  goldens re-blessed (`dynamic_components` plus the six setups whose collisions had been hiding a
+  component). Remove this entry once it is on main.
 
 ## Documentation drift (fix on the stack branches before their PRs merge)
 

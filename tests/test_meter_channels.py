@@ -22,7 +22,7 @@ provoke need a participant no shipped energy-system file wires yet.
 # clean
 
 from dataclasses import dataclass
-from typing import ClassVar, List, Optional
+from typing import ClassVar, List, Optional, Tuple
 
 import pytest
 from dataclasses_json import dataclass_json
@@ -460,3 +460,87 @@ def test_a_district_heating_meter_takes_the_heat_domain_carriers_its_own_default
         )
     assert caught.value.error_id.value == "EF-30"
     assert "DISTRICTHEATING" in str(caught.value)
+
+
+@pytest.mark.base
+def test_both_build_paths_hand_the_meter_its_participants_in_one_summation_order() -> None:
+    """Catches the two build paths disagreeing about the order an aggregator sums participants in.
+
+    The path-independence of the summation (F-35) does not come from each path sorting for
+    itself: it comes from both paths keying on the same strings. The runtime component name the
+    wiring stage records on a resolved port must be the very name a Python setup passes to
+    ``add_component_input_and_connect``, and the resolved connection's output must be the field
+    name the add-API stores. Nothing else asserts that cross-path invariant, so this test builds
+    the same two-participant arrangement once through each path and requires
+    ``get_dynamic_inputs`` to hand back the identical sequence. The participants share one weight
+    and are created zebra-first, so a path that fell back to creation order, or keyed on a
+    different string, fails the comparison rather than passing by accident.
+    """
+    zebra = "zebra_boiler"
+    alpha = "alpha_boiler"
+
+    imperative_meter = MeterFixtures.fuel_meter(lt.LoadTypes.OIL)
+    for source_name in (zebra, alpha):
+        imperative_meter.add_component_input_and_connect(
+            source_component_output=HeatSourceStub.EnergyDemand,
+            source_object_name=source_name,
+            source_load_type=lt.LoadTypes.OIL,
+            source_unit=lt.Units.WATT_HOUR,
+            source_tags=[lt.InandOutputType.HEAT_CONSUMPTION],
+            source_weight=MeterFixtures.MONITORED_ONLY,
+        )
+
+    declarative_meter = MeterFixtures.fuel_meter(lt.LoadTypes.OIL)
+    sources = {
+        name: HeatSourceStub(
+            my_simulation_parameters=MeterFixtures.parameters(),
+            config=HeatSourceStubConfig(component_id=ComponentID(name=name), carrier=lt.LoadTypes.OIL),
+        )
+        for name in (zebra, alpha)
+    }
+    resolver = DynamicConnectionResolver({**sources, MeterFixtures.METER_NAME: declarative_meter})
+    resolved = resolver.resolve_target(
+        MeterFixtures.METER_NAME,
+        [
+            FeedRequest(
+                consumer=MeterFixtures.METER_NAME,
+                source=source_name,
+                output=HeatSourceStub.EnergyDemand,
+                component_type=None,
+                flow_tags=(lt.InandOutputType.HEAT_CONSUMPTION,),
+                weight=MeterFixtures.MONITORED_ONLY,
+            )
+            for source_name in (zebra, alpha)
+        ],
+    )
+    # The wiring stage's one mutating step, replayed verbatim: the resolved port learns the
+    # source's runtime component name, which is what the summation key reads at simulation time.
+    for connection in resolved:
+        declarative_meter.connect_input(
+            input_fieldname=connection.aggregator_input_name,
+            src_object_name=sources[connection.source_name].component_name,
+            src_field_name=connection.source_output,
+        )
+
+    def summation_order(meter: FuelMeter) -> List[Tuple[str, str]]:
+        """The (source component, source output) sequence the meter would sum, in order.
+
+        Read through ``get_dynamic_inputs`` exactly as the meter's own ``i_simulate`` reads it,
+        so the assertion below compares what a run would actually add up.
+
+        Args:
+            meter: The aggregating meter, built through either path.
+
+        Returns:
+            The ordered source pairs of the meter's consumption participants.
+        """
+        return [
+            (port.src_object_name or "", port.src_field_name or "")
+            for port in meter.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_CONSUMPTION])
+        ]
+
+    assert summation_order(imperative_meter) == summation_order(declarative_meter)
+    assert summation_order(imperative_meter) == [
+        (alpha, HeatSourceStub.EnergyDemand),
+        (zebra, HeatSourceStub.EnergyDemand),
+    ]

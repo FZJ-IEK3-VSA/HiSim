@@ -31,13 +31,19 @@ import argparse
 import difflib
 import os
 import shutil
-import subprocess  # nosec B404 - the only child is this repository's own CLI
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import ClassVar, List, Optional, Sequence, Tuple
+
+# The repository root goes on the import path before anything from HiSim is imported: this script
+# is run as a file from a checkout, where the package need not be installed, and then only the
+# script's own directory is on the path.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from hisim.energy_system.recording import ChildRecorder  # noqa: E402  # pylint: disable=wrong-import-position
 
 
 class Paths:
@@ -167,28 +173,18 @@ class SetupDiscovery:
 class Recorder:
     """Runs one setup's recording in its own interpreter and reports what came back.
 
-    The child is this repository's own command line rather than a worker module of this script,
-    so that the fleet-wide run and a contributor recording a single setup by hand go through
-    exactly the same code and cannot drift apart.
+    The child comes from :class:`~hisim.energy_system.recording.child_recorder.ChildRecorder`,
+    shared with the probe runner, so that a fleet-wide run, a probe and a contributor recording a
+    single setup by hand all go through exactly the same command line. What this class adds is the
+    fleet's own concerns: how many children run at once, and how a failed child becomes a line in
+    the run's summary.
     """
-
-    #: The command that records one setup, completed with the three paths.
-    COMMAND = ("-m", "hisim.cli", "energy-system", "record")
 
     #: How many children record at once unless ``--jobs`` says otherwise. Capped at four rather
     #: than at the machine's core count because each child builds a complete system — occupancy
     #: profiles included — and holds it in memory; the CI runner has four cores and seven
     #: gigabytes, and four children fit both. A bigger machine can raise it on the command line.
     DEFAULT_JOBS: ClassVar[int] = min(4, os.cpu_count() or 1)
-
-    #: Environment variable naming the local load-profile-generator working directory. It is
-    #: cleared from every child's environment rather than set, so a machine with a stale setting
-    #: records the same thing as a clean one and no recording run is pinned to a fixed directory.
-    #: Cleared, PylpgWorkspace.default_base_index() derives the index from the child's own process,
-    #: which is what keeps a recording run out of the way of anything else using local profiles on
-    #: the same machine -- the collisions #611 exists to prevent. Pinning it to a constant would
-    #: reintroduce them for the length of a fleet-wide run, which is the better part of an hour.
-    LPG_INDEX_VARIABLE = "HISIM_LOCAL_LPG_CALC_INDEX"
 
     @classmethod
     def record(cls, setup: Path, parameters: Path, out_dir: Path, python: str) -> SetupOutcome:
@@ -203,15 +199,10 @@ class Recorder:
         Returns:
             The outcome, carrying the child's output when it failed.
         """
-        environment = dict(os.environ)
-        environment.pop(cls.LPG_INDEX_VARIABLE, None)
-        completed = subprocess.run(  # nosec B603 - fixed argument vector, no shell
-            [python, *cls.COMMAND, str(setup), str(parameters), "--out", str(out_dir)],
-            cwd=str(Paths.REPO_ROOT),
-            env=environment,
-            capture_output=True,
-            text=True,
-            check=False,
+        completed = ChildRecorder.run(
+            [str(setup), str(parameters), "--out", str(out_dir)],
+            python=python,
+            cwd=Paths.REPO_ROOT,
         )
         if completed.returncode == 0:
             return SetupOutcome(stem=setup.stem, ok=True)
@@ -389,7 +380,6 @@ class DuplicateParameterCheck:
         Returns:
             One message per offending pair; empty when the directory is clean.
         """
-        sys.path.insert(0, str(Paths.REPO_ROOT))
         from hisim.energy_system.recording.parameters import (  # noqa: PLC0415
             ParameterFileLibrary,
         )

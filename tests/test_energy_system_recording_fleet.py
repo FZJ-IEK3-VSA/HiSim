@@ -27,6 +27,7 @@ import pytest
 
 from hisim.cli import build_parser
 from hisim.energy_system.executor import SimulationParametersReader
+from hisim.energy_system.recording.child_recorder import ChildRecorder
 from hisim.energy_system.recording.parameters import (
     ParameterFileLibrary,
     ParameterFileName,
@@ -452,8 +453,8 @@ def test_a_recording_child_picks_its_own_profile_directory(monkeypatch: pytest.M
     ``pylpg/C<index>`` directory as anything else using local profiles.
     """
     recorded = RecordedChildEnvironment()
-    monkeypatch.setattr("scripts.record_all_setups.subprocess.run", recorded)
-    monkeypatch.setenv(Recorder.LPG_INDEX_VARIABLE, "1")
+    monkeypatch.setattr("hisim.energy_system.recording.child_recorder.subprocess.run", recorded)
+    monkeypatch.setenv(ChildRecorder.LPG_INDEX_VARIABLE, "1")
 
     Recorder.record(
         setup=Fleet.SETUPS / f"{Fleet.CHEAPEST_SETUP}.py",
@@ -463,7 +464,7 @@ def test_a_recording_child_picks_its_own_profile_directory(monkeypatch: pytest.M
     )
 
     assert len(recorded.environments) == 1
-    assert Recorder.LPG_INDEX_VARIABLE not in recorded.environments[0], (
+    assert ChildRecorder.LPG_INDEX_VARIABLE not in recorded.environments[0], (
         "the recorder pinned or passed on a local-LPG calculation index; cleared, the child derives "
         "its own from its process and cannot collide with another run"
     )

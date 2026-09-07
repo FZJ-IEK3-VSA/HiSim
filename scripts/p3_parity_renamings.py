@@ -81,6 +81,11 @@ class DeclaredPortRenamings:
             "Input_SolarThermalSystem_ElectricityConsumptionOutput_1": (
                 "ElectricityConsumptionOutputFromSolarThermalSystem"
             ),
+            # The air conditioner's draw, which air_conditioned_house likewise measures at the
+            # meter directly, inserted after the PV production and the household demand.
+            "Input_AirConditioner_ElectricalPowerConsumption_2": (
+                "ElectricalPowerConsumptionFromAirConditioner"
+            ),
             # In every EMS-controlled sizer the meter has exactly one participant — the
             # controller's residual — so the index is always zero.
             "Input_L2EMSElectricityController_TotalElectricityToOrFromGrid_0": (
@@ -92,15 +97,24 @@ class DeclaredPortRenamings:
         # last participant, so its index counts however many controlled heaters precede it, and
         # that is the whole reason four spellings of one wire appear below.
         "L2EMSElectricityController": {
-            # Household demand from the occupancy, weight 1 and therefore inserted early.
+            # Household demand from the occupancy, weight 1 and therefore inserted early. Index
+            # three is the car sizer, the one setup that inserts a participant before the demand.
             "Input_UTSPConnector_ElectricalPowerConsumption_2": "ElectricalPowerConsumptionFromUTSPConnector",
+            "Input_UTSPConnector_ElectricalPowerConsumption_3": "ElectricalPowerConsumptionFromUTSPConnector",
             # PV production, weight 999 and therefore inserted after the controlled loads.
             "Input_PVSystem_ElectricityOutput_2": "ElectricityOutputFromPVSystem",
             "Input_PVSystem_ElectricityOutput_3": "ElectricityOutputFromPVSystem",
+            "Input_PVSystem_ElectricityOutput_4": "ElectricityOutputFromPVSystem",
+            # The charge control of the electric car, which only the car sizer has. It is the
+            # first participant that setup wires, which is why every index of it counts one higher
+            # than the same participant's index in the sizers without a car.
+            "Input_L1EVChargeControl_1_BatteryChargingPowerToEMS_2": (
+                "BatteryChargingPowerToEMSFromL1EVChargeControl_1"
+            ),
             # The battery's realised charge or discharge, fed back so the controller sees what its
             # own dispatch achieved. Four indices: no controlled heater (district heating, gas,
             # hydrogen, pellets, wood chips), one (gas solar thermal), two (electric heating,
-            # heat pump) and three (heat pump plus solar thermal).
+            # heat pump) and three (heat pump plus solar thermal, and heat pump plus car).
             "Input_Battery_AcBatteryPowerUsed_4": "AcBatteryPowerUsedFromBattery",
             "Input_Battery_AcBatteryPowerUsed_5": "AcBatteryPowerUsedFromBattery",
             "Input_Battery_AcBatteryPowerUsed_6": "AcBatteryPowerUsedFromBattery",
@@ -112,11 +126,18 @@ class DeclaredPortRenamings:
             # The two CHPs of the same example.
             "Input_CHP1_ElectricityOutput_5": "ElectricityOutputFromCHP1",
             "Input_CHP2_ElectricityOutput_6": "ElectricityOutputFromCHP2",
-            # The hplib heat pump's two controlled draws in the heat-pump sizers.
+            # The hplib heat pump's two controlled draws in the heat-pump sizers, and the same two
+            # one index later in the car sizer, where the car's charge control precedes them.
             "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerSH_4": (
                 "ElectricalInputPowerSHFromMoreAdvancedHeatPumpHPLib"
             ),
             "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerDHW_5": (
+                "ElectricalInputPowerDHWFromMoreAdvancedHeatPumpHPLib"
+            ),
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerSH_5": (
+                "ElectricalInputPowerSHFromMoreAdvancedHeatPumpHPLib"
+            ),
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerDHW_6": (
                 "ElectricalInputPowerDHWFromMoreAdvancedHeatPumpHPLib"
             ),
             # The resistive heater's two controlled draws in the electric-heating sizer.
@@ -161,16 +182,37 @@ class DeclaredPortRenamings:
     #: happen to agree.
     DISPATCH_OUTPUTS: ClassVar[Mapping[str, Mapping[str, str]]] = {
         "L2EMSElectricityController": {
-            # The battery target of all nine EMS sizers. The legacy name is the prefix the setup
-            # passed, 'LoadingPowerInputForBattery_', plus the controller's fifteenth output.
-            "LoadingPowerInputForBattery_Output15": "DispatchToBattery_LoadingPowerInput",
+            # The battery target of the ten EMS sizers that pass this prefix. The legacy name is
+            # that prefix, 'LoadingPowerInputForBattery_', plus the controller's fourteenth
+            # output: the controller declares thirteen outputs before any setup adds a dispatch —
+            # seven of its own plus six grown by its default connections (one each for the
+            # occupancy and the solar-thermal pump, two each for the heat pump and the electric
+            # heater, none for PV or the battery) — so the first dispatch a setup adds is number
+            # fourteen. That count is the controller's, not the setup's, and this row was authored
+            # stale: retiring the old advanced heat pump (#604) had already removed one of those
+            # outputs when the table was first written, yet the row spelled the pre-retirement
+            # 'Output15', so every EMS setup failed the parity comparison from the table's first
+            # day. A test now asserts the numbers against a live build, so a wrong counter — born
+            # stale or moved later — is caught there instead of failing the whole fleet.
+            "LoadingPowerInputForBattery_Output14": "DispatchToBattery_LoadingPowerInput",
             # The dynamic-components example steers four participants and names all four targets
             # 'ElectricityTargetOutput', so in the legacy spelling only the counter tells them
-            # apart — which is exactly the fragility the declarative templates remove.
-            "ElectricityTargetOutput15": "DispatchToBattery1_LoadingPowerInput",
-            "ElectricityTargetOutput16": "DispatchToBattery2_LoadingPowerInput",
-            "ElectricityTargetOutput17": "DispatchToCHP1_ElectricityFromCHPTarget",
-            "ElectricityTargetOutput18": "DispatchToCHP2_ElectricityFromCHPTarget",
+            # apart — which is exactly the fragility the declarative templates remove. They start
+            # from the same fourteenth output and count up in the order the setup adds them.
+            "ElectricityTargetOutput14": "DispatchToBattery1_LoadingPowerInput",
+            "ElectricityTargetOutput15": "DispatchToBattery2_LoadingPowerInput",
+            "ElectricityTargetOutput16": "DispatchToCHP1_ElectricityFromCHPTarget",
+            "ElectricityTargetOutput17": "DispatchToCHP2_ElectricityFromCHPTarget",
+            # The car sizer steers two participants and passes a prefix of its own for each: the
+            # car's charge control first, so it takes the fourteenth output, then the house
+            # battery, which takes the fifteenth. That setup is therefore the one place where the
+            # battery target is not spelled 'LoadingPowerInputForBattery_' — the declarative name
+            # is the same either way, because it is derived from the participant and its input
+            # rather than from what a setup chose to call the channel.
+            "ElectricityToOrFromGridOfL1Controller_Output14": (
+                "DispatchToL1EVChargeControl_1_ElectricityTargetFromEMS"
+            ),
+            "ChargingPowerForBattery_Output15": "DispatchToBattery_LoadingPowerInput",
         },
     }
 

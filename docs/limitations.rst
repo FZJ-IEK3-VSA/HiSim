@@ -76,7 +76,7 @@ Storage Models
 ---------------
 
 - **Thermal energy storage.** Water-based thermal storage components
-  (e.g., :py:class:`hisim.components.generic_heat_water_storage.HeatStorage`)
+  (e.g., :py:class:`hisim.components.simple_water_storage.SimpleHotWaterStorage`)
   use simplified well-mixed tank assumptions. Thermal stratification and
   internal heat losses are approximated, not resolved with computational
   fluid dynamics.
@@ -90,7 +90,7 @@ Heat Pump and HVAC Models
   performance, defrost cycles, and auxiliary heating elements are approximated.
 
 - **HPLib-based models.** The advanced heat-pump components
-  (e.g., :py:class:`hisim.components.advanced_heat_pump_hplib.AdvancedHeatPumpHPLib`)
+  (e.g., :py:class:`hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib`)
   delegate to external physics libraries. Their accuracy depends on the
   underlying library and its calibration data.
 

@@ -12,6 +12,10 @@ discount rate** (no time value of money is applied). Key assumptions:
 * **Depreciation:** Straight-line over the technical lifetime in years.
   The investment cost and CO2 footprint are divided by the technical lifetime
   and multiplied by the simulated period as a fraction of a year.
+* **Maintenance:** Not depreciated. Maintenance is already an annual rate, so
+  it is only multiplied by the simulated period as a fraction of a year and is
+  never divided by the technical lifetime. Investment is a one-time cost that a
+  lifetime spreads out; maintenance recurs every year of that lifetime.
 * **Discount rate:** 0% -- no discounting or net present value conversion is
   performed.
 * **Year length:** A fixed 365-day year is used
@@ -87,7 +91,10 @@ class CapexComputationHelperFunctions:
         Returns:
             A ``CapexCostDataClass`` with total and per-simulated-period investment cost,
             CO2 footprint, maintenance cost, lifetime, and subsidy percentage (rounded to
-            2 decimals).
+            2 decimals). The two proration rules differ: investment cost and CO2 footprint
+            are one-time figures, so they are divided by the technical lifetime and then
+            scaled by the simulated fraction of a year, whereas maintenance is already an
+            annual figure and is only scaled by that fraction.
 
         Raises:
             ValueError: If ``unit`` is not one of the supported units.
@@ -199,15 +206,19 @@ class CapexComputationHelperFunctions:
 
         # Calculate values per simulated period
         seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (capex_investment_cost_in_euro / technical_lifetime_in_years) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-        device_co2_footprint_per_simulated_period = (device_co2_footprint_in_kg / technical_lifetime_in_years) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-        maintenance_costs_per_simulated_period_in_euro = (maintenance_costs_in_euro / technical_lifetime_in_years) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
+        fraction_of_year_simulated = simulation_parameters.duration.total_seconds() / seconds_per_year
+        # Investment and embodied CO2 are one-time figures: annualized over the technical lifetime
+        # first, then cut to the simulated fraction of a year.
+        capex_per_simulated_period = (
+            capex_investment_cost_in_euro / technical_lifetime_in_years
+        ) * fraction_of_year_simulated
+        device_co2_footprint_per_simulated_period = (
+            device_co2_footprint_in_kg / technical_lifetime_in_years
+        ) * fraction_of_year_simulated
+        # Maintenance is already an annual figure and recurs in every year of the lifetime, so it
+        # must only be cut to the simulated fraction of a year -- dividing by the lifetime as well
+        # would understate it by exactly that lifetime.
+        maintenance_costs_per_simulated_period_in_euro = maintenance_costs_in_euro * fraction_of_year_simulated
         capex_cost_data_class = CapexCostDataClass(
             capex_investment_cost_in_euro=round(capex_investment_cost_in_euro, 2),
             device_co2_footprint_in_kg=round(device_co2_footprint_in_kg, 2),

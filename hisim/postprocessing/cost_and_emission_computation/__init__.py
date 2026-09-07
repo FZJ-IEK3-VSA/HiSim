@@ -25,13 +25,19 @@ with the following inputs and assumptions:
   are used directly, either as plain numbers or as
   :class:`~hisim.units.Quantity` objects.
 
-The total values are then prorated to the simulated period by dividing by the
-technical lifetime in years and multiplying by the simulated duration as a
-fraction of a year (``duration.total_seconds() / seconds_per_year``). This is
-straight-line (linear) proration -- no discount rate is applied and the values
-are not converted to a net present value (NPV) or expressed as a levelised
-cost of energy (LCOE). The returned data class therefore carries both the
-full lifetime investment and the share attributable to the simulated period.
+The investment cost and the embodied CO2 footprint are then prorated to the
+simulated period by dividing by the technical lifetime in years and multiplying
+by the simulated duration as a fraction of a year
+(``duration.total_seconds() / seconds_per_year``). This is straight-line
+(linear) proration -- no discount rate is applied and the values are not
+converted to a net present value (NPV) or expressed as a levelised cost of
+energy (LCOE). The returned data class therefore carries both the full lifetime
+investment and the share attributable to the simulated period.
+
+The maintenance cost follows the other rule: it is an annual rate that falls
+due in every year of the technical lifetime, not a one-time cost the lifetime
+spreads out, so it is multiplied by the simulated fraction of a year alone and
+is never divided by the lifetime.
 
 OPEX model
 ----------
@@ -92,11 +98,14 @@ are exactly the years tabulated for the requested country:
   :class:`~hisim.components.configuration.EmissionFactorsAndCostsForFuelsConfig`.
   An unsupported country or year raises :class:`KeyError`.
 
-No discounting is applied at any stage: the CAPEX investment cost, CO2
-footprint, and maintenance cost are prorated linearly (straight-line) over the
-technical lifetime to the simulated duration, as described in the CAPEX model
-above. OPEX energy consumption, cost, and emissions are accumulated directly
-over the simulated period without annualisation or discounting.
+No discounting is applied at any stage: the CAPEX investment cost and CO2
+footprint are prorated linearly (straight-line) over the technical lifetime to
+the simulated duration, as described in the CAPEX model above. Maintenance is
+not prorated over the lifetime -- it is already an annual rate that recurs in
+every year of the lifetime, so it is only scaled by the simulated duration as a
+fraction of a year. OPEX energy consumption, cost, and emissions are
+accumulated directly over the simulated period without annualisation or
+discounting.
 
 Submodules
 ----------

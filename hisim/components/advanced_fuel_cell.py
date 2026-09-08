@@ -5,16 +5,24 @@ import os
 from dataclasses import dataclass
 import math
 
-from typing import Optional, ClassVar, List
+from typing import Dict, Optional, ClassVar, List, Tuple
 import copy
 from dataclasses_json import dataclass_json
 
 import pandas as pd
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.component import (
+    CapexCostDataClass,
+    Component,
+    ComponentInput,
+    ComponentOutput,
+    OpexCostDataClass,
+    SingleTimeStepValues,
+)
 from hisim import loadtypes as lt
 
-from hisim.components.configuration import PhysicsConfig
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig, PhysicsConfig
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
@@ -37,7 +45,16 @@ SPECIFIC_HEAT_CAPACITY_WATER = 4182  # J/(kg·K)
 @dataclass_json
 @dataclass
 class CHPConfig(ConfigBase):
-    """CHP Config class."""
+    """CHP Config class.
+
+    Besides the machine's operating parameters, the configuration carries the five cost fields
+    every costed component in the library declares. They are read as a set: while all five are
+    ``None`` -- the default, and what the config-building classmethod below produces --
+    postprocessing looks the figures up from the device database for the simulated year and
+    country and scales them by ``p_el_max``, the unit's electrical rating, which is what a
+    micro-CHP's price is quoted per. Setting all five overrides that lookup with the values given
+    here, for a specific quoted machine.
+    """
 
     @classmethod
     def get_main_classname(cls) -> str:
@@ -55,12 +72,38 @@ class CHPConfig(ConfigBase):
     eff_el_min: float  # [-]
     eff_th_min: float  # [-]
     mass_flow_max: float  # kg/s
-    p_el_max: float  # [W]
+    p_el_max: float  # [W]; the electrical rating, and the only figure the capex scales by
     p_th_max: float  # [W]
     eff_el_max: float  # [-]
     eff_th_max: float  # [-]
     temperature_max: float
     delta_temperature: float
+    #: CO2 footprint of investment in kg
+    device_co2_footprint_in_kg: Optional[float] = None
+    #: cost for investment in Euro
+    investment_costs_in_euro: Optional[float] = None
+    #: lifetime in years
+    lifetime_in_years: Optional[float] = None
+    #: maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float] = None
+    #: subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float] = None
+
+    def __post_init__(self) -> None:
+        """Refuses a non-positive maximum electrical power.
+
+        The investment cost is that rating times a price per kilowatt, so a unit rated at zero or
+        less would be costed at nothing and reported as an answer -- a machine that reads as free
+        rather than as unrated. The configuration is where that stops.
+
+        Raises:
+            ValueError: For a ``p_el_max`` that is not strictly positive.
+        """
+        if self.p_el_max <= 0.0:
+            raise ValueError(
+                f"The CHP maximum electrical power must be strictly positive, not {self.p_el_max} W. "
+                "It is what the investment cost is scaled by, so an unrated unit would be costed as free."
+            )
 
     @classmethod
     def get_default_config(
@@ -185,6 +228,22 @@ class CHP(Component):
     NumberofCycles: ClassVar[str] = "NumberofCycles"
     ThermalOutputPower: ClassVar[str] = "ThermalOutputPower"
     GasDemandReal: ClassVar[str] = "GasDemandReal"
+
+    # The names of the four totals the run is summarised by. They are constants because they are
+    # keys rather than prose: the KPI entries carry them, :meth:`CHP.read_run_totals` returns them,
+    # the operating cost looks the fuel up by one of them, and every refusal names the one it
+    # could not read.
+    ELECTRICAL_ENERGY_PRODUCED: ClassVar[str] = "Electrical energy produced"
+    THERMAL_ENERGY_PRODUCED: ClassVar[str] = "Thermal energy produced"
+    FUEL_CONSUMED: ClassVar[str] = "Fuel consumed"
+    NUMBER_OF_ACTIVATION_CYCLES: ClassVar[str] = "Number of activation cycles"
+    #: The four totals in the order their KPI entries are written, with the unit each declares.
+    RUN_TOTALS: ClassVar[Tuple[Tuple[str, str], ...]] = (
+        (ELECTRICAL_ENERGY_PRODUCED, "kWh"),
+        (THERMAL_ENERGY_PRODUCED, "kWh"),
+        (FUEL_CONSUMED, "kg"),
+        (NUMBER_OF_ACTIVATION_CYCLES, "-"),
+    )
 
     def __init__(
         self,
@@ -641,6 +700,63 @@ class CHP(Component):
         stsv.set_output_value(self.gas_demand_target_channel, gas_demand_target)  # CHP runs with
         stsv.set_output_value(self.gas_demand_real_used_channel, gas_demand_real_used)  # ThermalPowerOutput
 
+    def read_run_totals(
+        self,
+        all_outputs: List[ComponentOutput],
+        postprocessing_results: pd.DataFrame,
+    ) -> Dict[str, float]:
+        """Read the four totals that describe what the unit did over the simulated period.
+
+        The electrical and thermal energy are integrated from the two power outputs; the fuel
+        mass from the *real* fuel draw, not the requested one, which differs whenever the storage
+        could not deliver; and the cycle count is the final value of the cumulative counter, since
+        summing it would count every earlier timestep again. Both the KPI entries and the
+        operating costs need these totals, which is why they are read once here.
+
+        Args:
+            all_outputs: every output column of the run, searched for this component's by name.
+            postprocessing_results: the per-timestep values of those columns.
+
+        Returns:
+            Dict[str, float]: the four totals, keyed by the KPI names in :attr:`RUN_TOTALS`.
+
+        Raises:
+            ValueError: When one of the four output columns is not found for this component, is
+                empty, or carries NaN — pandas would silently drop NaN from a sum and an all-NaN
+                column would report zero, so a total is either computed from complete values or
+                refused by name, never reported wrongly in silence.
+        """
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        found: Dict[str, float] = {}
+        for index, output in enumerate(all_outputs):
+            if output.component_name != self.component_name:
+                continue
+            column = postprocessing_results.iloc[:, index]
+            if output.field_name == self.ElectricityOutput and output.unit == lt.Units.WATT:
+                found[self.ELECTRICAL_ENERGY_PRODUCED] = self._energy_in_kilowatt_hour(
+                    self._checked_column(column, self.ELECTRICAL_ENERGY_PRODUCED), seconds_per_timestep
+                )
+            elif output.field_name == self.ThermalOutputPower and output.unit == lt.Units.WATT:
+                found[self.THERMAL_ENERGY_PRODUCED] = self._energy_in_kilowatt_hour(
+                    self._checked_column(column, self.THERMAL_ENERGY_PRODUCED), seconds_per_timestep
+                )
+            elif output.field_name == self.GasDemandReal and output.unit == lt.Units.KG_PER_SEC:
+                found[self.FUEL_CONSUMED] = round(
+                    float(self._checked_column(column, self.FUEL_CONSUMED).sum()) * seconds_per_timestep, 6
+                )
+            elif output.field_name == self.NumberofCycles and output.unit == lt.Units.ANY:
+                found[self.NUMBER_OF_ACTIVATION_CYCLES] = float(
+                    self._checked_column(column, self.NUMBER_OF_ACTIVATION_CYCLES).iloc[-1]
+                )
+
+        for name, _ in self.RUN_TOTALS:
+            if name not in found:
+                raise ValueError(
+                    f"The CHP output for the KPI '{name}' was not found among the run's columns for "
+                    f"{self.component_name}; the KPI cannot be reported as absent silently."
+                )
+        return found
+
     def get_component_kpi_entries(
         self,
         all_outputs: List[ComponentOutput],
@@ -648,11 +764,9 @@ class CHP(Component):
     ) -> List[KpiEntry]:
         """Calculates KPIs for the CHP and returns all KPI entries as a list.
 
-        Four indicators describe what the unit did over the simulated period: the electrical
-        and thermal energy it produced, integrated from its power outputs; the fuel mass it
-        actually burned, integrated from the real fuel draw (not the requested one, which can
-        differ when the storage cannot deliver); and how many on/off cycles it went through,
-        read as the final value of its cumulative cycle counter. Cycles are an indicator of
+        Four indicators describe what the unit did over the simulated period, all four read by
+        :meth:`read_run_totals`: the electrical and thermal energy it produced, the fuel mass it
+        actually burned, and how many on/off cycles it went through. Cycles are an indicator of
         their own because wear grows with switching, not with runtime.
 
         Args:
@@ -663,58 +777,111 @@ class CHP(Component):
             List[KpiEntry]: the four entries, tagged as CHP.
 
         Raises:
-            ValueError: When one of the four output columns is not found for this component, is
-                empty, or carries NaN — pandas would silently drop NaN from a sum and an all-NaN
-                column would report zero, so a KPI is either computed from complete values or
-                refused by name, never reported wrongly in silence.
+            ValueError: When one of the four output columns is missing, empty or carries NaN, via
+                :meth:`read_run_totals`.
         """
-        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
-        electrical_energy_in_kilowatt_hour = None
-        thermal_energy_in_kilowatt_hour = None
-        fuel_consumed_in_kg = None
-        number_of_cycles = None
-        for index, output in enumerate(all_outputs):
-            if output.component_name != self.component_name:
-                continue
-            column = postprocessing_results.iloc[:, index]
-            if output.field_name == self.ElectricityOutput and output.unit == lt.Units.WATT:
-                electrical_energy_in_kilowatt_hour = self._energy_in_kilowatt_hour(
-                    self._checked_column(column, "Electrical energy produced"), seconds_per_timestep
-                )
-            elif output.field_name == self.ThermalOutputPower and output.unit == lt.Units.WATT:
-                thermal_energy_in_kilowatt_hour = self._energy_in_kilowatt_hour(
-                    self._checked_column(column, "Thermal energy produced"), seconds_per_timestep
-                )
-            elif output.field_name == self.GasDemandReal and output.unit == lt.Units.KG_PER_SEC:
-                fuel_consumed_in_kg = round(
-                    float(self._checked_column(column, "Fuel consumed").sum()) * seconds_per_timestep, 6
-                )
-            elif output.field_name == self.NumberofCycles and output.unit == lt.Units.ANY:
-                number_of_cycles = float(self._checked_column(column, "Number of activation cycles").iloc[-1])
-
-        entries = [
-            ("Electrical energy produced", "kWh", electrical_energy_in_kilowatt_hour),
-            ("Thermal energy produced", "kWh", thermal_energy_in_kilowatt_hour),
-            ("Fuel consumed", "kg", fuel_consumed_in_kg),
-            ("Number of activation cycles", "-", number_of_cycles),
-        ]
-        for name, unit, value in entries:
-            if value is None:
-                raise ValueError(
-                    f"The CHP output for the KPI '{name}' was not found among the run's columns for "
-                    f"{self.component_name}; the KPI cannot be reported as absent silently."
-                )
+        found = self.read_run_totals(all_outputs, postprocessing_results)
         return [
             KpiEntry(
                 name=name,
                 unit=unit,
-                value=value,
+                value=found[name],
                 tag=KpiTagEnumClass.CHP,
                 description=self.component_name,
                 name_of_source_component=self.component_name,
             )
-            for name, unit, value in entries
+            for name, unit in self.RUN_TOTALS
         ]
+
+    @staticmethod
+    def get_cost_capex(config: CHPConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
+        """Return the unit's investment cost, embodied CO2, lifetime and maintenance cost.
+
+        A fuel-cell CHP is bought, rated and replaced as one appliance and is priced per kilowatt
+        of electrical output (``ComponentType.CHP``), which is how micro-CHP costs are quoted, so
+        the figures scale by ``p_el_max`` — stated in watt on the configuration and converted here.
+        Where they come from is the all-or-nothing rule stated on :class:`CHPConfig`: the device
+        database unless all five cost fields carry values.
+
+        Args:
+            config: the CHP configuration, read for ``p_el_max`` and its cost fields.
+            simulation_parameters: the simulated year, country and duration, which decide which
+                database row applies and what share of the investment falls in the run.
+
+        Returns:
+            CapexCostDataClass: the investment cost and embodied CO2, both in total and prorated
+            over the simulated period, tagged as CHP.
+        """
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+            simulation_parameters=simulation_parameters,
+            component_type=lt.ComponentType.CHP,
+            unit=lt.Units.KILOWATT,
+            size_of_energy_system=config.p_el_max / 1e3,
+            config=config,
+            kpi_tag=KpiTagEnumClass.CHP,
+        )
+        CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(
+            config=config, capex_cost_data_class=capex_cost_data_class
+        )
+        return capex_cost_data_class
+
+    def get_cost_opex(
+        self,
+        all_outputs: List[ComponentOutput],
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
+        """Return the unit's operating cost: the fuel it burned, plus maintenance.
+
+        The fuel is the mass the unit really drew, not the mass it asked for, and it is converted
+        to energy with the same lower heating value :meth:`i_simulate` divided by to turn power
+        into that mass — so the kilowatt-hours priced here are the ones the simulation burned.
+        Which fuel it is follows the configured gas type, and so does the tariff: a hydrogen CHP
+        is priced at the green-hydrogen factors, a methane one at the gas factors. A hydrogen unit
+        therefore reports zero operating CO2, not by omission but because the fuels table gives
+        green hydrogen a zero footprint per kWh -- its emissions sit with whatever produced it.
+
+        Args:
+            all_outputs: every output column of the run, searched for this component's outputs.
+            postprocessing_results: the per-timestep values of those columns.
+
+        Returns:
+            OpexCostDataClass: the cost, CO2 and consumption of the fuel burned, plus the
+            maintenance cost for the simulated period, tagged as CHP and carrying the fuel's own
+            load type.
+
+        Raises:
+            ValueError: When one of the run totals is missing, empty or carries NaN, via
+                :meth:`read_run_totals`; or when the configured gas type is neither hydrogen nor
+                methane, via :meth:`get_fuel_load_type`.
+        """
+        fuel_load_type = self.get_fuel_load_type()
+        fuel_consumed_in_kg = self.read_run_totals(all_outputs, postprocessing_results)[self.FUEL_CONSUMED]
+        lower_heating_value_in_kwh_per_kg = (
+            PhysicsConfig.get_properties_for_energy_carrier(
+                energy_carrier=fuel_load_type
+            ).lower_heating_value_in_joule_per_kg
+            / 3.6e6
+        )
+        fuel_consumed_in_kilowatt_hour = fuel_consumed_in_kg * lower_heating_value_in_kwh_per_kg
+        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+            self.my_simulation_parameters.year, self.my_simulation_parameters.country
+        )
+        # get_fuel_load_type admits these two carriers and refuses everything else, so the
+        # alternative below is the methane one rather than an unhandled case.
+        if fuel_load_type == lt.LoadTypes.GREEN_HYDROGEN:
+            euro_per_kilowatt_hour = emissions_and_cost_factors.green_hydrogen_gas_costs_in_euro_per_kwh
+            co2_in_kg_per_kilowatt_hour = emissions_and_cost_factors.green_hydrogen_gas_footprint_in_kg_per_kwh
+        else:
+            euro_per_kilowatt_hour = emissions_and_cost_factors.gas_costs_in_euro_per_kwh
+            co2_in_kg_per_kilowatt_hour = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
+        return OpexCostDataClass(
+            opex_energy_cost_in_euro=fuel_consumed_in_kilowatt_hour * euro_per_kilowatt_hour,
+            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
+            co2_footprint_in_kg=fuel_consumed_in_kilowatt_hour * co2_in_kg_per_kilowatt_hour,
+            total_consumption_in_kwh=fuel_consumed_in_kilowatt_hour,
+            loadtype=fuel_load_type,
+            kpi_tag=KpiTagEnumClass.CHP,
+        )
 
     def _checked_column(self, column: pd.Series, kpi_name: str) -> pd.Series:
         """Returns a KPI's column only when every value in it is real.

@@ -106,7 +106,7 @@ def contract_from_price_entry(entry: EnergyPriceEntry, country: str) -> TariffCo
     engine; the whole default-contract construction lives here, in one place.
     """
     return TariffContract(
-        id=f"{country}_DEFAULT_{entry.carrier.value}_{entry.year}",
+        id=TariffContract.default_contract_id(country, entry.carrier, entry.year),
         carrier=entry.carrier,
         country=country,
         region=None,

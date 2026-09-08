@@ -266,6 +266,9 @@ class ComponentType(str, enum.Enum):
     CAR = "Car"
     FUEL_CELL = "FuelCell"
     ELECTROLYZER = "Electrolyzer"
+    # The grid-side conversion stage in front of a DC load: the step-down transformer and the
+    # rectifier are bought, rated and replaced as one unit, so they are one cost subject here.
+    TRANSFORMER_AND_RECTIFIER = "TransformerAndRectifier"
     CHP = "CHP"
     H2_STORAGE = "H2Storage"
     ELECTRIC_VEHICLE = "ElectricVehicle"

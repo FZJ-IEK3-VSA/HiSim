@@ -50,8 +50,9 @@ open, so nothing survives only in a conversation. Items are removed when done, n
   `full_year_all_options`, and COMPUTE_OPEX/COMPUTE_CAPEX run before COMPUTE_KPIS — both
   components are real devices (MODELS_NO_DEVICE would be a lie) with no `get_cost_opex`/
   `get_cost_capex`, so the stock all-options run still dies before the new KPIs compute.
-  Pre-existing, and the golden gate runs the setup KPI-only; fixing it means real cost data for
-  both devices, its own small PR.
+  Pre-existing, and the golden gate now runs COMPUTE_OPEX and COMPUTE_CAPEX as well (from
+  `golden_gate_costs` on), so the building-level cost KPIs are pinned by the references; fixing it
+  means real cost data for both devices, its own small PR.
 - [ ] **Extract the shared child-recorder helper** (decided 2026-09-05, #638 review round; both
   #636 and #638 are on main, so this is unblocked). `scripts/record_all_setups.py::Recorder` and
   `hisim/energy_system/recording/probe_session.py::ProbeRunner` both build the identical child

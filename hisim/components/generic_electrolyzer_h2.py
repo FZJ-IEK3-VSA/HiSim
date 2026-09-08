@@ -44,10 +44,10 @@ class ElectrolyzerConfig(ConfigBase):
 
     Besides the electrochemical parameters, the configuration carries the five cost fields every
     costed component in the library declares. They are read as a set: while all five are ``None``
-    — which is the default and what both factories below produce — postprocessing looks the
-    figures up from the device database for the simulated year and country and scales them by
-    ``nom_load``, the electrolyzer's rating in kW. Setting all five overrides that lookup with
-    the values given here, for a specific quoted machine.
+    — the default, and what both config-building classmethods below produce — postprocessing
+    looks the figures up from the device database for the simulated year and country and scales
+    them by ``nom_load``, the electrolyzer's rating in kW. Setting all five overrides that lookup
+    with the values given here, for a specific quoted machine.
     """
 
     @classmethod
@@ -75,6 +75,30 @@ class ElectrolyzerConfig(ConfigBase):
     maintenance_costs_in_euro_per_year: Optional[float] = None
     #: subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: Optional[float] = None
+
+    def __post_init__(self) -> None:
+        """Refuses a non-positive nominal load, or a maximum load below it.
+
+        The capex scales by ``nom_load``, so a machine rated at zero or less would be costed at
+        zero euros and reported as an answer -- a device that reads as free rather than as
+        unrated; and a maximum load below the nominal one describes a machine that cannot reach
+        its own rating, which the load distribution would follow into wrong numbers instead of
+        stopping. The configuration is where both stop.
+
+        Raises:
+            ValueError: For a ``nom_load`` that is not strictly positive, or a ``max_load``
+                below ``nom_load``.
+        """
+        if self.nom_load <= 0.0:
+            raise ValueError(
+                f"The electrolyzer nominal load must be strictly positive, not {self.nom_load} kW. "
+                "It is what the investment cost is scaled by, so an unrated machine would be costed as free."
+            )
+        if self.max_load < self.nom_load:
+            raise ValueError(
+                "The electrolyzer maximum load must not be below its nominal load: "
+                f"{self.max_load} kW < {self.nom_load} kW describes a machine that cannot reach its own rating."
+            )
 
     @classmethod
     def get_default_alkaline_electrolyzer_config(
@@ -132,8 +156,11 @@ class ElectrolyzerConfig(ConfigBase):
         config = ElectrolyzerConfig(
             component_id=component_id,  # config_json.get("name", "")
             electrolyzer_type=config_json.get("electrolyzer_type"),
-            nom_load=config_json.get("nom_load", 0.0),
-            max_load=config_json.get("max_load", 0.0),
+            # The two ratings are read without a fallback: a variant that carries neither is a
+            # broken input file, and defaulting them to zero would silently produce a machine
+            # that is refused above -- or, worse, costed as free -- instead of naming the key.
+            nom_load=config_json["nom_load"],
+            max_load=config_json["max_load"],
             nom_h2_flow_rate=config_json.get("nom_h2_flow_rate", 0.0),
             faraday_eff=config_json.get("faraday_eff", 0.0),
             i_cell_nom=config_json.get("i_cell_nom", 0.0),
@@ -203,11 +230,12 @@ class Electrolyzer(cp.Component):
     TotalRampUpTime = "TotalRampUpTime"
     TotalRampDownTime = "TotalRampDownTime"
 
-    #: The three outputs the component integrates itself, mapped to the KPI name, the KPI unit
-    #: string and the declared unit their column must carry. The unit is part of the key because
-    #: a component may publish the same quantity in two units, and reading the wrong column would
-    #: be off by a factor rather than absent. Both the KPI entries and the operating costs read
-    #: these, through :meth:`Electrolyzer.read_cumulative_totals`.
+    #: The three outputs the component integrates itself, keyed by output field name and mapped
+    #: to the KPI name, the KPI unit string and the unit the column must declare. That expected
+    #: unit is matched when a column is selected, because a component may publish the same
+    #: quantity in two units and reading the wrong one would be off by a factor rather than
+    #: absent. Both the KPI entries and the operating costs read these, through
+    #: :meth:`Electrolyzer.read_cumulative_totals`.
     CUMULATIVE_TOTALS: ClassVar[Dict[str, Tuple[str, str, lt.Units]]] = {
         TotalHydrogenProduced: ("Hydrogen produced", "kg", lt.Units.KG),
         TotalEnergyConsumed: ("Electrical energy consumed", "kWh", lt.Units.KWH),
@@ -891,15 +919,10 @@ class Electrolyzer(cp.Component):
         """Return the electrolyzer's investment cost, embodied CO2, lifetime and maintenance cost.
 
         The electrolyzer is priced per kilowatt of nominal electrical load
-        (``ComponentType.ELECTROLYZER``), which is how published electrolyzer costs are quoted.
-        The figures come from the device database for the simulated year and country unless all
-        five cost fields on the configuration carry values, in which case those are used verbatim;
-        that is the rule every other costed component follows, and it is why the database entry --
-        not this method -- is where the numbers are stated and sourced.
-
-        The device is deliberately *not* declared as modelling no device: it is real equipment
-        with a real price, so answering zero here would understate the system total silently
-        instead of naming what is missing.
+        (``ComponentType.ELECTROLYZER``), which is how published electrolyzer costs are quoted, so
+        the figures scale by ``nom_load``. Where they come from is the all-or-nothing rule stated
+        on :class:`ElectrolyzerConfig`: the device database unless all five cost fields carry
+        values.
 
         Args:
             config: the electrolyzer configuration, read for ``nom_load`` and its cost fields.
@@ -932,11 +955,9 @@ class Electrolyzer(cp.Component):
 
         The electricity is the machine's own cumulative ``TotalEnergyConsumed`` output, which is
         the load it was actually given rather than its rating, priced and carbon-accounted at the
-        electricity factors for the simulated year and country -- the same way every other
-        electricity consumer in the library prices what it draws. The water the process consumes
-        is not priced: no water tariff exists in the fuels table, so it would have to be invented
-        here, and inventing it silently is worse than leaving a named gap. Report it from the
-        component's ``TotalWaterDemand`` output when a tariff is added.
+        electricity factors for the simulated year and country. The water the process consumes is
+        deliberately left unpriced: the fuels table carries no water tariff, and a named gap is
+        better than an invented number -- report it from ``TotalWaterDemand`` once one exists.
 
         Args:
             all_outputs: every output column of the run, searched for this component's outputs.

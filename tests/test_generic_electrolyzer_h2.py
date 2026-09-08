@@ -319,3 +319,28 @@ def test_electrolyzer_opex_refuses_a_missing_consumption_column() -> None:
 
     with pytest.raises(ValueError, match="Electrical energy consumed"):
         electrolyzer.get_cost_opex([electrolyzer.total_hydrogen], pd.DataFrame({0: [1.0]}))
+
+
+@pytest.mark.base
+def test_electrolyzer_config_refuses_a_non_positive_nominal_load() -> None:
+    """A nominal load of zero or less is refused at construction, by value.
+
+    The investment cost is the nominal load times a price per kilowatt, so an unrated machine
+    would be costed at zero euros and reported as an answer -- a device that reads as free rather
+    than as unsized. The configuration is where that stops.
+    """
+    for wrong in (0.0, -1.0):
+        with pytest.raises(ValueError, match="nominal load"):
+            _build_config(nom_load=wrong)
+
+
+@pytest.mark.base
+def test_electrolyzer_config_refuses_a_maximum_load_below_the_nominal_one() -> None:
+    """A maximum load below the nominal one is refused at construction, by value.
+
+    Such a machine cannot reach its own rating: the controller would distribute a load it can
+    never be given, and the run would report plausible numbers for a device that cannot exist.
+    """
+    with pytest.raises(ValueError, match="maximum load"):
+        # _build_config pins max_load at 1028.225 kW, so a nominal load above that inverts the two.
+        _build_config(nom_load=2000.0)

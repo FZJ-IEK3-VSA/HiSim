@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 from typing import Iterator
 
+import pandas as pd
 import pytest
 
 from hisim import hisim_main
@@ -20,6 +21,34 @@ REPO_ROOT: Path = Path(__file__).resolve().parent.parent
 ELECTROLYZER_SETUP_PATH: str = str(
     REPO_ROOT / "system_setups" / "electrolyzer_with_renewables.py"
 )
+#: The runtime names the setup gives its two costed devices, which are also how they are written
+#: into the "Component" column of both cost tables.
+TRANSFORMER_COMPONENT_NAME: str = "StandardTransformerAndRectifier"
+ELECTROLYZER_COMPONENT_NAME: str = "Electrolyzer"
+
+
+def _cost_row(table: pd.DataFrame, component_name: str, table_name: str) -> pd.Series:
+    """Return the one row of a cost table that belongs to ``component_name``.
+
+    The cost tables carry the component's runtime name -- and nothing else -- in their leading
+    "Component" column, so the row is matched on equality rather than on a substring: this setup
+    also runs an ``L1ElectrolyzerController``, whose name contains "Electrolyzer", and a substring
+    match would accept its row instead. The separator and total rows the writer appends carry no
+    component name and simply do not match.
+
+    Args:
+        table: the parsed cost table.
+        component_name: the runtime component name whose row is wanted.
+        table_name: the file the table was read from, for the failure message.
+
+    Returns:
+        pd.Series: the single matching row, indexed by the table's column headers.
+    """
+    matching = table[table["Component"].astype(str).str.strip() == component_name]
+    assert len(matching) == 1, (
+        f"Expected exactly one {component_name} row in {table_name}, found {len(matching)}"
+    )
+    return matching.iloc[0]
 
 
 @pytest.fixture(name="isolated_result_directory")
@@ -105,18 +134,29 @@ def test_electrolyzer_with_renewables(isolated_result_directory: str) -> None:
     assert any(results_dir.iterdir()), (
         f"Result directory is empty: {results_dir}"
     )
-    # The cost stages write one table each, and only if they were reached and answered. Both
-    # devices have to appear by name: a component whose cost model went missing again would
-    # either raise or drop out of the table, and this is what tells the two apart from a run
-    # that merely finished.
-    operational_costs = (results_dir / "operational_costs_co2_footprint.csv").read_text(encoding="utf-8")
-    investment_costs = (results_dir / "investment_cost_co2_footprint.csv").read_text(encoding="utf-8")
-    for table_name, table in (
-        ("operational_costs_co2_footprint.csv", operational_costs),
-        ("investment_cost_co2_footprint.csv", investment_costs),
-    ):
-        for component in ("StandardTransformerAndRectifier", "Electrolyzer"):
-            assert component in table, f"{component} is missing from {table_name}"
+    # The cost stages write one table each (semicolon-separated, one header row, the component
+    # name in the leading "Component" column), and only if they were reached and answered. Both
+    # devices have to appear by name and with figures above zero: a component whose cost model
+    # went missing again would either raise or drop out of the table, and one that answered zero
+    # would understate the system total while still looking like an answer. This is what tells
+    # those apart from a run that merely finished.
+    operational_costs = pd.read_csv(results_dir / "operational_costs_co2_footprint.csv", sep=";")
+    investment_costs = pd.read_csv(results_dir / "investment_cost_co2_footprint.csv", sep=";")
+    for component in (TRANSFORMER_COMPONENT_NAME, ELECTROLYZER_COMPONENT_NAME):
+        opex_row = _cost_row(operational_costs, component, "operational_costs_co2_footprint.csv")
+        assert opex_row["Costs of energy consumption [EUR]"] > 0.0, (
+            f"{component} reports no energy cost in operational_costs_co2_footprint.csv"
+        )
+        assert opex_row["CO2-emissions of energy consumption [kg]"] > 0.0, (
+            f"{component} reports no energy CO2 in operational_costs_co2_footprint.csv"
+        )
+        capex_row = _cost_row(investment_costs, component, "investment_cost_co2_footprint.csv")
+        assert capex_row["Investment [EUR]"] > 0.0, (
+            f"{component} reports no investment in investment_cost_co2_footprint.csv"
+        )
+        assert capex_row["Device CO2-footprint [kg]"] > 0.0, (
+            f"{component} reports no device CO2 in investment_cost_co2_footprint.csv"
+        )
     # WRITE_KPIS_TO_JSON is on, so the KPI stage after the cost stages ran too.
     assert (results_dir / "all_kpis.json").is_file(), (
         f"all_kpis.json missing in results directory: {results_dir}"

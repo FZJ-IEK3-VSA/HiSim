@@ -8,6 +8,7 @@ components:
     class: hisim.components.transformer_rectifier.Transformer
     config:
       efficiency: 0.95
+      # The electrolyzer's max_load: the unit is rated to carry the machine it feeds, so change both together.
       rated_power_in_kilowatt: 1028.225
       device_co2_footprint_in_kg: null
       investment_costs_in_euro: null

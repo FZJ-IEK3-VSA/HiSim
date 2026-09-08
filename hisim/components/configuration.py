@@ -408,7 +408,7 @@ capex_techno_economic_parameters = {
             ComponentType.ELECTROLYZER: {
                 # PEM system at the MW scale including balance of plant; [48] and [49] report
                 # 1400-1800 EUR/kW for European 2023-2024 installations, midpoint taken.
-                "investment_costs_in_euro_per_kw": 1500,
+                "investment_costs_in_euro_per_kw": 1600,
                 # 2-4 % of investment per year, stack replacement included, Source: [48, 49]
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.03,
                 # System lifetime; the stack's shorter 10 years, which [19] records for the whole

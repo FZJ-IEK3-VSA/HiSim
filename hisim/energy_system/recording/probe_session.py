@@ -25,10 +25,7 @@ probes are recorded and afterwards removed.
 from __future__ import annotations
 
 import difflib
-import os
 import shutil
-import subprocess  # nosec B404 - the only child is this repository's own command line
-import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -37,6 +34,7 @@ from typing import ClassVar, Dict, Iterator, List, Optional, Tuple
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemRecordingError
 from hisim.energy_system.loader import dump_energy_system, load_energy_system, parse_energy_system
 from hisim.energy_system.model import EnergySystemFile
+from hisim.energy_system.recording.child_recorder import ChildRecorder
 from hisim.energy_system.recording.grouping import Grouping
 from hisim.energy_system.recording.grouping_checks import check_grouping
 from hisim.energy_system.recording.grouping_report import (
@@ -53,20 +51,13 @@ from hisim.energy_system.recording.session import RecordedFileWriter, RecordingS
 class ProbeRunner:
     """Records one setup under each of its probe configurations, one interpreter each.
 
-    The runner exists as a class only so that the command it builds, the environment it sets and
-    the throwaway directory it uses are stated once. Everything else about it is the same decision
-    the fleet-wide recording driver already made: sequential rather than parallel, this
-    repository's own command line as the child, and the child's output kept for the message when it
-    fails.
+    The runner exists as a class only so that the probe-specific part of the invocation — which
+    options a probe adds to the recorder's command line and the throwaway directory it records
+    into — is stated once. The child itself comes from
+    :class:`~hisim.energy_system.recording.child_recorder.ChildRecorder`, shared with the
+    fleet-wide recording driver. What is left to the runner is the reading of the result: probes
+    are recorded sequentially, and the child's output is kept for the message when one fails.
     """
-
-    #: The child command that records one probe, completed with the paths.
-    COMMAND: ClassVar[Tuple[str, ...]] = ("-m", "hisim.cli", "energy-system", "record")
-
-    #: Environment variable naming the local load-profile-generator working directory. It is
-    #: removed from the child's environment: each probe then derives its index from its own process
-    #: id and cannot collide with other runs, and an exported value on the parent cannot leak in.
-    LPG_INDEX_VARIABLE: ClassVar[str] = "HISIM_LOCAL_LPG_CALC_INDEX"
 
     #: Prefix of the throwaway directory the probes are recorded into.
     WORK_PREFIX: ClassVar[str] = ".probes-"
@@ -151,22 +142,11 @@ class ProbeRunner:
             EnergySystemRecordingError: ``EF-R5`` when the child failed or wrote nothing.
         """
         module_config = ModuleConfigMaterialiser.write(probe_list, probe, work_dir)
-        arguments: List[str] = [
-            python or sys.executable,
-            *cls.COMMAND,
-            str(setup),
-            str(parameters),
-            "--out",
-            str(work_dir),
-        ]
+        arguments: List[str] = [str(setup), str(parameters), "--out", str(work_dir)]
         if module_config is not None:
             arguments += ["--module-config", str(module_config), "--probe", probe.column]
             arguments += ["--probes", probe_list.origin]
-        environment = dict(os.environ)
-        environment.pop(cls.LPG_INDEX_VARIABLE, None)
-        completed = subprocess.run(  # nosec B603 - fixed argument vector, no shell
-            arguments, env=environment, capture_output=True, text=True, check=False
-        )
+        completed = ChildRecorder.run(arguments, python=python)
         label = "" if probe.is_baseline else f".{probe.column}"
         path = work_dir / f"{Path(setup).stem}{label}{RecordedFileWriter.SUFFIX}"
         if completed.returncode != 0 or not path.exists():

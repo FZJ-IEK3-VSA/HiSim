@@ -82,10 +82,10 @@ The external representation is fixed by P2 (mockups + `energy_systems/gas_boiler
 ### R4 — Freshness `[proposed; from scenario-json-freshness.yml]`
 A CI job re-records every in-scope setup and fails on any diff to the checked-in twin, printing the diff. Recording must therefore be deterministic: same setup + same parameters → byte-identical file across machines (no timestamps, no absolute paths, no dict-order dependence).
 
-### R5 — Scope of setups `[decided 2026-08-28; Q-P3.5]`
-- R5.1 In scope: **every** setup in `system_setups/`. The three that cannot be recorded are removed from main rather than carried as exceptions, so the recording script has no skip list and the scope needs no wording.
-- R5.2 Removed in their own commit, before the first recording: `simple_weather_data_import.py` (registers no component) and `basic_household_with_weather_data_request.py` (fetches DWD data at setup time) — both need the optional `wetterdienst`, which `requirements.txt` currently comments out pending an API migration, and both are already on the `--exclude` list of `scenario-json-freshness.yml`; and `air_conditioned_house.py`, which deletes `inputs/cache` before building and has no test at all. What goes with them: the two v1 `.scenario.json` twins (`simple_weather_data_import` has none), the two `tests/test_system_setups_*` files, and the freshness workflow's `--exclude` list, which becomes empty and is deleted with them.
-- R5.3 What stays: `hisim/components/weather_data_import.py` is a component, not a setup, and keeps its coverage in `test_config_contracts.py` and `test_json_configs.py`; cooling stays represented by `simple_air_conditioner_household_building_sizer.py`, so the fleet loses no physics.
+### R5 — Scope of setups `[decided 2026-08-28; Q-P3.5; amended 2026-09-02]`
+- R5.1 In scope: **every** setup in `system_setups/`. A setup that cannot be recorded is removed from main rather than carried as an exception, so the recording script has no skip list and the scope needs no wording. `[amended 2026-09-02]` Of the three this rule originally named, none was removed by P3's own hand — see R5.2 — and the recorded fleet is **twenty-two setups**, not twenty-one.
+- R5.2 `[amended 2026-09-02]` The removal this requirement asked for happened, but not as one P3 commit. `simple_weather_data_import.py` (registers no component) and `basic_household_with_weather_data_request.py` (fetches DWD data at setup time; both need the optional `wetterdienst`) were moved to `obsolete/` on main by #596, independently of P3, together with their v1 twin and their two `tests/test_system_setups_*` files. `air_conditioned_house.py` **stays**: it was named here because it deleted every file in `inputs/cache` before building and had no test, and #605 removed exactly that call and gave the setup a passing one-day KPI test, so the premise for deleting it is gone and the fleet policy that replaced it — every setup is made to work rather than dropped — applies instead. It is recorded like any other setup. What remained for P3's own commit was the tail: empty the freshness workflow's `--exclude` list and delete the option, which the two moves left better justified than when this was written — the names it excluded are no longer in `system_setups/` at all. After that commit the recorder needs no skip list.
+- R5.3 What stays: `hisim/components/weather_data_import.py` is a component, not a setup, and keeps its coverage in `test_config_contracts.py` and `test_json_configs.py`. Cooling is represented twice over: `air_conditioned_house.py` (kept, see R5.2 as amended) and `simple_air_conditioner_household_building_sizer.py`, so the fleet loses no physics.
 - R5.4 **A setup that cannot be recorded is removed, not skipped.** If a later setup cannot be recorded, that is a defect in the setup or a gap in the format, and there is no skip list for it to hide in.
 
 ### R6 — Module-config-driven setups `[proposed; Q-P3.3]`
@@ -211,6 +211,15 @@ extension of the golden gate and it blesses nothing.
 - R11.5 **Two windows.** Every triple runs a January week and a July week — `one_week_only` and a new `one_week_july`,
   both at 60 s. A single window measures the cooling and solar-thermal setups at their annual minimum, and the
   January-only window is why the air-conditioner setup divides by zero in the scan.
+  `[amended 2026-09-06]` **The July window is fenced; the rig runs the January week only.** HiSim has never supported
+  a mid-year start date: every profile-driven component (all six weather sources and both cache branches, PV, the
+  building, the LPG occupancy, the cars, the smart devices, the CSV loader, the seasonal heat-pump and CHP gates)
+  indexes its year-long profile from timestep 0 as if that were the 1st of January, so a July triple compares two
+  runs that both simulate January — the January triple's numbers under July timestamps for every setup without a
+  solar-thermal collector, and physically incoherent for the three with one, whose sun position follows the date
+  while its irradiance does not. `one_week_july` and the window name are kept and the fence is one refusal in
+  `scripts/p3_parity_matrix.py`; the mid-year-start epic (`roadmap/midyear_start_epic.md`) fixes the profiles
+  fleet-wide and unfences the window, at which point this requirement is met as first written.
 - R11.6 **One configuration axis.** The configurations are R10's probe list, so the rig, the grouping table and the
   recorded files share one definition of the configurations a setup has.
 - R11.7 **Manual, aggregated and loud.** `workflow_dispatch` only, with filters for setup, window and configuration; a
@@ -250,7 +259,7 @@ extension of the golden gate and it blesses nothing.
 
 | ID | Criterion | Verifies |
 |---|---|---|
-| AC-P3.1 | After the removal commit, the recording script produces a file for each of the 21 remaining setups in `system_setups/` — all of them, with no skip list; each loads, validates and builds through the executor without error. | R1, R5, R2.1 |
+| AC-P3.1 `[amended 2026-09-02]` | The recording script produces a file for each of the **22** setups in `system_setups/` — all of them, with no skip list; each loads, validates and builds through the executor without error. (The original wording counted 21 after a removal commit; see R5.2 as amended — `air_conditioned_house` stays and is recorded.) | R1, R5, R2.1 |
 | AC-P3.2 | `golden_check.py` passes for all 8 golden setups × 2 parameter sets when the run comes from the recorded file; a new blocking workflow `golden-yaml-check.yml` runs it. | R3.1, C-P3.1 |
 | AC-P3.3 | For every in-scope setup: wire set, component count and input counts equal the Python run; the recorded file's realized record re-executes byte-identically. | R3.2, R3.3 |
 | AC-P3.4 | Recording twice on two machines yields byte-identical files; the freshness workflow fails on a one-field change to a setup and prints the diff. | R4 |
@@ -259,12 +268,12 @@ extension of the golden gate and it blesses nothing.
 | AC-P3.7 | `dump(load(f)) == f` for every recorded file. | R2.5 |
 | AC-P3.8 | The car setup records `3·N + 14` components for the default household and re-executes byte-identically. *(Measured 2026-08-31 with D-23: 17 components for the default CHR01 household, which yields `N = 1`. The `+ 11` and `+ 9` of the original wording undercounted the car-free part of the setup by three.)* | R7 |
 | AC-P3.9 | The 12 base files (R6) each run under `one_day_15min.simulation.yaml` from `energy_systems/`; the heat-pump base is the one P5 hands to RenoVisor. | R6 |
-| AC-P3.10 | Apart from the removal commit of R5.2, `system_setups/`, the v1 JSONs and `scenario-json-freshness.yml` are unchanged by the P3 PRs, and every recorded file lands in `energy_systems/`; no v3 file is written into `system_setups/`. | R9, R5.2 |
+| AC-P3.10 `[amended 2026-09-02]` | Apart from the `--exclude`-list deletion that remained of R5.2, `system_setups/`, the v1 JSONs and `scenario-json-freshness.yml` are unchanged by the P3 PRs, and every recorded file lands in `energy_systems/`; no v3 file is written into `system_setups/`. | R9, R5.2 |
 | AC-P3.13 | For every setup with a probe list, each probe column's flat recording equals the grouped file realized with that column's selections, byte for byte — the baseline column against the R6 base file. | R10.6, R10.1 |
 | AC-P3.14 | The prefilled workbook marks a component absent, identical or differing against the baseline, and the importer rejects a workbook with a differing component that carries no assignment, naming it. | R10.2, R10.3 |
 | AC-P3.15 | `<stem>.grouping.yaml` is committed and the workbook is not; regenerating the workbook from the probe runs and re-importing it yields the identical `.grouping.yaml`. | R10.4 |
 | AC-P3.16 | The grouping report lists the `override` differences as consumer knobs and names the fork combinations the probe list never exercised. | R10.5, R10.7 |
-| AC-P3.17 | One dispatch of the rig covers every in-scope (setup, configuration, window) triple and prints them as one table; the January and July windows both appear for every triple. | R11.1, R11.5, R11.7 |
+| AC-P3.17 `[amended 2026-09-06]` | One dispatch of the rig covers every in-scope (setup, configuration, window) triple and prints them as one table; every runnable window appears for every triple. That is the January window alone while the July one is fenced (R11.5 as amended, because a July window reads January's profiles today); a dispatch that asks for July is refused with that reason rather than quietly given January. The criterion returns to "both windows" when the mid-year-start epic unfences it. | R11.1, R11.5, R11.7 |
 | AC-P3.18 | Changing one config value in a recorded file makes its triple fail and the report names the columns or KPIs that moved; the comparison is exact, so no threshold can hide it. | R11.2, R11.3 |
 | AC-P3.19 `[amended 2026-09-05]` | The seven KPI-broken setups return a structural verdict — component set and wire set compared, KPI stage reported as unavailable — rather than an error. The unavailable stage fails the triple in the summary table (R11.4 as amended); what the criterion pins is that the failure is a named verdict with both structural comparisons made, never an exception. | R11.4, R11.3 |
 | AC-P3.20 `[deferred to P6, 2026-08-31]` | The phase-6 teardown deletes the workflow, its configuration and its scripts, and the repository contains no reference to them afterwards. It is an acceptance criterion of P6, not of P3 — P3 ships the rig, P6 removes it. | R11.8 |
@@ -272,7 +281,7 @@ extension of the golden gate and it blesses nothing.
 | AC-P3.22 | Recording two setups with identical parameters that match nothing shipped produces one shared file, not two, and both recordings reference it. | R8.3, R8.5 |
 | AC-P3.23 | Two setups differing only in `cache_dir_path` produce the same parameter file, and no written file contains a machine-specific path. | R8.4 |
 | AC-P3.24 | The freshness job fails when two `energy_systems/*.simulation.yaml` have equal normalised content. | R8.6 |
-| AC-P3.11 | The recording script has no skip list: it records every file in `system_setups/` and fails if one cannot be recorded, naming it. After the removal commit, `wetterdienst` appears in no setup and the freshness workflow has no `--exclude`. | R5.1, R5.4, R5.2 |
+| AC-P3.11 `[amended 2026-09-02]` | The recording script has no skip list: it records every file in `system_setups/` and fails if one cannot be recorded, naming it. Since #596 moved the two `wetterdienst` setups to `obsolete/` and R5.2's tail commit emptied the exclude list, `wetterdienst` appears in no setup and the freshness workflow has no `--exclude`. | R5.1, R5.4, R5.2 |
 | AC-P3.12 | No recorded energy-system file contains a simulation-parameter key (duration, resolution, post-processing option, logging level, cache path); a schema-level test rejects them. | R8 |
 
 ## 11. Open Questions and Decisions
@@ -285,7 +294,7 @@ extension of the golden gate and it blesses nothing.
 | Q-P3.2 | KPI parity at `rel_tol = 1e-9`, or byte-identical result CSVs? | R3.1, C-P3.2, AC-P3.2 | `[answered 2026-08-28]` (a) KPI parity, the existing oracle. Renaming the legacy aggregator ports to make CSVs comparable stays a P4/P5 item, not a condition of the migration |
 | Q-P3.3 | Are the 12 module-config sizers recorded once with class defaults, and is the PV/battery/EMS fork flat or a group? | R6, R2.4, R10, AC-P3.9 | `[answered 2026-08-28]` **semi-manual, two passes** (R10): flat recordings of a probe list of configurations, a prefilled table where a person assigns each differing component to a group, a variant option or an override, and a second pass that builds the grouped file — with every probe column asserting the result byte for byte |
 | Q-P3.4 | Where do recorded files live, and do the v1 JSON twins stay? | R9, R4, AC-P3.10 | `[answered 2026-08-28]` (a) `energy_systems/<stem>.energy_system.yaml`, v1 twins and their workflow untouched; v1 retires with `json_executor.py` in P5 |
-| Q-P3.5 | Which of the three problematic setups are out of scope? | R5, AC-P3.1, AC-P3.11 | `[answered 2026-08-28]` none — they are **removed from main** instead, with their twins, tests and the freshness `--exclude` list. A setup that cannot be recorded is a defect, not an exception (R5.4) |
+| Q-P3.5 | Which of the three problematic setups are out of scope? | R5, AC-P3.1, AC-P3.11 | `[answered 2026-08-28; amended 2026-09-02]` none — the original answer removed all three from main. What actually happened: #596 retired the two `wetterdienst` setups independently, and `air_conditioned_house` became recordable when #605 removed its cache wipe, so it **stays** and the fleet is twenty-two (R5.2 as amended). The principle survives unchanged: a setup that cannot be recorded is a defect, not an exception (R5.4) |
 | Q-P3.6 | Does the recorder emit a `<stem>.simulation.yaml` too? | R8 | `[answered 2026-08-28]` only when the setup's parameters match no file in `energy_systems/`, and never twice with the same content — files are shared, named for their content, and the freshness job forbids duplicates |
 | Q-P3.7 | Do the 13 setups without a numeric oracle get one in P3? | A2, AC-P3.3, R11 | `[answered 2026-08-28]` yes, but not by joining the permanent gate: a **temporary A/B parity rig** (R11), dispatched by hand, comparing the Python path against the recorded file inside one container at exact equality, over a January and a July week, deleted in P3's last PR |
 

@@ -1569,8 +1569,12 @@ implementation silently drops a component from every cost result. Countermeasure
   (must provide `EnergyFlowFacts`). The base class default is `UNDECLARED`.
 - **Completeness check at simulation start, not end.** During component registration, any `UNDECLARED`
   component, or a `PRICED` component whose facts don't build, aborts with a message naming the class
-  and file. Strictness is configurable (`strict_cost_completeness`): hard error in CI and tests,
-  downgradeable to a warning for legacy system setups during migration.
+  and file. There is no lenient mode and no `strict_cost_completeness` flag: an undeclared component
+  is always a hard error, because the alternative is a cost result that is quietly incomplete. The
+  same rule applies to the compatibility adapter (§10.0): relevance is read off the class
+  declaration only — never inferred from the adapter's own tables — and every way of producing no
+  facts other than "this class is unknown and claims nothing" carries a reason that fails the
+  evaluation.
 
 Forgetting the cost model on a new component thus fails the very first test run — today, forgetting
 `get_cost_opex` merely produces a silent `NotImplementedError` swallowed by the None-filtering in
@@ -1689,8 +1693,9 @@ explicit final phase. Concretely, the following rules bind every phase except Ph
    CSV re-parse — is neither edited nor refactored.
 2. **Changes to existing files are purely additive**: a new `PostProcessingOptions` flag
    (`COMPUTE_LIFECYCLE_COSTS`), new optional methods on `Component` with a no-op default
-   (`get_cost_facts()` returning `None`), the `cost_relevance` class attribute (§9.2, metadata only,
-   warning-mode during the parallel phase). No existing line of calculation logic changes.
+   (`get_cost_facts()` returning `None`), the `cost_relevance` class attribute (§9.2 — metadata for
+   everything except the cost engine, which requires it). No existing line of calculation logic
+   changes.
 3. **Activation is opt-in and side-effect-free.** With the flag off, behavior is bit-identical to
    today. With the flag on, the new engine runs *in addition* and writes only new files
    (`lifecycle_costs.json`, `component_costs.*`, `cash_flow_timeline.csv`, `cost_audit.csv`,
@@ -1731,7 +1736,8 @@ data source as data-only PRs, whose effect is visible in the audit diff (§9.5).
 `observation_period = simulated period`, all rates 0, the engine reproduces today's
 "per simulated period" numbers exactly — verified via the shadow-mode parity report, not by modifying
 the old path. Unit tests against hand-calculated VDI 2067 / EN 15459 examples. This phase also ships
-the maintenance infrastructure of §9: `cost_relevance` declarations (additive, warning-mode), the
+the maintenance infrastructure of §9: `cost_relevance` declarations (additive, but mandatory once
+the bridge runs — an undeclared component aborts the evaluation), the
 pre-run resolution check, the auto-discovered contract test, the cost audit report, and the data-file
 CI (schema + coverage matrix) — so the safety net exists *before* any component adopts the new API.
 
@@ -1911,9 +1917,11 @@ revertable by turning the flag off.
     re-running scheme selection per scenario.
 
 **Cross-cutting (maintainability, §9)**
-14. Enforcement strictness rollout: when does `strict_cost_completeness` flip from warning to hard
-    error — per system setup, or globally at cutover (Phase 7)? Proposal: error in CI from Phase 1,
-    error everywhere at cutover.
+14. ~~Enforcement strictness rollout: when does `strict_cost_completeness` flip from warning to hard
+    error — per system setup, or globally at cutover (Phase 7)?~~ **Decided: no rollout and no
+    flag.** Declaration is mandatory from the start and an undeclared component aborts the
+    evaluation everywhere (§9.2). The flag was never implemented; the leniency it promised is what
+    would have let a component disappear from a cost result.
 15. Capacity-field convention for the contract test's scaling check: dataclass field metadata
     (`field(metadata={"capacity": True})`, proposal) vs. a `get_capacity_field_name()` classmethod on
     `ConfigBase`.

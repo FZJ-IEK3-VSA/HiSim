@@ -407,13 +407,34 @@ class ResolvedDynamicConnection:
             return None
         return self.dispatch_output_name
 
-    def sort_key(self) -> Tuple[int, str, str]:
-        """The deterministic ordering key of a target's connections.
+    @staticmethod
+    def order_key(weight: int, source_name: str, source_output: str) -> Tuple[int, str, str]:
+        """The one definition of the order an aggregator's participants are handled in.
+
+        Both build paths order participants by this tuple: feed resolution sorts a target's
+        resolved connections through :meth:`sort_key`, and ``DynamicComponent`` orders the ports
+        it hands out for summation through its ``_summation_sort_key``. The tuple is defined here,
+        once, so that a change to the ordering — a tiebreaker, a normalisation — reaches both
+        paths together instead of leaving one behind and re-opening the path-dependent summation
+        of F-35.
+
+        Args:
+            weight: The participant's declared weight.
+            source_name: The name of the participant component.
+            source_output: The name of the participant's measured output.
 
         Returns:
             Weight, participant name and participant output, in that priority.
         """
-        return (self.weight, self.source_name, self.source_output)
+        return (weight, source_name, source_output)
+
+    def sort_key(self) -> Tuple[int, str, str]:
+        """The deterministic ordering key of a target's connections.
+
+        Returns:
+            :meth:`order_key` over this connection's weight, participant name and output.
+        """
+        return self.order_key(self.weight, self.source_name, self.source_output)
 
     def describe(self) -> str:
         """Builds the one-line rendering error messages and the wire log name it by.

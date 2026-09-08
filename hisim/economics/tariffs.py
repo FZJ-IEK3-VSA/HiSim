@@ -220,6 +220,10 @@ class TariffContract:
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cost_database", "tariffs"
     )
 
+    #: Infix reserved for the ids of contracts synthesized from the §3.5 price entries. A catalog
+    #: file must not use it, or its contract would be mistaken for a synthesized one.
+    DEFAULT_ID_INFIX: ClassVar[str] = "_DEFAULT_"
+
     id: str  # equals the file name for catalog contracts
     carrier: EnergyCarrier
     country: str
@@ -232,6 +236,48 @@ class TariffContract:
     controllability_discount: ControllabilityDiscount = field(default_factory=ControllabilityDiscount)
     source_ids: Tuple[str, ...] = ()
     is_default_contract: bool = False  # generated from the §3.5 price entries
+
+    @classmethod
+    def default_contract_id(cls, country: str, carrier: EnergyCarrier, year: int) -> str:
+        """The id a contract synthesized from the §3.5 price entries carries.
+
+        The format lives here, next to the flag such a contract sets, because two unrelated places
+        need to agree on it: `calculators/energy.contract_from_price_entry`, which mints it, and
+        `serialization.contracts_from_json`, which has to recognize one in an archived file whose
+        contracts were stored as bare ids. That second reader used to re-derive the format from a
+        substring split and a hardcoded list of countries, so a synthesized contract for any third
+        country was looked up as a catalog file and failed.
+
+        Args:
+            country: Country code the price entries were read for.
+            carrier: The carrier the contract bills.
+            year: The price entry's year.
+
+        Returns:
+            The synthesized contract's id.
+        """
+        return f"{country}{cls.DEFAULT_ID_INFIX}{carrier.value}_{year}"
+
+    @classmethod
+    def is_default_contract_id(cls, contract_id: str) -> bool:
+        """Whether the id is one :meth:`default_contract_id` would mint.
+
+        Needed because a synthesized default contract has no catalog file — it is regenerated from
+        the price entries at the price basis year, which is what keeps scenario price overlays
+        effective — so a reader holding nothing but its id cannot load it and check
+        `is_default_contract`. The match is on the whole shape (country, the reserved infix, a real
+        carrier value, a numeric year) rather than on the infix alone, so a catalog contract that
+        happens to contain the word is not mistaken for a synthesized one.
+
+        Args:
+            contract_id: The id to classify.
+
+        Returns:
+            True if the id has the synthesized-default shape.
+        """
+        country, _, tail = contract_id.partition(cls.DEFAULT_ID_INFIX)
+        carrier_value, _, year = tail.rpartition("_")
+        return bool(country) and year.isdigit() and carrier_value in {member.value for member in EnergyCarrier}
 
     @classmethod
     def from_json(cls, raw: dict, registry: Optional[SourceRegistry] = None) -> "TariffContract":

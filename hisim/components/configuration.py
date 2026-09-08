@@ -319,6 +319,12 @@ Sources for capex techno-economic parameters:
         [45]: https://www.wko.at/netzwerke/infopoint-stromspeicher
         [46]: https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
         [47]: https://www.energieinstitut.at/privatpersonen/photovoltaik-und-solarthermie/solaranlagen
+        [48]: IRENA (2020), "Green Hydrogen Cost Reduction: Scaling up Electrolysers to Meet the
+        1.5C Climate Goal", https://www.irena.org/publications/2020/Dec/Green-hydrogen-cost-reduction
+        [49]: IEA (2023), "Global Hydrogen Review 2023", https://www.iea.org/reports/global-hydrogen-review-2023
+        [50]: ecoinvent-based life-cycle inventories for photovoltaic power electronics (inverter,
+        2500 W to 500 kW), used here as the closest published proxy for a rectifier's embodied
+        emissions: https://www.ecoinvent.org
         """
 capex_techno_economic_parameters = {
     "DE": {
@@ -392,6 +398,38 @@ capex_techno_economic_parameters = {
                 "subsidy_as_percentage_of_investment_costs": 0,
                 # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
                 # that's why we assume 0% subsidy here, source: [31]
+            },
+            # PROPOSED VALUES, NOT YET REVIEWED BY THE COST OWNER (added 2026-09-07 so that a
+            # stock all-options run of electrolyzer_with_renewables reaches its KPIs instead of
+            # dying in COMPUTE_OPEX/COMPUTE_CAPEX). Every figure below is the midpoint of a
+            # published range for a megawatt-scale industrial installation, not a measurement, and
+            # the two devices are industrial equipment rather than the household appliances the
+            # rest of this table describes -- so the orders of magnitude differ by design.
+            ComponentType.ELECTROLYZER: {
+                # PEM system at the MW scale including balance of plant; [48] and [49] report
+                # 1400-1800 EUR/kW for European 2023-2024 installations, midpoint taken.
+                "investment_costs_in_euro_per_kw": 1500,
+                # 2-4 % of investment per year, stack replacement included, Source: [48, 49]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.03,
+                # System lifetime; the stack's shorter 10 years, which [19] records for the whole
+                # device, is carried by the maintenance share above rather than by a 10-year
+                # replacement of everything. Source: [48, 49]
+                "technical_lifetime_in_years": 15,
+                "co2_footprint_in_kg_per_kw": 190.5,  # Source: [19]
+                "subsidy_as_percentage_of_investment_costs": 0,
+            },
+            ComponentType.TRANSFORMER_AND_RECTIFIER: {
+                # Grid-side power supply of a large electrolyzer -- step-down transformer plus
+                # rectifier -- at 100-200 EUR/kW, which is the ~10 % share [48] attributes to the
+                # power supply of a MW-scale system; midpoint taken.
+                "investment_costs_in_euro_per_kw": 150,
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.015,  # 1-2 %/year
+                # Grid transformers and industrial rectifiers are 25-30 year assets, Source: [23]
+                "technical_lifetime_in_years": 27,
+                # No published inventory for a rectifier was found; power electronics of the same
+                # duty (a PV inverter) carry roughly this, Source: [50]
+                "co2_footprint_in_kg_per_kw": 60,
+                "subsidy_as_percentage_of_investment_costs": 0,
             },
             # CAPEX per kWh
             ComponentType.BATTERY: {

@@ -113,6 +113,13 @@ python -m hisim.economics validate
 python -m hisim.economics report <results_dir> [--compare <reference_results_dir>]
 ```
 
+`evaluate`, `explain` and `report` all accept `--parameters <file>` (an `EconomicParameters`
+JSON document) and `--subsidy-catalog <dir>`, and all three mean the same thing: price under
+*these* assumptions rather than the stored ones, the flag winning over the
+`subsidy_catalog_path` inside the parameters file. `report` renders the stored evaluation when
+neither flag is given — that is what keeps it a rendering step rather than a second
+evaluation — and re-evaluates, saying so on stdout, when one of them is.
+
 The report layer follows the money along the calculation chain — every spec feature has at
 least one visualization plus a result table: **0** automated plausibility panel (thresholds:
 `cost_database/plausibility_checks.json` — range checks WARN, structural invariants FAIL),

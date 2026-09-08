@@ -29,8 +29,11 @@ is a judgement a person makes and not something one run can be asked about.
 That judgement has a second pass of its own, and it is built from the same three stages run several
 times over. :mod:`~hisim.energy_system.recording.probes` reads the authored list of module
 configurations a setup is recorded under; :mod:`~hisim.energy_system.recording.probe_session` records
-each of them in its own process; :mod:`~hisim.energy_system.recording.matrix` reduces the recordings
-to the three-state table a person is asked about;
+each of them in its own process, spawned through
+:mod:`~hisim.energy_system.recording.child_recorder`, which is where the recorder's child command
+line is stated for every caller that needs one;
+:mod:`~hisim.energy_system.recording.matrix` reduces the recordings to the three-state table a
+person is asked about;
 :mod:`~hisim.energy_system.recording.workbook` writes that table out as a spreadsheet and
 :mod:`~hisim.energy_system.recording.workbook_import` reads the answer back;
 :mod:`~hisim.energy_system.recording.grouping` is the answer as a value, with its committed form in
@@ -48,6 +51,7 @@ stay possible without importing HiSim's component tree, and a recorder necessari
 # clean
 
 from hisim.energy_system.recording.builder import EnergySystemBuilder, PortablePathGuard, build
+from hisim.energy_system.recording.child_recorder import ChildRecorder
 from hisim.energy_system.recording.configs import EntryConfigWriter
 from hisim.energy_system.recording.inputs import InputItemWriter
 from hisim.energy_system.recording.names import RecordedNames
@@ -102,6 +106,7 @@ __all__ = [
     "Assignment",
     "AssignmentKind",
     "CellState",
+    "ChildRecorder",
     "ColumnRealizer",
     "ColumnVerdict",
     "CombinationSpace",

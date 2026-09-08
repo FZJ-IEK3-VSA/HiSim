@@ -99,12 +99,18 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     # Create new CSV loader object
     csv_loader = CSVLoader(my_csv_loader, my_simulation_parameters=my_simulation_parameters)
 
+    # The electrolyzer configuration is read first because the transformer and rectifier in front
+    # of it is rated for it: the conversion stage has to carry the machine's maximum load, which is
+    # also what its investment cost is scaled by.
+    my_electrolyzer_config = ElectrolyzerConfig.config_electrolyzer(electrolyzer_name)
+
     # Setup the transformer and rectifier unit
     my_transformer = Transformer(
         my_simulation_parameters=my_simulation_parameters,
         config=TransformerConfig(
             component_id=ComponentID(name=name),
             efficiency=efficiency,
+            rated_power_in_kilowatt=my_electrolyzer_config.max_load,
         ),
     )
 
@@ -116,7 +122,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     # Setup the electrolyzer
     my_electrolyzer = Electrolyzer(
-        config=ElectrolyzerConfig.config_electrolyzer(electrolyzer_name),
+        config=my_electrolyzer_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 

@@ -911,7 +911,7 @@ def test_the_grouping_probe_verb_drives_the_shared_recorder_child(monkeypatch: p
         captured.setdefault("argv", list(arguments))
         return subprocess.CompletedProcess(args=arguments, returncode=1, stdout="", stderr="stubbed refusal")
 
-    monkeypatch.setattr("hisim.energy_system.recording.probe_session.subprocess.run", fake_run)
+    monkeypatch.setattr("hisim.energy_system.recording.child_recorder.subprocess.run", fake_run)
 
     # Absolute paths, because the continuous-integration job runs pytest from tests/ and a
     # working-directory-relative fixture path would make the verb refuse with EF-03 before the

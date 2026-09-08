@@ -607,7 +607,8 @@ tests/worked_examples/
     subsidies/...
     modernization_levy/...                # the German §559/§559e landlord/tenant split
     end_to_end/...                        # few full EvaluationInputs cases
-tools/convert_worked_examples.py          # manual run + CI drift check
+tools/convert_worked_examples.py          # manual run + CI drift check (entry point)
+tools/worked_examples/                    # the converter itself, one module per seam
 ```
 
 **One example = one workbook = one YAML file** (decided, was open question):
@@ -651,12 +652,41 @@ Fixed template layout, validated by the converter:
   positive, revenue/subsidy negative) next to the Expected table; the
   converter checks the sign of expected values in known revenue-type rows.
 
-### 3.3 Converter (`tools/convert_worked_examples.py`)
+### 3.3 Converter (`tools/convert_worked_examples.py` -> `tools/worked_examples/`)
+
+`tools/convert_worked_examples.py` stays the command — CI and the authoring
+instructions below both name that path — but it is a thin entry point; the
+implementation is the `tools/worked_examples/` package it delegates to, split
+out of a single 1,147-line module in the PR-561 review round. One module per
+seam: `model.py` (the dataclasses one example is held in), `attestation.py`
+(§3.8 fingerprint, review state, the warn/error switch), `emitter.py` (§3.4,
+every byte of the generated text), `arithmetic.py` (the Excel-to-Python
+translator of the cross-check below), `formulas.py` (rewriting raw cell
+references into defined names), `workbook.py` (the §3.2 sheet template and the
+row-level rules) and `cli.py` (discovery, the run modes, the exit codes). The
+package **must not import `hisim`**: the drift check runs in a CI job that
+installs only `openpyxl` and `PyYAML`. The dependency to the test suite runs the
+other way — `tests/test_worked_examples.py` imports the fingerprint protocol and
+the workbook-discovery predicate from the package, so each has one owner.
 
 Reads each workbook with `openpyxl` twice — `data_only=False` (formula text)
 and `data_only=True` (cached values) — and emits deterministic YAML (stable key
 order, fixed float formatting, values rounded consistently with the declared
-tolerance).
+tolerance). The **tolerance itself is never rounded**: it is emitted at full
+precision in plain decimal, so reading the fixture back yields exactly the
+`abs_tol` the author declared. Rendering it at the value's decimal count changed
+what the example asserted — a declared `0.025` was stored as `0.03` (looser),
+`0.15` as `0.1` (stricter), and anything below about 5e-13 as `0.0`, which
+demands bit-exact equality. Plain decimal rather than an exponent because
+`1e-06` parses as a *string* under a YAML 1.1 loader.
+
+The `spec_section` metadata field names a subsection of **`cost_spec.md`**, the
+domain specification — not of this document, whose §3 describes the library
+itself. Both have a §3.2 and a §3.6 with different meanings, so a reader
+following the field needs to know which document it points at. The field is not
+repeated in the generated header: that header is part of the fixture text the
+drift check compares byte for byte, so adding a sentence to it would rewrite all
+25 committed files.
 
 **Formula extraction and rewriting:**
 

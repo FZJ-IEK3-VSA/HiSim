@@ -59,13 +59,6 @@ open, so nothing survives only in a conversation. Items are removed when done, n
   variable and run the same subprocess shape — deliberate duplication while the two lived on
   different stack branches. The helper's home is the recording package, with the script importing
   it.
-- [ ] **Flip `energy-system-freshness` from advisory to blocking after its burn-in** (decided
-  2026-09-05, #636 review round). The gate merged with `continue-on-error: true` because
-  byte-identical re-recording is proven by test for one setup and only by design for the other
-  twenty-one; after a week of green runs on main (first green run 2026-09-06, so due around
-  2026-09-13), delete that one line (the workflow header carries the same instruction) and the
-  gate blocks. That first green run on development-box twins is also AC-P3.4's cross-machine
-  evidence; the week of them is the confidence.
 
 ## Deferred by design (not P3's debt, listed so it is findable)
 
@@ -82,3 +75,6 @@ Rig headers say P6: #637. Channel migration: #645. Requirements doc R5.1/R5.2/R5
 AC-P3.10, AC-P3.11 and Q-P3.5 amended to the twenty-two-setup reality: 2026-09-07, this commit.
 The #625 fleet re-record: satisfied by #636 recording all twenty-two after #625, first freshness
 run green on main 2026-09-06. AC-P3.4 evidence: same run. #598 closed: 2026-09-07.
+The freshness gate flipped to blocking: 2026-09-08, #654 — eleven green runs on main
+across 2026-09-06..08 (one cancelled by a newer push, none failed), which the owner judged
+sufficient to grant the bit ahead of the nominal week.

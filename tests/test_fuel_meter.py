@@ -269,3 +269,8 @@ def test_house(
         oil_consumption_in_kilowatt_hour,
         rtol=0.05,
     )
+
+    # The qualified key has to hold the meter's real emissions: a lookup that found nothing, or
+    # found an entry the qualification had emptied, would otherwise be logged and pass.
+    assert co2_footprint_due_to_heating_use_in_kg is not None
+    assert co2_footprint_due_to_heating_use_in_kg > 0

@@ -405,7 +405,6 @@ class SimpleAirConditioner(cp.Component):
             value=opex_dataclass.total_consumption_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(electricity_consumption_kwh)
 
@@ -431,7 +430,6 @@ class SimpleAirConditioner(cp.Component):
             value=thermal_energy_delivered_cooling_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(thermal_energy_delivered_cooling_entry)
 
@@ -442,7 +440,6 @@ class SimpleAirConditioner(cp.Component):
             value=capex_dataclass.capex_investment_cost_in_euro,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(capex)
 
@@ -452,7 +449,6 @@ class SimpleAirConditioner(cp.Component):
             value=capex_dataclass.device_co2_footprint_in_kg,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(co2_footprint_capex)
 
@@ -462,7 +458,6 @@ class SimpleAirConditioner(cp.Component):
             value=opex_dataclass.opex_energy_cost_in_euro,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(opex)
 
@@ -472,7 +467,6 @@ class SimpleAirConditioner(cp.Component):
             value=opex_dataclass.opex_maintenance_cost_in_euro,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(maintenance_costs)
 
@@ -482,7 +476,6 @@ class SimpleAirConditioner(cp.Component):
             value=opex_dataclass.co2_footprint_in_kg,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(co2_footprint)
 
@@ -494,7 +487,6 @@ class SimpleAirConditioner(cp.Component):
             + opex_dataclass.opex_maintenance_cost_in_euro,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(total_costs)
 
@@ -505,7 +497,6 @@ class SimpleAirConditioner(cp.Component):
             + opex_dataclass.co2_footprint_in_kg,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(total_co2_footprint)
 

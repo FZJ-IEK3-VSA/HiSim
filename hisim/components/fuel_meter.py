@@ -471,7 +471,6 @@ class FuelMeter(DynamicComponent):
             value=opex_dataclass.total_consumption_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(energy_consumption)
 
@@ -483,7 +482,6 @@ class FuelMeter(DynamicComponent):
             value=opex_dataclass.opex_energy_cost_in_euro,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(opex)
 
@@ -493,7 +491,6 @@ class FuelMeter(DynamicComponent):
             value=opex_dataclass.opex_maintenance_cost_in_euro,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(maintenance_costs)
 
@@ -503,7 +500,6 @@ class FuelMeter(DynamicComponent):
             value=opex_dataclass.co2_footprint_in_kg,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(co2_footprint)
 

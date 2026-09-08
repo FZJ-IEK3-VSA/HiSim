@@ -1142,8 +1142,9 @@ class Building(cp.Component):
         The building-information entries describe the building itself, not any single output, so
         they are appended once outside the output loop; appending them per matching output emitted
         the same KPI name several times, which the KPI collection now refuses instead of silently
-        collapsing. The two output-driven helpers each fire for one field name only and therefore
-        contribute every entry at most once.
+        collapsing. The two output-driven helpers only produce entries for the building's own
+        outputs, and each field name they answer to occurs once among those, so every entry they
+        contribute is emitted at most once.
         """
 
         list_of_kpi_entries: List[KpiEntry] = self.get_building_kpis_from_building_information(

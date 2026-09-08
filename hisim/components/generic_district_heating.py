@@ -765,7 +765,6 @@ class DistrictHeating(Component):
             value=opex_dataclass.total_consumption_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(energy_consumption)
 
@@ -775,7 +774,6 @@ class DistrictHeating(Component):
             value=opex_dataclass.consumption_for_space_heating_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(sh_energy_consumption)
 
@@ -785,7 +783,6 @@ class DistrictHeating(Component):
             value=opex_dataclass.consumption_for_domestic_hot_water_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(dhw_energy_consumption)
 
@@ -796,7 +793,6 @@ class DistrictHeating(Component):
             value=capex_dataclass.capex_investment_cost_in_euro,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(capex)
 
@@ -806,7 +802,6 @@ class DistrictHeating(Component):
             value=capex_dataclass.device_co2_footprint_in_kg,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(co2_footprint_capex)
 
@@ -816,7 +811,6 @@ class DistrictHeating(Component):
             value=opex_dataclass.opex_energy_cost_in_euro,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(opex)
 
@@ -826,7 +820,6 @@ class DistrictHeating(Component):
             value=opex_dataclass.opex_maintenance_cost_in_euro,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(maintenance_costs)
 
@@ -836,7 +829,6 @@ class DistrictHeating(Component):
             value=opex_dataclass.co2_footprint_in_kg,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(co2_footprint)
 
@@ -848,7 +840,6 @@ class DistrictHeating(Component):
             + opex_dataclass.opex_maintenance_cost_in_euro,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(total_costs)
 
@@ -858,7 +849,6 @@ class DistrictHeating(Component):
             value=capex_dataclass.device_co2_footprint_for_simulated_period_in_kg + opex_dataclass.co2_footprint_in_kg,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
-            name_of_source_component=self.component_name,
         )
         list_of_kpi_entries.append(total_co2_footprint)
         return list_of_kpi_entries

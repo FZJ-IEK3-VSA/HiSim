@@ -24,16 +24,22 @@ survives only in a conversation. Items are removed when done, not ticked and kep
   transformer/rectifier and electrolyzer KPIs (`electrolyzer_setup_kpis` branch). Both are blessed
   and gated on `golden_gate_full_fleet`, which merges after #639 and the two KPI PRs. Every setup
   in the repository is now golden-gated at week resolution or better.
-- [x] **Multi-instance KPI collision — fixed 2026-09-07 on `kpi_multi_instance`.** Component KPI
-  entries are keyed by `KpiPreparation.keyed_component_entries`: where several components of one
-  building share an entry name, each keys as `"<name> (<source component>)"`, and a collision
-  whose colliders do not all name a source is refused rather than silently overwritten. Every
-  `KpiEntry` of the seven components that shared names across classes now carries its
-  `component_name`, `Building`'s duplicate emission is hoisted out of its per-output loop, and the
-  fuel/gas/electricity-meter lookup in `read_opex_and_capex_costs_from_results` matches an entry's
-  own `name` instead of the collection key, so qualification cannot zero a general KPI. Seven
-  goldens re-blessed (`dynamic_components` plus the six setups whose collisions had been hiding a
-  component). Remove this entry once it is on main.
+- [x] **Multi-instance KPI collision — fixed 2026-09-07 on `kpi_multi_instance`.**
+  `Component.component_kpi_entries` is now the method the collector calls: it asks the overridable
+  `get_component_kpi_entries` and stamps every entry that names no source with the component's own
+  name, so no component has to remember the field. `KpiPreparation.keyed_component_entries` then
+  keys one building's entries: where several components share an entry name, each keys as
+  `"<name> (<source component>)"`, a collision whose colliders do not all name a source is refused
+  rather than silently overwritten, and one component emitting a name twice is refused too.
+  `Building`'s duplicate emission is hoisted out of its per-output loop, the diesel car's two
+  entries got distinct names, and the meter lookup in `read_opex_and_capex_costs_from_results`
+  matches an entry's own `name` instead of the collection key and sums across the meters of a
+  building, so qualification neither zeroes a general KPI nor lets one of two meters stand for
+  both. Seven goldens re-blessed (`dynamic_components` plus the six setups whose collisions had
+  been hiding a component). Remove this entry once it is on main.
+- [ ] **Stable KPI addresses.** Keys are still volatile (bare unless a collision exists) and
+  consumers rebuild key strings by hand. Spec: `roadmap/kpi_address_spec.md`; its own PR after #653
+  is on main.
 
 ## Documentation drift (fix on the stack branches before their PRs merge)
 

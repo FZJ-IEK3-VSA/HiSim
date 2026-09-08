@@ -4,7 +4,7 @@ name: "share_with_absolute_cap"
 group: "subsidies"
 spec_section: "5.2"
 computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
-description: "A single 30 % grant on a 40,000 EUR measure whose eligible cost is capped at 30,000 EUR. The cap binds, so the grant is 30 % of the capped basis, not of the measure cost, and the effective support share falls below the headline rate."
+description: "A single 30 % grant on a 40,000 EUR measure whose eligible cost is capped at 30,000 EUR per dwelling unit (one unit here). The cap binds, so the grant is 30 % of the capped basis, not of the measure cost, and the effective support share falls below the headline rate."
 inputs:
   measure_cost_in_euro: 40000
   interest_rate: 0.03
@@ -36,3 +36,8 @@ expected:
     abs_tol: 0.01
     derivation: "total_upfront_award_in_euro"
     note: "an upfront grant is paid at year 0 and is therefore not discounted"
+  support_ledger_npv_in_euro:
+    value: -9000.00
+    abs_tol: 0.01
+    derivation: "-support_npv_in_euro"
+    note: "the same support as it lands on the ledger: negative cost (§3.9)"

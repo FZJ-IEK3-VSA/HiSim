@@ -10,6 +10,7 @@ inputs:
   financed_share: 0.6
   interest_rate: 0.05
   duration_in_years: 15
+  loan_type: "ANNUITY"
 expected:
   principal_in_euro:
     value: 18000.00

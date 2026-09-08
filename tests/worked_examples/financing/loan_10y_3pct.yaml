@@ -1,6 +1,6 @@
 # GENERATED from loan_10y_3pct.xlsx by tools/convert_worked_examples.py.
 # Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
-name: "loan_10y_3pct_round_numbers"
+name: "loan_10y_3pct"
 group: "financing"
 spec_section: "4.4"
 computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
@@ -9,6 +9,7 @@ inputs:
   principal_in_euro: 20000
   interest_rate: 0.03
   duration_in_years: 10
+  loan_type: "ANNUITY"
 expected:
   annuity_in_euro:
     value: 2344.61

@@ -32,7 +32,8 @@ expected:
     value: 1481.00
     abs_tol: 0.01
     derivation: "energy_working_in_euro+energy_standing_in_euro"
-  mean_energy_price_in_euro_per_kwh:
+  mean_working_price_in_euro_per_kwh:
     value: 0.394571
     abs_tol: 0.000001
     derivation: "energy_working_in_euro/energy_bought_in_kwh"
+    note: "a working price: it excludes the standing charge"

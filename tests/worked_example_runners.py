@@ -51,6 +51,37 @@ SYNTHETIC_COUNTRY = "XX"
 EXAMPLE_YEAR = 2024
 
 
+class SyntheticCarbonData:
+    """The carbon figures the synthetic `XX` cost database ships, for the CO2-price example.
+
+    The CO2 price component of a bill is priced off the *database* — the price entry's emission
+    factor and its `co2_price_exposure` share, times the country's CO2 price trajectory — not off
+    the tariff contract a workbook brings. Those three numbers therefore cannot be workbook inputs,
+    so they live here, are written into the fixture database by
+    `tests/test_worked_examples.py::fixture_synthetic_database`, and are *copied* into the
+    `co2_price_from_trajectory` workbook as declared inputs. A change here that the workbook does
+    not follow fails that example instead of silently re-baselining it — the same arrangement the
+    modernization-levy example uses for the statutory percentages of `allocation_DE_2024.json`.
+
+    The trajectory is deliberately three widely spaced points, so the step interpolation of
+    `Co2PricePath.price` (the last point at or before a year applies) is visible in the example's
+    per-year figures rather than hidden inside a smooth curve.
+    """
+
+    #: Emission factor of the synthetic electricity entry, in kg CO2 per kWh.
+    EMISSION_FACTOR_IN_KG_PER_KWH = 0.4
+
+    #: Share of the emissions the CO2 price applies to; 1.0 = the working price contains no carbon
+    #: cost yet, so the whole volume is exposed (§3.5's rule against double counting).
+    CO2_PRICE_EXPOSURE = 1.0
+
+    #: Name of the trajectory in the fixture's `co2_price_paths.json`.
+    PRICE_PATH_NAME = "worked_example"
+
+    #: Calendar year -> EUR per ton CO2, read with step interpolation.
+    PRICE_PATH_POINTS = {"2024": 50.0, "2027": 80.0, "2030": 110.0}
+
+
 def _financing_values(inputs: Dict[str, Any]) -> Dict[str, float]:
     """Runs `loan_flows` and exposes the loan schedule under the worked-example labels (§4.4).
 
@@ -61,12 +92,24 @@ def _financing_values(inputs: Dict[str, Any]) -> Dict[str, float]:
     year-0 net investment; the loan itself only ever sees the resulting principal), and
     `annuity_via_pmt_in_euro` is the same engine number under a second label, so a workbook cell
     computed with Excel's `PMT` is compared against the engine rather than against itself.
+
+    `loan_type` is read from the workbook when it is declared and defaults to `ANNUITY` when it is
+    not; a value that is not a `LoanType` member aborts the example with the list of the ones that
+    are, instead of raising a bare `ValueError` from the enum constructor.
     """
+    declared_loan_type = str(inputs.get("loan_type", LoanType.ANNUITY.value))
+    try:
+        loan_type = LoanType(declared_loan_type)
+    except ValueError as error:
+        raise ValueError(
+            f"worked example declares loan_type {declared_loan_type!r}, which is not a LoanType; "
+            f"expected one of {[member.value for member in LoanType]}."
+        ) from error
     plan = FinancingPlan(
         financed_share=float(inputs.get("financed_share", 1.0)),
         nominal_interest_rate=float(inputs["interest_rate"]),
         term_in_years=int(inputs["duration_in_years"]),
-        type=LoanType(str(inputs.get("loan_type", "ANNUITY"))),
+        type=loan_type,
     )
     if "principal_in_euro" in inputs:
         principal = float(inputs["principal_in_euro"])
@@ -204,9 +247,13 @@ def _tariff_values(inputs: Dict[str, Any]) -> Dict[str, float]:
 
     Assembles the `BillingDeterminants` from the example's quantities — total kWh, per-band kWh,
     sold kWh, the integrated cost of a dynamic year, the billing-period peak — and publishes the
-    resulting bill per cost category plus the §8.5 decomposition (mean energy price, volume
-    effect, flexibility value). Categories absent from a bill are reported as 0.0 rather than
-    omitted, so a workbook can assert "no capacity charge" as a value instead of by silence.
+    resulting bill per cost category plus the §8.5 decomposition, published under the labels the
+    workbooks use: `mean_working_price_in_euro_per_kwh` (the engine's `mean_energy_price...`, named
+    for what it is — a working price that excludes the standing charge) and
+    `bill_at_mean_price_in_euro` (the engine's `volume_effect_in_euro`: what the same volume would
+    have cost at the year's average price). Categories absent from a bill are reported as 0.0
+    rather than omitted, so a workbook can assert "no capacity charge" as a value instead of by
+    silence.
     `apply_tariff` is a pure *year-1* billing engine; escalation and the multi-year projection
     belong to the evaluator and are covered by the end-to-end group instead.
     """
@@ -237,8 +284,8 @@ def _tariff_values(inputs: Dict[str, Any]) -> Dict[str, float]:
         "energy_capacity_charge_in_euro": bill.by_category.get(CostCategory.ENERGY_CAPACITY_CHARGE, zero).best_estimate,
         "feed_in_revenue_in_euro": bill.by_category.get(CostCategory.FEED_IN_REVENUE, zero).best_estimate,
         "total_bill_in_euro": bill.total().best_estimate,
-        "mean_energy_price_in_euro_per_kwh": bill.mean_energy_price_in_euro_per_kwh,
-        "volume_effect_in_euro": bill.volume_effect_in_euro,
+        "mean_working_price_in_euro_per_kwh": bill.mean_energy_price_in_euro_per_kwh,
+        "bill_at_mean_price_in_euro": bill.volume_effect_in_euro,
         "flexibility_value_in_euro": bill.flexibility_value_in_euro,
         "marginal_price_components_in_euro_per_kwh": contract.marginal_purchase_price_components().best_estimate,
     }
@@ -301,6 +348,14 @@ def _subsidy_values(inputs: Dict[str, Any]) -> Dict[str, float]:
     influence a result; the cap that *is* asserted comes from the example's own numbers.
     Note `support_npv_in_euro` is the one figure assembled here rather than by the engine — the
     upfront awards plus each instalment discounted with the engine's own discount factor.
+
+    **Two signs, one quantity.** The solver reports awards as positive *magnitudes* — its own
+    vocabulary, and the one `UncertainValue.scale` requires, since it refuses negative factors —
+    so every `scheme_*_award_in_euro`, `total_upfront_award_in_euro` and `support_npv_in_euro`
+    here is positive. `support_ledger_npv_in_euro` is the same support as it reaches the timeline:
+    negative cost, the sign `award.upfront_amount.as_revenue()` gives it at the single site that
+    mirrors it (`calculators/subsidy_application.py`, §3.9). Publishing both is what lets the
+    `subsidies/` workbooks state which convention each row is in instead of implying one.
     """
     letters = sorted({match.group(1) for match in (re.match(r"^scheme_([a-z])_", key) for key in inputs) if match})
     schemes = [_subsidy_scheme(letter, inputs) for letter in letters]
@@ -345,6 +400,7 @@ def _subsidy_values(inputs: Dict[str, Any]) -> Dict[str, float]:
     values["total_upfront_award_in_euro"] = total_upfront
     values["tax_credit_total_in_euro"] = schedule_total
     values["support_npv_in_euro"] = support_npv
+    values["support_ledger_npv_in_euro"] = -support_npv
     values["effective_support_share"] = total_upfront / measure_cost if measure_cost else 0.0
     cap = schemes[0].eligible_cost.cap_for_units(dwelling_units)
     if cap is not None:
@@ -483,7 +539,10 @@ def _modernization_levy_values(inputs: Dict[str, Any], database: CostDatabase) -
         "present_value_factor_sum": sum(parameters.discount_factor(year) for year in range(1, horizon + 1)),
     }
     for subject, _asset_class, _unit, _investment in subjects:
-        values[f"subsidy_{subject.rsplit('.', maxsplit=1)[-1].lower()}_in_euro"] = -sum(
+        # `subsidy_deduction_*`: the magnitude §559 Abs. 2 deducts from the levy basis. The
+        # timeline carries these as negative cost (`as_revenue`, §3.9); the sign is flipped back
+        # here because the workbook states the deduction, not the ledger entry.
+        values[f"subsidy_deduction_{subject.rsplit('.', maxsplit=1)[-1].lower()}_in_euro"] = -sum(
             entry.amount_in_euro.best_estimate
             for entry in result.timeline.entries
             if entry.category == CostCategory.SUBSIDY and entry.subject == subject
@@ -546,10 +605,18 @@ def _end_to_end_values(inputs: Dict[str, Any], database: CostDatabase) -> Dict[s
     An example that declares `heating_investment_in_euro` is a *package* under the landlord/tenant
     split and goes to :func:`_modernization_levy_values` instead: one device cannot express the
     §559/§559e paragraph split (§6.4, D27).
+
+    Two inputs exist for the CO2-price example and default to the library-wide behavior otherwise:
+    `co2_price_scenario` (default `"none"`, i.e. carbon pricing off, which is why no other example
+    produces an ENERGY_CO2_PRICE entry even though the fixture database now carries an emission
+    factor) and `price_basis_year` (default `EXAMPLE_YEAR`), the economic "today" the CO2
+    trajectory is anchored on. Declaring the basis year makes the calendar year of each projection
+    year visible in the workbook, which is where the trajectory's step interpolation happens.
     """
     if "heating_investment_in_euro" in inputs:
         return _modernization_levy_values(inputs, database)
     horizon = int(inputs["horizon_in_years"])
+    basis_year = int(inputs.get("price_basis_year", EXAMPLE_YEAR))
     parameters = EconomicParameters(
         observation_period_in_years=horizon,
         interest_rate=float(inputs["interest_rate"]),
@@ -559,9 +626,9 @@ def _end_to_end_values(inputs: Dict[str, Any], database: CostDatabase) -> Dict[s
             carrier: float(inputs.get("energy_price_escalation_rate", 0.0)) for carrier in EnergyCarrier
         },
         feed_in_escalation_rate=float(inputs.get("feed_in_escalation_rate", 0.0)),
-        co2_price_scenario="none",
+        co2_price_scenario=str(inputs.get("co2_price_scenario", "none")),
         country=SYNTHETIC_COUNTRY,
-        price_basis_year=EXAMPLE_YEAR,
+        price_basis_year=basis_year,
     )
     facts = ComponentCostFacts(
         asset_class=ComponentType.HEAT_PUMP,
@@ -590,7 +657,7 @@ def _end_to_end_values(inputs: Dict[str, Any], database: CostDatabase) -> Dict[s
             carrier=EnergyCarrier.ELECTRICITY,
             country=SYNTHETIC_COUNTRY,
             region=None,
-            valid_from_year=EXAMPLE_YEAR,
+            valid_from_year=basis_year,
             supply=TariffSupply(
                 kind=SupplyKind.FLAT,
                 working_price_in_euro_per_kwh=UncertainValue.exact(
@@ -608,7 +675,7 @@ def _end_to_end_values(inputs: Dict[str, Any], database: CostDatabase) -> Dict[s
             source_ids=("inline:worked example",),
         )
     evaluation_inputs = EvaluationInputs(
-        simulation_year=EXAMPLE_YEAR,
+        simulation_year=basis_year,
         simulated_period_fraction=1.0,
         cost_facts=[SubjectCostFacts("device", facts)],
         billing=billing,

@@ -21,12 +21,12 @@ inputs:
   cap_low_rent_threshold_in_euro_per_m2: 7
   months_per_year: 12
 expected:
-  subsidy_heatpump_in_euro:
+  subsidy_deduction_heatpump_in_euro:
     value: 9000.00
     abs_tol: 0.01
     derivation: "heating_investment_in_euro*heating_subsidy_rate"
     note: "grant deducted from the §559e basis (§559 Abs. 2)"
-  subsidy_wallinsulation_in_euro:
+  subsidy_deduction_wallinsulation_in_euro:
     value: 10000.00
     abs_tol: 0.01
     derivation: "envelope_investment_in_euro*envelope_subsidy_rate"
@@ -34,12 +34,12 @@ expected:
   heating_levy_basis_in_euro:
     value: 21000.00
     abs_tol: 0.01
-    derivation: "heating_investment_in_euro-subsidy_heatpump_in_euro"
+    derivation: "heating_investment_in_euro-subsidy_deduction_heatpump_in_euro"
     note: "no anyway-cost credit in a greenfield package, so no maintenance deduction"
   general_levy_basis_in_euro:
     value: 40000.00
     abs_tol: 0.01
-    derivation: "envelope_investment_in_euro-subsidy_wallinsulation_in_euro"
+    derivation: "envelope_investment_in_euro-subsidy_deduction_wallinsulation_in_euro"
   heating_cap_in_euro_per_year:
     value: 600.00
     abs_tol: 0.01
@@ -82,5 +82,5 @@ expected:
   landlord_npv_in_euro:
     value: 7441.09
     abs_tol: 0.01
-    derivation: "heating_investment_in_euro+envelope_investment_in_euro-subsidy_heatpump_in_euro-subsidy_wallinsulation_in_euro-levy_npv_in_euro"
+    derivation: "heating_investment_in_euro+envelope_investment_in_euro-subsidy_deduction_heatpump_in_euro-subsidy_deduction_wallinsulation_in_euro-levy_npv_in_euro"
     note: "investment net of grants minus the levy received; landlord + tenant = the system NPV (§6.5)"

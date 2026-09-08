@@ -31,7 +31,7 @@ expected:
     value: 1090.00
     abs_tol: 0.01
     derivation: "energy_working_in_euro+energy_standing_in_euro"
-  volume_effect_in_euro:
+  bill_at_mean_price_in_euro:
     value: 1080.00
     abs_tol: 0.01
     derivation: "energy_bought_in_kwh*(mean_spot_price_in_euro_per_kwh+marginal_price_components_in_euro_per_kwh)"
@@ -41,7 +41,8 @@ expected:
     abs_tol: 0.01
     derivation: "energy_bought_in_kwh*mean_spot_price_in_euro_per_kwh-cost_integrated_in_euro"
     note: "the saving of buying in cheap hours instead of at the average price"
-  mean_energy_price_in_euro_per_kwh:
+  mean_working_price_in_euro_per_kwh:
     value: 0.250000
     abs_tol: 0.000001
     derivation: "cost_integrated_in_euro/energy_bought_in_kwh+marginal_price_components_in_euro_per_kwh"
+    note: "a working price: it excludes the standing charge"

@@ -30,7 +30,12 @@ calculator and assert intermediates as well as finals (§3.2) — usually the st
 failure message prints the label, the Excel value, the engine value and the derivation the
 workbook recorded. What a failure here can never be is a *price* problem: the end-to-end runner
 prices against a synthetic empty country (`XX`, D17) with zero energy prices and overrides every
-device figure, so no shipped price can reach an expected value. The one deliberate exception is
+device figure, so no shipped price can reach an expected value. The synthetic database does carry
+two carbon figures (an emission factor and a CO2-price exposure share) plus one CO2 price
+trajectory, because those are priced off the database and not off a workbook's tariff contract;
+they come from `SyntheticCarbonData`, are declared as inputs by the one example that switches
+carbon pricing on, and reach no other example, whose `co2_price_scenario` stays `"none"`. The one
+deliberate exception is
 the modernization-levy example, which must run under German tenancy law and therefore reads the
 statutory percentages of `allocation_DE_2024.json` — it declares them as workbook inputs so that
 a change to that file fails the example instead of re-baselining it. Nor can a failure be an extraction
@@ -60,6 +65,7 @@ from hisim.economics.database import CostDatabase
 from tests.worked_example_runners import (
     EXAMPLE_YEAR,
     SYNTHETIC_COUNTRY,
+    SyntheticCarbonData,
     _discounting_values,
     _end_to_end_values,
     _financing_values,
@@ -143,12 +149,20 @@ EXAMPLE_IDS = [f"{example['group']}/{example['name']}" for example in EXAMPLES]
 
 @pytest.fixture(name="synthetic_database", scope="module")
 def fixture_synthetic_database(tmp_path_factory) -> CostDatabase:
-    """A cost database with nothing in it but one electricity price entry.
+    """A cost database with nothing in it but one electricity price entry and one CO2 trajectory.
 
     The end-to-end examples override every device figure and bring their own tariff contract, so
-    the database must not contribute any number of its own. It also carries no escalation
+    the database must not contribute any *price* of its own. It also carries no escalation
     defaults file, which keeps the parameter fallback chain (§3.2) at the explicit rates the
     example declares.
+
+    Two carbon figures are the exception, and they have to be: the CO2 price component of a bill
+    is priced off the price entry's emission factor and `co2_price_exposure` share times the
+    country's trajectory (`calculators/energy.py`), none of which a workbook's tariff contract can
+    carry. They come from `SyntheticCarbonData`, are copied into the `co2_price_from_trajectory`
+    workbook as declared inputs, and reach no other example: every other end-to-end example leaves
+    `co2_price_scenario` at `"none"`, so `get_co2_price_path` returns None and no ENERGY_CO2_PRICE
+    entry is emitted regardless of the emission factor.
     """
     directory = tmp_path_factory.mktemp("worked_example_cost_database")
     sources = {
@@ -170,8 +184,8 @@ def fixture_synthetic_database(tmp_path_factory) -> CostDatabase:
                 "year": EXAMPLE_YEAR,
                 "working_price_in_euro_per_kwh": 0.0,
                 "standing_charge_in_euro_per_year": 0.0,
-                "emission_factor_in_kg_per_kwh": 0.0,
-                "co2_price_exposure": 0.0,
+                "emission_factor_in_kg_per_kwh": SyntheticCarbonData.EMISSION_FACTOR_IN_KG_PER_KWH,
+                "co2_price_exposure": SyntheticCarbonData.CO2_PRICE_EXPOSURE,
                 "tax_and_levy_share": 0.0,
                 "quantity_unit": "kWh",
                 "source_ids": ["src_worked_example"],
@@ -179,8 +193,19 @@ def fixture_synthetic_database(tmp_path_factory) -> CostDatabase:
             }
         ]
     }
+    co2_paths = {
+        "countries": {
+            SYNTHETIC_COUNTRY: {
+                SyntheticCarbonData.PRICE_PATH_NAME: {
+                    "points": SyntheticCarbonData.PRICE_PATH_POINTS,
+                    "source_ids": ["src_worked_example"],
+                }
+            }
+        }
+    }
     (directory / "sources.json").write_text(json.dumps(sources), encoding="utf-8")
     (directory / f"energy_prices_{SYNTHETIC_COUNTRY}.json").write_text(json.dumps(prices), encoding="utf-8")
+    (directory / "co2_price_paths.json").write_text(json.dumps(co2_paths), encoding="utf-8")
     return CostDatabase(str(directory))
 
 

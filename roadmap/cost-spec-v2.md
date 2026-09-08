@@ -683,6 +683,16 @@ tolerance).
 7. Ranges must consist of individually labeled rows (or a labeled table, once
    the template grows one for long timelines).
 8. No uncertainty-band syntax (degenerate-bands policy, §3.2).
+9. The metadata `name` equals the file stem (added in the PR-561 review round;
+   `loan_10y_3pct.xlsx` had called itself `loan_10y_3pct_round_numbers`, so the
+   YAML's `name`, the pytest id and the file name were three different strings
+   for one example).
+10. Value and tolerance cells (columns B and C of both tables) carry no number
+    format but `General`. Same round: Excel's PMT wizard leaves a `[$$-409]`
+    US-dollar format behind, which displayed euro annuities as dollars in two
+    workbooks. Rules 9 and 10 both guard defects that are **invisible in the
+    generated YAML** — the converter reads the stored value, not the displayed
+    one — and therefore cannot be caught by reviewing a diff.
 
 **Arithmetic cross-check (stale-cache defense):** for pure-arithmetic formulas
 (`+ - * / ^ ( )` over names — not the Excel function library), the converter
@@ -701,7 +711,7 @@ transitively today and must be declared explicitly as a dev/test dependency.
 
 ```yaml
 # GENERATED from loan_10y_3pct.xlsx — edit the xlsx, then run tools/convert_worked_examples.py
-name: loan_10y_3pct_round_numbers
+name: loan_10y_3pct
 spec_section: "4.4"
 computed_by: "N. Pflugradt, by hand + Excel PMT, 2026-08-05"
 description: >
@@ -803,6 +813,47 @@ content by a fingerprint, never a boolean anyone must remember to reset.
   defeats the mechanism — same trust boundary as §3.7; the forcing function
   (file open, explicit paste, attributable name in the PR diff) is the
   strongest available short of proctoring.
+
+### 3.9 How to review an example
+
+Asked for by the PR-561 reviewers, who opened the workbooks first and found
+them the slower way round.
+
+**Review the generated YAML diff, not the workbook.** The YAML is the whole
+example in one readable text: the inputs the engine is fed, every expected
+value, every tolerance, and — the point of the format — **every formula as a
+`derivation` string**, rewritten from cell coordinates into named quantities.
+A reviewer therefore never has to open a spreadsheet to see how a number was
+computed. Read a diff in this order:
+
+1. `description` — the derivation in words. If it no longer matches the
+   numbers, stop here; everything below is a rationalization.
+2. `inputs` — are they round numbers a human can re-derive from (§3.2)? Is
+   every one of them a *literal*, and does the example still assert what its
+   name claims?
+3. `expected` — for each row, read the `derivation` and re-derive the `value`
+   by hand or on a calculator. `abs_tol` is the author's claim about precision:
+   `0.01` means cents are asserted, `0.000001` means a rate is. A row with a
+   `note` and no `derivation` is a deliberate constant, and the note has to say
+   where it comes from (rule 5) — those are the rows worth the most attention.
+4. A changed *value* with an unchanged derivation is the classic golden-test
+   failure mode (a number pasted back from a failing test run) and needs an
+   explanation in the PR or the description (§3.7).
+
+**Open the workbook only to spot-check or to edit.** It is the source of truth
+and holds three things the YAML deliberately does not carry: the column-C input
+comments, the column-E sign-convention header, and the metadata's review rows.
+Attesting a review *requires* the sheet open (§3.8) — that is the mechanism, not
+an inconvenience.
+
+**The YAML is never edited by hand.** It carries a generated header saying so,
+and CI's drift check (§3.6) fails on a single byte of difference from what the
+workbook produces. After any workbook edit, re-run
+`python tools/convert_worked_examples.py` and commit both files together. Note
+that openpyxl discards cached formula values on save, so a workbook edited by
+script has to be recalculated (LibreOffice headless, or Excel) before it will
+convert at all — the converter refuses a cell without a cached number rather
+than computing one.
 
 ## 4. Deprecated alternative: hand-written YAML
 

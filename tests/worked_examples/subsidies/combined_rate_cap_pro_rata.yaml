@@ -4,7 +4,7 @@ name: "combined_rate_cap_pro_rata"
 group: "subsidies"
 spec_section: "5.4"
 computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
-description: "Two share-based schemes in one cumulation group ask for 30 % and 20 %, but the group's combined rate is capped at 40 %. Both rates are scaled down pro rata by the same factor 0.40/0.50, so each scheme keeps its relative weight and the sum hits the cap exactly."
+description: "Two share-based schemes in one cumulation group ask for 30 % and 20 % of the same 20,000 EUR measure cost, but the group's combined rate is capped at 40 %. Both rates are scaled down pro rata by the same factor 0.40/0.50, so each scheme keeps its relative weight and the sum hits the cap exactly."
 inputs:
   measure_cost_in_euro: 20000
   interest_rate: 0.03
@@ -35,3 +35,13 @@ expected:
     abs_tol: 0.000001
     derivation: "total_upfront_award_in_euro/measure_cost_in_euro"
     note: "equals the combined rate cap"
+  support_npv_in_euro:
+    value: 8000.00
+    abs_tol: 0.01
+    derivation: "total_upfront_award_in_euro"
+    note: "both awards are upfront grants paid at year 0, so the support NPV is their sum, undiscounted"
+  support_ledger_npv_in_euro:
+    value: -8000.00
+    abs_tol: 0.01
+    derivation: "-support_npv_in_euro"
+    note: "the same support as it lands on the ledger: negative cost (§3.9)"

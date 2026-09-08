@@ -32,3 +32,13 @@ expected:
     value: 0.250000
     abs_tol: 0.000001
     derivation: "total_upfront_award_in_euro/measure_cost_in_euro"
+  support_npv_in_euro:
+    value: 22500.00
+    abs_tol: 0.01
+    derivation: "total_upfront_award_in_euro"
+    note: "an upfront grant is paid at year 0 and is therefore not discounted"
+  support_ledger_npv_in_euro:
+    value: -22500.00
+    abs_tol: 0.01
+    derivation: "-support_npv_in_euro"
+    note: "the same support as it lands on the ledger: negative cost (§3.9)"

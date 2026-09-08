@@ -30,6 +30,7 @@ expected:
     value: 80.00
     abs_tol: 0.01
     derivation: "investment_in_euro*maintenance_rate"
+    note: "year 0 is the investment year and is undiscounted; operating flows fall in years 1..T (§3.6), so nominal_*_year_1 names the year-1 timeline entry - exact also under escalation, where every year's nominal figure differs"
   nominal_feed_in_revenue_year_1_in_euro:
     value: -240.00
     abs_tol: 0.01

@@ -1,6 +1,6 @@
 """Converts the Excel worked-example workbooks into the YAML fixtures the tests read.
 
-Implements cost-spec-v2 §3.3 (converter, validation rules 1-8, arithmetic cross-check),
+Implements cost-spec-v2 §3.3 (converter, validation rules 1-10, arithmetic cross-check),
 §3.4 (YAML format), §3.6 (drift check) and §3.8 (review attestations).
 
 The workbook is the source of truth; the YAML next to it is generated and must never be
@@ -110,6 +110,17 @@ BAND_LABEL_TOKENS = ("uncertainty", "_min_", "_best_estimate_", "_max_", "_avg_"
 #: award amounts as positive magnitudes and only the evaluator mirrors them onto the timeline, so
 #: a blanket "subsidy is negative" rule would be wrong for the `subsidies/` group.
 REVENUE_LABEL_TOKENS = ("feed_in_revenue", "residual_value", "anyway_cost_credit", "loan_disbursement")
+
+#: Rule 10: the only number format a value or tolerance cell may carry. Anything else makes the
+#: number a reviewer *sees* differ from the number that ships: Excel's own PMT wizard, for one,
+#: leaves a `[$$-409]` US-dollar format behind, which displayed euro annuities as dollars in two
+#: workbooks of the first round. `General` is also what keeps the displayed precision honest — a
+#: two-decimal currency format hides exactly the digits the declared tolerance is about.
+GENERAL_NUMBER_FORMAT = "General"
+
+#: Rule 10 applies to the value column and the tolerance column; the label and note columns hold
+#: text, where a format cannot mislead.
+FORMATTED_COLUMNS = (2, 3)
 
 #: Relative tolerance of the arithmetic cross-check. LibreOffice writes full-precision floats, so
 #: the two evaluations agree to round-off, not bit-for-bit.
@@ -401,6 +412,37 @@ def _check_label(label: str, row_index: int, seen: Dict[str, int]) -> None:
             "use degenerate bands only (rule 8)."
         )
     seen[label] = row_index
+
+
+def _check_number_formats(sheet, row_index: int, label: str) -> None:
+    """Validation rule 10: a value or tolerance cell carries no number format but `General`.
+
+    The rule exists because a leaked format is invisible in the generated YAML and therefore
+    survives review: the converter reads the *stored* value, so a euro annuity displayed as
+    `$2,344.61` by a `[$$-409]` format inherited from Excel's PMT wizard converts perfectly while
+    telling every human who opens the sheet that the library computes dollars. Two workbooks of the
+    first round carried exactly that. Restricting the value and tolerance columns to `General` also
+    keeps the displayed precision equal to the stored one, so a reviewer re-deriving a figure by
+    hand compares against all the digits the tolerance claims.
+
+    Args:
+        sheet: The formula sheet (formats live on it, not on the cached-value copy).
+        row_index: Spreadsheet row of the INPUTS or EXPECTED row being checked.
+        label: Label of the row, for the error message.
+
+    Raises:
+        ValidationError: If a checked cell carries any other number format.
+    """
+    for column in FORMATTED_COLUMNS:
+        cell = sheet.cell(row_index, column)
+        if cell.value is None:
+            continue
+        if cell.number_format != GENERAL_NUMBER_FORMAT:
+            raise ValidationError(
+                f"row {row_index}: {label!r} has number format {cell.number_format!r} on "
+                f"{cell.coordinate}; value and tolerance cells must be formatted {GENERAL_NUMBER_FORMAT!r} "
+                "so the displayed number is the stored one (rule 10)."
+            )
 
 
 # --------------------------------------------------------------------------- formula handling
@@ -760,7 +802,7 @@ def _parse_metadata(rows: Sequence[Tuple[int, List[object]]]) -> Dict[str, str]:
 def convert_workbook(path: str) -> Tuple[Example, str]:
     """Converts one workbook into an :class:`Example` and its generated YAML text.
 
-    The heart of the tool, and the place where all eight validation rules of §3.3 are actually
+    The heart of the tool, and the place where all ten validation rules of §3.3 are actually
     applied to a sheet. The workbook is opened twice — once for formula text and once for the
     cached values Excel/LibreOffice last computed — because the fixture needs both: the cached
     number is the expectation, the formula is the derivation that makes it auditable. Nothing is
@@ -780,7 +822,7 @@ def convert_workbook(path: str) -> Tuple[Example, str]:
 
     Raises:
         ValidationError: On any §3.1/§3.2 layout violation (multiple sheets, sheet-scoped names,
-            doubly named cells), any of the eight validation rules, a failed arithmetic
+            doubly named cells), any of the ten validation rules, a failed arithmetic
             cross-check, a missing cached value, or an empty INPUTS/EXPECTED table.
     """
     source_name = os.path.basename(path)
@@ -812,6 +854,13 @@ def convert_workbook(path: str) -> Tuple[Example, str]:
 
     sections = _collect_sections(formula_sheet)
     metadata = _parse_metadata(sections[METADATA_MARKER])
+    file_stem = os.path.splitext(source_name)[0]
+    if metadata["name"] != file_stem:
+        raise ValidationError(
+            f"{source_name}: metadata name {metadata['name']!r} differs from the file stem "
+            f"{file_stem!r}; they address the same example everywhere else (test ids, the YAML's "
+            "`name`, the spec's cross-references), so they must be the same string (rule 9)."
+        )
     example = Example(source_name=source_name, group=group, metadata=metadata)
     seen_labels: Dict[str, int] = {}
     # Cached values of every named cell, resolved up front: formulas may reference rows that
@@ -828,6 +877,7 @@ def convert_workbook(path: str) -> Tuple[Example, str]:
     for row_index, cells in sections[INPUTS_MARKER]:
         label = _cell_text(cells[0])
         _check_label(label, row_index, seen_labels)
+        _check_number_formats(formula_sheet, row_index, label)
         coordinate = f"B{row_index}"
         if name_by_coordinate.get(coordinate) != label:
             raise ValidationError(
@@ -846,6 +896,7 @@ def convert_workbook(path: str) -> Tuple[Example, str]:
     for row_index, cells in sections[EXPECTED_MARKER]:
         label = _cell_text(cells[0])
         _check_label(label, row_index, seen_labels)
+        _check_number_formats(formula_sheet, row_index, label)
         coordinate = f"B{row_index}"
         if name_by_coordinate.get(coordinate) != label:
             raise ValidationError(

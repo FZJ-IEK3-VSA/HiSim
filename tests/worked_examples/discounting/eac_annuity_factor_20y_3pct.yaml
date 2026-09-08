@@ -14,6 +14,7 @@ expected:
     value: 0.067216
     abs_tol: 0.000001
     derivation: "interest_rate*(1+interest_rate)^observation_period_in_years/((1+interest_rate)^observation_period_in_years-1)"
+    note: "VDI 2067 Annuitätsfaktor / capital recovery factor; the reciprocal of the present-value annuity factor"
   annuity_factor_via_pmt:
     value: 0.067216
     abs_tol: 0.000001

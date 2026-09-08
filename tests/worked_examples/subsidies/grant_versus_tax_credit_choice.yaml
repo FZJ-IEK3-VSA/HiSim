@@ -43,3 +43,12 @@ expected:
     value: 0.00
     abs_tol: 0.01
     note: "constant, not a formula: the grant loses the comparison, so nothing is paid at year 0"
+  scheme_a_award_in_euro:
+    value: 0.00
+    abs_tol: 0.01
+    note: "constant, not a formula: the grant loses the comparison the solver made - 4,000 EUR upfront against the tax credit's 4,538.75 EUR discounted at 5 % - so scheme A is not applied and its award is zero"
+  support_ledger_npv_in_euro:
+    value: -4538.75
+    abs_tol: 0.01
+    derivation: "-support_npv_in_euro"
+    note: "the same support as it lands on the ledger: negative cost (§3.9)"

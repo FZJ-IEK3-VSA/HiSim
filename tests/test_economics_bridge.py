@@ -38,6 +38,7 @@ import datetime
 import json
 import os
 from pathlib import Path
+from typing import Optional, cast
 
 import pandas as pd
 import pytest
@@ -53,6 +54,7 @@ from hisim.economics.facts import ComponentCostFacts
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import load_default_bundle, select_applicable
 from hisim.economics.plausibility import CheckIds, CheckStatus, run_plausibility_checks
+from hisim.economics.scenarios import ScenarioSet
 from hisim.components import (
     building,
     electricity_meter,
@@ -234,8 +236,23 @@ class _Parameters:
         self.start_date = datetime.datetime(2024, 1, 1)
         self.end_date = self.start_date + datetime.timedelta(days=days)
         self.result_directory = result_directory
-        self.economic_parameters = None
-        self.economic_context = None
+        # Annotated rather than inferred from the None: the tests below assign real objects, and
+        # a variable mypy typed `None` from its initializer cannot hold one.
+        self.economic_parameters: Optional[EconomicParameters] = None
+        self.economic_context: Optional[EconomicContext] = None
+
+
+def _unusable_scenario_set() -> ScenarioSet:
+    """A value in the `scenario_set` slot that the cube cannot evaluate.
+
+    Every *malformed* real `ScenarioSet` is rejected by `ScenarioSet.from_json` at parse time —
+    which is the behaviour §4.6 wants and therefore exactly what cannot be used to reach the
+    evaluation-time failure path this test is about. So the slot is filled with a value that is not
+    a scenario set at all, and the cast records that deliberate lie rather than hiding it: whatever
+    `evaluate_cube` reaches for is missing, so the cube fails without the test depending on its
+    internals.
+    """
+    return cast(ScenarioSet, object())
 
 
 class _Contract:
@@ -358,9 +375,7 @@ class TestFailuresAbortInsteadOfDegrading:
         not something a reader notices.
         """
         parameters = _Parameters(str(tmp_path))
-        # An object that is not a ScenarioSet: whatever `evaluate_cube` reaches for is missing, so
-        # the cube fails the way a malformed one would, without depending on its internals.
-        parameters.economic_context = EconomicContext(scenario_set=object())
+        parameters.economic_context = EconomicContext(scenario_set=_unusable_scenario_set())
 
         with pytest.raises(CostDataError) as raised:
             bridge.compute_lifecycle_costs([], [], pd.DataFrame(), parameters)
@@ -379,7 +394,7 @@ class TestFailuresAbortInsteadOfDegrading:
         before any economics happened, and the D7 refusal message promises it survives an abort.
         """
         parameters = _Parameters(str(tmp_path))
-        parameters.economic_context = EconomicContext(scenario_set=object())
+        parameters.economic_context = EconomicContext(scenario_set=_unusable_scenario_set())
 
         with pytest.raises(CostDataError):
             bridge.compute_lifecycle_costs([], [], pd.DataFrame(), parameters)
@@ -548,6 +563,8 @@ class TestSharedHelpers:
 
         # pylint: disable=protected-access
         assert bridge._sum_output_column("Meter", "A", outputs, frame) == pytest.approx(3.0)
-        assert bridge._power_series("Meter", "B", outputs, frame).tolist() == [7.0, 8.0]
+        series = bridge._power_series("Meter", "B", outputs, frame)
+        assert series is not None
+        assert series.tolist() == [7.0, 8.0]
         assert bridge._sum_output_column("Meter", "C", outputs, frame) is None
         assert bridge._power_series("Meter", "C", outputs, frame) is None

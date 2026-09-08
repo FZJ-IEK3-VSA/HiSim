@@ -331,7 +331,9 @@ class TestPublishedForecasts:
         # One simulated day at hourly resolution would make the two lengths agree by accident, so
         # the provider below runs on a *shorter* horizon than the 24 h the keys promise.
         provider = make_provider(make_contract(dynamic_supply()), seconds_per_timestep=3600)
-        provider._price_series = provider._price_series[:5]  # pylint: disable=protected-access
+        # pylint: disable=protected-access
+        assert provider._price_series is not None  # a DYNAMIC contract resamples one in i_prepare
+        provider._price_series = provider._price_series[:5]
         stsv = _single_time_step_values(provider)
 
         provider.i_simulate(0, stsv, False)

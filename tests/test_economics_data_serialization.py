@@ -445,6 +445,7 @@ class TestSerializationRoundtrip:
     CapacityCharge,
     CapacityChargeKind,
     ControllabilityDiscount,
+    ControllabilityKind,
     FeedIn,
     FeedInKind,
     SupplyKind,
@@ -477,7 +478,7 @@ class TestSerializationRoundtrip:
                 billing_interval_in_minutes=15,
             ),
             feed_in=FeedIn(kind=FeedInKind.FIXED_TARIFF, rate_in_euro_per_kwh=UncertainValue.exact(0.081)),
-            controllability_discount=ControllabilityDiscount(kind="GRID_FEE_SHARE", grid_fee_reduction_share=0.4),
+            controllability_discount=ControllabilityDiscount(kind=ControllabilityKind.GRID_FEE_SHARE, grid_fee_reduction_share=0.4),
             source_ids=("inline:test contract",),
         )
 

@@ -214,6 +214,20 @@ class ControllabilityDiscount:
     annual_amount_in_euro: UncertainValue = field(default_factory=lambda: UncertainValue.exact(0.0))
     grid_fee_reduction_share: float = 0.0  # GRID_FEE_SHARE: fraction taken off the grid fee
 
+    def __post_init__(self) -> None:
+        """Accepts the kind as its own string value, the way `ComponentCostFacts` accepts a number.
+
+        A catalog reader, a test or a worked-example runner may hand over the plain
+        `"GRID_FEE_SHARE"` this field carried before it became an enum. Coercing here keeps every
+        such call site working *and* validates it in the same step, which is the point of the enum:
+        an unknown kind raises now instead of leaving both amount fields unread and the discount
+        silently worth nothing.
+
+        Raises:
+            ValueError: If the kind names no `ControllabilityKind` member.
+        """
+        self.kind = ControllabilityKind(self.kind)
+
 
 @dataclass
 class TariffContract:

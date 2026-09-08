@@ -27,6 +27,7 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiHelperClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -306,6 +307,8 @@ class SimpleWaterStorageState:
 class SimpleWaterStorage(cp.Component):
     """SimpleWaterStorage class with generic functions."""
 
+    cost_relevance = CostRelevance.PRICED
+
     @utils.measure_execution_time
     def __init__(
         self,
@@ -541,6 +544,8 @@ class SimpleWaterStorage(cp.Component):
 
 class SimpleHotWaterStorage(SimpleWaterStorage):
     """SimpleHotWaterStorage class."""
+
+    cost_relevance = CostRelevance.PRICED
 
     # Input
     # A hot water storage can be used also with more than one heat generator. In this case you need to add a new input and output.
@@ -1272,6 +1277,8 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
 class SimpleHotWaterStorageController(cp.Component):
     """SimpleHotWaterStorageController Class."""
 
+    cost_relevance = CostRelevance.FREE_OF_COST
+
     # Inputs
     WaterMassFlowRateFromHeatGenerator = "WaterMassFlowRateFromHeatGenerator"
 
@@ -1403,6 +1410,8 @@ class SimpleHotWaterStorageController(cp.Component):
 
 class SimpleDHWStorage(SimpleWaterStorage):
     """SimpleHotWaterStorage class."""
+
+    cost_relevance = CostRelevance.PRICED
 
     # Input
     # A hot water storage can be used also with more than one heat generator. In this case you need to add a new input and output.

@@ -19,6 +19,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelp
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from hisim.economics.facts import CostRelevance
 
 
 __authors__ = "Frank Burkrad, Maximilian Hillen,"
@@ -169,6 +170,8 @@ class CHP(Component):
     Simulate chp efficiency (cop) as well as electrical (p_el) &
     thermal power (p_th), massflow (m_dot) and output temperature (t_out).
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     ControlSignal: ClassVar[str] = "ControlSignal"  # at which Procentage is the CHP modulating [0..1]

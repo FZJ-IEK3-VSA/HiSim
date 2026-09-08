@@ -175,7 +175,7 @@ simulation in shadow mode).
 | `adapter.py` | Compatibility adapter for components that have not yet adopted `get_cost_facts()`: maps known classes/configs to facts and meter specs. Shrinks as adoption grows; never calls legacy cost methods (§10.0 rule 4). |
 | `audit.py` | `cost_audit.csv` (one row per component: origin, sources, bands, subsidies) and the legacy parity report (§9.5, §9.7). |
 | `exports.py` | All JSON/CSV exports and the namespaced lifecycle KPIs with `value_min`/`value_max` bands (§7.2–§7.4). |
-| `bridge.py` | The postprocessing entry point behind `COMPUTE_LIFECYCLE_COSTS`: collects facts/flows from a finished run, picks a covered price basis year, evaluates the default bundle, writes everything. Guarded so it can never break a run. |
+| `bridge.py` | The postprocessing entry point behind `COMPUTE_LIFECYCLE_COSTS`: collects facts/flows from a finished run, picks a covered price basis year, evaluates the default bundle, writes everything. Opt-in, and loud: a fleet the cost model cannot describe — an undeclared component (§9.2), a recognized one whose facts don't build, a declared fact the database can't price — fails the run rather than producing a cost report with a hole in it (D7). |
 | `validation.py` | Data-file CI: source completeness, coverage matrix, question coverage, staleness (§9.6). |
 | `reporting.py` | Human-readable reports (option `LIFECYCLE_COST_REPORT`): plausibility panel, `cost_summary.md`, self-contained `lifecycle_report.html` with inline-SVG charts, variant-comparison section. |
 | `report_plots.py` | Matplotlib PNG companions (annual cash flows, investment build-up, perspective whiskers, component stacks, payback curve) — same display groups and colors as the HTML. |
@@ -483,6 +483,14 @@ under a tariff it was not simulated with must be opted into, §4.6).
 
 ## 5. Adding things — quick recipes
 
+- **Any new component at all** (§9.2, not optional): declare `cost_relevance` in the class's own
+  body — `PRICED`, `METER` or `FREE_OF_COST`. Inheriting a parent's declaration does not count.
+  `tests/test_economics_adapter_contract.py::test_every_component_class_declares_cost_relevance`
+  fails until you do. Pick `PRICED` for anything that is real hardware even when no database row
+  describes it yet: such a component then *fails* every lifecycle-cost run containing it until
+  someone adds the row, which is the intended outcome. `FREE_OF_COST` is for controllers, weather,
+  load-profile providers and idealized or pass-through helpers only — declaring it for hardware
+  silently prices that hardware at zero, which is the one thing §9.2 exists to prevent.
 - **New component adopts the engine** (Phase 6 pattern, §9.1): set
   `cost_relevance = CostRelevance.PRICED` on the class, implement `get_cost_facts()` (~6 lines:
   asset class, size from the config, unit, KPI tag, optional per-field overrides with an

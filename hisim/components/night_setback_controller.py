@@ -24,6 +24,7 @@ from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.building import Building
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
 from hisim.simulationparameters import SimulationParameters
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Jonas Pfeiffer"
 __copyright__ = "Copyright 2026, the House Infrastructure Project"
@@ -84,6 +85,8 @@ class NightSetbackController(cp.Component):
     ``BuildingTemperatureModifier`` to reduce the heating set temperature
     during the night.
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     BuildingTemperatureModifier: str = "BuildingTemperatureModifier"
 

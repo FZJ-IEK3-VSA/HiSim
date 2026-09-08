@@ -26,6 +26,7 @@ from hisim.dynamic_component import (
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -78,6 +79,8 @@ class FuelMeterConfig(ConfigBase):
 
 class FuelMeter(DynamicComponent):
     """Fuel meter class."""
+
+    cost_relevance = CostRelevance.METER
 
     # Outputs
     HeatConsumption: ClassVar[str] = "HeatConsumption"

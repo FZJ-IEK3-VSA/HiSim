@@ -217,9 +217,12 @@ class Component:
     """Base class for all components."""
 
     # Cost role declaration for the lifecycle cost engine (cost_spec.md §9.2). PRICED
-    # components must return facts from `get_cost_facts()`, FREE_OF_COST components must
-    # return None, METER components provide `get_energy_flow_facts()`. UNDECLARED components
-    # are flagged by the completeness check (warning during the parallel phase).
+    # components must return facts from `get_cost_facts()` or have an adapter table entry,
+    # FREE_OF_COST components must return None, METER components provide
+    # `get_energy_flow_facts()`. Every subclass must override this in its own class body:
+    # UNDECLARED is only the loadable default, and a component that still carries it aborts any
+    # lifecycle-cost run it appears in — at simulation start via
+    # `Simulator.check_cost_declarations`, and again in the postprocessing bridge under D7.
     cost_relevance: ClassVar[CostRelevance] = CostRelevance.UNDECLARED
 
     @classmethod
@@ -548,8 +551,10 @@ class Component:
         """Return cost-relevant facts for the lifecycle cost engine, or None (cost_spec.md §3.3).
 
         Components declare, the engine computes: no prices, no discounting, no dataframe
-        access here. The default (None) means "not part of the cost model" — controllers,
-        weather and occupancy simply don't override this hook.
+        access here. The default (None) means "this component contributes no cost facts" —
+        controllers, weather and occupancy simply don't override this hook. It does *not* mean
+        "not part of the cost model": that is decided by `cost_relevance` alone, and a component
+        returning None while declaring `PRICED` is a hard failure rather than a free device.
 
         Called once per component after the simulation and before any legacy cost code runs, via
         `hisim.economics.adapter.get_cost_facts` (which falls back to a compatibility table for
@@ -559,7 +564,8 @@ class Component:
         than the cost database — never a price it computed itself. Which of the two behaviors is
         expected is declared by the class attribute `cost_relevance` above, so a forgotten
         override is caught by the completeness check instead of silently dropping the component
-        from the cost report.
+        from the cost report. That declaration is mandatory: see `cost_relevance` for the two
+        places an undeclared component aborts.
         """
         return None
 

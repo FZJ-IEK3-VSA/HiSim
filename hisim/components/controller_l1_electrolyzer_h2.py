@@ -15,6 +15,7 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, IEK-3"
@@ -102,6 +103,8 @@ class ElectrolyzerControllerConfig(ConfigBase):
 
 class ElectrolyzerController(Component):
     """Electrolyzer Controller class."""
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     ProvidedLoad: str = "ProvidedLoad"

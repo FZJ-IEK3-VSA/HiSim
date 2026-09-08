@@ -27,6 +27,7 @@ from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+from hisim.economics.facts import CostRelevance
 
 
 __authors__ = "Kristina Dabrock"
@@ -188,6 +189,8 @@ class SolarThermalSystem(Component):
     This class represents a solar thermal system that can be used
     for warm water and space heating.
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     TemperatureOutsideDegC: ClassVar[str] = "TemperatureOutsideDegC"
@@ -839,6 +842,8 @@ class SolarThermalSystemController(Component):
     (1) SolarThermalSystem (control_signal)
 
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     MeanWaterTemperatureInStorage: ClassVar[str] = "MeanWaterTemperatureInStorage"

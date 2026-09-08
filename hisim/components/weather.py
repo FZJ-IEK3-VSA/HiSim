@@ -23,6 +23,7 @@ from hisim.component import Component, ComponentOutput, SingleTimeStepValues, Op
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -603,6 +604,8 @@ WeatherConfig.SIZING_CONTRIBUTIONS = (
 
 class Weather(Component):
     """Provide thermal and solar conditions of local weather."""
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     # None

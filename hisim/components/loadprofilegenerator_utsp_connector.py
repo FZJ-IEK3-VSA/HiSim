@@ -50,6 +50,7 @@ from hisim.component import OpexCostDataClass
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, FactContribution, constructor, preset
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.lpg_car_information import CarProfileHandover, GenericCarInformation
+from hisim.economics.facts import CostRelevance
 
 # Constants for warm water fallback values used in i_simulate
 DEFAULT_WW_TEMPERATURE_INPUT: float = 40.45  # °C - default warm water temperature fallback
@@ -379,6 +380,8 @@ class UtspLpgConnector(cp.Component):
     The data is retrieved from the UTSP, which executes the LoadProfileGenerator to simulate
     the specified household.
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     WW_MassInput: str = "WarmWaterMassInput"  # kg/s

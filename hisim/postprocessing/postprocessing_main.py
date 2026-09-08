@@ -73,6 +73,29 @@ def _load_attribute(module_name: str, attribute_name: str) -> Any:
     return getattr(importlib.import_module(module_name), attribute_name)
 
 
+def _propagating_cost_errors() -> Tuple[type, ...]:
+    """Exception types a lifecycle-cost failure must propagate instead of logging and continuing.
+
+    Computing lifecycle costs is opt-in, so a cost model that cannot describe the simulated fleet
+    is a failed run rather than a log line (cost_spec.md §9.2, decision D7). `CostDataError` is
+    the typed marker for exactly that class of failure — `UnresolvableSubjectsError`, raised for
+    an undeclared or otherwise undescribable component, is one — while everything else coming out
+    of the engine is an accident that must still not cost a user their simulation results.
+
+    Resolved through `_load_attribute` and behind a guard so that the *handler* can never fail:
+    if `hisim.economics` itself will not import, there is no typed error to recognize and the
+    caller's broad handler should log whatever went wrong rather than re-raise blindly.
+
+    Returns:
+        A tuple usable directly as the second argument of `isinstance`; empty when the cost
+        package could not be imported, which makes every exception fall through to the log.
+    """
+    try:
+        return (_load_attribute("hisim.economics.catalog_entries", "CostDataError"),)
+    except Exception:  # pylint: disable=broad-except
+        return ()
+
+
 class PostProcessor:
     """Entry point that orchestrates HiSim's post-processing stage.
 
@@ -317,7 +340,14 @@ class PostProcessor:
                     ),
                 )
             except Exception as err:  # pylint: disable=broad-except
-                # The parallel engine must never break a run during the transition phase.
+                # Asking for lifecycle costs is opt-in, so an answer that cannot be produced is a
+                # failed run rather than a log line: a CostDataError — and hence the D7
+                # UnresolvableSubjectsError raised for an undeclared or otherwise undescribable
+                # component (cost_spec.md §9.2, §8) — propagates and fails postprocessing.
+                # Everything else is an accident in the parallel engine and must still not cost a
+                # user their simulation results, so it stays a logged error.
+                if isinstance(err, _propagating_cost_errors()):
+                    raise
                 log.error(f"Lifecycle cost engine failed (legacy outputs are unaffected): {err}")
             end = timer()
             duration = end - start

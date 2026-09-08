@@ -18,6 +18,7 @@ from hisim import utils
 from hisim import loadtypes as lt
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -100,6 +101,8 @@ class PriceSignal(cp.Component):
     Class component that provides price for electricity.
     Outputs: Price for injection: cents/kWh, Price for purchase: cents/kWh
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Forecasts
     Price_Injection_Forecast_24h = "Price_Injection_Forecast_24h"

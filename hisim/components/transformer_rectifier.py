@@ -26,6 +26,7 @@ from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters
+from hisim.economics.facts import CostRelevance
 
 
 @dataclass_json
@@ -163,6 +164,8 @@ class Transformer(StatelessComponent):
         Defaults to an empty :py:class:`~hisim.config.DisplayConfig`.
 
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     TransformerInput: str = "Input1"
     TransformerOutput: str = "MyTransformerOutput"

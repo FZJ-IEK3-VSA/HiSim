@@ -29,6 +29,7 @@ from hisim.components.weather import Weather
 import hisim.loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -174,6 +175,8 @@ class GenericHeatPump(cp.Component):
         Minimum time duration that the heat pump has to stay idle, in seconds. The default is 900.
 
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     State = "State"
@@ -623,6 +626,8 @@ class GenericHeatPumpController(cp.Component):
         Mode index for operation type for this heat pump
 
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     TemperatureMean = "ResidenceTemperature"

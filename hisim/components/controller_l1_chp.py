@@ -19,6 +19,7 @@ from hisim import utils
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "edited Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -226,6 +227,8 @@ class L1CHPController(cp.Component):
     (3) EMS controller (controller_l2_energy_management_system) -> optional if electricity should be involved in control.
     (4) Hydrogen storage (generic_hydrogen_storage) -> optional if component is fuel cell and amount of hydrogen in storage is relevant.
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     BuildingTemperature = "BuildingTemperature"

@@ -21,6 +21,7 @@ from hisim.dynamic_component import (
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
+from hisim.economics.facts import CostRelevance
 
 DEFAULT_SOURCE_WEIGHT = 999
 __authors__ = "Jonas Hoppe"
@@ -69,6 +70,8 @@ class HeatingMeter(DynamicComponent):
     computes per-timestep and cumulative energy in watt-hours, and derives
     OPEX costs and CO2 emissions for district heating.
     """
+
+    cost_relevance = CostRelevance.METER
 
     # Outputs
     HeatAvailableInWatt: str = "HeatAvailableInWatt"

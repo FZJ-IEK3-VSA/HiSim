@@ -16,19 +16,22 @@ W1.2 — not even the choice of price basis year, which is resolved downstream i
 `evaluator.effective_price_basis_year` so the postprocessing path and the `evaluate` CLI derive
 the same year from the same file.
 
-**Why it can never break a run.** Two independent layers of guarding. Outside, both entry points
-are called from `postprocessing_main.py` inside a bare ``except Exception`` that logs
-``"Lifecycle cost engine failed (legacy outputs are unaffected): …"`` (respectively
-``"Lifecycle cost parity report failed …"``) and continues with the remaining postprocessing
-steps — so *every* exception is swallowed there, including the deliberate fail-fast
-`UnresolvableSubjectsError` of decision D7, and no lifecycle-cost problem can ever cost a user
-their simulation results. Inside, three narrower guards degrade gracefully instead of aborting:
-a cost database that fails to load logs an error and returns before anything is written; a
+**What breaks a run and what does not.** Computing lifecycle costs is opt-in, and asking for it
+means asking for an answer: a fleet the cost model cannot describe therefore *fails the run*. The
+`UnresolvableSubjectsError` of decision D7 — raised for an undeclared component (§9.2), for a
+recognized component whose facts do not build, and for a declared fact the database cannot price
+— propagates out of `postprocessing_main.py` and out of `hisim_main`. That guard used to be a
+bare ``except Exception`` that logged ``"Lifecycle cost engine failed (legacy outputs are
+unaffected): …"`` and continued, which meant the deliberate fail-fast of D7 arrived as a log line
+in the middle of a successful run; it now re-raises `CostDataError` (of which
+`UnresolvableSubjectsError` is one) and swallows only the accidents, so an incomplete cost model
+cannot be mistaken for a complete one. What still degrades gracefully rather than aborting: a
 subsidy catalog that fails to load logs an error and leaves `catalog` at None, so evaluation
-continues with the §10.1 flat shim; and a failing scenario cube logs
-``"… (base results unaffected)"`` and leaves the already-written base exports in place. Note
-what is *not* guarded away: the D7 resolution check and the evaluation itself are allowed to
-propagate, because a partial cost result is worse than none (cost-spec-v2 §8).
+continues with the §10.1 flat shim, and a failing scenario cube logs ``"… (base results
+unaffected)"`` and leaves the already-written base exports in place. Neither of those changes a
+figure in the base result; an undescribable component does — and so does a *cost database* that
+fails to load, which raises `CostDataError` and fails the run the same way: a wrong database path
+must not turn "compute my lifecycle costs" into a run with no cost files and a line in the log.
 
 The bridge is also the only consumer of `adapter.py`, and the reason `economic_inputs.json` is
 written before any economics happens: the file must be a faithful extract of the simulation,
@@ -61,7 +64,7 @@ from hisim.economics.exports import (
     write_lifecycle_kpis,
     write_provenance_ledger,
 )
-from hisim.economics.facts import BillingDeterminants, CostRelevance
+from hisim.economics.facts import BillingDeterminants, CostRelevance, describe_undeclared_class
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import load_default_bundle, select_applicable
 from hisim.economics.serialization import write_inputs
@@ -328,13 +331,13 @@ def build_evaluation_inputs(
     result is the plain-data record that `write_inputs` persists and the evaluator prices — no
     prices, no perspective, no economics of any kind are decided here.
 
-    Four things it also decides, all reported rather than silent. `UNDECLARED` components are
-    skipped and listed at INFO level: during the parallel phase a component that has not adopted
-    §9.2 is simply not in the cost model yet, and that has to be visible without being fatal.
-    A component the adapter *does* recognize but cannot describe — a registered extractor that
-    yielded nothing, a meter whose configured fuel maps to no carrier — becomes an
-    `UnresolvedSubject` instead (issues #2 and #3), which the downstream D7 check turns into a
-    hard failure rather than a component quietly missing from the cost report. A meter whose
+    Four things it also decides, and none of them is silent. An `UNDECLARED` component becomes an
+    `UnresolvedSubject` naming its class: §9.2 makes the declaration mandatory, so a component
+    that reaches the cost engine without one is a defect in that component, not a component
+    outside the cost model, and the downstream D7 check aborts the evaluation on it. A component
+    the adapter *does* recognize but cannot describe — a registered extractor that yielded
+    nothing, a meter whose configured fuel maps to no carrier — becomes an `UnresolvedSubject` the
+    same way (issues #2 and #3), rather than quietly missing from the cost report. A meter whose
     declared output does not exist warns and leaves its carrier unbilled, and a run with no meter
     flows at all warns that energy costs are missing from the results (§3.4). And the simulated
     period is converted into `simulated_period_fraction`, which the engine uses to annualize; runs
@@ -358,7 +361,6 @@ def build_evaluation_inputs(
     """
     cost_facts: List[SubjectCostFacts] = []
     billing: List[BillingDeterminants] = []
-    undeclared: List[str] = []
     unresolved: List[UnresolvedSubject] = []
     for wrapper in wrapped_components:
         component = wrapper.my_component
@@ -366,7 +368,12 @@ def build_evaluation_inputs(
         try:
             relevance = adapter.effective_cost_relevance(component)
             if relevance == CostRelevance.UNDECLARED:
-                undeclared.append(f"{subject} ({type(component).__name__})")
+                # §9.2 makes the declaration mandatory, so this is a defect in the component, not
+                # a component outside the cost model: it becomes an unresolved subject and the D7
+                # check below refuses to price the rest of the fleet around the hole.
+                unresolved.append(
+                    UnresolvedSubject(subject=subject, reason=describe_undeclared_class(type(component)))
+                )
                 continue
             if relevance == CostRelevance.FREE_OF_COST:
                 continue
@@ -394,11 +401,6 @@ def build_evaluation_inputs(
             "Lifecycle cost engine: components that could not be described for the cost model "
             f"(evaluation will abort, cost-spec-v2 §8/D7): "
             f"{', '.join(sorted(item.subject for item in unresolved))}"
-        )
-    if undeclared:
-        log.information(
-            "Lifecycle cost engine: components without cost declaration (not part of the cost "
-            f"model during the parallel phase): {', '.join(sorted(undeclared))}"
         )
     if not billing:
         log.warning(
@@ -494,10 +496,11 @@ def compute_lifecycle_costs(
     with ``generate_report`` additionally `cost_summary.md`, `lifecycle_report.html` and the PNG
     charts. No legacy file is read, written or otherwise touched.
 
-    Failure behaviour (see the module docstring): a database that will not load, a catalog that will
-    not load and a failing scenario cube are each caught here and logged, leaving the rest intact;
-    anything else propagates into postprocessing's own ``except Exception``, which logs it and lets
-    the simulation's legacy outputs stand.
+    Failure behaviour (see the module docstring): a catalog that will not load and a failing
+    scenario cube are caught here and logged, leaving the rest intact. Everything else propagates,
+    the D7 `UnresolvableSubjectsError` above all: postprocessing re-raises `CostDataError` rather
+    than logging it, so a run that asked for lifecycle costs and cannot have them fails instead of
+    finishing with a cost report missing a component.
 
     Args:
         wrapped_components: The simulator's wrapped components.
@@ -511,11 +514,10 @@ def compute_lifecycle_costs(
     parameters: Optional[EconomicParameters] = getattr(simulation_parameters, "economic_parameters", None)
     if parameters is None:
         parameters = EconomicParameters(country=getattr(simulation_parameters, "country", "DE"))
-    try:
-        database = CostDatabase(parameters.cost_database_path)
-    except CostDataError as err:
-        log.error(f"Lifecycle cost engine: cost database failed to load: {err}")
-        return
+    # A database that will not load is a CostDataError and propagates: a run that asked for
+    # lifecycle costs with an unreadable cost database must fail, not finish without cost files
+    # and a line in the log (same principle as the D7 abort below).
+    database = CostDatabase(parameters.cost_database_path)
     inputs = build_evaluation_inputs(wrapped_components, all_outputs, postprocessing_results, simulation_parameters)
     # The faithful extract goes to disk before anything economic touches it (W1.1): what the
     # file contains must depend on the simulation only, never on cost-database state.

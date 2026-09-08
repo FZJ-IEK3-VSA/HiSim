@@ -1010,6 +1010,8 @@ class HeatPumpHplibController(Component):
     On/off Switch with respect to water temperature from storage.
     """
 
+    cost_relevance = CostRelevance.FREE_OF_COST
+
     # Inputs
     WaterTemperatureInputFromHeatWaterStorage = "WaterTemperatureInputFromHeatWaterStorage"
     HeatingFlowTemperatureFromHeatDistributionSystem = "HeatingFlowTemperatureFromHeatDistributionSystem"

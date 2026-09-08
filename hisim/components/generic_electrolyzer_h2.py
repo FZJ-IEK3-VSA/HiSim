@@ -27,6 +27,7 @@ from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 
 from hisim import component as cp
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -177,6 +178,8 @@ class Electrolyzer(cp.Component):
         Ramp down rate of the electrolyzer in [% of nom_load/s].
 
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     LoadInput = "LoadInput"

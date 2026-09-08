@@ -31,6 +31,14 @@ carrier, which used to be billed as heating oil (issue #3) — and `TestEnergyFl
 pins the meter-path precedence of issue #18: the component's own `get_energy_flow_facts` first,
 the adapter's class-name table second, with the capacity peaks still coming from the table because
 the hook cannot express them. Quantities are kWh on both paths (D26).
+
+The third way a component could vanish is now closed here too, and it is why every stub in this
+file declares a `cost_relevance`. An *undeclared* component used to be dropped from the extract
+and logged at INFO level; it becomes an `UnresolvedSubject` and fails the evaluation instead
+(§9.2), so a stub that merely borrowed a real class's name would no longer reach the path it is
+meant to exercise. `FakeController` keeps its missing declaration deliberately — it is the defect
+under test — and `FakeFreeOfCostController` is the control that shows the declared "costs
+nothing" answer still costs nothing.
 """
 
 # clean
@@ -123,16 +131,34 @@ class FakeHeatPump:
 
 
 class FakeController:
-    """A component with no cost declaration at all (must be reported, never priced).
+    """A component with no cost declaration at all (must abort the run, never be priced).
 
-    Most components in a HiSim setup are controllers and have no cost of their own; §9.2 requires
-    that they be visibly absent from the cost model rather than silently priced at zero. It has no
-    `cost_relevance` and no adapter entry, which is the combination the bridge must skip.
+    §9.2 makes the declaration mandatory, so this stub is a *defect*, not a controller: it has no
+    `cost_relevance` and no adapter entry, which is the combination that makes the bridge produce
+    an unresolved subject and the D7 check refuse to price anything. A real controller with no
+    cost of its own declares `FREE_OF_COST` and is skipped silently; that is a different stub and
+    a different outcome, which is exactly what §9.2 exists to keep apart.
     """
 
     def __init__(self) -> None:
         """A component with no cost declaration of any kind."""
         self.component_name = "FakeController"
+        self.config = _Config()
+
+
+class FakeFreeOfCostController:
+    """A controller that declares `FREE_OF_COST` — the legitimate "costs nothing" answer.
+
+    The counterpart to `FakeController`, and the reason the abort above is not simply "controllers
+    break the cost model": a component that has stated it has no cost of its own contributes
+    neither facts nor a blocker, and the bridge drops it without a word.
+    """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
+
+    def __init__(self) -> None:
+        """A declared cost-free component."""
+        self.component_name = "FakeFreeOfCostController"
         self.config = _Config()
 
 
@@ -143,7 +169,13 @@ class ElectricityMeter:
     it by class name to a `MeterSpec` naming the output fields to read (grid import/export in Wh
     and the power series for peaks). The stub therefore has to carry that exact class name, and
     reproduces the double role of a meter: a billed carrier *and* a priced device of its own.
+
+    It declares `METER` because the real class does. Relevance is never inferred from the adapter
+    tables, so a stub that only borrowed the class name would be `UNDECLARED` and the bridge would
+    never reach the meter path these tests are about.
     """
+
+    cost_relevance = CostRelevance.METER
 
     def __init__(self) -> None:
         """A meter the adapter knows by class name, with no adopted flow hook yet."""
@@ -164,6 +196,8 @@ class FuelMeter:
     for the component's own legacy OPEX report only.
     """
 
+    cost_relevance = CostRelevance.METER
+
     def __init__(self) -> None:
         """An oil meter with the legacy heating value its config still carries."""
         self.component_name = "FuelMeter"
@@ -182,6 +216,8 @@ class GenericBoiler:
     produce it on demand: an OIL config resolves to the oil-boiler class, an ELECTRICITY one
     resolves to nothing.
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     def __init__(self, energy_carrier=lt.LoadTypes.OIL, component_name: str = "Boiler") -> None:
         """A boiler the compatibility table knows, burning the given carrier."""
@@ -232,6 +268,36 @@ class _SimulationParameters:
         self.result_directory = ""
 
 
+def _fail_evaluation(inputs) -> str:
+    """Runs the D7 resolution check over extracted inputs and returns the raised error's message.
+
+    Shared by every test that has to show a subject *blocking* rather than merely being recorded:
+    extraction only writes `unresolved_subjects` into the record, and it is this check — the one
+    `bridge.compute_lifecycle_costs` calls — that turns them into the refusal to produce partial
+    cost results. Asserting on its message is what distinguishes the D7 abort from a warning.
+
+    Args:
+        inputs: The `EvaluationInputs` an extraction produced.
+
+    Returns:
+        The `UnresolvableSubjectsError` message; the call fails the test if nothing is raised.
+    """
+    from hisim.economics.database import CostDatabase
+    from hisim.economics.evaluator import (
+        EconomicEvaluator,
+        UnresolvableSubjectsError,
+        require_resolvable_subjects,
+    )
+    from hisim.economics.parameters import EconomicParameters
+
+    evaluator = EconomicEvaluator(
+        CostDatabase(), EconomicParameters(country="DE", price_basis_year=2024)
+    )
+    with pytest.raises(UnresolvableSubjectsError) as raised:
+        require_resolvable_subjects(inputs, evaluator)
+    return str(raised.value)
+
+
 def _results_frame(columns) -> pd.DataFrame:
     """Column order defines the index the bridge uses to find an output's series.
 
@@ -258,13 +324,42 @@ class TestFactsExtraction:
         assert facts.size == pytest.approx(9.0)
         assert facts.size_unit is Units.KILOWATT
 
-    def test_undeclared_component_is_skipped(self):
-        """Components without a declaration are not part of the cost model (§9.2)."""
+    def test_undeclared_component_becomes_an_unresolved_subject(self):
+        """A component with no declaration aborts the evaluation instead of being skipped (§9.2).
+
+        Inverted from ``test_undeclared_component_is_skipped``, which pinned the parallel-phase
+        leniency: an undeclared component used to be dropped from the extract and mentioned at
+        INFO level, so a forgotten declaration cost a device its place in every cost result and
+        said so only in a log nobody reads. The declaration is mandatory now, so the component
+        becomes an `UnresolvedSubject` and the downstream D7 check turns it into a hard failure.
+        """
         inputs = build_evaluation_inputs(
             [_Wrapper(FakeController())], [], pd.DataFrame(), _SimulationParameters()
         )
         assert inputs.cost_facts == []
         assert inputs.billing == []
+        assert [item.subject for item in inputs.unresolved_subjects] == ["FakeController"]
+        reason = inputs.unresolved_subjects[0].reason
+        assert "FakeController" in reason  # the class, so the reader knows which file to open
+        assert "cost_relevance" in reason  # what is missing ...
+        assert "FREE_OF_COST" in reason  # ... and what may be written instead
+        message = _fail_evaluation(inputs)
+        assert "FakeController" in message
+        assert "no partial cost results" in message  # the D7 refusal, not a warning
+
+    def test_a_component_declared_free_of_cost_is_skipped_silently(self):
+        """The declared "costs nothing" answer stays free: no facts, no billing, no blocker.
+
+        The control for the test above — without it, the abort could just as well be "any
+        component the cost model has no facts for", which would make `FREE_OF_COST` unusable and
+        break every controller in the fleet.
+        """
+        inputs = build_evaluation_inputs(
+            [_Wrapper(FakeFreeOfCostController())], [], pd.DataFrame(), _SimulationParameters()
+        )
+        assert inputs.cost_facts == []
+        assert inputs.billing == []
+        assert inputs.unresolved_subjects == []
 
     def test_simulated_period_fraction_follows_the_date_range(self):
         """One simulated day of a 365-day year -> 1/365; a full year -> 1.0."""
@@ -381,24 +476,6 @@ class TestPeakExtraction:
 class TestUnresolvedSubjects:
     """A component the adapter recognizes but cannot describe fails the run (issues #2, #3, D7)."""
 
-    @staticmethod
-    def _fail_evaluation(inputs):
-        """Runs the D7 check over extracted inputs and returns the raised error's message."""
-        from hisim.economics.database import CostDatabase
-        from hisim.economics.evaluator import (
-            EconomicEvaluator,
-            UnresolvableSubjectsError,
-            require_resolvable_subjects,
-        )
-        from hisim.economics.parameters import EconomicParameters
-
-        evaluator = EconomicEvaluator(
-            CostDatabase(), EconomicParameters(country="DE", price_basis_year=2024)
-        )
-        with pytest.raises(UnresolvableSubjectsError) as raised:
-            require_resolvable_subjects(inputs, evaluator)
-        return str(raised.value)
-
     def test_registered_extractor_returning_nothing_blocks_the_evaluation(self):
         """A boiler burning an unmapped fuel is an unresolved subject, not a silent drop (#2).
 
@@ -413,7 +490,7 @@ class TestUnresolvedSubjects:
         )
         assert inputs.cost_facts == []
         assert [item.subject for item in inputs.unresolved_subjects] == ["MysteryBoiler"]
-        message = self._fail_evaluation(inputs)
+        message = _fail_evaluation(inputs)
         assert "MysteryBoiler" in message
         assert "GenericBoiler" in message  # the reason names the registered class ...
         assert "no partial cost results" in message  # ... and it is the D7 refusal
@@ -442,7 +519,7 @@ class TestUnresolvedSubjects:
         )
         assert inputs.billing == []  # nothing was billed at a guessed carrier
         assert [item.subject for item in inputs.unresolved_subjects] == ["FuelMeter"]
-        message = self._fail_evaluation(inputs)
+        message = _fail_evaluation(inputs)
         assert "FuelMeter" in message
         assert "fuel_loadtype" in message
 
@@ -484,7 +561,7 @@ class TestUnresolvedSubjects:
         assert [item["subject"] for item in written["unresolved_subjects"]] == ["Odd"]
         reloaded = read_inputs(str(tmp_path))
         assert [item.subject for item in reloaded.unresolved_subjects] == ["Odd"]
-        assert "Odd" in self._fail_evaluation(reloaded)
+        assert "Odd" in _fail_evaluation(reloaded)
 
 
 class TestEnergyFlowHookAdoption:

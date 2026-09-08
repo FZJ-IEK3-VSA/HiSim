@@ -52,16 +52,68 @@ class CostRelevance(str, enum.Enum):
     `UNDECLARED` exists only as the base-class default, so that a component class is loadable
     before anyone has classified it. It is not a tolerated state and there is no lenient mode: a
     component that reaches the cost engine still carrying `UNDECLARED` aborts the evaluation
-    (decision D7), and every component in this repository must name its role explicitly. The
-    fleet-wide test that enforces that on all `Component` subclasses arrives with the bridge
-    wiring; `adapter.effective_cost_relevance` already reports the declaration verbatim and
-    infers nothing.
+    (decision D7), and every component in this repository must name its role explicitly. Three
+    things now hold that line together — `adapter.effective_cost_relevance` reports the
+    declaration verbatim and infers nothing,
+    `tests/test_economics_adapter_contract.py::test_every_component_class_declares_cost_relevance`
+    fails on any `Component` subclass in `hisim.components` without a declaration in its own class
+    body, and `simulator.Simulator.check_cost_declarations` aborts a `COMPUTE_LIFECYCLE_COSTS` run
+    before the first timestep if one slipped through anyway.
     """
 
     UNDECLARED = "UNDECLARED"
     PRICED = "PRICED"  # must return ComponentCostFacts
     FREE_OF_COST = "FREE_OF_COST"  # controllers, weather, idealized devices
     METER = "METER"  # must provide EnergyFlowFacts / BillingDeterminants
+
+
+class UndeclaredCostRelevanceError(ValueError):
+    """A component in the run declares no `cost_relevance`, so the cost model cannot describe it.
+
+    Raised by the pre-run completeness check (`simulator.check_cost_declarations`, §9.2) when a
+    lifecycle-cost run is requested and some registered component class still carries the
+    `UNDECLARED` base-class default. It is a `ValueError` because that is what
+    `Simulator.run_all_timesteps` already documents as its refusal type, and it carries the
+    offending classes so a caller can report them rather than re-parse the message.
+
+    The bridge does not raise this: a component that reaches *it* undeclared becomes an
+    `UnresolvedSubject` and fails through the same D7 path as any other undescribable subject.
+    This error exists so that a year-long simulation refuses in the first second instead of
+    running for hours and dying in postprocessing.
+    """
+
+    def __init__(self, component_classes: List[type]) -> None:
+        """Renders one bullet per offending class, in the order the components were registered."""
+        self.component_classes: Tuple[type, ...] = tuple(component_classes)
+        bullets = "\n".join(f"  - {describe_undeclared_class(cls)}" for cls in self.component_classes)
+        super().__init__(
+            f"Lifecycle cost computation was requested, but {len(self.component_classes)} "
+            "component class(es) in this simulation declare no cost_relevance, so the cost model "
+            "cannot describe them (cost_spec.md §9.2). The run is refused before the first "
+            "timestep rather than after the last one.\n" + bullets
+        )
+
+
+def describe_undeclared_class(component_class: type) -> str:
+    """One sentence naming an undeclared component class and what its author has to write.
+
+    Shared by the pre-run completeness check and the postprocessing bridge so that both failure
+    paths say the same thing about the same defect, and so the message always carries the module
+    the class lives in — without it the reader of a failed run has to grep for a class name.
+
+    Args:
+        component_class: The `Component` subclass that carries no own `cost_relevance`.
+
+    Returns:
+        The message, without a trailing newline and without bullet punctuation, so a caller can
+        embed it in a list or use it as an `UnresolvedSubject.reason` unchanged.
+    """
+    return (
+        f"{component_class.__name__} (module {component_class.__module__}) declares no "
+        "cost_relevance, so nothing can say whether it costs money: declare "
+        "cost_relevance = CostRelevance.PRICED, CostRelevance.METER or "
+        "CostRelevance.FREE_OF_COST in the class body (cost_spec.md §9.2)"
+    )
 
 
 def _coerce_uncertain(

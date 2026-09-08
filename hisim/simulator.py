@@ -15,6 +15,10 @@ from hisim import sim_repository
 import hisim.component as cp
 import hisim.dynamic_component as dcp
 from hisim import log
+from hisim.economics.facts import (
+    CostRelevance,
+    UndeclaredCostRelevanceError,
+)
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim import postprocessingoptions
@@ -289,6 +293,52 @@ class Simulator:
             self._simulation_parameters.result_directory, "Detailed_Iteration_Log.txt"
         )
 
+    def check_cost_declarations(self) -> None:
+        """Refuses a lifecycle-cost run whose components have not all declared a cost role (§9.2).
+
+        The completeness check cost_spec.md §9.2 asks for "at simulation start, not end". Every
+        `Component` subclass must declare `cost_relevance` in its own class body; a class that
+        declares nothing keeps the `UNDECLARED` base-class default and cannot be described to the
+        cost model at all, which the postprocessing bridge turns into a hard D7 failure. Finding
+        that out in postprocessing means a year-long simulation runs for hours and then dies
+        without producing the cost report it was started for, so the same defect is caught here,
+        before the first timestep.
+
+        Only components with no declaration are rejected. A declared component that turns out to
+        be undescribable for some other reason — `PRICED` with no facts anywhere, a meter whose
+        fuel maps to no carrier — is a data question this method cannot answer without the cost
+        database, and stays with the bridge's D7 check.
+
+        Does nothing unless `PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS` or
+        `LIFECYCLE_COST_REPORT` was requested: components are free to be undeclared in a run that
+        never asks what anything costs.
+
+        Raises:
+            UndeclaredCostRelevanceError: If lifecycle costs were requested and at least one
+                registered component's class declares no `cost_relevance`. The message names
+                every offending class and the module it lives in. It is a `ValueError`, so a
+                caller catching `run_all_timesteps`' documented refusal type still catches it.
+        """
+        options = self._simulation_parameters.post_processing_options
+        wanted = (
+            postprocessingoptions.PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS in options
+            or postprocessingoptions.PostProcessingOptions.LIFECYCLE_COST_REPORT in options
+        )
+        if not wanted:
+            return
+        undeclared: List[type] = []
+        for wrapped_component in self.wrapped_components:
+            component_class = type(wrapped_component.my_component)
+            # `getattr` with the default mirrors `adapter.effective_cost_relevance`: a class that
+            # does not carry the attribute at all is undeclared, not a crash.
+            relevance = getattr(component_class, "cost_relevance", CostRelevance.UNDECLARED)
+            if relevance is not CostRelevance.UNDECLARED:
+                continue
+            if component_class not in undeclared:
+                undeclared.append(component_class)
+        if undeclared:
+            raise UndeclaredCostRelevanceError(undeclared)
+
     # @profile
     # @utils.measure_execution_time
     def run_all_timesteps(self) -> None:
@@ -296,7 +346,9 @@ class Simulator:
 
         Raises:
             ValueError: If simulation parameters are not initialized, no components
-                are defined, or post-processing data transfer is None.
+                are defined, post-processing data transfer is None, or lifecycle costs were
+                requested while some component declares no `cost_relevance`
+                (`check_cost_declarations`).
         """
         # Error Tests
         # Test if all parameters were initialized
@@ -306,6 +358,10 @@ class Simulator:
         # Tests if wrapper has any components at all
         if len(self.wrapped_components) == 0:
             raise ValueError("Not a single component was defined. Quitting.")
+
+        # A lifecycle-cost run needs every component to have declared a cost role; refuse now
+        # rather than after hours of simulation (cost_spec.md §9.2).
+        self.check_cost_declarations()
 
         # prepare logging and simulation directory
         self.prepare_simulation_directory()

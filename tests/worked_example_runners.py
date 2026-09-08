@@ -1,15 +1,16 @@
 """Entry points that drive each worked-example group through the engine (cost-spec-v2 §3.5).
 
 One `_<group>_values` function per workbook group — financing, discounting, tariffs, subsidies,
-modernization levy, end-to-end — each mapping an example's inputs onto the engine surface under
-test and returning the computed values by label. Moved out of `test_worked_examples.py` (PR-3
+modernization_levy, end_to_end — each mapping an example's inputs onto the engine surface under
+test and returning the computed values by label; the dispatch table in `test_worked_examples.py`
+maps group name to function one to one. Moved out of `test_worked_examples.py` (PR-3
 review, 500-line rule): these are the library the parametrized driver dispatches into, not
 tests themselves. The rule for writing one is unchanged — a runner exercises the *engine's own*
 entry points and never re-implements the arithmetic the workbook cross-checks.
 """
 
 import re
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs, SubjectCostFacts
@@ -33,6 +34,7 @@ from hisim.economics.tariffs import (
     CapacityCharge,
     CapacityChargeKind,
     ControllabilityDiscount,
+    ControllabilityKind,
     FeedIn,
     FeedInKind,
     SupplyKind,
@@ -82,6 +84,55 @@ class SyntheticCarbonData:
     PRICE_PATH_POINTS = {"2024": 50.0, "2027": 80.0, "2030": 110.0}
 
 
+class FractionBounds:
+    """Accepted range for the fraction-typed inputs of a worked example (§3.2).
+
+    Rates and shares are read from workbooks as bare floats, which makes one authoring mistake
+    invisible: writing `interest_rate: 3` for "3 %" passes the whole engine-vs-Excel chain, because
+    both sides consume the same mis-scaled number and therefore agree on a physically wrong answer.
+    The workbook cannot catch it either — a cross-check compares two derivations of the same input,
+    not the input against reality. So the runners bound it here instead.
+
+    The range is the closed unit interval: every fraction-typed input of the library today is a
+    non-negative share or rate below 1, and both ends must be inclusive (a zero-interest financing
+    example and a zero maintenance rate both exist). It deliberately does *not* cover the price
+    escalation rates, which may legitimately be negative.
+    """
+
+    MINIMUM = 0.0
+    MAXIMUM = 1.0
+
+
+def _fraction(inputs: Dict[str, Any], label: str, default: float) -> float:
+    """Reads one fraction-typed input and bounds it to :class:`FractionBounds`.
+
+    The single reader for every rate and share a workbook declares, so the range check cannot be
+    forgotten at one of the call sites. A value outside the range names the input, the value and
+    the accepted range, because the reader of the message is whoever wrote the workbook row.
+
+    Args:
+        inputs: The example's declared inputs.
+        label: The input label to read.
+        default: Value to use when the example does not declare the label.
+
+    Returns:
+        The declared value as a float, or `default` when the label is absent.
+
+    Raises:
+        ValueError: If the declared value is outside the closed unit interval.
+    """
+    if label not in inputs:
+        return default
+    value = float(inputs[label])
+    if not FractionBounds.MINIMUM <= value <= FractionBounds.MAXIMUM:
+        raise ValueError(
+            f"worked example declares {label} = {value!r}, which is outside the accepted range "
+            f"[{FractionBounds.MINIMUM}, {FractionBounds.MAXIMUM}] for a fraction; a rate or share "
+            "is a fraction, not a percentage, so 3 % is 0.03."
+        )
+    return value
+
+
 def _financing_values(inputs: Dict[str, Any]) -> Dict[str, float]:
     """Runs `loan_flows` and exposes the loan schedule under the worked-example labels (§4.4).
 
@@ -106,8 +157,8 @@ def _financing_values(inputs: Dict[str, Any]) -> Dict[str, float]:
             f"expected one of {[member.value for member in LoanType]}."
         ) from error
     plan = FinancingPlan(
-        financed_share=float(inputs.get("financed_share", 1.0)),
-        nominal_interest_rate=float(inputs["interest_rate"]),
+        financed_share=_fraction(inputs, "financed_share", 1.0),
+        nominal_interest_rate=_fraction(inputs, "interest_rate", 0.0),
         term_in_years=int(inputs["duration_in_years"]),
         type=loan_type,
     )
@@ -153,7 +204,7 @@ def _discounting_values(inputs: Dict[str, Any]) -> Dict[str, float]:
     Like `_financing_values` it publishes the annuity factor twice, under a plain and a
     `_via_pmt` label, so a workbook may derive it either way.
     """
-    rate = float(inputs["interest_rate"])
+    rate = _fraction(inputs, "interest_rate", 0.0)
     horizon = int(inputs["observation_period_in_years"])
     parameters = EconomicParameters(observation_period_in_years=horizon, interest_rate=rate)
     # The workbook gives net figures per year, of either sign, all booked under one neutral
@@ -188,22 +239,79 @@ def _discounting_values(inputs: Dict[str, Any]) -> Dict[str, float]:
     return values
 
 
-def _tariff_contract(inputs: Dict[str, Any]) -> TariffContract:
+def _controllability_kind(inputs: Dict[str, Any]) -> ControllabilityKind:
+    """Reads the `controllability_kind` input as a `ControllabilityKind` member (§8.2).
+
+    The kind selects which of the discount's two amount fields the billing engine reads, so a
+    misspelled workbook value used to make the discount silently worth nothing. Reading it through
+    the enum turns that into an aborted example naming the accepted values, the same way
+    `loan_type` is read in `_financing_values`.
+    """
+    declared = str(inputs.get("controllability_kind", ControllabilityKind.NONE.value))
+    try:
+        return ControllabilityKind(declared)
+    except ValueError as error:
+        raise ValueError(
+            f"worked example declares controllability_kind {declared!r}, which is not a "
+            f"ControllabilityKind; expected one of {[member.value for member in ControllabilityKind]}."
+        ) from error
+
+
+def _time_of_use_bands(inputs: Dict[str, Any]) -> Tuple[List[TimeOfUseBand], Dict[str, float]]:
+    """Parses the two time-of-use band families and checks that they describe the same bands.
+
+    A workbook declares a band twice — `band_<name>_price_in_euro_per_kwh` on the contract side and
+    `band_<name>_energy_in_kwh` on the meter side — and nothing but the shared `<name>` ties the two
+    together. So the names are compared here: a price without energy, or energy without a price, is
+    an authoring mistake that would otherwise bill the missing side at the fallback band and still
+    look plausible.
+
+    Bands are built in the **workbook's declared row order**, not sorted, because the first band of
+    a contract is its fallback (`tariffs.time_of_use_band_for`). Sorting them alphabetically — what
+    this used to do — picked a fallback the workbook author never chose. The generated YAML
+    preserves row order, so `inputs.items()` is that order.
+
+    Returns:
+        `(bands, energy_per_band)` — the contract's bands in declared order, and the meter's kWh
+        per band name.
+
+    Raises:
+        ValueError: If the price-band names and the energy-band names are not the same set.
+    """
+    prices: Dict[str, float] = {}
+    energies: Dict[str, float] = {}
+    for label, value in inputs.items():
+        price_match = re.match(r"^band_([a-z0-9]+)_price_in_euro_per_kwh$", label)
+        if price_match is not None:
+            prices[price_match.group(1)] = float(value)
+            continue
+        energy_match = re.match(r"^band_([a-z0-9]+)_energy_in_kwh$", label)
+        if energy_match is not None:
+            energies[energy_match.group(1)] = float(value)
+    if set(prices) != set(energies):
+        raise ValueError(
+            "worked example declares time-of-use bands inconsistently: priced bands "
+            f"{sorted(prices)} but metered bands {sorted(energies)}. Every band needs both a "
+            "band_<name>_price_in_euro_per_kwh and a band_<name>_energy_in_kwh row, under the "
+            "same <name>."
+        )
+    bands = [
+        TimeOfUseBand(name=name, price_in_euro_per_kwh=UncertainValue.exact(price))
+        for name, price in prices.items()
+    ]
+    return bands, energies
+
+
+def _tariff_contract(inputs: Dict[str, Any], bands: List[TimeOfUseBand]) -> TariffContract:
     """Builds the contract an example describes through its flat input labels (§8.2).
 
     Workbooks are two-column tables, so a nested contract has to be expressed as flat labels:
-    `supply_kind`, `working_price_in_euro_per_kwh`, `band_<name>_price_in_euro_per_kwh` for
-    time-of-use bands, plus the capacity-charge, feed-in and controllability keys. Every key is
+    `supply_kind`, `working_price_in_euro_per_kwh`, the time-of-use bands (parsed by
+    :func:`_time_of_use_bands` and passed in, so the contract and the meter cannot disagree about
+    which bands exist), plus the capacity-charge, feed-in and controllability keys. Every key is
     optional and defaults to the neutral value (0.0 / NONE), which is what lets one example
     describe a bare flat tariff and the next a fully loaded contract without a schema per case.
     """
-    bands = []
-    for label, value in sorted(inputs.items()):
-        match = re.match(r"^band_([a-z0-9]+)_price_in_euro_per_kwh$", label)
-        if match is not None:
-            bands.append(
-                TimeOfUseBand(name=match.group(1), price_in_euro_per_kwh=UncertainValue.exact(float(value)))
-            )
     supply = TariffSupply(
         kind=SupplyKind(str(inputs.get("supply_kind", "FLAT"))),
         working_price_in_euro_per_kwh=UncertainValue.exact(float(inputs.get("working_price_in_euro_per_kwh", 0.0))),
@@ -234,9 +342,9 @@ def _tariff_contract(inputs: Dict[str, Any]) -> TariffContract:
             rate_in_euro_per_kwh=UncertainValue.exact(float(inputs.get("feed_in_rate_in_euro_per_kwh", 0.0))),
         ),
         controllability_discount=ControllabilityDiscount(
-            kind=str(inputs.get("controllability_kind", "NONE")),
+            kind=_controllability_kind(inputs),
             annual_amount_in_euro=UncertainValue.exact(float(inputs.get("controllability_amount_in_euro", 0.0))),
-            grid_fee_reduction_share=float(inputs.get("grid_fee_reduction_share", 0.0)),
+            grid_fee_reduction_share=_fraction(inputs, "grid_fee_reduction_share", 0.0),
         ),
         source_ids=("inline:worked example",),
     )
@@ -257,12 +365,8 @@ def _tariff_values(inputs: Dict[str, Any]) -> Dict[str, float]:
     `apply_tariff` is a pure *year-1* billing engine; escalation and the multi-year projection
     belong to the evaluator and are covered by the end-to-end group instead.
     """
-    contract = _tariff_contract(inputs)
-    per_band = {}
-    for label, value in inputs.items():
-        match = re.match(r"^band_([a-z0-9]+)_energy_in_kwh$", label)
-        if match is not None:
-            per_band[match.group(1)] = float(value)
+    bands, per_band = _time_of_use_bands(inputs)
+    contract = _tariff_contract(inputs, bands)
     determinants = BillingDeterminants(
         carrier=EnergyCarrier.ELECTRICITY,
         energy_bought_in_kwh=float(inputs.get("energy_bought_in_kwh", 0.0)),
@@ -332,7 +436,7 @@ def _subsidy_scheme(letter: str, inputs: Dict[str, Any]) -> SubsidyScheme:
         benefit=benefit,
         eligible_cost=EligibleCostSpec(cap_per_dwelling_unit_in_euro=caps),
         cumulation_group=(str(inputs["cumulation_group"]) if "cumulation_group" in inputs else None),
-        combined_rate_cap=(float(inputs["combined_rate_cap"]) if "combined_rate_cap" in inputs else None),
+        combined_rate_cap=(_fraction(inputs, "combined_rate_cap", 0.0) if "combined_rate_cap" in inputs else None),
         excludes=([str(inputs[f"{prefix}excludes"])] if f"{prefix}excludes" in inputs else []),
         payout_kind=PayoutKind(str(inputs[f"{prefix}payout_kind"])),
     )
@@ -346,8 +450,13 @@ def _subsidy_values(inputs: Dict[str, Any]) -> Dict[str, float]:
     total, any tax-credit instalments, the support NPV and the effective support share. The
     catalog is in-memory and the country synthetic, so the shipped BEG/§35c definitions cannot
     influence a result; the cap that *is* asserted comes from the example's own numbers.
-    Note `support_npv_in_euro` is the one figure assembled here rather than by the engine — the
-    upfront awards plus each instalment discounted with the engine's own discount factor.
+
+    Every published figure comes out of the engine, `support_npv_in_euro` included: it is
+    `SubsidyDecision.discounted_support_in_euro`, the solver's *own* objective value for the
+    combination it chose, so an example asserting it pins the discounting convention that choice
+    was made under rather than a re-addition of the awards performed here.
+    `effective_support_share` is that discounted support over the measure cost — not the upfront
+    total over it, which reported 0 % support for a scheme paid entirely as instalments.
 
     **Two signs, one quantity.** The solver reports awards as positive *magnitudes* — its own
     vocabulary, and the one `UncertainValue.scale` requires, since it refuses negative factors —
@@ -368,6 +477,14 @@ def _subsidy_values(inputs: Dict[str, Any]) -> Dict[str, float]:
         country=SYNTHETIC_COUNTRY,
     )
     measure_cost = float(inputs["measure_cost_in_euro"])
+    if measure_cost <= 0.0:
+        # Every benefit in this group is a share of, or a cap against, this cost, so a
+        # non-positive one has no meaning; it used to be absorbed by a 0.0 support share.
+        raise ValueError(
+            f"worked example declares measure_cost_in_euro = {measure_cost!r}; a subsidised "
+            "measure must cost more than zero, since every benefit in this group is a share of "
+            "or a cap against that cost."
+        )
     facts = ComponentCostFacts(
         asset_class=ComponentType.HEAT_PUMP,
         size=float(inputs.get("measure_size_in_kw", 10.0)),
@@ -381,7 +498,7 @@ def _subsidy_values(inputs: Dict[str, Any]) -> Dict[str, float]:
     )
     dwelling_units = int(inputs.get("dwelling_units", 1))
     context = SubsidyContext(building=SubsidyBuildingContext(dwelling_units=dwelling_units))
-    parameters = EconomicParameters(interest_rate=float(inputs["interest_rate"]))
+    parameters = EconomicParameters(interest_rate=_fraction(inputs, "interest_rate", 0.0))
     decision = solve_cumulation(catalog, measure, context, EXAMPLE_YEAR, parameters.discount_factor)
 
     awards = {award.scheme_id: award for award in decision.applied}
@@ -391,17 +508,16 @@ def _subsidy_values(inputs: Dict[str, Any]) -> Dict[str, float]:
         values[f"scheme_{letter}_award_in_euro"] = award.upfront_amount.best_estimate if award is not None else 0.0
     total_upfront = sum(award.upfront_amount.best_estimate for award in decision.applied)
     schedule_total = 0.0
-    support_npv = total_upfront
     for award in decision.applied:
         for offset, amount in enumerate(award.schedule_amounts, start=1):
             values[f"tax_credit_year_{offset}_in_euro"] = amount.best_estimate
             schedule_total += amount.best_estimate
-            support_npv += amount.best_estimate * parameters.discount_factor(offset)
+    support_npv = decision.discounted_support_in_euro
     values["total_upfront_award_in_euro"] = total_upfront
     values["tax_credit_total_in_euro"] = schedule_total
     values["support_npv_in_euro"] = support_npv
     values["support_ledger_npv_in_euro"] = -support_npv
-    values["effective_support_share"] = total_upfront / measure_cost if measure_cost else 0.0
+    values["effective_support_share"] = support_npv / measure_cost
     cap = schemes[0].eligible_cost.cap_for_units(dwelling_units)
     if cap is not None:
         values["eligible_cap_in_euro"] = cap
@@ -441,14 +557,19 @@ def _levy_scheme(scheme_id: str, asset_class: ComponentType, rate: float) -> Sub
 def _modernization_levy_values(inputs: Dict[str, Any], database: CostDatabase) -> Dict[str, float]:
     """Evaluates a mixed retrofit package under the landlord/tenant split (§6.4, D27).
 
-    The second end-to-end entry point, and the only one that reaches the allocation layer: two
-    subjects (a heat pump and a wall insulation, sized in kW and m²), each with its own upfront
-    grant, are evaluated for a rented German building with a declared living area and cold rent.
-    Published are the engine's booked levy — the tenant leg of the minted transfer pair — its
+    The entry point of the `modernization_levy` group, and the only one that reaches the allocation
+    layer: two subjects (a heat pump and a wall insulation, sized in kW and m²), each with its own
+    upfront grant, are evaluated for a rented German building with a declared living area and cold
+    rent. Published are the engine's booked levy — the tenant leg of the minted transfer pair — its
     present value and both payers' NPVs, plus the paragraph split, which the timeline deliberately
     does not carry separately (see `actors.DE2024Ruleset.modernization_levy_entries`) and which is
     therefore read from the ruleset's `compute_modernization_levy` on the *engine's own* levy
     basis, obtained from the public `build_timeline`.
+
+    Both caps and both **uncapped** legs come off that same outcome object rather than being
+    re-derived here (`ModernizationLevyOutcome`). The uncapped legs are what make the statutory
+    percentages testable at all: in this package each capped leg lands exactly on its cap, so the
+    capped figures are the same number whatever the rate is.
 
     **Why this runner uses `country="DE"`** while every other end-to-end example prices against
     the synthetic `XX` country (D17): §559e is German law, and the ruleset is selected by country.
@@ -466,7 +587,7 @@ def _modernization_levy_values(inputs: Dict[str, Any], database: CostDatabase) -
     horizon = int(inputs["horizon_in_years"])
     parameters = EconomicParameters(
         observation_period_in_years=horizon,
-        interest_rate=float(inputs["interest_rate"]),
+        interest_rate=_fraction(inputs, "interest_rate", 0.0),
         general_price_escalation_rate=0.0,
         investment_price_escalation_rate=0.0,
         energy_price_escalation_rates={carrier: 0.0 for carrier in EnergyCarrier},
@@ -575,14 +696,21 @@ def _modernization_levy_values(inputs: Dict[str, Any], database: CostDatabase) -
     outcome = ruleset.compute_modernization_levy(context)
     values["annual_levy_heating_in_euro"] = outcome.heating_levy_in_euro.best_estimate
     values["annual_levy_general_in_euro"] = outcome.general_levy_in_euro.best_estimate
+    # The uncapped legs, because both capped ones sit *at* their cap in this example: a change to
+    # a statutory rate in allocation_DE_2024.json does not move them, so asserting only the capped
+    # figures would leave the rate unpinned. These are the engine's own pre-cap basis x rate.
+    values["uncapped_levy_heating_in_euro"] = outcome.uncapped_heating_levy_in_euro.best_estimate
+    values["uncapped_levy_general_in_euro"] = outcome.uncapped_general_levy_in_euro.best_estimate
     heating_basis, general_basis = ruleset.levy_pools(context)
     values["heating_levy_basis_in_euro"] = ruleset.levy_basis(*heating_basis).best_estimate
     values["general_levy_basis_in_euro"] = ruleset.levy_basis(*general_basis).best_estimate
-    months_of_area = 12.0 * float(inputs["living_area_in_m2"])
-    values["heating_cap_in_euro_per_year"] = (
-        ruleset.levy.heating_cap_in_euro_per_m2_per_month * months_of_area
-    )
-    values["general_cap_in_euro_per_year"] = ruleset.general_cap_rate(context) * months_of_area
+    # The caps as the engine resolved them (the general one already tiered by the cold rent), not
+    # re-derived from the rate and the area here: the cap formula is the engine's to own, so a
+    # change to it must fail this example rather than be reproduced by it.
+    assert outcome.heating_cap_in_euro_per_year is not None, "the example declares a living area"
+    assert outcome.total_cap_in_euro_per_year is not None, "the example declares a living area"
+    values["heating_cap_in_euro_per_year"] = outcome.heating_cap_in_euro_per_year
+    values["general_cap_in_euro_per_year"] = outcome.total_cap_in_euro_per_year
     return values
 
 
@@ -602,10 +730,6 @@ def _end_to_end_values(inputs: Dict[str, Any], database: CostDatabase) -> Dict[s
     an explicit zero, instead of the collector reporting "no such label" and the example silently
     covering less than it claims.
 
-    An example that declares `heating_investment_in_euro` is a *package* under the landlord/tenant
-    split and goes to :func:`_modernization_levy_values` instead: one device cannot express the
-    §559/§559e paragraph split (§6.4, D27).
-
     Two inputs exist for the CO2-price example and default to the library-wide behavior otherwise:
     `co2_price_scenario` (default `"none"`, i.e. carbon pricing off, which is why no other example
     produces an ENERGY_CO2_PRICE entry even though the fixture database now carries an emission
@@ -613,13 +737,11 @@ def _end_to_end_values(inputs: Dict[str, Any], database: CostDatabase) -> Dict[s
     trajectory is anchored on. Declaring the basis year makes the calendar year of each projection
     year visible in the workbook, which is where the trajectory's step interpolation happens.
     """
-    if "heating_investment_in_euro" in inputs:
-        return _modernization_levy_values(inputs, database)
     horizon = int(inputs["horizon_in_years"])
     basis_year = int(inputs.get("price_basis_year", EXAMPLE_YEAR))
     parameters = EconomicParameters(
         observation_period_in_years=horizon,
-        interest_rate=float(inputs["interest_rate"]),
+        interest_rate=_fraction(inputs, "interest_rate", 0.0),
         general_price_escalation_rate=float(inputs.get("general_price_escalation_rate", 0.0)),
         investment_price_escalation_rate=float(inputs.get("investment_price_escalation_rate", 0.0)),
         energy_price_escalation_rates={
@@ -637,7 +759,7 @@ def _end_to_end_values(inputs: Dict[str, Any], database: CostDatabase) -> Dict[s
         investment_cost_override_in_euro=UncertainValue.exact(float(inputs["investment_in_euro"])),
         installation_cost_override_in_euro=UncertainValue.exact(0.0),
         lifetime_override_in_years=float(inputs["lifetime_in_years"]),
-        maintenance_rate_override=UncertainValue.exact(float(inputs.get("maintenance_rate", 0.0))),
+        maintenance_rate_override=UncertainValue.exact(_fraction(inputs, "maintenance_rate", 0.0)),
         fixed_operation_cost_override_in_euro_per_year=UncertainValue.exact(0.0),
         embodied_co2_override_in_kg=0.0,
         override_source="worked example (cost-spec-v2 §3)",

@@ -10,16 +10,20 @@ pass, two different toolchains agree on the same arithmetic.
 
 Group to entry point:
 
-===============  ==========================================================================
-group            entry point
-===============  ==========================================================================
-`financing`      :func:`hisim.economics.financing.loan_flows`
-`discounting`    :class:`hisim.economics.parameters.EconomicParameters` + `CashFlowTimeline`
-`tariffs`        :func:`hisim.economics.tariffs.apply_tariff`
-`subsidies`      :func:`hisim.economics.subsidies.solve_cumulation` on in-memory catalogs
-`end_to_end`     :meth:`hisim.economics.evaluator.EconomicEvaluator.evaluate` (a package under
-                 the landlord/tenant split when the example declares a heating investment)
-===============  ==========================================================================
+====================  =======================================================================
+group                 entry point
+====================  =======================================================================
+`financing`           :func:`hisim.economics.financing.loan_flows`
+`discounting`         :class:`hisim.economics.parameters.EconomicParameters` + `CashFlowTimeline`
+`tariffs`             :func:`hisim.economics.tariffs.apply_tariff`
+`subsidies`           :func:`hisim.economics.subsidies.solve_cumulation` on in-memory catalogs
+`modernization_levy`  :meth:`hisim.economics.actors.DE2024Ruleset.compute_modernization_levy`,
+                      on a retrofit package under the German landlord/tenant split
+`end_to_end`          :meth:`hisim.economics.evaluator.EconomicEvaluator.evaluate`, for one device
+====================  =======================================================================
+
+The map is one to one: a group is selected by its directory name alone, never by which inputs an
+example happens to declare.
 
 The runners aggregate engine outputs (sums, ratios, discounting) but never re-implement
 pricing logic: whenever a worked example asserts a capped basis, a scaled rate or a band
@@ -69,6 +73,7 @@ from tests.worked_example_runners import (
     _discounting_values,
     _end_to_end_values,
     _financing_values,
+    _modernization_levy_values,
     _subsidy_values,
     _tariff_values,
 )
@@ -220,6 +225,7 @@ def test_worked_example(example: Dict[str, Any], synthetic_database: CostDatabas
         "discounting": _discounting_values,
         "tariffs": _tariff_values,
         "subsidies": _subsidy_values,
+        "modernization_levy": lambda inputs: _modernization_levy_values(inputs, synthetic_database),
         "end_to_end": lambda inputs: _end_to_end_values(inputs, synthetic_database),
     }
     group = example["group"]
@@ -265,7 +271,7 @@ def test_library_covers_every_group() -> None:
     """The library holds at least 20 examples and no group is empty (§3)."""
     assert len(EXAMPLES) >= 20, f"only {len(EXAMPLES)} worked examples found; the library needs at least 20."
     groups = {example["group"] for example in EXAMPLES}
-    expected_groups = {"financing", "discounting", "tariffs", "subsidies", "end_to_end"}
+    expected_groups = {"financing", "discounting", "tariffs", "subsidies", "modernization_levy", "end_to_end"}
     assert expected_groups <= groups, f"missing worked-example groups: {sorted(expected_groups - groups)}"
     for group in expected_groups:
         assert any(example["group"] == group for example in EXAMPLES), f"group {group!r} is empty."

@@ -1243,7 +1243,7 @@ carry a slot-reordered band while their sum cannot; two separately booked entrie
 to the rent increase the tenant actually pays (the same representability limit as §6.5/B11). One
 consequence worth stating: the zero floor of the basis applies per paragraph pool, so an
 over-subsidized heating measure no longer nets its surplus against the envelope measures of the same
-package. Worked example: `tests/worked_examples/end_to_end/heating_levy_559e_mixed_package.xlsx`.
+package. Worked example: `tests/worked_examples/modernization_levy/heating_levy_559e_mixed_package.xlsx`.
 
 *Two simplifications, stated.* The levy model is deliberately narrower than the statute in two
 places, and both are conservative — they understate the rent a landlord may reach, never overstate

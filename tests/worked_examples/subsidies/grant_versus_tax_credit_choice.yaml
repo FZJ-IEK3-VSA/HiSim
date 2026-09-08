@@ -52,3 +52,8 @@ expected:
     abs_tol: 0.01
     derivation: "-support_npv_in_euro"
     note: "the same support as it lands on the ledger: negative cost (§3.9)"
+  effective_support_share:
+    value: 0.226937
+    abs_tol: 0.000001
+    derivation: "support_npv_in_euro/measure_cost_in_euro"
+    note: "the discounted support over the measure cost; on the upfront total it would report 0 % support for this scheme, which is paid entirely as instalments"

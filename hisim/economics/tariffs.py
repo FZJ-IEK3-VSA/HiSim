@@ -99,15 +99,32 @@ class FeedInKind(str, enum.Enum):
     SPOT_REFERENCED = "SPOT_REFERENCED"  # direct marketing
 
 
+class ControllabilityKind(str, enum.Enum):
+    """§14a-EnWG-style controllability discount structures (§8.2).
+
+    How a grid operator pays for the right to curtail a dimmable device: not at all, as a fixed
+    annual credit against the standing charge, or as a percentage off the grid-fee component. The
+    kind selects which of the two amount fields of :class:`ControllabilityDiscount` is read, so a
+    value outside this set would leave both unread and the discount would silently be worth
+    nothing — which is why it is an enum rather than the free string it used to be.
+    """
+
+    NONE = "NONE"
+    FIXED_ANNUAL = "FIXED_ANNUAL"  # flat annual credit, booked against the standing charge
+    GRID_FEE_SHARE = "GRID_FEE_SHARE"  # fraction taken off the grid-fee component
+
+
 @dataclass
 class TimeOfUseBand:
     """One ToU band: weekday/hour masks with a working price.
 
     A band is a named set of hours (day/night, peak/off-peak) with its own energy price, and the
-    name is load-bearing: the meter reports energy *per band name*, so a band renamed in the
-    contract silently stops matching the determinants and its energy falls through to the fallback
-    band. Masks may overlap — the first declared match wins (:func:`time_of_use_band_for`) — which
-    makes a broad catch-all band declared last a valid way to express "everything else".
+    name is load-bearing: the meter reports energy *per band name*, so a band renamed on one side
+    and not the other stops matching. That mismatch is refused rather than absorbed —
+    :func:`apply_tariff` rejects determinants naming a band the contract does not define, instead
+    of letting its energy fall through to the fallback band at the wrong price. Masks may overlap
+    — the first declared match wins (:func:`time_of_use_band_for`) — which makes a broad catch-all
+    band declared last a valid way to express "everything else".
     """
 
     name: str  # must match the key the meter reports energy under
@@ -193,9 +210,23 @@ class ControllabilityDiscount:
     the curtailment it is paid for, which overstates the benefit and is flagged as such in the spec.
     """
 
-    kind: str = "NONE"  # NONE | FIXED_ANNUAL | GRID_FEE_SHARE
+    kind: ControllabilityKind = ControllabilityKind.NONE
     annual_amount_in_euro: UncertainValue = field(default_factory=lambda: UncertainValue.exact(0.0))
     grid_fee_reduction_share: float = 0.0  # GRID_FEE_SHARE: fraction taken off the grid fee
+
+    def __post_init__(self) -> None:
+        """Accepts the kind as its own string value, the way `ComponentCostFacts` accepts a number.
+
+        A catalog reader, a test or a worked-example runner may hand over the plain
+        `"GRID_FEE_SHARE"` this field carried before it became an enum. Coercing here keeps every
+        such call site working *and* validates it in the same step, which is the point of the enum:
+        an unknown kind raises now instead of leaving both amount fields unread and the discount
+        silently worth nothing.
+
+        Raises:
+            ValueError: If the kind names no `ControllabilityKind` member.
+        """
+        self.kind = ControllabilityKind(self.kind)
 
 
 @dataclass
@@ -354,7 +385,7 @@ class TariffContract:
         )
         discount_raw = raw.get("controllability_discount", {"kind": "NONE"})
         discount = ControllabilityDiscount(
-            kind=discount_raw.get("kind", "NONE"),
+            kind=ControllabilityKind(discount_raw.get("kind", "NONE")),
             annual_amount_in_euro=UncertainValue.from_json(discount_raw.get("annual_amount_in_euro", 0.0)),
             grid_fee_reduction_share=float(discount_raw.get("grid_fee_reduction_share", 0.0)),
         )
@@ -388,7 +419,7 @@ class TariffContract:
         :func:`apply_tariff` add it to the time-varying energy price.
         """
         grid_fee = self.supply.grid_fee_in_euro_per_kwh
-        if self.controllability_discount.kind == "GRID_FEE_SHARE":
+        if self.controllability_discount.kind == ControllabilityKind.GRID_FEE_SHARE:
             grid_fee = grid_fee.scale(1.0 - self.controllability_discount.grid_fee_reduction_share)
         return self.supply.markup_in_euro_per_kwh + grid_fee + self.supply.taxes_and_levies_in_euro_per_kwh
 
@@ -443,7 +474,7 @@ def contract_to_json(contract: TariffContract) -> dict:
             "markup_in_euro_per_kwh": contract.feed_in.markup_in_euro_per_kwh.to_json(),
         },
         "controllability_discount": {
-            "kind": contract.controllability_discount.kind,
+            "kind": contract.controllability_discount.kind.value,
             "annual_amount_in_euro": contract.controllability_discount.annual_amount_in_euro.to_json(),
             "grid_fee_reduction_share": contract.controllability_discount.grid_fee_reduction_share,
         },
@@ -633,9 +664,11 @@ def time_of_use_band_for(
     """The ToU band that prices one moment — the single band-selection rule (§8.4).
 
     First declared match wins. When nothing matches, or when the moment is unknown, the **first**
-    band applies: that is the rule `apply_tariff` bills unbanded energy with, so the price a
-    controller reacts to and the price the bill charges cannot disagree. `None` only when the
-    contract declares no bands at all (a data error the billing engine reports).
+    band applies: that is the rule `apply_tariff` bills *unbanded* energy with — energy the meter
+    assigned to no band at all — so the price a controller reacts to and the price the bill charges
+    cannot disagree. It is not a rule for energy filed under an unknown band *name*, which
+    `apply_tariff` refuses outright. `None` only when the contract declares no bands at all (a data
+    error the billing engine reports).
     """
     if not supply.bands:
         return None
@@ -742,8 +775,10 @@ def apply_tariff(determinants: BillingDeterminants, contract: TariffContract) ->
 
     Three billing paths, one per supply kind. FLAT multiplies the marginal price by annual energy.
     TIME_OF_USE prices each band's energy with its own price and bills whatever the meter did not
-    attribute to a band at the fallback band's price — the same fallback the price provider uses,
-    so a band-name mismatch produces a consistent (if wrong-looking) bill instead of free energy.
+    attribute to *any* band — the annual total minus the banded sum — at the fallback band's price,
+    the same fallback the price provider uses, so unattributed energy is never free. Energy filed
+    under a band name the contract does not define is a different case and is refused: it would
+    otherwise be priced at the fallback band, which is a wrong bill rather than a defaulted one.
     DYNAMIC refuses to work from annual totals at all: it requires the integral the meter computed
     at native resolution, because kWh times average price is precisely the error a dynamic tariff
     exists to exploit. Only DYNAMIC can report a non-zero flexibility value, and only when the
@@ -757,7 +792,8 @@ def apply_tariff(determinants: BillingDeterminants, contract: TariffContract) ->
         The year-1 bill by category, with the §8.5 decomposition attached.
 
     Raises:
-        CostDataError: For a TIME_OF_USE contract without bands, or a DYNAMIC contract whose
+        CostDataError: For a TIME_OF_USE contract without bands, for a TIME_OF_USE contract whose
+            determinants name a band it does not define, or for a DYNAMIC contract whose
             determinants carry no integrated cost.
     """
     bill = Year1Bill()
@@ -773,6 +809,17 @@ def apply_tariff(determinants: BillingDeterminants, contract: TariffContract) ->
     elif supply.kind == SupplyKind.TIME_OF_USE:
         if not supply.bands:
             raise CostDataError(f"Tariff {contract.id}: TIME_OF_USE without bands.")
+        known_bands = [band.name for band in supply.bands]
+        unknown = sorted(set(determinants.energy_bought_per_band_in_kwh) - set(known_bands))
+        if unknown:
+            raise CostDataError(
+                f"Tariff {contract.id}: the billing determinants file energy under band name(s) "
+                f"{unknown}, which this contract does not define; its bands are {known_bands}. "
+                "Energy under an unknown name would fall through to the fallback band and be "
+                "billed at the wrong price, so a name mismatch between the meter and the contract "
+                "is a data error (§8.4). Rename the band in whichever of the two is wrong, or "
+                "report the energy without a band name to have it billed at the fallback band."
+            )
         total = UncertainValue.exact(0.0)
         banded_energy = 0.0
         for band in supply.bands:
@@ -781,8 +828,10 @@ def apply_tariff(determinants: BillingDeterminants, contract: TariffContract) ->
             total = total + band.price_in_euro_per_kwh.scale(band_energy)
         unbanded = energy_bought - banded_energy
         if unbanded > 1e-6:
-            # Bill unbanded energy at the fallback band and let the meter warn upstream — the
-            # same fallback the price provider applies to an unmatched moment.
+            # Energy the meter assigned to no band at all (total minus the banded sum) — a
+            # modelled default, not a mismatch: it is billed at the fallback band, the same
+            # fallback the price provider applies to an unmatched moment. Energy filed under a
+            # band name the contract does not know was rejected above instead.
             fallback = time_of_use_band_for(supply)
             assert fallback is not None  # bands were checked above
             total = total + fallback.price_in_euro_per_kwh.scale(unbanded)
@@ -824,7 +873,7 @@ def apply_tariff(determinants: BillingDeterminants, contract: TariffContract) ->
     # its band is mirrored (`as_revenue`) before being added to a cost — otherwise the LOW slot of
     # the standing charge would combine a cheap charge with a stingy credit (§3.9).
     standing = contract.standing_charge_in_euro_per_year
-    if contract.controllability_discount.kind == "FIXED_ANNUAL":
+    if contract.controllability_discount.kind == ControllabilityKind.FIXED_ANNUAL:
         standing = standing + contract.controllability_discount.annual_amount_in_euro.as_revenue()
     bill.by_category[CostCategory.ENERGY_STANDING] = standing
 

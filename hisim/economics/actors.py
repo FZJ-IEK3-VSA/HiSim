@@ -216,16 +216,33 @@ class ModernizationLevyOutcome:
     (see :meth:`DE2024Ruleset.modernization_levy_entries` for why the split is not bookable
     per slot). Tests, worked examples and any future per-paragraph report read the legs here.
 
-    All three fields are annual nominal amounts in euro, already capped. `total_in_euro` is the
-    figure that is actually charged and the one every other consumer should read: it is summed
+    The first three fields are annual nominal amounts in euro, already capped. `total_in_euro` is
+    the figure that is actually charged and the one every other consumer should read: it is summed
     slot-wise *before* the legs are repaired into valid bands, so with a banded basis whose
     general cap binds in one slot and not another it can differ from `general + heating` by
-    exactly that repair. The legs are diagnostics; the total is the money.
+    exactly that repair. The capped legs are diagnostics; the total is the money.
+
+    The remaining four fields say *why* a leg came out the way it did, which the capped figures
+    alone cannot: `uncapped_general_levy_in_euro` and `uncapped_heating_levy_in_euro` are the plain
+    `basis x rate` products before either cap is applied, and `heating_cap_in_euro_per_year` /
+    `total_cap_in_euro_per_year` are the two caps as they were actually resolved for this context
+    (the general cap already tiered by the current cold rent). A consumer comparing a leg against
+    its uncapped counterpart can therefore report "cut by the §559e cap" rather than only the
+    resulting euros. They also close a test hole: a cap-bound leg does not move when the statutory
+    *rate* changes, so an example asserting only the capped figure would stay green through a rate
+    edit — the uncapped legs are the quantities such an example must pin instead.
+
+    The two cap fields are `None` exactly when no living area was given, since a cap stated per m²
+    cannot be evaluated without one; the uncapped legs are always populated.
     """
 
     general_levy_in_euro: UncertainValue
     heating_levy_in_euro: UncertainValue
     total_in_euro: UncertainValue
+    uncapped_general_levy_in_euro: UncertainValue
+    uncapped_heating_levy_in_euro: UncertainValue
+    heating_cap_in_euro_per_year: Optional[float] = None
+    total_cap_in_euro_per_year: Optional[float] = None
 
 
 def _ordered_band(slots: dict) -> UncertainValue:
@@ -635,15 +652,22 @@ class DE2024Ruleset:
             ctx: Levy basis facts, per-measure breakdown, living area and current cold rent.
 
         Returns:
-            The two legs and the total, as annual nominal euro bands. Without a living area no cap
-            can be evaluated at all and both legs are returned uncapped, as §6.4 has always done.
+            The two capped legs and the total, as annual nominal euro bands, plus the two uncapped
+            `basis x rate` legs and the two resolved caps that produced them (see
+            :class:`ModernizationLevyOutcome`). Without a living area no cap can be evaluated at
+            all: both legs are returned uncapped, as §6.4 has always done, and the two cap fields
+            are None.
         """
         heating_parts, general_parts = self.levy_pools(ctx)
         heating = self.levy_basis(*heating_parts).scale(self.levy.heating_levy_rate_per_year)
         general = self.levy_basis(*general_parts).scale(self.levy.levy_rate_per_year)
         if ctx.living_area_in_m2 is None:
             return ModernizationLevyOutcome(
-                general_levy_in_euro=general, heating_levy_in_euro=heating, total_in_euro=general + heating
+                general_levy_in_euro=general,
+                heating_levy_in_euro=heating,
+                total_in_euro=general + heating,
+                uncapped_general_levy_in_euro=general,
+                uncapped_heating_levy_in_euro=heating,
             )
         months_of_area = 12.0 * ctx.living_area_in_m2
         heating_cap = self.levy.heating_cap_in_euro_per_m2_per_month * months_of_area
@@ -659,6 +683,10 @@ class DE2024Ruleset:
             total_in_euro=UncertainValue(
                 minimum=sum(capped["minimum"]), best_estimate=sum(capped["best_estimate"]), maximum=sum(capped["maximum"])
             ),
+            uncapped_general_levy_in_euro=general,
+            uncapped_heating_levy_in_euro=heating,
+            heating_cap_in_euro_per_year=heating_cap,
+            total_cap_in_euro_per_year=total_cap,
         )
 
     def modernization_levy_entries(self, ctx: AllocationContext) -> List[CashFlowEntry]:

@@ -449,7 +449,13 @@ triplets; every step below is evaluated in the three slots of §3.9):
 2. **Replacements** at years `n·L` while `n·L < T` (L = service life; for brownfield assets the first
    replacement is at `L − current_age`): replacement cost `I_gross · (1 + r_inv)^t`, discounted.
 3. **Residual value** at year `T`: straight-line share of the last-installed unit's escalated purchase
-   price, entered as negative cost (VDI 2067).
+   price, entered as negative cost (VDI 2067). This is a **book value**, not a market-value estimate:
+   the price is escalated to the unit's own *installation* year and never to the horizon, then written
+   down straight-line over the service life and discounted from year `T`. What a used device would
+   actually fetch after `T` years is a resale question the engine deliberately does not model —
+   VDI 2067-1 and DIN EN 15459-1 both prescribe the book value, and it is the figure a reviewer can
+   re-derive from the timeline. Worked example:
+   `tests/worked_examples/end_to_end/replacement_and_residual_value.xlsx`.
 4. **Maintenance & fixed operation**: `(maintenance_rate · I_gross + fixed_operation_cost) · (1+r_gen)^t`.
 5. **Energy costs** per carrier: year-1 cost from `EnergyFlowFacts` (or the meter's simulated dynamic-
    tariff cost), split into working price (escalated), standing charge (escalated with the general
@@ -1237,7 +1243,23 @@ carry a slot-reordered band while their sum cannot; two separately booked entrie
 to the rent increase the tenant actually pays (the same representability limit as §6.5/B11). One
 consequence worth stating: the zero floor of the basis applies per paragraph pool, so an
 over-subsidized heating measure no longer nets its surplus against the envelope measures of the same
-package. Worked example: `tests/worked_examples/end_to_end/heating_levy_559e_mixed_package.xlsx`.
+package. Worked example: `tests/worked_examples/modernization_levy/heating_levy_559e_mixed_package.xlsx`.
+
+*Two simplifications, stated.* The levy model is deliberately narrower than the statute in two
+places, and both are conservative — they understate the rent a landlord may reach, never overstate
+it.
+
+1. **The §559 Abs. 3a cap is a six-year window, not a lifetime ceiling.** The statute caps the
+   increase *within six years*; after six years another increase is permitted. The engine models one
+   constant levy over the whole horizon, so a 20-year evaluation charges the tenant six years' worth
+   of cap for twenty years and credits the landlord the same. Modelling the real thing needs a
+   staircase of levy entries plus an assumption about whether a landlord actually re-raises, which is
+   rent-market behavior — see the non-goal below.
+2. **The comparable-rent ceiling (ortsübliche Vergleichsmiete) is out of scope.** A modernization
+   levy that pushes the rent past the locally comparable rent is contestable under German tenancy
+   law, but the engine has no rent-index data and no locality model, so it computes the levy from
+   §559/§559e alone. This is the same boundary as the "rent-market feedback" non-goal of §2: whether
+   the market bears the increase is not modelled, only what the legal cap allows.
 
 ### 6.5 Actor-level results and KPIs
 

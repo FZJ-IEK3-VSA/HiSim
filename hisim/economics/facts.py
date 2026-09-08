@@ -49,9 +49,13 @@ class CostRelevance(str, enum.Enum):
     registration — an `UNDECLARED` component, or a `PRICED` one whose facts do not build, aborts the
     run before the timestep loop starts rather than producing a quietly incomplete cost report.
 
-    `UNDECLARED` is the base-class default and exists only so that not-yet-migrated components stay
-    loadable during the parallel phase; strictness is configurable so CI can treat it as an error
-    while legacy system setups get a warning.
+    `UNDECLARED` exists only as the base-class default, so that a component class is loadable
+    before anyone has classified it. It is not a tolerated state and there is no lenient mode: a
+    component that reaches the cost engine still carrying `UNDECLARED` aborts the evaluation
+    (decision D7), and every component in this repository must name its role explicitly. The
+    fleet-wide test that enforces that on all `Component` subclasses arrives with the bridge
+    wiring; `adapter.effective_cost_relevance` already reports the declaration verbatim and
+    infers nothing.
     """
 
     UNDECLARED = "UNDECLARED"

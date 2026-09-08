@@ -15,18 +15,23 @@ of any dependency on `hisim.components`.
 
 **Its place in the pipeline.** It sits on the extraction side of the cost-spec-v2 seam-1 cut,
 used only by `bridge.py` while it walks a finished simulation's wrapped components: for each one
-it asks `effective_cost_relevance` whether the component is priced, free of cost or a meter,
-`extract_cost_facts` for its `ComponentCostFacts`, `get_energy_flow_facts` for a declared carrier
-flow, and `get_meter_spec` for how to read that flow out of the results frame when the component
-has not adopted the hook. Everything it produces lands in `EvaluationInputs` and hence in
+it asks `effective_cost_relevance` for the class's *declared* cost role, `extract_cost_facts` for
+its `ComponentCostFacts`, `get_energy_flow_facts` for a declared carrier flow, and
+`get_meter_spec` for how to read that flow out of the results frame when the component has not
+adopted the hook. Everything it produces lands in `EvaluationInputs` and hence in
 `economic_inputs.json`; nothing downstream of that file knows this module exists.
 
-**What it does and does not fail on.** The adapter is also used exploratorily, so a component it
-cannot describe comes back as a `FactsExtraction` carrying a *reason* rather than as an exception
-— the bridge owns the decision to fail (decision D7, issue #2). The one exception is a
-configuration that names something the engine has no mapping for, above all a fuel meter whose
-`fuel_loadtype` is unset or unknown: that raises `CostDataError` instead of billing the fuel at
-oil prices (issue #3), and the bridge catches it per component so it too lands on the D7 path.
+**What it does and does not fail on.** Nothing here guesses and nothing here shrugs. Relevance is
+read off the class declaration only — there is no inference from these tables, so a component that
+forgot to declare stays `UNDECLARED` and the bridge aborts the evaluation on it (decision D7,
+§9.2). Extraction likewise never returns "no facts" without saying why: an extractor that returns
+None, one that trips over a config field that has moved, and a class declared `PRICED` with
+neither hook nor table entry all come back as a `FactsExtraction` carrying an `unresolved_reason`.
+The adapter is also used exploratorily, so those are records rather than exceptions and the bridge
+owns the decision to fail. The one thing that does raise is a configuration naming something the
+engine has no mapping for, above all a fuel meter whose `fuel_loadtype` is unset or unknown: that
+raises `CostDataError` instead of billing the fuel at oil prices (issue #3), and the bridge catches
+it per component so it too lands on the D7 path.
 
 **It is temporary and should shrink.** Every entry below is a component that has not yet
 implemented `get_cost_facts()` in its own module, where the declaration belongs next to the
@@ -143,24 +148,24 @@ def _boiler_facts(config: Any) -> Optional[ComponentCostFacts]:
 
 
 def _hds_facts(config: Any) -> Optional[ComponentCostFacts]:
-    """Facts for the heat distribution system, whose asset class depends on the emitter type.
+    """Facts for `HeatDistribution`, whose asset class depends on the emitter type.
 
     Floor heating and radiators are separately priced classes, sized in m² of conditioned floor
-    area. The emitter type is matched against *both* its numeric enum value and its name, so the
-    extractor works whether the config holds an enum member or a plain string — it is shared by
-    two component classes (`HeatDistribution`, `HeatDistributionSystem`) and reads their configs
-    as they are, without importing either.
+    area. The emitter type is matched against the *name* of the `HeatDistributionSystemType`
+    member, which is also what a serialized config spells it as, so the extractor works whether
+    the config holds an enum member or a plain string and reads the config as it is without
+    importing the component module.
 
     Returns:
-        None for low-temperature radiators, which have no cost database entry yet; see
-        `_boiler_facts` for what an unpriced-but-registered component means — it surfaces as an
-        unresolved subject, not as a silent omission.
+        None for low-temperature radiators (and any emitter type added later), which have no cost
+        database entry yet; see `_boiler_facts` for what an unpriced-but-registered component
+        means — it surfaces as an unresolved subject, not as a silent omission.
     """
     heating_system = getattr(config, "heating_system", None)
-    heating_value = getattr(heating_system, "value", heating_system)
-    if heating_value in (2, "FloorHeating"):
+    heating_name = getattr(heating_system, "name", heating_system)
+    if heating_name == "FLOORHEATING":
         asset_class = ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING
-    elif heating_value in (1, "Radiator"):
+    elif heating_name == "RADIATOR":
         asset_class = ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR
     else:
         return None  # low-temperature radiators have no cost database entry yet
@@ -178,9 +183,11 @@ class FactsExtractors:
     The whole compatibility layer in one place: component class name -> a function that turns that
     component's config into `ComponentCostFacts`. Keying by name rather than by type is what keeps
     `hisim.economics` importable without pulling in `hisim.components` (§10.0 rule 1), at the
-    price of no static checking — a renamed component class silently drops out of the cost model,
-    which is what the §9.2 completeness check and the auto-discovered contract test exist to
-    catch.
+    price of no static checking — a renamed component class or a renamed config field would drop
+    out of the cost model unnoticed. `tests/test_economics_adapter_contract.py` is what makes that
+    impossible: it resolves every key below against the classes actually defined in
+    `hisim.components` and runs every extractor against the real default configs, so a rename
+    fails a test instead of quietly shrinking a cost result.
 
     Each entry is a ~4-line declaration of exactly what §9.1 says a reviewer should have to
     verify: the asset class, the config field the size comes from, the unit conversion, and the
@@ -195,12 +202,6 @@ class FactsExtractors:
             size=_quantity_value(config.set_thermal_output_power_in_watt) * 1e-3,
             size_unit=Units.KILOWATT,
             kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING_AND_DOMESTIC_HOT_WATER,
-        ),
-        "ModularHeatPump": lambda config: ComponentCostFacts(
-            asset_class=ComponentType.HEAT_PUMP,
-            size=config.power_th * 1e-3,
-            size_unit=Units.KILOWATT,
-            kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         ),
         # Note: the legacy battery capex multiplies the kWh capacity by 1e-3 — a latent unit bug
         # surfaced by the parity harness (cost_module_issues.md #20a). The adapter declares the
@@ -218,20 +219,19 @@ class FactsExtractors:
             kpi_tag=KpiTagEnumClass.ROOFTOP_PV,
         ),
         "GenericBoiler": _boiler_facts,
-        "GenericDistrictHeating": lambda config: ComponentCostFacts(
+        "DistrictHeating": lambda config: ComponentCostFacts(
             asset_class=ComponentType.DISTRICT_HEATING,
-            size=config.connected_load_w * 1e-3,
+            size=config.connected_load_in_w * 1e-3,
             size_unit=Units.KILOWATT,
             kpi_tag=KpiTagEnumClass.DISTRICT_HEATING,
         ),
-        "GenericElectricHeating": lambda config: ComponentCostFacts(
+        "ElectricHeating": lambda config: ComponentCostFacts(
             asset_class=ComponentType.ELECTRIC_HEATER,
             size=config.maximum_electric_power_w * 1e-3,
             size_unit=Units.KILOWATT,
             kpi_tag=KpiTagEnumClass.ELECTRIC_HEATING,
         ),
         "HeatDistribution": _hds_facts,
-        "HeatDistributionSystem": _hds_facts,
         "SimpleHotWaterStorage": lambda config: ComponentCostFacts(
             asset_class=ComponentType.THERMAL_ENERGY_STORAGE,
             size=config.volume_heating_water_storage_in_liter,
@@ -291,8 +291,9 @@ def _fuel_meter_carrier(config: Any, component_name: str) -> EnergyCarrier:
     heating, which HiSim also routes through the fuel meter. There is deliberately no fallback:
     an unmapped or missing `fuel_loadtype` used to be billed as heating oil, so a mis-configured
     meter published oil prices for whatever it actually metered (issue #3). A carrier the engine
-    cannot derive is a configuration error, and configuration errors fail (§10.0 rule 3 covers
-    *extraction* accidents, not a meter that does not say what it meters).
+    cannot derive is a configuration error, and configuration errors fail. This one raises rather
+    than returning a reason because it is reached from `get_meter_spec` too, which has no
+    `FactsExtraction` to put a reason in.
 
     Args:
         config: The meter's config; only `fuel_loadtype` is read.
@@ -338,9 +339,8 @@ def get_meter_spec(component: Any) -> Optional[MeterSpec]:
 
     Raises:
         CostDataError: For a fuel meter whose `fuel_loadtype` maps to no pricing carrier — the
-            meter exists but cannot say what it meters (issue #3). Callers that classify
-            components exploratorily (`effective_cost_relevance`) propagate it too; `bridge.py`
-            turns it into an unresolved subject for the component.
+            meter exists but cannot say what it meters (issue #3). `bridge.py` catches it per
+            component and turns it into an unresolved subject.
     """
     class_name = type(component).__name__
     if class_name == "ElectricityMeter":
@@ -373,23 +373,25 @@ class FactsExtraction:
     `effective_cost_relevance`, by tests, by anyone inspecting a component — so it must not raise
     when a component it knows yields nothing. It returns this record instead, which lets the one
     caller that owns the policy (`bridge.py`) distinguish the two kinds of "no facts": a class the
-    adapter has never heard of (`unresolved_reason` None — that is the §9.2 undeclared-components
-    path) from a class it *does* know that produced nothing anyway (`unresolved_reason` set — an
-    unresolved subject under decision D7).
+    adapter has never heard of *and* which declares no cost role (`unresolved_reason` None — that
+    is the §9.2 undeclared-components path, and the bridge rejects it on the declaration before it
+    ever gets here) from a class that should have produced facts and did not
+    (`unresolved_reason` set — an unresolved subject under decision D7).
 
     Exactly one of the two fields is meaningful at a time: facts present means resolved,
     `unresolved_reason` present means the component should have had facts and does not.
     """
 
     facts: Optional[ComponentCostFacts] = None
-    #: Why a component the adapter recognizes produced no facts; None when there is nothing to
-    #: report (unknown class, or facts extracted successfully).
+    #: Why a component that should have had facts produced none; None when there is nothing to
+    #: report (an unknown, undeclared class, or facts extracted successfully).
     unresolved_reason: Optional[str] = None
 
 
-# The seven returns are the precedence rule this function exists to state -- hook, declared
-# free of cost, unknown class, unpriceable configuration, extractor accident, no facts, facts --
-# and folding them into fewer branches would hide the order rather than simplify it.
+# The eight returns are the precedence rule this function exists to state -- hook, declared
+# free of cost, declared priced but undescribable, unknown class, unpriceable configuration,
+# extractor accident, no facts, facts -- and folding them into fewer branches would hide the
+# order rather than simplify it.
 def extract_cost_facts(component: Any) -> FactsExtraction:  # pylint: disable=too-many-return-statements
     """Facts for one component: the adopted `get_cost_facts()` API first, adapter table second.
 
@@ -399,16 +401,21 @@ def extract_cost_facts(component: Any) -> FactsExtraction:  # pylint: disable=to
     component without any coordinating change, and what makes an adapter entry become dead the
     moment the component implements the hook.
 
-    Three subtleties. A `get_cost_facts()` that returns None on a class declared `FREE_OF_COST`
+    The rule for the "no facts" cases is that only a genuinely unknown class may come back
+    without a reason. A `get_cost_facts()` that returns None on a class declared `FREE_OF_COST`
     (§9.2) means "genuinely no cost", so the table is deliberately *not* consulted afterwards; any
     other None falls through to the table. A registered class whose extractor returns None — an
-    unmapped boiler fuel, an unpriced emitter type — is *not* silently dropped any more (issue
-    #2): it comes back with an `unresolved_reason` naming the class, which the bridge turns into a
-    D7 failure. And an extractor that trips over a config field that moved is still only warned
-    about, per §10.0 rule 3, because that is a parallel-phase accident rather than a statement
-    about the modelled system — with one exception: a `CostDataError` is the adapter's own way of
-    saying "this configuration cannot be priced" (see `_fuel_meter_carrier`) and is reported as
-    unresolved instead of swallowed.
+    unmapped boiler fuel, an unpriced emitter type — gets an `unresolved_reason` naming the class,
+    which the bridge turns into a D7 failure (issue #2). So does a class declared `PRICED` that
+    has neither the hook nor a table entry, and so does an extractor that trips over a config
+    field that has moved: both used to pass silently (the latter as nothing but a log warning), and
+    both meant a component vanished from every cost result because of a rename. A parallel-phase
+    accident is still an accident that unprices a device, so it fails like one. A
+    `CostDataError` — the adapter's own way of saying "this configuration cannot be priced", see
+    `_fuel_meter_carrier` — is reported the same way.
+
+    The only silent outcome left is a class the adapter has never heard of and that declared
+    nothing, which the bridge rejects on its `UNDECLARED` relevance before it ever asks for facts.
 
     Args:
         component: The finished simulation's component object; only its class name, its
@@ -416,7 +423,8 @@ def extract_cost_facts(component: Any) -> FactsExtraction:  # pylint: disable=to
 
     Returns:
         A `FactsExtraction` — facts when the component could be described, a reason when a
-        recognized component could not, and neither when the adapter simply does not know it.
+        recognized or declared-priced component could not be, and neither when the adapter simply
+        does not know the class and the class claims nothing.
     """
     getter = getattr(component, "get_cost_facts", None)
     if getter is not None:
@@ -433,6 +441,14 @@ def extract_cost_facts(component: Any) -> FactsExtraction:  # pylint: disable=to
     class_name = type(component).__name__
     extractor = FactsExtractors.BY_CLASS_NAME.get(class_name)
     if extractor is None:
+        if getattr(type(component), "cost_relevance", CostRelevance.UNDECLARED) == CostRelevance.PRICED:
+            return FactsExtraction(
+                unresolved_reason=(
+                    f"class {class_name} declares cost_relevance PRICED, but neither "
+                    "get_cost_facts() nor the adapter table FactsExtractors.BY_CLASS_NAME "
+                    "yields facts for it, so nothing can describe it to the cost model"
+                )
+            )
         return FactsExtraction()
     try:
         extracted: Optional[ComponentCostFacts] = extractor(component.config)
@@ -440,7 +456,13 @@ def extract_cost_facts(component: Any) -> FactsExtraction:  # pylint: disable=to
         return FactsExtraction(unresolved_reason=str(err))
     except (AttributeError, TypeError, ValueError) as err:
         log.warning(f"Cost adapter could not extract facts from {class_name}: {err}")
-        return FactsExtraction()
+        return FactsExtraction(
+            unresolved_reason=(
+                f"the registered cost extractor for class {class_name} failed with "
+                f"{type(err).__name__}: {err} — most likely a config field it reads has been "
+                "renamed, which would drop the component from the cost model"
+            )
+        )
     if extracted is None:
         return FactsExtraction(
             unresolved_reason=(
@@ -501,33 +523,28 @@ def get_energy_flow_facts(
 
 
 def effective_cost_relevance(component: Any) -> CostRelevance:
-    """Declared relevance, or the adapter's best guess for legacy components (§9.2).
+    """The component class's declared cost role, and nothing else (§9.2).
 
     §9.2 exists because the naive default — "no `get_cost_facts()` means no costs" — has a failure
     mode locality never had: a forgotten implementation silently drops a component from every cost
-    result. The class-level `cost_relevance` declaration makes that omission visible, and this
-    function is the bridge during migration: an explicit declaration always wins, and only an
-    `UNDECLARED` component is classified from what the adapter happens to know about it.
+    result. Declaring `cost_relevance` on the class is therefore mandatory, and this function only
+    reports the declaration: a class that declares nothing is `UNDECLARED`, which `bridge.py`
+    treats as fatal (D7) rather than as something to be guessed at.
 
-    The inferred order matters — METER before PRICED — because meters can be both (an electricity
-    meter measures flows *and* is itself a priced device); `bridge.py` handles that by reading the
-    meter flows and then still asking for cost facts. Everything the adapter recognizes in neither
-    way stays `UNDECLARED` and is reported as such: not priced, but not silently forgotten either.
+    Earlier revisions inferred `METER` from `get_meter_spec` and `PRICED` from
+    `FactsExtractors.BY_CLASS_NAME` for undeclared classes, as a migration aid. That inference is
+    gone: it turned the two things that must be visible — a component nobody has classified, and a
+    component whose adapter entry no longer matches its class name — into a plausible-looking
+    answer. A meter still needs `get_meter_spec` to say *how* to read its flows, and `bridge.py`
+    calls that separately; a meter that is also a priced device (an electricity meter measures
+    flows and costs money) declares `METER` and is still asked for cost facts.
 
-    Note that a component which meters a carrier through the `get_energy_flow_facts` hook but has
-    no entry in the meter table must declare `cost_relevance = METER` itself — the inference here
-    cannot call the hook, which needs the results frame this function does not have.
+    Args:
+        component: The component to classify; only its class's `cost_relevance` attribute is read,
+            so this never touches a config and never raises.
 
-    Raises:
-        CostDataError: From the `get_meter_spec` inference for a meter whose configuration names
-            no priceable carrier (issue #3); classification of such a component is impossible
-            rather than merely uncertain.
+    Returns:
+        The declared `CostRelevance`, or `CostRelevance.UNDECLARED` when the class declares none.
     """
-    declared = getattr(type(component), "cost_relevance", CostRelevance.UNDECLARED)
-    if declared != CostRelevance.UNDECLARED:
-        return declared
-    if get_meter_spec(component) is not None:
-        return CostRelevance.METER
-    if type(component).__name__ in FactsExtractors.BY_CLASS_NAME:
-        return CostRelevance.PRICED
-    return CostRelevance.UNDECLARED
+    declared: CostRelevance = getattr(type(component), "cost_relevance", CostRelevance.UNDECLARED)
+    return declared

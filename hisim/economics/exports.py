@@ -327,12 +327,25 @@ def build_lifecycle_kpi_entries(
         )
         for decision in result.subsidy_decisions:
             for award in decision.applied:
-                if award.upfront_amount.maximum > 0:
+                # The award's *total* (upfront + instalments), not its upfront amount: a
+                # tax-credit schedule has a zero upfront amount and would otherwise be missing
+                # from the KPI set while the SUBSIDY category NPV counts it. Awards with no euro
+                # amount at all (loan terms, an operational rate) still have none and stay out —
+                # `describe_award` is what decides which is which.
+                presentation = views.describe_award(award)
+                if presentation.total_in_euro is not None and presentation.total_in_euro.maximum > 0:
+                    # Q20: the KPI reads as the scheme's friendly name; the raw id follows in the
+                    # description, which is where a machine consumer and a grepping reviewer
+                    # both look for the catalog key.
+                    detail = f"{decision.measure_subject}; scheme {presentation.scheme_id}"
                     add(
-                        f"Subsidy {award.scheme_id} [EUR] ({perspective})",
+                        f"Subsidy {presentation.display_name} [EUR] ({perspective})",
                         "EUR",
-                        award.upfront_amount,
-                        description=decision.measure_subject,
+                        presentation.total_in_euro,
+                        description=(
+                            f"{detail}; {presentation.payout_note}"
+                            if presentation.payout_note else detail
+                        ),
                     )
         # The total is a view of the result, not a running sum kept while emitting KPIs (W4.1),
         # and since D2 it is the timeline-based nominal figure — so it is *not* the sum of the

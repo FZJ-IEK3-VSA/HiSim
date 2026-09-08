@@ -358,6 +358,123 @@ class TestSubsidyDecisionsAcrossPerspectives:
         assert markdown.count("**HeatPump** (") == 1
 
 
+class TestAwardsOfEveryPayoutKindAreReported:
+    """PR-9 finding: an applied award with no upfront amount vanished from the subsidy section.
+
+    Observed on the German retrofit run: the §35c tax credit awarded to the heat distribution
+    system (2,060 EUR average, paid over three years) was in `lifecycle_costs.json` and in the
+    SUBSIDY category NPV, but `cost_summary.md` said "applied none" for that subject and the HTML
+    decision card printed "0.00 EUR" — both read `SubsidyAward.upfront_amount`, which is zero for
+    three of the five payout kinds. These tests pin all five.
+    """
+
+    @staticmethod
+    def _matrix_with_awards(database):
+        """One evaluated perspective whose decision carries an award of every payout kind.
+
+        The awards are attached to the result rather than solved for, because no shipped catalog
+        offers all five kinds for one measure and the renderers are what is under test here: they
+        must describe an award by its payout kind, whatever produced it.
+        """
+        from hisim.economics.subsidies import PayoutKind, SubsidyAward, SubsidyDecision
+
+        evaluator = EconomicEvaluator(database, EconomicParameters(country="DE", price_basis_year=2026))
+        matrix = EvaluationMatrix()
+        perspective = next(
+            perspective for perspective in select_applicable(load_default_bundle(), has_register=False)
+            if perspective.id == "greenfield_net"
+        )
+        result = evaluator.evaluate(make_inputs(), perspective)
+        result.subsidy_decisions = [
+            SubsidyDecision(
+                measure_subject="HeatPump",
+                applied=[
+                    SubsidyAward(
+                        scheme_id="GRANT_SCHEME",
+                        payout_kind=PayoutKind.UPFRONT_GRANT,
+                        upfront_amount=UncertainValue(3000.0, 2000.0, 4000.0),
+                    ),
+                    SubsidyAward(
+                        scheme_id="TAX_CREDIT_SCHEME",
+                        payout_kind=PayoutKind.TAX_CREDIT_SCHEDULE,
+                        schedule_amounts=[UncertainValue.exact(721.14)] * 2 + [UncertainValue.exact(618.12)],
+                    ),
+                    SubsidyAward(
+                        scheme_id="LOAN_SCHEME",
+                        payout_kind=PayoutKind.LOAN_TERMS,
+                        loan_interest_rate=0.009,
+                        loan_term_in_years=20,
+                        loan_repayment_grant_share=0.25,
+                    ),
+                    SubsidyAward(
+                        scheme_id="OPERATIONAL_SCHEME",
+                        payout_kind=PayoutKind.OPERATIONAL,
+                        operational_rate_per_kwh=0.08,
+                        operational_carrier=EnergyCarrier.ELECTRICITY,
+                        operational_duration_years=10,
+                    ),
+                    SubsidyAward(
+                        scheme_id="VAT_SCHEME",
+                        payout_kind=PayoutKind.VAT_REDUCTION,
+                        reduced_vat_rate=0.07,
+                    ),
+                ],
+            )
+        ]
+        matrix.results[perspective.id] = result
+        return matrix
+
+    def _rendered(self, database):
+        """The two documents rendered from that matrix."""
+        matrix = self._matrix_with_awards(database)
+        plausibility = run_plausibility_checks(matrix)
+        return (
+            build_lifecycle_report_html(matrix, plausibility, None),
+            build_cost_summary_markdown(matrix, plausibility),
+        )
+
+    def test_the_markdown_lists_every_applied_award(self, database):
+        """No applied award is dropped, and a scheduled payout shows the sum of its instalments."""
+        _html, markdown = self._rendered(database)
+        assert "applied none" not in markdown
+        for scheme_id in ("GRANT_SCHEME", "TAX_CREDIT_SCHEME", "LOAN_SCHEME", "OPERATIONAL_SCHEME",
+                          "VAT_SCHEME"):
+            assert scheme_id in markdown, scheme_id
+        assert "TAX_CREDIT_SCHEME (2,060 EUR, tax credit paid over 3 years)" in markdown
+        assert "GRANT_SCHEME (3,000 [2,000 | 4,000] EUR)" in markdown
+
+    def test_the_html_card_shows_totals_and_terms_instead_of_zeros(self, database):
+        """The decision card of the HTML report says the same thing as the markdown summary."""
+        html, _markdown = self._rendered(database)
+        # Q20 wraps the scheme in a span carrying the raw id as its tooltip; these awards declare
+        # no display name, so the visible text is still the id.
+        assert (
+            '<span title="TAX_CREDIT_SCHEME">TAX_CREDIT_SCHEME</span>: '
+            "2,060 EUR, tax credit paid over 3 years"
+        ) in html
+        section = html.split("<h2>5 - Subsidy decisions</h2>")[1].split("</section>")[0]
+        assert "0.00 EUR" not in section
+        assert "0.90% interest, 20 years term, 25% repayment grant" in html
+        assert "0.0800 EUR/kWh on ELECTRICITY for 10 years" in html
+        assert "reduced VAT rate 7.0%" in html
+
+    def test_the_kpi_export_carries_the_scheduled_award(self, database):
+        """`lifecycle_kpis.json` publishes a tax credit at its total, and no euro KPI without one.
+
+        The KPI set filtered on a non-zero upfront amount too, so the same award was missing from
+        the machine-readable side; an award that has no euro amount at all (loan terms, an
+        operational rate) still gets none, because inventing one would be worse than omitting it.
+        """
+        from hisim.economics.exports import build_lifecycle_kpi_entries
+
+        entries = {entry.name: entry for entry in build_lifecycle_kpi_entries(self._matrix_with_awards(database))}
+        assert "Subsidy TAX_CREDIT_SCHEME [EUR] (greenfield_net)" in entries
+        assert entries["Subsidy TAX_CREDIT_SCHEME [EUR] (greenfield_net)"].value == pytest.approx(2060.40)
+        assert "Subsidy GRANT_SCHEME [EUR] (greenfield_net)" in entries
+        assert "Subsidy LOAN_SCHEME [EUR] (greenfield_net)" not in entries
+        assert "Subsidy OPERATIONAL_SCHEME [EUR] (greenfield_net)" not in entries
+
+
 class TestPngsAndCli:
     """Matplotlib companions and the `report` CLI."""
 
@@ -370,6 +487,8 @@ class TestPngsAndCli:
 
     def test_report_cli_with_compare(self, tmp_path):
         """`python -m hisim.economics report <dir> --compare <ref>` writes everything."""
+        import json
+
         from hisim.economics.__main__ import main
         from hisim.economics.serialization import write_inputs
 
@@ -379,7 +498,15 @@ class TestPngsAndCli:
         reference_dir.mkdir()
         write_inputs(make_inputs(), str(variant_dir))
         write_inputs(make_inputs(energy_kwh=15000.0, investment=2000.0), str(reference_dir))
-        assert main(["report", str(variant_dir), "--compare", str(reference_dir)]) == 0
+        # Neither directory carries a stored evaluation, so the assumptions have to be stated:
+        # the engine defaults are not a fallback any more.
+        parameters_path = tmp_path / "parameters.json"
+        with open(parameters_path, "w", encoding="utf-8") as file:
+            json.dump(EconomicParameters().to_dict(), file)
+        assert main([
+            "report", str(variant_dir), "--compare", str(reference_dir),
+            "--parameters", str(parameters_path),
+        ]) == 0
         for file_name in (
             "cost_summary.md",
             "lifecycle_report.html",

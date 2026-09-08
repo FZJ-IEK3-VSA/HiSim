@@ -557,6 +557,19 @@ def _decision_from_json(raw: dict) -> SubsidyDecision:
                 loan_repayment_grant_share=item.get("loan_repayment_grant_share"),
                 reduced_vat_rate=item.get("reduced_vat_rate"),
                 caps_binding_per_slot=dict(item.get("caps_binding_per_slot", {})),
+                # Q26 F8: absent in a result written before the award arithmetic was recorded,
+                # where the report states the amount without the multiplication behind it.
+                benefit_rate=item.get("benefit_rate"),
+                benefit_rate_before_group_cap=item.get("benefit_rate_before_group_cap"),
+                eligible_basis_in_euro=(
+                    UncertainValue.from_json(item["eligible_basis_in_euro"])
+                    if item.get("eligible_basis_in_euro") is not None
+                    else None
+                ),
+                eligible_basis_cap_in_euro=item.get("eligible_basis_cap_in_euro"),
+                # Q20: absent in a result written before display names existed, which the
+                # award's `label` then resolves back to the scheme id.
+                display_name=item.get("display_name") or "",
             )
             for item in raw.get("applied", [])
         ],
@@ -701,6 +714,41 @@ def matrix_from_json(
             item, timelines.get(perspective), ledgers.get(perspective)
         )
     return matrix
+
+
+def read_stored_parameters(result_directory: str) -> Optional[EconomicParameters]:
+    """The economic assumptions a stored run was priced under, or None if the directory has none.
+
+    Every `LifecycleCostResult` carries the `EconomicParameters` it was evaluated with — including
+    the *resolved* price basis year, which is the field a re-pricing invocation most easily gets
+    wrong — and `lifecycle_costs.json` serializes them per perspective. So the assumptions do
+    travel with the artifacts, and a later `explain`/`report`/`evaluate` on an archived directory
+    can reproduce the run instead of silently substituting the engine defaults (which is what the
+    CLI did: a run priced at basis year 2026 was re-priced at 2024 and then failed the D7
+    resolution check on data valid from 2026).
+
+    The first perspective's parameters are returned. All perspectives of one matrix are evaluated
+    by the same evaluator from the same parameter set — a perspective varies the subsidy mode, the
+    actor scope and the installation context, never the assumptions — so "the first" is "the
+    run's".
+
+    Args:
+        result_directory: A directory holding `lifecycle_costs.json`.
+
+    Returns:
+        The stored parameters, or None when the directory holds no stored evaluation (or a stored
+        evaluation without a single perspective).
+    """
+    path = os.path.join(result_directory, ExportFileNames.LIFECYCLE_COSTS_FILE_NAME)
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as file:
+        raw = json.load(file)
+    for item in raw.values():
+        if "parameters" in item:
+            parameters: EconomicParameters = EconomicParameters.from_dict(item["parameters"])
+            return parameters
+    return None
 
 
 def read_results(result_directory: str) -> Optional[EvaluationMatrix]:

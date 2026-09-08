@@ -233,12 +233,21 @@ def _combination_awards(
                     payout_kind=scheme.payout_kind,
                     upfront_amount=basis.scale(rate),
                     caps_binding_per_slot=binding,
+                    # Q26 F8: both factors of the multiplication, and the pre-cap rate when the
+                    # group's combined-rate cap scaled this scheme down.
+                    benefit_rate=rate,
+                    benefit_rate_before_group_cap=scheme_rate if scale_down < 1.0 else None,
+                    eligible_basis_in_euro=basis,
+                    eligible_basis_cap_in_euro=scheme.eligible_cost.cap_for_units(
+                        context.building.dwelling_units
+                    ),
                 )
             )
     for scheme in schemes:
         if scheme.benefit_kind in (BenefitKind.SHARE_OF_ELIGIBLE_COST, BenefitKind.BONUS_SHARE):
             continue
         basis, binding = _eligible_cost_basis(scheme, measure, context)
+        basis_cap = scheme.eligible_cost.cap_for_units(context.building.dwelling_units)
         benefit = scheme.benefit
         if isinstance(benefit, LumpSumBenefit):
             # A grant never exceeds the cost it funds, so the lump sum is clamped to the eligible
@@ -252,6 +261,8 @@ def _combination_awards(
                     payout_kind=scheme.payout_kind,
                     upfront_amount=amount.clamp_upper(basis) if scheme.eligible_cost.categories else amount,
                     caps_binding_per_slot=binding,
+                    eligible_basis_in_euro=basis if scheme.eligible_cost.categories else None,
+                    eligible_basis_cap_in_euro=basis_cap,
                 )
             )
         elif isinstance(benefit, PerUnitBenefit):
@@ -262,6 +273,8 @@ def _combination_awards(
                     payout_kind=scheme.payout_kind,
                     upfront_amount=amount.clamp_upper(basis),
                     caps_binding_per_slot=binding,
+                    eligible_basis_in_euro=basis,
+                    eligible_basis_cap_in_euro=basis_cap,
                 )
             )
         elif isinstance(benefit, TaxCreditBenefit):
@@ -273,6 +286,11 @@ def _combination_awards(
                     payout_kind=PayoutKind.TAX_CREDIT_SCHEDULE,
                     schedule_amounts=schedule,
                     caps_binding_per_slot=binding,
+                    # Q26 F8: a tax credit is a percentage form like a share award, so it states
+                    # the same multiplication; the instalment split is the payout note's job.
+                    benefit_rate=benefit.rate,
+                    eligible_basis_in_euro=basis,
+                    eligible_basis_cap_in_euro=basis_cap,
                 )
             )
         elif isinstance(benefit, ReducedVatBenefit):
@@ -313,6 +331,13 @@ def _combination_awards(
         if any(ratio < 1.0 for ratio in ratios):
             for award in awards:
                 award.upfront_amount = _scaled_to_cap(award.upfront_amount, ratios)
+    # Q20: the friendly name travels with the award, because the report that shows it is often
+    # built from a serialized result in a process that never loaded a catalog. Attached in one
+    # pass rather than at the seven construction sites above, so a new benefit kind cannot forget
+    # it.
+    names = {scheme.id: scheme.display_name for scheme in schemes}
+    for award in awards:
+        award.display_name = names.get(award.scheme_id) or ""
     return awards
 
 
@@ -452,11 +477,17 @@ def solve_cumulation(
     decision = SubsidyDecision(measure_subject=measure.subject)
     for assessment in assessments:
         if assessment.status == EligibilityStatus.INELIGIBLE:
-            decision.rejected.append({"scheme_id": assessment.scheme.id, "reason": assessment.rejected_reason})
+            decision.rejected.append({
+                "scheme_id": assessment.scheme.id,
+                "display_name": assessment.scheme.label,
+                "reason": assessment.rejected_reason,
+            })
         elif assessment.status == EligibilityStatus.UNDETERMINED:
-            decision.undetermined.append(
-                {"scheme_id": assessment.scheme.id, "missing_fields": assessment.missing_fields}
-            )
+            decision.undetermined.append({
+                "scheme_id": assessment.scheme.id,
+                "display_name": assessment.scheme.label,
+                "missing_fields": assessment.missing_fields,
+            })
 
     def admissible(combination: List[SubsidyScheme]) -> bool:
         """Whether the combination violates no `excludes` relation.

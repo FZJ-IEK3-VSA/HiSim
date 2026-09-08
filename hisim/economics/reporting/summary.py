@@ -80,6 +80,69 @@ def _band_str(band: Optional[UncertainValue], unit: str = "EUR") -> str:
     return f"{_fmt(band.best_estimate)} [{_fmt(band.minimum)} | {_fmt(band.maximum)}] {unit}"
 
 
+def _award_amount_str(presentation: "views.AwardPresentation") -> str:
+    """What one applied award is worth, in one phrase — band, terms, or both.
+
+    The single rendering of `views.describe_award` shared by the markdown decision list, the HTML
+    decision cards in `sections.py` and the awards table, so the three cannot say different things
+    about the same award again. An award with a euro amount reads as the house band format,
+    followed by its payout note when the payout is not a plain year-0 grant ("tax credit paid over
+    3 years"); an award that carries no euro amount at all — loan terms, an operational rate, a
+    VAT reduction — reads as its terms alone, because a "0 EUR" would be a false statement about
+    an applied award whose value is booked by the financing or energy calculators.
+
+    Args:
+        presentation: The award as `views.describe_award` valued it.
+
+    Returns:
+        The phrase, without surrounding punctuation.
+    """
+    if presentation.total_in_euro is None:
+        return presentation.payout_note or presentation.payout_kind
+    band = _band_str(presentation.total_in_euro)
+    return f"{band}, {presentation.payout_note}" if presentation.payout_note else band
+
+
+def _award_arithmetic_str(presentation: "views.AwardPresentation") -> str:
+    """The award's own arithmetic and cap verdict, as one appended phrase (Q26 F8).
+
+    An award amount that states no rate and no basis cannot be checked, and the cap verdict is the
+    difference between "spending more would earn more" and "this measure has hit its ceiling" -
+    the two conclusions a reader draws a plan from. Both come from the solver's recorded decision
+    data via `views.describe_award`; this only joins them.
+
+    Args:
+        presentation: The award as `views.describe_award` valued it.
+
+    Returns:
+        The parenthesized phrase, or the empty string for a form that states no rate and declares
+        no cap — where `payout_note` already carries the form's own terms.
+    """
+    parts = [part for part in (presentation.arithmetic, presentation.cap_verdict) if part]
+    return f" ({'; '.join(parts)})" if parts else ""
+
+
+def _scheme_markdown(display_name: Optional[str], scheme_id: str) -> str:
+    """A subsidy scheme named for a human, with its raw id in a trailing parenthesis (Q20).
+
+    The report used to print `DE_BEG_EM_HP_SPEED_2024` wherever a scheme appears, which is a
+    database key, not a name: a reader could not tell a speed bonus from an income bonus without
+    opening the catalog. Markdown has no hover, so the id follows the name in a parenthesis rather
+    than in a tooltip; the id has to stay visible for the one reader who needs it, the reviewer
+    grepping `cost_audit.csv` or the catalog for that exact string.
+
+    Args:
+        display_name: The catalog's friendly name, or None/empty when it declared none.
+        scheme_id: The raw id.
+
+    Returns:
+        "name (id)", or the bare id when the catalog declares no friendly name.
+    """
+    if not display_name or display_name == scheme_id:
+        return scheme_id
+    return f"{display_name} ({scheme_id})"
+
+
 # ---------------------------------------------------------------------------- plausibility (B)
 
 
@@ -406,20 +469,24 @@ def build_cost_summary_markdown(
         lines.append("## Subsidy decisions")
         lines.append("")
         for decision, perspective_ids in decisions:
-            # Every applied award, at its total amount: filtering on a non-zero *upfront* amount
-            # printed "applied none" for a measure the HTML report listed as APPLIED, because a
-            # scheduled tax credit pays out over years and its upfront amount is zero by
-            # construction. `award_total_amount` is the same figure the awards table shows.
+            # Every applied award, at its total amount and under its friendly name: filtering on a
+            # non-zero *upfront* amount printed "applied none" for a measure the HTML report listed
+            # as APPLIED, because a scheduled tax credit pays out over years and its upfront amount
+            # is zero by construction. `views.describe_award` is the same source the awards table
+            # and the decision cards read.
             applied = ", ".join(
-                f"{award.scheme_id} ({_band_str(views.award_total_amount(award))})"
-                for award in decision.applied
+                f"{_scheme_markdown(presentation.display_name, presentation.scheme_id)} "
+                f"({_award_amount_str(presentation)}{_award_arithmetic_str(presentation)})"
+                for presentation in (views.describe_award(award) for award in decision.applied)
             ) or "none"
             note = _perspectives_note(perspective_ids, matrix)
             lines.append(f"- **{decision.measure_subject}** ({note}): applied {applied}")
             for reject in decision.rejected:
-                lines.append(f"  - rejected {reject['scheme_id']}: {reject['reason']}")
+                name = _scheme_markdown(reject.get("display_name"), reject["scheme_id"])
+                lines.append(f"  - rejected {name}: {reject['reason']}")
             for item in decision.undetermined:
-                lines.append(f"  - undetermined {item['scheme_id']} (missing: {', '.join(item['missing_fields'])})")
+                name = _scheme_markdown(item.get("display_name"), item["scheme_id"])
+                lines.append(f"  - undetermined {name} (missing: {', '.join(item['missing_fields'])})")
             if decision.undetermined_upper_bound_in_euro > 0:
                 lines.append(
                     f"  - answering the open questions could unlock up to "

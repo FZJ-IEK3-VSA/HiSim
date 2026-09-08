@@ -9,7 +9,7 @@ single-module `reporting.py` (PR-3 review); the package `__init__` re-exports ev
 
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from hisim.economics import views
 from hisim.economics.input_audit import InputAuditReport, OriginKind, ResolvedInputRow, price_basis
@@ -19,7 +19,14 @@ from hisim.economics.timeline import CostCategory
 from hisim.economics.uncertainty import UncertainValue
 
 
-from hisim.economics.reporting.summary import _band_str, _decisions_by_content, _fmt, _perspectives_note
+from hisim.economics.reporting.summary import (
+    _award_amount_str,
+    _award_arithmetic_str,
+    _band_str,
+    _decisions_by_content,
+    _fmt,
+    _perspectives_note,
+)
 from hisim.economics.reporting.charts import (
     _annual_flow_svg,
     _Bar,
@@ -472,6 +479,27 @@ def _subsidy_composition_svg(matrix: EvaluationMatrix) -> str:
     )
 
 
+def _scheme_html(display_name: Optional[str], scheme_id: str) -> str:
+    """A subsidy scheme named for a human, with its raw id in the tooltip (owner decision Q20).
+
+    The report used to print `DE_BEG_EM_HP_SPEED_2024` wherever a scheme appears, which is a
+    database key, not a name: a reader could not tell a speed bonus from an income bonus without
+    opening the catalog. The friendly name is now the visible text and the id moves into the
+    `title` attribute, where it stays available to the one reader who needs it — the reviewer
+    grepping `cost_audit.csv` or the catalog for that exact string.
+
+    Args:
+        display_name: The catalog's friendly name, or None/empty when it declared none.
+        scheme_id: The raw id, always shown as the tooltip and used as the visible text when
+            there is no friendly name (so an older catalog degrades to the previous behaviour).
+
+    Returns:
+        An escaped `<span>` with the name as text and the id as its tooltip.
+    """
+    name = display_name or scheme_id
+    return f"<span title=\"{_esc(scheme_id)}\">{_esc(name)}</span>"
+
+
 def _subsidy_awards_table(matrix: EvaluationMatrix) -> str:
     """All awards across measures: scheme, amount band, payout kind, binding caps.
 
@@ -481,24 +509,30 @@ def _subsidy_awards_table(matrix: EvaluationMatrix) -> str:
     money lands and therefore its present value, and a cap that binds only in the HIGH slot
     explains an asymmetric band elsewhere in the report.
 
-    Amounts come from `views.award_total_amount`, so a scheduled payout is shown as the sum of
-    its instalments rather than as its zero upfront amount. Rows are de-duplicated by decision
-    *content* (`_decisions_by_content`), not by measure name: perspectives that awarded a measure
-    the same way share one row, named in the "Perspectives" column, while a perspective that
-    decided differently gets its own rows. Returns empty when no award applied anywhere.
+    Amounts come from `views.describe_award`, so a scheduled payout is shown as the sum of its
+    instalments rather than as its zero upfront amount, and an award with no euro amount of its
+    own (loan terms, an operational rate) is shown by its terms rather than as a zero. Rows are
+    de-duplicated by decision *content* (`_decisions_by_content`), not by measure name:
+    perspectives that awarded a measure the same way share one row, named in the "Perspectives"
+    column, while a perspective that decided differently gets its own rows. Returns empty when no
+    award applied anywhere.
     """
     rows = []
     for decision, perspective_ids in _decisions_by_content(matrix):
         note = _perspectives_note(perspective_ids, matrix)
         for award in decision.applied:
-            caps = ", ".join(slot for slot, bound in award.caps_binding_per_slot.items() if bound) or "-"
-            amount = views.award_total_amount(award)
+            presentation = views.describe_award(award)
             rows.append([
                 _esc(decision.measure_subject),
-                _esc(award.scheme_id),
-                _esc(_band_str(amount)),
-                _esc(award.payout_kind.value),
-                _esc(caps),
+                _scheme_html(presentation.display_name, presentation.scheme_id),
+                _esc(_award_amount_str(presentation)),
+                # Q26 F8: the multiplication and the ceiling verdict, so an amount can be checked
+                # against the rate and the basis that produced it.
+                _esc("; ".join(
+                    part for part in (presentation.arithmetic, presentation.cap_verdict) if part
+                ) or "-"),
+                _esc(presentation.payout_kind),
+                _esc(", ".join(presentation.caps_binding) or "-"),
                 _esc(note),
             ])
     if not rows:
@@ -506,7 +540,9 @@ def _subsidy_awards_table(matrix: EvaluationMatrix) -> str:
     return _details(
         "awards table (§5.4 audit trail)",
         _table(
-            ["Measure", "Scheme", "Amount", "Payout", "Caps binding (slots)", "Perspectives"], rows
+            ["Measure", "Scheme", "Amount", "Arithmetic", "Payout", "Caps binding (slots)",
+             "Perspectives"],
+            rows,
         ),
     )
 
@@ -533,12 +569,11 @@ def _subsidy_section_html(matrix: EvaluationMatrix) -> str:
     requires a catalog. The section is omitted entirely only when there is neither a decision nor
     any support to draw.
 
-    An award is worth `views.award_total_amount` here, exactly as in the awards table below and in
-    `cost_summary.md`. The card used to print the *upfront* amount instead, unlabelled, so a
-    scheduled payout — a tax credit spread over years, whose upfront amount is zero by
-    construction — was listed as APPLIED for 0 EUR next to a table that valued the same award at
-    four thousand. Three renderings of one audit trail may not disagree about what an award is
-    worth.
+    An award is worth `views.describe_award`'s total here, exactly as in the awards table below
+    and in `cost_summary.md`. The card used to print the *upfront* amount instead, unlabelled,
+    which is zero for a tax-credit schedule, an operational rate and loan terms, so a §35c credit
+    worth 2,060 EUR appeared as "0.00 EUR" while the SUBSIDY category NPV beside it counted it.
+    Three renderings of one audit trail may not disagree about what an award is worth.
     """
     cards = []
     for decision, perspective_ids in _decisions_by_content(matrix):
@@ -548,20 +583,27 @@ def _subsidy_section_html(matrix: EvaluationMatrix) -> str:
             f"<span style='font-weight:400;color:var(--muted)'>({_esc(note)})</span></h3><ul>"
         ]
         for award in decision.applied:
-            caps = [slot for slot, bound in award.caps_binding_per_slot.items() if bound]
-            cap_note = f" — cap binding in {', '.join(caps)}" if caps else ""
+            presentation = views.describe_award(award)
+            cap_note = (
+                f" — cap binding in {', '.join(presentation.caps_binding)}"
+                if presentation.caps_binding else ""
+            )
             lines.append(
-                f"<li><span class='status PASS'>APPLIED</span> {_esc(award.scheme_id)}: "
-                f"{_esc(_band_str(views.award_total_amount(award)))}{_esc(cap_note)}</li>"
+                f"<li><span class='status PASS'>APPLIED</span> "
+                f"{_scheme_html(presentation.display_name, presentation.scheme_id)}: "
+                f"{_esc(_award_amount_str(presentation))}"
+                f"{_esc(_award_arithmetic_str(presentation))}{_esc(cap_note)}</li>"
             )
         for reject in decision.rejected:
             lines.append(
-                f"<li><span class='status FAIL'>REJECTED</span> {_esc(reject['scheme_id'])}: "
+                f"<li><span class='status FAIL'>REJECTED</span> "
+                f"{_scheme_html(reject.get('display_name'), reject['scheme_id'])}: "
                 f"{_esc(reject['reason'])}</li>"
             )
         for item in decision.undetermined:
             lines.append(
-                f"<li><span class='status WARN'>OPEN</span> {_esc(item['scheme_id'])}: "
+                f"<li><span class='status WARN'>OPEN</span> "
+                f"{_scheme_html(item.get('display_name'), item['scheme_id'])}: "
                 f"missing {_esc(', '.join(item['missing_fields']))}</li>"
             )
         if decision.undetermined_upper_bound_in_euro > 0:

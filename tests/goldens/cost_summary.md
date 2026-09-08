@@ -58,12 +58,12 @@ Simulation year 2026, country DE, horizon 20 a, interest 3.0%, price basis 2026.
 
 ## Subsidy decisions
 
-- **HeatPump** (all perspectives with subsidy decisions): applied DE_BEG_EM_HP_BASE_2024 (4,800 [3,840 | 6,240] EUR), DE_BEG_EM_HP_INCOME_2024 (4,800 [3,840 | 6,240] EUR), DE_BEG_EM_HP_EFFICIENCY_2024 (800 [640 | 1,040] EUR)
-  - undetermined DE_BEG_EM_HP_SPEED_2024 (missing: building.existing_heating.energy_carrier, building.existing_heating.is_functional)
+- **HeatPump** (all perspectives with subsidy decisions): applied BEG EM heat pump — base grant (30 %) (DE_BEG_EM_HP_BASE_2024) (4,800 [3,840 | 6,240] EUR (30.0% x 16,000 EUR eligible basis = 4,800 EUR; cap not binding (30,000 EUR eligible cost))), BEG EM heat pump — income bonus (30 %) (DE_BEG_EM_HP_INCOME_2024) (4,800 [3,840 | 6,240] EUR (30.0% x 16,000 EUR eligible basis = 4,800 EUR; cap not binding (30,000 EUR eligible cost))), BEG EM heat pump — efficiency bonus (5 %) (DE_BEG_EM_HP_EFFICIENCY_2024) (800 [640 | 1,040] EUR (5.0% x 16,000 EUR eligible basis = 800 EUR; cap not binding (30,000 EUR eligible cost)))
+  - undetermined BEG EM heat pump — speed bonus (20 %) (DE_BEG_EM_HP_SPEED_2024) (missing: building.existing_heating.energy_carrier, building.existing_heating.is_functional)
   - answering the open questions could unlock up to 800 EUR
-- **Envelope.Windows** (all perspectives with subsidy decisions): applied DE_TAX_35C_2024 (4,200 [3,080 | 5,320] EUR)
-  - undetermined DE_BEG_EM_ENVELOPE_2024 (missing: measure.technical_attributes.u_value)
-  - undetermined DE_BEG_EM_ENVELOPE_ISFP_2024 (missing: building.has_renovation_roadmap)
+- **Envelope.Windows** (all perspectives with subsidy decisions): applied §35c income-tax credit (20 % over 3 years) (DE_TAX_35C_2024) (4,200 [3,080 | 5,320] EUR, tax credit paid over 3 years (20.0% x 21,000 EUR eligible basis = 4,200 EUR; cap not binding (200,000 EUR eligible cost)))
+  - undetermined BEG EM envelope grant (15 %) (DE_BEG_EM_ENVELOPE_2024) (missing: measure.technical_attributes.u_value)
+  - undetermined BEG EM envelope — iSFP bonus (5 %) (DE_BEG_EM_ENVELOPE_ISFP_2024) (missing: building.has_renovation_roadmap)
   - answering the open questions could unlock up to 234 EUR
 
 ## Variant comparison (brownfield_net)

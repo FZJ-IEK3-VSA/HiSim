@@ -25,6 +25,7 @@ from typing import (
 )
 
 from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.database import SourceEntry, SourceRegistry
 from hisim.economics.provenance import (
     ParameterOrigin,
@@ -587,6 +588,25 @@ class SubsidyScheme:
     excludes: List[str]  # scheme ids this one cannot be combined with (symmetric in effect)
     payout_kind: PayoutKind
     source_ids: Tuple[str, ...] = ()  # registry ids; mandatory for catalog-loaded schemes (W2.4)
+    #: Human-readable name for the report ("BEG EM heat pump — base grant (30 %)", owner decision
+    #: Q20). Optional in the schema so a catalog written before Q20 still loads; every renderer
+    #: reads :attr:`label`, which falls back to the id, and `validate` warns about a scheme that
+    #: ships without one.
+    display_name: Optional[str] = None
+
+    @property
+    def label(self) -> str:
+        """The name a reader sees, with the scheme id as the fallback (Q20).
+
+        The one place the fallback lives, so a catalog that predates ``display_name`` degrades to
+        exactly the old behaviour — an id on screen — instead of an empty cell. Renderers put this
+        in the visible text and keep :attr:`id` in a tooltip or a trailing parenthesis, because
+        the id is what a reviewer needs to grep the catalog and the audit trail with.
+
+        Returns:
+            The display name, or the scheme id when the catalog declares none.
+        """
+        return self.display_name or self.id
 
     def __post_init__(self) -> None:
         """Keeps `benefit_kind` and the typed payload in sync (W2.2)."""
@@ -792,6 +812,7 @@ class SubsidyCatalog:
                     excludes=list(cumulation.get("excludes", [])),
                     payout_kind=PayoutKind(item.get("payout", {}).get("kind", "UPFRONT_GRANT")),
                     source_ids=source_ids,
+                    display_name=item.get("display_name") or None,
                 )
             )
         questions = {}
@@ -818,6 +839,90 @@ class SubsidyCatalog:
             country=country,
             sources=resolved_sources,
         )
+
+    @classmethod
+    def resolve_base_path(cls, configured_path: str) -> str:
+        """Turns a configured catalog path into a directory that exists, or says where it looked.
+
+        A `subsidy_catalog_path` is written into `EconomicParameters` by a system setup, a scenario
+        file or a RenoVisor request, and is then read back by a CLI invocation whose working
+        directory is nobody's business — so resolving a relative path against the current directory
+        alone makes the same parameter file work from the repository root and fail from anywhere
+        else. Three roots are tried, in order: the current working directory (an absolute path is
+        used as given), the repository/installation root that contains the `hisim` package, and the
+        package's own data directory, so that both `hisim/subsidy_catalog` and `subsidy_catalog`
+        resolve to the shipped catalog wherever the command runs.
+
+        Args:
+            configured_path: The non-empty path a parameter set names.
+
+        Returns:
+            An existing directory to load the catalog from.
+
+        Raises:
+            CostDataError: If no candidate exists. Named catalog data that cannot be found is a
+                fail-fast condition (D25): the alternative is a full result priced by the §10.1
+                flat shim under a catalog the caller believed was active.
+        """
+        package_directory = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        install_root = os.path.dirname(package_directory)
+        candidates = [os.path.abspath(configured_path)]
+        if not os.path.isabs(configured_path):
+            candidates.append(os.path.abspath(os.path.join(install_root, configured_path)))
+            candidates.append(os.path.abspath(os.path.join(package_directory, configured_path)))
+        for candidate in candidates:
+            if os.path.isdir(candidate):
+                return candidate
+        raise CostDataError(
+            f"Configured subsidy catalog path {configured_path!r} does not resolve to a directory "
+            f"(tried: {', '.join(candidates)}). Fix the path or remove `subsidy_catalog_path` from "
+            "the parameters — a catalog that was named but cannot be read is never replaced by the "
+            "§10.1 legacy flat-shim support."
+        )
+
+    @classmethod
+    def load_configured(
+        cls, country: str, configured_path: Optional[str], override_path: Optional[str] = None
+    ) -> Optional["SubsidyCatalog"]:
+        """The catalog a parameter set asks for: loaded, or None when it asks for none.
+
+        The single entry point every caller that holds `EconomicParameters` uses — the CLI's
+        subcommands and the postprocessing bridge — so the two cases stay apart everywhere. Naming
+        no catalog is a legitimate parameter set: the country may have none yet (Ireland), and the
+        §10.1 legacy flat shim then prices the support from the device entries. Naming one that
+        cannot be read is not, and raises rather than falling through to that shim.
+
+        Every failure leaves here as a `CostDataError`, whatever the loader raised, because both
+        callers need the same one: the bridge's failure has to reach `postprocessing_main` as the
+        typed cost error it propagates (anything else is logged and the run finishes without cost
+        files), and the CLI turns exactly that type into exit code 2.
+
+        Args:
+            country: ISO country code selecting the catalog file.
+            configured_path: `EconomicParameters.subsidy_catalog_path`, possibly None.
+            override_path: A `--subsidy-catalog` flag, which wins over the parameters when given.
+
+        Returns:
+            The loaded catalog, or None when neither a path nor an override was given.
+
+        Raises:
+            CostDataError: If a path was given but does not resolve, or the catalog it names is
+                missing or malformed.
+        """
+        path = override_path or configured_path
+        if not path:
+            return None
+        base_path = cls.resolve_base_path(path)
+        try:
+            return cls.load(country, base_path)
+        except CostDataError:
+            raise
+        except Exception as err:  # pylint: disable=broad-except
+            raise CostDataError(
+                f"The subsidy catalog configured at {path!r} for country {country!r} failed to "
+                f"load ({type(err).__name__}: {err}). A run that asked for its subsidies must not "
+                "quietly produce flat-shim ones instead."
+            ) from err
 
     # ------------------------------------------------------------------ provenance (§3.10, W2.4)
 

@@ -477,6 +477,7 @@ def build_evaluation_inputs(
     cost_facts: List[SubjectCostFacts] = []
     billing: List[BillingDeterminants] = []
     unresolved: List[UnresolvedSubject] = []
+    not_installed: List[str] = []
     billing_intervals = _capacity_billing_intervals(wrapped_components)
     for wrapper in wrapped_components:
         component = wrapper.my_component
@@ -512,6 +513,16 @@ def build_evaluation_inputs(
             # Registered class, no facts: not an undeclared component and not a priced one either
             # — the §9.2 hole issue #2 closed.
             unresolved.append(UnresolvedSubject(subject=subject, reason=extraction.unresolved_reason))
+        elif extraction.not_installed_reason is not None:
+            # Configured at zero size: absent from the building, so absent from the cost model -
+            # a skip, not a failure. It is a warning rather than a note because an asset that
+            # silently leaves the cost model is exactly the omission a reader has to notice.
+            not_installed.append(f"{subject}: {extraction.not_installed_reason}")
+    if not_installed:
+        log.warning(
+            "Lifecycle cost engine: components configured at zero size, excluded from the cost "
+            f"model as not installed: {'; '.join(sorted(not_installed))}"
+        )
     if unresolved:
         log.warning(
             "Lifecycle cost engine: components that could not be described for the cost model "
@@ -730,24 +741,12 @@ def compute_lifecycle_costs(
     # The faithful extract goes to disk before anything economic touches it (W1.1): what the
     # file contains must depend on the simulation only, never on cost-database state.
     write_inputs(inputs, result_directory)
-    catalog = None
-    if parameters.subsidy_catalog_path:
-        try:
-            catalog = SubsidyCatalog.load(parameters.country, parameters.subsidy_catalog_path)
-        except CostDataError:
-            raise
-        except Exception as err:
-            # A configured catalog that will not load is not a degradation, it is a different
-            # calculation: evaluation would silently fall back to the §10.1 flat shim and publish
-            # subsidy figures that have nothing to do with the catalog the run asked for. Wrapped
-            # rather than re-raised bare so the path and the original exception are in the message
-            # and the failure arrives as the CostDataError postprocessing already re-raises.
-            raise CostDataError(
-                f"Lifecycle cost engine: the subsidy catalog configured at "
-                f"{parameters.subsidy_catalog_path!r} for country {parameters.country!r} failed to "
-                f"load ({type(err).__name__}: {err}). A run that asked for its subsidies must not "
-                "quietly produce flat-shim ones instead."
-            ) from err
+    # A configured catalog that will not load — or whose path does not resolve — is not a
+    # degradation, it is a different calculation: evaluation would silently fall back to the §10.1
+    # flat shim and publish subsidy figures that have nothing to do with the catalog the run asked
+    # for. `load_configured` is the one place that decision lives, shared with the CLI so both
+    # paths refuse identically, and it raises the `CostDataError` postprocessing re-raises.
+    catalog = SubsidyCatalog.load_configured(parameters.country, parameters.subsidy_catalog_path)
     evaluator = EconomicEvaluator(database, parameters, catalog)
     # D7 (cost-spec-v2 §8): an unresolvable subject aborts the whole cost evaluation — no partial
     # results. postprocessing_main catches it and logs an error; the legacy outputs are unaffected.

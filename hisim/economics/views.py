@@ -48,7 +48,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, TypeVar
 from hisim.economics.calculators.subsidy_application import nominal_support_from_entries
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.results import LifecycleCostResult
-from hisim.economics.subsidies import SubsidyAward
+from hisim.economics.subsidies import PayoutKind, SubsidyAward
 from hisim.economics.timeline import Actor, CategoryRules, CostCategory, discount_factor
 from hisim.economics.uncertainty import Slot, UncertainValue
 
@@ -647,15 +647,224 @@ def payer_npv_total(result: LifecycleCostResult) -> UncertainValue:
     return UncertainValue.sum(result.npv_by_payer.values())
 
 
+class SubsidySchemeLabels:
+    """The names of the support sources a timeline can carry that no catalog scheme covers (Q20).
+
+    Two ids reach the report without ever having been a `SubsidyScheme`: the §10.1 legacy flat
+    share, which is subsidy data carried in the *device* catalog for countries that have no
+    subsidy catalog yet, and the fallback for a support entry that names no scheme at all. Both
+    used to be printed raw — a reader of the Irish report saw a node called `LEGACY_FLAT` — and
+    both deserve an honest label rather than an invented programme name: what the legacy shim
+    models is a flat percentage with no scheme behind it, and the label says exactly that.
+    """
+
+    LEGACY_FLAT_ID = "LEGACY_FLAT"
+    LEGACY_FLAT = "flat legacy support share (no catalog)"
+    UNATTRIBUTED = "subsidy (unattributed)"
+
+
+def scheme_display_names(result: LifecycleCostResult) -> Dict[str, str]:
+    """Every support id this result can show, mapped to the name a reader sees (Q20).
+
+    Built from the awards of the result's own subsidy decisions, because that is where the
+    catalog's `display_name` was captured at evaluation time — a report is regularly rendered in
+    a process that never loaded a catalog, so re-reading the data files here would be both a
+    seam-4 violation and unreliable. Ids with no award (the legacy shim, an unattributed support
+    entry) get their labels from `SubsidySchemeLabels`, and an id the mapping does not know maps
+    to itself, so nothing ever renders as an empty cell.
+
+    Args:
+        result: The evaluated perspective whose timeline and decisions are about to be rendered.
+
+    Returns:
+        `{scheme id: display name}`, always including the legacy-shim id and the unattributed
+        key (the empty string), so callers can look up straight from a timeline entry's
+        `subsidy_scheme_id or ""`.
+    """
+    names = {
+        "": SubsidySchemeLabels.UNATTRIBUTED,
+        SubsidySchemeLabels.LEGACY_FLAT_ID: SubsidySchemeLabels.LEGACY_FLAT,
+    }
+    for decision in result.subsidy_decisions:
+        for award in decision.applied:
+            names[award.scheme_id] = award.label
+        for item in list(decision.rejected) + list(decision.undetermined):
+            scheme_id = item.get("scheme_id")
+            if scheme_id:
+                names.setdefault(scheme_id, item.get("display_name") or scheme_id)
+    return names
+
+
 def award_total_amount(award: SubsidyAward) -> UncertainValue:
     """The amount an award is worth in total, nominal (§5.4).
 
     A scheduled payout (a tax credit spread over N years) is worth the sum of its instalments,
     not its — zero — upfront amount; every other kind is worth its upfront amount. The awards
-    table has always shown it this way (`reporting.py:1190-1191`); stating the rule here keeps
-    it from drifting away from the KPI beside it.
+    table has always shown it this way; stating the rule here keeps it from drifting away from
+    the KPI beside it. `describe_award` is what renderers call — this is its euro half, kept
+    separate because the KPI export and the chart data want the band without the prose.
+
+    The two halves are *added* rather than chosen between, so an award that one day carries both
+    a year-0 payment and a schedule is worth both. Today no solver branch produces such an award
+    — a `TaxCreditBenefit` leaves `upfront_amount` at zero and every other euro-valued benefit
+    leaves `schedule_amounts` empty — so the sum equals the old either/or for every award that
+    exists, and stays correct if that ever changes.
+
+    Args:
+        award: One entry of `SubsidyDecision.applied`.
+
+    Returns:
+        The nominal, undiscounted euro band the award pays in total.
     """
-    return UncertainValue.sum(award.schedule_amounts) if award.schedule_amounts else award.upfront_amount
+    return UncertainValue.sum([award.upfront_amount, *award.schedule_amounts])
+
+
+@dataclass
+class AwardPresentation:
+    """One applied award reduced to what a reader has to be told about it (§5.4).
+
+    The renderers of the subsidy section — the markdown summary's decision list, the HTML decision
+    cards and the awards table — used to each read `SubsidyAward` fields directly, and all three
+    read `upfront_amount`. That is zero for three of the five payout kinds, so a §35c tax credit
+    worth 2,060 EUR was printed as "0.00 EUR" on the card and dropped entirely from the markdown
+    list (which filtered on a non-zero upfront amount), while the SUBSIDY category NPV beside it
+    counted the money. This record is the single place where "what is this award worth, and how
+    does it arrive" is decided, so the three renderings cannot disagree again.
+
+    `total_in_euro` is None exactly when the award carries no euro amount at all — loan terms,
+    an operational per-kWh rate, a reduced VAT rate — because their value depends on the
+    financing plan or the energy flows and is booked by another calculator. Those awards are
+    still *applied* and must still be listed, which is what `payout_note` is for: it names the
+    terms instead of a euro band.
+    """
+
+    scheme_id: str
+    payout_kind: str
+    total_in_euro: Optional[UncertainValue]
+    payout_note: str
+    caps_binding: Tuple[str, ...]
+    #: The friendly name a reader sees (Q20); equal to `scheme_id` when the catalog had none.
+    display_name: str = ""
+    #: The multiplication that produced `total_in_euro`, as `rate x basis = amount` (Q26 F8), or
+    #: the empty string for an award whose form states no rate — a lump sum, a per-unit amount,
+    #: loan terms, a VAT reduction — where `payout_note` already carries the form's own terms.
+    arithmetic: str = ""
+    #: What the eligible-cost ceiling did: "cap not binding", "capped at X EUR" or the empty
+    #: string where the scheme declares no cap at all. Read from the solver's recorded decision
+    #: data, never re-derived from the amount.
+    cap_verdict: str = ""
+
+
+def describe_award(award: SubsidyAward) -> AwardPresentation:
+    """What an applied award is worth and how it is paid out, per payout kind (§5.2, §5.4).
+
+    The mapping from the flat `SubsidyAward` union onto the fields a renderer needs. An upfront
+    grant is worth its year-0 amount and needs no note; a tax credit is worth the sum of its
+    instalments and says over how many years they arrive; loan terms, operational support and a
+    VAT reduction have no euro amount of their own and are described by their terms — the
+    interest rate and term they impose on the financing plan, the per-kWh rate and duration, the
+    reduced rate — so that the reader sees an applied award rather than a silent gap.
+
+    Args:
+        award: One entry of `SubsidyDecision.applied`.
+
+    Returns:
+        The renderable form; `total_in_euro` is None only for the kinds that carry no euro amount.
+    """
+    total = award_total_amount(award)
+    caps = tuple(slot for slot, bound in award.caps_binding_per_slot.items() if bound)
+    note = ""
+    if award.payout_kind == PayoutKind.TAX_CREDIT_SCHEDULE:
+        note = f"tax credit paid over {len(award.schedule_amounts)} years"
+    elif award.payout_kind == PayoutKind.OPERATIONAL:
+        carrier = award.operational_carrier.value if award.operational_carrier is not None else "energy"
+        note = (
+            f"{award.operational_rate_per_kwh:.4f} EUR/kWh on {carrier} for "
+            f"{award.operational_duration_years} years"
+        )
+    elif award.payout_kind == PayoutKind.LOAN_TERMS:
+        terms = []
+        if award.loan_interest_rate is not None:
+            terms.append(f"{award.loan_interest_rate:.2%} interest")
+        if award.loan_term_in_years is not None:
+            terms.append(f"{award.loan_term_in_years} years term")
+        if award.loan_repayment_grant_share is not None:
+            terms.append(f"{award.loan_repayment_grant_share:.0%} repayment grant")
+        note = "loan terms: " + (", ".join(terms) if terms else "inherited from the financing plan")
+    elif award.payout_kind == PayoutKind.VAT_REDUCTION:
+        rate = award.reduced_vat_rate
+        note = f"reduced VAT rate {rate:.1%}" if rate is not None else "reduced VAT rate"
+    quantified = award.payout_kind not in (
+        PayoutKind.LOAN_TERMS, PayoutKind.OPERATIONAL, PayoutKind.VAT_REDUCTION
+    ) or bool(total.maximum)
+    return AwardPresentation(
+        scheme_id=award.scheme_id,
+        display_name=award.label,
+        payout_kind=award.payout_kind.value,
+        total_in_euro=total if quantified else None,
+        payout_note=note,
+        caps_binding=caps,
+        arithmetic=award_arithmetic(award, total),
+        cap_verdict=award_cap_verdict(award),
+    )
+
+
+def award_arithmetic(award: SubsidyAward, total: UncertainValue) -> str:
+    """`rate x eligible basis = amount` for the two percentage forms, else "" (Q26 F8).
+
+    An award line that states only its euro amount cannot be checked: the reader cannot tell a
+    9 % rate on a small basis from a 20 % rate that a ceiling cut back, and those are different
+    conclusions about what a second measure would earn. The solver records both factors on the
+    award, so the multiplication is a formatting of stored data rather than a re-derivation —
+    which is what keeps it inside the seam-4 rule.
+
+    The lump-sum, per-unit, loan-terms and VAT forms return the empty string on purpose: they
+    have no rate, and `describe_award`'s `payout_note` already states their own terms.
+
+    Args:
+        award: The applied award, read for its rate, its eligible basis and the pre-cap rate.
+        total: The award's value as `award_total_amount` computed it, for the product.
+
+    Returns:
+        A short arithmetic string with the best-estimate slot of both factors, or "".
+    """
+    if award.benefit_rate is None or award.eligible_basis_in_euro is None:
+        return ""
+    rate_text = f"{award.benefit_rate:.1%}"
+    if award.benefit_rate_before_group_cap is not None:
+        rate_text = (
+            f"{rate_text} (of {award.benefit_rate_before_group_cap:.1%}, cut back by the "
+            "cumulation group's combined-rate cap)"
+        )
+    return (
+        f"{rate_text} x {award.eligible_basis_in_euro.best_estimate:,.0f} EUR eligible basis = "
+        f"{total.best_estimate:,.0f} EUR"
+    )
+
+
+def award_cap_verdict(award: SubsidyAward) -> str:
+    """What the eligible-cost ceiling did to this award, in the solver's own terms (Q26 F8).
+
+    The second half of an award line a reader cannot otherwise reconstruct: below the ceiling the
+    support scales with what was spent, at the ceiling it does not, and the same measure costing
+    more would earn exactly the same euros. The solver records the ceiling and the per-slot
+    binding flags; this states them.
+
+    Args:
+        award: The applied award.
+
+    Returns:
+        "capped at X EUR (slots: ...)", "cap not binding", or "" when the scheme declares no cap.
+    """
+    if award.eligible_basis_cap_in_euro is None:
+        return ""
+    binding = [slot for slot, bound in award.caps_binding_per_slot.items() if bound]
+    if binding:
+        return (
+            f"capped at {award.eligible_basis_cap_in_euro:,.0f} EUR eligible cost "
+            f"({', '.join(binding)})"
+        )
+    return f"cap not binding ({award.eligible_basis_cap_in_euro:,.0f} EUR eligible cost)"
 
 
 def total_subsidies_received(result: LifecycleCostResult) -> Optional[UncertainValue]:

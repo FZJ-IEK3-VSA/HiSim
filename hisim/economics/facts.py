@@ -277,9 +277,15 @@ class ComponentCostFacts:
         cost database actually has an entry for this asset class and whether its `per_unit` matches
         `size_unit` is the pre-run resolution check's job, since that needs the database.
 
+        A size of exactly zero is deliberately *not* an error: a setup that always builds a PV
+        system and then configures it at 0 kWp has said "not installed", which is a statement
+        about the modelled building rather than corrupt data, and `is_not_installed` is how the
+        extraction side recognizes it. Negative and non-finite sizes stay hard errors, because
+        neither can mean anything.
+
         Raises:
-            ValueError: If the asset class is not a `ComponentType`, the size is not finite and
-                positive, the size unit is not priceable, `count` is below 1, the maintenance-rate
+            ValueError: If the asset class is not a `ComponentType`, the size is negative or not
+                finite, the size unit is not priceable, `count` is below 1, the maintenance-rate
                 override is negative in any slot, a non-positive lifetime override was given, or the
                 technical attributes are not JSON-serializable.
         """
@@ -291,8 +297,11 @@ class ComponentCostFacts:
         )
         if not isinstance(self.asset_class, ComponentType):
             raise ValueError(f"asset_class must be a ComponentType, got {self.asset_class!r}.")
-        if not math.isfinite(self.size) or self.size <= 0:
-            raise ValueError(f"ComponentCostFacts.size must be finite and > 0, got {self.size!r}.")
+        if not math.isfinite(self.size) or self.size < 0:
+            raise ValueError(
+                f"ComponentCostFacts.size must be finite and >= 0, got {self.size!r} "
+                "(a size of exactly 0 is allowed and means 'not installed')."
+            )
         if self.size_unit not in ComponentCostFacts.SUPPORTED_SIZE_UNITS:
             raise ValueError(
                 f"size_unit {self.size_unit!r} is not supported for costing; "
@@ -310,6 +319,20 @@ class ComponentCostFacts:
             json.dumps(self.technical_attributes)
         except (TypeError, ValueError) as err:
             raise ValueError("technical_attributes must be JSON-serializable.") from err
+
+    def is_not_installed(self) -> bool:
+        """True when the component is configured at zero size, i.e. declared but not built.
+
+        System setups routinely instantiate a device unconditionally and then size it from a
+        parameter — a building sizer with `share_of_maximum_pv_potential = 0` still constructs a
+        PV system, at 0 kWp. Such a device is absent from the building, not mis-declared, so the
+        extraction side turns this into a skip with a reason rather than pricing a zero-size asset
+        or failing the whole evaluation.
+
+        Returns:
+            True when `size` is exactly zero.
+        """
+        return self.size == 0.0
 
     def has_overrides(self) -> bool:
         """True if any per-field override is set (then `override_source` is required in strict mode).

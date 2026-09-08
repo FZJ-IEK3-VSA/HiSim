@@ -86,8 +86,13 @@ jobs:
           python scripts/golden_check.py \
             --mode json \
             --setup "${{ matrix.setup }}" --param "${{ matrix.param }}"
+      # Only on failure, like golden-check, golden-year and golden_ref_spec.md's own listing:
+      # the report explains a deviation, so uploading it from a passing job stores something
+      # nobody reads and puts an artifact upload -- a network call to a service that can and does
+      # answer 403 -- inside the success path of a check that already passed. One such 403 on a
+      # green job failed this workflow's summary gate as if a JSON pair had diverged.
       - name: Upload deviation report
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v6
         with:
           name: golden-json-report-${{ matrix.setup }}-${{ matrix.param }}

@@ -96,8 +96,9 @@ jobs:
           python scripts/golden_check.py \
             --mode yaml \
             --setup "${{ matrix.setup }}" --param "${{ matrix.param }}"
+      # Failure-only, for the reason spelled out in golden-json-check.yml.
       - name: Upload deviation report
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v6
         with:
           name: golden-yaml-report-${{ matrix.setup }}-${{ matrix.param }}

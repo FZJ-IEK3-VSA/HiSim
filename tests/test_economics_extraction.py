@@ -177,6 +177,14 @@ class ElectricityMeter:
 
     cost_relevance = CostRelevance.METER
 
+    #: The output-name constants the real meter publishes. The adapter resolves a `MeterSpec`'s
+    #: column names off the meter *class* rather than duplicating them as literals, so a stub that
+    #: omitted them would be refused as a meter that cannot say which column carries its energy —
+    #: which is the point of that lookup, and means the stub has to declare them like the real one.
+    ElectricityFromGrid = "ElectricityFromGrid"
+    ElectricityToGrid = "ElectricityToGrid"
+    ElectricityFromGridInWatt = "ElectricityFromGridInWatt"
+
     def __init__(self) -> None:
         """A meter the adapter knows by class name, with no adopted flow hook yet."""
         self.component_name = "ElectricityMeter"
@@ -197,6 +205,10 @@ class FuelMeter:
     """
 
     cost_relevance = CostRelevance.METER
+
+    #: The consumption column the real fuel meter publishes, declared here for the same reason as
+    #: on the electricity stub above: the adapter reads the name off the class.
+    HeatConsumption = "HeatConsumption"
 
     def __init__(self) -> None:
         """An oil meter with the legacy heating value its config still carries."""
@@ -544,6 +556,45 @@ class TestUnresolvedSubjects:
             adapter.get_meter_spec(meter)
         assert "WeirdMeter" in str(raised.value)
         assert "electricity" in str(raised.value).lower()
+
+    def test_a_meter_output_missing_from_the_run_blocks_instead_of_unbilling_the_carrier(self):
+        """A declared meter column the run does not contain is an unresolved subject, not a warning.
+
+        Failure mode caught: the bill that is silently short one flow. The bridge used to log a
+        warning and return no determinants for the meter, so the whole carrier went unbilled and
+        the lifecycle result looked complete — the same silent-omission class as an undeclared
+        component (§9.2), and now refused the same way.
+        """
+        inputs = build_evaluation_inputs(
+            [_Wrapper(ElectricityMeter())],
+            [_Output("ElectricityMeter", "ElectricityToGrid")],  # the bought column is missing
+            _results_frame([("sold", [500.0] * 24)]),
+            _SimulationParameters(seconds_per_timestep=900),
+        )
+        assert inputs.billing == []
+        assert [item.subject for item in inputs.unresolved_subjects] == ["ElectricityMeter"]
+        message = _fail_evaluation(inputs)
+        assert "ElectricityFromGrid" in message  # the missing column is named ...
+        assert "no partial cost results" in message  # ... and it is the D7 refusal
+
+    def test_a_meter_missing_only_its_power_column_blocks_too(self):
+        """The peak series counts as a declared output: missing it drops a capacity charge silently.
+
+        Failure mode caught: the narrower version of the same hole. Energy and feed-in were read,
+        so a bill came out — just without the capacity charge the tariff bills on (§8.4), which no
+        reader of the result could have noticed.
+        """
+        inputs = build_evaluation_inputs(
+            [_Wrapper(ElectricityMeter())],
+            [
+                _Output("ElectricityMeter", "ElectricityFromGrid"),
+                _Output("ElectricityMeter", "ElectricityToGrid"),
+            ],
+            _results_frame([("bought", [1000.0] * 24), ("sold", [500.0] * 24)]),
+            _SimulationParameters(seconds_per_timestep=900),
+        )
+        assert inputs.billing == []
+        assert "ElectricityFromGridInWatt" in _fail_evaluation(inputs)
 
     def test_the_extraction_failure_survives_the_written_extract(self, tmp_path):
         """`economic_inputs.json` records the failure, so re-pricing hits the same wall (W1.1)."""

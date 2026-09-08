@@ -19,8 +19,9 @@ the same year from the same file.
 **What breaks a run and what does not.** Computing lifecycle costs is opt-in, and asking for it
 means asking for an answer: a fleet the cost model cannot describe therefore *fails the run*. The
 `UnresolvableSubjectsError` of decision D7 — raised for an undeclared component (§9.2), for a
-recognized component whose facts do not build, and for a declared fact the database cannot price
-— propagates out of `postprocessing_main.py` and out of `hisim_main`. That guard used to be a
+recognized component whose facts do not build, for a meter whose declared output column this run
+does not contain, and for a declared fact the database cannot price — propagates out of
+`postprocessing_main.py` and out of `hisim_main`. That guard used to be a
 bare ``except Exception`` that logged ``"Lifecycle cost engine failed (legacy outputs are
 unaffected): …"`` and continued, which meant the deliberate fail-fast of D7 arrived as a log line
 in the middle of a successful run; it now re-raises `CostDataError` (of which
@@ -165,7 +166,8 @@ def _sum_output_column(
     The results DataFrame has no named columns the engine could rely on, so an output is located
     positionally: `all_outputs` and the frame's columns are in the same order. Returning None
     rather than 0.0 for a missing output is what lets the caller distinguish "this meter measured
-    nothing" from "this meter's declared field does not exist", and warn about the latter.
+    nothing" from "this meter's declared field does not exist" — the second is a broken extraction
+    and the caller refuses the run over it.
     """
     for index, output in enumerate(all_outputs):
         if output.component_name == component_name and output.field_name == field_name:
@@ -180,8 +182,8 @@ def _power_series(
 
     Unlike `_sum_output_column` this does not aggregate or rescale: capacity charges are billed on
     peaks, not on sums, so the whole series is handed to `_peaks_from_power_series`. None means the
-    meter declared a `power_field` that the run did not produce, in which case the carrier is billed
-    without capacity charges.
+    meter declared a `power_field` that the run did not produce, which the caller refuses the run
+    over rather than billing the carrier without its capacity charge.
     """
     for index, output in enumerate(all_outputs):
         if output.component_name == component_name and output.field_name == field_name:
@@ -238,6 +240,32 @@ def _peaks_from_power_series(
     return monthly_peaks, annual_peak
 
 
+def _missing_meter_column_error(component: Any, field_name: str, role: str) -> CostDataError:
+    """The refusal for a meter output the meter's class declares but the run does not contain.
+
+    A meter is the only place a carrier can be billed from (§3.4), so a column it declares and the
+    run does not hold is not a gap the engine may work around: summing what is there and skipping
+    what is not publishes a bill that is quietly missing a flow — an unbilled carrier, a feed-in
+    revenue silently zero, a capacity charge silently dropped. Raising instead makes the meter an
+    unresolved subject in `build_evaluation_inputs`, and the D7 check refuses to price the rest of
+    the fleet around the hole.
+
+    Args:
+        component: The meter whose column is missing, named in the message.
+        field_name: The output field name that was looked for.
+        role: What that column carries, in the message's words ("bought energy", "peak power").
+
+    Returns:
+        The `CostDataError` to raise; the caller raises it so the traceback points at the lookup.
+    """
+    return CostDataError(
+        f"Meter {component.component_name}: the {role} column {field_name!r} declared by its class "
+        "is not among this run's outputs, so the flow it measures cannot be read. Billing the "
+        "carrier without it would publish a bill that silently omits that flow, so the meter "
+        "becomes an unresolved subject and the evaluation aborts instead (D7)."
+    )
+
+
 def _billing_determinants(
     component: Any,
     all_outputs: List[Any],
@@ -268,11 +296,16 @@ def _billing_determinants(
         simulation_parameters: For `seconds_per_timestep`, which sizes the peak intervals.
 
     Returns:
-        The billing determinants for this component's carrier, or None when it meters nothing. On
-        the table path a meter whose declared output column does not exist in this run also
-        yields None, with a warning, and its carrier stays unbilled; a component answering
-        through the hook owns that judgement itself and a zero it reports is taken as a measured
-        zero.
+        The billing determinants for this component's carrier, or None when it meters nothing. A
+        component answering through the hook owns that judgement itself, and a zero it reports is
+        taken as a measured zero.
+
+    Raises:
+        CostDataError: If a column the meter's class declares — bought energy, sold energy or the
+            power series the peaks come from — is not among this run's outputs. It used to warn
+            and leave the carrier unbilled (or the peaks at zero), which published a bill missing
+            a flow; `build_evaluation_inputs` now turns it into an unresolved subject and the
+            evaluation aborts (D7).
     """
     meter_spec = adapter.get_meter_spec(component)
     flows = adapter.get_energy_flow_facts(component, all_outputs, postprocessing_results)
@@ -286,19 +319,15 @@ def _billing_determinants(
             component.component_name, meter_spec.bought_field, all_outputs, postprocessing_results
         )
         if bought_kwh is None:
-            log.warning(
-                f"Meter {component.component_name}: output {meter_spec.bought_field!r} not found; "
-                "carrier stays unbilled."
-            )
-            return None
+            raise _missing_meter_column_error(component, meter_spec.bought_field, "bought energy")
         sold_kwh = 0.0
         if meter_spec.sold_field:
-            sold_kwh = (
-                _sum_output_column(
-                    component.component_name, meter_spec.sold_field, all_outputs, postprocessing_results
-                )
-                or 0.0
+            sold_column = _sum_output_column(
+                component.component_name, meter_spec.sold_field, all_outputs, postprocessing_results
             )
+            if sold_column is None:
+                raise _missing_meter_column_error(component, meter_spec.sold_field, "sold energy")
+            sold_kwh = sold_column
         determinants = BillingDeterminants(
             carrier=meter_spec.carrier, energy_bought_in_kwh=bought_kwh, energy_sold_in_kwh=sold_kwh
         )
@@ -306,11 +335,12 @@ def _billing_determinants(
         series = _power_series(
             component.component_name, meter_spec.power_field, all_outputs, postprocessing_results
         )
-        if series is not None:
-            (
-                determinants.peak_per_billing_period_in_kw,
-                determinants.annual_peak_in_kw,
-            ) = _peaks_from_power_series(series, simulation_parameters.seconds_per_timestep)
+        if series is None:
+            raise _missing_meter_column_error(component, meter_spec.power_field, "peak power")
+        (
+            determinants.peak_per_billing_period_in_kw,
+            determinants.annual_peak_in_kw,
+        ) = _peaks_from_power_series(series, simulation_parameters.seconds_per_timestep)
     return determinants
 
 
@@ -337,9 +367,11 @@ def build_evaluation_inputs(
     outside the cost model, and the downstream D7 check aborts the evaluation on it. A component
     the adapter *does* recognize but cannot describe — a registered extractor that yielded
     nothing, a meter whose configured fuel maps to no carrier — becomes an `UnresolvedSubject` the
-    same way (issues #2 and #3), rather than quietly missing from the cost report. A meter whose
-    declared output does not exist warns and leaves its carrier unbilled, and a run with no meter
-    flows at all warns that energy costs are missing from the results (§3.4). And the simulated
+    same way (issues #2 and #3), rather than quietly missing from the cost report. So does a meter
+    whose class declares an output column this run does not contain: it used to warn and leave the
+    carrier unbilled, which published a bill missing a flow. A run with no meter flows *at all*
+    stays a warning, because a system with nothing metered is a legitimate — if unpriced —
+    configuration rather than a broken meter (§3.4). And the simulated
     period is converted into `simulated_period_fraction`, which the engine uses to annualize; runs
     longer than a year are clamped to one full year with a warning (cost_module_issues.md #15).
 

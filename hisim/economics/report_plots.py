@@ -1,9 +1,9 @@
-"""Matplotlib PNG companions of the lifecycle cost report (the LIFECYCLE_COST_REPORT
-postprocessing option, which arrives with stack part 8/8, the bridge).
+"""Matplotlib PNG companions of the lifecycle cost report.
 
-Same display groups and colors as the HTML report — both take them from
-`presentation_style.py`, so a group keeps its hue across every output and this module no longer
-imports `reporting.py` (W4.7). Written into the result directory next to the HTML report.
+Produced for the LIFECYCLE_COST_REPORT postprocessing option, which arrives with stack part 8/8
+(the bridge), and written into the result directory next to the HTML report. Same display groups
+and colors as the HTML report — both take them from `presentation_style.py`, so a group keeps its
+hue across every output and this module no longer imports `reporting.py` (W4.7).
 
 Like `reporting.py`, this module never computes: the numbers plotted come from `views.py` and
 `results.py`; the arithmetic here is bar geometry and axis scaling.

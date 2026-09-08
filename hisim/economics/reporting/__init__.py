@@ -1,7 +1,8 @@
-"""Human-readable lifecycle cost reports (the LIFECYCLE_COST_REPORT postprocessing option,
-which arrives with stack part 8/8, the bridge).
+"""Human-readable lifecycle cost reports.
 
-Follows the money along the calculation chain so results can be checked for plausibility:
+Produced for the LIFECYCLE_COST_REPORT postprocessing option, which arrives with stack part 8/8
+(the bridge). The report follows the money along the calculation chain so results can be checked
+for plausibility:
 
 1. plausibility panel (automated checks, thresholds in cost_database/plausibility_checks.json)
 2. input audit (facts x database resolution)

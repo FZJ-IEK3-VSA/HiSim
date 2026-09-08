@@ -10,12 +10,23 @@ open, so nothing survives only in a conversation. Items are removed when done, n
 
 ## Missing deliverables (code)
 
-- [ ] **Multi-instance KPI collision (found 2026-09-05 while implementing the CHP KPIs).** Two
-  components of one class in one building collapse into a single flattened KPI group: the two
-  batteries of `dynamic_components` report one `BUI1.Battery.*` set, one instance silently
-  overwriting the other, and the two CHPs now do the same. Pre-existing and systemic — the flatten
-  key is building.tag.name and ignores the entry's source component. Fixing it renames KPIs and
-  therefore re-blesses references; its own PR, after the gate has settled.
+- [x] **Multi-instance KPI collision — fixed 2026-09-07 on `kpi_multi_instance`.**
+  `Component.component_kpi_entries` is now the method the collector calls: it asks the overridable
+  `get_component_kpi_entries` and stamps every entry that names no source with the component's own
+  name, so no component has to remember the field. `KpiPreparation.keyed_component_entries` then
+  keys one building's entries: where several components share an entry name, each keys as
+  `"<name> (<source component>)"`, a collision whose colliders do not all name a source is refused
+  rather than silently overwritten, and one component emitting a name twice is refused too.
+  `Building`'s duplicate emission is hoisted out of its per-output loop, the diesel car's two
+  entries got distinct names, and the meter lookup in `read_opex_and_capex_costs_from_results`
+  matches an entry's own `name` instead of the collection key and sums across the meters of a
+  building, so qualification neither zeroes a general KPI nor lets one of two meters stand for
+  both. Seven goldens re-blessed (`dynamic_components` plus the six setups whose collisions had
+  been hiding a component). Remove this entry once it is on main.
+- [ ] **Stable KPI addresses.** Keys are still volatile (bare unless a collision exists) and
+  consumers rebuild key strings by hand. Spec: `roadmap/kpi_address_spec.md`; its own PR after #653
+  is on main.
+
 
 ## Decision needed (owner)
 

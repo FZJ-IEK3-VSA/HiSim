@@ -1137,9 +1137,19 @@ class Building(cp.Component):
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
-        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        """Calculates KPIs for the respective component and return all KPI entries as list.
 
-        list_of_kpi_entries: List[KpiEntry] = []
+        The building-information entries describe the building itself, not any single output, so
+        they are appended once outside the output loop; appending them per matching output emitted
+        the same KPI name several times, which the KPI collection now refuses instead of silently
+        collapsing. The two output-driven helpers only produce entries for the building's own
+        outputs, and each field name they answer to occurs once among those, so every entry they
+        contribute is emitted at most once.
+        """
+
+        list_of_kpi_entries: List[KpiEntry] = self.get_building_kpis_from_building_information(
+            list_of_kpi_entries=[]
+        )
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
                 list_of_kpi_entries = self.get_building_kpis_from_outputs(
@@ -1147,9 +1157,6 @@ class Building(cp.Component):
                     index=index,
                     postprocessing_results=postprocessing_results,
                     list_of_kpi_entries=list_of_kpi_entries,
-                )
-                list_of_kpi_entries = self.get_building_kpis_from_building_information(
-                    list_of_kpi_entries=list_of_kpi_entries
                 )
                 list_of_kpi_entries = self.get_building_temperature_deviation_from_set_temperatures(
                     output=output,

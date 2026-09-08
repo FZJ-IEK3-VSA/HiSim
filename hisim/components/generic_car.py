@@ -425,7 +425,9 @@ class Car(cp.Component):
                 )
                 list_of_kpi_entries.append(diesel_demand_in_liter_kpi_entry)
                 diesel_demand_in_kwh_kpi_entry = KpiEntry(
-                    name="Diesel demand for driving",
+                    # Distinct from the liter entry above: one component may not emit one KPI
+                    # name twice, or every consumer reads only whichever of the two came last.
+                    name="Diesel energy demand for driving",
                     unit="kWh",
                     value=consumption_in_kwh,
                     tag=KpiTagEnumClass.CAR,

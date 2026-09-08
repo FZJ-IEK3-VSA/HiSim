@@ -554,6 +554,38 @@ class Component:
             return []
         raise NotImplementedError(f"{self.component_name} has no kpis implemented.")
 
+    def component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Return this component's KPI entries, each of them naming this component as its source.
+
+        Callers use this rather than :meth:`get_component_kpi_entries` directly, because an entry
+        has to know which component produced it and the overridable method cannot be relied on to
+        say so: the source name is what tells two instances of one class apart once their entries
+        meet in one building's KPI collection, and roughly forty components build their entries by
+        hand, so leaving the field to them means every one of them is one forgotten argument away
+        from a KPI that silently overwrites its sibling. Stamping it here, on the instance that
+        knows its own name, makes the field a property of the collection rather than of each
+        component's discipline. An entry that already names a source keeps it, so a component that
+        reports on behalf of another one is not relabelled.
+
+        Args:
+            all_outputs: Every output of the simulation, as the KPI methods expect them.
+            postprocessing_results: The result time series, column-aligned with ``all_outputs``.
+
+        Returns:
+            List[KpiEntry]: the component's entries, with ``name_of_source_component`` filled in.
+        """
+        kpi_entries = self.get_component_kpi_entries(
+            all_outputs=all_outputs, postprocessing_results=postprocessing_results
+        )
+        for kpi_entry in kpi_entries:
+            if kpi_entry.name_of_source_component is None:
+                kpi_entry.name_of_source_component = self.component_name
+        return kpi_entries
+
     def capital_cost_data(
         self, simulation_parameters: Optional[SimulationParameters] = None
     ) -> CapexCostDataClass:

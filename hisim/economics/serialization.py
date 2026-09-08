@@ -68,7 +68,7 @@ from hisim.economics.subsidies import (
     SubsidyContext,
     SubsidyDecision,
 )
-from hisim.economics.tariffs import contract_to_json
+from hisim.economics.tariffs import TariffContract, contract_to_json, load_tariff_contract
 from hisim.economics.timeline import Actor, CashFlowEntry, CashFlowTimeline, CostCategory, SubjectKind
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
@@ -87,20 +87,6 @@ class SerializationFileNames:
     PROVENANCE_FILE_NAME = "cost_provenance.json"
 
 
-def _band_or_none(value: Optional[UncertainValue]) -> Any:
-    """Serializes an optional uncertainty band, preserving the None/zero distinction.
-
-    Every monetary override is optional, and "no override" is a different statement from "an
-    override of zero euro" — so None must survive as JSON null rather than collapsing to a band.
-    """
-    return value.to_json() if value is not None else None
-
-
-def _band_from(value: Any) -> Optional[UncertainValue]:
-    """The inverse of `_band_or_none`: JSON null stays None, anything else becomes a triplet."""
-    return UncertainValue.from_json(value) if value is not None else None
-
-
 def facts_to_json(facts: ComponentCostFacts) -> dict:
     """Serializes ComponentCostFacts.
 
@@ -116,11 +102,11 @@ def facts_to_json(facts: ComponentCostFacts) -> dict:
         "size_unit": facts.size_unit.name,
         "kpi_tag": facts.kpi_tag.value if facts.kpi_tag else None,
         "count": facts.count,
-        "investment_cost_override_in_euro": _band_or_none(facts.investment_cost_override_in_euro),
-        "installation_cost_override_in_euro": _band_or_none(facts.installation_cost_override_in_euro),
+        "investment_cost_override_in_euro": UncertainValue.optional_to_json(facts.investment_cost_override_in_euro),
+        "installation_cost_override_in_euro": UncertainValue.optional_to_json(facts.installation_cost_override_in_euro),
         "lifetime_override_in_years": facts.lifetime_override_in_years,
-        "maintenance_rate_override": _band_or_none(facts.maintenance_rate_override),
-        "fixed_operation_cost_override_in_euro_per_year": _band_or_none(
+        "maintenance_rate_override": UncertainValue.optional_to_json(facts.maintenance_rate_override),
+        "fixed_operation_cost_override_in_euro_per_year": UncertainValue.optional_to_json(
             facts.fixed_operation_cost_override_in_euro_per_year
         ),
         "embodied_co2_override_in_kg": facts.embodied_co2_override_in_kg,
@@ -147,11 +133,13 @@ def facts_from_json(raw: dict) -> ComponentCostFacts:
         size_unit=Units[raw["size_unit"]],
         kpi_tag=kpi_tag,
         count=raw.get("count", 1),
-        investment_cost_override_in_euro=_band_from(raw.get("investment_cost_override_in_euro")),
-        installation_cost_override_in_euro=_band_from(raw.get("installation_cost_override_in_euro")),
+        investment_cost_override_in_euro=UncertainValue.optional_from_json(raw.get("investment_cost_override_in_euro")),
+        installation_cost_override_in_euro=UncertainValue.optional_from_json(
+            raw.get("installation_cost_override_in_euro")
+        ),
         lifetime_override_in_years=raw.get("lifetime_override_in_years"),
-        maintenance_rate_override=_band_from(raw.get("maintenance_rate_override")),
-        fixed_operation_cost_override_in_euro_per_year=_band_from(
+        maintenance_rate_override=UncertainValue.optional_from_json(raw.get("maintenance_rate_override")),
+        fixed_operation_cost_override_in_euro_per_year=UncertainValue.optional_from_json(
             raw.get("fixed_operation_cost_override_in_euro_per_year")
         ),
         embodied_co2_override_in_kg=raw.get("embodied_co2_override_in_kg"),
@@ -218,7 +206,7 @@ def asset_to_json(asset: ExistingAsset) -> dict:
         "size": asset.size,
         "size_unit": asset.size_unit.name,
         "installation_year": asset.installation_year,
-        "replacement_cost_override_in_euro": _band_or_none(asset.replacement_cost_override_in_euro),
+        "replacement_cost_override_in_euro": UncertainValue.optional_to_json(asset.replacement_cost_override_in_euro),
         "is_functional": asset.is_functional,
         "energy_carrier": asset.energy_carrier.value if asset.energy_carrier else None,
         "replaced_by_asset_classes": [asset_class.name for asset_class in asset.replaced_by_asset_classes],
@@ -236,7 +224,9 @@ def asset_from_json(item: dict) -> ExistingAsset:
         size=item["size"],
         size_unit=Units[item["size_unit"]],
         installation_year=item["installation_year"],
-        replacement_cost_override_in_euro=_band_from(item.get("replacement_cost_override_in_euro")),
+        replacement_cost_override_in_euro=UncertainValue.optional_from_json(
+            item.get("replacement_cost_override_in_euro")
+        ),
         is_functional=item.get("is_functional", True),
         energy_carrier=EnergyCarrier(item["energy_carrier"]) if item.get("energy_carrier") else None,
         replaced_by_asset_classes=[ComponentType[name] for name in item.get("replaced_by_asset_classes", [])],
@@ -386,9 +376,17 @@ def contracts_from_json(raw: dict, tariffs_base_path: Optional[str] = None) -> D
     tariffs directory. In both forms, contracts generated from the §3.5 price entries are
     skipped: they are derived data that the evaluator regenerates at the price basis year, which
     keeps scenario price overlays effective.
-    """
-    from hisim.economics.tariffs import TariffContract, load_tariff_contract
 
+    How a generated contract is recognized differs between the two forms, and only because it has
+    to: an embedded contract declares itself through the typed ``is_default_contract`` flag, while
+    an id-only file offers nothing but the id — and a generated contract has no catalog file to
+    load and ask. `TariffContract.is_default_contract_id` therefore answers that from the id shape,
+    next to the code that mints it, instead of the substring split against a hardcoded pair of
+    countries this function used to do (which sent a generated contract for any third country to
+    the catalog loader, where it failed). An id that survives that check is loaded and its flag
+    tested too, so a default contract that *was* written to a file is still skipped by its own
+    declaration.
+    """
     contracts: Dict[EnergyCarrier, Any] = {}
     embedded = raw.get("tariff_contracts")
     if embedded:
@@ -399,9 +397,12 @@ def contracts_from_json(raw: dict, tariffs_base_path: Optional[str] = None) -> D
             contracts[EnergyCarrier(carrier_name)] = contract
         return contracts
     for carrier_name, contract_id in (raw.get("tariff_contract_ids") or {}).items():
-        if contract_id.split("_DEFAULT_")[0] in ("DE", "AT") and "_DEFAULT_" in contract_id:
-            continue  # default contracts are regenerated from the price entries
-        contracts[EnergyCarrier(carrier_name)] = load_tariff_contract(contract_id, tariffs_base_path)
+        if TariffContract.is_default_contract_id(contract_id):
+            continue  # never had a file; regenerated from the price entries at the basis year
+        contract = load_tariff_contract(contract_id, tariffs_base_path)
+        if contract.is_default_contract:
+            continue
+        contracts[EnergyCarrier(carrier_name)] = contract
     return contracts
 
 
@@ -643,8 +644,10 @@ def result_from_json(
         annual_cost_series_nominal_in_euro=[
             UncertainValue.from_json(value) for value in raw["annual_cost_series_nominal_in_euro"]
         ],
-        monthly_cost_year1_in_euro=_band_from(raw.get("monthly_cost_year1_in_euro")),
-        levelized_cost_of_heat_in_euro_per_kwh=_band_from(raw.get("levelized_cost_of_heat_in_euro_per_kwh")),
+        monthly_cost_year1_in_euro=UncertainValue.optional_from_json(raw.get("monthly_cost_year1_in_euro")),
+        levelized_cost_of_heat_in_euro_per_kwh=UncertainValue.optional_from_json(
+            raw.get("levelized_cost_of_heat_in_euro_per_kwh")
+        ),
         timeline=timeline if timeline is not None else CashFlowTimeline(),
         lifecycle_co2_result=LifecycleCo2Result(
             embodied_co2_in_kg=co2.get("embodied_co2_in_kg", 0.0),

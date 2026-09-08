@@ -25,13 +25,14 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Dict, List, Optional
+from enum import Enum
+from typing import ClassVar, Dict, List, Optional
 
 from hisim.economics.provenance import ResolvedSource
 from hisim.economics.uncertainty import UncertainValue
 
 
-class OriginKind:
+class OriginKind(str, Enum):
     """How a row's unit price was resolved.
 
     The vocabulary is shared by both renderers; each spells it its own way, which is formatting
@@ -43,6 +44,12 @@ class OriginKind:
     (UNRESOLVED — a component the engine could not price, which must be visible rather than silently
     contributing zero). Deciding this once here is what fixed the pre-W4.6 disagreement in which the
     HTML report dropped an override's unit price whenever the asset class had no database entry.
+
+    An enum rather than a bag of string constants, so a `cost_audit.json` carrying a fourth,
+    misspelled kind fails on load instead of falling through every renderer's comparisons and being
+    rendered as a blank cell. The member *values* are the strings the file format has always
+    carried, so the change is invisible to any file already written; deriving from `str` keeps the
+    members usable wherever the old constants were.
     """
 
     ORIGIN_OVERRIDE = "OVERRIDE"
@@ -77,7 +84,7 @@ class ResolvedInputRow:
     asset_class: str
     size: float
     size_unit: str
-    origin_kind: str
+    origin_kind: OriginKind
     #: The `override_source` the facts declared, when `origin_kind` is OVERRIDE. Empty means the
     #: override cites nothing — a flagged condition, not a formatting question.
     override_source: Optional[str] = None
@@ -107,14 +114,14 @@ class ResolvedInputRow:
             "asset_class": self.asset_class,
             "size": self.size,
             "size_unit": self.size_unit,
-            "origin_kind": self.origin_kind,
+            "origin_kind": self.origin_kind.value,
             "override_source": self.override_source,
             "entry_key": self.entry_key,
             "source_ids": self.source_ids,
-            "unit_price_in_euro": _band_json(self.unit_price_in_euro),
+            "unit_price_in_euro": UncertainValue.optional_to_json(self.unit_price_in_euro),
             "lifetime_in_years": self.lifetime_in_years,
-            "investment_gross_in_euro": _band_json(self.investment_gross_in_euro),
-            "subsidies_nominal_in_euro": _band_json(self.subsidies_nominal_in_euro),
+            "investment_gross_in_euro": UncertainValue.optional_to_json(self.investment_gross_in_euro),
+            "subsidies_nominal_in_euro": UncertainValue.optional_to_json(self.subsidies_nominal_in_euro),
             "subsidy_scheme_ids": self.subsidy_scheme_ids,
             "caps_binding_by_scheme": self.caps_binding_by_scheme,
             "flags": self.flags,
@@ -127,20 +134,28 @@ class ResolvedInputRow:
         Rebuilds a row from a stored `cost_audit.json`, defaulting the collection fields to empty so
         an audit written by an older version still loads. The mandatory keys are the identity and
         origin fields; everything a run may legitimately not have produced is optional.
+
+        `origin_kind` goes through `OriginKind`, so a file carrying a spelling no renderer knows
+        fails here instead of reaching the report as a kind that matches none of its comparisons
+        and renders as an empty cell.
+
+        Raises:
+            KeyError: If a mandatory key is missing.
+            ValueError: If `origin_kind` names no `OriginKind` member.
         """
         return ResolvedInputRow(
             subject=raw["subject"],
             asset_class=raw["asset_class"],
             size=raw["size"],
             size_unit=raw["size_unit"],
-            origin_kind=raw["origin_kind"],
+            origin_kind=OriginKind(raw["origin_kind"]),
             override_source=raw.get("override_source"),
             entry_key=raw.get("entry_key"),
             source_ids=list(raw.get("source_ids", [])),
-            unit_price_in_euro=_band_from(raw.get("unit_price_in_euro")),
+            unit_price_in_euro=UncertainValue.optional_from_json(raw.get("unit_price_in_euro")),
             lifetime_in_years=raw.get("lifetime_in_years"),
-            investment_gross_in_euro=_band_from(raw.get("investment_gross_in_euro")),
-            subsidies_nominal_in_euro=_band_from(raw.get("subsidies_nominal_in_euro")),
+            investment_gross_in_euro=UncertainValue.optional_from_json(raw.get("investment_gross_in_euro")),
+            subsidies_nominal_in_euro=UncertainValue.optional_from_json(raw.get("subsidies_nominal_in_euro")),
             subsidy_scheme_ids=list(raw.get("subsidy_scheme_ids", [])),
             caps_binding_by_scheme={
                 scheme: list(slots) for scheme, slots in raw.get("caps_binding_by_scheme", {}).items()
@@ -224,16 +239,6 @@ class InputAuditReport:
                 for item in raw.get("sources", [])
             ],
         )
-
-
-def _band_json(value: Optional[UncertainValue]) -> Any:
-    """Serializes an optional band, keeping `None` distinct from a zero band."""
-    return value.to_json() if value is not None else None
-
-
-def _band_from(value: Any) -> Optional[UncertainValue]:
-    """Parses an optional band; the inverse of `_band_json`, `None` staying `None`."""
-    return UncertainValue.from_json(value) if value is not None else None
 
 
 def write_input_audit(audit: InputAuditReport, result_directory: str) -> str:

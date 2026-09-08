@@ -128,8 +128,11 @@ class EconomicParameters:
         """The parameter record as a JSON-serializable dict, one key per field.
 
         Consumed by `LifecycleCostResult.to_json` so the assumptions travel with every stored
-        result (§4.6). Plain `asdict` is sufficient: every enum in the record is a str-enum, so
-        the per-carrier and per-asset-class rate dicts keep JSON-compatible string keys.
+        result (§4.6). Plain `asdict` is sufficient, but note what it does *not* do: the keys of the
+        two rate dicts stay `EnergyCarrier` and `ComponentType` *members* here, not strings. Both
+        enums derive from `str`, so `json.dump` writes each key as its enum *value* ("HeatPump",
+        not "HEAT_PUMP") — which is the spelling `from_dict` has to read back, and the reason that
+        method accepts the member name as well.
         """
         return asdict(self)
 
@@ -140,13 +143,17 @@ class EconomicParameters:
         The counterpart of `to_dict`, and the reason a stored evaluation can be re-priced at all:
         `economic_inputs.json` and a hand-written `--parameters` file both arrive as plain JSON,
         and the two rate dictionaries key on enums that JSON can only carry as strings. Those keys
-        are converted back here; every other field is a scalar that survives the round trip
-        unchanged, and a field the mapping omits keeps its documented default, so a subset is a
-        legitimate input.
+        are converted back here — by member value *or* member name, see `_enum_key`, since the two
+        kinds of file spell them differently; every other field is a scalar that survives the round
+        trip unchanged, and a field the mapping omits keeps its documented default, so a subset is
+        a legitimate input.
 
         An unknown key is refused rather than ignored: at this level a key that no field claims is
         a typo in a hand-written assumption file, and silently dropping it would price the run
-        with a default the author believed they had overridden.
+        with a default the author believed they had overridden. A rate dict that is present but is
+        not a mapping is refused for the same reason: `"energy_price_escalation_rates": null` used
+        to pass straight through as `None`, and the record then carried `None` where every reader
+        expects a dict.
 
         Args:
             raw: The mapping to read, as produced by `to_dict` or parsed from JSON.
@@ -155,7 +162,8 @@ class EconomicParameters:
             The reconstructed parameter record, validated by `__post_init__`.
 
         Raises:
-            ValueError: If the mapping carries a key that is not a field of this class.
+            ValueError: If the mapping carries a key that is not a field of this class, if a rate
+                dict is present but is not a mapping, or if one of its keys names no enum member.
         """
         known = {field_info.name for field_info in fields(cls)}
         values = dict(raw)
@@ -169,8 +177,53 @@ class EconomicParameters:
             ("energy_price_escalation_rates", EnergyCarrier),
             ("investment_price_escalation_rates", ComponentType),
         ):
-            if values.get(key):
-                values[key] = {
-                    enum_class(member): float(rate) for member, rate in values[key].items()
-                }
+            if key not in values:
+                continue  # absent means "no per-carrier / per-asset-class override", the default
+            rates = values[key]
+            if not isinstance(rates, dict):
+                raise ValueError(
+                    f"economic parameter {key!r} must be a mapping of {enum_class.__name__} to "
+                    f"rate, got {rates!r}. Omit the key to keep the default (an empty mapping, so "
+                    "every carrier or asset class falls back to the general escalation rate); an "
+                    "explicit null is not that statement."
+                )
+            values[key] = {
+                cls._enum_key(enum_class, member, key): float(rate) for member, rate in rates.items()
+            }
         return cls(**values)
+
+    @staticmethod
+    def _enum_key(enum_class: Any, spelling: Any, parameter_name: str) -> Any:
+        """Resolves one rate-dict key onto an enum member, by value or by member name.
+
+        Both spellings have to work. `to_dict` + `json.dump` writes the enum *value* ("HeatPump"),
+        so that is what a stored `economic_inputs.json` carries; a hand-written `--parameters`
+        file, on the other hand, is almost always typed as the member *name* ("HEAT_PUMP"), which
+        is the spelling the enum is referred to by everywhere else in the code and in the spec.
+        Accepting only the value made the natural hand-written spelling raise a bare
+        `ValueError: 'HEAT_PUMP' is not a valid ComponentType` from inside a dict comprehension,
+        with nothing to say which parameter it came from.
+
+        Args:
+            enum_class: `EnergyCarrier` or `ComponentType`.
+            spelling: The key as it was written in the JSON file.
+            parameter_name: Field the dict belongs to, so the error names it.
+
+        Returns:
+            The matching enum member.
+
+        Raises:
+            ValueError: If the spelling matches neither a member value nor a member name.
+        """
+        try:
+            return enum_class(spelling)
+        except ValueError:
+            pass
+        try:
+            return enum_class[spelling]
+        except KeyError:
+            accepted = ", ".join(f"{member.name}/{member.value!r}" for member in enum_class)
+            raise ValueError(
+                f"{spelling!r} in economic parameter {parameter_name!r} is no {enum_class.__name__}; "
+                f"accepted spellings are the member name or its value: {accepted}."
+            ) from None

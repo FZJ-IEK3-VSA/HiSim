@@ -325,6 +325,97 @@ def _fuel_meter_carrier(config: Any, component_name: str) -> EnergyCarrier:
     )
 
 
+@dataclass(frozen=True)
+class MeterOutputContract:
+    """Which of a meter class's own constants name the columns the billing engine reads.
+
+    A `MeterSpec` needs three column names, and a meter class already publishes them as class
+    constants (`ElectricityMeter.ElectricityFromGrid` and friends) because its own `add_output`
+    calls use them. This record therefore stores the *constant names*, not the column strings: the
+    strings are read off the class at resolution time, so the class stays the single source of the
+    column it writes. While they were duplicated here as literals, renaming a meter output moved
+    the column and left the adapter reading a name nothing wrote any more — an empty series, a
+    carrier billed at zero, and no complaint anywhere.
+
+    `carrier_of` takes the whole component rather than its config because the two fuel-ish meters
+    derive their pricing carrier from configured load types and want their instance name for the
+    error message, while the other two are fixed.
+    """
+
+    carrier_of: Callable[[Any], EnergyCarrier]
+    bought_constant: str
+    sold_constant: Optional[str] = None
+    power_constant: Optional[str] = None
+
+
+class MeterOutputContracts:
+    """Class-name keyed meter table, the energy twin of `FactsExtractors` (§3.4/§8.4).
+
+    The four meter classes the engine can bill from, each with the carrier it meters and the
+    constants naming its billable outputs. Keyed by class name for the same reason as the facts
+    table — `hisim.economics` imports no component module (§10.0 rule 1) — and pinned by the same
+    test file, which resolves every key against the real classes and compares every resolved
+    column name against the class constant it claims to read.
+    """
+
+    BY_CLASS_NAME: Dict[str, MeterOutputContract] = {
+        "ElectricityMeter": MeterOutputContract(
+            carrier_of=lambda _component: EnergyCarrier.ELECTRICITY,
+            bought_constant="ElectricityFromGrid",
+            sold_constant="ElectricityToGrid",
+            # The only carrier with a capacity-charge tariff, so the only one needing peaks (§8.4).
+            power_constant="ElectricityFromGridInWatt",
+        ),
+        "GasMeter": MeterOutputContract(
+            carrier_of=lambda component: _gas_meter_carrier(component.config),
+            bought_constant="GasFromGrid",
+        ),
+        "FuelMeter": MeterOutputContract(
+            carrier_of=lambda component: _fuel_meter_carrier(
+                component.config, getattr(component, "component_name", type(component).__name__)
+            ),
+            bought_constant="HeatConsumption",
+        ),
+        # District-heating style heat delivery (cost_module_issues.md #18).
+        "HeatingMeter": MeterOutputContract(
+            carrier_of=lambda _component: EnergyCarrier.DISTRICT_HEATING,
+            bought_constant="HeatConsumption",
+        ),
+    }
+
+
+def _meter_output_name(component: Any, constant_name: str) -> str:
+    """The output column a meter class publishes under the given constant.
+
+    Reads the constant off `type(component)` instead of repeating its value here, so the meter
+    class owns the name of the column it writes and the adapter can only ever ask for a column
+    that class actually declares.
+
+    Args:
+        component: The meter instance; only its class is read.
+        constant_name: Name of the class constant holding the output field name.
+
+    Returns:
+        The output field name as the class states it.
+
+    Raises:
+        CostDataError: If the class has no such constant. That is a renamed or deleted meter
+            output, and the alternative is billing a carrier from a column nothing writes;
+            `bridge.py` catches it per component and reports it as an unresolved subject, so the
+            run aborts through the D7 path instead of publishing a zero bill.
+    """
+    meter_class = type(component)
+    field_name = getattr(meter_class, constant_name, None)
+    if not isinstance(field_name, str):
+        raise CostDataError(
+            f"Meter class {meter_class.__name__} declares no output-name constant "
+            f"{constant_name!r}, so the cost engine cannot tell which results column carries its "
+            "metered energy. The constant was renamed or removed; update "
+            "adapter.MeterOutputContracts to match."
+        )
+    return field_name
+
+
 def get_meter_spec(component: Any) -> Optional[MeterSpec]:
     """Meter descriptor for known meter classes; None for non-meters.
 
@@ -334,35 +425,28 @@ def get_meter_spec(component: Any) -> Optional[MeterSpec]:
     calls this for every component; a non-None result makes it read the named output columns out
     of the results frame into `BillingDeterminants`.
 
-    Only the electricity meter declares a `power_field`, because it is the only carrier with a
-    capacity-charge tariff to compute peaks for (§8.4).
+    The column names come from the meter class itself (`_meter_output_name`), which is what makes a
+    renamed meter output a loud failure rather than a carrier quietly billed from an empty series.
 
     Raises:
         CostDataError: For a fuel meter whose `fuel_loadtype` maps to no pricing carrier — the
-            meter exists but cannot say what it meters (issue #3). `bridge.py` catches it per
-            component and turns it into an unresolved subject.
+            meter exists but cannot say what it meters (issue #3) — and for a meter class that no
+            longer declares one of the output constants the table names. `bridge.py` catches both
+            per component and turns them into unresolved subjects.
     """
-    class_name = type(component).__name__
-    if class_name == "ElectricityMeter":
-        return MeterSpec(
-            carrier=EnergyCarrier.ELECTRICITY,
-            bought_field="ElectricityFromGrid",
-            sold_field="ElectricityToGrid",
-            power_field="ElectricityFromGridInWatt",
-        )
-    if class_name == "GasMeter":
-        return MeterSpec(carrier=_gas_meter_carrier(component.config), bought_field="GasFromGrid")
-    if class_name == "FuelMeter":
-        return MeterSpec(
-            carrier=_fuel_meter_carrier(
-                component.config, getattr(component, "component_name", class_name)
-            ),
-            bought_field="HeatConsumption",
-        )
-    if class_name == "HeatingMeter":
-        # District-heating style heat delivery (cost_module_issues.md #18).
-        return MeterSpec(carrier=EnergyCarrier.DISTRICT_HEATING, bought_field="HeatConsumption")
-    return None
+    contract = MeterOutputContracts.BY_CLASS_NAME.get(type(component).__name__)
+    if contract is None:
+        return None
+    return MeterSpec(
+        carrier=contract.carrier_of(component),
+        bought_field=_meter_output_name(component, contract.bought_constant),
+        sold_field=(
+            _meter_output_name(component, contract.sold_constant) if contract.sold_constant else None
+        ),
+        power_field=(
+            _meter_output_name(component, contract.power_constant) if contract.power_constant else None
+        ),
+    )
 
 
 @dataclass

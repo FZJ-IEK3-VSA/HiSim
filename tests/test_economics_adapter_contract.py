@@ -35,10 +35,14 @@ from hisim.components.heat_distribution_system import HeatDistributionConfig, He
 from hisim.config import auto_fields, presets_of
 from hisim.economics.adapter import (
     FactsExtractors,
+    MeterOutputContracts,
     _hds_facts,
     effective_cost_relevance,
     extract_cost_facts,
+    get_meter_spec,
 )
+from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.database import CostDataError
 from hisim.economics.facts import ComponentCostFacts, CostRelevance
 from hisim.loadtypes import ComponentType
 
@@ -187,6 +191,32 @@ class AdapterContractScan:
             substitutes[field_name] = cls.AUTO_SUBSTITUTES[key]
         return dataclasses.replace(config, **substitutes)
 
+    @classmethod
+    def uninitialized(cls, component_class: type) -> Any:
+        """A bare instance of the component class carrying a default config, built without ``__init__``.
+
+        ``get_meter_spec`` reads a component's class and, for the two meters whose carrier depends
+        on a configured load type, its ``config``. Constructing a real meter would need a
+        simulator, a `SimulationParameters` and wired inputs, so the sweep hands it the least
+        object the function can read: an instance created through ``__new__`` with a default config
+        attached when the class has one.
+
+        Args:
+            component_class: The component class to instantiate.
+
+        Returns:
+            The bare instance, with ``config`` set when a default config could be built.
+        """
+        instance = component_class.__new__(component_class)
+        for config_class in cls.configs_of(component_class):
+            for factory in cls.factories_of(config_class).values():
+                try:
+                    instance.config = cls.concrete(factory())
+                except Exception:  # pylint: disable=broad-except
+                    continue
+                return instance
+        return instance
+
 
 class FakeComponents:
     """Throwaway component stand-ins, one per adapter failure branch under test.
@@ -330,6 +360,103 @@ def test_every_extractor_reads_its_real_config_without_raising(scan):
                     f"{config_class.__name__}.{factory_name}"
                 )
     assert not problems, "cost adapter extractors disagree with their configs: " + "; ".join(problems)
+
+
+class MeterSpecExpectations:
+    """The carrier each mapped meter bills when configured the way its default config configures it.
+
+    Pinned here rather than derived, because "which carrier does this meter's reading get billed
+    at" is the one decision in a `MeterSpec` that no class constant states: it comes from a load
+    type in the config (gas or hydrogen, oil or pellets) or from the meter's identity. A silent
+    change of it would price a metered kWh from the wrong price series.
+    """
+
+    CARRIER_BY_CLASS_NAME: Dict[str, EnergyCarrier] = {
+        "ElectricityMeter": EnergyCarrier.ELECTRICITY,
+        "GasMeter": EnergyCarrier.NATURAL_GAS,
+        "FuelMeter": EnergyCarrier.HEATING_OIL,
+        "HeatingMeter": EnergyCarrier.DISTRICT_HEATING,
+    }
+
+
+@pytest.mark.base
+def test_the_meter_expectations_cover_the_whole_meter_table():
+    """Every mapped meter class has a pinned carrier, so the sweep below cannot skip one.
+
+    Failure mode caught: a meter added to ``MeterOutputContracts`` and not to the expectations,
+    which would make the sweep pass over the very entry that was just added.
+    """
+    assert set(MeterSpecExpectations.CARRIER_BY_CLASS_NAME) == set(MeterOutputContracts.BY_CLASS_NAME)
+
+
+@pytest.mark.base
+def test_every_meter_spec_names_the_columns_its_meter_class_declares(scan):
+    """``get_meter_spec`` resolves each mapped meter's columns off the real class's own constants.
+
+    Failure mode caught: the one this whole file exists for, on the energy side. The billable
+    output columns used to be duplicated into the adapter as string literals, so renaming
+    ``ElectricityMeter.ElectricityFromGrid`` moved the column and left the engine reading a name
+    nothing wrote — an empty series, a carrier billed at zero, and no error anywhere. The adapter
+    now reads the constants off the class, and this test runs that resolution against the real
+    classes: a renamed or deleted constant fails here, and so does a table key that no longer
+    names exactly one class.
+
+    The carrier is checked too, against `MeterSpecExpectations`, because it is derived from config
+    load types rather than from a class constant and nothing else would notice it moving.
+    """
+    found, _failures = scan
+    problems = []
+    for class_name, contract in MeterOutputContracts.BY_CLASS_NAME.items():
+        classes = found.get(class_name, [])
+        if len(classes) != 1:
+            where = ", ".join(f"{cls.__module__}.{cls.__name__}" for cls in classes) or "nothing"
+            problems.append(f"{class_name} -> {where}")
+            continue
+        meter_class = classes[0]
+        try:
+            spec = get_meter_spec(AdapterContractScan.uninitialized(meter_class))
+        except Exception as error:  # pylint: disable=broad-except
+            problems.append(f"{class_name}: get_meter_spec raised {type(error).__name__}: {error}")
+            continue
+        assert spec is not None, f"{class_name} is a key of the meter table but yields no MeterSpec"
+        expected_carrier = MeterSpecExpectations.CARRIER_BY_CLASS_NAME[class_name]
+        if spec.carrier != expected_carrier:
+            problems.append(f"{class_name}: bills {spec.carrier} where {expected_carrier} is expected")
+        for spec_field, constant_name in (
+            ("bought_field", contract.bought_constant),
+            ("sold_field", contract.sold_constant),
+            ("power_field", contract.power_constant),
+        ):
+            resolved = getattr(spec, spec_field)
+            if constant_name is None:
+                if resolved is not None:
+                    problems.append(
+                        f"{class_name}.{spec_field} is {resolved!r} although the table declares no constant"
+                    )
+                continue
+            declared = getattr(meter_class, constant_name, None)
+            if resolved != declared:
+                problems.append(
+                    f"{class_name}.{spec_field} reads {resolved!r}, but "
+                    f"{meter_class.__name__}.{constant_name} is {declared!r}"
+                )
+    assert not problems, "cost adapter meter specs disagree with their meter classes: " + "; ".join(problems)
+
+
+@pytest.mark.base
+def test_a_meter_without_its_output_constant_refuses_instead_of_billing_a_stale_column():
+    """A meter class missing a declared output constant raises, naming the class and the constant.
+
+    Failure mode caught: the runtime lookup degrading back into a silent one. Falling back to a
+    literal, or to None, would bill the carrier from a column nothing writes; the raised
+    ``CostDataError`` is what ``bridge.py`` turns into an unresolved subject and hence into a D7
+    abort of the whole evaluation.
+    """
+    stand_in = FakeComponents.named("ElectricityMeter", SimpleNamespace())
+    with pytest.raises(CostDataError) as raised:
+        get_meter_spec(stand_in)
+    assert "ElectricityMeter" in str(raised.value)
+    assert "ElectricityFromGrid" in str(raised.value)
 
 
 @pytest.mark.base

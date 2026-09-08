@@ -413,8 +413,19 @@ class TestEconomicContextAndNewSections:
         perspective = select_applicable(load_default_bundle(), has_register=False)[0]
         result = evaluator.evaluate(inputs, perspective)
         svg = _stacked_subject_svg(result)
-        # Credits are drawn on their own (left) side, marked as such:
-        assert 'class="credit"' in svg
+        # Credits are drawn on their own side: at least one bar starts left of the zero line.
+        # Checked geometrically rather than by a marker class — the credit rects used to carry a
+        # `class="credit"` hook that no stylesheet rule ever matched, and it was removed with the
+        # duplicated markup that carried it. Where a bar *sits* is the property this test is about
+        # anyway; a class attribute was only ever a proxy for it.
+        zero_line = re.search(r'<line x1="([\d.]+)" y1="2"', svg)
+        assert zero_line, "the chart draws a vertical zero line the credit side is measured from"
+        zero_x = float(zero_line.group(1))
+        rect_lefts = [float(x) for x in re.findall(r'<rect x="([\d.]+)"', svg)]
+        assert rect_lefts, "the chart draws bars"
+        assert any(left < zero_x for left in rect_lefts), (
+            f"no bar starts left of the zero line at x={zero_x}; credits are not on the credit side"
+        )
         # The zero baseline exists and every net dot sits at a signed position (circles present):
         assert svg.count("<circle") == len(result.component_breakdowns)
         # Residual value must NOT appear as a positive-side cost segment: its tooltip carries

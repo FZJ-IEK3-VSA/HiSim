@@ -73,7 +73,6 @@ def make_provider(contract: TariffContract, seconds_per_timestep: int = 3600) ->
         config=TariffProviderConfig(
             component_id=ComponentID(name="TariffProvider"),
             tariff_contract_id="SYNTHETIC_TEST",
-            forecast_horizon_in_hours=24,
         ),
     )
     provider.contract = contract
@@ -287,6 +286,68 @@ class TestCapacityChargeMarginalIsAPeakSignal:
         assert discarded == CAPACITY_PRICE_IN_EURO_PER_KW  # 9 kW was a new peak in that iteration
         assert kept == CAPACITY_PRICE_IN_EURO_PER_KW  # 7 kW is one too, against the restored 5 kW
         assert stsv.values[provider.peak_so_far_output.global_index] == pytest.approx(7.0)
+
+    def test_a_forced_convergence_iteration_still_resets_the_monthly_peak(self):
+        """Catches a month boundary keeping the previous month's peak when it converges late.
+
+        The reset used to be skipped on a forced-convergence iteration, on the theory that it was
+        not idempotent. It is: `i_restore_state` puts the pre-timestep peak back before every
+        iteration, so zeroing it at a boundary produces the same state however often it runs — and
+        a timestep whose *only* iteration is the forced one then never got its reset, so the first
+        draw of the new billing period was compared against the old period's peak and the capacity
+        signal stayed silent through a peak that would be billed.
+        """
+        provider = capacity_charge_provider(CapacityChargeKind.MONTHLY_PEAK)
+        stsv, grid_index = connected_grid_input(provider)
+        steps_per_period = max(1, provider.my_simulation_parameters.timesteps // 12)
+        assert steps_per_period == 2
+
+        capacity_charge_at(provider, stsv, grid_index, timestep=0, power_in_watt=9_000.0)
+        provider.i_save_state()
+        provider.i_restore_state()
+        stsv.values[grid_index] = 2_000.0
+        provider.i_simulate(2, stsv, True)  # the boundary timestep, forced convergence
+
+        assert float(stsv.values[provider.capacity_charge_output.global_index]) == (
+            CAPACITY_PRICE_IN_EURO_PER_KW
+        )
+        assert stsv.values[provider.peak_so_far_output.global_index] == pytest.approx(2.0)
+
+
+class TestPublishedForecasts:
+    """The two 24 h series an MPC controller reads out of the SingletonSimRepository."""
+
+    def test_both_forecasts_have_the_same_length(self):
+        """Catches an MPC controller silently optimizing a shorter horizon than it thinks.
+
+        Both series are published under keys promising 24 hours and are meant to be read together,
+        step by step. The purchase forecast used to be truncated to the length of the resampled
+        price series while the injection forecast was not, so any run shorter than a day published
+        two different lengths under those two keys — and a consumer zipping them loses the tail
+        without an error.
+        """
+        from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
+
+        # One simulated day at hourly resolution would make the two lengths agree by accident, so
+        # the provider below runs on a *shorter* horizon than the 24 h the keys promise.
+        provider = make_provider(make_contract(dynamic_supply()), seconds_per_timestep=3600)
+        provider._price_series = provider._price_series[:5]  # pylint: disable=protected-access
+        stsv = _single_time_step_values(provider)
+
+        provider.i_simulate(0, stsv, False)
+
+        repository = SingletonSimRepository()
+        purchase = repository.get_entry(SingletonDictKeyEnum.PRICEPURCHASEFORECAST24H)
+        injection = repository.get_entry(SingletonDictKeyEnum.PRICEINJECTIONFORECAST24H)
+        assert len(purchase) == len(injection) == 24
+
+
+def dynamic_supply() -> TariffSupply:
+    """A DYNAMIC supply on the synthetic reference profile, for the forecast tests."""
+    supply = additive_components()
+    supply.kind = SupplyKind.DYNAMIC
+    supply.spot_series = "__synthetic__"
+    return supply
 
 
 #: Capacity price of the contracts below, in EUR/kW — round, and unlike any per-kWh price here.

@@ -14,11 +14,12 @@ import os
 import types
 import pytest
 from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.adapter import FactsExtractors
 from hisim.economics.database import CostDatabase
 from hisim.economics.facts import ComponentCostFacts, CostRelevance
 from hisim.economics.uncertainty import UncertainValue
 from hisim.economics.validation import validate_all, validate_cost_database
-from hisim.loadtypes import ComponentType
+from hisim.loadtypes import ComponentType, Units
 
 pytestmark = pytest.mark.base
 
@@ -548,3 +549,106 @@ class TestLoaderErrorsAreLocated:
         self._price_file(tmp_path, EnergyCarrier.ELECTRICITY.value)
         database = CostDatabase(str(tmp_path))
         assert database.energy_prices["XX"][0].carrier is EnergyCarrier.ELECTRICITY
+
+
+class TestTheMigratedIndustrialEntries:
+    """The two rows migrated from the *proposed*, unreviewed legacy table (issue #34)."""
+
+    #: Asset class -> what `configuration.py`'s row states, one figure per column the migration
+    #: copied. Written out here rather than read from `capex_techno_economic_parameters`, so that a
+    #: value edited on one side of the migration shows up as a failure instead of agreeing with
+    #: itself.
+    LEGACY_ROWS = {
+        ComponentType.ELECTROLYZER: (1500.0, 0.03, 15.0, 190.5),
+        ComponentType.TRANSFORMER_AND_RECTIFIER: (150.0, 0.015, 27.0, 60.0),
+    }
+
+    @pytest.mark.parametrize("asset_class", sorted(LEGACY_ROWS, key=lambda item: item.value))
+    def test_the_entry_is_a_one_to_one_copy_of_the_legacy_row(self, asset_class):
+        """Catches the migration quietly re-pricing a device it was only supposed to move.
+
+        These two rows exist so that `electrolyzer_with_renewables` can be priced at all; their
+        figures are midpoints of published ranges for megawatt-scale industrial equipment and have
+        not been reviewed by the cost owner. Copying them one-to-one is what keeps the new engine's
+        numbers comparable with the legacy path's for the same devices — the whole point of the
+        §9.7 parity report.
+        """
+        investment, maintenance, lifetime, embodied_co2 = self.LEGACY_ROWS[asset_class]
+        entry = CostDatabase().get_device_entry(asset_class, 2024, "DE")
+
+        assert entry.specific_investment.best_estimate == pytest.approx(investment)
+        assert entry.specific_investment.is_exact()  # a migrated legacy value carries no band
+        assert entry.maintenance_rate_per_year.best_estimate == pytest.approx(maintenance)
+        assert entry.service_life_in_years == pytest.approx(lifetime)
+        assert entry.embodied_co2_value == pytest.approx(embodied_co2)
+
+    @pytest.mark.parametrize("asset_class", sorted(LEGACY_ROWS, key=lambda item: item.value))
+    def test_the_entry_says_in_its_notes_that_the_values_are_unreviewed(self, asset_class):
+        """Catches a proposed figure losing the warning that it is one.
+
+        The legacy table marks both rows "PROPOSED VALUES, NOT YET REVIEWED BY THE COST OWNER".
+        That caveat is the most important thing about them, and a migration that dropped it would
+        turn an explicitly provisional number into an ordinary database entry.
+        """
+        entry = CostDatabase().get_device_entry(asset_class, 2024, "DE")
+
+        assert "PROPOSED" in entry.notes
+        assert "Review before" in entry.notes
+
+    @pytest.mark.parametrize("asset_class", sorted(LEGACY_ROWS, key=lambda item: item.value))
+    def test_the_entry_cites_resolvable_sources(self, asset_class):
+        """§3.10 forbids an unsourced datapoint, so the migration had to bring its citations."""
+        database = CostDatabase()
+        entry = database.get_device_entry(asset_class, 2024, "DE")
+
+        assert entry.source_ids
+        for source_id in entry.source_ids:
+            assert database.sources.entries[source_id].citation
+
+
+class TestTheAdapterEntriesAddedWithThoseRows:
+    """§9.1: a device type in the database is only half of what makes a component priceable."""
+
+    def test_the_electrolyzer_is_sized_by_its_nominal_load(self):
+        """Its config states `nom_load` in kW, which is what the ELECTROLYZER row prices per."""
+        from hisim.components.generic_electrolyzer_h2 import ElectrolyzerConfig
+
+        config = ElectrolyzerConfig.get_default_alkaline_electrolyzer_config()
+        facts = FactsExtractors.BY_CLASS_NAME["Electrolyzer"](config)
+
+        assert facts.asset_class == ComponentType.ELECTROLYZER
+        assert facts.size == pytest.approx(config.nom_load)
+        assert facts.size_unit == Units.KILOWATT
+
+    def test_the_transformer_is_sized_by_its_rated_power(self):
+        """The one figure its own capex model scales by, so the two agree on what "size" means."""
+        from hisim.components.transformer_rectifier import TransformerConfig
+
+        config = TransformerConfig.get_default_transformer_config()
+        facts = FactsExtractors.BY_CLASS_NAME["Transformer"](config)
+
+        assert facts.asset_class == ComponentType.TRANSFORMER_AND_RECTIFIER
+        assert facts.size == pytest.approx(config.rated_power_in_kilowatt)
+        assert facts.size_unit == Units.KILOWATT
+
+    def test_the_generic_heat_pump_answers_through_the_hook_not_the_table(self):
+        """Its config carries no size at all, so only the component can say how big it is.
+
+        `GenericHeatPumpConfig` names a manufacturer and a model; the rating is looked up out of
+        the heat-pump database into `max_heating_power_in_watt` while the component is built. An
+        adapter extractor is handed the config alone and could therefore never size it, which is
+        why this one component uses the §9.1 hook instead of a table entry.
+        """
+        from hisim.component import Component
+        from hisim.components.generic_heat_pump import GenericHeatPump
+
+        assert "GenericHeatPump" not in FactsExtractors.BY_CLASS_NAME
+        assert GenericHeatPump.get_cost_facts is not Component.get_cost_facts
+
+        heat_pump = GenericHeatPump.__new__(GenericHeatPump)
+        heat_pump.max_heating_power_in_watt = 9000.0
+        facts = heat_pump.get_cost_facts()
+
+        assert facts.asset_class == ComponentType.HEAT_PUMP
+        assert facts.size == pytest.approx(9.0)
+        assert facts.size_unit == Units.KILOWATT

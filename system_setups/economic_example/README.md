@@ -41,6 +41,32 @@ first, then `cost_summary.md`. For the Ireland example the comparison lives in t
   cheaper heat pump via data overlay, and the high CO2-price path — rendered as a tornado in
   section 9 and exported to `scenario_cube.csv`/`.json`.
 
+## The tariff provider (§8.3)
+
+The German example attaches a `TariffProvider` to the wired setup
+(`attach_tariff_provider`), so the run carries the per-timestep price signal of a tariff
+contract alongside its physics. It is the simulation-side half of §8: the contract the
+provider reads is the contract the postprocessing billing engine bills the resulting load
+profile with, so a control decision and its bill can never rest on different prices.
+
+Which output is consumed by whom, precisely — because "a price signal nobody reads" is worth
+saying out loud:
+
+| Signal | Consumed by |
+|---|---|
+| `ElectricityFromGridInWatt` (input) | the provider itself, from the setup's `ElectricityMeter`; it is what makes the two capacity-charge outputs real instead of constant zero |
+| `PricePurchase`, `PriceInjection` | **nothing in this setup.** They are written to the results frame for the reader and are available for wiring; no component in the shipped library takes a price input yet |
+| `BillingPeriodPeakSoFar`, `CapacityChargeMarginal` | **nothing in this setup.** They are the peak-shaving signal a rule-based EMS would react to |
+| `PRICEPURCHASEFORECAST24H`, `PRICEINJECTIONFORECAST24H` (SingletonSimRepository) | `controller_mpc.py`, the one live price consumer in the library — not part of this setup |
+
+The example uses the `SYNTHETIC_TEST` contract, whose spot profile is a closed formula: real
+day-ahead series cannot be shipped for licensing reasons. Swap `tariff_contract_id` for a
+contract in `hisim/cost_database/tariffs/` to price against a shipped one.
+
+Note that a setup may contain a `TariffProvider` **or** the older
+`generic_price_signal.PriceSignal`, never both: they publish the same two repository forecast
+keys, and the repository holds one value per key.
+
 ## The two clocks
 
 `WEATHER_YEAR = 2021` is the simulated physics (weather, load profiles);

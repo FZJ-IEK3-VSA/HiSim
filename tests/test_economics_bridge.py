@@ -23,17 +23,36 @@ a price file changes.
 engine, the adapter stopped recognizing a component class, an export file was renamed, or the
 engine's guard swallowed an exception and produced nothing. It does not mean a formula is wrong;
 if the engine math were broken, the engine tests would fail first and this one would still pass.
+
+**The second half of this file** does not run a simulation at all. The bridge also owns a handful
+of policies that decide what a run *does not* produce — which failures abort instead of degrading,
+what is deleted when one does, how a partial year is flagged, and how the setup-declared context is
+merged — and each of those is a branch an end-to-end run never steers into. They are exercised
+directly on the bridge's own functions with an empty fleet, which is enough: none of them depends
+on what was simulated.
 """
 
 # clean
 
+import datetime
 import json
+import os
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 import hisim.simulator as sim
 from hisim import loadtypes, utils
+from hisim.economics import bridge
+from hisim.economics.bridge import EconomicContext
+from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.database import CostDataError, CostDatabase
+from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs, SubjectCostFacts
+from hisim.economics.facts import ComponentCostFacts
+from hisim.economics.parameters import EconomicParameters
+from hisim.economics.perspectives import load_default_bundle, select_applicable
+from hisim.economics.plausibility import CheckIds, CheckStatus, run_plausibility_checks
 from hisim.components import (
     building,
     electricity_meter,
@@ -193,3 +212,342 @@ def test_lifecycle_cost_engine_runs_in_shadow_mode() -> None:
     with open(result_directory / "lifecycle_kpis.json", encoding="utf-8") as file:
         kpis = json.load(file)["Lifecycle costs"]
     assert any("Equivalent annual cost" in name for name in kpis)
+
+
+# --------------------------------------------------------------------- bridge policy (no run)
+
+
+class _Parameters:
+    """The attributes the bridge reads off `SimulationParameters`, and nothing else.
+
+    A real `SimulationParameters` would drag in a result-path provider and a logging setup that
+    none of the policies below touch. Everything here is what `compute_lifecycle_costs` and
+    `build_evaluation_inputs` actually read: the clock, the result directory and the two optional
+    economic attachments.
+    """
+
+    def __init__(self, result_directory: str, days: float = 365.0) -> None:
+        """A run of `days` days at quarter-hour resolution writing into `result_directory`."""
+        self.year = 2024
+        self.country = "DE"
+        self.seconds_per_timestep = 900
+        self.start_date = datetime.datetime(2024, 1, 1)
+        self.end_date = self.start_date + datetime.timedelta(days=days)
+        self.result_directory = result_directory
+        self.economic_parameters = None
+        self.economic_context = None
+
+
+class _Contract:
+    """A stand-in for a `TariffContract` with only the two fields the interval lookup reads."""
+
+    class _CapacityCharge:
+        """The capacity-charge block, carrying only its billing interval."""
+
+        def __init__(self, minutes: int) -> None:
+            """Holds the interval the peaks are metered over."""
+            self.billing_interval_in_minutes = minutes
+
+    def __init__(self, carrier, minutes: int) -> None:
+        """A contract for `carrier` whose capacity charge bills on `minutes`-long intervals."""
+        self.carrier = carrier
+        self.capacity_charge = self._CapacityCharge(minutes)
+
+
+class _ProviderWrapper:
+    """A wrapper carrying a component that holds a tariff contract, as `TariffProvider` does."""
+
+    def __init__(self, contract) -> None:
+        """Wraps a bare object whose only attribute is the contract."""
+        self.my_component = type("_Provider", (), {"contract": contract})()
+
+
+def _evaluated_empty_matrix():
+    """A real `EvaluationMatrix` from an empty fleet — the cheapest one the engine will produce.
+
+    The panel checks below are about a finding that depends on the *simulated period*, not on what
+    was simulated, so the matrix only has to be a genuine one. Evaluating empty inputs takes
+    milliseconds and keeps the test off hand-built result objects, which would have to be updated
+    whenever `LifecycleCostResult` grows a field.
+    """
+    parameters = EconomicParameters(country="DE")
+    evaluator = EconomicEvaluator(CostDatabase(), parameters, None)
+    inputs = EvaluationInputs(simulation_year=2024, simulated_period_fraction=1.0)
+    return evaluator.evaluate_matrix(
+        inputs, select_applicable(load_default_bundle(), has_register=False)
+    )
+
+
+class TestExtrapolationOfAPartialYear:
+    """§8.5: a run shorter than a year is multiplied up, and both outputs have to say so."""
+
+    def test_a_short_run_warns_with_the_span_the_fraction_and_the_factor(self, tmp_path, capsys):
+        """Catches a 365x extrapolation being published as if it had been measured.
+
+        A one-day run's energy quantities and bills are divided by 1/365 to reach a year. Nothing
+        in the outputs used to mention it: the numbers look exactly like a full-year run's. The
+        warning has to carry all three figures a reader needs to judge the result — how long was
+        simulated, what share of a year that is, and what everything was multiplied by.
+        """
+        parameters = _Parameters(str(tmp_path), days=1.0)
+
+        inputs = bridge.build_evaluation_inputs([], [], pd.DataFrame(), parameters)
+
+        assert inputs.simulated_period_fraction == pytest.approx(1.0 / 365.0)
+        logged = capsys.readouterr().out
+        assert "extrapolat" in logged
+        assert "365" in logged  # the factor
+        assert "not a measurement" in logged
+
+    def test_a_full_year_run_does_not_warn(self, tmp_path, capsys):
+        """The warning must not fire on the ordinary case, or it stops being read."""
+        bridge.build_evaluation_inputs([], [], pd.DataFrame(), _Parameters(str(tmp_path)))
+
+        assert "extrapolat" not in capsys.readouterr().out
+
+    def test_the_panel_carries_the_same_statement(self):
+        """Catches the extrapolation living only in a log the reader of the report never sees.
+
+        `cost_summary.md` and the HTML report are what a reviewer reads weeks later; a log line is
+        gone by then. The plausibility panel is the one channel both of them render, so the
+        statement goes in as a WARN finding with the factor in its context.
+        """
+        report = run_plausibility_checks(_evaluated_empty_matrix(), simulated_period_fraction=1.0 / 365.0)
+
+        findings = [f for f in report.findings if f.check_id == CheckIds.CHECK_SIMULATED_PERIOD]
+        assert len(findings) == 1
+        assert findings[0].status == CheckStatus.WARN
+        assert findings[0].context["extrapolation_factor"] == pytest.approx(365.0)
+
+    def test_a_full_year_adds_no_panel_row(self):
+        """A row saying "this run covered a whole year" would be noise in every full-year report."""
+        report = run_plausibility_checks(_evaluated_empty_matrix(), simulated_period_fraction=1.0)
+
+        assert not [f for f in report.findings if f.check_id == CheckIds.CHECK_SIMULATED_PERIOD]
+
+
+class TestFailuresAbortInsteadOfDegrading:
+    """Every failure that used to be logged and worked around now fails the run (§10)."""
+
+    def test_an_unloadable_subsidy_catalog_aborts(self, tmp_path):
+        """Catches a configured subsidy engine silently becoming the flat legacy shim.
+
+        Setting `subsidy_catalog_path` is what switches the §5.4 solver on. A catalog that will not
+        load used to log an error and leave `catalog` at None, which continues under the §10.1 flat
+        shim: the run then publishes subsidy figures that have nothing to do with the catalog it
+        was configured with, and the only trace is a line in a log. The path and the underlying
+        error have to be in the message, because "it did not load" is not actionable on its own.
+        """
+        parameters = _Parameters(str(tmp_path))
+        parameters.economic_parameters = EconomicParameters(
+            country="DE", subsidy_catalog_path=str(tmp_path / "there_is_no_catalog_here")
+        )
+
+        with pytest.raises(CostDataError) as raised:
+            bridge.compute_lifecycle_costs([], [], pd.DataFrame(), parameters)
+
+        assert "there_is_no_catalog_here" in str(raised.value)
+        assert "flat-shim" in str(raised.value)
+
+    def test_a_failing_scenario_cube_aborts(self, tmp_path):
+        """Catches a report quietly missing the sensitivity section it was asked for.
+
+        A declared scenario set is a requested part of the answer. The cube failing used to log
+        "base results unaffected" and continue, which is true and beside the point: section 9 and
+        `scenario_cube.csv` are then simply absent from a run that asked for them, and absence is
+        not something a reader notices.
+        """
+        parameters = _Parameters(str(tmp_path))
+        # An object that is not a ScenarioSet: whatever `evaluate_cube` reaches for is missing, so
+        # the cube fails the way a malformed one would, without depending on its internals.
+        parameters.economic_context = EconomicContext(scenario_set=object())
+
+        with pytest.raises(CostDataError) as raised:
+            bridge.compute_lifecycle_costs([], [], pd.DataFrame(), parameters)
+
+        assert "scenario" in str(raised.value).lower()
+
+    def test_the_exports_written_before_a_failure_are_removed(self, tmp_path):
+        """Catches a half-written export set being readable as a complete one.
+
+        The scenario cube runs *after* the numeric exports, so a failing one is a real failure
+        part-way through: `lifecycle_costs.json`, the KPI file and the audit are already on disk.
+        `postprocessing_main` deliberately logs and continues for a non-cost error, so without the
+        cleanup that run finishes green over a cost report missing half its files.
+
+        `economic_inputs.json` is deliberately kept: it is the extract of the *simulation*, written
+        before any economics happened, and the D7 refusal message promises it survives an abort.
+        """
+        parameters = _Parameters(str(tmp_path))
+        parameters.economic_context = EconomicContext(scenario_set=object())
+
+        with pytest.raises(CostDataError):
+            bridge.compute_lifecycle_costs([], [], pd.DataFrame(), parameters)
+
+        left_behind = set(os.listdir(tmp_path))
+        assert "economic_inputs.json" in left_behind
+        for export in ("lifecycle_costs.json", "lifecycle_kpis.json", "cash_flow_timeline.csv",
+                       "cost_audit.csv", "component_costs.json"):
+            assert export not in left_behind, export
+
+    def test_a_successful_run_keeps_its_exports(self, tmp_path):
+        """The cleanup must only ever run on the failure path."""
+        bridge.compute_lifecycle_costs([], [], pd.DataFrame(), _Parameters(str(tmp_path)))
+
+        written = set(os.listdir(tmp_path))
+        assert {"economic_inputs.json", "lifecycle_costs.json", "lifecycle_kpis.json"} <= written
+
+
+class TestCapacityChargeBillingInterval:
+    """§8.4: peaks are metered over the *contract's* interval, not over a hard-coded 15 minutes."""
+
+    def test_the_interval_is_read_from_the_run_s_tariff_contract(self):
+        """Catches every contract being metered on 15 minutes whatever it says.
+
+        A capacity charge is billed on the highest mean power over the contract's metering
+        interval. Reading that interval off the provider in the run is what keeps the peaks the
+        bridge extracts and the peaks the contract bills the same quantity.
+        """
+        wrappers = [_ProviderWrapper(_Contract(EnergyCarrier.ELECTRICITY, 30))]
+
+        intervals = bridge._capacity_billing_intervals(wrappers)  # pylint: disable=protected-access
+
+        assert intervals == {EnergyCarrier.ELECTRICITY: 30}
+
+    def test_a_run_without_a_provider_has_no_intervals(self):
+        """No provider means no contract to read, and the default interval applies."""
+        assert not bridge._capacity_billing_intervals([])  # pylint: disable=protected-access
+
+    def test_a_timestep_that_does_not_divide_the_interval_says_so(self, capsys):
+        """Catches a carrier silently billed without its capacity charge.
+
+        A timestep that does not divide the billing interval cannot be grouped into interval means,
+        so no peaks are computed — which is right, a ragged grouping would be worse. What was wrong
+        is that it happened in silence: the bill then misses a component nobody can see is missing.
+        """
+        series = pd.Series([1000.0] * 20)
+
+        peaks, annual = bridge._peaks_from_power_series(series, 400, 15)  # pylint: disable=protected-access
+
+        assert peaks == [] and annual == 0.0
+        logged = capsys.readouterr().out
+        assert "400" in logged and "15" in logged
+
+
+class TestContextMerge:
+    """`_merge_context`: what the setup declared fills gaps, and a declared zero is a declaration."""
+
+    def _inputs(self):
+        """Simulation-derived inputs with one extracted subject and one extracted scalar."""
+        return EvaluationInputs(
+            simulation_year=2024,
+            simulated_period_fraction=1.0,
+            cost_facts=[
+                SubjectCostFacts(
+                    "PVSystem",
+                    ComponentCostFacts(
+                        asset_class=loadtypes.ComponentType.PV, size=5.0, size_unit=loadtypes.Units.KILOWATT
+                    ),
+                )
+            ],
+            living_area_in_m2=150.0,
+        )
+
+    def test_a_declared_zero_overrides_an_extracted_value(self):
+        """Catches a declared 0.0 being read as "not declared" and silently dropped.
+
+        The merge used to be `context.x or inputs.x`, which cannot tell a declared zero from an
+        absent field. A building with no heat demand, a rent-free unit and an emission intensity of
+        zero are all statements a setup author can make, and all three were being ignored.
+        """
+        inputs = self._inputs()
+
+        bridge._merge_context(inputs, EconomicContext(living_area_in_m2=0.0))  # pylint: disable=protected-access
+
+        assert inputs.living_area_in_m2 == 0.0
+
+    def test_an_undeclared_field_leaves_the_extracted_value_alone(self):
+        """The other half of the same rule: the context fills gaps, it does not overrule."""
+        inputs = self._inputs()
+
+        bridge._merge_context(inputs, EconomicContext())  # pylint: disable=protected-access
+
+        assert inputs.living_area_in_m2 == 150.0
+
+    def test_a_negative_quantity_is_refused_where_it_is_declared(self):
+        """Catches a negative area or demand turning into a negative KPI that looks like a result.
+
+        None of these fields is checked downstream: a negative living area produces a negative
+        EUR/m² and a negative heat demand a negative levelized cost of heat, both of which read as
+        numbers rather than as the typo they are. The refusal names the field while the setup that
+        wrote it is still on screen.
+        """
+        with pytest.raises(ValueError) as raised:
+            EconomicContext(annual_heat_demand_in_kwh=-1.0)
+
+        assert "annual_heat_demand_in_kwh" in str(raised.value)
+
+    def test_a_technical_attribute_key_matching_no_subject_warns(self, capsys):
+        """Catches per-subject attributes silently going nowhere because of a typo.
+
+        Those attributes are what §5.3 subsidy conditions resolve against — a SCOP, a refrigerant,
+        an achieved U-value — so a key naming a subject that does not exist turns "the grant was
+        denied" into a mystery. The warning names the unmatched key and the subjects that do exist.
+        """
+        inputs = self._inputs()
+        context = EconomicContext(technical_attributes_by_subject={"HeatPumpp": {"scop": 4.2}})
+
+        bridge._merge_context(inputs, context)  # pylint: disable=protected-access
+
+        logged = capsys.readouterr().out
+        assert "HeatPumpp" in logged and "PVSystem" in logged
+
+    def test_a_matching_key_is_merged_and_does_not_warn(self):
+        """The ordinary case: attributes join the extracted facts rather than replacing them."""
+        inputs = self._inputs()
+        context = EconomicContext(technical_attributes_by_subject={"PVSystem": {"module": "mono"}})
+
+        bridge._merge_context(inputs, context)  # pylint: disable=protected-access
+
+        assert inputs.cost_facts[0].facts.technical_attributes == {"module": "mono"}
+        assert inputs.cost_facts[0].facts.size == 5.0
+
+
+class TestSharedHelpers:
+    """The two duplications the review asked to collapse, pinned so they stay collapsed."""
+
+    def test_the_parameters_resolver_prefers_what_the_setup_attached(self, tmp_path):
+        """A setup's own `EconomicParameters` win over the country default."""
+        parameters = _Parameters(str(tmp_path))
+        attached = EconomicParameters(country="AT")
+        parameters.economic_parameters = attached
+
+        assert bridge._resolve_economic_parameters(parameters) is attached  # pylint: disable=protected-access
+
+    def test_the_parameters_resolver_falls_back_to_the_simulation_country(self, tmp_path):
+        """Without an attachment the run is priced against its own country's defaults."""
+        parameters = _Parameters(str(tmp_path))
+
+        resolved = bridge._resolve_economic_parameters(parameters)  # pylint: disable=protected-access
+
+        assert resolved.country == "DE"
+
+    def test_the_output_column_lookup_is_positional_and_absence_is_none(self):
+        """One lookup behind both the sum and the raw series, so they cannot locate differently."""
+
+        class _Output:
+            """The two attributes the positional lookup matches on."""
+
+            def __init__(self, component_name: str, field_name: str) -> None:
+                """Names one declared output."""
+                self.component_name = component_name
+                self.field_name = field_name
+
+        outputs = [_Output("Meter", "A"), _Output("Meter", "B")]
+        frame = pd.DataFrame({0: [1000.0, 2000.0], 1: [7.0, 8.0]})
+
+        # pylint: disable=protected-access
+        assert bridge._sum_output_column("Meter", "A", outputs, frame) == pytest.approx(3.0)
+        assert bridge._power_series("Meter", "B", outputs, frame).tolist() == [7.0, 8.0]
+        assert bridge._sum_output_column("Meter", "C", outputs, frame) is None
+        assert bridge._power_series("Meter", "C", outputs, frame) is None

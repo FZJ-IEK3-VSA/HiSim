@@ -539,9 +539,17 @@ class PVSystem(cp.Component):
             investment_cost_override_in_euro=config.investment_costs_in_euro,
             lifetime_override_in_years=config.lifetime_in_years,
             embodied_co2_override_in_kg=config.device_co2_footprint_in_kg,
+            # Any of the three overrides makes the facts overridden, so any of them needs the
+            # provenance §3.10 requires: keying only on the investment left a config-declared
+            # lifetime or embodied-CO2 override sourceless, which strict mode rejects and the
+            # provenance ledger records as unattributed.
             override_source=(
                 "component config (e.g. building_sizer / RenoVisor request)"
-                if config.investment_costs_in_euro is not None
+                if (
+                    config.investment_costs_in_euro is not None
+                    or config.lifetime_in_years is not None
+                    or config.device_co2_footprint_in_kg is not None
+                )
                 else None
             ),
         )

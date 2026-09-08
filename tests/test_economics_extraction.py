@@ -66,17 +66,22 @@ pytestmark = pytest.mark.base
 
 
 class _Output:
-    """Stand-in for hisim.component.ComponentOutput (only these two fields are read).
+    """Stand-in for hisim.component.ComponentOutput (only these three fields are read).
 
     The bridge locates a meter's series by finding the position of `(component_name, field_name)`
     in the list of all outputs and taking the results frame column at that index, so a fake needs
     nothing more than those two strings. Using a stub instead of the real class keeps the tests
     independent of whatever else `ComponentOutput` grows.
+
+    `unit` is optional because only the meters' own `get_energy_flow_facts` hooks read it — they
+    filter on `WATT_HOUR` so a same-named power output in watts can never be summed as energy —
+    while the bridge's positional lookup does not care.
     """
 
-    def __init__(self, component_name: str, field_name: str) -> None:
+    def __init__(self, component_name: str, field_name: str, unit: Any = None) -> None:
         self.component_name = component_name
         self.field_name = field_name
+        self.unit = unit
 
 
 class _Wrapper:
@@ -730,3 +735,107 @@ class TestFaithfulness:
         assert [problem.subject for problem in raised.value.problems] == ["Unpriceable"]
         # The caller's inputs (the object that was written) are untouched.
         assert len(inputs.cost_facts) == 2
+
+
+class TestTheElectricityMeterHookRefusesAMissingColumn:
+    """§3.4: the adopted hook and the `MeterSpec` fallback must refuse the same run."""
+
+    def _meter(self):
+        """A real `ElectricityMeter`, constructed without running `__init__`.
+
+        The hook reads nothing but `self.component_name` and the two class-level output constants,
+        so building the component properly — config, simulation parameters, display config, output
+        declarations — would add construction cost without adding coverage.
+        """
+        from hisim.components.electricity_meter import ElectricityMeter as RealElectricityMeter
+
+        meter = RealElectricityMeter.__new__(RealElectricityMeter)
+        meter.component_name = "ElectricityMeter"
+        return meter
+
+    def _output(self, field_name: str):
+        """One declared output of that meter, in watt-hours."""
+        return _Output("ElectricityMeter", field_name, unit=lt.Units.WATT_HOUR)
+
+    def test_both_columns_present_reports_both_flows(self):
+        """The ordinary case still integrates both directions into kWh."""
+        meter = self._meter()
+        outputs = [self._output(meter.ElectricityFromGrid), self._output(meter.ElectricityToGrid)]
+        frame = pd.DataFrame({0: [1000.0, 1000.0], 1: [500.0, 500.0]})
+
+        flows = meter.get_energy_flow_facts(outputs, frame)
+
+        assert flows.energy_bought_in_kwh == pytest.approx(2.0)
+        assert flows.energy_sold_in_kwh == pytest.approx(1.0)
+
+    @pytest.mark.parametrize("missing", ["ElectricityFromGrid", "ElectricityToGrid"])
+    def test_a_missing_column_raises_instead_of_reporting_zero(self, missing):
+        """Catches a grid bill or a feed-in revenue of zero being published as if measured.
+
+        Both columns are declarations of this meter's class, so a run without one is a broken
+        extraction, not an unused direction. The hook initialised both totals to 0.0 and returned
+        them, which publishes a bill missing a flow — while the bridge's `MeterSpec` fallback has
+        always refused the same run. Same defect, same refusal, whichever path reads the meter.
+        """
+        meter = self._meter()
+        present = [name for name in ("ElectricityFromGrid", "ElectricityToGrid") if name != missing]
+        outputs = [self._output(name) for name in present]
+        frame = pd.DataFrame({0: [1000.0, 1000.0]})
+
+        with pytest.raises(CostDataError) as raised:
+            meter.get_energy_flow_facts(outputs, frame)
+
+        assert missing in str(raised.value)
+        assert "ElectricityMeter" in str(raised.value)
+        assert "D7" in str(raised.value)
+
+
+class TestOverrideSourceCoversEveryOverride:
+    """§3.10: whatever is overridden needs provenance, not only an overridden investment."""
+
+    def test_a_lifetime_only_override_still_carries_its_source(self):
+        """Catches a config-declared lifetime or CO2 override arriving unattributed.
+
+        `override_source` used to be set only when `investment_costs_in_euro` was present, so a
+        config that overrode the lifetime alone produced facts that `has_overrides()` reports as
+        overridden with no source behind them — which strict mode (§9.3) rejects and the provenance
+        ledger records as an unattributed number.
+        """
+        from hisim.components.generic_pv_system import PVSystem
+
+        pv_system = PVSystem.__new__(PVSystem)
+        pv_system.config = _PvConfigStub(lifetime_in_years=30.0)
+
+        facts = pv_system.get_cost_facts()
+
+        assert facts.lifetime_override_in_years == 30.0
+        assert facts.has_overrides()
+        assert facts.override_source
+
+    def test_no_override_at_all_still_carries_no_source(self):
+        """The other half: a component that overrides nothing must not claim a source."""
+        from hisim.components.generic_pv_system import PVSystem
+
+        pv_system = PVSystem.__new__(PVSystem)
+        pv_system.config = _PvConfigStub()
+
+        facts = pv_system.get_cost_facts()
+
+        assert not facts.has_overrides()
+        assert facts.override_source is None
+
+
+class _PvConfigStub:
+    """The five `PVSystemConfig` fields `PVSystem.get_cost_facts` reads."""
+
+    def __init__(
+        self,
+        investment_costs_in_euro=None,
+        lifetime_in_years=None,
+        device_co2_footprint_in_kg=None,
+    ) -> None:
+        """A 5 kW array with the given (optional) per-field overrides."""
+        self.power_in_watt = 5000.0
+        self.investment_costs_in_euro = investment_costs_in_euro
+        self.lifetime_in_years = lifetime_in_years
+        self.device_co2_footprint_in_kg = device_co2_footprint_in_kg

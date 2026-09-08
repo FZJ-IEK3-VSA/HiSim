@@ -15,7 +15,12 @@ from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.config.channels import DispatchRule, DynamicConnectionChannel
 from hisim.economics.carriers import EnergyCarrier
-from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
+from hisim.economics.facts import (
+    ComponentCostFacts,
+    CostRelevance,
+    EnergyFlowFacts,
+    missing_meter_column_error,
+)
 from hisim.dynamic_component import (
     DynamicComponent,
     DynamicConnectionInput,
@@ -728,8 +733,14 @@ class ElectricityMeter(DynamicComponent):
             kpi_tag=KpiTagEnumClass.ELECTRICITY_METER,
             investment_cost_override_in_euro=self.config.investment_costs_in_euro,
             lifetime_override_in_years=self.config.lifetime_in_years,
+            # Either override needs the provenance, not just the investment one (§3.10).
             override_source=(
-                "component config" if self.config.investment_costs_in_euro is not None else None
+                "component config"
+                if (
+                    self.config.investment_costs_in_euro is not None
+                    or self.config.lifetime_in_years is not None
+                )
+                else None
             ),
         )
 
@@ -746,12 +757,12 @@ class ElectricityMeter(DynamicComponent):
         consumer inside the building is billed implicitly through it — which is what makes double
         counting structurally impossible rather than a thing to watch out for.
 
-        This is the §3.4 declaration of that boundary, and since the issue #18 wiring it is also
-        the path the pipeline actually uses: `hisim.economics.bridge` asks this hook first and only
-        falls back to reading the columns itself, guided by `adapter.get_meter_spec`, for meters
-        that have not adopted it. The peak series for capacity charges, which `EnergyFlowFacts`
-        cannot carry, still comes from that `MeterSpec`, so the two paths must stay in agreement
-        about which outputs constitute the boundary.
+        This is the §3.4 declaration of that boundary, and it is the path the pipeline actually
+        uses: `hisim.economics.bridge` asks this hook first and falls back to reading the columns
+        itself, guided by `adapter.get_meter_spec`, only for meters that have not adopted it. The
+        peak series for capacity charges, which `EnergyFlowFacts` cannot carry, still comes from
+        that `MeterSpec`, so the two paths must stay in agreement about which outputs constitute
+        the boundary.
 
         Both source outputs are in **watt-hours** per timestep, so the summed column is scaled by
         `1e-3` into the kilowatt-hours the tariff engine prices; the unit filter on
@@ -768,19 +779,28 @@ class ElectricityMeter(DynamicComponent):
 
         Returns:
             The electricity bought and sold at this meter, in kWh over the simulated period.
+
+        Raises:
+            CostDataError: If either declared column is not among this run's outputs. Both are
+                declarations of this class, so a run without one is a broken extraction, not an
+                unused direction — and the two of them are the only place electricity enters the
+                cost model. Reporting 0.0 instead published a grid bill of zero and a feed-in
+                revenue of zero as if they had been measured; the bridge's `MeterSpec` fallback has
+                always refused the same run, and it is the same refusal (`missing_meter_column_error`)
+                so the hook and the fallback cannot disagree about what a missing column means.
         """
-        energy_bought_in_kwh = 0.0
-        energy_sold_in_kwh = 0.0
+        totals = {}
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name and output.unit == lt.Units.WATT_HOUR:
-                if output.field_name == self.ElectricityFromGrid:
-                    energy_bought_in_kwh = float(postprocessing_results.iloc[:, index].sum()) * 1e-3
-                elif output.field_name == self.ElectricityToGrid:
-                    energy_sold_in_kwh = float(postprocessing_results.iloc[:, index].sum()) * 1e-3
+                if output.field_name in (self.ElectricityFromGrid, self.ElectricityToGrid):
+                    totals[output.field_name] = float(postprocessing_results.iloc[:, index].sum()) * 1e-3
+        for field_name, role in ((self.ElectricityFromGrid, "bought energy"), (self.ElectricityToGrid, "sold energy")):
+            if field_name not in totals:
+                raise missing_meter_column_error(self.component_name, field_name, role)
         return EnergyFlowFacts(
             carrier=EnergyCarrier.ELECTRICITY,
-            energy_bought_in_kwh=energy_bought_in_kwh,
-            energy_sold_in_kwh=energy_sold_in_kwh,
+            energy_bought_in_kwh=totals[self.ElectricityFromGrid],
+            energy_sold_in_kwh=totals[self.ElectricityToGrid],
         )
 
     @staticmethod

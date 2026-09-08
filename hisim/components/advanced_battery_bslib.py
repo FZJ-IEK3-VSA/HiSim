@@ -412,9 +412,15 @@ class Battery(Component):
             ),
             lifetime_override_in_years=config.lifetime_in_years,
             embodied_co2_override_in_kg=config.device_co2_footprint_in_kg,
+            # See generic_pv_system: any of the three overrides needs the provenance, not just
+            # the investment.
             override_source=(
                 "component config (e.g. building_sizer / RenoVisor request)"
-                if config.investment_costs_in_euro is not None
+                if (
+                    config.investment_costs_in_euro is not None
+                    or config.lifetime_in_years is not None
+                    or config.device_co2_footprint_in_kg is not None
+                )
                 else None
             ),
         )

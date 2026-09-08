@@ -31,10 +31,15 @@ import pytest
 from hisim.component_wrapper import ComponentWrapper
 from hisim.components.advanced_battery_bslib import Battery
 from hisim.components.electricity_meter import ElectricityMeter
+from hisim.components.generic_pv_system import PVSystem
 from hisim.components.sumbuilder import SumBuilderForTwoInputs
 from hisim.components.tariff_provider import TariffProvider
 from hisim.economics.bridge import build_evaluation_inputs
-from hisim.economics.facts import CostRelevance, UndeclaredCostRelevanceError
+from hisim.economics.facts import (
+    CostRelevance,
+    UndeclaredCostRelevanceError,
+    UnpriceableComponentError,
+)
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
@@ -199,6 +204,101 @@ class TestPreRunCheckRefusesAnUndeclaredFleet:
         with pytest.raises(UndeclaredCostRelevanceError) as raised:
             simulator.check_cost_declarations()
         assert raised.value.component_classes == (UndeclaredDevice,)
+
+
+class PricedWithoutFacts:
+    """A PRICED component class nothing can produce facts for — the second §9.1 defect.
+
+    It implements no `get_cost_facts` and, living outside `hisim.components`, can have no entry in
+    the adapter's class-name table either, which is exactly the state the pre-run check has to
+    catch: the component would be extracted, found undescribable and turned into an unresolved
+    subject, and the D7 check would abort the evaluation — after the whole simulation had run.
+
+    It carries `get_cost_facts` from nowhere on purpose: the check compares the class's method
+    against `Component.get_cost_facts`, and a stub that inherits from nothing has no such method
+    at all, which is the same answer.
+    """
+
+    cost_relevance = CostRelevance.PRICED
+
+    def __init__(self, component_name: str = "PricedWithoutFacts") -> None:
+        """The two attributes the check and the bridge read off a component."""
+        self.component_name = component_name
+        self.config = None
+
+
+class TestPreRunCheckRefusesAPricedComponentNothingCanDescribe:
+    """`check_cost_declarations` on the §9.1 half: PRICED with no hook and no adapter entry."""
+
+    @pytest.mark.parametrize(
+        "option",
+        [PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS, PostProcessingOptions.LIFECYCLE_COST_REPORT],
+    )
+    def test_a_priced_component_without_a_facts_source_aborts_the_run(self, option):
+        """Catches an unpriceable device costing a full simulation before anyone is told.
+
+        The bridge already refuses such a component under D7, but only after the last timestep. A
+        year-long run then spends hours producing exactly the cost report it was started for, minus
+        the cost report. The pre-run check answers the same question from the class alone.
+        """
+        simulator = _simulator(option)
+        _register(simulator, PricedWithoutFacts())
+
+        with pytest.raises(UnpriceableComponentError) as raised:
+            simulator.check_cost_declarations()
+
+        assert "PricedWithoutFacts" in str(raised.value)
+        assert "get_cost_facts" in str(raised.value)
+        assert "BY_CLASS_NAME" in str(raised.value)
+
+    def test_it_is_a_value_error_so_the_documented_refusal_type_still_holds(self):
+        """`run_all_timesteps` documents ValueError; this refusal must not widen that contract."""
+        simulator = _simulator(PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS)
+        _register(simulator, PricedWithoutFacts())
+
+        with pytest.raises(ValueError):
+            simulator.check_cost_declarations()
+
+    def test_a_priced_component_with_a_hook_passes(self):
+        """A class implementing `get_cost_facts` itself is describable, and must not be refused.
+
+        `Battery` is a real PRICED component with an adapter entry; `PVSystem` implements the hook.
+        Both have to pass, because the check mirrors the adapter's hook-first-table-second
+        precedence rather than insisting on one of the two.
+        """
+        simulator = _simulator(PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS)
+        _register(simulator, _uninitialized(PVSystem))
+        _register(simulator, _uninitialized(Battery))
+
+        simulator.check_cost_declarations()
+
+    def test_a_priced_component_with_only_an_adapter_entry_passes(self):
+        """The table half of the precedence: no hook, but the adapter knows the class name."""
+        simulator = _simulator(PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS)
+        _register(simulator, _uninitialized(Battery))
+
+        simulator.check_cost_declarations()
+
+    def test_undeclared_is_reported_before_unpriceable(self):
+        """Two different defects, two different fixes — and the undeclared one is reported first.
+
+        A class that declares nothing cannot also be judged on whether it is priceable: naming its
+        role is the first thing its author has to do, and the message for the second defect would
+        be noise until they have.
+        """
+        simulator = _simulator(PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS)
+        _register(simulator, UndeclaredDevice())
+        _register(simulator, PricedWithoutFacts())
+
+        with pytest.raises(UndeclaredCostRelevanceError):
+            simulator.check_cost_declarations()
+
+    def test_without_the_option_an_unpriceable_component_is_fine(self):
+        """A run that never asks what anything costs may hold any component at all."""
+        simulator = _simulator(PostProcessingOptions.PLOT_LINE)
+        _register(simulator, PricedWithoutFacts())
+
+        simulator.check_cost_declarations()
 
 
 class TestPreRunCheckStaysOutOfTheWayOtherwise:

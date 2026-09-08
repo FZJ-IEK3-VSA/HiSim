@@ -345,7 +345,11 @@ class PostProcessor:
                 # UnresolvableSubjectsError raised for an undeclared or otherwise undescribable
                 # component (cost_spec.md §9.2, §8) — propagates and fails postprocessing.
                 # Everything else is an accident in the parallel engine and must still not cost a
-                # user their simulation results, so it stays a logged error.
+                # user their simulation results, so it stays a logged error. What that leniency
+                # must not do is leave a *partial* cost export set behind for a later reader to
+                # take as complete, and it does not: `compute_lifecycle_costs` removes the files it
+                # had already written before letting anything propagate, so this branch is reached
+                # with the cost files either all there or none of them.
                 if isinstance(err, _propagating_cost_errors()):
                     raise
                 log.error(f"Lifecycle cost engine failed (legacy outputs are unaffected): {err}")

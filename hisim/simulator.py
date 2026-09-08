@@ -18,12 +18,45 @@ from hisim import log
 from hisim.economics.facts import (
     CostRelevance,
     UndeclaredCostRelevanceError,
+    UnpriceableComponentError,
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim import postprocessingoptions
 from hisim.loadtypes import UNITS_USING_MEAN_AGGREGATION
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
+
+
+def _has_cost_facts_source(component_class: type) -> bool:
+    """Whether anything can produce `ComponentCostFacts` for this class (cost_spec.md §9.1).
+
+    Mirrors the precedence `adapter.extract_cost_facts` applies at postprocessing time, so the
+    pre-run refusal and the D7 abort can never disagree about which classes have a facts source:
+    a class that implements `get_cost_facts` itself wins, and the compatibility table is consulted
+    only when it has not.
+
+    "Implements it itself" is "the attribute is not the one `Component` defines" rather than a
+    lookup in the class body, so a component that inherits a working hook from a component base
+    class of its own counts as having one — which it does, at run time, since that is the method
+    the adapter will call. The lookup goes through `getattr` with a default for the same reason the
+    adapter's does: a class carrying no such attribute at all is a class with no hook, not a crash.
+
+    The adapter is imported here rather than at module level: `hisim.economics.adapter` reaches
+    into the KPI structures and the load types, and the simulator is imported by everything, so
+    the dependency stays where the one function that needs it can see it.
+
+    Args:
+        component_class: The registered component's class.
+
+    Returns:
+        True when the class implements the hook or the adapter table knows its name.
+    """
+    from hisim.economics.adapter import FactsExtractors  # noqa: E402  (see the docstring)
+
+    hook = getattr(component_class, "get_cost_facts", None)
+    if hook is not None and hook is not cp.Component.get_cost_facts:
+        return True
+    return component_class.__name__ in FactsExtractors.BY_CLASS_NAME
 
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago, Maximillian Hillen"
@@ -294,20 +327,29 @@ class Simulator:
         )
 
     def check_cost_declarations(self) -> None:
-        """Refuses a lifecycle-cost run whose components have not all declared a cost role (§9.2).
+        """Refuses a lifecycle-cost run this fleet's components cannot be described for (§9.1/§9.2).
 
-        The completeness check cost_spec.md §9.2 asks for "at simulation start, not end". Every
-        `Component` subclass must declare `cost_relevance` in its own class body; a class that
-        declares nothing keeps the `UNDECLARED` base-class default and cannot be described to the
-        cost model at all, which the postprocessing bridge turns into a hard D7 failure. Finding
-        that out in postprocessing means a year-long simulation runs for hours and then dies
-        without producing the cost report it was started for, so the same defect is caught here,
-        before the first timestep.
+        The completeness check cost_spec.md §9.2 asks for "at simulation start, not end", and this
+        method answers it for the two defects that are visible without the cost database:
 
-        Only components with no declaration are rejected. A declared component that turns out to
-        be undescribable for some other reason — `PRICED` with no facts anywhere, a meter whose
-        fuel maps to no carrier — is a data question this method cannot answer without the cost
-        database, and stays with the bridge's D7 check.
+        1. a class that declares no `cost_relevance` at all and therefore keeps the `UNDECLARED`
+           base-class default, and
+        2. a class that declares `PRICED` while nothing can produce facts for it — neither a
+           `get_cost_facts` implementation of its own nor an entry in
+           `adapter.FactsExtractors.BY_CLASS_NAME`.
+
+        Both end the same way in postprocessing: the bridge turns them into unresolved subjects and
+        the D7 check aborts the evaluation. Finding that out there means a year-long simulation runs
+        for hours and then dies without producing the cost report it was started for, so both are
+        caught here instead. The second check mirrors the precedence `adapter.extract_cost_facts`
+        applies — hook first, table second — so this refusal and that one can never disagree about
+        which classes have a facts source.
+
+        What still belongs to the bridge, because it needs data this method has no business
+        loading: whether the facts a source produces can actually be *priced* — an asset class with
+        no `devices_<COUNTRY>.json` row, a meter whose configured fuel maps to no carrier, an
+        extractor that returns None for this particular configuration. Those stay with the D7
+        check.
 
         Does nothing unless `PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS` or
         `LIFECYCLE_COST_REPORT` was requested: components are free to be undeclared in a run that
@@ -318,6 +360,10 @@ class Simulator:
                 registered component's class declares no `cost_relevance`. The message names
                 every offending class and the module it lives in. It is a `ValueError`, so a
                 caller catching `run_all_timesteps`' documented refusal type still catches it.
+            UnpriceableComponentError: If a registered component's class declares `PRICED` and has
+                neither its own `get_cost_facts` nor an adapter-table entry. Also a `ValueError`,
+                for the same reason. Reported separately from the undeclared classes because the
+                fix is a different one.
         """
         options = self._simulation_parameters.post_processing_options
         wanted = (
@@ -327,17 +373,23 @@ class Simulator:
         if not wanted:
             return
         undeclared: List[type] = []
+        unpriceable: List[type] = []
         for wrapped_component in self.wrapped_components:
             component_class = type(wrapped_component.my_component)
             # `getattr` with the default mirrors `adapter.effective_cost_relevance`: a class that
             # does not carry the attribute at all is undeclared, not a crash.
             relevance = getattr(component_class, "cost_relevance", CostRelevance.UNDECLARED)
-            if relevance is not CostRelevance.UNDECLARED:
+            if relevance is CostRelevance.UNDECLARED:
+                if component_class not in undeclared:
+                    undeclared.append(component_class)
                 continue
-            if component_class not in undeclared:
-                undeclared.append(component_class)
+            if relevance is CostRelevance.PRICED and not _has_cost_facts_source(component_class):
+                if component_class not in unpriceable:
+                    unpriceable.append(component_class)
         if undeclared:
             raise UndeclaredCostRelevanceError(undeclared)
+        if unpriceable:
+            raise UnpriceableComponentError(unpriceable)
 
     # @profile
     # @utils.measure_execution_time

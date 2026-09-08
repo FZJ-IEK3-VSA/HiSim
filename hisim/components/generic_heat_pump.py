@@ -28,8 +28,8 @@ from hisim.components.building import Building
 from hisim.components.weather import Weather
 import hisim.loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
-from hisim.economics.facts import CostRelevance
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
+from hisim.economics.facts import ComponentCostFacts, CostRelevance
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -596,6 +596,29 @@ class GenericHeatPump(cp.Component):
         """Returns investment cost, CO2 emissions and lifetime."""
         capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
         return capex_cost_data_class
+
+    def get_cost_facts(self) -> ComponentCostFacts:
+        """Cost facts for the lifecycle cost engine (cost_spec.md §3.3, §9.1).
+
+        Declares the heat pump as one priced subject of the database's `HEAT_PUMP` class, sized by
+        its nominal heating power in kW.
+
+        It is the hook rather than an entry in `adapter.FactsExtractors.BY_CLASS_NAME`, because an
+        adapter extractor is handed the *config* alone and this config carries no size at all: it
+        names a manufacturer and a model, and the rating is looked up out of the heat-pump database
+        in `build()` into `max_heating_power_in_watt`. Only the component knows how big it is, so
+        only the component can say. The `1e-3` converts the watts held there into the kilowatts the
+        cost database prices in; without it a 10 kW machine would be costed as 10 MW.
+
+        Returns:
+            The facts for this heat pump; never None, since the class declares `PRICED`.
+        """
+        return ComponentCostFacts(
+            asset_class=lt.ComponentType.HEAT_PUMP,
+            size=self.max_heating_power_in_watt * 1e-3,
+            size_unit=lt.Units.KILOWATT,
+            kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
 
     def get_component_kpi_entries(
         self,

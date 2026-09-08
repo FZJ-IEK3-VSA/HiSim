@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union
 
 from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
@@ -94,6 +95,35 @@ class UndeclaredCostRelevanceError(ValueError):
         )
 
 
+class UnpriceableComponentError(ValueError):
+    """A component declares `PRICED` but nothing in the code base can say what it is.
+
+    Raised by the pre-run completeness check (`simulator.check_cost_declarations`, §9.2) alongside
+    `UndeclaredCostRelevanceError`, and for the same reason: a lifecycle-cost run that cannot
+    describe one of its devices is going to abort in postprocessing on the D7 check, and finding
+    that out after a year-long simulation costs hours for a defect that is visible before the first
+    timestep. The two errors are separate because the fixes are: an undeclared class needs one line
+    naming its role, an unpriceable one needs a `get_cost_facts` hook or an adapter entry plus, in
+    most cases, a `devices_<COUNTRY>.json` row to price it against.
+
+    It is a `ValueError` for the same reason as its sibling — that is what
+    `Simulator.run_all_timesteps` documents as its refusal type — and it carries the offending
+    classes so a caller can report them rather than re-parse the message.
+    """
+
+    def __init__(self, component_classes: List[type]) -> None:
+        """Renders one bullet per offending class, in the order the components were registered."""
+        self.component_classes: Tuple[type, ...] = tuple(component_classes)
+        bullets = "\n".join(f"  - {describe_unpriceable_class(cls)}" for cls in self.component_classes)
+        super().__init__(
+            f"Lifecycle cost computation was requested, but {len(self.component_classes)} "
+            "component class(es) in this simulation declare cost_relevance PRICED while nothing "
+            "can produce cost facts for them, so the evaluation would abort after the run "
+            "(cost_spec.md §9.1/§9.2, decision D7). The run is refused before the first timestep "
+            "rather than after the last one.\n" + bullets
+        )
+
+
 def describe_undeclared_class(component_class: type) -> str:
     """One sentence naming an undeclared component class and what its author has to write.
 
@@ -113,6 +143,61 @@ def describe_undeclared_class(component_class: type) -> str:
         "cost_relevance, so nothing can say whether it costs money: declare "
         "cost_relevance = CostRelevance.PRICED, CostRelevance.METER or "
         "CostRelevance.FREE_OF_COST in the class body (cost_spec.md §9.2)"
+    )
+
+
+def describe_unpriceable_class(component_class: type) -> str:
+    """One sentence naming a PRICED class with no facts source and what its author has to write.
+
+    The counterpart of `describe_undeclared_class` for the second half of the §9.1 contract, and
+    shared for the same reason: the pre-run check and the adapter's own refusal should say the same
+    thing about the same defect, and the message has to carry the module the class lives in so the
+    reader of a failed run does not have to grep for a class name.
+
+    Args:
+        component_class: The `Component` subclass declaring PRICED with no facts source.
+
+    Returns:
+        The message, without a trailing newline and without bullet punctuation.
+    """
+    return (
+        f"{component_class.__name__} (module {component_class.__module__}) declares "
+        "cost_relevance PRICED, but it implements no get_cost_facts() of its own and has no entry "
+        "in hisim.economics.adapter.FactsExtractors.BY_CLASS_NAME, so nothing can tell the cost "
+        "model what it is: implement get_cost_facts() on the class or register an extractor for it "
+        "(cost_spec.md §9.1)"
+    )
+
+
+def missing_meter_column_error(component_name: str, field_name: str, role: str) -> CostDataError:
+    """The refusal for a meter output the meter's class declares but the run does not contain.
+
+    A meter is the only place a carrier can be billed from (§3.4), so a column it declares and the
+    run does not hold is not a gap the engine may work around: summing what is there and skipping
+    what is not publishes a bill that is quietly missing a flow — an unbilled carrier, a feed-in
+    revenue silently zero, a capacity charge silently dropped. Raising instead makes the meter an
+    unresolved subject in `bridge.build_evaluation_inputs`, and the D7 check refuses to price the
+    rest of the fleet around the hole.
+
+    It lives here rather than in the bridge because both halves of the §3.4 boundary need it and
+    they sit on opposite sides of the wiring: the bridge raises it for a meter it reads through a
+    `MeterSpec`, and a meter that has adopted `get_energy_flow_facts` raises it for itself — and a
+    component may not import the postprocessing bridge that walks it. Two wordings for one defect
+    is how the hook came to report a silent zero where the fallback aborted.
+
+    Args:
+        component_name: The meter instance whose column is missing, named in the message.
+        field_name: The output field name that was looked for.
+        role: What that column carries, in the message's words ("bought energy", "peak power").
+
+    Returns:
+        The `CostDataError` to raise; the caller raises it so the traceback points at the lookup.
+    """
+    return CostDataError(
+        f"Meter {component_name}: the {role} column {field_name!r} declared by its class "
+        "is not among this run's outputs, so the flow it measures cannot be read. Billing the "
+        "carrier without it would publish a bill that silently omits that flow, so the meter "
+        "becomes an unresolved subject and the evaluation aborts instead (D7)."
     )
 
 

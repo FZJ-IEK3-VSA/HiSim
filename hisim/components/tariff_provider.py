@@ -61,10 +61,12 @@ class TariffProviderConfig(ConfigBase):
     """Configuration of the tariff provider.
 
     Deliberately thin: everything price-bearing lives in the tariff contract data file, so the
-    configuration only has to name *which* contract applies (`tariff_contract_id`) and how far
-    ahead the forecast for MPC controllers should reach. Keeping prices out of the component
-    config is what allows a scenario to swap the tariff by id, and what guarantees that the
-    simulated control signal and the postprocessing bill come from the same source (§8.1).
+    configuration only has to name *which* contract applies (`tariff_contract_id`). Keeping prices
+    out of the component config is what allows a scenario to swap the tariff by id, and what
+    guarantees that the simulated control signal and the postprocessing bill come from the same
+    source (§8.1). The forecast horizon is not configurable: the repository keys this component
+    publishes under are named `...FORECAST24H` and every consumer reads exactly 24 hours, so a
+    knob setting anything else would have been a promise nothing keeps.
 
     As a `dataclasses_json` `ConfigBase` dataclass it is also the JSON-mode surface of this
     component:
@@ -75,8 +77,6 @@ class TariffProviderConfig(ConfigBase):
     #: Contract id resolved against hisim/cost_database/tariffs/, or "SYNTHETIC_TEST" for the
     #: deterministic synthetic reference profile (spec Q16).
     tariff_contract_id: str
-    #: Hours of price forecast published for MPC controllers.
-    forecast_horizon_in_hours: int
 
     @classmethod
     def get_main_classname(cls):
@@ -97,7 +97,6 @@ class TariffProviderConfig(ConfigBase):
         return TariffProviderConfig(
             component_id=component_id,
             tariff_contract_id="SYNTHETIC_TEST",
-            forecast_horizon_in_hours=24,
         )
 
 
@@ -114,9 +113,20 @@ class TariffProvider(cp.Component):
 
     In the wider flow it is the simulation-side half of §8: it reads the same `TariffContract`
     that the postprocessing billing engine later bills the resulting load profile with, so control
-    decisions and their bill cannot be based on different prices. Controllers consume the outputs
-    either by ordinary input wiring or, for MPC, through the 24 h forecast published to the
-    `SingletonSimRepository`.
+    decisions and their bill cannot be based on different prices.
+
+    **Who consumes what, as of today.** The 24 h forecast published to the `SingletonSimRepository`
+    is consumed by `controller_mpc.py`, which reads exactly those two keys — that is the live
+    consumer. The four per-timestep outputs are available for ordinary input wiring and are
+    recorded in the results frame, but no component in the shipped library takes a price input yet;
+    `system_setups/economic_example/economic_example_heatpump.py` wires the provider in and its
+    README states which output is read by whom. A rule-based EMS reacting to
+    `CapacityChargeMarginal` is the intended next consumer, not a claim about the present.
+
+    **It supersedes `generic_price_signal.PriceSignal`** (which stays untouched during the parallel
+    phase), and the two must not appear in one setup: both publish the same two
+    `SingletonSimRepository` forecast keys, the repository holds one value per key, and two
+    publishers means whichever ran last silently decides what an MPC controller optimizes against.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST  # the contract prices energy, not hardware
@@ -335,6 +345,10 @@ class TariffProvider(cp.Component):
         written unconditionally, so this component always converges immediately; it reads no
         input that could change within a timestep except the grid draw it merely observes.
 
+        The monthly peak reset is unconditional across the iterations of a timestep: `i_restore_state`
+        puts the pre-timestep peak back before each one, so zeroing it at a month boundary produces
+        the same state however often it runs.
+
         The capacity-charge branch runs only for a contract that has one *and* only when the
         optional grid-draw input is actually connected; otherwise both related outputs stay zero,
         which is the honest answer — an unconnected peak tracker knows nothing. The peak itself is
@@ -346,13 +360,17 @@ class TariffProvider(cp.Component):
 
         The 24 h forecast is published once, at timestep 0, and only for a DYNAMIC contract (only
         then is `_price_series` set): it is a look-ahead over the resampled series, which is known
-        in full up front, so there is nothing to update later.
+        in full up front, so there is nothing to update later. Both published series are exactly
+        one day of timesteps long, so a consumer may zip them.
 
         Args:
             timestep: Index of the current timestep.
             stsv: Value store of this timestep; outputs are written into it.
-            force_convergence: Set by the simulator on the final iteration of a timestep. Read
-                only by the monthly peak reset, which is skipped on such an iteration.
+            force_convergence: Set by the simulator on the final iteration of a timestep. Not read:
+                every iteration of a timestep starts from the restored pre-timestep peak, so
+                zeroing it at a month boundary is idempotent and the same on every iteration. It
+                used to be skipped on a forced iteration, which meant a month boundary that
+                converged only on that iteration kept the previous month's peak.
         """
         stsv.set_output_value(self.price_purchase_output, self._purchase_price(timestep))
         stsv.set_output_value(self.price_injection_output, self._injection_price())
@@ -366,7 +384,7 @@ class TariffProvider(cp.Component):
             # calendar months; the exact monthly peaks for billing are computed by the meter (§8.4).
             if capacity.kind == CapacityChargeKind.MONTHLY_PEAK and self._timesteps_per_billing_period:
                 steps_per_month = max(1, self.my_simulation_parameters.timesteps // 12)
-                if timestep % steps_per_month == 0 and not force_convergence:
+                if timestep % steps_per_month == 0:
                     self._peak_so_far_in_kw = 0.0
             # Compared against the peak *before* this timestep is folded in: at or above it, one
             # more kilowatt raises the billed peak and costs the capacity price; below it, extra
@@ -386,12 +404,15 @@ class TariffProvider(cp.Component):
         # 24 h price forecast for MPC (same mechanism as generic_price_signal.py, §8.3).
         if timestep == 0 and self._price_series is not None:
             steps_per_day = int(24 * 3600 / self.my_simulation_parameters.seconds_per_timestep)
+            # Both series are exactly one day long. The purchase forecast used to be truncated to
+            # the length of the resampled price series while the injection forecast was not, so a
+            # run shorter than a day published two forecasts of different lengths under keys that
+            # both promise 24 h — and an MPC controller zipping them silently optimizes the shorter
+            # horizon. `_purchase_price` clamps a step past the end of the series to its last
+            # value, which is the same degradation the resampling itself applies.
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.PRICEPURCHASEFORECAST24H,
-                entry=[
-                    self._purchase_price(step)
-                    for step in range(min(steps_per_day, len(self._price_series)))
-                ],
+                entry=[self._purchase_price(step) for step in range(steps_per_day)],
             )
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.PRICEINJECTIONFORECAST24H,

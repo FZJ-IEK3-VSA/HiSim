@@ -16,9 +16,10 @@ Run it manually from the repository root:
 
     python system_setups/economic_example/economic_example_heatpump.py
 
-Results land in system_setups/results/household_heatpump_building_sizer/default_config/;
-open `lifecycle_report.html` (all perspectives, actor split, subsidy cards, scenario tornado)
-and `cost_summary.md`. Everything is re-priceable offline:
+Results land in system_setups/results/household_heatpump_building_sizer/default_config/<run>/,
+where `<run>` is the timestamped directory HiSim creates per run (the sibling README spells the
+same path); open `lifecycle_report.html` (all perspectives, actor split, subsidy cards, scenario
+tornado) and `cost_summary.md`. Everything is re-priceable offline:
 `python -m hisim.economics evaluate <results_dir>` / `... explain ... --value "..."`.
 
 Note on structure: unlike the files next to it in `system_setups/`, this module defines no
@@ -59,6 +60,8 @@ from hisim.economics.subsidies import (  # noqa: E402
     SubsidyCatalog,
     SubsidyContext,
 )
+from hisim.components.electricity_meter import ElectricityMeter  # noqa: E402
+from hisim.components.tariff_provider import TariffProvider, TariffProviderConfig  # noqa: E402
 from hisim.hisim_main import initialize_from_python  # noqa: E402
 from hisim.loadtypes import ComponentType, Units  # noqa: E402
 from hisim.postprocessingoptions import PostProcessingOptions  # noqa: E402
@@ -214,6 +217,58 @@ def build_economic_context() -> EconomicContext:
     )
 
 
+def attach_tariff_provider(my_sim, params: SimulationParameters) -> TariffProvider:
+    """Adds a `TariffProvider` to the wired setup and connects it to the electricity meter.
+
+    The §8.1 point of the component: the contract it reads is the contract the postprocessing
+    billing engine bills this run's load profile with, so the price a control strategy could react
+    to and the price the bill charges cannot be different numbers. Attaching it here rather than
+    inside `household_heatpump_building_sizer.py` keeps that shipped setup — which several golden
+    references pin — untouched, which is the same separation the module docstring describes for the
+    economics as a whole.
+
+    **What consumes what, honestly stated.** Its `ElectricityFromGridInWatt` input is connected to
+    the meter's grid draw, which is what makes the two capacity-charge outputs
+    (`BillingPeriodPeakSoFar`, `CapacityChargeMarginal`) real rather than constant zero. Its two
+    price outputs are *published*, not consumed: no component in this setup takes a price input —
+    the only price consumer in the component library is `controller_mpc`, and it reads the 24 h
+    forecast this provider publishes to the `SingletonSimRepository` rather than a wired input.
+    The prices are therefore in the results frame for a reader and for any controller wired to
+    them, and the README says so.
+
+    Args:
+        my_sim: The `Simulator` returned by `initialize_from_python`, already wired.
+        params: The run's simulation parameters, shared with every other component.
+
+    Returns:
+        The provider that was added, so a caller can read its contract.
+
+    Raises:
+        ValueError: If the setup contains no `ElectricityMeter` to read the grid draw from.
+    """
+    meters = [
+        wrapper.my_component
+        for wrapper in my_sim.wrapped_components
+        if isinstance(wrapper.my_component, ElectricityMeter)
+    ]
+    if not meters:
+        raise ValueError(
+            "The tariff provider needs an ElectricityMeter to follow the grid draw, and the wired "
+            "setup has none."
+        )
+    provider = TariffProvider(
+        my_simulation_parameters=params,
+        config=TariffProviderConfig.get_default_config(),
+    )
+    provider.connect_input(
+        provider.ElectricityFromGridInWatt,
+        meters[0].component_name,
+        ElectricityMeter.ElectricityFromGridInWatt,
+    )
+    my_sim.add_component(provider)
+    return provider
+
+
 def main() -> None:
     """Runs the full-year simulation with the complete economic evaluation.
 
@@ -221,7 +276,9 @@ def main() -> None:
     setup: append `LIFECYCLE_COST_REPORT` to the post-processing options (which implies the
     computation and adds the human-readable reports), attach `EconomicParameters` — country and
     price basis year, plus the subsidy catalog path that activates the real BEG engine instead of
-    the flat shim — and attach the context built above.
+    the flat shim — and attach the context built above. A fourth line adds the §8.3 tariff provider
+    (`attach_tariff_provider`), so the run also carries the per-timestep price signal of the
+    contract its bill is computed from.
 
     Everything after that is an ordinary HiSim run: the setup module is imported and wired by
     `initialize_from_python`, all timesteps are simulated, and postprocessing writes the cost
@@ -247,6 +304,8 @@ def main() -> None:
         ),
         my_simulation_parameters=params,
     )
+    provider = attach_tariff_provider(my_sim, params)
+    print(f"Tariff provider active: contract {provider.contract.id} ({provider.contract.supply.kind.value})")
     my_sim.run_all_timesteps()
     result_directory = my_sim.simulation_parameters.result_directory
     print(f"\nDONE in {time.time() - start:.0f} s")

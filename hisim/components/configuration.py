@@ -325,6 +325,9 @@ Sources for capex techno-economic parameters:
         [50]: ecoinvent-based life-cycle inventories for photovoltaic power electronics (inverter,
         2500 W to 500 kW), used here as the closest published proxy for a rectifier's embodied
         emissions: https://www.ecoinvent.org
+        [51]: Clean Hydrogen Partnership (FCH 2 JU), MAWP Key Performance Indicators, "Residential
+        micro-CHP for single family homes and small buildings (0.3-5 kW)", state of the art 2024:
+        https://www.clean-hydrogen.europa.eu/residential-micro-chp-single-family-homes-and-small-buildings-03-5-kw_en
         """
 capex_techno_economic_parameters = {
     "DE": {
@@ -429,6 +432,34 @@ capex_techno_economic_parameters = {
                 # No published inventory for a rectifier was found; power electronics of the same
                 # duty (a PV inverter) carry roughly this, Source: [50]
                 "co2_footprint_in_kg_per_kw": 60,
+                "subsidy_as_percentage_of_investment_costs": 0,
+            },
+            # PROPOSED VALUES, NOT YET REVIEWED BY THE COST OWNER (added 2026-09-08 so that a
+            # stock all-options run of dynamic_components reaches its KPIs instead of dying in
+            # COMPUTE_OPEX/COMPUTE_CAPEX). The device this row prices is the one the component
+            # models: a residential fuel-cell micro-CHP of a few kW electrical (the component's
+            # own reference machine is a BlueGen-class SOFC), not an engine CHP and not an
+            # industrial unit -- a fuel cell costs several times an engine of the same output, so
+            # the figure below is deliberately far above the household heaters above it.
+            ComponentType.CHP: {
+                # Per kW of *electrical* rating, which is how m-CHP costs are quoted. [51] states
+                # 5500 EUR/kW as the 2024 state of the art for the 0.3-5 kW class, which is the
+                # year and class this table row is for, so it is taken as it stands rather than as
+                # the midpoint of a range. [19] records 6767 EUR/kW for a hydrogen fuel cell,
+                # older and higher, and is what says this is the right order of magnitude.
+                "investment_costs_in_euro_per_kw": 5500,
+                # [51] quotes maintenance per kWh produced (3.5 EUR ct/kWh in 2024) rather than as
+                # a share of the investment, so the share is derived from that source's own
+                # figures: 60000 h of stack durability over a 14-year appliance life is about
+                # 4300 operating hours per year, and 4300 h * 1 kW * 0.035 EUR/kWh = 150 EUR per
+                # kW per year, which is 2.7 % of the 5500 EUR/kW above. Source: [51]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.027,
+                # Appliance lifetime with the stack replaced as maintenance, 2024 state of the
+                # art; the stack's own shorter life is carried by the maintenance share above.
+                # [19] records 5 years for the whole device, which is a stack life, not an
+                # appliance life. Source: [51]
+                "technical_lifetime_in_years": 14,
+                "co2_footprint_in_kg_per_kw": 405.5,  # hydrogen fuel cell, Source: [19]
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             # CAPEX per kWh

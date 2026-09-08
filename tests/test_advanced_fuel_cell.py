@@ -2,6 +2,7 @@
 
 # clean
 
+import dataclasses
 import json
 import math
 from typing import NamedTuple
@@ -345,3 +346,198 @@ def test_chp_kpi_entries_refuse_nan_instead_of_understating() -> None:
 
     with pytest.raises(ValueError, match="Electrical energy produced"):
         chp.get_component_kpi_entries(outputs, frame)
+
+
+def _build_config(p_el_max: float = 3_000.0, gas_type: str = "Hydrogen") -> advanced_fuel_cell.CHPConfig:
+    """Build the default CHP configuration, optionally at another rating or on another fuel.
+
+    The rating is a parameter because the capex tests below assert that the cost scales with it,
+    and everything else about the machine is held fixed so that the rating is the only thing that
+    can explain a difference. ``dataclasses.replace`` rather than an assignment, because the
+    rating is validated in ``__post_init__`` and an assignment afterwards would walk past it.
+
+    Args:
+        p_el_max: maximum electrical power in watt, which is also what the investment cost is
+            scaled by.
+        gas_type: the fuel the unit burns, which decides the load type and tariff of its opex.
+
+    Returns:
+        CHPConfig: the default configuration at that rating and fuel, cost fields unset.
+    """
+    return dataclasses.replace(
+        advanced_fuel_cell.CHPConfig.get_default_config(), p_el_max=p_el_max, gas_type=gas_type
+    )
+
+
+def _build_chp(gas_type: str) -> advanced_fuel_cell.CHP:
+    """Construct a default CHP on the given fuel, in a year the fuel tariffs cover.
+
+    The cost tests build their own unit rather than reusing :func:`build_chp_system`, whose 2017
+    parameters predate the emission and cost factors the operating cost reads.
+
+    Args:
+        gas_type: the fuel the unit burns.
+
+    Returns:
+        CHP: the component, whose output channels the cost tests read totals from.
+    """
+    return advanced_fuel_cell.CHP(
+        config=_build_config(gas_type=gas_type),
+        my_simulation_parameters=SimulationParameters.one_day_only(2021, 60),
+    )
+
+
+def _fuel_outputs(chp: advanced_fuel_cell.CHP) -> list[cp.ComponentOutput]:
+    """Return the four output channels the run totals are read from, in column order."""
+    return [
+        chp.el_power_channel,
+        chp.th_power_channel,
+        chp.gas_demand_real_used_channel,
+        chp.number_of_cycles_channel,
+    ]
+
+
+#: Two timesteps of 60 s at 0.001 kg/s, which is what the opex frames below burn.
+FUEL_BURNED_IN_KG: float = 0.12
+#: Lower heating values in kWh/kg, written out here rather than read from PhysicsConfig so that
+#: the tests check the conversion against published values instead of against the code under test.
+HYDROGEN_LOWER_HEATING_VALUE_IN_KWH_PER_KG: float = 33.3
+METHANE_LOWER_HEATING_VALUE_IN_KWH_PER_KG: float = 13.9
+
+
+@pytest.mark.base
+def test_chp_config_leaves_the_cost_fields_unset_by_default() -> None:
+    """The five cost fields default to ``None``, which is what selects the database lookup.
+
+    They are read as a set: postprocessing looks the figures up from the device database for the
+    simulated year and country only while all five are ``None``. A default that accidentally
+    carried a number would silently pin every CHP in the fleet to it.
+    """
+    config = _build_config()
+    assert config.device_co2_footprint_in_kg is None
+    assert config.investment_costs_in_euro is None
+    assert config.lifetime_in_years is None
+    assert config.maintenance_costs_in_euro_per_year is None
+    assert config.subsidy_as_percentage_of_investment_costs is None
+
+
+@pytest.mark.base
+def test_chp_capex_scales_with_the_electrical_rating() -> None:
+    """The investment cost, embodied CO2 and maintenance cost are all linear in ``p_el_max``.
+
+    Micro-CHP costs are quoted per kilowatt of electrical output, so doubling the rating has to
+    double all three figures exactly. Asserting the ratio rather than the euros keeps the test
+    meaningful when the owner revises the proposed price per kilowatt, while still catching a
+    capex that ignores the rating -- the failure this cost model exists to prevent -- or one that
+    scales by the wrong power of it.
+    """
+    mysim = SimulationParameters.one_day_only(2021, 60)
+    small = advanced_fuel_cell.CHP.get_cost_capex(_build_config(p_el_max=3_000.0), mysim)
+    large = advanced_fuel_cell.CHP.get_cost_capex(_build_config(p_el_max=6_000.0), mysim)
+
+    assert small.capex_investment_cost_in_euro > 0.0
+    assert small.device_co2_footprint_in_kg > 0.0
+    assert small.maintenance_costs_in_euro > 0.0
+    assert 5.0 < small.lifetime_in_years < 25.0, "a fuel-cell appliance is a one- to two-decade asset"
+    assert large.capex_investment_cost_in_euro == pytest.approx(2 * small.capex_investment_cost_in_euro)
+    assert large.device_co2_footprint_in_kg == pytest.approx(2 * small.device_co2_footprint_in_kg)
+    assert large.maintenance_costs_in_euro == pytest.approx(2 * small.maintenance_costs_in_euro)
+    # The rating is stated in watt and the price per kilowatt, so the conversion has to happen:
+    # a unit priced per watt would land a thousandfold below the 5500 EUR/kW the database cites.
+    assert 4000.0 <= small.capex_investment_cost_in_euro / 3.0 <= 7000.0
+
+
+@pytest.mark.base
+def test_chp_capex_prefers_explicit_config_values_over_the_database() -> None:
+    """A configuration carrying all five cost fields is used verbatim, with no database lookup.
+
+    This is the escape hatch for a specific quoted machine, and it is all-or-nothing: the helper
+    consults the database only while all five fields are ``None``. Pinning it here keeps a future
+    change to the shared helper from silently overriding a user's own numbers.
+    """
+    config = _build_config()
+    config.device_co2_footprint_in_kg = 900.0
+    config.investment_costs_in_euro = 21000.0
+    config.lifetime_in_years = 9.0
+    config.maintenance_costs_in_euro_per_year = 700.0
+    config.subsidy_as_percentage_of_investment_costs = 0.4
+
+    capex = advanced_fuel_cell.CHP.get_cost_capex(config, SimulationParameters.one_day_only(2021, 60))
+
+    assert capex.capex_investment_cost_in_euro == pytest.approx(21000.0)
+    assert capex.device_co2_footprint_in_kg == pytest.approx(900.0)
+    assert capex.lifetime_in_years == pytest.approx(9.0)
+    assert capex.maintenance_costs_in_euro == pytest.approx(700.0)
+    assert capex.subsidy_as_percentage_of_investment_costs == pytest.approx(0.4)
+
+
+@pytest.mark.base
+def test_chp_opex_prices_the_hydrogen_it_actually_burned() -> None:
+    """A hydrogen unit's operating cost is the fuel it really drew, priced as green hydrogen.
+
+    The fuel mass is the ``GasDemandReal`` column -- what the unit got, not what it asked for --
+    integrated over the run and converted with hydrogen's lower heating value, the same one
+    ``i_simulate`` divided by. The CO2 is zero on purpose: the fuels table gives green hydrogen a
+    zero footprint per kWh, so the emissions sit with whatever produced the hydrogen, and a test
+    that demanded a positive number here would be demanding double counting.
+    """
+    chp = _build_chp(gas_type="Hydrogen")
+    frame = pd.DataFrame({0: [3000.0, 3000.0], 1: [4000.0, 4000.0], 2: [0.001, 0.001], 3: [1.0, 2.0]})
+
+    opex = chp.get_cost_opex(_fuel_outputs(chp), frame)
+
+    expected_kilowatt_hours = FUEL_BURNED_IN_KG * HYDROGEN_LOWER_HEATING_VALUE_IN_KWH_PER_KG
+    assert opex.loadtype == lt.LoadTypes.GREEN_HYDROGEN
+    assert opex.total_consumption_in_kwh == pytest.approx(expected_kilowatt_hours, rel=0.01)
+    # Cost is those kilowatt-hours times a positive per-kWh tariff, so the euros per kWh have to
+    # be a plausible tariff rather than zero or a thousandfold miss.
+    assert 0.0 < opex.opex_energy_cost_in_euro / opex.total_consumption_in_kwh < 2.0
+    assert opex.co2_footprint_in_kg == pytest.approx(0.0)
+    assert opex.opex_maintenance_cost_in_euro > 0.0
+
+
+@pytest.mark.base
+def test_chp_opex_prices_a_methane_unit_at_the_gas_tariff() -> None:
+    """A methane unit is priced and carbon-accounted as natural gas, not as hydrogen.
+
+    The fuel is chosen by the configured gas type, and it decides three things at once: the load
+    type the row carries, the heating value the mass is converted with, and which tariff applies.
+    Methane's heating value is under half hydrogen's per kilogram, so a unit that priced the same
+    mass as hydrogen would report more than twice the energy -- which is what this catches.
+    """
+    chp = _build_chp(gas_type="Methan")
+    frame = pd.DataFrame({0: [3000.0, 3000.0], 1: [4000.0, 4000.0], 2: [0.001, 0.001], 3: [1.0, 2.0]})
+
+    opex = chp.get_cost_opex(_fuel_outputs(chp), frame)
+
+    expected_kilowatt_hours = FUEL_BURNED_IN_KG * METHANE_LOWER_HEATING_VALUE_IN_KWH_PER_KG
+    assert opex.loadtype == lt.LoadTypes.GAS
+    assert opex.total_consumption_in_kwh == pytest.approx(expected_kilowatt_hours, rel=0.01)
+    assert 0.0 < opex.opex_energy_cost_in_euro / opex.total_consumption_in_kwh < 2.0
+    assert 0.0 < opex.co2_footprint_in_kg / opex.total_consumption_in_kwh < 2.0
+
+
+@pytest.mark.base
+def test_chp_opex_refuses_a_missing_fuel_column() -> None:
+    """A missing output column raises naming the KPI instead of costing the run as free.
+
+    The operating cost reads the same four columns the KPIs do, so an absent fuel column would
+    otherwise be reported as zero euros -- a run that looks free rather than unmeasured.
+    """
+    chp = _build_chp(gas_type="Hydrogen")
+
+    with pytest.raises(ValueError, match="Electrical energy produced"):
+        chp.get_cost_opex([chp.gas_demand_real_used_channel], pd.DataFrame({0: [0.001]}))
+
+
+@pytest.mark.base
+def test_chp_config_refuses_a_non_positive_electrical_rating() -> None:
+    """A maximum electrical power of zero or less is refused at construction, by value.
+
+    The investment cost is that rating times a price per kilowatt, so an unrated machine would be
+    costed at zero euros and reported as an answer -- a device that reads as free rather than as
+    unsized. The configuration is where that stops.
+    """
+    for wrong in (0.0, -1.0):
+        with pytest.raises(ValueError, match="maximum electrical power"):
+            _build_config(p_el_max=wrong)

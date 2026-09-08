@@ -87,8 +87,13 @@ jobs:
           ret=0
         fi
         exit "$ret"
+    # The one upload that must stay unconditional, because the combine job below consumes it.
+    # It is diagnostics all the same, so a failure to store it must not turn a passing test
+    # matrix red: without continue-on-error a 403 from the artifact service is indistinguishable
+    # from a failing test, and it also fails the gate job that waits on this one.
     - name: Upload coverage data
       if: always()
+      continue-on-error: true
       uses: actions/upload-artifact@v6
       with:
         name: coverage-${{ matrix.name }}

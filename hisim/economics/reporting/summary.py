@@ -2,7 +2,8 @@
 
 `build_cost_summary_markdown`/`write_cost_summary` produce the reviewer-facing text
 summary, and `render_plausibility_findings` turns the panel's findings into displayable
-rows shared by the markdown, the HTML report and the bridge's log warnings. Split out of
+rows shared by the markdown, the HTML report and — from stack part 8/8 on — the bridge's log
+warnings. Split out of
 the former single-module `reporting.py` (PR-3 review); the package `__init__` re-exports
 everything, so `from hisim.economics.reporting import ...` is unchanged.
 """
@@ -16,9 +17,9 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 from hisim.economics import views
-from hisim.economics.plausibility import CheckIds, PlausibilityFinding, PlausibilityReport
-from hisim.economics.presentation_style import PresentationStyle
-from hisim.economics.results import EvaluationMatrix, VariantComparison
+from hisim.economics.plausibility import CheckIds, CheckStatus, PlausibilityFinding, PlausibilityReport
+from hisim.economics.presentation_style import PresentationStyle, group_name
+from hisim.economics.results import EvaluationMatrix, LifecycleCostResult, VariantComparison
 from hisim.economics.uncertainty import UncertainValue
 
 
@@ -26,14 +27,14 @@ class ReportFileNames:
     """Names of the report files written next to the results.
 
     Collected in one namespace because these names are part of the package's public output
-    surface: `bridge.py` and the `report` CLI write them, the golden tests read them, and the
-    README lists them among the files the engine adds without touching the legacy path (§10).
+    surface: the `report` CLI writes them (and `bridge.py` will, from stack part 8/8), the golden
+    tests read them, and the README lists them among the files the engine adds without touching
+    the legacy path (§10).
     They are plain names, not paths — the result directory is always supplied by the caller.
     """
 
     COST_SUMMARY_FILE_NAME = "cost_summary.md"
     LIFECYCLE_REPORT_FILE_NAME = "lifecycle_report.html"
-    COMPARISON_REPORT_FILE_NAME = "variant_comparison_report.html"
 
 
 def _fmt(value: float) -> str:
@@ -82,6 +83,12 @@ def _band_str(band: Optional[UncertainValue], unit: str = "EUR") -> str:
 # ---------------------------------------------------------------------------- plausibility (B)
 
 
+#: The three statuses the panel can render. The markdown's icon table is keyed by them and the
+#: HTML writes them straight into a CSS class (`.status.PASS` and its two siblings), so a fourth
+#: spelling is not a new state — it is an unstyled cell and a KeyError.
+PANEL_STATUSES = frozenset({CheckStatus.PASS, CheckStatus.WARN, CheckStatus.FAIL})
+
+
 @dataclass
 class PlausibilityCheck:
     """One check **rendered** for the panel: the display row, all strings.
@@ -96,6 +103,26 @@ class PlausibilityCheck:
     value: str
     expected: str
     detail: str = ""
+
+    def __post_init__(self) -> None:
+        """Refuses a status neither renderer can display.
+
+        `status` is a plain string because `plausibility.CheckStatus` serializes verbatim into the
+        findings JSON, the markdown and the HTML — and a plain string is exactly what lets a typo or
+        a status invented engine-side travel all the way into the output: the markdown table looks
+        it up in an icon map and raises a bare `KeyError` in the middle of writing a report, while
+        the HTML emits `class='status Passed'`, which matches no rule and renders as unstyled text
+        that reads like an ordinary row. Refusing at construction names the offending value and the
+        three that exist instead.
+
+        Raises:
+            ValueError: If `status` is not one of PASS, WARN or FAIL.
+        """
+        if self.status not in PANEL_STATUSES:
+            raise ValueError(
+                f"Plausibility check '{self.name}' carries the status {self.status!r}, which the "
+                f"panel cannot render. Expected one of {', '.join(sorted(PANEL_STATUSES))}."
+            )
 
 
 #: Reader hints per check kind — prose, so it lives with the presentation. Checks whose hint
@@ -199,16 +226,22 @@ def render_plausibility_findings(report: PlausibilityReport) -> List[Plausibilit
     """The panel rows of a plausibility report, in report order.
 
     The rendering half of section 0, and the module's public entry point for it: both report
-    formats and `bridge.py`'s log warnings go through here, so the panel a reader sees in the
-    HTML, the table in `cost_summary.md` and the lines in the simulation log are the same rows
-    with the same wording. Order is preserved exactly as `run_plausibility_checks` produced it
+    formats and, from stack part 8/8, `bridge.py`'s log warnings go through here, so the panel a
+    reader sees in the HTML, the table in `cost_summary.md` and the lines in the simulation log
+    are the same rows with the same wording. Order is preserved exactly as `run_plausibility_checks` produced it
     (structural findings first, then magnitudes), which is what makes the golden panel stable.
     """
     return [_render_finding(finding) for finding in report.findings]
 
 
 def all_bands_degenerate(matrix: EvaluationMatrix) -> bool:
-    """True when every result band is exact (min = best_estimate = max).
+    """True when every perspective's headline NPV band is exact (min = best_estimate = max).
+
+    Only `total_npv_in_euro` is examined, not every band in every result: the headline NPV is the
+    proxy the reports use, and it is a sound one because a band anywhere in a run's cost data
+    propagates into it. The reverse does not strictly hold — a run could in principle carry a band
+    that cancels out of the total — so read this as "the reports have no whiskers to draw", which is
+    the question the note it gates actually answers.
 
     That is the expected state when the price basis year resolves to the 1:1-migrated legacy
     data (deliberately degenerate for parity, §10.1 Phase 1); banded AI-estimate data ships
@@ -216,6 +249,34 @@ def all_bands_degenerate(matrix: EvaluationMatrix) -> bool:
     not a bug.
     """
     return all(result.total_npv_in_euro.is_exact() for result in matrix.results.values())
+
+
+def _reference_result(matrix: EvaluationMatrix) -> LifecycleCostResult:
+    """The matrix's reference perspective — its first — refusing an empty matrix by name.
+
+    Every report is built around one reference result: the run parameters in its header, the
+    single-result sections, the price basis year of the degenerate-band note. Reaching for it with
+    `next(iter(...))` on a matrix that evaluated nothing raised a bare `StopIteration` from four
+    different places, which surfaces to a caller as an exception with no message and no hint that
+    the *input* was empty — and an empty matrix is a perfectly reachable state (every perspective
+    filtered out, an evaluation that failed upstream), not a programming error.
+
+    Args:
+        matrix: The evaluated perspectives.
+
+    Returns:
+        The first result, which every builder treats as the reference.
+
+    Raises:
+        ValueError: If the matrix holds no evaluated perspective.
+    """
+    reference = next(iter(matrix.results.values()), None)
+    if reference is None:
+        raise ValueError(
+            "Cannot build a report: the evaluation matrix has no evaluated perspectives. Every "
+            "report is built around a reference perspective, so there is nothing to render."
+        )
+    return reference
 
 
 def _degenerate_note(matrix: EvaluationMatrix) -> str:
@@ -226,7 +287,7 @@ def _degenerate_note(matrix: EvaluationMatrix) -> str:
     year in question and the two ways out (pick a banded basis year, or add bands to that year's
     entries as a data PR). Shared by the markdown and HTML headers so the two cannot drift.
     """
-    reference = next(iter(matrix.results.values()))
+    reference = _reference_result(matrix)
     basis = reference.parameters.price_basis_year or reference.simulation_year
     return (
         f"All cost inputs resolved to exact values, so every min/best_estimate/max band is degenerate and "
@@ -273,9 +334,12 @@ def build_cost_summary_markdown(
 
     Returns:
         The complete markdown document, newline-terminated.
+
+    Raises:
+        ValueError: If the matrix holds no evaluated perspective (see `_reference_result`).
     """
     checks = render_plausibility_findings(plausibility)
-    reference = next(iter(matrix.results.values()))
+    reference = _reference_result(matrix)
     params = reference.parameters
     lines: List[str] = []
     lines.append("# Lifecycle cost summary")
@@ -321,10 +385,10 @@ def build_cost_summary_markdown(
     lines.append("| Display group | NPV |")
     lines.append("|---|---|")
     group_npv = views.fold_categories(reference.npv_by_category, PresentationStyle.CATEGORY_TO_GROUP)
-    for index, (group_name, _categories) in enumerate(PresentationStyle.DISPLAY_GROUPS):
+    for index in range(len(PresentationStyle.DISPLAY_GROUPS)):
         total = group_npv.get(index)
         if total is not None and (total.best_estimate or total.minimum or total.maximum):
-            lines.append(f"| {group_name} | {_band_str(total)} |")
+            lines.append(f"| {group_name(index)} | {_band_str(total)} |")
     lines.append("")
     lines.append(f"## Per subject ({reference.perspective_id})")
     lines.append("")
@@ -342,10 +406,13 @@ def build_cost_summary_markdown(
         lines.append("## Subsidy decisions")
         lines.append("")
         for decision, perspective_ids in decisions:
+            # Every applied award, at its total amount: filtering on a non-zero *upfront* amount
+            # printed "applied none" for a measure the HTML report listed as APPLIED, because a
+            # scheduled tax credit pays out over years and its upfront amount is zero by
+            # construction. `award_total_amount` is the same figure the awards table shows.
             applied = ", ".join(
-                f"{award.scheme_id} ({_band_str(award.upfront_amount)})"
+                f"{award.scheme_id} ({_band_str(views.award_total_amount(award))})"
                 for award in decision.applied
-                if award.upfront_amount.maximum
             ) or "none"
             note = _perspectives_note(perspective_ids, matrix)
             lines.append(f"- **{decision.measure_subject}** ({note}): applied {applied}")
@@ -396,8 +463,9 @@ def write_cost_summary(
 
     The thin filesystem wrapper around `build_cost_summary_markdown`: rendering and writing are
     separate so tests and the golden oracle can compare the document without a directory, while
-    `bridge.py` and the `report` CLI get a one-call side effect. UTF-8 is explicit because the
-    document contains non-ASCII text and the postprocessing may run under any locale.
+    the `report` CLI (and `bridge.py`, from stack part 8/8) gets a one-call side effect. UTF-8 is
+    explicit because the document contains non-ASCII text and the postprocessing may run under any
+    locale.
 
     Args:
         matrix: Evaluated perspectives.
@@ -445,9 +513,12 @@ def _decision_content_key(decision) -> Tuple:
     unanswered fields of an open question. Amounts are rounded to the cent so that float noise in
     the last digits cannot split one decision into two.
 
-    Deliberately renderer-independent: the awards table shows an award's total while the decision
-    card shows its upfront amount, and both are in the key, so the two renderings group the same
-    perspectives and cannot disagree about which decisions are "the same".
+    Deliberately renderer-independent: every rendering now shows an award's total
+    (`views.award_total_amount`), but the upfront amount stays in the key beside it. Two awards can
+    share a total and differ in when it is paid — an upfront grant and a scheduled tax credit of
+    the same size are not the same decision to anyone reading the report — and keying on both is
+    what keeps the cards, the awards table and the markdown grouping identically whatever any one
+    of them chooses to print.
     """
     return (
         decision.measure_subject,

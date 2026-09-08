@@ -13,7 +13,8 @@ not "any date-shaped text"), so the `retrieved` dates of the §3.10 source regis
 golden and a data PR that changes one shows up as a diff. Everything else — every euro figure,
 every SVG coordinate, every tooltip — is compared exactly. The PNG companions are not goldens
 (matplotlib output is not byte-stable across versions); `report_plots` is covered by the
-numbers it now reads out of the view-model plus its own unit tests.
+numbers it now reads out of the view-model plus `tests/test_economics_report_plots.py`, which
+checks that the files are written and that what they plot still reconciles.
 
 Regenerate deliberately with ``HISIM_REGEN_GOLDENS=1 pytest tests/test_economics_report_goldens.py``.
 Any regeneration outside a change that is *meant* to move numbers is a bug being papered over.
@@ -258,21 +259,36 @@ def _normalize(text: str) -> str:
 
 
 def _assert_matches_golden(file_name: str, text: str) -> None:
-    """Compares one rendered document against its checked-in golden, or regenerates it.
+    """Compares one rendered document against its checked-in golden.
 
-    Regeneration is deliberate and visible: the file is (re)written only when
-    `HISIM_REGEN_GOLDENS=1` is set or no golden exists yet, and that path reports a *skip*, never
-    a pass — so a missing or freshly written golden can never be mistaken for a verified one. On
-    mismatch the failure carries a unified diff capped at 80 lines: enough to name the section and
-    the figure that moved, without dumping a large HTML document into the test log.
+    Regeneration is deliberate and explicit: the file is written only when `HISIM_REGEN_GOLDENS=1`
+    is set, and that path reports a *skip*, never a pass, so a freshly written golden can never be
+    mistaken for a verified one.
+
+    A **missing** golden fails. It used to be written and the test skipped, which is the same
+    reflex applied to a case it does not fit: a regeneration under the env var is someone saying
+    "these numbers moved on purpose", while an absent golden is an oracle with nothing to compare
+    against — on a fresh checkout, after a bad merge, or because the file was never committed — and
+    a green-with-skips run is exactly how that goes unnoticed for a release. The failure says how to
+    create the file deliberately.
+
+    On mismatch the failure carries a unified diff capped at 80 lines: enough to name the section
+    and the figure that moved, without dumping a large HTML document into the test log.
     """
     path = os.path.join(GOLDEN_DIRECTORY, file_name)
     normalized = _normalize(text)
-    if os.environ.get("HISIM_REGEN_GOLDENS") == "1" or not os.path.isfile(path):
+    if os.environ.get("HISIM_REGEN_GOLDENS") == "1":
         os.makedirs(GOLDEN_DIRECTORY, exist_ok=True)
         with open(path, "w", encoding="utf-8") as file:
             file.write(normalized)
         pytest.skip(f"regenerated golden {file_name}")
+    if not os.path.isfile(path):
+        pytest.fail(
+            f"The golden {file_name} is missing from {GOLDEN_DIRECTORY}, so this oracle verified "
+            "nothing. Create it deliberately with "
+            "`HISIM_REGEN_GOLDENS=1 pytest tests/test_economics_report_goldens.py` and review the "
+            "file that appears before committing it."
+        )
     with open(path, encoding="utf-8") as file:
         expected = file.read()
     if normalized == expected:

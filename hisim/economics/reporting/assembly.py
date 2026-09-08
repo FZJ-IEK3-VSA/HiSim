@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Tuple
 from hisim.economics import views
 from hisim.economics.input_audit import InputAuditReport
 from hisim.economics.plausibility import PlausibilityReport
-from hisim.economics.presentation_style import PresentationStyle, group_of
+from hisim.economics.presentation_style import PresentationStyle, group_name, group_of
 from hisim.economics.results import EvaluationMatrix, VariantComparison
 from hisim.economics.uncertainty import UncertainValue
 
@@ -27,16 +27,17 @@ from hisim.economics.reporting.summary import (
     _band_str,
     _degenerate_note,
     _fmt,
+    _reference_result,
     all_bands_degenerate,
     render_plausibility_findings,
 )
 from hisim.economics.reporting.charts import (
+    _bar_row,
     _co2_section_html,
     _details,
     _esc,
     _legend_html,
     _payback_svg,
-    _rect,
     _stacked_subject_svg,
     _svg_open,
     _table,
@@ -141,7 +142,7 @@ def _actor_section_html(matrix: EvaluationMatrix) -> str:
             )
         payer_table = _details(
             "payer x cost-group table (NPV)",
-            _table(["Payer"] + [PresentationStyle.DISPLAY_GROUPS[index][0] for index in group_indices], table_rows),
+            _table(["Payer"] + [group_name(index) for index in group_indices], table_rows),
         )
         blocks.append(
             f"<details open><summary><b>{_esc(perspective_id)}</b> — payer NPVs sum to the system NPV "
@@ -183,15 +184,22 @@ def _tornado_svg(rows: List[Tuple[str, float]], base_value: float) -> str:
     parts.append(f'<line x1="{center}" y1="4" x2="{center}" y2="{height - 20}" stroke="var(--baseline)"/>')
     y = 4.0
     for label, swing in sorted(rows, key=lambda item: -abs(item[1])):
-        mid = y + row_h / 2
         color = "var(--g5)" if swing > 0 else "var(--g1)"
         x_from = center if swing >= 0 else center + swing * scale
-        parts.append(_text(left - 8, mid + 4, label, 11, "end"))
-        parts.append(_rect(x_from, y + 5, abs(swing) * scale, row_h - 10, color,
-                           f"{label}: {'+' if swing >= 0 else ''}{_fmt(swing)} EUR/a vs base", rx=3))
         anchor_x = center + swing * scale + (6 if swing >= 0 else -6)
-        parts.append(_text(anchor_x, mid + 4, f"{'+' if swing >= 0 else ''}{_fmt(swing)}", 10,
-                           "start" if swing >= 0 else "end", "var(--muted)"))
+        parts.extend(
+            _bar_row(
+                label=label,
+                y=y,
+                row_h=row_h,
+                left=left,
+                bars=[(x_from, abs(swing) * scale, color,
+                       f"{label}: {'+' if swing >= 0 else ''}{_fmt(swing)} EUR/a vs base", 3)],
+                value=(anchor_x, f"{'+' if swing >= 0 else ''}{_fmt(swing)}",
+                       "start" if swing >= 0 else "end"),
+                inset=5,
+            )
+        )
         y += row_h
     parts.append(_text(center, height - 6, f"base: {_fmt(base_value)} EUR/a", 10, "middle", "var(--muted)"))
     parts.append("</svg>")
@@ -364,13 +372,18 @@ def _checks_section_html(plausibility: PlausibilityReport) -> str:
 
     Rendering only — the checks themselves, their thresholds and their order are decided in
     `plausibility.py` from `cost_database/plausibility_checks.json`, and the same rows are
-    re-used for the markdown table and for `bridge.py`'s log warnings. The reader hint in the
-    Note column is the one part that lives on this side, since "what usually causes this" is
-    editorial rather than computed.
+    re-used for the markdown table and for `bridge.py`'s log warnings (the bridge arrives with
+    stack part 8/8). The reader hint in the Note column is the one part that lives on this side,
+    since "what usually causes this" is editorial rather than computed.
+
+    The status is written into a CSS class as well as into the cell, so it is escaped on both
+    paths even though `PlausibilityCheck` now refuses anything but PASS/WARN/FAIL: an unescaped
+    value interpolated into a quoted attribute is a markup injection waiting for the day the
+    constraint is relaxed, and escaping the three legal spellings costs nothing.
     """
     checks = render_plausibility_findings(plausibility)
     rows = "".join(
-        f"<tr><td><span class='status {check.status}'>{check.status}</span></td>"
+        f"<tr><td><span class='status {_esc(check.status)}'>{_esc(check.status)}</span></td>"
         f"<td>{_esc(check.name)}</td><td>{_esc(check.value)}</td><td>{_esc(check.expected)}</td>"
         f"<td>{_esc(check.detail)}</td></tr>"
         for check in checks
@@ -477,8 +490,11 @@ def build_lifecycle_report_html(
 
     Returns:
         The complete HTML document as one string.
+
+    Raises:
+        ValueError: If the matrix holds no evaluated perspective (see `_reference_result`).
     """
-    reference = next(iter(matrix.results.values()))
+    reference = _reference_result(matrix)
     params = reference.parameters
     header = (
         f"<h1>Lifecycle cost report</h1><p class='sub'>Simulation year {reference.simulation_year}, "
@@ -527,16 +543,16 @@ def write_lifecycle_report(
     result_directory: str,
     audit: Optional[InputAuditReport] = None,
     comparison: Optional[VariantComparison] = None,
-    file_name: str = ReportFileNames.LIFECYCLE_REPORT_FILE_NAME,
     scenario_cube=None,
 ) -> str:
-    """Writes the HTML report.
+    """Writes the HTML report as `ReportFileNames.LIFECYCLE_REPORT_FILE_NAME`.
 
     The filesystem counterpart of `build_lifecycle_report_html`, kept separate for the same
     reason as the markdown pair: the golden oracle and the unit tests render without touching a
-    directory, while `bridge.py` and the `report` CLI get one call. `file_name` is a parameter
-    rather than a constant so a second report can be written beside the first under
-    `ReportFileNames.COMPARISON_REPORT_FILE_NAME` without overwriting it.
+    directory, while the `report` CLI — and `bridge.py`, from stack part 8/8 — gets one call. The
+    name is fixed rather than
+    a parameter — a comparison is a *section* of this report, not a second document, so there was
+    never a second name for a caller to pass.
 
     Args:
         matrix: Evaluated perspectives.
@@ -544,13 +560,12 @@ def write_lifecycle_report(
         result_directory: Directory to write into (the run's `results/`).
         audit: Optional input audit for section 1.
         comparison: Optional variant comparison for section 8.
-        file_name: Output file name; defaults to `lifecycle_report.html`.
         scenario_cube: Optional scenario cube for section 9.
 
     Returns:
         The path written.
     """
-    path = os.path.join(result_directory, file_name)
+    path = os.path.join(result_directory, ReportFileNames.LIFECYCLE_REPORT_FILE_NAME)
     with open(path, "w", encoding="utf-8") as file:
         file.write(
             build_lifecycle_report_html(matrix, plausibility, audit, comparison, scenario_cube)

@@ -496,7 +496,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
     """
     from hisim.economics.plausibility import run_plausibility_checks
 
-    from hisim.economics.report_plots import plot_payback_curve, write_report_plots
+    from hisim.economics.report_plots import write_report_plots
     from hisim.economics.reporting import (
         write_cost_summary,
         write_lifecycle_report,
@@ -533,13 +533,11 @@ def _cmd_report(args: argparse.Namespace) -> int:
     write_lifecycle_report(
         matrix, plausibility, args.results_dir, audit, comparison, scenario_cube=scenario_cube,
     )
-    write_report_plots(matrix, args.results_dir)
-    if comparison is not None and reference_result is not None:
-        plot_payback_curve(
-            reference_result,
-            matrix.results[comparison.perspective_id],
-            os.path.join(args.results_dir, "lifecycle_payback_curve.png"),
-        )
+    # One function owns the PNG set: handing it the comparison's reference makes it write the
+    # payback curve as part of that set, rather than the CLI writing a fifth file beside it under
+    # a name only it knew. `write_report_plots` picks the variant side by perspective id, which is
+    # the same result this call site used to look up.
+    write_report_plots(matrix, args.results_dir, reference_result)
     print(
         f"Wrote cost_summary.md, lifecycle_report.html and PNG charts to {args.results_dir} "
         f"({len(plausibility)} plausibility checks, {len(plausibility.flagged())} flagged)."

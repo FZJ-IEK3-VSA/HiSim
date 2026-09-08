@@ -1,4 +1,5 @@
-"""Human-readable lifecycle cost reports (postprocessing option LIFECYCLE_COST_REPORT).
+"""Human-readable lifecycle cost reports (the LIFECYCLE_COST_REPORT postprocessing option,
+which arrives with stack part 8/8, the bridge).
 
 Follows the money along the calculation chain so results can be checked for plausibility:
 
@@ -40,8 +41,9 @@ only the generation date.
 number is read off the result object or off `views.py`; the only arithmetic left here is SVG
 geometry — scales, bar heights, pixel coordinates — and the rounding inside `_fmt`. Discounting,
 aggregation, category folding and the business rules that used to hide in chart helpers all live
-engine-side. `tests/test_economics_import_lint.py` enforces the import half of that contract;
-`tests/test_economics_report_goldens.py` pins the rendered output.
+engine-side. `tests/test_economics_report_goldens.py` pins the rendered output; the import half
+of the contract is enforced by `tests/test_economics_import_lint.py`, which arrives with stack
+part 8/8.
 """
 
 from hisim.economics.reporting.charts import _annual_flow_svg, _stacked_subject_svg  # noqa: F401 — unit-tested directly

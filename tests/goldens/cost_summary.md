@@ -61,7 +61,7 @@ Simulation year 2026, country DE, horizon 20 a, interest 3.0%, price basis 2026.
 - **HeatPump** (all perspectives with subsidy decisions): applied DE_BEG_EM_HP_BASE_2024 (4,800 [3,840 | 6,240] EUR), DE_BEG_EM_HP_INCOME_2024 (4,800 [3,840 | 6,240] EUR), DE_BEG_EM_HP_EFFICIENCY_2024 (800 [640 | 1,040] EUR)
   - undetermined DE_BEG_EM_HP_SPEED_2024 (missing: building.existing_heating.energy_carrier, building.existing_heating.is_functional)
   - answering the open questions could unlock up to 800 EUR
-- **Envelope.Windows** (all perspectives with subsidy decisions): applied none
+- **Envelope.Windows** (all perspectives with subsidy decisions): applied DE_TAX_35C_2024 (4,200 [3,080 | 5,320] EUR)
   - undetermined DE_BEG_EM_ENVELOPE_2024 (missing: measure.technical_attributes.u_value)
   - undetermined DE_BEG_EM_ENVELOPE_ISFP_2024 (missing: building.has_renovation_roadmap)
   - answering the open questions could unlock up to 234 EUR

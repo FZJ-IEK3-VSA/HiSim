@@ -10,7 +10,7 @@ into which presentation passes `CATEGORY_TO_GROUP`.
 This module exists so `report_plots.py` no longer imports `reporting.py` (and through it the
 engine) just to learn what colour "Energy" is. It imports nothing but `timeline.CostCategory`,
 which makes it importable from either side of the seam without dragging anything along; the
-import-lint in `tests/test_economics_import_lint.py` pins that.
+import-lint that pins that (`tests/test_economics_import_lint.py`) arrives with stack part 8/8.
 """
 
 from __future__ import annotations
@@ -23,17 +23,41 @@ from hisim.economics.timeline import CostCategory
 def _build_category_to_group(
     display_groups: List[Tuple[str, Tuple[CostCategory, ...]]]
 ) -> Dict[CostCategory, int]:
-    """Total category -> group-index mapping; categories no group declares land in group 0.
+    """Total category -> group-index mapping, refusing a `CostCategory` no group declares.
 
-    Inverts the group definitions into a lookup and, crucially, makes it *total*: it iterates over
-    the whole `CostCategory` enum rather than only over the declared members, so a category added
-    later still has an entry. That is what lets the result be handed to `views.fold_categories`,
-    which rejects gaps on purpose, without a future enum member breaking every report.
+    Inverts the group definitions into a lookup and checks that it is *total* over the whole
+    `CostCategory` enum, which is what lets the result be handed to `views.fold_categories` (it
+    rejects gaps on purpose).
+
+    An undeclared category used to fall back to group 0, "Investment & financing". That is not a
+    safe default, it is a wrong one: a new category — a levy, a tax, a credit — would be summed
+    into the investment block, coloured as investment and legended as investment in every chart of
+    every report, and the resulting number is arithmetically fine and semantically false, which is
+    the one failure mode a reader cannot catch. Refusing at import time turns "someone added a
+    category and nobody told presentation" into an immediate, named error at the first import of
+    this module rather than into a plausible-looking bar.
+
+    Args:
+        display_groups: The ordered display groups with the categories each declares.
+
+    Returns:
+        Every `CostCategory` member mapped to its group index.
+
+    Raises:
+        ValueError: If any `CostCategory` member is declared by no group; the message names them.
     """
     declared = {
         category: index for index, (_name, categories) in enumerate(display_groups) for category in categories
     }
-    return {category: declared.get(category, 0) for category in CostCategory}
+    undeclared = [category.value for category in CostCategory if category not in declared]
+    if undeclared:
+        raise ValueError(
+            "Every CostCategory has to belong to exactly one display group, but no group declares "
+            f"{', '.join(undeclared)}. Add each of them to a group in "
+            "PresentationStyle.DISPLAY_GROUPS -- a category that silently landed in group 0 was "
+            "summed, coloured and legended as investment in every report."
+        )
+    return {category: declared[category] for category in CostCategory}
 
 
 class PresentationStyle:
@@ -73,9 +97,9 @@ class PresentationStyle:
     GROUP_COLORS_DARK = ["#3987e5", "#199e70", "#c98500", "#008300", "#9085e9", "#e66767", "#d55181", "#d95926"]
 
     #: **Total** category -> group-index mapping — every `CostCategory` member has an entry, so it
-    #: can be handed to `views.fold_categories` (which rejects gaps on purpose) without a category
-    #: added later blowing up a report. A category no group declares lands in group 0, the same
-    #: fallback `group_of` has always had.
+    #: can be handed to `views.fold_categories` (which rejects gaps on purpose). Totality is
+    #: enforced, not defaulted: a category `DISPLAY_GROUPS` does not declare fails the import of
+    #: this module by name rather than being folded into group 0 (see `_build_category_to_group`).
     CATEGORY_TO_GROUP: Dict[CostCategory, int] = _build_category_to_group(DISPLAY_GROUPS)
 
 
@@ -83,9 +107,10 @@ def group_of(category: CostCategory) -> int:
     """Display-group index of a cost category.
 
     The accessor the HTML report and the matplotlib companions use to pick a stack segment and its
-    colour for a category. It never raises for a valid `CostCategory`, because the underlying map is
-    total; the index doubles as the index into `GROUP_COLORS_LIGHT`/`GROUP_COLORS_DARK` and into
-    `DISPLAY_GROUPS`, which is what keeps colour, label and stacking order in lockstep.
+    colour for a category. It never raises for a valid `CostCategory`, because the underlying map
+    is total over the enum and is checked to be so when this module is imported; the index doubles
+    as the index into `GROUP_COLORS_LIGHT`/`GROUP_COLORS_DARK` and into `DISPLAY_GROUPS`, which is
+    what keeps colour, label and stacking order in lockstep.
     """
     return PresentationStyle.CATEGORY_TO_GROUP[category]
 

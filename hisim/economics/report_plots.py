@@ -1,4 +1,5 @@
-"""Matplotlib PNG companions of the lifecycle cost report (LIFECYCLE_COST_REPORT).
+"""Matplotlib PNG companions of the lifecycle cost report (the LIFECYCLE_COST_REPORT
+postprocessing option, which arrives with stack part 8/8, the bridge).
 
 Same display groups and colors as the HTML report — both take them from
 `presentation_style.py`, so a group keeps its hue across every output and this module no longer
@@ -12,20 +13,25 @@ figures as inline SVG: a PNG can be dropped into the PDF report, a slide deck or
 comment, which an HTML page cannot. They are companions, never the primary output — the set is
 a deliberate subset (five charts out of the report's dozen-odd sections), always for the *first*
 perspective of the matrix, and it carries no tables, no plausibility panel and no audit trail.
-A reviewer checking numbers should read the HTML; the PNGs are for pasting.
+A reviewer checking numbers should read the HTML; the PNGs are for pasting. Widen the subset when
+a consumer actually needs a non-first perspective in a hand-out — until then, one perspective per
+file name is what keeps the set nameable without a naming scheme nobody asked for.
 
 What the module does not own: which colour a display group has and which categories fall into
 it (`presentation_style.py`), any figure being plotted (`views.py`, `results.py`), and the file
-naming/orchestration of the report as a whole (`bridge.py`, `__main__.py`, which call
-`write_report_plots`). Unlike the HTML and markdown reports these outputs are deliberately *not*
-golden-tested — matplotlib rendering is not byte-stable across versions — so the guarantee that
-they agree with the report is structural, not pinned: both read the same view functions.
+naming/orchestration of the report as a whole (`__main__.py`, and `bridge.py` once stack part 8/8
+lands; both call `write_report_plots`). Unlike the HTML and markdown reports these outputs are
+deliberately *not* golden-tested — matplotlib rendering is not byte-stable across versions — so the
+guarantee that they agree with the report is structural, not pinned: both read the same view
+functions, and `tests/test_economics_report_plots.py` checks the files and that structural
+agreement.
 """
 
 from __future__ import annotations
 
+import contextlib
 import os
-from typing import Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import matplotlib
 
@@ -37,7 +43,7 @@ matplotlib.use("Agg")  # postprocessing runs headless
 import matplotlib.pyplot as plt  # noqa: E402  — backend must be set before pyplot
 
 from hisim.economics import views  # noqa: E402
-from hisim.economics.presentation_style import PresentationStyle  # noqa: E402
+from hisim.economics.presentation_style import PresentationStyle, group_name  # noqa: E402
 from hisim.economics.results import (  # noqa: E402
     EvaluationMatrix,
     LifecycleCostResult,
@@ -68,7 +74,7 @@ def _style_axis(axis) -> None:
     """Applies the shared chart chrome to one matplotlib axis.
 
     Drops the top and right spines, mutes the remaining ones, and puts a horizontal grid behind
-    the marks. Called from `_new_figure` so every chart in the set is styled identically; charts
+    the marks. Called from `_figure` so every chart in the set is styled identically; charts
     with a horizontal value axis override the grid direction afterwards.
     """
     axis.set_facecolor(_Palette.SURFACE)
@@ -81,18 +87,36 @@ def _style_axis(axis) -> None:
     axis.set_axisbelow(True)
 
 
-def _new_figure(width: float = 9.0, height: float = 4.2):
-    """Creates a styled figure/axis pair at the report's fixed width and resolution.
+@contextlib.contextmanager
+def _figure(width: float = 9.0, height: float = 4.2) -> Iterator[Tuple[Any, Any]]:
+    """A styled figure/axis pair at the report's fixed width and resolution, always closed.
 
     The single constructor for every chart here, so all PNGs of a run share a width, a DPI and
     the chrome from `_style_axis` and can therefore be stacked in a document without looking
     like they came from different tools. Callers pass a taller `height` for the horizontal
     charts, whose height scales with the number of rows.
+
+    It is a context manager because pyplot figures are held by a global registry until they are
+    closed: every plot function used to call `plt.close` as its last statement, so any exception
+    between creating the figure and that line — a malformed series, a missing key — leaked the
+    figure for the lifetime of the process, and a postprocessing run that writes plots per
+    building leaks one per failure. Closing in `finally` makes the cleanup a property of the
+    figure rather than of each function remembering to reach its last line.
+
+    Args:
+        width: Figure width in inches.
+        height: Figure height in inches; the horizontal charts scale it with their row count.
+
+    Yields:
+        The figure and its single axis, already styled.
     """
     figure, axis = plt.subplots(figsize=(width, height), dpi=130)
-    figure.patch.set_facecolor(_Palette.SURFACE)
-    _style_axis(axis)
-    return figure, axis
+    try:
+        figure.patch.set_facecolor(_Palette.SURFACE)
+        _style_axis(axis)
+        yield figure, axis
+    finally:
+        plt.close(figure)
 
 
 def plot_annual_cash_flows(result: LifecycleCostResult, path: str) -> str:
@@ -123,36 +147,35 @@ def plot_annual_cash_flows(result: LifecycleCostResult, path: str) -> str:
     for year, row in enumerate(folded):
         for index, value in row.items():
             per_group[index][year] = value
-    figure, axis = _new_figure()
-    bottom_pos = [0.0] * (horizon + 1)
-    bottom_neg = [0.0] * (horizon + 1)
-    for index, (group_name, _categories) in enumerate(PresentationStyle.DISPLAY_GROUPS):
-        values = per_group[index]
-        if not any(values):
-            continue
-        positives = [max(v, 0.0) for v in values]
-        negatives = [min(v, 0.0) for v in values]
-        if any(positives):
-            axis.bar(years, positives, bottom=bottom_pos, width=0.82, label=group_name,
-                     color=PresentationStyle.GROUP_COLORS_LIGHT[index], linewidth=0.6, edgecolor=_Palette.SURFACE)
-            bottom_pos = [b + v for b, v in zip(bottom_pos, positives)]
-        if any(negatives):
-            label = None if any(positives) else group_name
-            axis.bar(years, negatives, bottom=bottom_neg, width=0.82, label=label,
-                     color=PresentationStyle.GROUP_COLORS_LIGHT[index], linewidth=0.6, edgecolor=_Palette.SURFACE)
-            bottom_neg = [b + v for b, v in zip(bottom_neg, negatives)]
-    axis.axhline(0, color=_Palette.MUTED, linewidth=0.8)
-    axis.set_xlabel("year", color=_Palette.MUTED, fontsize=9)
-    axis.set_ylabel("nominal EUR per year", color=_Palette.MUTED, fontsize=9)
-    axis.set_title(
-        f"Annual cash flows — {result.perspective_id} "
-        f"(NPV {result.total_npv_in_euro.best_estimate:,.0f} EUR)",
-        fontsize=10, color=_Palette.INK, loc="left",
-    )
-    axis.legend(fontsize=7.5, frameon=False, ncol=2, labelcolor=_Palette.INK)
-    figure.tight_layout()
-    figure.savefig(path, facecolor=_Palette.SURFACE)
-    plt.close(figure)
+    with _figure() as (figure, axis):
+        bottom_pos = [0.0] * (horizon + 1)
+        bottom_neg = [0.0] * (horizon + 1)
+        for index in range(len(PresentationStyle.DISPLAY_GROUPS)):
+            values = per_group[index]
+            if not any(values):
+                continue
+            positives = [max(v, 0.0) for v in values]
+            negatives = [min(v, 0.0) for v in values]
+            if any(positives):
+                axis.bar(years, positives, bottom=bottom_pos, width=0.82, label=group_name(index),
+                         color=PresentationStyle.GROUP_COLORS_LIGHT[index], linewidth=0.6, edgecolor=_Palette.SURFACE)
+                bottom_pos = [b + v for b, v in zip(bottom_pos, positives)]
+            if any(negatives):
+                label = None if any(positives) else group_name(index)
+                axis.bar(years, negatives, bottom=bottom_neg, width=0.82, label=label,
+                         color=PresentationStyle.GROUP_COLORS_LIGHT[index], linewidth=0.6, edgecolor=_Palette.SURFACE)
+                bottom_neg = [b + v for b, v in zip(bottom_neg, negatives)]
+        axis.axhline(0, color=_Palette.MUTED, linewidth=0.8)
+        axis.set_xlabel("year", color=_Palette.MUTED, fontsize=9)
+        axis.set_ylabel("nominal EUR per year", color=_Palette.MUTED, fontsize=9)
+        axis.set_title(
+            f"Annual cash flows — {result.perspective_id} "
+            f"(NPV {result.total_npv_in_euro.best_estimate:,.0f} EUR)",
+            fontsize=10, color=_Palette.INK, loc="left",
+        )
+        axis.legend(fontsize=7.5, frameon=False, ncol=2, labelcolor=_Palette.INK)
+        figure.tight_layout()
+        figure.savefig(path, facecolor=_Palette.SURFACE)
     return path
 
 
@@ -186,27 +209,26 @@ def plot_investment_waterfall(result: LifecycleCostResult, path: str) -> str:
         net_values.append(share.net_in_euro)
     if not subjects:
         return path
-    figure, axis = _new_figure(height=max(2.2, 0.55 * len(subjects) + 1.2))
-    positions = range(len(subjects))
-    axis.barh(positions, net_values, color=PresentationStyle.GROUP_COLORS_LIGHT[0], label="net investment",
-              edgecolor=_Palette.SURFACE, linewidth=0.6)
-    axis.barh(positions, subsidy_values, left=net_values,
-              color=PresentationStyle.GROUP_COLORS_LIGHT[3],
-              label="covered by subsidies", edgecolor=_Palette.SURFACE, linewidth=0.6)
-    for position, (gross, net) in enumerate(zip(gross_values, net_values)):
-        axis.text(gross * 1.01, position, f"{net:,.0f} net / {gross:,.0f} gross", va="center",
-                  fontsize=7.5, color=_Palette.MUTED)
-    axis.set_yticks(list(positions), subjects, fontsize=8, color=_Palette.INK)
-    axis.invert_yaxis()
-    axis.xaxis.grid(True, color=_Palette.GRID, linewidth=0.6)
-    axis.yaxis.grid(False)
-    axis.set_xlabel("year-0 investment [EUR]", color=_Palette.MUTED, fontsize=9)
-    axis.set_title(f"Investment build-up (year 0) — {result.perspective_id}", fontsize=10,
-                   color=_Palette.INK, loc="left")
-    axis.legend(fontsize=7.5, frameon=False, labelcolor=_Palette.INK)
-    figure.tight_layout()
-    figure.savefig(path, facecolor=_Palette.SURFACE)
-    plt.close(figure)
+    with _figure(height=max(2.2, 0.55 * len(subjects) + 1.2)) as (figure, axis):
+        positions = range(len(subjects))
+        axis.barh(positions, net_values, color=PresentationStyle.GROUP_COLORS_LIGHT[0], label="net investment",
+                  edgecolor=_Palette.SURFACE, linewidth=0.6)
+        axis.barh(positions, subsidy_values, left=net_values,
+                  color=PresentationStyle.GROUP_COLORS_LIGHT[3],
+                  label="covered by subsidies", edgecolor=_Palette.SURFACE, linewidth=0.6)
+        for position, (gross, net) in enumerate(zip(gross_values, net_values)):
+            axis.text(gross * 1.01, position, f"{net:,.0f} net / {gross:,.0f} gross", va="center",
+                      fontsize=7.5, color=_Palette.MUTED)
+        axis.set_yticks(list(positions), subjects, fontsize=8, color=_Palette.INK)
+        axis.invert_yaxis()
+        axis.xaxis.grid(True, color=_Palette.GRID, linewidth=0.6)
+        axis.yaxis.grid(False)
+        axis.set_xlabel("year-0 investment [EUR]", color=_Palette.MUTED, fontsize=9)
+        axis.set_title(f"Investment build-up (year 0) — {result.perspective_id}", fontsize=10,
+                       color=_Palette.INK, loc="left")
+        axis.legend(fontsize=7.5, frameon=False, labelcolor=_Palette.INK)
+        figure.tight_layout()
+        figure.savefig(path, facecolor=_Palette.SURFACE)
     return path
 
 
@@ -235,23 +257,23 @@ def plot_perspective_costs(matrix: EvaluationMatrix, path: str) -> str:
         best_estimates.append(band.best_estimate)
         lows.append(band.best_estimate - band.minimum)
         highs.append(band.maximum - band.best_estimate)
-    figure, axis = _new_figure(height=max(2.2, 0.5 * len(labels) + 1.2))
-    positions = range(len(labels))
-    axis.errorbar(best_estimates, positions, xerr=[lows, highs], fmt="o", color=PresentationStyle.GROUP_COLORS_LIGHT[0],
-                  ecolor=PresentationStyle.GROUP_COLORS_LIGHT[0], elinewidth=2, capsize=3, markersize=7,
-                  markeredgecolor=_Palette.SURFACE, markeredgewidth=1.5)
-    for position, (_label, best_estimate) in enumerate(zip(labels, best_estimates)):
-        axis.text(best_estimates[position] + highs[position] + max(best_estimates) * 0.02, position,
-                  f"{best_estimate:,.0f} EUR/a", va="center", fontsize=7.5, color=_Palette.MUTED)
-    axis.set_yticks(list(positions), labels, fontsize=8, color=_Palette.INK)
-    axis.invert_yaxis()
-    axis.xaxis.grid(True, color=_Palette.GRID, linewidth=0.6)
-    axis.yaxis.grid(False)
-    axis.set_xlabel("equivalent annual cost [EUR/a] with min/max band", color=_Palette.MUTED, fontsize=9)
-    axis.set_title("Perspectives at a glance", fontsize=10, color=_Palette.INK, loc="left")
-    figure.tight_layout()
-    figure.savefig(path, facecolor=_Palette.SURFACE)
-    plt.close(figure)
+    with _figure(height=max(2.2, 0.5 * len(labels) + 1.2)) as (figure, axis):
+        positions = range(len(labels))
+        axis.errorbar(best_estimates, positions, xerr=[lows, highs], fmt="o",
+                      color=PresentationStyle.GROUP_COLORS_LIGHT[0],
+                      ecolor=PresentationStyle.GROUP_COLORS_LIGHT[0], elinewidth=2, capsize=3, markersize=7,
+                      markeredgecolor=_Palette.SURFACE, markeredgewidth=1.5)
+        for position, (_label, best_estimate) in enumerate(zip(labels, best_estimates)):
+            axis.text(best_estimates[position] + highs[position] + max(best_estimates) * 0.02, position,
+                      f"{best_estimate:,.0f} EUR/a", va="center", fontsize=7.5, color=_Palette.MUTED)
+        axis.set_yticks(list(positions), labels, fontsize=8, color=_Palette.INK)
+        axis.invert_yaxis()
+        axis.xaxis.grid(True, color=_Palette.GRID, linewidth=0.6)
+        axis.yaxis.grid(False)
+        axis.set_xlabel("equivalent annual cost [EUR/a] with min/max band", color=_Palette.MUTED, fontsize=9)
+        axis.set_title("Perspectives at a glance", fontsize=10, color=_Palette.INK, loc="left")
+        figure.tight_layout()
+        figure.savefig(path, facecolor=_Palette.SURFACE)
     return path
 
 
@@ -264,61 +286,60 @@ def plot_component_costs(result: LifecycleCostResult, path: str) -> str:
     breakdowns = list(result.component_breakdowns.items())
     if not breakdowns:
         return path
-    figure, axis = _new_figure(height=max(2.4, 0.55 * len(breakdowns) + 1.4))
-    positions = range(len(breakdowns))
-    lefts_pos = [0.0] * len(breakdowns)
-    lefts_neg = [0.0] * len(breakdowns)
-    per_subject = [
-        views.fold_categories(breakdown.npv_by_category, PresentationStyle.CATEGORY_TO_GROUP)
-        for _subject, breakdown in breakdowns
-    ]
-    for index, (group_name, _categories) in enumerate(PresentationStyle.DISPLAY_GROUPS):
-        values = [
-            grouped[index].best_estimate if index in grouped else 0.0 for grouped in per_subject
+    with _figure(height=max(2.4, 0.55 * len(breakdowns) + 1.4)) as (figure, axis):
+        positions = range(len(breakdowns))
+        lefts_pos = [0.0] * len(breakdowns)
+        lefts_neg = [0.0] * len(breakdowns)
+        per_subject = [
+            views.fold_categories(breakdown.npv_by_category, PresentationStyle.CATEGORY_TO_GROUP)
+            for _subject, breakdown in breakdowns
         ]
-        if not any(values):
-            continue
-        positives = [max(v, 0.0) for v in values]
-        negatives = [min(v, 0.0) for v in values]
-        if any(positives):
-            axis.barh(positions, positives, left=lefts_pos,
-                      color=PresentationStyle.GROUP_COLORS_LIGHT[index], label=group_name,
-                      edgecolor=_Palette.SURFACE, linewidth=0.6)
-            lefts_pos = [left + value for left, value in zip(lefts_pos, positives)]
-        if any(negatives):
-            label = None if any(positives) else group_name
-            axis.barh(positions, negatives, left=lefts_neg,
-                      color=PresentationStyle.GROUP_COLORS_LIGHT[index], label=label,
-                      edgecolor=_Palette.SURFACE, linewidth=0.6)
-            lefts_neg = [left + value for left, value in zip(lefts_neg, negatives)]
-    axis.axvline(0, color=_Palette.MUTED, linewidth=0.9)
-    # Net NPV band per subject: black dot with min/max whiskers on the same signed axis.
-    nets = [breakdown.total_npv_in_euro for _subject, breakdown in breakdowns]
-    axis.errorbar(
-        [band.best_estimate for band in nets],
-        list(positions),
-        xerr=[
-            [band.best_estimate - band.minimum for band in nets],
-            [band.maximum - band.best_estimate for band in nets],
-        ],
-        fmt="o", color=_Palette.INK, ecolor=_Palette.INK, elinewidth=1.4, capsize=3, markersize=5,
-        markeredgecolor=_Palette.SURFACE, markeredgewidth=1.2, label="net NPV (band)",
-    )
-    for position, band in enumerate(nets):
-        axis.text(lefts_pos[position] + max(lefts_pos) * 0.02 + 1, position,
-                  f"{band.best_estimate:,.0f} [{band.minimum:,.0f} | {band.maximum:,.0f}]",
-                  va="center", fontsize=7, color=_Palette.MUTED)
-    axis.set_yticks(list(positions), [subject for subject, _b in breakdowns], fontsize=8, color=_Palette.INK)
-    axis.invert_yaxis()
-    axis.xaxis.grid(True, color=_Palette.GRID, linewidth=0.6)
-    axis.yaxis.grid(False)
-    axis.set_xlabel("NPV [EUR] — credits left of 0, costs right; marker = net NPV band",
-                    color=_Palette.MUTED, fontsize=9)
-    axis.set_title(f"Per-component costs — {result.perspective_id}", fontsize=10, color=_Palette.INK, loc="left")
-    axis.legend(fontsize=7.5, frameon=False, ncol=2, labelcolor=_Palette.INK)
-    figure.tight_layout()
-    figure.savefig(path, facecolor=_Palette.SURFACE)
-    plt.close(figure)
+        for index in range(len(PresentationStyle.DISPLAY_GROUPS)):
+            values = [
+                grouped[index].best_estimate if index in grouped else 0.0 for grouped in per_subject
+            ]
+            if not any(values):
+                continue
+            positives = [max(v, 0.0) for v in values]
+            negatives = [min(v, 0.0) for v in values]
+            if any(positives):
+                axis.barh(positions, positives, left=lefts_pos,
+                          color=PresentationStyle.GROUP_COLORS_LIGHT[index], label=group_name(index),
+                          edgecolor=_Palette.SURFACE, linewidth=0.6)
+                lefts_pos = [left + value for left, value in zip(lefts_pos, positives)]
+            if any(negatives):
+                label = None if any(positives) else group_name(index)
+                axis.barh(positions, negatives, left=lefts_neg,
+                          color=PresentationStyle.GROUP_COLORS_LIGHT[index], label=label,
+                          edgecolor=_Palette.SURFACE, linewidth=0.6)
+                lefts_neg = [left + value for left, value in zip(lefts_neg, negatives)]
+        axis.axvline(0, color=_Palette.MUTED, linewidth=0.9)
+        # Net NPV band per subject: black dot with min/max whiskers on the same signed axis.
+        nets = [breakdown.total_npv_in_euro for _subject, breakdown in breakdowns]
+        axis.errorbar(
+            [band.best_estimate for band in nets],
+            list(positions),
+            xerr=[
+                [band.best_estimate - band.minimum for band in nets],
+                [band.maximum - band.best_estimate for band in nets],
+            ],
+            fmt="o", color=_Palette.INK, ecolor=_Palette.INK, elinewidth=1.4, capsize=3, markersize=5,
+            markeredgecolor=_Palette.SURFACE, markeredgewidth=1.2, label="net NPV (band)",
+        )
+        for position, band in enumerate(nets):
+            axis.text(lefts_pos[position] + max(lefts_pos) * 0.02 + 1, position,
+                      f"{band.best_estimate:,.0f} [{band.minimum:,.0f} | {band.maximum:,.0f}]",
+                      va="center", fontsize=7, color=_Palette.MUTED)
+        axis.set_yticks(list(positions), [subject for subject, _b in breakdowns], fontsize=8, color=_Palette.INK)
+        axis.invert_yaxis()
+        axis.xaxis.grid(True, color=_Palette.GRID, linewidth=0.6)
+        axis.yaxis.grid(False)
+        axis.set_xlabel("NPV [EUR] — credits left of 0, costs right; marker = net NPV band",
+                        color=_Palette.MUTED, fontsize=9)
+        axis.set_title(f"Per-component costs — {result.perspective_id}", fontsize=10, color=_Palette.INK, loc="left")
+        axis.legend(fontsize=7.5, frameon=False, ncol=2, labelcolor=_Palette.INK)
+        figure.tight_layout()
+        figure.savefig(path, facecolor=_Palette.SURFACE)
     return path
 
 
@@ -332,20 +353,19 @@ def plot_payback_curve(
     """
     curves = cumulative_discounted_savings(reference, variant)
     years = list(range(len(curves["best_estimate"])))
-    figure, axis = _new_figure(height=3.6)
-    styles = {"low": (":", 1.2, "optimistic"), "best_estimate": ("-", 2.2, "expected"),
-              "high": ("--", 1.2, "pessimistic")}
-    for slot, (linestyle, linewidth, label) in styles.items():
-        axis.plot(years, curves[slot], linestyle, linewidth=linewidth,
-                  color=PresentationStyle.GROUP_COLORS_LIGHT[0], label=label)
-    axis.axhline(0, color=_Palette.MUTED, linewidth=0.8)
-    axis.set_xlabel("year", color=_Palette.MUTED, fontsize=9)
-    axis.set_ylabel("cumulative discounted savings [EUR]", color=_Palette.MUTED, fontsize=9)
-    axis.set_title("Discounted payback (zero-crossing)", fontsize=10, color=_Palette.INK, loc="left")
-    axis.legend(fontsize=7.5, frameon=False, labelcolor=_Palette.INK)
-    figure.tight_layout()
-    figure.savefig(path, facecolor=_Palette.SURFACE)
-    plt.close(figure)
+    with _figure(height=3.6) as (figure, axis):
+        styles = {"low": (":", 1.2, "optimistic"), "best_estimate": ("-", 2.2, "expected"),
+                  "high": ("--", 1.2, "pessimistic")}
+        for slot, (linestyle, linewidth, label) in styles.items():
+            axis.plot(years, curves[slot], linestyle, linewidth=linewidth,
+                      color=PresentationStyle.GROUP_COLORS_LIGHT[0], label=label)
+        axis.axhline(0, color=_Palette.MUTED, linewidth=0.8)
+        axis.set_xlabel("year", color=_Palette.MUTED, fontsize=9)
+        axis.set_ylabel("cumulative discounted savings [EUR]", color=_Palette.MUTED, fontsize=9)
+        axis.set_title("Discounted payback (zero-crossing)", fontsize=10, color=_Palette.INK, loc="left")
+        axis.legend(fontsize=7.5, frameon=False, labelcolor=_Palette.INK)
+        figure.tight_layout()
+        figure.savefig(path, facecolor=_Palette.SURFACE)
     return path
 
 
@@ -356,11 +376,13 @@ def write_report_plots(
 ) -> List[str]:
     """Writes the PNG set for the first perspective (+ payback when comparing).
 
-    The module's only public orchestration point: called by `bridge.py` right after the HTML and
-    markdown reports are written, and by the `report` CLI, so the PNG set always accompanies a
-    report rather than being generated on its own. Only the matrix's first perspective is
-    plotted — the PNGs are a hand-out, and the full per-perspective treatment is the HTML
-    report's job — and an empty matrix produces no files instead of an error.
+    The module's only public orchestration point: called by the `report` CLI — and, from stack
+    part 8/8 on, by `bridge.py` right after the HTML and markdown reports are written — so the PNG
+    set always accompanies a report rather than being generated on its own. It owns the whole set,
+    the payback curve included: a caller that wrote a fifth PNG beside these four had to know a
+    file name only this function otherwise uses. Only the matrix's first perspective is plotted —
+    the PNGs are a hand-out, and the full per-perspective treatment is the HTML report's job — and
+    an empty matrix produces no files instead of an error.
 
     Args:
         matrix: Evaluated perspectives; the first one is the subject of the per-result charts.

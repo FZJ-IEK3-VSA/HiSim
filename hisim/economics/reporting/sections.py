@@ -12,8 +12,8 @@ from __future__ import annotations
 from typing import List, Tuple
 
 from hisim.economics import views
-from hisim.economics.input_audit import InputAuditReport, OriginKind, ResolvedInputRow
-from hisim.economics.presentation_style import group_of
+from hisim.economics.input_audit import InputAuditReport, OriginKind, ResolvedInputRow, price_basis
+from hisim.economics.presentation_style import PresentationStyle, group_of
 from hisim.economics.results import EvaluationMatrix, LifecycleCostResult
 from hisim.economics.timeline import CostCategory
 from hisim.economics.uncertainty import UncertainValue
@@ -22,21 +22,39 @@ from hisim.economics.uncertainty import UncertainValue
 from hisim.economics.reporting.summary import _band_str, _decisions_by_content, _fmt, _perspectives_note
 from hisim.economics.reporting.charts import (
     _annual_flow_svg,
+    _Bar,
+    _bar_row,
     _category_table,
     _cumulative_npv_svg,
     _details,
     _esc,
     _legend_html,
     _loan_svg,
-    _rect,
     _svg_open,
     _table,
-    _text,
     _waterfall_svg,
     _whisker_svg,
 )
 
 # ---------------------------------------------------------------------------- HTML report (A)
+
+
+def _group_color_declarations(colors: List[str]) -> str:
+    """The `--g0..--gN` custom-property declarations of one theme, from the palette itself.
+
+    The eight display-group hues have to appear in the stylesheet as well as in the palette the
+    charts and the matplotlib companions read, and writing them out twice is how a group ends up
+    one hue in the HTML and another in its PNG. Generating them means the palette is edited in one
+    place; the output is byte-for-byte the hand-written line it replaces.
+
+    Args:
+        colors: A theme's group colours in group order.
+
+    Returns:
+        The declarations as one line, e.g. ``--g0:#2a78d6; --g1:#1baf7a;`` — each terminated, so
+        the caller only adds the closing brace.
+    """
+    return " ".join(f"--g{index}:{color};" for index, color in enumerate(colors))
 
 
 class _ReportCss:
@@ -50,10 +68,12 @@ class _ReportCss:
     The whole palette is declared as CSS custom properties on `:root` and redeclared under
     `@media (prefers-color-scheme: dark)`, which is what makes the inline charts theme-aware: a
     bar filled with `var(--g3)` re-colours with the reader's system setting, something a
-    rasterized chart cannot do. `--g0`..`--g7` are the eight display-group hues and mirror
-    `PresentationStyle.GROUP_COLORS_LIGHT` / `GROUP_COLORS_DARK` index for index, so a group
-    keeps its colour across the HTML, its SVGs and the matplotlib PNGs — if one list is edited,
-    this one has to move with it. `--ink-*`, `--muted`, `--surface`, `--grid` and `--baseline`
+    rasterized chart cannot do. `--g0`..`--g7` are the eight display-group hues and are *generated*
+    from `PresentationStyle.GROUP_COLORS_LIGHT` / `GROUP_COLORS_DARK` rather than transcribed, so a
+    group keeps its colour across the HTML, its SVGs and the matplotlib PNGs by construction; the
+    two lists were previously copied here by hand and could drift apart silently, and a hue that
+    disagrees between an SVG and its PNG companion is a bug nobody reads as one. `--ink-*`,
+    `--muted`, `--surface`, `--grid` and `--baseline`
     are the chrome roles, and `--good`/`--warning`/`--critical` back the `.status.PASS` /
     `.status.WARN` / `.status.FAIL` classes the plausibility panel emits from the finding status
     verbatim.
@@ -64,11 +84,11 @@ class _ReportCss:
   --surface:#fcfcfb; --page:#f9f9f7; --ink-1:#0b0b0b; --ink-2:#52514e; --muted:#898781;
   --grid:#e1e0d9; --baseline:#c3c2b7; --border:rgba(11,11,11,0.10);
   --good:#0ca30c; --warning:#fab219; --critical:#d03b3b;
-  --g0:#2a78d6; --g1:#1baf7a; --g2:#eda100; --g3:#008300; --g4:#4a3aa7; --g5:#e34948; --g6:#e87ba4; --g7:#eb6834; }
+  """ + _group_color_declarations(PresentationStyle.GROUP_COLORS_LIGHT) + """ }
 @media (prefers-color-scheme: dark) { :root {
   --surface:#1a1a19; --page:#0d0d0d; --ink-1:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
   --grid:#2c2c2a; --baseline:#383835; --border:rgba(255,255,255,0.10);
-  --g0:#3987e5; --g1:#199e70; --g2:#c98500; --g3:#008300; --g4:#9085e9; --g5:#e66767; --g6:#d55181; --g7:#d95926; } }
+  """ + _group_color_declarations(PresentationStyle.GROUP_COLORS_DARK) + """ } }
 body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--page);
   color: var(--ink-1); margin: 0; padding: 24px; }
 main { max-width: 960px; margin: 0 auto; }
@@ -118,8 +138,14 @@ def _audit_section_html(audit: InputAuditReport) -> str:
     numbers: one row per priced fact with its size, its resolved unit price and lifetime, where
     that price came from and any flags raised while resolving it. This is the §9.5 "review one
     table instead of 46 files" workflow — a config-wiring mistake such as a 5000 kW heat pump is
-    an implausible size or price in this table long before it is a surprising NPV. The sources
-    table is appended so the prices above can be checked for currency in the same place.
+    an implausible size or price in this table long before it is a surprising NPV (and is flagged
+    as such: `AuditThresholds` bounds a size per unit, 1,000 kW among them). The sources table is
+    appended so the prices above can be checked for currency in the same place.
+
+    The unit price carries its **basis** rather than a flat "EUR/unit", from the same
+    `input_audit.price_basis` the CSV column uses: a database row states euro per unit of its size
+    while an override states an absolute amount for the whole subject, and printing the two under
+    one label made a per-kW figure and a total look like the same quantity.
     """
     # A named template beats an f-string here: seven placeholders, three of them formatted,
     # and the row's shape stays readable as HTML.
@@ -130,7 +156,7 @@ def _audit_section_html(audit: InputAuditReport) -> str:
             cls=_esc(row.asset_class),
             size=row.size,
             unit=_esc(row.size_unit),
-            price=_esc(_band_str(row.unit_price_in_euro, "EUR/unit")),
+            price=_esc(_band_str(row.unit_price_in_euro, price_basis(row))),
             life=f"{row.lifetime_in_years:g} a" if row.lifetime_in_years else "-",
             origin=_esc(_origin_label(row)),
             flags=_esc("; ".join(row.flags)),
@@ -386,6 +412,11 @@ def _subsidy_composition_svg(matrix: EvaluationMatrix) -> str:
     decisions, and falls back to any perspective with subsidy flows, which is what makes the
     chart appear for the §10.1 legacy flat shim (support with no award trail behind it). Renders
     empty when no perspective has support at all.
+
+    Which perspective won that selection is printed above the chart. A run's perspectives do not
+    have to agree about support — a gross view applies nothing a net view applies — so an unlabelled
+    composition invites the reader to take one perspective's funded share for the run's, and the
+    selection rule above is not something a reader of the output can see.
     """
     result = next(
         (res for res in matrix.results.values() if any(res.subsidy_decisions)), None
@@ -415,17 +446,26 @@ def _subsidy_composition_svg(matrix: EvaluationMatrix) -> str:
         subject, gross, subsidy, net = (
             share.subject, share.gross_in_euro, share.subsidy_in_euro, share.net_in_euro
         )
-        parts.append(_text(left - 8, y + row_h / 2 + 4, subject, 11, "end"))
-        parts.append(_rect(left, y + 4, net * scale, row_h - 8, "var(--g0)",
-                           f"{subject} - net cost after subsidies: {_fmt(net)} EUR", rx=2))
+        bars: List[_Bar] = [(left, net * scale, "var(--g0)",
+                             f"{subject} - net cost after subsidies: {_fmt(net)} EUR", 2)]
         if subsidy > 0:
-            parts.append(_rect(left + net * scale + 1.5, y + 4, max(subsidy * scale - 1.5, 0.5), row_h - 8,
-                               "var(--g3)", f"{subject} - subsidies: {_fmt(subsidy)} EUR", rx=2))
-        parts.append(_text(left + gross * scale + 6, y + row_h / 2 + 4,
-                           f"{share.share_of_gross:.0%} funded", 10, "start", "var(--muted)"))
+            bars.append((left + net * scale + 1.5, max(subsidy * scale - 1.5, 0.5), "var(--g3)",
+                         f"{subject} - subsidies: {_fmt(subsidy)} EUR", 2))
+        parts.extend(
+            _bar_row(
+                label=subject,
+                y=y,
+                row_h=row_h,
+                left=left,
+                bars=bars,
+                value=(left + gross * scale + 6, f"{share.share_of_gross:.0%} funded", "start"),
+            )
+        )
         y += row_h
     parts.append("</svg>")
     return (
+        f'<p class="sub">Composition drawn from perspective <b>{_esc(result.perspective_id)}</b>; '
+        "perspectives can differ in what they apply.</p>"
         '<div class="legend"><span class="chip"><span class="swatch" style="background:var(--g0)"></span>'
         'net cost</span><span class="chip"><span class="swatch" style="background:var(--g3)"></span>'
         "subsidies</span></div>" + "".join(parts)
@@ -492,6 +532,13 @@ def _subsidy_section_html(matrix: EvaluationMatrix) -> str:
     substitutes a note that the §10.1 legacy flat shim is doing the work instead — an audit trail
     requires a catalog. The section is omitted entirely only when there is neither a decision nor
     any support to draw.
+
+    An award is worth `views.award_total_amount` here, exactly as in the awards table below and in
+    `cost_summary.md`. The card used to print the *upfront* amount instead, unlabelled, so a
+    scheduled payout — a tax credit spread over years, whose upfront amount is zero by
+    construction — was listed as APPLIED for 0 EUR next to a table that valued the same award at
+    four thousand. Three renderings of one audit trail may not disagree about what an award is
+    worth.
     """
     cards = []
     for decision, perspective_ids in _decisions_by_content(matrix):
@@ -505,7 +552,7 @@ def _subsidy_section_html(matrix: EvaluationMatrix) -> str:
             cap_note = f" — cap binding in {', '.join(caps)}" if caps else ""
             lines.append(
                 f"<li><span class='status PASS'>APPLIED</span> {_esc(award.scheme_id)}: "
-                f"{_esc(_band_str(award.upfront_amount))}{_esc(cap_note)}</li>"
+                f"{_esc(_band_str(views.award_total_amount(award)))}{_esc(cap_note)}</li>"
             )
         for reject in decision.rejected:
             lines.append(

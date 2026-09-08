@@ -37,19 +37,21 @@ silently fixed.
 from __future__ import annotations
 
 import csv
+import enum
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 
 from hisim import log
 from hisim.economics.database import CostDatabase, CostDataError
 from hisim.economics.evaluator import EvaluationInputs, effective_price_basis_year
-from hisim.economics.input_audit import InputAuditReport, OriginKind, ResolvedInputRow
+from hisim.economics.input_audit import InputAuditReport, OriginKind, ResolvedInputRow, price_basis
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.provenance import ResolvedSource
 from hisim.economics.results import LifecycleCostResult
 from hisim.economics.uncertainty import UncertainValue
+from hisim.loadtypes import Units
 
 
 class AuditFileNames:
@@ -72,10 +74,44 @@ class AuditThresholds:
     in the audit row — never an error, never a changed number — because the threshold is a heuristic
     and the engine's own validation (`ComponentCostFacts.__post_init__`, the resolution check) is
     what actually rejects impossible declarations.
+
+    The size bound is **per unit**, because one number cannot be a heuristic for five quantities: a
+    single flat bound of 10,000 was loose enough to pass a 5,000 kW heat pump — the very example
+    §9.5 and the report's section 1 use to explain what the audit catches — while being tight
+    enough to flag a perfectly ordinary 30,000 l heating-oil tank. The bounds below are each set
+    where a *residential* declaration stops being believable: a thousand kW, kWh or m² is already
+    an apartment block rather than a house, a hundred thousand litres is a tank farm, and a
+    unitless count of ten thousand devices is a typo. They are deliberately generous — a flag is a
+    prompt to look, so a false positive costs a reader a glance while a false negative costs them
+    the whole report.
     """
 
-    #: Anything above this many units of a size is almost certainly a wiring mistake (§9.5).
-    IMPLAUSIBLE_SIZE = 1e4
+    #: Size above which a declaration is almost certainly a wiring mistake, per size unit (§9.5).
+    #: Keyed by the units `ComponentCostFacts.SUPPORTED_SIZE_UNITS` allows.
+    IMPLAUSIBLE_SIZE_BY_UNIT: Dict[Units, float] = {
+        Units.KILOWATT: 1e3,
+        Units.KWH: 1e3,
+        Units.SQUARE_METER: 1e3,
+        Units.LITER: 1e5,
+        Units.ANY: 1e4,
+    }
+
+    @classmethod
+    def implausible_size(cls, size_unit: Units) -> float:
+        """The bound for one size unit, falling back to the unitless one.
+
+        A unit added to `ComponentCostFacts.SUPPORTED_SIZE_UNITS` without a bound here falls back to
+        the ANY bound rather than raising: the audit's contract is that a heuristic never breaks a
+        run, so an un-tuned bound has to degrade to a looser one, not to a KeyError in the middle of
+        writing the report.
+
+        Args:
+            size_unit: The unit the declared size is stated in.
+
+        Returns:
+            The size above which the row is flagged.
+        """
+        return cls.IMPLAUSIBLE_SIZE_BY_UNIT.get(size_unit, cls.IMPLAUSIBLE_SIZE_BY_UNIT[Units.ANY])
 
 
 def build_input_audit(
@@ -91,7 +127,8 @@ def build_input_audit(
     wins whether or not a database entry exists), a cost-database entry with its `valid_from_year`
     key and source ids, or nothing at all. It then attaches the resulting gross investment and the
     subsidy outcome from the evaluated result, and flags what looks wrong: a missing database entry,
-    an override without an `override_source`, an implausible size.
+    an override without an `override_source`, a size above the bound
+    `AuditThresholds.implausible_size` sets for that size's unit.
 
     "Once" is the design point (W4.6). The same question used to be answered independently by the
     CSV writer here and by the HTML report's input-audit section, and the two implementations
@@ -137,7 +174,7 @@ def build_input_audit(
         lifetime = facts.lifetime_override_in_years
         if lifetime is None and entry is not None:
             lifetime = entry.service_life_in_years
-        if facts.size > AuditThresholds.IMPLAUSIBLE_SIZE:
+        if facts.size > AuditThresholds.implausible_size(facts.size_unit):
             flags.append(f"size {facts.size:,.0f} {facts.size_unit.value} looks implausible")
         breakdown = result.component_breakdowns.get(subject_facts.subject) if result else None
         decision = decisions_by_subject.get(subject_facts.subject)
@@ -211,23 +248,6 @@ def _csv_origin(row: ResolvedInputRow) -> str:
     return "unresolved - not priced"
 
 
-def _csv_price_basis(row: ResolvedInputRow) -> str:
-    """What the row's three unit-price columns are measured in.
-
-    The columns hold one number per slot but not one *kind* of number: a DATABASE row states the
-    entry's specific investment, euro per unit of the declared size (EUR/kW, EUR/m², …), while an
-    OVERRIDE row states an absolute euro amount for the whole subject, which is why the two are
-    never multiplied by the size the same way downstream. Labelling both "Unit price" and nothing
-    else made a per-kW figure and a total look like the same quantity in one column — this column
-    says which one a reader is looking at, and an UNRESOLVED row has no price and says nothing.
-    """
-    if row.origin_kind == OriginKind.ORIGIN_OVERRIDE:
-        return "EUR absolute (override)"
-    if row.origin_kind == OriginKind.ORIGIN_DATABASE:
-        return f"EUR/{row.size_unit} (database)"
-    return ""
-
-
 def write_cost_audit(audit: InputAuditReport, result_directory: str) -> str:
     """Writes cost_audit.csv: one row per component with origins, sources and bands (§9.5).
 
@@ -289,7 +309,7 @@ def write_cost_audit(audit: InputAuditReport, result_directory: str) -> str:
                 row.size_unit,
                 _csv_origin(row),
                 " ".join(row.source_ids),
-                _csv_price_basis(row),
+                price_basis(row),
                 unit_price.minimum if unit_price else "",
                 unit_price.best_estimate if unit_price else "",
                 unit_price.maximum if unit_price else "",
@@ -311,21 +331,43 @@ def write_cost_audit(audit: InputAuditReport, result_directory: str) -> str:
     return path
 
 
-def _read_legacy_csv(path: str) -> Optional[pd.DataFrame]:
-    """Reads one legacy cost CSV, or None when it is absent or unparseable.
+class LegacyCsvStatus(enum.Enum):
+    """Why a legacy cost CSV produced no table.
+
+    The two reasons are not the same finding and must not read as one. ABSENT is the ordinary
+    state of a run with `COMPUTE_CAPEX` off — there is nothing to compare against and nothing is
+    wrong. UNREADABLE means the file is there and this harness could not parse it, which is a
+    defect in the harness, in the legacy writer or in the file, and silently reporting it as "not
+    present (COMPUTE_CAPEX off)" is how a broken parity check looks exactly like a disabled one —
+    on the report whose whole purpose is to be the evidence base for the cutover decision.
+    """
+
+    ABSENT = "absent"
+    UNREADABLE = "unreadable"
+
+
+def _read_legacy_csv(path: str) -> Union[pd.DataFrame, LegacyCsvStatus]:
+    """Reads one legacy cost CSV, or says which way it failed.
 
     The single point at which this package touches legacy output, and it is strictly read-only
     (§10.0 rule 4). Every failure mode is non-fatal on purpose: the parity report is diagnostic
     evidence, and a missing or malformed legacy file must never turn into an error on a run whose
-    legacy results are fine.
+    legacy results are fine. Which failure it was, however, reaches the caller — see
+    `LegacyCsvStatus`.
+
+    Args:
+        path: The legacy CSV to read.
+
+    Returns:
+        The parsed table, or the `LegacyCsvStatus` saying why there is none.
     """
     if not os.path.isfile(path):
-        return None
+        return LegacyCsvStatus.ABSENT
     try:
         return pd.read_csv(path, sep=";")
     except (pd.errors.ParserError, OSError) as err:
         log.warning(f"Parity harness could not read {path}: {err}")
-        return None
+        return LegacyCsvStatus.UNREADABLE
 
 
 def write_parity_report(
@@ -364,6 +406,13 @@ def write_parity_report(
     Because the migrated database entries are degenerate bands (min = best_estimate = max), checking the
     BEST_ESTIMATE slot checks all three.
 
+    **Where the new value comes from.** Which origin won, what that origin's unit price is and which
+    lifetime applies are all read off `build_input_audit`'s rows rather than decided again here.
+    This function used to re-derive all three, and its override branch had already drifted: it took
+    the override as the whole subject's investment while the engine and the database branch both
+    multiply by `facts.count`, so every multi-unit subject with an override was reported as a
+    discrepancy that did not exist.
+
     Args:
         inputs: The declared facts, read back from `economic_inputs.json` so they provably predate
             the legacy run that produced the CSVs.
@@ -373,14 +422,33 @@ def write_parity_report(
 
     Returns:
         The path of `cost_parity_report.csv`, or None when the legacy capex CSV is absent (i.e.
-        COMPUTE_CAPEX was off and there is nothing to compare against).
+        COMPUTE_CAPEX was off and there is nothing to compare against) or could not be read.
     """
-    capex_df = _read_legacy_csv(os.path.join(result_directory, "investment_cost_co2_footprint.csv"))
-    if capex_df is None:
-        log.information("Parity report skipped: legacy capex CSV not present (COMPUTE_CAPEX off).")
+    legacy_path = os.path.join(result_directory, "investment_cost_co2_footprint.csv")
+    legacy_csv = _read_legacy_csv(legacy_path)
+    if isinstance(legacy_csv, LegacyCsvStatus):
+        if legacy_csv is LegacyCsvStatus.ABSENT:
+            log.information("Parity report skipped: legacy capex CSV not present (COMPUTE_CAPEX off).")
+        else:
+            log.warning(
+                f"Parity report skipped: the legacy capex CSV {legacy_path} exists but could not be "
+                "read, so this run contributes no parity evidence. This is a defect, not a disabled "
+                "option."
+            )
         return None
+    capex_df = legacy_csv
     path = os.path.join(result_directory, AuditFileNames.PARITY_REPORT_FILE_NAME)
-    year = effective_price_basis_year(parameters, database, inputs.simulation_year)
+    # The audit resolves override-vs-database precedence, the unit price and the lifetime once, and
+    # this harness reads them off its rows instead of deciding them a second time: the two answers
+    # disagreeing is precisely the class of defect W4.6 removed, and it would show up here as a
+    # fabricated discrepancy in the report the cutover decision rests on. No result is passed --
+    # parity compares declarations against the legacy CSV and needs no evaluated perspective.
+    audit = build_input_audit(inputs, database, parameters)
+    # Paired by subject, never by position: the audit builds one row per declared fact today, but a
+    # harness that silently relied on that would report subject A's origin and lifetime against
+    # subject B's legacy figures the day `build_input_audit` filters or reorders anything -- a
+    # wrong parity row that looks exactly like a real discrepancy.
+    rows_by_subject = {row.subject: row for row in audit.rows}
     fraction = inputs.simulated_period_fraction
     rows: List[List[Any]] = []
     legacy_by_component: Dict[str, Dict[str, float]] = {}
@@ -392,22 +460,46 @@ def write_parity_report(
                 "lifetime": float(row["Lifetime [Years]"]),
                 "investment_period": float(row["Investment for simulated period [EUR]"]),
             }
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, TypeError, ValueError) as err:
+            # Named, not swallowed: a renamed legacy column silently turns every component into a
+            # "not in legacy CSV" row, i.e. into a report that looks complete and compares nothing.
+            log.warning(
+                f"Parity harness could not read the legacy capex row for component '{name}' in "
+                f"{legacy_path}: {type(err).__name__}: {err}. The component is reported as not "
+                "present in the legacy CSV."
+            )
             continue
+    if len(capex_df.index) and not legacy_by_component:
+        log.warning(
+            f"Parity harness parsed none of the {len(capex_df.index)} data rows of {legacy_path}: "
+            "every component will be reported as not present in the legacy CSV, so the report "
+            "compares nothing. The columns the harness reads are most likely no longer the ones "
+            "the legacy path writes."
+        )
     for subject_facts in inputs.cost_facts:
         facts = subject_facts.facts
+        audit_row = rows_by_subject.get(subject_facts.subject)
         legacy = legacy_by_component.get(subject_facts.subject)
-        try:
-            entry = database.get_device_entry(facts.asset_class, year, parameters.country)
-        except CostDataError:
-            entry = None
-        if facts.investment_cost_override_in_euro is not None:
-            new_investment = facts.investment_cost_override_in_euro.best_estimate
-        elif entry is not None:
-            new_investment = entry.investment_for_size(facts.size).best_estimate * facts.count
-        else:
+        if audit_row is None:
+            log.warning(
+                f"Parity harness has no input-audit row for the declared subject "
+                f"'{subject_facts.subject}', so it has no new value to compare; the subject is "
+                "left out of the parity report."
+            )
             continue
-        lifetime = facts.lifetime_override_in_years or (entry.service_life_in_years if entry else 0.0)
+        if audit_row.origin_kind == OriginKind.ORIGIN_UNRESOLVED or audit_row.unit_price_in_euro is None:
+            continue
+        if audit_row.origin_kind == OriginKind.ORIGIN_OVERRIDE:
+            # `.scale(count)` exactly as the engine does it (calculators/context_resolution.py):
+            # an override states the price of one device, and a subject may declare several.
+            new_investment = audit_row.unit_price_in_euro.scale(float(facts.count)).best_estimate
+        else:
+            # The row says DATABASE, so this lookup is the one `build_input_audit` already made and
+            # cannot fail. The entry is needed rather than the row's unit price because sizing is
+            # the entry's own law (`investment_for_size`: absolute, power-law or linear).
+            entry = database.get_device_entry(facts.asset_class, audit.price_basis_year, parameters.country)
+            new_investment = entry.investment_for_size(facts.size).scale(float(facts.count)).best_estimate
+        lifetime = audit_row.lifetime_in_years or 0.0
         new_period = new_investment / lifetime * fraction if lifetime else 0.0
         if legacy is None:
             rows.append([subject_facts.subject, "investment", "", new_investment, "", "not in legacy CSV"])

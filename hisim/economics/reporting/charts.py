@@ -11,15 +11,15 @@ already-computed results; no section layout. Split out of the former single-modu
 from __future__ import annotations
 
 import html
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from hisim.economics import views
-from hisim.economics.presentation_style import PresentationStyle
+from hisim.economics.presentation_style import PresentationStyle, group_name
 from hisim.economics.results import EvaluationMatrix, LifecycleCostResult, VariantComparison
 from hisim.economics.uncertainty import Slot, UncertainValue
 
 
-from hisim.economics.reporting.summary import _band_str, _fmt
+from hisim.economics.reporting.summary import _band_str, _fmt, _reference_result
 
 
 class _ReportStyle:
@@ -107,10 +107,74 @@ def _hline(x1: float, x2: float, y: float, color: str = "var(--baseline)", width
 
     Two unrelated jobs share one primitive because both are a straight segment at a constant y:
     axis chrome (default colour `--baseline`, hairline) and the min-to-max whisker of the
-    banded charts (caller passes a group colour and a heavier stroke). It is also used
-    degenerately, with `x1 == x2`, to mark a point.
+    banded charts (caller passes a group colour and a heavier stroke). Both draw something only
+    when `x1 != x2` — a degenerate call renders nothing, which is how `_whisker_svg`'s zero
+    marker came to be invisible; a vertical rule is written out as a `<line>` by the charts that
+    need one.
     """
     return f'<line x1="{x1:.1f}" y1="{y:.1f}" x2="{x2:.1f}" y2="{y:.1f}" stroke="{color}" stroke-width="{width}"/>'
+
+
+#: One bar of a `_bar_row`: `(x, width, colour, tooltip, corner radius)` in user units. The row's
+#: y and height are not part of it — they follow from the row, which is the point of the helper.
+_Bar = Tuple[float, float, str, str, float]
+
+
+def _bar_row(
+    label: str,
+    y: float,
+    row_h: float,
+    left: float,
+    bars: Sequence[_Bar] = (),
+    marks: Sequence[str] = (),
+    value: Optional[Tuple[float, str, str]] = None,
+    inset: float = 4.0,
+    emphasis: bool = False,
+    value_size: int = 10,
+) -> List[str]:
+    """One row of a horizontal bar chart: label, bars, extra marks, value label.
+
+    Five charts in this package draw the same row — a right-aligned label ending just before the
+    plot area, one or more bars inset vertically inside the row, and a figure printed past the end
+    of the bar — and each of them used to hand-write the four offsets that make a row look like a
+    row: the label at `left - 8` on the row's optical centre `y + row_h / 2 + 4`, the bar at
+    `y + inset` with height `row_h - 2 * inset`, the value label on that same centre line. Five
+    copies of those offsets is five chances for one chart to sit a pixel off the others, which is
+    exactly the kind of drift nobody reports and everybody notices.
+
+    Row *height* stays with the caller (`row_h`, and the `y += row_h` after each call), because it
+    is the caller that knows how many rows it has and how tall its canvas must be.
+
+    Args:
+        label: The row's name, drawn right-aligned before the plot area.
+        y: Top of the row in user units.
+        row_h: Row height; the label and value sit on `y + row_h / 2 + 4`.
+        left: Left edge of the plot area — the label ends 8 units before it.
+        bars: `(x, width, colour, tooltip, rx)` per bar, drawn in order and inset vertically.
+        marks: Pre-rendered SVG emitted after the bars, for marks that are not bars (the whisker
+            and dot of a banded row).
+        value: `(x, text, anchor)` of the figure printed next to the bar, or None for no figure.
+        inset: Vertical gap between the row and its bars, which is what leaves a visible gap
+            between adjacent rows.
+        emphasis: Draws the label and value in the ink colour and bold — a total row.
+        value_size: Font size of the value label.
+
+    Returns:
+        The row's SVG parts, in drawing order, for the caller to extend its parts list with.
+    """
+    ink = "var(--ink-1)"
+    parts = [_text(left - 8, y + row_h / 2 + 4, label, 11, "end", ink if emphasis else "var(--ink-2)", bold=emphasis)]
+    parts.extend(
+        _rect(x, y + inset, width, row_h - 2 * inset, color, tooltip, rx) for x, width, color, tooltip, rx in bars
+    )
+    parts.extend(marks)
+    if value is not None:
+        value_x, value_text, value_anchor = value
+        parts.append(
+            _text(value_x, y + row_h / 2 + 4, value_text, value_size, value_anchor,
+                  ink if emphasis else "var(--muted)", bold=emphasis)
+        )
+    return parts
 
 
 def _table(headers: List[str], rows: List[List[str]]) -> str:
@@ -157,11 +221,11 @@ def _category_table(result: LifecycleCostResult) -> str:
     """
     rows = []
     group_npv = views.fold_categories(result.npv_by_category, PresentationStyle.CATEGORY_TO_GROUP)
-    for index, (group_name, categories) in enumerate(PresentationStyle.DISPLAY_GROUPS):
+    for index, (_label, categories) in enumerate(PresentationStyle.DISPLAY_GROUPS):
         group_total = group_npv.get(index)
         if group_total is None or not (group_total.best_estimate or group_total.minimum or group_total.maximum):
             continue
-        rows.append([f"<b>{_esc(group_name)}</b>", f"<b>{_esc(_band_str(group_total))}</b>"])
+        rows.append([f"<b>{_esc(group_name(index))}</b>", f"<b>{_esc(_band_str(group_total))}</b>"])
         for category in categories:
             value = result.npv_by_category.get(category)
             if value is not None and (value.best_estimate or value.minimum or value.maximum):
@@ -231,12 +295,18 @@ def _co2_section_html(matrix: EvaluationMatrix) -> str:
     damage cost (a macroeconomic charge) is ever added to them.
 
     Three views of the same figures: sorted horizontal bars, a cumulative operational curve over
-    the horizon (flat-sloped, because v1 holds emission factors constant — the caption says so),
-    and a table whose Total row closes against `total_co2_in_kg`. Emissions are never discounted,
+    the horizon (flat-sloped, because v1 holds emission factors constant — the caption says so;
+    revisit both the slope and that caption when a time-varying emission-factor path ships, spec
+    §3.8), and a table whose Total row closes against `total_co2_in_kg`. Emissions are never
+    discounted,
     so unlike the money charts this one has no present-value counterpart. Renders as the empty
     string when the run has no emissions data at all.
+
+    Raises:
+        ValueError: If the matrix holds no evaluated perspective (see `_reference_result`); the
+            section is drawn from the reference one.
     """
-    result = next(iter(matrix.results.values()))
+    result = _reference_result(matrix)
     co2 = result.lifecycle_co2_result
     embodied = dict(co2.embodied_by_subject_in_kg)
     operational = dict(co2.operational_co2_by_carrier_in_kg)
@@ -255,11 +325,17 @@ def _co2_section_html(matrix: EvaluationMatrix) -> str:
     y = 4.0
     for subject, value, kind in entries:
         color = "var(--g0)" if kind == "embodied" else "var(--g7)"
-        parts.append(_text(left - 8, y + row_h / 2 + 4, subject, 11, "end"))
-        parts.append(_rect(left, y + 4, value * scale, row_h - 8, color,
-                           f"{subject} ({kind}): {value:,.0f} kg CO2 over the horizon", rx=3))
-        parts.append(_text(left + value * scale + 6, y + row_h / 2 + 4, f"{value:,.0f} kg", 10,
-                           "start", "var(--muted)"))
+        parts.extend(
+            _bar_row(
+                label=subject,
+                y=y,
+                row_h=row_h,
+                left=left,
+                bars=[(left, value * scale, color,
+                       f"{subject} ({kind}): {value:,.0f} kg CO2 over the horizon", 3)],
+                value=(left + value * scale + 6, f"{value:,.0f} kg", "start"),
+            )
+        )
         y += row_h
     parts.append("</svg>")
     bars = "".join(parts)
@@ -315,7 +391,7 @@ def _legend_html(groups_present: List[int]) -> str:
     """
     chips = "".join(
         f'<span class="chip"><span class="swatch" style="background:var(--g{index})"></span>'
-        f"{_esc(PresentationStyle.DISPLAY_GROUPS[index][0])}</span>"
+        f"{_esc(group_name(index))}</span>"
         for index in groups_present
     )
     return f'<div class="legend">{chips}</div>'
@@ -336,7 +412,9 @@ def _annual_flow_svg(result: LifecycleCostResult) -> str:
     requires instead of at a fixed height; one shared `scale` covers `max_pos + max_neg` so the
     two halves stay comparable. Each segment is shortened by up to 1px
     (`bar_h - min(1.0, bar_h * 0.3)`) to leave a hairline between stacked groups without
-    swallowing a thin one, and x-ticks are thinned to about ten labels whatever the horizon.
+    swallowing a thin one, and x-ticks are thinned by `horizon // 10`, which gives about ten
+    labels at a 100-year horizon and fewer below it — a 20-year run is labelled every other year,
+    a 5-year run every year — because integer division floors the step at 1.
     """
     horizon = result.parameters.observation_period_in_years
     per_year: List[Dict[int, float]] = views.fold_category_matrix(
@@ -354,12 +432,12 @@ def _annual_flow_svg(result: LifecycleCostResult) -> str:
     for year, groups in enumerate(per_year):
         x = left + year * bar_w
         y_pos, y_neg = zero_y, zero_y
-        for index, display_group in enumerate(PresentationStyle.DISPLAY_GROUPS):
+        for index in range(len(PresentationStyle.DISPLAY_GROUPS)):
             value = groups.get(index, 0.0)
             if not value:
                 continue
             bar_h = abs(value) * scale
-            tooltip = f"year {year} - {display_group[0]}: {_fmt(value)} EUR"
+            tooltip = f"year {year} - {group_name(index)}: {_fmt(value)} EUR"
             if value > 0:
                 y_pos -= bar_h
                 parts.append(_rect(x + 1, y_pos, bar_w - 2, bar_h - min(1.0, bar_h * 0.3), f"var(--g{index})", tooltip))
@@ -467,23 +545,36 @@ def _waterfall_svg(steps: List[Tuple[str, float, str]], total_label: str, net: f
     for label, value, color in steps:
         x_from = left + min(cursor, cursor + value) * scale
         bar_w = abs(value) * scale
-        parts.append(_text(left - 8, y + row_h / 2 + 4, label, 11, "end"))
-        parts.append(_rect(x_from, y + 4, bar_w, row_h - 8, color, f"{label}: {_fmt(value)} EUR", rx=3))
-        parts.append(
-            _text(x_from + bar_w + 6 if value >= 0 else x_from - 6, y + row_h / 2 + 4,
-                  f"{'+' if value >= 0 else ''}{_fmt(value)}", 10,
-                  "start" if value >= 0 else "end", "var(--muted)")
+        parts.extend(
+            _bar_row(
+                label=label,
+                y=y,
+                row_h=row_h,
+                left=left,
+                bars=[(x_from, bar_w, color, f"{label}: {_fmt(value)} EUR", 3)],
+                value=(
+                    x_from + bar_w + 6 if value >= 0 else x_from - 6,
+                    f"{'+' if value >= 0 else ''}{_fmt(value)}",
+                    "start" if value >= 0 else "end",
+                ),
+            )
         )
         cursor += value
         y += row_h
     parts.append(_hline(left, width - 10, y + 2, "var(--baseline)"))
     y += 8
-    parts.append(_text(left - 8, y + row_h / 2 + 4, total_label, 11, "end", "var(--ink-1)", bold=True))
-    parts.append(
-        _rect(left, y + 4, abs(net) * scale, row_h - 8, "var(--ink-1)", f"{total_label}: {_fmt(net)} EUR", rx=3)
+    parts.extend(
+        _bar_row(
+            label=total_label,
+            y=y,
+            row_h=row_h,
+            left=left,
+            bars=[(left, abs(net) * scale, "var(--ink-1)", f"{total_label}: {_fmt(net)} EUR", 3)],
+            value=(left + abs(net) * scale + 6, f"{_fmt(net)} EUR", "start"),
+            emphasis=True,
+            value_size=11,
+        )
     )
-    parts.append(_text(left + abs(net) * scale + 6, y + row_h / 2 + 4, f"{_fmt(net)} EUR", 11, "start",
-                       "var(--ink-1)", bold=True))
     parts.append("</svg>")
     return "".join(parts)
 
@@ -501,7 +592,8 @@ def _whisker_svg(rows: List[Tuple[str, UncertainValue]], unit: str) -> str:
     Geometry: the axis spans `min(0, smallest minimum)` to the largest maximum, so zero is
     always on the canvas and rows with credits (negative NPVs) read correctly against it; `to_x`
     maps value to pixel, labels sit to the right of each maximum, and the numeric band is
-    printed next to the whisker so the chart is readable without hovering.
+    printed next to the whisker so the chart is readable without hovering. When some row is
+    negative, a vertical rule marks zero across the rows.
     """
     width, row_h, left = 860, 30, 220
     height = len(rows) * row_h + 30
@@ -516,17 +608,31 @@ def _whisker_svg(rows: List[Tuple[str, UncertainValue]], unit: str) -> str:
     y = 8.0
     for label, band in rows:
         mid = y + row_h / 2
-        parts.append(_text(left - 8, mid + 4, label, 11, "end"))
-        parts.append(_hline(to_x(band.minimum), to_x(band.maximum), mid, "var(--g0)", 2))
-        parts.append(
-            f'<circle cx="{to_x(band.best_estimate):.1f}" cy="{mid:.1f}" r="5" fill="var(--g0)" '
-            f'stroke="var(--surface)" stroke-width="2">'
-            f"<title>{_esc(label)}: {_esc(_band_str(band, unit))}</title></circle>"
+        parts.extend(
+            _bar_row(
+                label=label,
+                y=y,
+                row_h=row_h,
+                left=left,
+                marks=[
+                    _hline(to_x(band.minimum), to_x(band.maximum), mid, "var(--g0)", 2),
+                    f'<circle cx="{to_x(band.best_estimate):.1f}" cy="{mid:.1f}" r="5" fill="var(--g0)" '
+                    f'stroke="var(--surface)" stroke-width="2">'
+                    f"<title>{_esc(label)}: {_esc(_band_str(band, unit))}</title></circle>",
+                ],
+                value=(to_x(band.maximum) + 8, _band_str(band, unit), "start"),
+            )
         )
-        parts.append(_text(to_x(band.maximum) + 8, mid + 4, _band_str(band, unit), 10, "start", "var(--muted)"))
         y += row_h
     if min_value < 0:
-        parts.append(_hline(to_x(0.0), to_x(0.0), 4, "var(--baseline)"))
+        # A vertical rule through every row, not a zero-length horizontal one: the marker exists to
+        # say which side of zero a row sits on, and a line whose two x coordinates were identical
+        # drew nothing at all — the axis was invisible in exactly the charts (payer NPVs, per-carrier
+        # bills with a credit) that have negative rows and therefore need it.
+        zero_x = to_x(0.0)
+        parts.append(
+            f'<line x1="{zero_x:.1f}" y1="4" x2="{zero_x:.1f}" y2="{height - 8}" stroke="var(--baseline)"/>'
+        )
     parts.append("</svg>")
     return "".join(parts)
 
@@ -548,8 +654,10 @@ def _stacked_subject_svg(result: LifecycleCostResult) -> str:
     Geometry: `pos_span`/`neg_span` are the widest cost and credit stacks, each additionally
     widened to cover the net band's maximum/minimum so the whisker can never be drawn off the
     canvas; the zero line is placed `neg_span * scale` from the left, which is why it moves
-    between runs. Credit rects are emitted inline rather than through `_rect` so they can carry
-    a `class="credit"` hook for styling; the shipped stylesheet does not currently use it.
+    between runs. Cost and credit rects are the same mark drawn on opposite sides of that line:
+    the credit ones used to be written out inline so they could carry a `class="credit"` hook,
+    which no rule in the shipped stylesheet ever matched — a second copy of `_rect`'s markup kept
+    alive for a hook nobody styled.
     """
     breakdowns = list(result.component_breakdowns.values())
     if not breakdowns:
@@ -588,35 +696,39 @@ def _stacked_subject_svg(result: LifecycleCostResult) -> str:
     for breakdown in breakdowns:
         mid = y + row_h / 2
         values = per_subject[breakdown.subject]
-        parts.append(_text(left - 8, mid + 4, breakdown.subject, 11, "end"))
+        bars: List[_Bar] = []
         x_pos = zero_x
         x_neg = zero_x
-        for index, display_group in enumerate(PresentationStyle.DISPLAY_GROUPS):
+        for index in range(len(PresentationStyle.DISPLAY_GROUPS)):
             value = values.get(index, 0.0)
             if not value:
                 continue
             bar_w = abs(value) * scale
-            tooltip = f"{breakdown.subject} - {display_group[0]}: {_fmt(value)} EUR NPV"
+            tooltip = f"{breakdown.subject} - {group_name(index)}: {_fmt(value)} EUR NPV"
             if value > 0:
-                parts.append(
-                    _rect(x_pos, y + 5, max(bar_w - 1.5, 0.5), row_h - 10, f"var(--g{index})", tooltip, rx=2)
-                )
+                bars.append((x_pos, max(bar_w - 1.5, 0.5), f"var(--g{index})", tooltip, 2))
                 x_pos += bar_w
             else:
                 x_neg -= bar_w
-                parts.append(
-                    f'<rect class="credit" x="{x_neg:.1f}" y="{y + 5:.1f}" width="{max(bar_w - 1.5, 0.5):.1f}" '
-                    f'height="{row_h - 10:.1f}" fill="var(--g{index})" rx="2">'
-                    f"<title>{_esc(tooltip)}</title></rect>"
-                )
+                bars.append((x_neg, max(bar_w - 1.5, 0.5), f"var(--g{index})", tooltip, 2))
         total = breakdown.total_npv_in_euro
-        parts.append(_hline(to_x(total.minimum), to_x(total.maximum), mid, "var(--ink-1)", 1.5))
-        parts.append(
-            f'<circle cx="{to_x(total.best_estimate):.1f}" cy="{mid:.1f}" r="4" fill="var(--ink-1)" '
-            f'stroke="var(--surface)" stroke-width="1.5">'
-            f"<title>{_esc(breakdown.subject)} net NPV: {_esc(_band_str(total))}</title></circle>"
+        parts.extend(
+            _bar_row(
+                label=breakdown.subject,
+                y=y,
+                row_h=row_h,
+                left=left,
+                bars=bars,
+                marks=[
+                    _hline(to_x(total.minimum), to_x(total.maximum), mid, "var(--ink-1)", 1.5),
+                    f'<circle cx="{to_x(total.best_estimate):.1f}" cy="{mid:.1f}" r="4" fill="var(--ink-1)" '
+                    f'stroke="var(--surface)" stroke-width="1.5">'
+                    f"<title>{_esc(breakdown.subject)} net NPV: {_esc(_band_str(total))}</title></circle>",
+                ],
+                value=(x_pos + 8, _band_str(total), "start"),
+                inset=5,
+            )
         )
-        parts.append(_text(x_pos + 8, mid + 4, _band_str(total), 10, "start", "var(--muted)"))
         y += row_h
     parts.append(_text(zero_x, height - 6, "credits left | costs right of 0; whisker + dot = net NPV band",
                        9, "middle", "var(--muted)"))

@@ -22,9 +22,11 @@ from hisim.loadtypes import ComponentType
 
 pytestmark = pytest.mark.base
 
+# HeatPumpHplib is deliberately absent: main retired advanced_heat_pump_hplib into the obsolete
+# staging area (#604), and its `get_cost_facts` adoption went with the module. The fleet's hplib
+# heat pump is MoreAdvancedHeatPumpHPLib, which declares PRICED and is priced through the adapter
+# table rather than the hook, so it has no declaration for this test to check.
 ADOPTED_COMPONENTS = [
-    ("hisim.components.advanced_heat_pump_hplib", "HeatPumpHplib", "HeatPumpHplibConfig",
-     "get_default_generic_advanced_hp_lib", "config"),
     ("hisim.components.generic_pv_system", "PVSystem", "PVSystemConfig", "get_default_pv_system", "config"),
     ("hisim.components.advanced_battery_bslib", "Battery", "BatteryConfig", "get_default_config", "battery_config"),
     ("hisim.components.electricity_meter", "ElectricityMeter", "ElectricityMeterConfig",

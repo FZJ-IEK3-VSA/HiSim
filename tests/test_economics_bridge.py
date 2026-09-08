@@ -67,18 +67,26 @@ def test_lifecycle_cost_engine_runs_in_shadow_mode() -> None:
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
+    # The weather config is built first because the PV and building configs copy its identity
+    # (weather_identity) and the sizing kernel refuses a config that still carries an unresolved
+    # field, exactly as the shipped system setups do it.
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
     my_weather = weather.Weather(
-        config=weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN),
+        config=my_weather_config,
         my_simulation_parameters=my_simulation_parameters,
     )
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+        share_of_maximum_pv_potential=1, rooftop_area_in_m2=120
+    )
+    my_photovoltaic_system_config.weather_identity = my_weather_config.identity()
     my_photovoltaic_system = generic_pv_system.PVSystem(
-        config=generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-            share_of_maximum_pv_potential=1, rooftop_area_in_m2=120
-        ),
+        config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
     )
+    my_building_config = building.BuildingConfig.preset_standard("Building")
+    my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(
-        config=building.BuildingConfig.preset_standard("Building"),
+        config=my_building_config,
         my_simulation_parameters=my_simulation_parameters,
     )
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(

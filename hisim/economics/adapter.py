@@ -99,21 +99,6 @@ def _quantity_value(value: Any) -> float:
     return float(getattr(value, "value", value))
 
 
-def _heat_pump_facts(config: Any) -> ComponentCostFacts:
-    """Facts for `HeatPumpHplib` from its configured thermal output power.
-
-    Named rather than inlined into the table below because the config field arrives as a typed
-    `Quantity` and needs unwrapping. Sized in kW thermal, which is what the `HEAT_PUMP` device
-    entries are priced per (§3.5); the KPI tag marks it as the space-heating heat pump.
-    """
-    return ComponentCostFacts(
-        asset_class=ComponentType.HEAT_PUMP,
-        size=_quantity_value(config.set_thermal_output_power_in_watt) * 1e-3,
-        size_unit=Units.KILOWATT,
-        kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-    )
-
-
 def _boiler_facts(config: Any) -> Optional[ComponentCostFacts]:
     """Facts for `GenericBoiler`, whose asset class depends on the fuel it burns.
 
@@ -196,7 +181,9 @@ class FactsExtractors:
     """
 
     BY_CLASS_NAME: Dict[str, Callable[[Any], Optional[ComponentCostFacts]]] = {
-        "HeatPumpHplib": _heat_pump_facts,
+        # HeatPumpHplib has no entry: main retired it into the obsolete staging area (#604), and
+        # the contract test rightly refuses a key that names no class in hisim.components. The
+        # fleet's hplib heat pump is MoreAdvancedHeatPumpHPLib below.
         "MoreAdvancedHeatPumpHPLib": lambda config: ComponentCostFacts(
             asset_class=ComponentType.HEAT_PUMP,
             size=_quantity_value(config.set_thermal_output_power_in_watt) * 1e-3,

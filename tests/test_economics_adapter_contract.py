@@ -84,6 +84,11 @@ class AdapterContractScan:
     AUTO_SUBSTITUTES: Dict[str, Any] = {
         "GenericBoilerConfig.minimal_thermal_power_in_watt": 3000.0,
         "GenericBoilerConfig.maximal_thermal_power_in_watt": 12000.0,
+        # Only sizable on current main (the PR CI runs on the merge with main); the extractor
+        # never reads it, so any realized identity string exercises the sweep.
+        "PVSystemConfig.weather_identity": (
+            "Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center"
+        ),
         "HeatDistributionConfig.heating_system": HeatDistributionSystemType.RADIATOR,
         "HeatDistributionConfig.water_mass_flow_rate_in_kg_per_second": 0.5,
         "HeatDistributionConfig.absolute_conditioned_floor_area_in_m2": 120.0,
@@ -192,7 +197,7 @@ class AdapterContractScan:
         return dataclasses.replace(config, **substitutes)
 
     @classmethod
-    def uninitialized(cls, component_class: type) -> Any:
+    def uninitialized(cls, component_class: Any) -> Any:
         """A bare instance of the component class carrying a default config, built without ``__init__``.
 
         ``get_meter_spec`` reads a component's class and, for the two meters whose carrier depends
@@ -202,7 +207,8 @@ class AdapterContractScan:
         attached when the class has one.
 
         Args:
-            component_class: The component class to instantiate.
+            component_class: The component class to instantiate. Typed ``Any`` because
+                ``type.__new__`` has no overload accepting an arbitrary class object.
 
         Returns:
             The bare instance, with ``config`` set when a default config could be built.

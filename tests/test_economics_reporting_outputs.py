@@ -603,4 +603,4 @@ class TestPngsAndCli:
         # what the NPV bridge decomposes; without it the section is skipped, and nothing else
         # here would notice.
         report = (variant_dir / "lifecycle_report.html").read_text(encoding="utf-8")
-        assert 'id="building-npv-bridge"' in report
+        assert 'id="vs-reference-npv-bridge"' in report

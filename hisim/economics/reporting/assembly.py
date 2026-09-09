@@ -1,10 +1,19 @@
 """Assembly of the HTML lifecycle report (cost_spec.md §7.2).
 
 The remaining sections (perspectives, actors, scenarios, KPIs, components, checks,
-variant comparison) and the two entry points `build_lifecycle_report_html` and
-`write_lifecycle_report` that stitch every section into the final self-contained
-document, in the order `scaffold.ReportSections.ORDER` declares. Split out of the former
-single-module `reporting.py` (PR-3 review); the package `__init__` re-exports everything.
+variant comparison), the four chapter builders the document is told as (owner decision Q24) and
+the two entry points `build_lifecycle_report_html` and `write_lifecycle_report` that stitch them
+into the final self-contained document. Split out of the former single-module `reporting.py`
+(PR-3 review); the package `__init__` re-exports everything.
+
+**Chapters, not one list.** The report used to be one flat sequence that told three stories at
+once — the perspective-free cost of the technology, the owner-occupier's, the landlord and
+tenant's, the macroeconomic one — with each section picking a perspective of its own. It is now
+`_building_chapter_html` plus one builder per story, each rendering its sections on the
+perspectives `views.story_perspectives` classified into it and opening them through a
+chapter-scoped `scaffold._ChapterContext`, so anchors are chapter-prefixed and a section name
+appearing in two chapters is explained once. A chapter whose perspectives this run has none of
+is skipped with a log line, never rendered empty.
 """
 
 
@@ -12,7 +21,7 @@ from __future__ import annotations
 
 import datetime
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from hisim.economics import views
 from hisim.economics.input_audit import InputAuditReport
@@ -58,6 +67,7 @@ from hisim.economics.reporting.scaffold import (
 )
 from hisim.economics.reporting.sections import (
     _ReportCss,
+    _assumptions_section_html,
     _audit_section_html,
     _co2_section_html,
     _energy_section_html,
@@ -80,8 +90,11 @@ from hisim.economics.reporting.sections_charts import (
     _liquidity_section_html,
     _loan_section_html,
     _monthly_burden_section_html,
+    _owner_statement_section_html,
+    _society_statement_section_html,
     _sources_uses_section_html,
     _subject_flows_section_html,
+    _tenant_statement_section_html,
     _treemap_section_html,
     _uncertainty_section_html,
     _wealth_benchmark_section_html,
@@ -532,27 +545,30 @@ def build_lifecycle_report_html(
     scenario_cube=None,
     reference_result: Optional[LifecycleCostResult] = None,
 ) -> str:
-    """The self-contained HTML report, sections along the calculation chain.
+    """The self-contained HTML report, told as the chapters of `ReportChapters` (Q24).
 
     The module's main entry point and the assembly of everything above: a header stating the
-    run's parameters, a table of contents, every `_*_section_html` block in the order
-    `ReportSections.ORDER` declares (the comparison pair only when comparing), and a footer
-    telling the reader how to trace any figure back to its sources with
-    `python -m hisim.economics explain`. The order is the calculation chain, not a menu: each
-    section is placed where a mistake made upstream of it first becomes visible, which is why the
-    contents are a navigation aid rather than the structure itself.
+    run's parameters, a two-level table of contents, then the story the report tells — the
+    building on the gross basis, the owner-occupied chapter, the rented-out chapter, the society
+    chapter and, when there is a reference variant, the comparison block — and a footer telling
+    the reader how to trace any figure back to its sources with
+    `python -m hisim.economics explain`. Within a chapter the sections run along the calculation
+    chain, each placed where a mistake made upstream of it first becomes visible, which is why
+    the contents are a navigation aid rather than the structure itself.
 
-    The whole document is rendered as one chapter, `ReportChapters.THE_BUILDING`: splitting the
-    story chapters apart needs the per-party statement sections, which land with the second half
-    of the chart set, so until then every section carries the `building-` anchor prefix and the
-    contents have a single top-level entry.
+    Which perspectives belong to which chapter is decided by `views.story_perspectives`, from
+    what each result *books* rather than from what it is called, and a chapter whose story this
+    run has none of is skipped rather than drawn empty — named under the contents with its
+    reason, like every other omission: an owner-occupied house has no landlord, and a run without
+    a macroeconomic perspective has no society chapter.
 
     The returned document is a **single file with no external references** — stylesheet inlined
     from `_ReportCss`, charts as inline SVG, tooltips native, no script and no font, image or
     CDN request — so it survives being mailed, archived beside the results or opened offline.
     Sections that have nothing to show return the empty string and vanish rather than rendering
-    an empty box, which is why the list is concatenated blindly; each of them says so under the
-    table of contents, so a gap in the page is never left to the reader to interpret. When every band is degenerate
+    an empty box, which is why the lists are concatenated blindly; each of them says so under the
+    table of contents, so a gap in the page is never left to the reader to interpret. When every
+    band is degenerate
     the header carries the `_degenerate_note` explanation, so missing whiskers read as a
     property of the price data rather than as a broken feature.
 
@@ -561,12 +577,14 @@ def build_lifecycle_report_html(
 
     Args:
         matrix: Evaluated perspectives; the first is the reference used for the single-result
-            sections (investment, energy bill, CO2) and for the scenario section's base.
+            sections of the building chapter (investment, energy bill, CO2, assumptions) and for
+            the scenario section's base.
         plausibility: The panel rendered as the plausibility section.
         audit: Optional resolved-input audit; the input-audit section is omitted without it.
-        comparison: Optional variant-vs-reference comparison; appends the comparison sections.
+        comparison: Optional variant-vs-reference comparison; adds the comparison chapter, and is
+            handed to the one story chapter that owns its perspective (see `_comparison_for`).
         scenario_cube: Optional `ScenarioCube` (untyped by the seam-4 import rule); adds the
-            scenarios section.
+            scenarios section to the building chapter.
         reference_result: The comparison's baseline result. Needed by the two sections that
             decompose a comparison rather than restating it — the NPV bridge, which splits it by
             cost group, and the bank benchmark, which needs the per-year differential flows —
@@ -593,16 +611,22 @@ def build_lifecycle_report_html(
             "<section style='border-left:4px solid var(--warning)'><b>No uncertainty bands in "
             f"this run.</b> <span class='sub'>{_esc(_degenerate_note(matrix))}</span></section>"
         )
+    stories = views.story_perspectives(list(matrix.results.values()))
     context = _ChapterContext(chapter=ReportChapters.THE_BUILDING)
-    document = _chapter_open(ReportChapters.THE_BUILDING) + "".join(
-        _document_sections(matrix, plausibility, audit, comparison, scenario_cube,
-                           reference_result, context)
-    )
+    parts = [
+        _chapter_open(ReportChapters.THE_BUILDING),
+        _building_chapter_html(matrix, plausibility, audit, comparison, scenario_cube, context),
+    ]
+    parts.extend(_owner_chapter_html(stories, comparison, context))
+    parts.extend(_rented_chapter_html(stories, comparison, context))
+    parts.extend(_society_chapter_html(stories, comparison, context))
+    parts.extend(_comparison_chapter_html(matrix, comparison, reference_result, context))
     footer = (
         "<footer>Every number is traceable: "
         "<code>python -m hisim.economics explain &lt;results_dir&gt; --value "
         f"\"{_esc(reference.perspective_id)}/total_npv_in_euro\"</code> — hisim.economics</footer>"
     )
+    document = "".join(parts)
     return (
         "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
@@ -612,121 +636,352 @@ def build_lifecycle_report_html(
     )
 
 
-def _document_sections(
+def _building_chapter_html(
     matrix: EvaluationMatrix,
     plausibility: PlausibilityReport,
     audit: Optional[InputAuditReport],
     comparison: Optional[VariantComparison],
     scenario_cube,
-    reference_result: Optional[LifecycleCostResult],
     context: _ChapterContext,
-) -> List[str]:
-    """Every section of the document, in `ReportSections.ORDER`.
+) -> str:
+    """The common part: what the technology costs, before asking whose money it is (rule 2.8).
 
-    Split out of `build_lifecycle_report_html` because the document has to be *rendered* before
-    its table of contents can be built — the contents list the sections that actually appeared,
-    not the ones that might have — so the assembly and the shell around it are two steps rather
-    than one expression.
+    Everything on the gross / perspective-free basis, in the order the numbers are built in —
+    inputs, then what they add up to, then the flows over the years, then the physics and the
+    emissions, then where the uncertainty sits, and finally the perspectives table as the bridge
+    into the story chapters. The sections that need *a* perspective take the matrix's first, which
+    is the reference view of the run.
 
-    Most sections take the matrix's first perspective, which is the reference view of the run.
-    Five cannot and use `_first_result_where` instead: the equity build-up needs a financed
-    perspective, the who-pays-whom Sankey one with more than one payer, the funding statement one
-    whose year 0 carries support or a loan, the energy balance one that carries device flows, and
-    the landlord statement a landlord-scoped one. Each of them names the perspective it is showing
-    in its own heading, and records a reason on the context when the run has none. The loan and
-    cost-of-credit sections take the whole matrix, because they draw a block per financed
-    perspective rather than picking one.
-
-    The cash curve is the sixth: with a comparison it draws the perspective the comparison was
-    computed *for*, not the matrix's first, because the payback sentence under it comes from that
-    comparison and a payback drawn under somebody else's cash position is simply a wrong chart.
-    The section refuses the mix rather than trusting this call site (§seam 4 is about numbers;
-    this is the same argument about which result a number belongs to).
+    Scenarios sits here rather than in a story chapter: the spec's chapter table does not assign
+    it, and a sensitivity sweep over the base perspective is a statement about the priced inputs,
+    not about a party.
 
     Args:
-        matrix: Evaluated perspectives.
+        matrix: Every evaluated perspective; the matrix-shaped sections show all of them.
         plausibility: The panel for the plausibility section.
-        audit: Optional input audit.
-        comparison: Optional variant comparison.
-        scenario_cube: Optional scenario cube.
-        reference_result: Optional baseline result, needed by both sections that compare the run
-            against something outside it: the NPV bridge decomposes the difference to it by cost
-            group, and the bank benchmark takes the per-year differential flows against it. Its
-            absence skips both, each with its own reason.
-        context: The chapter every section is rendered into; **mutated** as the explanations are
-            recorded.
+        audit: Optional input audit; without it the audit section is omitted.
+        comparison: Optional variant comparison, for the overview's payback milestone.
+        scenario_cube: Optional scenario cube for the scenarios section.
+        context: The building chapter's own context; **mutated** as explanations are recorded.
 
     Returns:
-        The sections in page order; the empty ones are kept and concatenate to nothing.
+        The chapter's sections, concatenated in page order.
+
+    Raises:
+        ValueError: If the matrix holds no evaluated perspective (see `_reference_result`).
     """
     reference = _reference_result(matrix)
-    financed = _first_result_where(
-        matrix, lambda result: views.loan_amortization_series(result).has_flows()
-    ) or reference
-    multi_actor = _first_result_where(
-        matrix, lambda result: len({entry.payer for entry in result.timeline.entries}) > 1
-    ) or reference
-    funded = _first_result_where(matrix, _has_year_zero_funding) or reference
     attributed = _first_result_where(matrix, views.has_energy_balance) or reference
-    landlord = _first_result_where(matrix, lambda result: result.scope_payer == Actor.LANDLORD)
-    # The comparison names its own perspective; drawing the cash curve on any other one would
-    # put its payback sentence under a stranger's curve.
-    liquidity = matrix.results.get(comparison.perspective_id, reference) if comparison else reference
-    sections = [
+    return "".join([
+        # The primer first: discounting, the three worlds and the sign rule, stated once for
+        # every section that follows.
         _how_to_read_section_html(context),
+        # The one-page overview a renovation report starts with (Q1) opens the analysis.
         _lifecycle_overview_section_html(reference, comparison, context),
         _checks_section_html(plausibility, context),
         _audit_section_html(audit, context) if audit is not None else "",
+        # Q26 F2: the causes, directly after the audit of what was priced and before the first
+        # figure that is computed from them.
+        _assumptions_section_html(
+            reference,
+            context,
+            co2_damage_priced=_first_result_where(matrix, views.prices_co2_damage) is not None,
+        ),
         _investment_section_html(reference, context),
-        _sources_uses_section_html(funded, context),
         _component_events_section_html(reference, context),
         _timeline_section_html(matrix, context),
-        _liquidity_section_html(liquidity, comparison, context),
-        _loan_section_html(matrix, context),
-        _cost_of_credit_section_html(matrix, context),
         _energy_section_html(reference, context),
         _energy_balance_section_html(attributed, context),
         _co2_section_html(matrix, context),
         _subsidy_section_html(matrix, context),
-        _perspective_section_html(matrix, context),
-        _landlord_statement_section_html(landlord, context) if landlord is not None
-        else context.skip(
-            ReportSections.LANDLORD_STATEMENT,
-            "No perspective of this run is scoped to the landlord, so there is no landlord "
-            "business case to state.",
-        ),
-        _actor_section_html(matrix, context),
-        _actor_flow_section_html(multi_actor, context),
         _uncertainty_section_html(reference, context),
         _components_section_html(matrix, context),
         _treemap_section_html(reference, context),
         _subject_flows_section_html(reference, context),
-        _equity_section_html(financed, context),
         _scenario_section_html(scenario_cube, matrix, context),
-        _monthly_burden_section_html(reference, context),
+        _perspective_section_html(matrix, context),
         _kpi_section_html(matrix, context),
+    ])
+
+
+def _sub_matrix(results: List[LifecycleCostResult]) -> EvaluationMatrix:
+    """An `EvaluationMatrix` of just these results, for a chapter that owns only some of them.
+
+    The matrix-shaped section builders (the loan panel, who-pays-what) render one block per
+    perspective they are given, so restricting a chapter to its own story is a matter of handing
+    them a smaller matrix rather than teaching each of them a filter.
+
+    Args:
+        results: The chapter's own perspectives, in the order they are to be rendered.
+
+    Returns:
+        A matrix carrying exactly those results, keyed by perspective id.
+    """
+    return EvaluationMatrix(results={result.perspective_id: result for result in results})
+
+
+def _comparison_for(
+    results: Sequence[LifecycleCostResult], comparison: Optional[VariantComparison]
+) -> Optional[VariantComparison]:
+    """The comparison, but only for the chapter whose story it is actually about.
+
+    A `VariantComparison` is computed for *one* perspective, so handing it to a chapter that does
+    not contain that perspective would draw the owner's payback under the landlord's cash curve.
+    The chapters that do not own it show their cumulative discounted cost instead, which is what
+    the cash curve does without a reference anyway.
+
+    Args:
+        results: The chapter's own perspectives.
+        comparison: The run's comparison, or None when nothing was compared.
+
+    Returns:
+        The comparison when this chapter carries the perspective it was computed for, else None.
+    """
+    if comparison is None:
+        return None
+    owns = any(result.perspective_id == comparison.perspective_id for result in results)
+    return comparison if owns else None
+
+
+def _result_for(
+    results: Sequence[LifecycleCostResult],
+    comparison: Optional[VariantComparison],
+    lead: LifecycleCostResult,
+) -> LifecycleCostResult:
+    """The chapter's own result the comparison was computed for, or its lead without one.
+
+    The other half of `_comparison_for`. A `VariantComparison` is computed for exactly one
+    perspective, and the cash curve refuses to draw any other one beside it — a payback sentence
+    under a stranger's curve is two parties' figures presented as one. `_comparison_for` decides
+    whether this chapter owns the comparison at all; this decides which of its results the
+    comparison belongs to, so the pair handed to the section always agrees.
+
+    Args:
+        results: The chapter's own perspectives.
+        comparison: The comparison this chapter owns, as `_comparison_for` returned it, or None.
+        lead: The perspective the chapter draws when there is no comparison to follow.
+
+    Returns:
+        The result the comparison was computed for, or `lead`.
+    """
+    if comparison is None:
+        return lead
+    return next(
+        (result for result in results if result.perspective_id == comparison.perspective_id),
+        lead,
+    )
+
+
+def _owner_chapter_html(
+    stories: views.StoryPerspectives,
+    comparison: Optional[VariantComparison],
+    context: _ChapterContext,
+) -> List[str]:
+    """The owner-occupied story: how a household pays for this and lives with it (rule 2.8).
+
+    Funding, the cash curve, the loan and what it costs, the monthly burden, the equity build-up
+    and who pays whom — all on the net / owner perspectives `views.story_perspectives` selected,
+    i.e. the after-subsidy views a household actually pays out of its own account. Each section
+    still picks the perspective that *has* its subject matter (a loan chart needs a financed one),
+    but now only from within this chapter's story.
+
+    Args:
+        stories: The three story lists; this chapter renders `stories.owner`.
+        comparison: The run's comparison, passed on only when this chapter owns its perspective.
+        context: The document's chapter context; a chapter-scoped copy is derived from it and the
+            shared explanation memory is **mutated**.
+
+    Returns:
+        The chapter heading and its sections, or the empty list when this run tells no owner's
+        story.
+    """
+    if not stories.owner:
+        return context.skip_chapter(
+            ReportChapters.OWNER_OCCUPIED,
+            "No perspective of this run tells an owner's story (neither an owner-scoped nor a "
+            "support-carrying one).",
+        )
+    chapter = context.for_chapter(ReportChapters.OWNER_OCCUPIED)
+    owner_matrix = _sub_matrix(list(stories.owner))
+    lead = stories.owner[0]
+    financed = _first_result_where(
+        owner_matrix, lambda result: views.loan_amortization_series(result).has_flows()
+    ) or lead
+    funded = _first_result_where(owner_matrix, _has_year_zero_funding) or lead
+    multi_actor = _first_result_where(
+        owner_matrix, lambda result: len({entry.payer for entry in result.timeline.entries}) > 1
+    ) or lead
+    owner_comparison = _comparison_for(stories.owner, comparison)
+    return [
+        _chapter_open(ReportChapters.OWNER_OCCUPIED),
+        "".join([
+            # Q26 F4: the statement opens the chapter for the same reason the landlord's opens
+            # the rented one — it is what makes every figure after it readable. It is rendered on
+            # the financed view where the run has one, because the loan flows belong on the cash
+            # side of an owner's statement; without financing that is the chapter's lead anyway.
+            _owner_statement_section_html(financed, chapter),
+            _sources_uses_section_html(funded, chapter),
+            _liquidity_section_html(
+                _result_for(stories.owner, owner_comparison, lead), owner_comparison, chapter
+            ),
+            _loan_section_html(owner_matrix, chapter),
+            _cost_of_credit_section_html(owner_matrix, chapter),
+            _monthly_burden_section_html(lead, chapter),
+            _equity_section_html(financed, chapter),
+            _actor_flow_section_html(multi_actor, chapter),
+        ]),
     ]
-    if comparison is not None:
-        sections.append(_comparison_section_html(comparison, context))
-        variant = matrix.results.get(comparison.perspective_id, reference)
-        if reference_result is not None:
-            sections.append(
-                _comparison_bridge_section_html(reference_result, variant, comparison, context)
-            )
-            sections.append(_wealth_benchmark_section_html(reference_result, variant, context))
-        else:
-            sections.append(context.skip(
-                ReportSections.NPV_BRIDGE,
-                "The report was built with a comparison but without the reference result the "
-                "bridge decomposes, so there is nothing to split by cost group.",
-            ))
-            sections.append(context.skip(
-                ReportSections.BANK_BENCHMARK,
-                "The report was built with a comparison but without the reference result the "
-                "fixed-interest benchmark needs, so there are no per-year differential flows to "
-                "compare against a savings account.",
-            ))
-    return sections
+
+
+def _rented_chapter_html(
+    stories: views.StoryPerspectives,
+    comparison: Optional[VariantComparison],
+    context: _ChapterContext,
+) -> List[str]:
+    """The rented-out story: the landlord's business case and the tenant's monthly reality.
+
+    Rendered only when the allocation actually produced landlord or tenant perspectives; a run of
+    an owner-occupied house has no rented story and the chapter is skipped — named under the
+    contents with its reason — rather than drawn empty. The landlord statement opens it because
+    it is the section that separates the landlord's cash from the landlord's book value, which is
+    what makes every figure after it readable.
+
+    Args:
+        stories: The three story lists; this chapter renders `stories.rented`.
+        comparison: The run's comparison, passed on only when this chapter owns its perspective.
+        context: The document's chapter context; the shared explanation memory is **mutated**.
+
+    Returns:
+        The chapter heading and its sections, or the empty list when nothing was rented out.
+    """
+    if not stories.rented:
+        return context.skip_chapter(
+            ReportChapters.RENTED_OUT,
+            "The allocation produced no landlord and no tenant perspective, so this run has no "
+            "rented story to tell.",
+        )
+    chapter = context.for_chapter(ReportChapters.RENTED_OUT)
+    rented_matrix = _sub_matrix(list(stories.rented))
+    landlord = next(
+        (result for result in stories.rented if result.scope_payer == Actor.LANDLORD),
+        stories.rented[0],
+    )
+    tenant = next(
+        (result for result in stories.rented if result.scope_payer == Actor.TENANT),
+        stories.rented[0],
+    )
+    rented_comparison = _comparison_for(stories.rented, comparison)
+    return [
+        _chapter_open(ReportChapters.RENTED_OUT),
+        "".join([
+            _landlord_statement_section_html(landlord, chapter),
+            _tenant_statement_section_html(tenant, chapter),
+            _actor_section_html(rented_matrix, chapter),
+            _actor_flow_section_html(landlord, chapter),
+            _monthly_burden_section_html(tenant, chapter),
+            _liquidity_section_html(
+                _result_for(stories.rented, rented_comparison, landlord),
+                rented_comparison,
+                chapter,
+            ),
+        ]),
+    ]
+
+
+def _society_chapter_html(
+    stories: views.StoryPerspectives,
+    comparison: Optional[VariantComparison],
+    context: _ChapterContext,
+) -> List[str]:
+    """The macroeconomic story: transfers cancel, CO2 enters at its damage cost (rule 2.8).
+
+    Two sections only, because that is all the perspective supports: the cash curve of the
+    resource cost over time and who pays whom once the transfers between the parties have netted
+    themselves out. Skipped — and named under the contents — when the bundle evaluated no
+    macroeconomic perspective.
+
+    Args:
+        stories: The three story lists; this chapter renders `stories.society`.
+        comparison: The run's comparison, passed on only when this chapter owns its perspective.
+        context: The document's chapter context; the shared explanation memory is **mutated**.
+
+    Returns:
+        The chapter heading and its sections, or the empty list when no perspective books CO2 at
+        its damage cost.
+    """
+    if not stories.society:
+        return context.skip_chapter(
+            ReportChapters.SOCIETY,
+            "This run evaluated no macroeconomic perspective, so there is no view in which "
+            "transfers cancel and CO2 is priced at its damage cost.",
+        )
+    chapter = context.for_chapter(ReportChapters.SOCIETY)
+    macro = stories.society[0]
+    society_comparison = _comparison_for(stories.society, comparison)
+    return [
+        _chapter_open(ReportChapters.SOCIETY),
+        "".join([
+            _society_statement_section_html(macro, chapter),
+            _liquidity_section_html(
+                _result_for(stories.society, society_comparison, macro),
+                society_comparison,
+                chapter,
+            ),
+            _actor_flow_section_html(macro, chapter),
+        ]),
+    ]
+
+
+def _comparison_chapter_html(
+    matrix: EvaluationMatrix,
+    comparison: Optional[VariantComparison],
+    reference_result: Optional[LifecycleCostResult],
+    context: _ChapterContext,
+) -> List[str]:
+    """The fourth block: the three sections that only exist when there is a reference variant.
+
+    Not one of the three stories — it answers a question about two runs rather than about one
+    party — which is why it carries no authored lead-in and sits at the end.
+
+    Args:
+        matrix: Evaluated perspectives; the comparison's own is looked up in it.
+        comparison: The run's comparison, or None when nothing was compared.
+        reference_result: The comparison's baseline result; without it the two sections that
+            decompose it are skipped, each naming its own reason under the contents.
+        context: The document's chapter context; the shared explanation memory is **mutated**.
+
+    Returns:
+        The chapter heading and its sections, or the empty list without a comparison.
+
+    Raises:
+        ValueError: If the matrix holds no evaluated perspective (see `_reference_result`).
+    """
+    if comparison is None:
+        return []
+    chapter = context.for_chapter(ReportChapters.COMPARISON)
+    reference = _reference_result(matrix)
+    variant = matrix.results.get(comparison.perspective_id, reference)
+    blocks = [_comparison_section_html(comparison, chapter)]
+    if reference_result is not None:
+        # The bridge and the benchmark need both results, not just the published deltas: the
+        # bridge splits by cost group and the benchmark needs the per-year differential flows.
+        blocks.append(
+            _comparison_bridge_section_html(reference_result, variant, comparison, chapter)
+        )
+        blocks.append(_wealth_benchmark_section_html(reference_result, variant, chapter))
+    else:
+        chapter.skip(
+            ReportSections.NPV_BRIDGE,
+            "The report was built with a comparison but without the reference result the bridge "
+            "decomposes, so there is nothing to split by cost group.",
+        )
+        chapter.skip(
+            ReportSections.BANK_BENCHMARK,
+            "The report was built with a comparison but without the reference result the "
+            "fixed-interest benchmark needs, so there are no per-year differential flows to "
+            "compare against a savings account.",
+        )
+    return [_chapter_open(ReportChapters.COMPARISON), "".join(blocks)]
 
 
 def write_lifecycle_report(
@@ -743,9 +998,8 @@ def write_lifecycle_report(
     The filesystem counterpart of `build_lifecycle_report_html`, kept separate for the same
     reason as the markdown pair: the golden oracle and the unit tests render without touching a
     directory, while the `report` CLI — and `bridge.py`, from stack part 8/8 — gets one call. The
-    name is fixed rather than
-    a parameter — a comparison is a *section* of this report, not a second document, so there was
-    never a second name for a caller to pass.
+    name is fixed rather than a parameter — a comparison is a *chapter* of this report, not a
+    second document, so there was never a second name for a caller to pass.
 
     The PNG companions are not written here: `report_plots.write_report_plots` writes them in the
     same breath at both call sites, one set per perspective under

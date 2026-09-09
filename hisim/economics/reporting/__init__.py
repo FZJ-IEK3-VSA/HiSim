@@ -2,10 +2,10 @@
 
 Produced for the LIFECYCLE_COST_REPORT postprocessing option, which arrives with stack part 8/8
 (the bridge). The report follows the money along the calculation chain so results can be checked
-for plausibility. `scaffold.ReportSections.ORDER` is the authoritative list of *which* sections
-exist and what they are called; the order they appear in is `assembly`'s, and from slice 9 of
-this stack the chapters'. Neither is restated here, because a second list is a second thing to
-keep in step and the first one to go stale.
+for plausibility. `scaffold.ReportSections` names every section and `scaffold.ReportChapters`
+the four stories they are told as; the page order is the one each chapter builder in
+`assembly.py` writes down, and it is deliberately not restated here, because a second list is a
+second thing to keep in step and the first one to go stale.
 
 Outputs: `cost_summary.md` (diffable text), `lifecycle_report.html` (self-contained, inline
 SVG, light/dark aware) and matplotlib PNGs (see `report_plots.py`).
@@ -26,7 +26,9 @@ domain knowledge to spot.
 shows, what it adds, a "Terms used here" disclosure and a "How this is calculated" disclosure —
 rendered by `scaffold._explanation_html` from `report_prose.ReportProse`. The text is authored
 prose held in one file and never assembled here, so an editorial change is a change to that file
-and the renderer cannot quietly reword anything.
+and the renderer cannot quietly reword anything. A section name that appears in more than one
+chapter is explained at its first occurrence and links back from every later one, so the
+chapters do not triple the prose weight of the document.
 
 **Two outputs, two jobs.** The HTML is for reading a single run and is allowed to be rich
 (collapsible details, tooltips, per-perspective blocks). The markdown summary is for *diffing*

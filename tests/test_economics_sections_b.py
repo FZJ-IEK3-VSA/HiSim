@@ -90,6 +90,19 @@ def _dashed_segments(svg: str):
     ]
 
 
+def _chapter_of(anchor: str) -> str:
+    """The chapter anchor a section's chapter-prefixed anchor belongs to.
+
+    Matched against `ReportChapters.ORDER` rather than split on the first dash, because one
+    chapter anchor carries a dash of its own (`vs-reference`) and splitting would file its
+    sections under a chapter that does not exist.
+    """
+    for chapter, _name in ReportChapters.ORDER:
+        if anchor.startswith(f"{chapter}-"):
+            return chapter
+    raise AssertionError(f"{anchor} carries no chapter prefix")
+
+
 class TestTreemapSvg:
     """The area encoding of the cost-structure panels, asserted on the emitted rectangles."""
 
@@ -388,16 +401,20 @@ def fixture_report(database) -> str:
     )
 
 
-#: The seven sections this slice adds to the document, by anchor.
+#: The eight sections this slice adds to the document, by their chapter-prefixed anchor. Three of
+#: them are perspective-scoped and therefore live in the owner-occupied chapter rather than in the
+#: perspective-free one, and the benchmark only exists against a reference variant: which chapter
+#: a section lands in is part of what the document claims about it, so the prefixes are spelled
+#: out here rather than searched for.
 NEW_ANCHORS = (
     "building-at-a-glance",
-    "building-funding",
+    "owner-funding",
     "building-energy-balance",
     "building-cost-structure",
     "building-cost-shapes",
-    "building-equity-build-up",
-    "building-monthly-burden",
-    "building-bank-benchmark",
+    "owner-equity-build-up",
+    "owner-monthly-burden",
+    "vs-reference-bank-benchmark",
 )
 
 
@@ -417,21 +434,35 @@ class TestTheNewSectionsRender:
         for anchor in NEW_ANCHORS:
             assert f'id="{anchor}"' in report, anchor
 
-    def test_the_new_sections_sit_where_the_order_declares(self, report):
-        """`ReportSections.ORDER` is the document's own claim about its shape; the page follows it."""
+    def test_the_new_sections_sit_in_the_chapter_that_tells_their_story(self, report):
+        """The document is chapter-major, and each of these sections is in the chapter it claims.
+
+        The page order is the chapters of `ReportChapters.ORDER`, each rendering in one
+        uninterrupted run; *within* a chapter the order is the one that chapter's story is told in
+        and deliberately not `ReportSections.ORDER`, which is a name registry rather than a page
+        order. What is asserted is therefore the chapter-major shape plus the chapter each of
+        these eight sections landed in — an interleaved document, or a perspective-scoped section
+        rendered in the perspective-free chapter, fails one or the other.
+
+        That each of them opens with its four authored parts and is reachable from the contents is
+        the goldens oracle's job, which covers all eight and their captions word for word; what is
+        left here is what a golden cannot express.
+        """
         anchors = [anchor for anchor, _html in rendered_sections(report)]
-        declared = [
-            f"building-{anchor}" for anchor, _name in ReportSections.ORDER
-            if f"building-{anchor}" in anchors
+        chapters = [_chapter_of(anchor) for anchor in anchors]
+        rendered_chapters = [
+            chapter for chapter, _name in ReportChapters.ORDER if chapter in chapters
         ]
-        assert anchors == declared
+        assert chapters == sorted(chapters, key=rendered_chapters.index)
+        for anchor in NEW_ANCHORS:
+            assert anchor in anchors, anchor
 
     def test_a_perspective_scoped_section_names_its_perspective(self, report):
         """The equity build-up is drawn for the financed view, not for the matrix's first row."""
         by_anchor = dict(rendered_sections(report))
-        assert "<h3>Equity build-up (financed)" in by_anchor["building-equity-build-up"]
+        assert "<h3>Equity build-up (financed)" in by_anchor["owner-equity-build-up"]
         assert "<h3>Cost structure (gross)" in by_anchor["building-cost-structure"]
-        assert "<h3>Funding (financed)" in by_anchor["building-funding"]
+        assert "<h3>Funding (financed)" in by_anchor["owner-funding"]
 
 
 class TestTheDisclosuresEachSectionOwes:
@@ -445,7 +476,7 @@ class TestTheDisclosuresEachSectionOwes:
 
     def test_the_funding_section_states_the_double_entry_it_was_given(self, report):
         """Sources equal uses equal the gross year-0 investment, or the Sankey is a picture."""
-        funding = dict(rendered_sections(report))["building-funding"]
+        funding = dict(rendered_sections(report))["owner-funding"]
         # The section's own caption is the last paragraph before its diagram; the paragraphs
         # above it are the authored opening, which states no amount.
         caption = funding[:funding.index("<svg")].rsplit("<p class='sub'>", 1)[1]
@@ -457,7 +488,7 @@ class TestTheDisclosuresEachSectionOwes:
         self, report, financed_result
     ):
         """The book-value line is the residual calculator's own basis; that is its audit weight."""
-        equity = dict(rendered_sections(report))["building-equity-build-up"]
+        equity = dict(rendered_sections(report))["owner-equity-build-up"]
         series = views.asset_debt_series(financed_result)
         assert f"{_fmt(series.residual_credit_in_euro)} EUR" in equity
 
@@ -465,20 +496,20 @@ class TestTheDisclosuresEachSectionOwes:
         self, report, gross_result
     ):
         """A monthly figure whose scope is unstated is the easiest number in the report to misread."""
-        section = dict(rendered_sections(report))["building-monthly-burden"]
+        section = dict(rendered_sections(report))["owner-monthly-burden"]
         burden = views.monthly_burden_series(gross_result)
         assert _band_str(burden.series[1], "EUR/month") in section
         assert f"{_fmt(burden.replacement_reserve_per_month)} EUR/month" in section
 
     def test_the_benchmark_draws_both_panels_and_states_the_crossings_it_found(self, report):
         """An absent break-even reads as "did not compute" unless the window is named."""
-        benchmark = dict(rendered_sections(report))["building-bank-benchmark"]
+        benchmark = dict(rendered_sections(report))["vs-reference-bank-benchmark"]
         assert benchmark.count("<svg") == 2  # the rate fan and the terminal advantage
         assert "interest rate [%] (nominal, pre-tax)" in benchmark
 
     def test_the_rate_fan_draws_ten_distinct_ramp_steps(self, report):
         """Ten ordered rates in a cycled eight-colour palette gave 9 % and 10 % away to 1 % and 2 %."""
-        benchmark = dict(rendered_sections(report))["building-bank-benchmark"]
+        benchmark = dict(rendered_sections(report))["vs-reference-bank-benchmark"]
         fan = re.findall(r'stroke="var\(--ramp(\d+)\)"', benchmark)
         assert len(fan) == len(views.WealthBenchmarkGrid.RATES) == len(SequentialRamp.LIGHT)
         assert len(set(fan)) == len(fan)

@@ -1,12 +1,12 @@
-"""Parsers the two renderer test modules of the visualization set share.
+"""Parsers the renderer test modules of the visualization set share.
 
-`tests/test_economics_sections_a.py` and `tests/test_economics_sections_b.py` are two halves of
-one suite — the first half of the chart set and the second — and both assert on the *emitted*
-file rather than on the renderer's own variables, because that is where the defects they pin were
-visible. Both therefore need the same two parsers, and both had a byte-identical copy of them: a
-rectangle reader and a section splitter. Two copies of a parser is how one of them ends up
-tolerating a rendering the other rejects, which in a pair of files that exist to police a
-rendering is the whole failure.
+`tests/test_economics_sections_a.py`, `..._b.py` and `..._c.py` are one suite in three files —
+the first half of the chart set, the second, and the chapters they are told in — and all of them
+assert on the *emitted* file rather than on the renderer's own variables, because that is where
+the defects they pin were visible. They therefore need the same two parsers, and each had a
+byte-identical copy of them: a rectangle reader and a section splitter. Two copies of a parser is
+how one of them ends up tolerating a rendering the other rejects, which in a set of files that
+exist to police a rendering is the whole failure.
 
 Not a `conftest.py` fixture set: these are pure functions of a string with no test state in them,
 and the repository's own convention for that is a plain module beside the tests that import it

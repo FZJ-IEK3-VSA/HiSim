@@ -2,12 +2,12 @@
 
 One function per chart of the visualization extension: the lifecycle overview the report opens
 with, how year 0 is funded, who pays whom (the actor Sankey and the landlord's income statement
-drawn as one), the cash curve, the loan and what credit costs, the household's energy balance,
-the uncertainty drivers, the cost structure and the cost shapes, the equity build-up, the monthly
-burden, the component lifetimes, the NPV bridge and the fixed-interest benchmark. They live
-beside `sections.py` rather than inside it because the split is by question rather than by size —
-`sections.py` walks the calculation chain a reviewer checks, this module answers what a reader
-came for.
+drawn as one), the four per-party statements the story chapters open with, the cash curve, the
+loan and what credit costs, the household's energy balance, the uncertainty drivers, the cost
+structure and the cost shapes, the equity build-up, the monthly burden, the component lifetimes,
+the NPV bridge and the fixed-interest benchmark. They live beside `sections.py` rather than
+inside it because the split is by question rather than by size — `sections.py` walks the
+calculation chain a reviewer checks, this module answers what a reader came for.
 
 Like every other section they open with `scaffold._explanation_html`, i.e. with the four
 authored parts held in `report_prose.ReportProse` (rule 2.6): the report has to be understandable
@@ -19,9 +19,13 @@ all records its reason on the `_ChapterContext` and returns nothing; the documen
 reasons under its table of contents, because a reader who notices a missing section is never the
 person reading the log.
 
-The per-party statements (owner, tenant, society), the chapter split they make possible and the
-assumptions section arrive with slice 9 of this stack; `scaffold.ReportSections.ORDER` already
-names them, so an entry there without a builder here is expected until then.
+The owner, tenant and society statements are one table builder and one caption builder rather
+than three, because `views.StatementPartitions` already carries the words each party's two sides
+are called by — the society statement reads "real resource costs" / "transfers" where the
+household ones read "cash flows" / "accounting credits", and the renderer never learns which
+party it is drawing. The landlord's (Q21) predates the generalization and keeps its own pair: its
+caption carries the §559 levy verdict, its rows say "cash" and "accounting" where the shared
+table spells the labels out, and it is the one statement drawn as a Sankey as well as tabulated.
 """
 
 
@@ -510,6 +514,204 @@ def _actor_flow_section_html(result: LifecycleCostResult, context: _ChapterConte
         + f"<p class='sub'>{matrix.folded_ribbon_count} ribbon(s) below 0.5 % of the flow volume, "
         f"carrying {_fmt(matrix.folded_amount_in_euro)} EUR in total, were folded into a single "
         "grey ribbon per node pair.</p></section>"
+    )
+
+
+def _statement_table_html(statement: views.PerspectiveStatement) -> str:
+    """The two-sided table every party statement shares (Q21, Q26 F4).
+
+    One row per category with its present value and the side it sits on, then the two subtotals
+    and the net position. The side column is labelled from the statement's own partition, so the
+    society statement reads "real resource costs" / "transfers" where the household ones read
+    "cash flows" / "accounting credits", without this function knowing which party it is drawing.
+    The landlord statement is the one that does not come through here — it predates the
+    generalization and carries its own table with the levy verdict in its caption.
+
+    The subtotals are printed even when a side is empty — the tenant's credit side always is —
+    because a stated zero is the answer to "where is my credit side?" and a missing row is not.
+
+    Args:
+        statement: The partition `views.perspective_statement` returned.
+
+    Returns:
+        The table, rows in the statement's own order.
+    """
+    partition = statement.partition
+    rows = [
+        [_esc(line.label), _fmt(line.npv_in_euro),
+         partition.secondary_label if line.is_accounting_credit else partition.primary_label]
+        for line in list(statement.cash_lines) + list(statement.accounting_lines)
+    ]
+    rows.append([
+        f"<b>{_esc(partition.primary_label)}, subtotal</b>",
+        f"<b>{_fmt(statement.cash_subtotal_in_euro)}</b>",
+        f"<b>{_esc(partition.primary_label)}</b>",
+    ])
+    rows.append([
+        f"<b>{_esc(partition.secondary_label)}, subtotal</b>",
+        f"<b>{_fmt(statement.accounting_subtotal_in_euro)}</b>",
+        f"<b>{_esc(partition.secondary_label)}</b>",
+    ])
+    rows.append([
+        "<b>net position</b>", f"<b>{_fmt(statement.net_position_in_euro)}</b>", "<b>both sides</b>",
+    ])
+    return _table(["Item", "NPV [EUR]", "Side"], rows)
+
+
+def _owner_statement_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
+    """The owner-occupier's two-sided statement (owner decision Q26 F4, rule 2.9).
+
+    The owner rows of the perspectives table were single numbers until here. This decomposes them
+    into the money that moved — investment net of subsidies, bills, maintenance, replacements,
+    feed-in revenue and the loan flows where the financed view applies — and the value that was
+    merely booked: the residual worth of the hardware and the anyway credit. The caption states
+    how much of the result is each, because a strongly negative owner NPV carried by book value
+    is a different proposition from the same figure carried by cash.
+
+    Every figure comes from `views.perspective_statement`, which validates that the two sides sum
+    to the perspective's NPV before this runs, so the table and the headline cannot disagree.
+
+    Args:
+        result: The owner perspective to state.
+        context: The chapter this section is being rendered into.
+
+    Returns:
+        The section, or the empty string for a perspective that books no flows at all.
+    """
+    statement = views.perspective_statement(result, views.StatementPartitions.OWNER)
+    if not statement.cash_lines and not statement.accounting_lines:
+        return context.skip(
+            ReportSections.OWNER_STATEMENT,
+            f"Perspective {result.perspective_id!r} books no flows at all, so there is no owner "
+            "position to state.",
+        )
+    return (
+        _section_open(ReportSections.OWNER_STATEMENT, context, result.perspective_id)
+        + _explanation_html(ReportSections.OWNER_STATEMENT, context)
+        + _statement_caption(statement)
+        + _statement_table_html(statement)
+        + "</section>"
+    )
+
+
+def _tenant_statement_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
+    """The tenant's statement: everything paid because of the renovation, nothing received (F4).
+
+    The tenant's side of the rented-out story, decomposed into the levy set by law and the energy
+    and apportioned operating costs set by physics and prices — the split the fairness question
+    turns on. The credit side is deliberately empty and its subtotal is printed as the zero it is:
+    a tenant receives nothing back in this ledger, and a lower energy bill shows up as a smaller
+    cost line rather than as income.
+
+    The caption additionally checks the levy against the landlord statement's levy income, since
+    the pair is booked as equal halves and a difference between the two sections would mean the
+    transfer had leaked.
+
+    Args:
+        result: The tenant perspective to state.
+        context: The chapter this section is being rendered into.
+
+    Returns:
+        The section, or the empty string for a tenant the allocation gave no flows.
+    """
+    statement = views.perspective_statement(result, views.StatementPartitions.TENANT)
+    if not statement.cash_lines and not statement.accounting_lines:
+        return context.skip(
+            ReportSections.TENANT_STATEMENT,
+            f"The allocation assigned perspective {result.perspective_id!r} no flows at all, so "
+            "there is no tenant position to state.",
+        )
+    levy_line = next(
+        (line for line in statement.cash_lines
+         if line.category == CostCategory.MODERNIZATION_LEVY),
+        None,
+    )
+    levy_note = (
+        f"The modernization levy accounts for <b>{_fmt(levy_line.npv_in_euro)} EUR</b> of the "
+        f"tenant's position, the energy and operating costs for the rest; the levy is the exact "
+        "counterpart of the landlord statement's levy income."
+        if levy_line is not None else
+        "This tenant pays no modernization levy, so the whole position is energy and apportioned "
+        "operating cost."
+    )
+    return (
+        _section_open(ReportSections.TENANT_STATEMENT, context, result.perspective_id)
+        + _explanation_html(ReportSections.TENANT_STATEMENT, context)
+        + _statement_caption(statement)
+        + f"<p class='sub'>{levy_note}</p>"
+        + _statement_table_html(statement)
+        + "</section>"
+    )
+
+
+def _society_statement_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
+    """The macroeconomic statement: real resources against transfers that cancel (Q26 F4).
+
+    The proof of what "macroeconomic" means rather than the word: the resource categories keep
+    their values, the transfers appear with both halves and an explicit zero-sum line, and CO2
+    enters at its damage cost rather than at any price a household pays. On the shipped
+    macroeconomic perspective every transfer has already been removed at source (§4.5), so the
+    transfer rows are the zeros that statement makes checkable — which is stated in the caption
+    rather than left as an empty side.
+
+    Args:
+        result: The macroeconomic perspective to state.
+        context: The chapter this section is being rendered into.
+
+    Returns:
+        The section, or the empty string for a perspective that books no flows at all.
+    """
+    statement = views.perspective_statement(result, views.StatementPartitions.SOCIETY)
+    if not statement.cash_lines and not statement.accounting_lines:
+        return context.skip(
+            ReportSections.SOCIETY_STATEMENT,
+            f"Perspective {result.perspective_id!r} books no flows at all, so there is no "
+            "macroeconomic position to state.",
+        )
+    transfers = (
+        "The macroeconomic accounting removes every transfer at source — no subsidy, no feed-in "
+        "remuneration, no CO2 price and no levy is booked in this view — so the transfer side "
+        "sums to <b>0.00 EUR</b> and the net position is real resource use alone."
+        if not statement.accounting_lines else
+        "Each transfer appears with both of its halves, so the side sums to "
+        f"<b>{_fmt(statement.accounting_subtotal_in_euro)} EUR</b>."
+    )
+    damage = result.npv_by_category.get(CostCategory.CO2_DAMAGE)
+    damage_note = (
+        f" CO2 enters as a cost of {_esc(_band_str(damage))} at a damage cost of "
+        f"{result.parameters.co2_damage_cost_in_euro_per_ton:,.2f} EUR/t, flat over the horizon "
+        "(see <i>Assumptions</i>)."
+        if damage is not None else
+        " This view books no CO2 damage cost."
+    )
+    return (
+        _section_open(ReportSections.SOCIETY_STATEMENT, context, result.perspective_id)
+        + _explanation_html(ReportSections.SOCIETY_STATEMENT, context)
+        + f"<p class='sub'>{transfers}{damage_note}</p>"
+        + _statement_table_html(statement)
+        + "</section>"
+    )
+
+
+def _statement_caption(statement: views.PerspectiveStatement) -> str:
+    """The run's own two subtotals under a party statement, in the partition's own words.
+
+    The prose says what the two sides *are*; this says what they came to here, which is the half a
+    reader cannot get from anywhere else on the page.
+
+    Args:
+        statement: The partition `views.perspective_statement` returned.
+
+    Returns:
+        The caption paragraph.
+    """
+    partition = statement.partition
+    return (
+        f"<p class='sub'>{_esc(partition.primary_label.capitalize())} come to "
+        f"<b>{_fmt(statement.cash_subtotal_in_euro)} EUR</b> and "
+        f"{_esc(partition.secondary_label)} to "
+        f"<b>{_fmt(statement.accounting_subtotal_in_euro)} EUR</b> in present value; together they "
+        f"are the net position of {_esc(_band_str(statement.net_position_band))}.</p>"
     )
 
 

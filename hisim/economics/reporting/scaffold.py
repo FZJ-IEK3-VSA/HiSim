@@ -29,25 +29,24 @@ from hisim.economics.reporting.charts import _details, _esc
 class ReportSections:
     """The mnemonic identity of every report section (rule 2.8, owner decision Q18).
 
-    One `(anchor, name)` pair per section, and the order they appear on the page. The report used
-    to interleave two numbering schemes — legacy sections 0 to 10 with 4b and 6b wedged in, plus
+    One `(anchor, name)` pair per section of the report. The report used to interleave two
+    numbering schemes — legacy sections 0 to 10 with 4b and 6b wedged in, plus
     the V-numbers of the chart set — neither of which ran monotonically down the document, so a
     reader could not use either to navigate. Names replace both; the V-numbers survive only as
     spec-internal identifiers, the way the decision log's D-numbers do.
 
     `ORDER` is the canonical *membership* and the canonical names of the sections, not the page
-    order: the page order is the assembly's, and from slice 9 of this stack the chapters' — the
+    order: the page order is the one each chapter builder in `assembly.py` writes down, and the
     same section name legitimately appears in more than one chapter, in a position each chapter
     chooses for its own story, so no single list here could be the order. What this list is for
     is the set: `tests/test_economics_sections_a.py` checks that every anchor the document emits
-    is a member of it, and the table of contents iterates it to find the sections a chapter
-    rendered before sorting them by where they actually are on the page.
+    is a member of it, and the table of contents looks its names up in each chapter that rendered
+    before sorting them by where they actually are on the page.
 
-    It is a superset: a section that has nothing to show returns an empty string and then appears
-    in neither the page nor the contents (the document says so under "Not drawn for this run"
-    instead). It is also ahead of the renderers — the charts of the second half of the
-    visualization set land in a later slice — so a name here without a builder yet is expected,
-    and `ReportProse` already carries the authored text for all of them.
+    It is a superset of what any one document contains: a section that has nothing to show
+    returns an empty string and then appears in neither the page nor the contents (the document
+    says so under "Not drawn for this run" instead), and a chapter renders only the sections its
+    own story needs.
 
     `HOW_TO_READ` is the one section that carries no chart and no number: the primer that states
     the three conventions — discounting, the three worlds of the min/max band, and the sign rule —
@@ -122,12 +121,12 @@ class ReportChapters:
     when a reference variant exists, and it carries no authored intro because it answers a
     question about two runs rather than about one party.
 
-    `assembly.py` currently renders the whole document as `THE_BUILDING`: the chapter split
-    itself arrives with **slice 9 of this stack**, because it needs the per-party statement
-    sections that land with the second half of the chart set. The machinery is here now because
-    the anchors, the contents and the explain-once-then-link rule are what the section builders
-    are written against, and retrofitting them later would touch every one of them a second
-    time.
+    `assembly.py` has one builder per chapter and hands each of them only the perspectives
+    `views.story_perspectives` classified into it, so which story a section is telling is decided
+    by what its results *book* rather than by what they are called. A chapter whose perspectives
+    this run has none of is skipped with `skip_chapter` rather than rendered empty: an
+    owner-occupied house genuinely has no landlord story, and the reason is named under the
+    contents where a reader of the document will find it.
     """
 
     THE_BUILDING = ("building", "The building")
@@ -190,10 +189,10 @@ class _ChapterContext:
     def for_chapter(self, chapter: Tuple[str, str]) -> "_ChapterContext":
         """A context for another chapter, sharing this one's explanation and skip memory.
 
-        Unused until **slice 9 of this stack** splits the document into chapters — today the
-        whole report is `THE_BUILDING` and there is no second chapter to derive. It exists now
-        because it is what makes the two memories the *document's* rather than a chapter's, which
-        is the property every section builder is already written against.
+        Both memories are the *document's* rather than the chapter's: a section explains itself
+        once wherever it first appears and links back from every later chapter, and every
+        omission — whichever chapter reached it — lands in the one list the document prints under
+        its table of contents.
         """
         return _ChapterContext(
             chapter=chapter, first_explained=self.first_explained, skipped=self.skipped
@@ -221,10 +220,10 @@ class _ChapterContext:
     def skip_chapter(self, chapter: Tuple[str, str], reason: str) -> List[str]:
         """The same for a whole chapter, whose builder returns a list of blocks rather than one.
 
-        Nothing calls it until **slice 9 of this stack** builds the chapters, which are the first
-        thing large enough to be skipped as a unit ("this run tells no owner's story"). It is
-        here so that the chapter builders have the mechanism the section builders already use,
-        rather than reaching for the log the way they do today.
+        A chapter is the largest thing a run can be missing — "this run tells no owner's story" —
+        and it is missing for a reason a reader can act on: an owner-occupied house genuinely has
+        no landlord. The three story chapters call it before they derive their own context, so
+        the entry carries no chapter tag: it *is* the chapter.
 
         Args:
             chapter: The `(anchor, name)` pair of the chapter that is not being drawn.

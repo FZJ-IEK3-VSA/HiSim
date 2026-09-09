@@ -611,10 +611,16 @@ class TestSectionExplanations:
         assert report.index(">How to read this report") > report.index("<nav")
 
     def test_the_rendered_prose_is_the_authored_prose(self, report):
-        """The renderer marks the text up; it never edits it."""
+        """The renderer marks the text up; it never edits it — in every chapter it rendered."""
         by_anchor = dict(rendered_sections(report))
+        for chapter, _chapter_name in ReportChapters.ORDER:
+            self._assert_prose_of_chapter(by_anchor, chapter)
+
+    @staticmethod
+    def _assert_prose_of_chapter(by_anchor, chapter: str) -> None:
+        """Every section of one chapter carries `ReportProse`'s own markup, or links to it."""
         for anchor, name in ReportSections.ORDER:
-            html = by_anchor.get(f"building-{anchor}")
+            html = by_anchor.get(f"{chapter}-{anchor}")
             if html is None or "see the explanation under" in html:
                 continue
             prose = ReportProse.for_section(name)
@@ -638,11 +644,17 @@ class TestSectionExplanations:
         assert ReportProse.to_html(ReportProse.for_chapter(name)) in report
 
     def test_anchors_are_unique_and_chapter_prefixed(self, report):
-        """Two sections sharing an anchor would send every contents link to the same place."""
+        """Two sections sharing an anchor would send every contents link to the same place.
+
+        Uniqueness is the load-bearing half now that a section name can appear in more than one
+        chapter: "Cash curve" under Owner-occupied and under Rented out are two different charts,
+        and they are only two different destinations because the chapter is in the anchor.
+        """
         anchors = [anchor for anchor, _html in rendered_sections(report)]
         assert len(anchors) == len(set(anchors))
+        prefixes = tuple(f"{chapter}-" for chapter, _name in ReportChapters.ORDER)
         for anchor in anchors:
-            assert anchor.startswith(f"{ReportChapters.THE_BUILDING[0]}-"), anchor
+            assert anchor.startswith(prefixes), anchor
 
 
 class TestVisualizationSectionsRender:
@@ -652,19 +664,20 @@ class TestVisualizationSectionsRender:
         """Each perspective-scoped section says which perspective it is showing.
 
         The presence of the anchors themselves is `tests/test_economics_report_goldens.py`'s
-        job — it lists all twenty-two — so what is left here is the half that list cannot check:
-        *which* perspective a section that had to choose one ended up drawing.
+        job — it lists every one of them, chapter by chapter — so what is left here is the half
+        that list cannot check: *which* perspective a section that had to choose one ended up
+        drawing.
         """
         sections = dict(rendered_sections(report))
-        assert "<h3>Cash curve (gross)" in sections["building-cash-curve"]
-        credit = sections["building-cost-of-credit"]
-        # One block per financed perspective, each naming itself; not the matrix's first row.
+        assert "<h3>Cash curve (gross)" in sections["owner-cash-curve"]
+        credit = sections["owner-cost-of-credit"]
+        # One block per financed perspective, each naming itself; not the chapter's lead.
         assert "<b>financed</b>" in credit
         assert "<b>gross</b>" not in credit
 
     def test_the_cash_curve_states_its_payback_in_words(self, report):
         """An absent annotation reads as "did not pay back" to one reader and "not computed" to another."""
-        curve = dict(rendered_sections(report))["building-cash-curve"]
+        curve = dict(rendered_sections(report))["owner-cash-curve"]
         # Both markers are this run's own annotations. "deepest out-of-pocket" and "world" also
         # occur in the authored prose above the chart, so neither would fail if the chart lost
         # them; the amount and the year of each can only come from the renderer.
@@ -673,22 +686,22 @@ class TestVisualizationSectionsRender:
 
     def test_the_who_pays_whom_section_publishes_what_it_folded(self, report):
         """A folded ribbon is hidden from the picture, so its count and total are stated."""
-        flows = dict(rendered_sections(report))["building-who-pays-whom"]
+        flows = dict(rendered_sections(report))["rented-who-pays-whom"]
         assert "ribbon(s) below 0.5 % of the flow volume" in flows
         assert "<svg" in flows
 
     def test_the_loan_and_credit_sections_arrive_together(self, report):
         """Two halves of one question: what the debt service looks like, and what it costs."""
         anchors = [anchor for anchor, _html in rendered_sections(report)]
-        assert "building-loan" in anchors
-        assert "building-cost-of-credit" in anchors
-        credit = dict(rendered_sections(report))["building-cost-of-credit"]
+        assert "owner-loan" in anchors
+        assert "owner-cost-of-credit" in anchors
+        credit = dict(rendered_sections(report))["owner-cost-of-credit"]
         assert "Effective annual rate" in credit
         assert "Repayment grant" in credit  # the disclosure table
 
     def test_the_landlord_statement_states_both_sides_and_draws_them(self, report):
         """The table partitions the NPV and the income Sankey draws the same partition."""
-        statement = dict(rendered_sections(report))["building-landlord-statement"]
+        statement = dict(rendered_sections(report))["rented-landlord-statement"]
         assert "cash flows, subtotal" in statement
         assert "accounting credits, subtotal" in statement
         assert "net position" in statement
@@ -760,18 +773,25 @@ class TestTheDocumentSaysWhatItDidNotDraw:
         assert "<b>Loan</b>" in block
         assert "every purchase in this bundle is a cash purchase" in block
         assert "<b>Cost of credit</b>" in block
-        assert 'id="building-loan"' not in thin_report  # named there instead of drawn here
+        assert 'id="owner-loan"' not in thin_report  # named there instead of drawn here
 
-    def test_the_landlord_statement_is_no_longer_dropped_in_silence(self, thin_report):
-        """It used to vanish with no signal at all when nothing was landlord-scoped."""
+    def test_the_rented_story_is_no_longer_dropped_in_silence(self, thin_report):
+        """It used to vanish with no signal at all when nothing was landlord- or tenant-scoped.
+
+        The landlord statement is a section of the rented chapter, so on a run with no rented
+        story the omission is one chapter rather than a handful of sections — which is the
+        honest statement, and the reason a chapter can be skipped the same way a section can.
+        """
         block = thin_report.split("Not drawn for this run", maxsplit=1)[1].split("</div>")[0]
-        assert "<b>Landlord statement</b>" in block
-        assert "No perspective of this run is scoped to the landlord" in block
+        assert "<b>Rented out</b>" in block
+        assert "no landlord and no tenant perspective" in block
+        assert 'id="rented-landlord-statement"' not in thin_report
 
     def test_a_skip_entry_names_the_chapter_it_would_have_been_drawn_in(self, thin_report):
-        """One chapter today; from slice 9 the same list carries three, and has to say which."""
+        """Four chapters can each drop a section, so an entry that named none would be ambiguous."""
         block = thin_report.split("Not drawn for this run", maxsplit=1)[1].split("</div>")[0]
-        assert block.count("<span class='chapter-tag'>The building</span>") >= 2
+        assert "<span class='chapter-tag'>The building</span>" in block
+        assert block.count("<span class='chapter-tag'>Owner-occupied</span>") >= 2
 
     def test_a_run_that_drew_everything_says_nothing(self):
         """An empty "nothing was skipped" box would be noise on every complete report.
@@ -784,12 +804,14 @@ class TestTheDocumentSaysWhatItDidNotDraw:
         """
         assert _not_drawn_html([]) == ""
 
-    def test_the_rich_report_names_the_one_section_it_cannot_draw(self, report):
-        """Its counterpart on a real document: what is missing is listed, and only what is."""
+    def test_the_rich_report_names_what_it_could_not_draw(self, report):
+        """Its counterpart on a real document: sections and chapters, each with its reason."""
         block = report.split("Not drawn for this run", maxsplit=1)[1].split("</div>")[0]
-        assert "<b>Energy balance</b>" in block
+        assert "<b>Energy balance</b>" in block  # a section of the building chapter
         assert "fewer than two device energy flows" in block
-        assert block.count("<li>") == 1
+        assert "<b>Who pays whom</b>" in block  # a section of a story chapter
+        assert "<b>Society</b>" in block  # and a whole chapter
+        assert 'id="society-society-statement"' not in report
 
     def test_the_bridge_says_why_it_could_not_decompose_a_comparison(self, database):
         """A comparison without its reference result: the section is named, not logged away."""
@@ -805,12 +827,12 @@ class TestTheDocumentSaysWhatItDidNotDraw:
         rendered = build_lifecycle_report_html(
             matrix, run_plausibility_checks(matrix), None, comparison
         )
-        assert 'id="building-npv-bridge"' not in rendered
+        assert 'id="vs-reference-npv-bridge"' not in rendered
         assert "<b>NPV bridge</b>" in rendered
         assert "without the reference result the bridge decomposes" in rendered
 
     def test_a_chapter_can_be_skipped_the_same_way(self):
-        """Nothing calls it before slice 9, so the mechanism is pinned rather than exercised."""
+        """The unit behind the three story chapters' skips, pinned on its own."""
         context = _ChapterContext(chapter=ReportChapters.THE_BUILDING)
         blocks = context.skip_chapter(ReportChapters.RENTED_OUT, "Nothing was rented out.")
         assert isinstance(blocks, list) and not blocks
@@ -858,10 +880,13 @@ class TestTheCashCurveTellsOnePerspectivesStory:
         rendered = build_lifecycle_report_html(
             matrix, run_plausibility_checks(matrix), None, comparison, reference_result=reference
         )
-        curve = dict(rendered_sections(rendered))["building-cash-curve"]
-        # The matrix's first perspective is "gross"; the comparison's is "financed".
+        sections = dict(rendered_sections(rendered))
+        curve = sections["owner-cash-curve"]
+        # The owner chapter's lead is "gross"; the comparison's perspective is "financed".
         assert "<h3>Cash curve (financed)" in curve
         assert "cumulative discounted savings" in curve
+        # And the chapter that does *not* own the comparison draws its own curve without it.
+        assert "cumulative discounted savings" not in sections["rented-cash-curve"]
 
     def test_a_mismatched_pair_is_refused_rather_than_drawn(self, database):
         """A caller cannot reintroduce the mix by handing the section the wrong result."""
@@ -941,10 +966,11 @@ class TestTheSectionOrderIsTheAssemblys:
     def test_every_anchor_the_document_emits_is_a_member_of_the_order(self, report):
         """A section with an anchor outside `ORDER` is one the contents cannot list."""
         known = {anchor for anchor, _name in ReportSections.ORDER}
+        chapters = [chapter for chapter, _name in ReportChapters.ORDER]
         for anchor, _html in rendered_sections(report):
-            chapter, _, section = anchor.partition("-")
-            assert chapter == ReportChapters.THE_BUILDING[0], anchor
-            assert section in known, anchor
+            chapter = next((one for one in chapters if anchor.startswith(f"{one}-")), None)
+            assert chapter is not None, anchor
+            assert anchor[len(chapter) + 1:] in known, anchor
 
     def test_every_heading_the_document_emits_is_a_name_of_the_order(self, report):
         """The names are `ORDER`'s too, so a contents entry and a heading cannot drift apart."""
@@ -980,11 +1006,11 @@ class TestCostOfCreditCoversEveryFinancedPerspective:
             )
             matrix.results[perspective.id] = evaluator.evaluate(make_inputs(), perspective)
         rendered = build_lifecycle_report_html(matrix, run_plausibility_checks(matrix))
-        credit = dict(rendered_sections(rendered))["building-cost-of-credit"]
+        credit = dict(rendered_sections(rendered))["owner-cost-of-credit"]
         assert "<b>financed_60</b>" in credit and "<b>financed_90</b>" in credit
         assert credit.count("Effective annual rate: <b>") == 2  # the authored prose says it once more
         assert "<b>gross</b>" not in credit  # the cash purchase has no credit to price
-        loan = dict(rendered_sections(rendered))["building-loan"]
+        loan = dict(rendered_sections(rendered))["owner-loan"]
         assert "<b>financed_60</b>" in loan and "<b>financed_90</b>" in loan  # the same set
 
 
@@ -1005,6 +1031,6 @@ class TestTheBridgePrintsThePublishedDelta:
         rendered = build_lifecycle_report_html(
             matrix, run_plausibility_checks(matrix), None, comparison, reference_result=reference
         )
-        bridge = dict(rendered_sections(rendered))["building-npv-bridge"]
+        bridge = dict(rendered_sections(rendered))["vs-reference-npv-bridge"]
         expected = f"{comparison.npv_delta_in_euro.best_estimate:,.0f}"
         assert f"Net NPV difference: <b>{expected} EUR</b>" in bridge

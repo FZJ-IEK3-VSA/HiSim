@@ -254,8 +254,8 @@ class TestHtmlReport:
         with_reference = build_lifecycle_report_html(
             matrix, checks, audit, comparison, reference_result=reference
         )
-        assert 'id="building-npv-bridge"' not in without
-        assert 'id="building-npv-bridge"' in with_reference
+        assert 'id="vs-reference-npv-bridge"' not in without
+        assert 'id="vs-reference-npv-bridge"' in with_reference
         assert "Net NPV difference" in with_reference
 
 

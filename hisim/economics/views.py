@@ -54,6 +54,8 @@ from hisim.economics.numerics import bisect_root
 from hisim.economics.results import (
     LifecycleCostResult,
     ModernizationLevySummary,
+    RateOrigin,
+    ResolvedRate,
     VariantComparison,
     discounted_payback_year,
 )
@@ -4425,3 +4427,314 @@ def _depreciation_life(last_event: LifecycleEvent, residual_in_euro: float, hori
     if 0.0 < ratio < 1.0:
         return max(remaining_years / (1.0 - ratio), 1.0)
     return max(float(remaining_years), 1.0)
+
+
+# ----- 9/9 views, the causes the story chapters state -----
+
+# ================================================ the assumptions behind the numbers (Q26 F2)
+
+
+@dataclass(frozen=True)
+class AssumptionRow:
+    """One economic assumption: what it is, what it was, and where it came from (Q26 F2).
+
+    The unit of the Assumptions section. `value` is already formatted as text because the rows
+    are heterogeneous — a rate, a year, a count of years, a euro band, a kWh figure — and forcing
+    them into one numeric type would either lose the band or lose the unit; everything else about
+    the row stays data. `source` is a citation where the data layer has one (a database file, the
+    country escalation defaults, a tariff contract id) and the literal "configuration" where the
+    value is a run parameter, which is a statement rather than a placeholder: it says nobody
+    reviewed this number, the run chose it.
+    """
+
+    group: str
+    name: str
+    value: str
+    source: str
+    #: True for a value the engine computed from the others rather than read (the annuity
+    #: factor), so the section can mark it as derived instead of implying it was configured.
+    is_computed: bool = False
+
+
+class AssumptionGroups:
+    """The groups the assumptions table is banded into, in the order it prints them.
+
+    Named constants so the section, the tests that check the table's completeness and any future
+    export agree on both the spelling and the order. The order is the order a reader reconstructs
+    a number in: first the money-over-time frame, then how prices move, then what energy costs,
+    then the physical quantities per-unit figures divide by, and last the macroeconomic shadow
+    price that only one chapter uses.
+    """
+
+    FRAME = "Calculation frame"
+    ESCALATION = "Escalation rates"
+    TARIFFS = "Energy tariffs"
+    QUANTITIES = "Building quantities"
+    SOCIETY = "Macroeconomic"
+    ORDER = (FRAME, ESCALATION, TARIFFS, QUANTITIES, SOCIETY)
+    #: The source text for a value that is a run parameter rather than reviewed data.
+    CONFIGURATION_SOURCE = "configuration"
+
+
+def prices_co2_damage(result: LifecycleCostResult) -> bool:
+    """Whether this perspective books the macroeconomic CO2 damage cost (Q26 F2/F3).
+
+    A predicate rather than a report-side membership test, so the Assumptions section can state
+    the damage-cost path when *some* perspective of the run priced one — the section itself
+    renders on the reference perspective, which never does.
+    """
+    return CostCategory.CO2_DAMAGE in result.npv_by_category
+
+
+def economic_assumptions(
+    result: LifecycleCostResult, co2_damage_priced: bool = False
+) -> List[AssumptionRow]:
+    """Every economic assumption this evaluation ran on, with its value and its source (F2).
+
+    The complete set of causes behind the report's consequences (rule 2.9): the interest rate,
+    the horizon and the price basis year they discount over; the annuity factor they imply,
+    marked as computed; every escalation rate that applied, with the step of the §3.2 fallback
+    chain that produced it; the working price, standing charge and feed-in rate of every carrier
+    billed; the building quantities the per-unit figures divide by; and the CO2 damage cost where
+    the macroeconomic perspective priced one.
+
+    Nothing here is a constant of the view. The parameter half comes from `result.parameters`, the
+    resolved half from `result.assumptions`, which the evaluator filled from the cost database and
+    `EvaluationInputs`; a result stored before that record existed simply contributes no resolved
+    rows, and the section says which half is missing rather than inventing it.
+
+    Args:
+        result: The perspective whose assumptions are stated. Any perspective will do — the
+            assumption set is a property of the run, not of the view — but the report states it
+            once, on the reference perspective of the building chapter.
+        co2_damage_priced: Whether any perspective of the run books the CO2 damage cost, which
+            decides whether the damage-cost path belongs in the table. It is a property of the
+            *run*, not of `result`, so the caller supplies it — see `prices_co2_damage`.
+
+    Returns:
+        The rows in `AssumptionGroups.ORDER`, ready to be tabulated.
+    """
+    params = result.parameters
+    configuration = AssumptionGroups.CONFIGURATION_SOURCE
+    rows: List[AssumptionRow] = [
+        AssumptionRow(AssumptionGroups.FRAME, "interest rate (discount rate)",
+                      f"{params.interest_rate:.2%}", configuration),
+        AssumptionRow(AssumptionGroups.FRAME, "observation period",
+                      f"{params.observation_period_in_years} a", configuration),
+        AssumptionRow(AssumptionGroups.FRAME, "price basis year",
+                      str(params.price_basis_year if params.price_basis_year is not None
+                          else result.simulation_year), configuration),
+        AssumptionRow(AssumptionGroups.FRAME, "annuity factor",
+                      f"{params.annuity_factor():.6f}",
+                      "computed from the interest rate and the horizon", is_computed=True),
+    ]
+    assumptions = result.assumptions
+    if assumptions is not None:
+        for label, rate in assumptions.escalation_rates.items():
+            rows.append(
+                AssumptionRow(
+                    AssumptionGroups.ESCALATION,
+                    _escalation_row_name(label),
+                    f"{rate.rate:.2%} per year",
+                    _rate_source(rate, configuration),
+                )
+            )
+        for carrier, tariff in assumptions.tariffs.items():
+            source = (
+                ", ".join(tariff.source_ids)
+                if tariff.source_ids
+                else (f"tariff contract {tariff.contract_id}" if not tariff.is_default_contract
+                      else configuration)
+            )
+            contract_note = (
+                "database price entry" if tariff.is_default_contract else tariff.contract_id
+            )
+            rows.append(
+                AssumptionRow(
+                    AssumptionGroups.TARIFFS,
+                    f"{carrier}: working price ({contract_note})",
+                    f"{tariff.working_price_in_euro_per_kwh.best_estimate:.4f} EUR/kWh",
+                    source,
+                )
+            )
+            rows.append(
+                AssumptionRow(
+                    AssumptionGroups.TARIFFS,
+                    f"{carrier}: standing charge",
+                    f"{tariff.standing_charge_in_euro_per_year.best_estimate:,.2f} EUR/a",
+                    source,
+                )
+            )
+            if tariff.feed_in_rate_in_euro_per_kwh is not None:
+                rows.append(
+                    AssumptionRow(
+                        AssumptionGroups.TARIFFS,
+                        f"{carrier}: feed-in rate ({tariff.feed_in_kind.value})",
+                        f"{tariff.feed_in_rate_in_euro_per_kwh.best_estimate:.4f} EUR/kWh",
+                        source,
+                    )
+                )
+    areas = result.reference_areas
+    if areas.living_area_in_m2 is not None:
+        rows.append(AssumptionRow(AssumptionGroups.QUANTITIES, "living area",
+                                  f"{areas.living_area_in_m2:,.1f} m2", configuration))
+    if areas.heated_floor_area_in_m2 is not None:
+        rows.append(AssumptionRow(AssumptionGroups.QUANTITIES, "heated floor area",
+                                  f"{areas.heated_floor_area_in_m2:,.1f} m2", configuration))
+    heat_demand = assumptions.annual_heat_demand_in_kwh if assumptions is not None else None
+    if heat_demand:
+        rows.append(AssumptionRow(AssumptionGroups.QUANTITIES, "annual heat demand",
+                                  f"{heat_demand:,.0f} kWh/a", configuration))
+    for carrier, quantities in result.annual_energy_quantities_by_carrier.items():
+        rows.append(
+            AssumptionRow(
+                AssumptionGroups.QUANTITIES,
+                f"{carrier}: energy bought (annualized)",
+                f"{quantities.bought_in_kwh:,.0f} kWh/a",
+                "simulation output",
+            )
+        )
+        if quantities.sold_in_kwh:
+            rows.append(
+                AssumptionRow(
+                    AssumptionGroups.QUANTITIES,
+                    f"{carrier}: energy sold (annualized)",
+                    f"{quantities.sold_in_kwh:,.0f} kWh/a",
+                    "simulation output",
+                )
+            )
+    if co2_damage_priced:
+        rows.append(
+            AssumptionRow(
+                AssumptionGroups.SOCIETY,
+                "CO2 damage cost (flat over the horizon)",
+                f"{params.co2_damage_cost_in_euro_per_ton:,.2f} EUR/t",
+                configuration,
+            )
+        )
+    rows.append(
+        AssumptionRow(
+            AssumptionGroups.SOCIETY,
+            "CO2 price scenario (path on the energy bill)",
+            params.co2_price_scenario,
+            configuration,
+        )
+    )
+    order = {group: index for index, group in enumerate(AssumptionGroups.ORDER)}
+    return sorted(rows, key=lambda row: order.get(row.group, len(order)))
+
+
+def _escalation_row_name(label: str) -> str:
+    """The reader's name for one escalation-rate key (`energy:electricity` -> "energy: electricity").
+
+    The keys are stable identifiers chosen by the evaluator; this is the only place they become
+    words, so a renamed key changes one line rather than every table that shows it.
+    """
+    if ":" not in label:
+        return f"{label} prices"
+    kind, subject = label.split(":", 1)
+    return f"{kind}: {subject}"
+
+
+def _rate_source(rate: ResolvedRate, configuration: str) -> str:
+    """The citation for one resolved escalation rate, per the step of the chain that produced it.
+
+    A configured rate cites the run (`configuration`), a rate from the country defaults file cites
+    that file's registered sources, and a rate that fell through to the general one says so — the
+    three are genuinely different claims about how reviewed the number is.
+    """
+    if rate.origin == RateOrigin.COUNTRY_DEFAULTS and rate.source_ids:
+        return ", ".join(rate.source_ids)
+    if rate.origin == RateOrigin.COUNTRY_DEFAULTS:
+        return "country escalation defaults"
+    if rate.origin == RateOrigin.GENERAL_FALLBACK:
+        return f"{configuration} (general fallback)"
+    return configuration
+
+
+# ============================================================ CO2 conversion factors (Q26 F3)
+
+
+@dataclass(frozen=True)
+class Co2FactorRow:
+    """One line of the CO2 factors table: a mass and the multiplication that produced it (F3).
+
+    Two shapes in one record, because the table shows them side by side. An *operational* row is
+    a carrier: `factor_in_kg_per_unit` is kg per kWh, `quantity` the annualized kWh bought, and
+    `annual_mass_in_kg` their product — the mass that repeats every year. An *embodied* row is a
+    device: the factor is kg per size unit, the quantity is the installed size, and
+    `per_installation_in_kg` is their product, charged `installations` times within the horizon.
+
+    `total_in_kg` is the figure the chart above the table draws, so the two are checkable against
+    each other by eye, which is the whole purpose of the row.
+    """
+
+    subject: str
+    kind: str
+    factor_in_kg_per_unit: float
+    quantity: float
+    quantity_unit: str
+    total_in_kg: float
+    annual_mass_in_kg: Optional[float] = None
+    per_installation_in_kg: Optional[float] = None
+    installations: int = 1
+
+
+class Co2FactorKinds:
+    """The two kinds of CO2 factor row, named once for the view and its renderer."""
+
+    OPERATIONAL = "operational"
+    EMBODIED = "embodied"
+
+
+def co2_factor_rows(result: LifecycleCostResult) -> List[Co2FactorRow]:
+    """The conversions behind every CO2 mass the report publishes (Q26 F3, rule 2.9).
+
+    Per carrier: emission factor x annualized kWh bought = the mass emitted per year, and that
+    times the horizon is the carrier total the chart draws. Per device: embodied factor x
+    installed size = the mass per installation, times the number of installations booked within
+    the horizon. Both are read from what the engine recorded while it computed the masses — the
+    price entry's factor and the device entry's per-unit figure — never re-derived by dividing a
+    mass by a quantity, which would reproduce the mass whatever the factor was.
+
+    A result stored before the factors were recorded contributes no rows, and the CO2 section then
+    renders as it did before rather than showing a table of divisions.
+
+    Args:
+        result: The perspective whose CO2 accounting is stated.
+
+    Returns:
+        Operational rows first, then embodied ones, each in the accounting's own order.
+    """
+    co2 = result.lifecycle_co2_result
+    horizon = result.parameters.observation_period_in_years
+    rows: List[Co2FactorRow] = []
+    for carrier, factor in co2.emission_factor_by_carrier_in_kg_per_kwh.items():
+        quantities = result.annual_energy_quantities_by_carrier.get(carrier)
+        bought = quantities.bought_in_kwh if quantities is not None else 0.0
+        rows.append(
+            Co2FactorRow(
+                subject=carrier,
+                kind=Co2FactorKinds.OPERATIONAL,
+                factor_in_kg_per_unit=factor,
+                quantity=bought,
+                quantity_unit="kWh/a",
+                annual_mass_in_kg=factor * bought,
+                total_in_kg=co2.operational_co2_by_carrier_in_kg.get(carrier, 0.0),
+                installations=horizon,
+            )
+        )
+    for subject, basis in co2.embodied_basis_by_subject.items():
+        rows.append(
+            Co2FactorRow(
+                subject=subject,
+                kind=Co2FactorKinds.EMBODIED,
+                factor_in_kg_per_unit=basis.factor_in_kg_per_unit,
+                quantity=basis.size,
+                quantity_unit=basis.size_unit,
+                per_installation_in_kg=basis.per_installation_in_kg,
+                installations=basis.installations,
+                total_in_kg=co2.embodied_by_subject_in_kg.get(subject, 0.0),
+            )
+        )
+    return rows

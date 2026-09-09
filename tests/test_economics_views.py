@@ -279,6 +279,29 @@ class TestTimeSeriesViews:
                 )
                 assert series[year] == pytest.approx(expected)
 
+    def test_the_outstanding_balance_starts_at_the_disbursement_and_ends_at_zero(self, result):
+        """The balance line is the disbursement minus the principal booked so far, year by year.
+
+        The docstring used to promise "year 0 carries the full disbursement" while the loop
+        subtracts year-0 principal first; the two agree here because an annuity plan repays
+        nothing in the year it is drawn, and the assertion below pins the *rule* — disbursement
+        minus cumulative principal — rather than the coincidence.
+        """
+        amortization = views.loan_amortization_series(result)
+        assert amortization.disbursement_in_euro > 0.0
+        assert amortization.principal_in_euro[0] == pytest.approx(0.0)
+        assert amortization.outstanding_balance_in_euro[0] == pytest.approx(
+            amortization.disbursement_in_euro
+        )
+        running = 0.0
+        for year, principal in enumerate(amortization.principal_in_euro):
+            running += principal
+            assert amortization.outstanding_balance_in_euro[year] == pytest.approx(
+                amortization.disbursement_in_euro - running
+            )
+        # The fixture's 12-year term fits inside the horizon, so the plan amortizes fully.
+        assert amortization.outstanding_balance_in_euro[-1] == pytest.approx(0.0, abs=1e-6)
+
     def test_cumulative_operational_co2_is_the_running_total(self, result):
         """Same numbers as the yearly series, accumulated."""
         yearly = result.lifecycle_co2_result.operational_co2_by_year_in_kg
@@ -336,6 +359,72 @@ class TestDetailTable:
         for detail_year in years:
             amounts = [row.nominal_in_euro.best_estimate for row in detail_year.rows]
             assert amounts == sorted(amounts)
+
+
+class TestTheLevySummaryOfARealLandlordRun:
+    """`LifecycleCostResult.modernization_levy` as an evaluation actually fills it (§6.4, D27).
+
+    Every other test of the levy builds an `AllocationContext` by hand and asks the ruleset
+    directly, which leaves the wiring untested: the evaluator has to derive the context from the
+    inputs, run the ruleset, convert the outcome into the summary record and hang it on the
+    result. A break anywhere along that chain shows up as `modernization_levy is None` and no
+    existing test would have noticed — the timeline still carries the transfer pair.
+
+    The fixture's building is 150 m² at 8.5 EUR/m²·month cold rent, so the general §559 Abs. 3a
+    ceiling is the upper tier (3.00 EUR/m²·month = 5,400 EUR/a) and the §559e one 900 EUR/a.
+    """
+
+    def test_the_summary_reaches_the_result_with_both_legs_and_a_verdict(self, allocated):
+        """The record exists, its legs add up to the amount, and every world has a verdict."""
+        from hisim.economics.results import LevyBindingMechanism
+
+        levy = allocated.modernization_levy
+        assert levy is not None
+        assert levy.annual_amount_in_euro.best_estimate == pytest.approx(
+            levy.general_leg_in_euro.best_estimate + levy.heating_leg_in_euro.best_estimate
+        )
+        assert levy.cap_in_euro_per_m2_per_month == pytest.approx(3.0)
+        assert set(levy.binding_mechanism_by_slot) == {Slot.LOW, Slot.BEST_ESTIMATE, Slot.HIGH}
+        for verdict in levy.binding_mechanism_by_slot.values():
+            assert LevyBindingMechanism.names_a_cap(verdict) or verdict.endswith(
+                LevyBindingMechanism.RATE_BELOW_CAP
+            )
+        assert levy.cap_binding_in_best_estimate == LevyBindingMechanism.names_a_cap(
+            levy.binding_mechanism_by_slot[Slot.BEST_ESTIMATE]
+        )
+
+    def test_the_summary_amount_is_the_amount_the_timeline_books(self, allocated):
+        """The record is a statement about the money, so it has to be the money (§6.4).
+
+        The levy is booked as one transfer pair per year; the summary states the annual figure.
+        A record that drifted from the entries would let the caption and the cash-flow table
+        disagree about the same rent increase.
+        """
+        levied_years = {
+            entry.year
+            for entry in allocated.timeline.entries
+            if entry.category == CostCategory.MODERNIZATION_LEVY and entry.payer == Actor.TENANT
+        }
+        assert levied_years
+        levy = allocated.modernization_levy
+        assert levy is not None
+        for year in sorted(levied_years):
+            booked = UncertainValue.sum(
+                entry.amount_in_euro
+                for entry in allocated.timeline.entries
+                if entry.category == CostCategory.MODERNIZATION_LEVY
+                and entry.payer == Actor.TENANT
+                and entry.year == year
+            )
+            assert booked.best_estimate == pytest.approx(levy.annual_amount_in_euro.best_estimate)
+
+    def test_both_legs_stay_inside_their_own_ceilings(self, allocated):
+        """900 EUR/a on the §559e leg, 5,400 EUR/a on the two together, in every world."""
+        levy = allocated.modernization_levy
+        assert levy is not None
+        for slot in Slot:
+            assert levy.heating_leg_in_euro.slot(slot) <= 900.0 + 1e-6
+            assert levy.annual_amount_in_euro.slot(slot) <= 5400.0 + 1e-6
 
 
 class TestPivotsAndAnnuities:

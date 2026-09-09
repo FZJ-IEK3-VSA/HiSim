@@ -39,7 +39,7 @@ import json
 import os
 from typing import Any, Dict, Optional
 
-from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.carriers import EnergyCarrier, validate_energy_attribution
 from hisim.economics.evaluator import EvaluationInputs, SubjectCostFacts, UnresolvedSubject
 from hisim.economics.exports import ExportFileNames
 from hisim.economics.facts import (
@@ -332,6 +332,34 @@ def subsidy_context_from_json(raw: dict) -> SubsidyContext:
     )
 
 
+def _attribution_from_json(raw: dict, key: str, context: str) -> Dict[str, Dict[str, float]]:
+    """Reads one per-subject energy-attribution map back, refusing a negative quantity.
+
+    Both sides of the round trip carry a map of this shape — the extract's simulated-period one
+    and the result's annualized one — and both are read back here so a hand-edited or
+    foreign-written file cannot put a negative magnitude into the household balance. Absent is not
+    an error: it is what every file written before the field existed looks like, and the chart
+    skips itself on the empty map.
+
+    Args:
+        raw: The decoded JSON object holding the map.
+        key: Its key in that object.
+        context: The dotted field path, for the error message.
+
+    Returns:
+        Subject -> role -> kWh, empty when the key is absent.
+
+    Raises:
+        ValueError: If any quantity is negative.
+    """
+    attribution = {
+        subject: {role: float(value) for role, value in by_role.items()}
+        for subject, by_role in raw.get(key, {}).items()
+    }
+    validate_energy_attribution(attribution, context)
+    return attribution
+
+
 def inputs_to_json(inputs: EvaluationInputs) -> dict:
     """Serializes EvaluationInputs to the economic_inputs.json structure.
 
@@ -447,10 +475,11 @@ def inputs_from_json(raw: dict, tariffs_base_path: Optional[str] = None) -> Eval
             for item in raw.get("cost_facts", [])
         ],
         billing=[billing_from_json(item) for item in raw.get("billing", [])],
-        energy_attribution_by_subject_in_kwh={
-            subject: {role: float(value) for role, value in by_role.items()}
-            for subject, by_role in raw.get("energy_attribution_by_subject_in_kwh", {}).items()
-        },
+        energy_attribution_by_subject_in_kwh=_attribution_from_json(
+            raw,
+            "energy_attribution_by_subject_in_kwh",
+            "EvaluationInputs.energy_attribution_by_subject_in_kwh",
+        ),
         unresolved_subjects=[
             UnresolvedSubject(subject=item["subject"], reason=item["reason"])
             for item in raw.get("unresolved_subjects", [])
@@ -716,10 +745,11 @@ def result_from_json(
         simulation_year=raw.get("simulation_year"),
         # Additive with the visualization extension; absent in files written before it, which is
         # exactly the case the household energy balance skips itself on.
-        energy_attribution_by_subject_in_kwh={
-            subject: {role: float(value) for role, value in by_role.items()}
-            for subject, by_role in raw.get("energy_attribution_by_subject_in_kwh", {}).items()
-        },
+        annual_energy_attribution_by_subject_in_kwh=_attribution_from_json(
+            raw,
+            "annual_energy_attribution_by_subject_in_kwh",
+            "LifecycleCostResult.annual_energy_attribution_by_subject_in_kwh",
+        ),
         raw_flexibility_value_by_carrier=dict(raw.get("raw_flexibility_value_by_carrier", {})),
         # Additive; absent in a result written before the Sowieso share existed, where every
         # credit was implicitly a full one.

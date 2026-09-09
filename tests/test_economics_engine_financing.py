@@ -318,6 +318,45 @@ class TestOperationalCo2Accumulation:
         assert by_carrier == pytest.approx((100.0 + 250.0) * horizon)
         assert by_carrier == pytest.approx(sum(co2_result.operational_co2_by_year_in_kg))
 
+    def test_two_factors_for_one_carrier_are_refused(self):
+        """The published factor has to reproduce the published mass (review, agreed small fix).
+
+        The mass accumulates over records while the factor was assigned last-wins, so two meters
+        of one carrier at different factors left the CO2 section stating `factor x kWh` with a
+        factor that multiplies out to something other than the mass beside it. Two records at the
+        same factor are the ordinary case and stay legal; two at different factors are a data
+        state no single published factor can describe, and the run says so.
+        """
+        from hisim.economics.calculators.co2 import accumulate_operational_emissions
+        from hisim.economics.calculators.energy import CarrierEmissions, EnergyFlowResult
+        from hisim.economics.database import CostDataError
+        from hisim.economics.results import LifecycleCo2Result
+
+        def accumulate(second_factor):
+            energy_result = EnergyFlowResult(
+                emissions=[
+                    CarrierEmissions(
+                        carrier_value=EnergyCarrier.ELECTRICITY.value,
+                        annual_emissions_in_kg=100.0,
+                        emission_factor_in_kg_per_kwh=0.38,
+                    ),
+                    CarrierEmissions(
+                        carrier_value=EnergyCarrier.ELECTRICITY.value,
+                        annual_emissions_in_kg=250.0,
+                        emission_factor_in_kg_per_kwh=second_factor,
+                    ),
+                ]
+            )
+            co2_result = LifecycleCo2Result(operational_co2_by_year_in_kg=[0.0] * 6)
+            accumulate_operational_emissions(energy_result, co2_result, 5)
+            return co2_result
+
+        assert accumulate(0.38).emission_factor_by_carrier_in_kg_per_kwh == {
+            EnergyCarrier.ELECTRICITY.value: pytest.approx(0.38)
+        }
+        with pytest.raises(CostDataError, match="two different"):
+            accumulate(0.15)
+
 
 class TestSignValidation:
     """§3.9 / W3.7: cost positive, money arriving negative — enforced on `add`."""

@@ -75,6 +75,9 @@ class CarrierEmissions:
     #: The factor the mass above was computed with, in kg per kWh bought. Carried alongside the
     #: product so the CO2 section can state the multiplication instead of asserting its result; it
     #: is the price entry's `emission_factor_in_kg_per_kwh`, constant over the horizon in v1.
+    #: Revisit when an energy price entry carries a per-year factor: cost_spec.md §3.8 asks for a
+    #: per-carrier emission trend, and at that point this single float becomes a path and the
+    #: report's "factor x kWh" line becomes one row per year rather than one per carrier.
     emission_factor_in_kg_per_kwh: float = 0.0
 
 

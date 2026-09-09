@@ -29,7 +29,7 @@ from hisim.economics.timeline import (
     CashFlowTimeline,
     CostCategory,
 )
-from hisim.economics.uncertainty import UncertainValue
+from hisim.economics.uncertainty import Slot, UncertainValue
 from hisim.loadtypes import ComponentType, Units
 
 pytestmark = pytest.mark.base
@@ -334,12 +334,12 @@ class TestHeatingModernizationLevy:
         )
         outcome = ruleset.compute_modernization_levy(self._context([banded]))
         verdicts = outcome.binding_mechanism_by_slot
-        assert set(verdicts) == {"low", "best_estimate", "high"}
-        assert LevyBindingMechanism.RATE_BELOW_CAP in verdicts["low"]
-        assert verdicts["low"].startswith("8%")
-        assert LevyBindingMechanism.RATE_BELOW_CAP in verdicts["best_estimate"]
-        assert verdicts["high"].startswith(LevyBindingMechanism.GENERAL_CAP)
-        assert "3.00 EUR/m2*mo" in verdicts["high"]
+        assert set(verdicts) == {Slot.LOW, Slot.BEST_ESTIMATE, Slot.HIGH}
+        assert LevyBindingMechanism.RATE_BELOW_CAP in verdicts[Slot.LOW]
+        assert verdicts[Slot.LOW].startswith("8%")
+        assert LevyBindingMechanism.RATE_BELOW_CAP in verdicts[Slot.BEST_ESTIMATE]
+        assert verdicts[Slot.HIGH].startswith(LevyBindingMechanism.GENERAL_CAP)
+        assert "3.00 EUR/m2*mo" in verdicts[Slot.HIGH]
         # The cheap world is uncapped, so its levy is exactly the percentage of its own basis.
         assert outcome.total_in_euro.minimum == pytest.approx(1600.0)
         assert outcome.total_in_euro.maximum == pytest.approx(3600.0)
@@ -354,11 +354,112 @@ class TestHeatingModernizationLevy:
         outcome = ruleset.compute_modernization_levy(
             self._context([self._measure("HEAT_PUMP", 40000.0)])
         )
-        assert outcome.cap_binding
-        assert outcome.binding_mechanism_by_slot["best_estimate"].startswith(
-            LevyBindingMechanism.HEATING_CAP
+        verdict = outcome.binding_mechanism_by_slot[Slot.BEST_ESTIMATE]
+        assert LevyBindingMechanism.names_a_cap(verdict)
+        assert verdict == f"{LevyBindingMechanism.HEATING_CAP} 0.50 EUR/m2*mo"
+
+    def test_the_heating_cap_is_named_even_when_the_general_leg_survives(self):
+        """The bug: a cut heating leg beside a surviving general leg named the *general* cap.
+
+        The old rule reported the §559e ceiling only when the general leg came out at zero, so the
+        commonest mixed package — a heat pump above its own ceiling plus insulation comfortably
+        below the general one — told the landlord that §559 Abs. 3a had decided the rent increase.
+        It had not: the §559e cap is 0.50 EUR/m²·month against §559's 3.00, so the reader was
+        pointed at the wrong paragraph and at a ceiling six times higher than the one that bound.
+
+        40,000 EUR of heat pump gives a 4,000 EUR/a §559e leg, cut to 600; 30,000 EUR of wall
+        insulation gives a 2,400 EUR/a §559 leg against the 3,000 EUR/a the general cap leaves.
+        """
+        from hisim.economics.actors import DE2024Ruleset, LevyBindingMechanism
+
+        ruleset = DE2024Ruleset.load()
+        outcome = ruleset.compute_modernization_levy(
+            self._context(
+                [
+                    self._measure("HEAT_PUMP", 40000.0),
+                    self._measure("WALL_INSULATION", 30000.0),
+                ]
+            )
         )
-        assert "0.50 EUR/m2*mo" in outcome.binding_mechanism_by_slot["best_estimate"]
+        assert outcome.heating_levy_in_euro.best_estimate == pytest.approx(600.0)
+        assert outcome.general_levy_in_euro.best_estimate == pytest.approx(2400.0)
+        assert outcome.binding_mechanism_by_slot[Slot.BEST_ESTIMATE] == (
+            f"{LevyBindingMechanism.HEATING_CAP} 0.50 EUR/m2*mo"
+        )
+
+    def test_both_caps_are_named_when_both_removed_euros(self):
+        """Two ceilings cut the same world, so the verdict names both rather than the last one.
+
+        40,000 EUR of heat pump is cut from 4,000 to 600 by §559e; 50,000 EUR of insulation is cut
+        from 4,000 to the 3,000 the general cap leaves beside it. Naming only §559 would hide the
+        ceiling that is actually binding the heating measure the landlord is deciding about.
+        """
+        from hisim.economics.actors import DE2024Ruleset, LevyBindingMechanism
+
+        ruleset = DE2024Ruleset.load()
+        outcome = ruleset.compute_modernization_levy(
+            self._context(
+                [
+                    self._measure("HEAT_PUMP", 40000.0),
+                    self._measure("WALL_INSULATION", 50000.0),
+                ]
+            )
+        )
+        assert outcome.total_in_euro.best_estimate == pytest.approx(3600.0)
+        assert outcome.binding_mechanism_by_slot[Slot.BEST_ESTIMATE] == (
+            f"{LevyBindingMechanism.HEATING_CAP} 0.50 EUR/m2*mo"
+            f"{LevyBindingMechanism.BOTH_CAPS_JOINER}"
+            f"{LevyBindingMechanism.GENERAL_CAP} 3.00 EUR/m2*mo"
+        )
+
+    def test_the_general_cap_alone_is_named_when_only_it_cut(self):
+        """A package with no §559e measure can only ever be decided by the general ceiling."""
+        from hisim.economics.actors import DE2024Ruleset, LevyBindingMechanism
+
+        ruleset = DE2024Ruleset.load()
+        outcome = ruleset.compute_modernization_levy(
+            self._context([self._measure("WALL_INSULATION", 50000.0)])
+        )
+        assert outcome.binding_mechanism_by_slot[Slot.BEST_ESTIMATE] == (
+            f"{LevyBindingMechanism.GENERAL_CAP} 3.00 EUR/m2*mo"
+        )
+
+    def test_neither_cap_is_named_when_neither_cut(self):
+        """Below both ceilings the levy is the statutory percentage, and spending more raises it."""
+        from hisim.economics.actors import DE2024Ruleset, LevyBindingMechanism
+
+        ruleset = DE2024Ruleset.load()
+        outcome = ruleset.compute_modernization_levy(
+            self._context([self._measure("WALL_INSULATION", 20000.0)])
+        )
+        verdict = outcome.binding_mechanism_by_slot[Slot.BEST_ESTIMATE]
+        assert not LevyBindingMechanism.names_a_cap(verdict)
+        assert verdict == f"8% {LevyBindingMechanism.RATE_BELOW_CAP}"
+
+    def test_a_heating_cap_above_the_general_one_is_not_the_binding_ceiling(self):
+        """A leg is classified by the ceiling that produced its value, not by the one that exists.
+
+        The shipped parameters put the §559e ceiling far below the general one, so this ordering
+        never occurs in practice; a future data file could invert it, and then the euros a heating
+        leg loses are lost to §559 Abs. 3a and naming §559e would be simply false.
+        """
+        import dataclasses
+
+        from hisim.economics.actors import DE2024Ruleset, LevyBindingMechanism
+
+        shipped = DE2024Ruleset.load()
+        ruleset = DE2024Ruleset(
+            levy=dataclasses.replace(shipped.levy, heating_cap_in_euro_per_m2_per_month=9.0)
+        )
+        # Heating cap 9.00 -> 10,800 EUR/a, above the 3,600 EUR/a general cap, so the general one
+        # is what cuts the 4,000 EUR/a heating leg down to 3,600.
+        outcome = ruleset.compute_modernization_levy(
+            self._context([self._measure("HEAT_PUMP", 40000.0)])
+        )
+        assert outcome.heating_levy_in_euro.best_estimate == pytest.approx(3600.0)
+        assert outcome.binding_mechanism_by_slot[Slot.BEST_ESTIMATE] == (
+            f"{LevyBindingMechanism.GENERAL_CAP} 3.00 EUR/m2*mo"
+        )
 
     def test_a_levy_without_a_living_area_records_no_verdict(self):
         """No living area means no cap could be evaluated, so there is nothing to state."""
@@ -368,7 +469,6 @@ class TestHeatingModernizationLevy:
         context = self._context([self._measure("HEAT_PUMP", 40000.0)], living_area=None)
         outcome = ruleset.compute_modernization_levy(context)
         assert outcome.binding_mechanism_by_slot == {}
-        assert not outcome.cap_binding
         assert outcome.cap_in_euro_per_m2_per_month is None
 
     def test_pure_heating_package_is_capped_at_fifty_cents_per_m2_and_month(self):
@@ -606,7 +706,7 @@ class TestResultQuantities:
             },
         )
         result = evaluator.evaluate(inputs, GREENFIELD_GROSS)
-        attribution = result.energy_attribution_by_subject_in_kwh
+        attribution = result.annual_energy_attribution_by_subject_in_kwh
         assert attribution["ElectricityMeter"]["GRID_IMPORT"] == pytest.approx(2000.0)
         assert attribution["ElectricityMeter"]["GRID_EXPORT"] == pytest.approx(480.0)
         assert attribution["PVSystem"]["PV_GENERATION"] == pytest.approx(3600.0)
@@ -625,8 +725,8 @@ class TestResultQuantities:
             cost_facts=[SubjectCostFacts("Device", make_facts(1000.0, 10.0))],
         )
         result = evaluator.evaluate(inputs, GREENFIELD_GROSS)
-        assert result.energy_attribution_by_subject_in_kwh == {}
-        assert result.to_json()["energy_attribution_by_subject_in_kwh"] == {}
+        assert result.annual_energy_attribution_by_subject_in_kwh == {}
+        assert result.to_json()["annual_energy_attribution_by_subject_in_kwh"] == {}
 
     def test_quantities_are_serialized_additively(self, database):
         """lifecycle_costs.json gains the new fields without losing any existing one."""

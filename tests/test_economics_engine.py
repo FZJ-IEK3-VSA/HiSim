@@ -429,6 +429,20 @@ class TestBrownfieldAndStatusQuo:
         third = credit_at(0.3)
         assert third == pytest.approx(full * 0.3)
         assert full < 0  # a credit, cost-negative
+        # Linearity alone would survive a wrong basis — both figures would simply be wrong by the
+        # same factor — so the basis itself is computed here from the database entry the code
+        # documents it reads: the like-for-like replacement of the registered 15 kW gas boiler,
+        # escalated to the credit year at the investment rate. The register's boiler is 17 years
+        # into an 18-year service life, so the credit falls in year 1; `zero_rate_parameters`
+        # switches the escalation off and the shipped per-asset-class table is empty by design
+        # (spec Q2), which makes that escalation the identity and is asserted rather than assumed.
+        assert database.get_escalation_defaults("DE").asset_class_rates == {}
+        like_for_like = database.get_device_entry(
+            ComponentType.GAS_HEATER, 2024, "DE"
+        ).investment_for_size(15.0)
+        escalated = like_for_like.best_estimate * (1.0 + params.investment_price_escalation_rate) ** 1
+        assert -full == pytest.approx(escalated)
+        assert -third == pytest.approx(escalated * 0.3)
 
     def test_the_applied_anyway_share_reaches_the_result_and_the_ledger(self, database):
         """The share is disclosed, not just applied: on the result and in the provenance trail."""

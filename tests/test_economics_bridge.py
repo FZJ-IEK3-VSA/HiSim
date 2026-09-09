@@ -551,20 +551,24 @@ class TestSharedHelpers:
         """One lookup behind both the sum and the raw series, so they cannot locate differently."""
 
         class _Output:
-            """The two attributes the positional lookup matches on."""
+            """The three attributes the positional lookup and the unit conversion read."""
 
-            def __init__(self, component_name: str, field_name: str) -> None:
-                """Names one declared output."""
+            def __init__(self, component_name: str, field_name: str, unit) -> None:
+                """Names one declared output and the unit it is declared in."""
                 self.component_name = component_name
                 self.field_name = field_name
+                self.unit = unit
 
-        outputs = [_Output("Meter", "A"), _Output("Meter", "B")]
+        outputs = [
+            _Output("Meter", "A", loadtypes.Units.WATT_HOUR),
+            _Output("Meter", "B", loadtypes.Units.WATT),
+        ]
         frame = pd.DataFrame({0: [1000.0, 2000.0], 1: [7.0, 8.0]})
 
         # pylint: disable=protected-access
-        assert bridge._sum_output_column("Meter", "A", outputs, frame) == pytest.approx(3.0)
+        assert bridge._sum_output_column("Meter", "A", outputs, frame, 900) == pytest.approx(3.0)
         series = bridge._power_series("Meter", "B", outputs, frame)
         assert series is not None
         assert series.tolist() == [7.0, 8.0]
-        assert bridge._sum_output_column("Meter", "C", outputs, frame) is None
+        assert bridge._sum_output_column("Meter", "C", outputs, frame, 900) is None
         assert bridge._power_series("Meter", "C", outputs, frame) is None

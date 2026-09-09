@@ -386,34 +386,37 @@ class MeterOutputContracts:
     }
 
 
-def _meter_output_name(component: Any, constant_name: str) -> str:
-    """The output column a meter class publishes under the given constant.
+def _declared_output_name(component: Any, constant_name: str, table_name: str) -> str:
+    """The output column a component class publishes under the given constant.
 
-    Reads the constant off `type(component)` instead of repeating its value here, so the meter
+    Reads the constant off `type(component)` instead of repeating its value here, so the component
     class owns the name of the column it writes and the adapter can only ever ask for a column
-    that class actually declares.
+    that class actually declares. Both compatibility tables that name columns — the meter contracts
+    and the energy-balance specs — resolve through this one function, so a renamed output is the
+    same loud failure whichever table pointed at it.
 
     Args:
-        component: The meter instance; only its class is read.
+        component: The component instance; only its class is read.
         constant_name: Name of the class constant holding the output field name.
+        table_name: The adapter table that named the constant, for the error message.
 
     Returns:
         The output field name as the class states it.
 
     Raises:
-        CostDataError: If the class has no such constant. That is a renamed or deleted meter
-            output, and the alternative is billing a carrier from a column nothing writes;
-            `bridge.py` catches it per component and reports it as an unresolved subject, so the
-            run aborts through the D7 path instead of publishing a zero bill.
+        CostDataError: If the class has no such constant. That is a renamed or deleted output, and
+            the alternative is reading a column nothing writes; `bridge.py` catches it per
+            component and reports it as an unresolved subject, so the run aborts through the D7
+            path instead of publishing a zero bill or a flowless balance.
     """
-    meter_class = type(component)
-    field_name = getattr(meter_class, constant_name, None)
+    component_class = type(component)
+    field_name = getattr(component_class, constant_name, None)
     if not isinstance(field_name, str):
         raise CostDataError(
-            f"Meter class {meter_class.__name__} declares no output-name constant "
-            f"{constant_name!r}, so the cost engine cannot tell which results column carries its "
-            "metered energy. The constant was renamed or removed; update "
-            "adapter.MeterOutputContracts to match."
+            f"Component class {component_class.__name__} declares no output-name constant "
+            f"{constant_name!r}, so the cost engine cannot tell which results column that row of "
+            f"adapter.{table_name} refers to. The constant was renamed or removed; update "
+            f"adapter.{table_name} to match."
         )
     return field_name
 
@@ -427,7 +430,7 @@ def get_meter_spec(component: Any) -> Optional[MeterSpec]:
     calls this for every component; a non-None result makes it read the named output columns out
     of the results frame into `BillingDeterminants`.
 
-    The column names come from the meter class itself (`_meter_output_name`), which is what makes a
+    The column names come from the meter class itself (`_declared_output_name`), which makes a
     renamed meter output a loud failure rather than a carrier quietly billed from an empty series.
 
     Raises:
@@ -439,14 +442,19 @@ def get_meter_spec(component: Any) -> Optional[MeterSpec]:
     contract = MeterOutputContracts.BY_CLASS_NAME.get(type(component).__name__)
     if contract is None:
         return None
+    table = "MeterOutputContracts"
     return MeterSpec(
         carrier=contract.carrier_of(component),
-        bought_field=_meter_output_name(component, contract.bought_constant),
+        bought_field=_declared_output_name(component, contract.bought_constant, table),
         sold_field=(
-            _meter_output_name(component, contract.sold_constant) if contract.sold_constant else None
+            _declared_output_name(component, contract.sold_constant, table)
+            if contract.sold_constant
+            else None
         ),
         power_field=(
-            _meter_output_name(component, contract.power_constant) if contract.power_constant else None
+            _declared_output_name(component, contract.power_constant, table)
+            if contract.power_constant
+            else None
         ),
     )
 
@@ -521,11 +529,19 @@ class FactsExtraction:
 class DeviceEnergySpec:
     """How to read one energy-balance flow of a component out of the results frame.
 
-    The energy-balance counterpart of `MeterSpec`, and deliberately the same shape of contract: a
-    declarative "this class's output column *X* is that role", so `bridge.py` can collect the
-    household energy balance generically instead of special-casing devices. Where `MeterSpec`
-    describes the *billing* boundary, this describes the *physical* one — flows nobody is ever
-    charged for (PV generation, battery charging) belong here and never reach a price.
+    The energy-balance counterpart of `MeterOutputContract`, and deliberately the same shape of
+    contract: a declarative "this class's output constant *X* is that role", so `bridge.py` can
+    collect the household energy balance generically instead of special-casing devices. Where the
+    meter contracts describe the *billing* boundary, these describe the *physical* one — flows
+    nobody is ever charged for (PV generation, battery charging) belong here and never reach a
+    price.
+
+    `output_constant` is the **name of the class constant** that holds the column name, not the
+    column name itself, resolved through `_declared_output_name` exactly as a meter's is. The
+    difference matters: `MoreAdvancedHeatPumpHPLib.ElectricalInputPowerTotal` is the constant and
+    `"ElectricalInputPowerTotalHeatpump"` its value, and a table that spelled the value would keep
+    working after the class renamed the constant and stop working after it renamed the column —
+    the wrong way round.
 
     Units are not assumed: the summing side reads the declared unit of the output
     (`Units.WATT`, `Units.WATT_HOUR`, `Units.KWH`) and converts to kWh accordingly, because HiSim
@@ -539,6 +555,20 @@ class DeviceEnergySpec:
     """
 
     role: EnergyFlowRole
+    output_constant: str
+    positive_part: Optional[bool] = None
+
+
+@dataclass(frozen=True)
+class ResolvedDeviceEnergyFlow:
+    """One energy-balance flow with its column name resolved off the component class.
+
+    What `resolve_device_energy_flows` returns and `bridge.py` reads — the `MeterSpec` of the
+    physical side. Separating it from `DeviceEnergySpec` is what keeps the table a statement about
+    *constants* while the collector works with *columns*.
+    """
+
+    role: EnergyFlowRole
     field_name: str
     positive_part: Optional[bool] = None
 
@@ -549,22 +579,42 @@ class DeviceEnergySpecs:
     The compatibility table for energy the way `FactsExtractors.BY_CLASS_NAME` is the one for
     cost, and the honest answer to "where do the numbers on the energy-balance chart come from":
     every one of them is a named output column of a named component class, summed over the
-    simulated period. A class that is not in this table contributes nothing — the balance then
-    shows an unattributed remainder rather than inventing a flow for it.
+    simulated period.
+
+    **The table is total over the classes that move electricity.** Every component class that
+    declares an output with `LoadTypes.ELECTRICITY` in a unit the collector can convert has a row
+    here — a real one when its flow is a terminal of the balance, and an *explicit empty* one when
+    it is not. Absence therefore means "nobody has looked at this class", and `bridge.py` refuses
+    a run over it (D7) instead of quietly leaving the device out of a picture that claims to be a
+    balance of the house. That is the whole point of the empty rows: a controller that publishes a
+    setpoint in watts and a heat pump that publishes its consumption in watts are indistinguishable
+    to a scanner, and only a person can say which of them is energy crossing a node.
+
+    The empty rows fall into three groups, and the comments below say which group each row is in:
+    control and energy-management channels that are *instructions*, not flows; aggregates and
+    duplicate channels whose energy is already counted under another row; and real device flows
+    for which `carriers.EnergyFlowRole` has no terminal yet, which the balance therefore carries
+    inside its residual node rather than as a drawn terminal.
 
     The table is keyed by class name rather than by type so this module keeps importing no
-    component, which is what the import lint pins. Adding a device to the balance is adding a row
-    here; no chart, view or renderer changes with it.
+    component, which is what the import lint pins; `tests/test_economics_extraction.py` binds every
+    key and every constant to the real classes so the two cannot drift.
     """
 
     BY_CLASS_NAME: Dict[str, Tuple[DeviceEnergySpec, ...]] = {
+        # ---------------------------------------------------------------- drawn terminals
         "PVSystem": (DeviceEnergySpec(EnergyFlowRole.PV_GENERATION, "ElectricityEnergyOutput"),),
         "Battery": (
             DeviceEnergySpec(EnergyFlowRole.BATTERY_CHARGE, "AcBatteryPowerUsed", positive_part=True),
             DeviceEnergySpec(EnergyFlowRole.BATTERY_DISCHARGE, "AcBatteryPowerUsed", positive_part=False),
         ),
         "MoreAdvancedHeatPumpHPLib": (
-            DeviceEnergySpec(EnergyFlowRole.HEAT_PUMP_ELECTRICITY, "ElectricalInputPowerTotalHeatpump"),
+            DeviceEnergySpec(EnergyFlowRole.HEAT_PUMP_ELECTRICITY, "ElectricalInputPowerTotal"),
+        ),
+        # The older single-channel heat pump: one electricity output, flagged
+        # ELECTRICITY_CONSUMPTION_UNCONTROLLED, so it is the same terminal as its successor's.
+        "GenericHeatPump": (
+            DeviceEnergySpec(EnergyFlowRole.HEAT_PUMP_ELECTRICITY, "ElectricityOutput"),
         ),
         "UtspLpgConnector": (
             DeviceEnergySpec(EnergyFlowRole.HOUSEHOLD_ELECTRICITY, "ElectricalEnergyConsumption"),
@@ -573,18 +623,95 @@ class DeviceEnergySpecs:
             DeviceEnergySpec(EnergyFlowRole.GRID_IMPORT, "ElectricityFromGrid"),
             DeviceEnergySpec(EnergyFlowRole.GRID_EXPORT, "ElectricityToGrid"),
         ),
+        # ------------------------------------------------- control and energy management
+        # These publish setpoints, targets, surpluses and curtailment — an instruction to a
+        # device, or the arithmetic of one. The energy they refer to is metered at the device
+        # that follows the instruction, and counting both would count it twice.
+        "L2GenericEnergyManagementSystem": (),
+        "ExtendedController": (),
+        "FuelCellController": (),
+        "L1Controller": (),
+        "L1GenericElectrolyzerController": (),
+        "MpcController": (),
+        "PTXController": (),
+        "RsocBatteryController": (),
+        "XTPController": (),
+        # ------------------------------------------------------ examples and templates
+        # Shipped as documentation of the component API. They appear in no priced setup, and a
+        # row here is what keeps them from failing a run that happens to include one.
+        "ExampleComponent": (),
+        "ComponentName": (),
+        # -------------------------------- real device flows with no terminal in the vocabulary
+        # `carriers.EnergyFlowRole` names seven terminals, and none of them fits these. Their
+        # kilowatt hours are not lost: the balance's residual node carries whatever the drawn
+        # terminals do not account for, and the caption says so. Giving one of them a terminal
+        # means adding a role and teaching the layout to draw it — a change to the chart, not to
+        # this table, which is why the rows stay empty rather than borrowing a role that means
+        # something else.
+        #
+        # An EV battery is not a pass-through of the house bus (the car drives away with the
+        # energy), so it cannot be drawn under the battery's charge/discharge pair.
+        "CarBattery": (),
+        "Car": (),
+        # Wind generation would need a generation terminal of its own; PV_GENERATION is the PV
+        # array's, and a wind turbine drawn there would be labelled as solar.
+        "Windturbine": (),
+        # Electric heat and cooling: resistive space/DHW heat and air conditioning are neither the
+        # household base load nor a heat pump's electricity.
+        "ElectricHeating": (),
+        "AirConditioner": (),
+        "SimpleAirConditioner": (),
+        # A shiftable appliance whose profile may or may not already sit inside the household
+        # load profile, depending on how the LPG connector was configured — exactly the question
+        # a terminal would have to answer before it could be drawn.
+        "SmartDevice": (),
+        # Auxiliary pump electricity of a solar thermal loop.
+        "SolarThermalSystem": (),
+        # The hydrogen chain (electrolyzers, fuel cells, reversible cells, CHP and their storage):
+        # electricity that leaves or enters the bus as hydrogen. The balance has no hydrogen
+        # terminal, and half of these channels are the same energy seen twice (a load in W beside
+        # a cumulative total in kWh).
+        "AdvancedElectrolyzer": (),
+        "Electrolyzer": (),
+        "GenericElectrolyzer": (),
+        "HydrogenStorage": (),
+        "FuelCell": (),
+        "Rsoc": (),
+        "CHP": (),
+        "SimpleCHP": (),
     }
 
 
-def get_device_energy_specs(component: Any) -> Tuple[DeviceEnergySpec, ...]:
-    """The energy-balance flows this component class publishes, or an empty tuple.
+def resolve_device_energy_flows(component: Any) -> Optional[Tuple[ResolvedDeviceEnergyFlow, ...]]:
+    """The energy-balance flows this component class publishes, with their columns resolved.
 
     The lookup `bridge.py` calls for every wrapped component, whatever its cost relevance: the
     energy balance is a physical record, so a component that is free of cost or not declared at
-    all still contributes its kilowatt hours. Returning an empty tuple for an unknown class is the
-    normal case and never a warning — most components move no electricity across a balance node.
+    all still contributes its kilowatt hours.
+
+    Args:
+        component: The wrapped component; its class name selects the row and its class carries the
+            output-name constants that row refers to.
+
+    Returns:
+        The resolved flows for a class the table knows — possibly none, which is what an explicit
+        empty row means — and `None` for a class the table does not mention at all. The caller
+        distinguishes the two: an empty row is a decision, an absent one is an omission.
+
+    Raises:
+        CostDataError: If a row names an output constant the class does not declare.
     """
-    return DeviceEnergySpecs.BY_CLASS_NAME.get(type(component).__name__, ())
+    specs = DeviceEnergySpecs.BY_CLASS_NAME.get(type(component).__name__)
+    if specs is None:
+        return None
+    return tuple(
+        ResolvedDeviceEnergyFlow(
+            role=spec.role,
+            field_name=_declared_output_name(component, spec.output_constant, "DeviceEnergySpecs"),
+            positive_part=spec.positive_part,
+        )
+        for spec in specs
+    )
 
 
 # The eight returns are the precedence rule this function exists to state -- hook, declared

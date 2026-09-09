@@ -307,6 +307,9 @@ def write_cost_audit(audit: InputAuditReport, result_directory: str) -> str:
         "Subsidy max [EUR]",
         "Caps binding (slots)",
         "Anyway share",
+        # The share alone cannot be checked: the credit is share x basis, and without the basis a
+        # reader auditing "30 %" has no second number to multiply it by.
+        "Anyway basis [EUR]",
     ]
     for row in audit.rows:
         unit_price, gross, subsidy = (
@@ -334,6 +337,7 @@ def write_cost_audit(audit: InputAuditReport, result_directory: str) -> str:
                 subsidy.maximum if subsidy else "",
                 "; ".join(f"{scheme}:{','.join(slots)}" for scheme, slots in row.caps_binding_by_scheme.items()),
                 row.anyway_share if row.anyway_share is not None else "",
+                row.anyway_basis_in_euro if row.anyway_basis_in_euro is not None else "",
             ]
         )
     with open(path, "w", newline="", encoding="utf-8") as file:

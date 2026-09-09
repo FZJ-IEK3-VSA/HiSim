@@ -28,6 +28,7 @@ from typing import ClassVar, Dict, List, Optional
 from hisim.economics.calculators.annualization import annualize
 from hisim.economics.calculators.categories import EngineCategoryRules
 from hisim.economics.calculators.subsidy_application import nominal_support_from_entries
+from hisim.economics.carriers import validate_energy_attribution
 from hisim.economics.facts import BillingDeterminants, ComponentCostFacts
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import ActorScope
@@ -129,7 +130,15 @@ def annual_energy_attribution(
     Returns:
         The same shape in kWh per year. An empty input yields an empty map, which is the state
         every run without per-component attribution is in and which the chart skips on.
+
+    Raises:
+        ValueError: If the extract carries a negative quantity. Annualizing is a positive scaling,
+            so a magnitude that arrives negative leaves negative, and the check belongs where the
+            map changes hands rather than at the chart that would draw it.
     """
+    validate_energy_attribution(
+        attribution, "annual_energy_attribution(EvaluationInputs.energy_attribution_by_subject_in_kwh)"
+    )
     return {
         subject: {
             role: annualize(value, simulated_period_fraction, guard_zero=True)

@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from typing import Dict, FrozenSet, List, Optional, Protocol, Tuple
 
 from hisim.economics.catalog_entries import CostDataError
+from hisim.economics.results import LevyBindingMechanism
 from hisim.economics.timeline import Actor, CashFlowEntry, CashFlowTimeline, CostCategory
 from hisim.economics.uncertainty import Slot, UncertainValue
 from hisim.loadtypes import ComponentType
@@ -224,31 +225,6 @@ class ModernizationLevyParameters:
     heating_measure_component_types: FrozenSet[str] = frozenset()
 
 
-class LevyBindingMechanism:
-    """The vocabulary of the per-world levy verdicts.
-
-    "The levy is 1,847 EUR a year" is two different statements depending on what produced it: at a
-    ceiling the figure is fixed by law and the same renovation costing more would yield the same
-    rent, below it the figure is a percentage and every extra euro spent raises the rent. The
-    ruleset already knew which of the two applied; the constants here are what let it *say* so, in
-    one spelling, for each of the three worlds separately.
-
-    `SLOT_NAMES` maps the band's own field names onto the slot vocabulary the rest of the package
-    uses (`Slot` values), so the verdict map is keyed like every other per-slot map.
-    """
-
-    GENERAL_CAP = "§559 general cap"
-    HEATING_CAP = "§559e heating cap"
-    RATE_BELOW_CAP = "of eligible cost, below cap"
-    #: Euro per year below which a cap counts as not having removed anything.
-    TOLERANCE_IN_EURO = 1e-6
-    SLOT_NAMES = {
-        "minimum": Slot.LOW.value,
-        "best_estimate": Slot.BEST_ESTIMATE.value,
-        "maximum": Slot.HIGH.value,
-    }
-
-
 @dataclass
 class ModernizationLevyOutcome:
     """One year's rent increase, split into its §559 and §559e legs after both caps (§6.4).
@@ -285,20 +261,19 @@ class ModernizationLevyOutcome:
     uncapped_heating_levy_in_euro: UncertainValue
     heating_cap_in_euro_per_year: Optional[float] = None
     total_cap_in_euro_per_year: Optional[float] = None
-    #: Whether a statutory cap actually bit in the BEST_ESTIMATE slot. The landlord statement has
-    #: to say which of the two regimes produced the levy — the modernization cost or the ceiling —
-    #: because they are different economic situations: below the cap the levy scales with what was
-    #: spent, at the cap it does not, and a landlord reading a levy figure cannot tell which
-    #: without being told. False when no cap could be evaluated at all (no living area).
-    cap_binding: bool = False
     #: The general §559 Abs. 3a ceiling that applied, in EUR per m² and month, or None when no
     #: living area was known and therefore no cap was evaluated.
     cap_in_euro_per_m2_per_month: Optional[float] = None
-    #: Which mechanism set the levy in each world, keyed by `Slot` value. The caps are applied per
-    #: slot, so the same run can be cap-decided in the expensive world and rate-decided in the
-    #: cheap one; a single flag over the best-estimate slot states one of the three answers and
-    #: hides the other two. Empty when no living area was known and no cap could be evaluated.
-    binding_mechanism_by_slot: Dict[str, str] = field(default_factory=dict)
+    #: Which mechanism set the levy in each world, keyed by `Slot`. The caps are applied per slot,
+    #: so the same run can be cap-decided in the expensive world and rate-decided in the cheap
+    #: one; a single flag over the best-estimate slot would state one of those answers and hide
+    #: the other two, which is why there is no such flag here — a caller wanting the headline
+    #: answer reads this map's BEST_ESTIMATE entry through
+    #: `LevyBindingMechanism.names_a_cap` (`ModernizationLevySummary` exposes it as
+    #: `cap_binding_in_best_estimate`). Empty when no living area was known and no cap could be
+    #: evaluated. A world cut by *both* ceilings names both, joined by
+    #: `LevyBindingMechanism.BOTH_CAPS_JOINER`.
+    binding_mechanism_by_slot: Dict[Slot, str] = field(default_factory=dict)
 
 
 def _ordered_band(slots: dict) -> UncertainValue:
@@ -730,7 +705,7 @@ class DE2024Ruleset:
         cap_rate = self.general_cap_rate(ctx)
         total_cap = cap_rate * months_of_area
         capped = {}
-        mechanisms: Dict[str, str] = {}
+        mechanisms: Dict[Slot, str] = {}
         for slot in ("minimum", "best_estimate", "maximum"):
             heating_slot = min(getattr(heating, slot), heating_cap, total_cap)
             general_slot = min(getattr(general, slot), total_cap - heating_slot)
@@ -740,10 +715,10 @@ class DE2024Ruleset:
                 general_raw=getattr(general, slot),
                 heating_capped=heating_slot,
                 general_capped=general_slot,
+                heating_cap=heating_cap,
+                total_cap=total_cap,
                 cap_rate=cap_rate,
             )
-        uncapped_best_estimate = heating.best_estimate + general.best_estimate
-        capped_best_estimate = sum(capped["best_estimate"])
         return ModernizationLevyOutcome(
             general_levy_in_euro=_ordered_band({slot: values[1] for slot, values in capped.items()}),
             heating_levy_in_euro=_ordered_band({slot: values[0] for slot, values in capped.items()}),
@@ -754,9 +729,6 @@ class DE2024Ruleset:
             uncapped_heating_levy_in_euro=heating,
             heating_cap_in_euro_per_year=heating_cap,
             total_cap_in_euro_per_year=total_cap,
-            # "Did a ceiling decide this number" is the single most important thing to know about
-            # a levy, so it is recorded rather than left to be inferred from the amount.
-            cap_binding=capped_best_estimate < uncapped_best_estimate - LevyBindingMechanism.TOLERANCE_IN_EURO,
             cap_in_euro_per_m2_per_month=cap_rate,
             # The per-world verdict, because a cap applied per slot can decide one world and leave
             # the next one to the percentage of the modernization cost.
@@ -769,36 +741,58 @@ class DE2024Ruleset:
         general_raw: float,
         heating_capped: float,
         general_capped: float,
+        heating_cap: float,
+        total_cap: float,
         cap_rate: float,
     ) -> str:
-        """Which of the three mechanisms actually set this world's levy.
+        """Which ceiling — or which rate — actually set this world's levy.
 
-        Reads the same comparison the capping did, in the order the caps are applied (D27): the
-        §559e ceiling first, on the heating leg alone, then the general §559 Abs. 3a ceiling on the
-        two legs together. Whichever ceiling removed euros is the binding one; when neither did,
-        the levy is the statutory percentage of the eligible cost and the verdict says so with the
-        rate that produced it, since that is the case in which spending more would raise the rent.
+        Each leg is classified by *the ceiling that produced its bound value*, which is the only
+        way to get the answer right when the two legs are decided differently. The §559e ceiling
+        is applied to the heating leg alone and the §559 Abs. 3a ceiling to the two legs together
+        (D27), so a heating leg can be cut by either — by its own cap when that is the lower of
+        the two, and by the general cap when the general cap alone is below it — while the general
+        leg, which is only ever limited by the room the general cap leaves, can only be cut by the
+        general one.
+
+        Both ceilings can remove euros in the same world, and then both are named: the earlier
+        rule reported the general cap whenever the general leg survived, so a run whose §559e cap
+        cut the heating leg was told the §559 cap had decided it, which points a landlord at the
+        wrong paragraph and at a ceiling that in the shipped parameters is six times higher.
+
+        When neither ceiling removed anything the levy is the statutory percentage of the eligible
+        cost, and the verdict says so with the rate that produced it, since that is the case in
+        which spending more would raise the rent.
 
         Args:
             heating_raw: The §559e leg before any cap, in euro per year.
             general_raw: The §559 leg before any cap, in euro per year.
             heating_capped: The §559e leg after both caps.
             general_capped: The §559 leg after both caps.
+            heating_cap: The §559e ceiling for this context, in euro per year — compared against
+                the general one to say which of them bound the heating leg.
+            total_cap: The general ceiling for this context, in euro per year.
             cap_rate: The general ceiling in EUR per m² and month, for the verdict's wording.
 
         Returns:
-            A short sentence naming the binding mechanism, ready to be rendered verbatim.
+            A short sentence naming every binding ceiling, or the rate verdict; ready to be
+            rendered verbatim.
         """
         tolerance = LevyBindingMechanism.TOLERANCE_IN_EURO
         heating_cut = heating_raw - heating_capped > tolerance
         general_cut = general_raw - general_capped > tolerance
-        if heating_cut or general_cut:
-            if heating_cut and general_capped <= tolerance:
-                return (
-                    f"{LevyBindingMechanism.HEATING_CAP} "
-                    f"{self.levy.heating_cap_in_euro_per_m2_per_month:,.2f} EUR/m2*mo"
-                )
-            return f"{LevyBindingMechanism.GENERAL_CAP} {cap_rate:,.2f} EUR/m2*mo"
+        clauses = []
+        # The §559e ceiling can only be what bound the heating leg when it is the lower of the
+        # two; above the general cap it is never reached, and the euros were removed by §559.
+        if heating_cut and heating_cap <= total_cap:
+            clauses.append(
+                f"{LevyBindingMechanism.HEATING_CAP} "
+                f"{self.levy.heating_cap_in_euro_per_m2_per_month:,.2f} EUR/m2*mo"
+            )
+        if general_cut or (heating_cut and heating_cap > total_cap):
+            clauses.append(f"{LevyBindingMechanism.GENERAL_CAP} {cap_rate:,.2f} EUR/m2*mo")
+        if clauses:
+            return LevyBindingMechanism.BOTH_CAPS_JOINER.join(clauses)
         rate = (
             self.levy.heating_levy_rate_per_year
             if heating_capped > general_capped

@@ -488,6 +488,15 @@ def resolve_replaced_asset(
     # top of it rather than something folded into a price. That basis is captured here, before the
     # share scales it, because it is exactly the number the report multiplies out.
     credit_basis = credit.best_estimate
+    # What the basis *is* differs by branch, and the provenance detail has to say which: on the
+    # coupled-cost branch it is the non-energy share of the measure being built now, on the other
+    # it is the escalated like-for-like cost of the device being replaced. One wording for both
+    # would describe the wrong quantity in one of them.
+    credit_basis_description = (
+        "non-energy share of the measure"
+        if share.best_estimate < 1.0
+        else f"like-for-like cost of {replaced.asset_class.value}"
+    )
     credit = credit.scale(anyway_share)
     if credit.maximum <= 0:
         return ReplacedAssetOutcome(sunk_cost=sunk_cost)
@@ -501,8 +510,8 @@ def resolve_replaced_asset(
                     origin=ParameterOrigin.CONFIG_OVERRIDE,
                     source_ids=("inline:existing-asset register (Sowieso-Kosten share, §4.1)",),
                     detail=(
-                        f"anyway credit = {anyway_share:.0%} x like-for-like cost of "
-                        f"{replaced.asset_class.value} @ year {credit_year} "
+                        f"anyway credit = {anyway_share:.0%} x {credit_basis_description} "
+                        f"@ year {credit_year} "
                         f"({credit_basis:,.2f} EUR) = {credit.best_estimate:,.2f} EUR"
                     ),
                 )

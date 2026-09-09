@@ -17,7 +17,7 @@ from hisim.economics.facts import BillingDeterminants, ComponentCostFacts, Exist
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
 from hisim.economics.results import compare
-from hisim.economics.uncertainty import UncertainValue
+from hisim.economics.uncertainty import Slot, UncertainValue
 from hisim.loadtypes import ComponentType, Units
 
 pytestmark = pytest.mark.base
@@ -572,7 +572,8 @@ class TestSerializationRoundtrip:
             id="gross", installation_context=InstallationContext.GREENFIELD, subsidy_mode=SubsidyMode.none()
         )
         result = EconomicEvaluator(CostDatabase(), parameters).evaluate(reloaded, perspective)
-        assert result.energy_attribution_by_subject_in_kwh["Battery"]["BATTERY_CHARGE"] == pytest.approx(800.0)
+        annual = result.annual_energy_attribution_by_subject_in_kwh
+        assert annual["Battery"]["BATTERY_CHARGE"] == pytest.approx(800.0)
 
     def test_an_extract_without_the_attribution_key_still_reads(self):
         """Every additive field defaults to empty, so an archive written before it still loads."""
@@ -604,16 +605,15 @@ class TestSerializationRoundtrip:
             id="gross", installation_context=InstallationContext.GREENFIELD, subsidy_mode=SubsidyMode.none()
         )
         result = EconomicEvaluator(CostDatabase(), parameters).evaluate(self._inputs(), perspective)
-        result.energy_attribution_by_subject_in_kwh = {"PVSystem": {"PV_GENERATION": 4200.0}}
+        result.annual_energy_attribution_by_subject_in_kwh = {"PVSystem": {"PV_GENERATION": 4200.0}}
         result.anyway_share_by_subject = {"HeatPump": 0.3}
         result.anyway_basis_by_subject = {"HeatPump": 9000.0}
         result.modernization_levy = ModernizationLevySummary(
             annual_amount_in_euro=UncertainValue.exact(1800.0),
             general_leg_in_euro=UncertainValue.exact(1200.0),
             heating_leg_in_euro=UncertainValue.exact(600.0),
-            cap_binding=True,
             cap_in_euro_per_m2_per_month=3.0,
-            binding_mechanism_by_slot={"best_estimate": "§559 general cap 3.00 EUR/m2*mo"},
+            binding_mechanism_by_slot={Slot.BEST_ESTIMATE: "§559 general cap 3.00 EUR/m2*mo"},
         )
         result.assumptions = EconomicAssumptions(
             escalation_rates={"general": ResolvedRate(rate=0.02, origin=RateOrigin.COUNTRY_DEFAULTS)},
@@ -634,12 +634,16 @@ class TestSerializationRoundtrip:
         restored = read_results(str(tmp_path))
         assert restored is not None
         reloaded = restored.results["gross"]
-        assert reloaded.energy_attribution_by_subject_in_kwh == {"PVSystem": {"PV_GENERATION": 4200.0}}
+        assert reloaded.annual_energy_attribution_by_subject_in_kwh == {
+            "PVSystem": {"PV_GENERATION": 4200.0}
+        }
         assert reloaded.anyway_share_by_subject == {"HeatPump": 0.3}
         assert reloaded.anyway_basis_by_subject == {"HeatPump": 9000.0}
         assert reloaded.modernization_levy is not None
-        assert reloaded.modernization_levy.cap_binding
-        assert reloaded.modernization_levy.binding_mechanism_by_slot["best_estimate"].startswith("§559")
+        assert reloaded.modernization_levy.cap_binding_in_best_estimate
+        assert reloaded.modernization_levy.binding_mechanism_by_slot[Slot.BEST_ESTIMATE].startswith(
+            "§559"
+        )
         assert reloaded.assumptions is not None
         assert reloaded.assumptions.escalation_rates["general"].origin == RateOrigin.COUNTRY_DEFAULTS
         assert reloaded.assumptions.annual_heat_demand_in_kwh == pytest.approx(15000.0)
@@ -664,7 +668,7 @@ class TestSerializationRoundtrip:
         with open(path, encoding="utf-8") as file:
             raw = json.load(file)
         for key in (
-            "energy_attribution_by_subject_in_kwh",
+            "annual_energy_attribution_by_subject_in_kwh",
             "anyway_share_by_subject",
             "anyway_basis_by_subject",
             "modernization_levy",
@@ -678,7 +682,7 @@ class TestSerializationRoundtrip:
         reloaded = read_results(str(tmp_path))
         assert reloaded is not None
         older = reloaded.results["gross"]
-        assert older.energy_attribution_by_subject_in_kwh == {}
+        assert older.annual_energy_attribution_by_subject_in_kwh == {}
         assert older.anyway_share_by_subject == {} and older.anyway_basis_by_subject == {}
         assert older.modernization_levy is None and older.assumptions is None
         assert older.lifecycle_co2_result.emission_factor_by_carrier_in_kg_per_kwh == {}
@@ -781,3 +785,189 @@ class TestVariantComparison:
         comparison = compare(reference, variant)
         assert "Heater" in comparison.npv_delta_by_subject
         assert EnergyCarrier.ELECTRICITY.value in comparison.npv_delta_by_subject
+
+
+class TestTheResultRecordsRefuseWhatTheyCannotVouchFor:
+    """Construction-time and read-time invariants of the disclosure records (review, decision 1).
+
+    Every record here is published as a *statement*: "this rate came from the country defaults",
+    "this carrier was paid 8.2 ct per exported kWh under a fixed tariff", "this mass is 120 kg per
+    kW times 10 kW". A record whose fields do not add up to its statement is worse than a missing
+    one, because the report prints the statement either way and the reader checks the arithmetic.
+    These tests pin the refusals — at construction, so a defect fails where it is made, and in
+    `from_json`, so a stored file cannot smuggle one in past the constructor.
+    """
+
+    def test_a_rate_origin_outside_the_chain_is_refused(self):
+        """An unknown origin used to read as "configuration", the best-sourced of the three."""
+        from hisim.economics.results import RateOrigin, ResolvedRate
+
+        assert ResolvedRate.from_json({"rate": 0.02, "origin": "country defaults"}).origin is (
+            RateOrigin.COUNTRY_DEFAULTS
+        )
+        with pytest.raises(ValueError, match="not a step of the escalation fallback chain"):
+            ResolvedRate.from_json({"rate": 0.02, "origin": "vibes"})
+
+    def test_a_resolved_rate_round_trips_through_its_enum(self):
+        """The JSON stays the same word it always was, so stored results keep loading."""
+        from hisim.economics.results import RateOrigin, ResolvedRate
+
+        rate = ResolvedRate(rate=0.03, origin=RateOrigin.GENERAL_FALLBACK, source_ids=["x"])
+        assert rate.to_json()["origin"] == "general fallback"
+        assert ResolvedRate.from_json(rate.to_json()) == rate
+
+    @staticmethod
+    def _contract(kind, rate=0.082):
+        """A flat electricity contract with the given feed-in terms."""
+        from hisim.economics.tariffs import FeedIn, SupplyKind, TariffContract, TariffSupply
+
+        return TariffContract(
+            id="TEST_FLAT",
+            carrier=EnergyCarrier.ELECTRICITY,
+            country="DE",
+            region=None,
+            valid_from_year=2024,
+            supply=TariffSupply(
+                kind=SupplyKind.FLAT, working_price_in_euro_per_kwh=UncertainValue.exact(0.32)
+            ),
+            standing_charge_in_euro_per_year=UncertainValue.exact(120.0),
+            feed_in=FeedIn(kind=kind, rate_in_euro_per_kwh=UncertainValue.exact(rate)),
+            source_ids=("src:1",),
+        )
+
+    def test_the_tariff_record_is_built_from_the_contract_and_round_trips(self):
+        """One builder, so the kind and the rate cannot be filled inconsistently by hand."""
+        from hisim.economics.results import TariffAssumption
+        from hisim.economics.tariffs import FeedInKind
+
+        assumption = TariffAssumption.from_contract(self._contract(FeedInKind.FIXED_TARIFF))
+        assert assumption.feed_in_kind is FeedInKind.FIXED_TARIFF
+        assert assumption.feed_in_rate_in_euro_per_kwh is not None
+        assert assumption.feed_in_rate_in_euro_per_kwh.best_estimate == pytest.approx(0.082)
+        assert assumption.to_json()["feed_in_kind"] == "FIXED_TARIFF"
+        assert TariffAssumption.from_json(assumption.to_json()) == assumption
+
+    def test_a_contract_without_feed_in_carries_no_rate(self):
+        """`NONE` with a rate would publish a price nothing was ever paid at."""
+        from hisim.economics.results import TariffAssumption
+        from hisim.economics.tariffs import FeedInKind
+
+        assumption = TariffAssumption.from_contract(self._contract(FeedInKind.NONE))
+        assert assumption.feed_in_rate_in_euro_per_kwh is None
+        assert TariffAssumption.from_json(assumption.to_json()) == assumption
+
+    @pytest.mark.parametrize(
+        "kind_value,rate",
+        [("FIXED_TARIFF", None), ("NONE", {"min": 0.08, "best_estimate": 0.08, "max": 0.08})],
+    )
+    def test_a_feed_in_kind_and_rate_that_disagree_are_refused(self, kind_value, rate):
+        """The assumptions table prints the two as one row; either half alone cannot be read."""
+        from hisim.economics.results import TariffAssumption
+
+        raw = {
+            "carrier": "ELECTRICITY",
+            "contract_id": "TEST_FLAT",
+            "working_price_in_euro_per_kwh": 0.32,
+            "standing_charge_in_euro_per_year": 120.0,
+            "feed_in_kind": kind_value,
+            "feed_in_rate_in_euro_per_kwh": rate,
+        }
+        with pytest.raises(ValueError, match="feed_in_kind"):
+            TariffAssumption.from_json(raw)
+
+    def test_an_unknown_feed_in_kind_is_refused(self):
+        """The kind selects how the export revenue was computed; an unknown one is not a fact."""
+        from hisim.economics.results import TariffAssumption
+
+        with pytest.raises(ValueError, match="not a feed-in remuneration structure"):
+            TariffAssumption.from_json(
+                {
+                    "carrier": "ELECTRICITY",
+                    "contract_id": "TEST_FLAT",
+                    "working_price_in_euro_per_kwh": 0.32,
+                    "standing_charge_in_euro_per_year": 120.0,
+                    "feed_in_kind": "BARTER",
+                }
+            )
+
+    def test_the_levy_verdicts_are_keyed_by_slot_on_both_sides(self):
+        """Slot keys travel as their values, and an unknown key is a verdict nobody would read."""
+        from hisim.economics.results import LevyBindingMechanism, ModernizationLevySummary
+
+        summary = ModernizationLevySummary(
+            annual_amount_in_euro=UncertainValue.exact(1800.0),
+            general_leg_in_euro=UncertainValue.exact(1200.0),
+            heating_leg_in_euro=UncertainValue.exact(600.0),
+            cap_in_euro_per_m2_per_month=3.0,
+            binding_mechanism_by_slot={
+                Slot.BEST_ESTIMATE: f"{LevyBindingMechanism.GENERAL_CAP} 3.00 EUR/m2*mo"
+            },
+        )
+        assert summary.cap_binding_in_best_estimate
+        assert summary.to_json()["binding_mechanism_by_slot"] == {
+            "best_estimate": "§559 general cap 3.00 EUR/m2*mo"
+        }
+        assert ModernizationLevySummary.from_json(summary.to_json()) == summary
+        with pytest.raises(ValueError, match="keyed by evaluation slot"):
+            ModernizationLevySummary.from_json(
+                {**summary.to_json(), "binding_mechanism_by_slot": {"average": "whatever"}}
+            )
+
+    def test_the_headline_cap_answer_is_derived_from_the_verdicts(self):
+        """No stored flag to disagree with the verdict it summarizes."""
+        from hisim.economics.results import LevyBindingMechanism, ModernizationLevySummary
+
+        def summary(verdict):
+            return ModernizationLevySummary(
+                annual_amount_in_euro=UncertainValue.exact(100.0),
+                general_leg_in_euro=UncertainValue.exact(100.0),
+                heating_leg_in_euro=UncertainValue.exact(0.0),
+                binding_mechanism_by_slot={Slot.BEST_ESTIMATE: verdict},
+            )
+
+        assert summary(f"{LevyBindingMechanism.HEATING_CAP} 0.50 EUR/m2*mo").cap_binding_in_best_estimate
+        assert not summary(f"8% {LevyBindingMechanism.RATE_BELOW_CAP}").cap_binding_in_best_estimate
+        # No verdict at all (no living area, no cap evaluated) is not "a cap decided it".
+        assert not ModernizationLevySummary(
+            annual_amount_in_euro=UncertainValue.exact(100.0),
+            general_leg_in_euro=UncertainValue.exact(100.0),
+            heating_leg_in_euro=UncertainValue.exact(0.0),
+        ).cap_binding_in_best_estimate
+
+    def test_an_embodied_co2_basis_that_does_not_multiply_out_is_refused(self):
+        """The record is printed *as* the multiplication, so the three numbers are one statement."""
+        from hisim.economics.results import EmbodiedCo2Basis
+
+        basis = EmbodiedCo2Basis(
+            factor_in_kg_per_unit=120.0, size=10.0, size_unit="kW", per_installation_in_kg=1200.0
+        )
+        assert EmbodiedCo2Basis.from_json(basis.to_json()) == basis
+        with pytest.raises(ValueError, match="per installation"):
+            EmbodiedCo2Basis(
+                factor_in_kg_per_unit=120.0, size=10.0, size_unit="kW", per_installation_in_kg=999.0
+            )
+        with pytest.raises(ValueError, match="per installation"):
+            EmbodiedCo2Basis.from_json({**basis.to_json(), "per_installation_in_kg": 999.0})
+
+    def test_a_negative_energy_attribution_is_refused_on_both_sides_of_the_round_trip(self):
+        """Direction is the role, so a negative kWh would be drawn on the wrong side of the bus."""
+        from hisim.economics.calculators.aggregation import annual_energy_attribution
+        from hisim.economics.serialization import _attribution_from_json, inputs_from_json
+
+        with pytest.raises(ValueError, match="carries negative energy"):
+            inputs_from_json(
+                {
+                    "simulation_year": 2024,
+                    "simulated_period_fraction": 1.0,
+                    "energy_attribution_by_subject_in_kwh": {"PVSystem": {"PV_GENERATION": -5.0}},
+                }
+            )
+        with pytest.raises(ValueError, match="carries negative energy"):
+            annual_energy_attribution({"PVSystem": {"PV_GENERATION": -5.0}}, 1.0)
+        # The result side reads its (annualized) map through the same guarded helper.
+        with pytest.raises(ValueError, match="carries negative energy"):
+            _attribution_from_json(
+                {"annual_energy_attribution_by_subject_in_kwh": {"PVSystem": {"PV_GENERATION": -5.0}}},
+                "annual_energy_attribution_by_subject_in_kwh",
+                "LifecycleCostResult.annual_energy_attribution_by_subject_in_kwh",
+            )

@@ -32,10 +32,17 @@ from __future__ import annotations
 from typing import Iterable, List
 
 from hisim.economics.calculators.energy import EnergyFlowResult
+from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.results import LifecycleCo2Result
 from hisim.economics.timeline import CashFlowEntry, CostCategory
 from hisim.economics.uncertainty import UncertainValue
+
+
+#: Difference in kg per kWh below which two records of the same carrier count as carrying the
+#: same emission factor. Both come from the same price entry, so the only difference that can
+#: legitimately appear is float noise.
+EMISSION_FACTOR_TOLERANCE_IN_KG_PER_KWH = 1e-12
 
 
 class Co2Constants:
@@ -107,14 +114,36 @@ def accumulate_operational_emissions(
             accumulate across records, so two meters buying the same carrier add up in the
             carrier map exactly as they do in the yearly series.
         horizon: Observation period T in years.
+
+    Raises:
+        CostDataError: If two records of the same carrier carry different emission factors, which
+            would leave the published per-carrier factor unable to reproduce the published mass.
     """
     for carrier_emissions in energy_result.emissions:
         annual = carrier_emissions.annual_emissions_in_kg
         for projection_year in range(1, horizon + 1):
             co2_result.operational_co2_by_year_in_kg[projection_year] += annual
-        # The factor travels with the mass so the report can print the multiplication. Assigned
-        # rather than accumulated — it is a price-entry property, identical for every meter of the
-        # same carrier, not a quantity that adds up.
+        # The factor travels with the mass so the report can print the multiplication. It is a
+        # price-entry property, identical for every meter of the same carrier, not a quantity that
+        # adds up — so a second meter of the same carrier must arrive with the same factor. When
+        # it does not, the mass below is a sum over two different factors and no single published
+        # factor reproduces it; assigning last-wins would publish a multiplication that does not
+        # come out.
+        known_factor = co2_result.emission_factor_by_carrier_in_kg_per_kwh.get(
+            carrier_emissions.carrier_value
+        )
+        if (
+            known_factor is not None
+            and abs(known_factor - carrier_emissions.emission_factor_in_kg_per_kwh)
+            > EMISSION_FACTOR_TOLERANCE_IN_KG_PER_KWH
+        ):
+            raise CostDataError(
+                f"Carrier {carrier_emissions.carrier_value} was billed under two different "
+                f"emission factors ({known_factor:g} and "
+                f"{carrier_emissions.emission_factor_in_kg_per_kwh:g} kg/kWh). The CO2 section "
+                "publishes one factor per carrier and states the mass as factor x kWh, which no "
+                "single factor would reproduce here."
+            )
         co2_result.emission_factor_by_carrier_in_kg_per_kwh[carrier_emissions.carrier_value] = (
             carrier_emissions.emission_factor_in_kg_per_kwh
         )

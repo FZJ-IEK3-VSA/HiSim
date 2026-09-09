@@ -95,7 +95,7 @@ from hisim.economics.results import (
     TariffAssumption,
 )
 from hisim.economics.subsidies import SubsidyCatalog, SubsidyContext, SubsidyDecision
-from hisim.economics.tariffs import FeedInKind, TariffContract
+from hisim.economics.tariffs import TariffContract
 from hisim.economics.timeline import CashFlowTimeline, CostCategory
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType
@@ -450,9 +450,10 @@ def _levy_summary(outcome: Optional[ModernizationLevyOutcome]) -> Optional[Moder
         annual_amount_in_euro=outcome.total_in_euro,
         general_leg_in_euro=outcome.general_levy_in_euro,
         heating_leg_in_euro=outcome.heating_levy_in_euro,
-        cap_binding=outcome.cap_binding,
         cap_in_euro_per_m2_per_month=outcome.cap_in_euro_per_m2_per_month,
-        # Which mechanism set the levy in each of the three worlds.
+        # Which mechanism set the levy in each of the three worlds. Copied through as one shape:
+        # both sides key by `Slot`, so this is a copy rather than a translation, and "did a
+        # ceiling decide the headline figure" is derived from it on the summary.
         binding_mechanism_by_slot=dict(outcome.binding_mechanism_by_slot),
     )
 
@@ -772,14 +773,19 @@ class EconomicEvaluator:
                 modernization_cost = modernization_cost + addend
                 levy_cost_by_subject[subject] = levy_cost_by_subject[subject] + addend
             accumulate_embodied_co2(co2_result, subject, schedule.embodied_co2_addends)
-            if schedule.embodied_co2_addends:
+            size = costing.facts.size * costing.facts.count
+            if schedule.embodied_co2_addends and size:
                 # The factor and the size behind the mass just accumulated, so the CO2 section
                 # states `factor x size = kg` per installation rather than a bare total.
                 # `costing.embodied_co2_kg` is the mass of one installation with size and count
-                # already applied, so the factor is the per-unit figure it was built from.
-                size = costing.facts.size * costing.facts.count
+                # already applied, so the factor is the per-unit figure it was built from — always
+                # that quotient, including for an entry that states an absolute mass with no
+                # `per_unit`. A size of zero is the one case with no such quotient, and a mass
+                # that is not a multiple of a size cannot be published as one, so no basis record
+                # is written; the section then prints the mass without the multiplication rather
+                # than a factor of zero that does not reproduce it.
                 co2_result.embodied_basis_by_subject[subject] = EmbodiedCo2Basis(
-                    factor_in_kg_per_unit=(costing.embodied_co2_kg / size) if size else 0.0,
+                    factor_in_kg_per_unit=costing.embodied_co2_kg / size,
                     size=size,
                     size_unit=costing.facts.size_unit.value,
                     per_installation_in_kg=costing.embodied_co2_kg,
@@ -1006,7 +1012,7 @@ class EconomicEvaluator:
             # The per-subject half of the same physical context, annualized with the identical
             # divisor so the device column of the household energy balance adds up to the carrier
             # totals above it rather than to a slightly different year.
-            energy_attribution_by_subject_in_kwh=annual_energy_attribution(
+            annual_energy_attribution_by_subject_in_kwh=annual_energy_attribution(
                 inputs.energy_attribution_by_subject_in_kwh, inputs.simulated_period_fraction
             ),
             reference_areas=ReferenceAreas(
@@ -1073,21 +1079,10 @@ class EconomicEvaluator:
             rates[f"investment:{asset_class.name}"] = resolve_investment_escalation_rate(
                 asset_class, params, self.database
             )
-        tariffs: Dict[str, TariffAssumption] = {}
-        for contract in build.tariffs_applied:
-            feed_in = contract.feed_in
-            tariffs[contract.carrier.value] = TariffAssumption(
-                carrier=contract.carrier.value,
-                contract_id=contract.id,
-                working_price_in_euro_per_kwh=contract.supply.working_price_in_euro_per_kwh,
-                standing_charge_in_euro_per_year=contract.standing_charge_in_euro_per_year,
-                feed_in_kind=feed_in.kind.value,
-                feed_in_rate_in_euro_per_kwh=(
-                    feed_in.rate_in_euro_per_kwh if feed_in.kind != FeedInKind.NONE else None
-                ),
-                is_default_contract=contract.is_default_contract,
-                source_ids=list(contract.source_ids),
-            )
+        tariffs: Dict[str, TariffAssumption] = {
+            contract.carrier.value: TariffAssumption.from_contract(contract)
+            for contract in build.tariffs_applied
+        }
         return EconomicAssumptions(
             escalation_rates=rates,
             tariffs=tariffs,

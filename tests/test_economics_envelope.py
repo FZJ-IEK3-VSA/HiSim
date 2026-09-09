@@ -299,6 +299,47 @@ class TestEnvelopeTimeline:
         assert credit.minimum == pytest.approx(-gross.maximum * (1.0 - 0.4))
         assert credit.maximum == pytest.approx(-gross.minimum * (1.0 - 0.7))
 
+    def test_the_coupled_branch_names_its_own_basis_in_the_provenance(self, database):
+        """The credit's detail says what was multiplied, and the branches multiply different things.
+
+        (Review, agreed small fix.)
+
+        Both branches used to record "x like-for-like cost of <class>", which is true only of the
+        second: on this branch the basis is the *non-energy share of the measure being built now*,
+        not the cost of replacing the old element like for like. A reader reconciling the euro
+        figure against a like-for-like price would not find it.
+        """
+        from hisim.economics.provenance import ProvenanceLedger
+
+        overlaid = database.with_overlays(
+            {"devices_DE.WALL_EXTERNAL_INSULATION.energy_related_cost_share": 0.55},
+            "coupled_cost_provenance_test",
+        )
+        evaluator = EconomicEvaluator(overlaid, zero_rate_parameters())
+        register = ExistingAssetRegister(
+            assets=[
+                ExistingAsset(
+                    asset_class=ComponentType.WALL_EXTERNAL_INSULATION,
+                    size=100.0,
+                    size_unit=Units.SQUARE_METER,
+                    installation_year=2026 - 38,
+                    replaced_by_asset_classes=[ComponentType.WALL_EXTERNAL_INSULATION],
+                    anyway_share=0.4,
+                )
+            ]
+        )
+        inputs = EvaluationInputs(
+            simulation_year=2026,
+            simulated_period_fraction=1.0,
+            cost_facts=[SubjectCostFacts("Envelope.WallInsulation", wall_facts(100.0))],
+            existing_assets=register,
+        )
+        ledger = ProvenanceLedger()
+        evaluator.evaluate(inputs, BROWNFIELD, ledger)
+        details = [record.detail or "" for record in ledger.records]
+        assert any("40% x non-energy share of the measure" in detail for detail in details), details
+        assert not any("like-for-like cost of" in detail for detail in details), details
+
 
 class TestEnvelopeSubsidies:
     """BEG EM envelope schemes (15 % + 5 % iSFP, U-value conditions)."""

@@ -219,8 +219,11 @@ class LoanAmortization:
 
     `outstanding_balance_in_euro` is the disbursement minus the cumulative principal repayments
     up to and including that year, so it reconciles with the plotted bars by construction rather
-    than by a second schedule computation. Year 0 therefore carries the full disbursement, and a
-    fully amortizing plan ends at zero within float tolerance.
+    than by a second schedule computation. Year 0 therefore carries the disbursement *less any
+    principal booked at year 0* — normally the full disbursement, since an annuity plan repays
+    nothing in the year it is taken out, but a plan that books a year-0 repayment starts below it
+    rather than above the sum of its own repayments. A fully amortizing plan ends at zero within
+    float tolerance.
     """
 
     interest_in_euro: List[float]

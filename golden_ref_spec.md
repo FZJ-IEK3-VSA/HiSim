@@ -85,8 +85,9 @@ tests/
   Pick whichever setups you want to protect; the only hard requirements are that
   each is **offline-runnable** and **KPI-complete** (see §9 for the validator
   that checks this for you).
-- Every parameter set: `post_processing_options: ["COMPUTE_KPIS", "WRITE_KPIS_TO_JSON"]`
-  — nothing else (no plots/CSV/PDF).
+- Every parameter set: `post_processing_options: ["COMPUTE_OPEX", "COMPUTE_CAPEX",
+  "COMPUTE_KPIS", "WRITE_KPIS_TO_JSON"]` — the cost stages plus the KPIs, so the
+  building-level cost KPIs are pinned too, and nothing else (no plots/CSV/PDF).
 - Keep per-parameter-set `nondeterministic: false`; add optional `weight`/`slow`
   hint for shard balancing.
 - **Two parameter sets per setup** (decision §14.5): `one_week_60s`

@@ -13,14 +13,19 @@ Each test states the failure mode it catches.
 
 from __future__ import annotations
 
-from typing import List
+from dataclasses import dataclass
+from typing import List, Optional
 
 import pandas as pd
 import pytest
+from dataclasses_json import dataclass_json
 
-from hisim.component import Component
+from hisim.component import CapexCostDataClass, Component, OpexCostDataClass
 from hisim.component_wrapper import ComponentWrapper
 from hisim.config import ComponentID, ConfigBase, DisplayConfig
+from hisim.loadtypes import ComponentType, LoadTypes, Units
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+from hisim.postprocessing.cost_and_emission_computation.opex_and_capex_cost_calculation import opex_calculation
 from hisim.postprocessing.kpi_computation.kpi_preparation import KpiPreparation
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters
@@ -329,3 +334,120 @@ def test_two_instances_of_one_component_class_survive_the_whole_collection() -> 
     assert set(collected) == {"Distance driven (Car1)", "Distance driven (Car2)"}
     assert collected["Distance driven (Car1)"]["nameOfSourceComponent"] == "Car1"
     assert collected["Distance driven (Car2)"]["nameOfSourceComponent"] == "Car2"
+
+
+@dataclass_json
+@dataclass
+class _MaintainedDeviceConfig(ConfigBase):
+    """The config of the maintained device below: the five capex fields and nothing else."""
+
+    @classmethod
+    def get_main_classname(cls):
+        """Return the name used in place of a real component class name."""
+        return "tests.test_kpi_preparation.MaintainedDevice"
+
+    component_id: ComponentID
+    device_co2_footprint_in_kg: Optional[float]
+    investment_costs_in_euro: Optional[float]
+    lifetime_in_years: Optional[float]
+    maintenance_costs_in_euro_per_year: Optional[float]
+    subsidy_as_percentage_of_investment_costs: Optional[float]
+
+
+class _MaintainedDevice(Component):
+    """A component that costs 100 EUR of maintenance a year and reports it the ordinary way.
+
+    Its CAPEX goes through the shared helper and its OPEX maintenance through
+    :meth:`Component.calc_maintenance_cost`, so the figure that ends up in the opex table is the
+    one the proration rule produces -- not a number the test wrote there itself.
+    """
+
+    def __init__(self, name: str, my_simulation_parameters: SimulationParameters) -> None:
+        """Builds the device with a 1000 EUR investment, a 10-year life, and 100 EUR/a upkeep."""
+        super().__init__(
+            name=name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=_MaintainedDeviceConfig(
+                component_id=ComponentID(name),
+                device_co2_footprint_in_kg=200.0,
+                investment_costs_in_euro=1000.0,
+                lifetime_in_years=10.0,
+                maintenance_costs_in_euro_per_year=100.0,
+                subsidy_as_percentage_of_investment_costs=0.0,
+            ),
+            my_display_config=DisplayConfig(),
+        )
+
+    @staticmethod
+    def get_cost_capex(
+        config: _MaintainedDeviceConfig, simulation_parameters: SimulationParameters
+    ) -> CapexCostDataClass:
+        """Cost the device through the central helper, config branch."""
+        return CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+            simulation_parameters=simulation_parameters,
+            component_type=ComponentType.HEAT_PUMP,
+            unit=Units.KILOWATT,
+            size_of_energy_system=1.0,
+            config=config,
+        )
+
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame) -> OpexCostDataClass:
+        """Report no energy at all, and the maintenance the capital cost data carries."""
+        return OpexCostDataClass(
+            opex_energy_cost_in_euro=0.0,
+            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
+            co2_footprint_in_kg=0.0,
+            total_consumption_in_kwh=0.0,
+            loadtype=LoadTypes.ANY,
+            # A tag is required rather than cosmetic: the opex writer drops any component whose
+            # cost data carries a None field, and an untagged entry is exactly that.
+            kpi_tag=KpiTagEnumClass.GENERAL,
+        )
+
+
+@pytest.mark.base
+def test_the_building_maintenance_kpi_carries_the_prorated_annual_rate(tmp_path) -> None:
+    """Catches the corrected maintenance not surviving the trip from the device to the KPI.
+
+    Between the proration rule and the building-level KPI sit two boundaries the unit tests of
+    either side cannot see: the opex writer puts the per-period maintenance into a named CSV
+    column, and the KPI preparation reads that column back out of the "Total" row by that same
+    name. A rename on one side alone, or a reader looking for the wrong column, would silently
+    report zero maintenance for the whole building. Driving the writer and the reader in one
+    test is what pins the two names to each other.
+
+    One simulated day of a device with a 100 EUR/a rate is 100 EUR/a * (1/365) a = 0.27 EUR
+    after the writer's rounding. The old rule, which divided by the ten-year lifetime too, would
+    have put 0.03 EUR here, so the assertion tells the two rules apart.
+    """
+    simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    simulation_parameters.result_directory = str(tmp_path)
+    device = _MaintainedDevice(name="MaintainedDevice", my_simulation_parameters=simulation_parameters)
+    expected_maintenance_in_euro = round(device.calc_maintenance_cost(), 2)
+
+    opex_calculation(
+        components=[ComponentWrapper(component=device, is_cachable=False, connect_automatically=False)],
+        all_outputs=[],
+        postprocessing_results=pd.DataFrame(),
+        simulation_parameters=simulation_parameters,
+        building_objects_in_district_list=["BUI1"],
+    )
+
+    preparation = _bare_preparation("BUI1")
+    preparation.simulation_parameters = simulation_parameters
+    preparation.kpi_collection_dict_unsorted["BUI1"] = {
+        "Self-sufficiency rate according to solar htw berlin": KpiEntry(
+            name="Self-sufficiency rate according to solar htw berlin", unit="%", value=50.0
+        ).to_dict(),
+        "Total electricity consumption": KpiEntry(
+            name="Total electricity consumption", unit="kWh", value=100.0
+        ).to_dict(),
+    }
+
+    preparation.read_opex_and_capex_costs_from_results(building_object="BUI1")
+
+    collected = preparation.kpi_collection_dict_unsorted["BUI1"]
+    assert expected_maintenance_in_euro == pytest.approx(0.27)
+    assert collected["Maintenance costs for simulated period"]["value"] == pytest.approx(
+        expected_maintenance_in_euro
+    )

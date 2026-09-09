@@ -772,7 +772,7 @@ class CapexCostDataClass:
     lifetime_in_years: float
     capex_investment_cost_for_simulated_period_in_euro: float
     device_co2_footprint_for_simulated_period_in_kg: float
-    maintenance_costs_in_euro: float = 0.0
+    maintenance_costs_in_euro_per_year: float = 0.0
     maintenance_cost_per_simulated_period_in_euro: float = 0.0
     subsidy_as_percentage_of_investment_costs: float = 0.0
     kpi_tag: Optional[KpiTagEnumClass] = None
@@ -786,7 +786,7 @@ class CapexCostDataClass:
             lifetime_in_years=1,
             capex_investment_cost_for_simulated_period_in_euro=0,
             device_co2_footprint_for_simulated_period_in_kg=0,
-            maintenance_costs_in_euro=0,
+            maintenance_costs_in_euro_per_year=0,
             maintenance_cost_per_simulated_period_in_euro=0,
             subsidy_as_percentage_of_investment_costs=0,
             kpi_tag=None,

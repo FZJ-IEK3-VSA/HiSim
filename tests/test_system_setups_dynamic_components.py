@@ -134,7 +134,7 @@ def test_dynamic_components_system_setup(isolated_result_directory: str) -> None
         assert opex_row["Costs of energy consumption [EUR]"] >= 0.0, (
             f"{component} reports a negative energy cost in operational_costs_co2_footprint.csv"
         )
-        assert opex_row["Maintenance costs per year [EUR]"] > 0.0, (
+        assert opex_row["Maintenance costs for simulated period [EUR]"] > 0.0, (
             f"{component} reports no maintenance cost in operational_costs_co2_footprint.csv"
         )
     # WRITE_KPIS_TO_JSON is on, so the KPI stage after the cost stages ran too.

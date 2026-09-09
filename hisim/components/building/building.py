@@ -26,6 +26,7 @@ from hisim.loadtypes import OutputPostprocessingRules
 from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import prorate_to_simulated_period
 from hisim.config import DisplayConfig
 from hisim.economics.facts import CostRelevance
 
@@ -1118,20 +1119,23 @@ class Building(cp.Component):
             assert config.lifetime_in_years is not None
             assert config.investment_costs_in_euro is not None
             assert config.device_co2_footprint_in_kg is not None
-            seconds_per_year = 365 * 24 * 60 * 60
-            capex_per_simulated_period = ((config.investment_costs_in_euro / config.lifetime_in_years) *
-                                          (simulation_parameters.duration.total_seconds() / seconds_per_year)
-                                          )
-            device_co2_footprint_per_simulated_period = ((config.device_co2_footprint_in_kg / config.lifetime_in_years) *
-                                                         (simulation_parameters.duration.total_seconds() /
-                                                          seconds_per_year)
-                                                         )
+            # No maintenance rate is configured for this component -- the field is optional and
+            # is None in every config today, and get_cost_opex books nothing for a building
+            # without one -- so the proration receives zero rather than a None it could not
+            # divide, and the maintenance fields keep their zero defaults.
+            prorated = prorate_to_simulated_period(
+                investment_in_euro=config.investment_costs_in_euro,
+                co2_footprint_in_kg=config.device_co2_footprint_in_kg,
+                maintenance_in_euro_per_year=0.0,
+                lifetime_in_years=config.lifetime_in_years,
+                simulation_parameters=simulation_parameters,
+            )
             capex_cost_data_class = cp.CapexCostDataClass(
                 capex_investment_cost_in_euro=config.investment_costs_in_euro,
                 device_co2_footprint_in_kg=config.device_co2_footprint_in_kg,
                 lifetime_in_years=config.lifetime_in_years,
-                capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-                device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
+                capex_investment_cost_for_simulated_period_in_euro=prorated.investment_for_simulated_period_in_euro,
+                device_co2_footprint_for_simulated_period_in_kg=prorated.co2_footprint_for_simulated_period_in_kg,
             )
         return capex_cost_data_class
 

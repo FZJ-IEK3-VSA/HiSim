@@ -172,3 +172,28 @@ def test_deprecated_get_default_config_var_brinetemperature_alias() -> None:
         config = simple_heat_source.SimpleHeatSourceConfig.get_default_config_var_brinetemperature()
     assert config.heat_source_type is simple_heat_source.SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE
     assert config.component_id.name == "HeatSourceVarBrineTemperature"
+
+
+@pytest.mark.base
+def test_the_configured_maintenance_rate_reaches_the_simulated_period() -> None:
+    """Catches the configured annual upkeep never being booked anywhere.
+
+    Every factory config of this component sets a 10 EUR/a maintenance rate, and
+    ``get_cost_opex`` books maintenance through ``Component.calc_maintenance_cost``, which reads
+    ``maintenance_cost_per_simulated_period_in_euro`` off the capital cost data. While
+    ``get_cost_capex`` left both maintenance fields at their zero defaults, that configured rate
+    reached nothing at all: the opex table showed no upkeep for a heat source that has one.
+
+    Over a full simulated year the per-period figure is the annual rate itself; the annual rate
+    is reported unchanged beside it.
+    """
+    config = simple_heat_source.SimpleHeatSourceConfig.get_default_config_const_power()
+    assert config.maintenance_costs_in_euro_per_year == 10
+
+    capex = simple_heat_source.SimpleHeatSource.get_cost_capex(
+        config=config,
+        simulation_parameters=SimulationParameters.full_year(year=2021, seconds_per_timestep=3600),
+    )
+
+    assert capex.maintenance_costs_in_euro_per_year == 10
+    assert capex.maintenance_cost_per_simulated_period_in_euro == pytest.approx(10.0)

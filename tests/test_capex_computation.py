@@ -1,16 +1,16 @@
 """Tests for the CAPEX proration rules in ``capex_computation``.
 
-These tests pin the two different proration rules that
-``CapexComputationHelperFunctions.compute_capex_costs_and_emissions`` applies when it cuts
-lifetime figures down to the simulated period. The investment cost and
-the embodied CO2 footprint are one-time figures, so they are annualized over the technical
-lifetime and then scaled by the simulated fraction of a year. The maintenance cost is already
-an annual rate that falls due in every year of the lifetime, so it is scaled by that fraction
-alone and is never divided by the lifetime.
+These tests pin the two different proration rules that ``prorate_to_simulated_period`` applies
+when it cuts lifetime figures down to the simulated period, and that
+``CapexComputationHelperFunctions.compute_capex_costs_and_emissions`` inherits by calling it:
+the investment cost and the embodied CO2 footprint are one-time figures annualized over the
+technical lifetime, while the maintenance cost is an annual rate that is never divided by that
+lifetime. The proration function's own docstring is the authoritative statement of the rule.
 
-All cases feed the config branch of the helper (every capex field on the config is populated),
+Most cases feed the config branch of the helper (every capex field on the config is populated),
 so the expected numbers depend only on the four inputs written into the config and on the
-simulated duration -- never on the tabulated device database.
+simulated duration. The last case deliberately takes the other branch, where the helper builds
+the annual maintenance figure itself out of the tabulated device factors.
 """
 
 # clean
@@ -22,9 +22,13 @@ from typing import Optional
 import pytest
 from dataclasses_json import dataclass_json
 
+from hisim.components.configuration import EmissionFactorsAndCostsForDevicesConfig
 from hisim.config import ComponentID, ConfigBase
 from hisim.loadtypes import ComponentType, Units
-from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import (
+    CapexComputationHelperFunctions,
+    prorate_to_simulated_period,
+)
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -68,6 +72,25 @@ def make_config(lifetime_in_years: float = 10.0) -> CostedDummyConfig:
         lifetime_in_years=lifetime_in_years,
         maintenance_costs_in_euro_per_year=100.0,
         subsidy_as_percentage_of_investment_costs=0.0,
+    )
+
+
+def uncosted_config() -> CostedDummyConfig:
+    """Build a config with every capex field left ``None``, which selects the device branch.
+
+    The helper only reaches for the tabulated device factors when all five capex fields are
+    absent, so a config that omits every one of them is what steers the test into that branch.
+
+    Returns:
+        A config carrying no capex values at all.
+    """
+    return CostedDummyConfig(
+        component_id=ComponentID(name="UncostedDummy"),
+        device_co2_footprint_in_kg=None,
+        investment_costs_in_euro=None,
+        lifetime_in_years=None,
+        maintenance_costs_in_euro_per_year=None,
+        subsidy_as_percentage_of_investment_costs=None,
     )
 
 
@@ -117,7 +140,7 @@ def test_half_year_prorates_investment_over_lifetime_but_not_maintenance() -> No
     assert capex_data.maintenance_cost_per_simulated_period_in_euro == 50.0
     # The lifetime figures themselves pass through untouched.
     assert capex_data.capex_investment_cost_in_euro == 1000.0
-    assert capex_data.maintenance_costs_in_euro == 100.0
+    assert capex_data.maintenance_costs_in_euro_per_year == 100.0
     assert capex_data.lifetime_in_years == 10.0
 
 
@@ -165,3 +188,130 @@ def test_maintenance_does_not_depend_on_the_technical_lifetime() -> None:
 
     assert capex_data.capex_investment_cost_for_simulated_period_in_euro == 25.0
     assert capex_data.maintenance_cost_per_simulated_period_in_euro == 50.0
+
+
+@pytest.mark.base
+def test_prorate_to_simulated_period_applies_both_rules_over_half_a_year() -> None:
+    """Pins the shared proration function directly, without a helper or a config around it.
+
+    Over half a year the one-time figures lose both the lifetime and the half-year factor,
+    while the annual maintenance rate loses only the half-year factor:
+
+    * investment: (1000 EUR / 10 a) * 0.5 a = 50 EUR
+    * CO2:        (200 kg / 10 a) * 0.5 a   = 10 kg
+    * maintenance: 100 EUR/a * 0.5 a        = 50 EUR
+    """
+    prorated = prorate_to_simulated_period(
+        investment_in_euro=1000.0,
+        co2_footprint_in_kg=200.0,
+        maintenance_in_euro_per_year=100.0,
+        lifetime_in_years=10.0,
+        simulation_parameters=make_simulation_parameters(days=182.5),
+    )
+
+    assert prorated.investment_for_simulated_period_in_euro == 50.0
+    assert prorated.co2_footprint_for_simulated_period_in_kg == 10.0
+    assert prorated.maintenance_for_simulated_period_in_euro == 50.0
+
+
+@pytest.mark.base
+def test_prorate_to_simulated_period_charges_a_full_year_once() -> None:
+    """A full simulated year charges the annual maintenance rate exactly once.
+
+    With a simulated fraction of a year of 365 / 365 = 1.0, the maintenance figure is the
+    annual rate itself, while the investment share is one tenth of a 1000 EUR device with a
+    ten-year lifetime.
+    """
+    prorated = prorate_to_simulated_period(
+        investment_in_euro=1000.0,
+        co2_footprint_in_kg=200.0,
+        maintenance_in_euro_per_year=100.0,
+        lifetime_in_years=10.0,
+        simulation_parameters=make_simulation_parameters(days=365),
+    )
+
+    assert prorated.maintenance_for_simulated_period_in_euro == 100.0
+    assert prorated.investment_for_simulated_period_in_euro == 100.0
+    assert prorated.co2_footprint_for_simulated_period_in_kg == 20.0
+
+
+@pytest.mark.base
+def test_prorate_to_simulated_period_keeps_maintenance_free_of_the_lifetime() -> None:
+    """Doubling the lifetime halves the investment share and leaves maintenance untouched.
+
+    This is the discriminating case for the rule the function exists to hold: a formula that
+    divided maintenance by the lifetime as well would report a different maintenance figure
+    for each of the two lifetimes, and both would be a factor of the lifetime too small.
+    """
+    simulation_parameters = make_simulation_parameters(days=182.5)
+    ten_years = prorate_to_simulated_period(
+        investment_in_euro=1000.0,
+        co2_footprint_in_kg=200.0,
+        maintenance_in_euro_per_year=100.0,
+        lifetime_in_years=10.0,
+        simulation_parameters=simulation_parameters,
+    )
+    twenty_years = prorate_to_simulated_period(
+        investment_in_euro=1000.0,
+        co2_footprint_in_kg=200.0,
+        maintenance_in_euro_per_year=100.0,
+        lifetime_in_years=20.0,
+        simulation_parameters=simulation_parameters,
+    )
+
+    assert twenty_years.investment_for_simulated_period_in_euro == ten_years.investment_for_simulated_period_in_euro / 2
+    assert twenty_years.maintenance_for_simulated_period_in_euro == ten_years.maintenance_for_simulated_period_in_euro
+    assert twenty_years.maintenance_for_simulated_period_in_euro == 50.0
+
+
+@pytest.mark.base
+def test_device_database_branch_prorates_maintenance_without_the_lifetime() -> None:
+    """The tabulated-factor branch charges the annual maintenance share, not a lifetime slice.
+
+    The three tests above feed the helper's config branch, so none of them would notice the
+    device-database branch keeping the old rule: that branch builds the annual maintenance
+    figure itself, out of the tabulated investment cost and the tabulated maintenance share.
+    With every capex field on the config left ``None``, the helper looks the factors up for the
+    simulation year and country and scales them by the size, and the maintenance for a
+    half-year period must be
+
+        investment_per_kw * size * maintenance_share_per_year * 0.5
+
+    with no division by the tabulated technical lifetime anywhere in it. The expected numbers
+    are read from the same table rather than written down, so a revised device row moves the
+    test with it instead of breaking it.
+    """
+    simulation_parameters = make_simulation_parameters(days=182.5)
+    size_in_kw = 8.0
+    device_factors = EmissionFactorsAndCostsForDevicesConfig.get_values_for_year(
+        year=simulation_parameters.year,
+        device=ComponentType.HEAT_PUMP,
+        country=simulation_parameters.country,
+    )
+    assert device_factors.investment_costs_in_euro_per_kw is not None
+    investment_in_euro = device_factors.investment_costs_in_euro_per_kw * size_in_kw
+    expected_maintenance_in_euro = (
+        investment_in_euro * device_factors.maintenance_costs_as_percentage_of_investment_per_year * 0.5
+    )
+
+    capex_data = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=ComponentType.HEAT_PUMP,
+        unit=Units.KILOWATT,
+        size_of_energy_system=size_in_kw,
+        config=uncosted_config(),
+    )
+
+    assert capex_data.maintenance_cost_per_simulated_period_in_euro == pytest.approx(
+        expected_maintenance_in_euro
+    )
+    # The discriminating half of the assertion: the old rule divided by the lifetime as well,
+    # which for a lifetime of more than one year is a strictly smaller figure.
+    assert device_factors.technical_lifetime_in_years > 1
+    assert capex_data.maintenance_cost_per_simulated_period_in_euro != pytest.approx(
+        expected_maintenance_in_euro / device_factors.technical_lifetime_in_years
+    )
+    # The annual rate itself is reported untouched by the simulated duration.
+    assert capex_data.maintenance_costs_in_euro_per_year == pytest.approx(
+        investment_in_euro * device_factors.maintenance_costs_as_percentage_of_investment_per_year
+    )

@@ -437,11 +437,11 @@ def test_chp_capex_scales_with_the_electrical_rating() -> None:
 
     assert small.capex_investment_cost_in_euro > 0.0
     assert small.device_co2_footprint_in_kg > 0.0
-    assert small.maintenance_costs_in_euro > 0.0
+    assert small.maintenance_costs_in_euro_per_year > 0.0
     assert 5.0 < small.lifetime_in_years < 25.0, "a fuel-cell appliance is a one- to two-decade asset"
     assert large.capex_investment_cost_in_euro == pytest.approx(2 * small.capex_investment_cost_in_euro)
     assert large.device_co2_footprint_in_kg == pytest.approx(2 * small.device_co2_footprint_in_kg)
-    assert large.maintenance_costs_in_euro == pytest.approx(2 * small.maintenance_costs_in_euro)
+    assert large.maintenance_costs_in_euro_per_year == pytest.approx(2 * small.maintenance_costs_in_euro_per_year)
     # The rating is stated in watt and the price per kilowatt, so the conversion has to happen:
     # a unit priced per watt would land a thousandfold below the 5500 EUR/kW the database cites.
     assert 4000.0 <= small.capex_investment_cost_in_euro / 3.0 <= 7000.0
@@ -467,7 +467,7 @@ def test_chp_capex_prefers_explicit_config_values_over_the_database() -> None:
     assert capex.capex_investment_cost_in_euro == pytest.approx(21000.0)
     assert capex.device_co2_footprint_in_kg == pytest.approx(900.0)
     assert capex.lifetime_in_years == pytest.approx(9.0)
-    assert capex.maintenance_costs_in_euro == pytest.approx(700.0)
+    assert capex.maintenance_costs_in_euro_per_year == pytest.approx(700.0)
     assert capex.subsidy_as_percentage_of_investment_costs == pytest.approx(0.4)
 
 

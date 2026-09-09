@@ -12,6 +12,7 @@ from hisim.component import Component, ComponentInput, ComponentOutput, SingleTi
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, IEK-3"
@@ -79,6 +80,8 @@ class PTXControllerConfig(ConfigBase):
 
 class PTXController(Component):
     """PtX  Controller."""
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     RESLoad = "RESLoad"

@@ -45,6 +45,7 @@ from hisim.components.configuration import (
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -210,6 +211,8 @@ class MoreAdvancedHeatPumpHPLib(Component):
     Relevant simulation parameters are loaded within the init for a
     specific or generic heat pump type.
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     OnOffSwitchSH = "OnOffSwitchSH"  # 1 = on space heating,  0 = 0ff , -1 = cooling
@@ -2030,6 +2033,8 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
 
     """
 
+    cost_relevance = CostRelevance.FREE_OF_COST
+
     # Inputs
     WaterTemperatureInput = "WaterTemperatureInput"
     HeatingFlowTemperatureFromHeatDistributionSystem = "HeatingFlowTemperatureFromHeatDistributionSystem"
@@ -2519,6 +2524,8 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
     sends signal to the heat pump for activation or deactivation.
 
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     WaterTemperatureInputFromDHWStorage = "WaterTemperatureInputFromDHWStorage"

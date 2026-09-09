@@ -20,6 +20,7 @@ from hisim.component import Component, SingleTimeStepValues, ComponentInput, Com
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+from hisim.economics.facts import CostRelevance
 
 
 @dataclass_json
@@ -97,6 +98,8 @@ class ExampleTransformer(Component):
         Defaults to an empty :py:class:`~hisim.config.DisplayConfig`.
 
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # A demonstration component that scales one signal by a constant. It models no device, so
     # it has no operating cost -- as opposed to one whose cost model is merely unwritten.

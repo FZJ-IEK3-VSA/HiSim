@@ -277,3 +277,44 @@ were resolved with a documented default to keep the implementation moving; they 
     ton in the legacy dicts; converted to €/kWh at migration using the heating values from
     `PhysicsConfig` (pellets 4.9 kWh/kg — LHV 11.7 GJ/m3 at 650 kg/m3; wood chips 17.3 GJ/m3 at
     250 kg/m3). The conversion factors are recorded in the entry notes and the provenance ledger.
+
+34. **PRICED components with no facts source (2026-09-08, stack part 8/8 review)**: fourteen
+    component classes declare `cost_relevance = CostRelevance.PRICED` while nothing can produce
+    `ComponentCostFacts` for them — no `get_cost_facts()` of their own and no entry in
+    `adapter.FactsExtractors.BY_CLASS_NAME`. Each of them therefore fails
+    `Simulator.check_cost_declarations` before the first timestep of any run that asks for
+    lifecycle costs, and would fail the postprocessing D7 check if it got that far. Closing one
+    means two things, not one: a `devices_<COUNTRY>.json` row with real sources in `sources.json`
+    for the device type it is priced against, **and** an adapter entry (or a hook) that maps its
+    config to that asset class and a size. Grouped by the device type the cost database lacks:
+
+    - **CHP** — `advanced_fuel_cell.CHP`, `generic_chp.SimpleCHP`. No CHP device type exists at
+      all. This is the reason `system_setups/dynamic_components.py` fails fast under all options:
+      it wires two CHPs, and the run is refused before the first timestep.
+    - **Fuel cell / reversible SOC** — `generic_fuel_cell.FuelCell`, `generic_rsoc.Rsoc`.
+    - **Electrolyzers other than the one migrated** — `generic_electrolyzer.GenericElectrolyzer`,
+      `generic_electrolyzer_and_h2_storage.AdvancedElectrolyzer`. The `ELECTROLYZER` device type
+      now exists (migrated from the proposed legacy rows, see below), so these two need an adapter
+      entry each — but only after someone checks that their configs state a rating in kW and that
+      an industrial PEM price is the right one for them.
+    - **Hydrogen storage** — `generic_hydrogen_storage.GenericHydrogenStorage`,
+      `generic_electrolyzer_and_h2_storage.HydrogenStorage`. No hydrogen-storage device type.
+    - **Mobility** — `generic_car.Car`, `advanced_ev_battery_bslib.CarBattery`. No car or
+      car-battery device type; the stationary `BATTERY` entry is not a vehicle pack.
+    - **Wind** — `generic_windturbine.Windturbine`. No wind device type.
+    - **Air conditioning** — `air_conditioner.AirConditioner`,
+      `simple_air_conditioner.SimpleAirConditioner`. No air-conditioner device type.
+    - **`simple_heat_source.SimpleHeatSource`** — a case of its own. Its config declares its own
+      `investment_costs_in_euro`, `lifetime_in_years` and `device_co2_footprint_in_kg`, so it needs
+      no database row; what it lacks is an *asset class*, because `SimpleHeatSourceType` says how
+      the source behaves (constant power / constant temperature / brine) and never which fuel it
+      burns. Nothing in the config maps it unambiguously to one priced heater type, so it was
+      deliberately left without an adapter entry rather than mapped by guess.
+
+    A class scan finds a fifteenth, `simple_water_storage.SimpleWaterStorage`, which is not in the
+    list because it is an abstract base that is never instantiated — both of its concrete subclasses (`SimpleHotWaterStorage`,
+    `SimpleDHWStorage`) have adapter entries — and `generic_heat_pump.GenericHeatPump`,
+    `generic_electrolyzer_h2.Electrolyzer` and `transformer_rectifier.Transformer` were closed in
+    this PR (the heat pump by a hook, because its config carries no size at all; the other two by
+    adapter entries against the `ELECTROLYZER` and `TRANSFORMER_AND_RECTIFIER` rows migrated from
+    the *proposed, unreviewed* legacy table — see their `notes` in `devices_DE.json`).

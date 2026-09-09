@@ -11,6 +11,7 @@ from hisim import loadtypes as lt
 from hisim.component import Component
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
+from hisim.economics.facts import CostRelevance
 
 
 @dataclass_json
@@ -47,6 +48,8 @@ class SumBuilderConfig(ConfigBase):
 
 class CalculateOperation(cp.Component):
     """Arbitrary mathematical operations."""
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Arithmetic over other components' outputs: it owns no device, so there is nothing to
     # buy and nothing to run. See Component.MODELS_NO_DEVICE.
@@ -158,6 +161,8 @@ class SumBuilderForTwoInputs(Component):
     time step, and writes the result to one output channel.
     """
 
+    cost_relevance = CostRelevance.FREE_OF_COST
+
     # Arithmetic over other components' outputs: it owns no device, so there is nothing to
     # buy and nothing to run. See Component.MODELS_NO_DEVICE.
     MODELS_NO_DEVICE: ClassVar[bool] = True
@@ -243,6 +248,8 @@ class SumBuilderForTwoInputs(Component):
 
 class SumBuilderForThreeInputs(Component):
     """Sum builder for three inputs."""
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Arithmetic over other components' outputs: it owns no device, so there is nothing to
     # buy and nothing to run. See Component.MODELS_NO_DEVICE.

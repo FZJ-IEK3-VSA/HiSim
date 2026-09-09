@@ -32,6 +32,7 @@ from hisim.dynamic_component import (
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+from hisim.economics.facts import CostRelevance
 
 
 @dataclass_json
@@ -90,6 +91,8 @@ class GasMeter(DynamicComponent):
     It calculates the gas production and consumption dynamically for all components.
     So far only gas consumers are represented here but gas producers can be added here too.
     """
+
+    cost_relevance = CostRelevance.METER
 
     # Outputs
     GasAvailable: ClassVar[str] = "GasAvailable"

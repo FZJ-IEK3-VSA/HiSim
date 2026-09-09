@@ -15,6 +15,7 @@ from hisim import loadtypes as lt
 from hisim.components import controller_l1_electrolyzer
 from hisim.simulationparameters import SimulationParameters
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -103,6 +104,8 @@ class GenericElectrolyzer(cp.Component):
     Components to connect to: (1) Electrolyzer controller (controller_l1_electrolyzer).
 
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     AvailableElectricity: ClassVar[str] = "AvailbaleElectricity"

@@ -31,6 +31,7 @@ from hisim.components import (
     solar_thermal_system,
     controller_l1_generic_ev_charge,
 )
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -148,6 +149,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     component, which receives signals from the EMS.
 
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     ElectricityToElectrolyzerUnused = "ElectricityToElectrolyzerUnused"

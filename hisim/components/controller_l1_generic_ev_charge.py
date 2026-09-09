@@ -23,6 +23,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, 
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -112,6 +113,8 @@ class L1Controller(cp.Component):
     (2) Car Battery (advanced_ev_battery_bslib)
     (3) EMS (controller_l2_energy_management_system) - optional
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     ElectricityNeededByCar = "ElectricityNeededByCar"

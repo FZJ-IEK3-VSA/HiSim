@@ -23,6 +23,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import (
     component as cp,
 )
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -126,6 +127,8 @@ class FuelCell(cp.Component):
     consumption rate is interpolated for the current operating point.
 
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     DemandProfile = "DemandProfile"

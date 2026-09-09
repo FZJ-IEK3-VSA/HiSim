@@ -14,6 +14,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -56,6 +57,8 @@ class IdealizedHeaterConfig(ConfigBase):
 
 class IdealizedElectricHeater(cp.Component):
     """Idealized Electric Heater System."""
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     TheoreticalThermalBuildingDemand: str = "TheoreticalThermalBuildingDemand"

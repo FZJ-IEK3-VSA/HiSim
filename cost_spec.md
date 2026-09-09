@@ -315,9 +315,10 @@ class Component:
         return None
 ```
 
-Differences from today: default is **None = not part of the cost model** (controllers, weather,
-occupancy simply don't override the hook); overrides are per-field; no dataframe access — the typical
-implementation shrinks from ~40 lines to ~6. Energy-consumption *attribution* for KPI display stays in
+Differences from today: default is **None = this component contributes no cost facts** (controllers,
+weather, occupancy simply don't override the hook — whether that is *legitimate* is decided by
+`cost_relevance`, not by the None, see §9.2); overrides are per-field; no dataframe access — the
+typical implementation shrinks from ~40 lines to ~6. Energy-consumption *attribution* for KPI display stays in
 `get_component_kpi_entries()` and is no longer entangled with billing.
 
 ### 3.4 What meters provide: `EnergyFlowFacts`
@@ -1589,11 +1590,30 @@ implementation silently drops a component from every cost result. Countermeasure
   `cost_relevance: ClassVar[CostRelevance]` with values `PRICED` (must return facts),
   `FREE_OF_COST` (controllers, weather, idealized devices — must return `None`), or `METER`
   (must provide `EnergyFlowFacts`). The base class default is `UNDECLARED`.
-- **Completeness check at simulation start, not end.** During component registration, any `UNDECLARED`
-  component, or a `PRICED` component whose facts don't build, aborts with a message naming the class
-  and file. There is no lenient mode and no `strict_cost_completeness` flag: an undeclared component
-  is always a hard error, because the alternative is a cost result that is quietly incomplete. The
-  same rule applies to the compatibility adapter (§10.0): relevance is read off the class
+- **Completeness check at simulation start, not end.** `Simulator.check_cost_declarations` runs at
+  the top of `run_all_timesteps`, before the result directory is prepared and before the first
+  timestep: when `COMPUTE_LIFECYCLE_COSTS` (or `LIFECYCLE_COST_REPORT`) was requested, any
+  `UNDECLARED` component aborts the run with a message naming the class and its module, so a
+  year-long simulation cannot run for hours and then die in postprocessing. A `PRICED` component
+  whose facts don't build cannot be judged without the cost database and is caught by the
+  resolution check (§9.3) instead. There is no lenient mode and no `strict_cost_completeness`
+  flag: an undeclared component is always a hard error, because the alternative is a cost result
+  that is quietly incomplete. The bridge enforces the same rule independently — an `UNDECLARED`
+  component becomes an unresolved subject and aborts the evaluation under D7 — because the pre-run
+  check only sees the components one run registered, while a stored `economic_inputs.json` re-priced
+  later passes through no simulator at all.
+- **Fleet-wide, machine-checked.** Every `Component` subclass under `hisim.components` declares
+  `cost_relevance` in its *own* class body — inheriting a parent component's declaration does not
+  count, or a controller subclassing a priced device would be priced as one.
+  `tests/test_economics_adapter_contract.py::test_every_component_class_declares_cost_relevance`
+  is what makes that true rather than aspirational. The classification rule for the fleet: real
+  hardware is `PRICED` even when the cost database has no row for it yet (it then fails loudly
+  until someone adds the row), and `FREE_OF_COST` is reserved for controllers, weather,
+  load-profile providers, price signals and idealized or pass-through helpers. Building envelope
+  measures are *not* declared on the `Building` component; they enter as
+  `EconomicContext.extra_cost_facts` per element (§3.2b), which is why `Building` itself is
+  `FREE_OF_COST`.
+- **The same rule applies to the compatibility adapter** (§10.0): relevance is read off the class
   declaration only — never inferred from the adapter's own tables — and every way of producing no
   facts other than "this class is unknown and claims nothing" carries a reason that fails the
   evaluation.
@@ -1758,10 +1778,11 @@ data source as data-only PRs, whose effect is visible in the audit diff (§9.5).
 `observation_period = simulated period`, all rates 0, the engine reproduces today's
 "per simulated period" numbers exactly — verified via the shadow-mode parity report, not by modifying
 the old path. Unit tests against hand-calculated VDI 2067 / EN 15459 examples. This phase also ships
-the maintenance infrastructure of §9: `cost_relevance` declarations (additive, but mandatory once
-the bridge runs — an undeclared component aborts the evaluation), the
-pre-run resolution check, the auto-discovered contract test, the cost audit report, and the data-file
-CI (schema + coverage matrix) — so the safety net exists *before* any component adopts the new API.
+the maintenance infrastructure of §9: `cost_relevance` declarations (mandatory fleet-wide, machine-
+checked by the contract test, and enforced twice at run time — the pre-run completeness check and
+the bridge's D7 abort), the pre-run resolution check, the auto-discovered contract test, the cost
+audit report, and the data-file CI (schema + coverage matrix) — so the safety net exists *before*
+any component adopts the new API.
 
 **Phase 2 — parallel KPI set + per-component breakdowns.**
 The new lifecycle KPIs (§7.3) and the per-component visualization exports (§7.4) are emitted under

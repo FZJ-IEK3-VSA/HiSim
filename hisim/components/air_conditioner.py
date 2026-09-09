@@ -30,6 +30,7 @@ from hisim.sim_repository_singleton import (
     SingletonSimRepository,
     SingletonDictKeyEnum,
 )
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Marwa Alfouly, Kristina Dabrock"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -245,6 +246,8 @@ class AirConditionerConfig(ConfigBase):
 
 class AirConditioner(cp.Component):
     """Simulates an air conditioner that provides heating and cooling based on a modulating signal."""
+
+    cost_relevance = CostRelevance.PRICED
 
     # Input and output channel names
     OperatingState: ClassVar[str] = "State"
@@ -816,6 +819,8 @@ class AirConditionerControllerState:
 
 class AirConditionerController(cp.Component):
     """Controller component for modulating air conditioner behavior based on temperature."""
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     TemperatureIndoorAir: ClassVar[str] = "TemperatureIndoorAir"
     ElectricityInput: ClassVar[str] = "ElectricityInput"

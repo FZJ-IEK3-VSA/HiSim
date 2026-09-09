@@ -35,6 +35,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiTagEnumClass,
 )
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Katharina Rieck, Kristina Dabrock"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -103,6 +104,8 @@ class ElectricHeating(Component):
 
     This component refers to direct electric heating like radiators, electric boilers, fan heaters etc.
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     HeatingMode = "HeatingMode"
@@ -791,6 +794,8 @@ class ElectricHeatingControllerConfig(ConfigBase):
 
 class ElectricHeatingController(Component):
     """Electric Heating Controller."""
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"

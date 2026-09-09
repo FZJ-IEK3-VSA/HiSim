@@ -11,6 +11,7 @@ from hisim.component import Component, ComponentInput, ComponentOutput, SingleTi
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
+from hisim.economics.facts import CostRelevance
 
 
 # from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
@@ -114,6 +115,8 @@ class RsocControllerConfig(ConfigBase):
 
 class RsocController(Component):
     """rSOC Controller class."""
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     ProvidedPower: ClassVar[str] = "ProvidedPower"

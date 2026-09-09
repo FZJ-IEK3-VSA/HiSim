@@ -506,6 +506,49 @@ def test_postprocessing_option_export_results_in_one_file(
     )
 
 
+def test_postprocessing_option_compute_lifecycle_costs(
+    postprocessing_option_framework: PostProcessingOptionTestFramework,
+) -> None:
+    """Test that PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS writes the cost export set.
+
+    The baseline setup (`simple_system_setup_one`) is a signal generator and a summation node, so
+    every component in it is `FREE_OF_COST` and the engine prices nothing at all. That is on
+    purpose here: the export set has to appear even for a fleet with no priced subject, because a
+    run that asked for lifecycle costs and produced no files at all is indistinguishable from an
+    engine that never ran. `economic_inputs.json` is the faithful extract of that (empty) fleet and
+    is written before any pricing happens.
+    """
+    postprocessing_option_framework.run(
+        PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS,
+        expected_files=[
+            "economic_inputs.json",
+            "lifecycle_costs.json",
+            "cash_flow_timeline.csv",
+            "lifecycle_kpis.json",
+            "cost_audit.csv",
+        ],
+    )
+
+
+def test_postprocessing_option_lifecycle_cost_report(
+    postprocessing_option_framework: PostProcessingOptionTestFramework,
+) -> None:
+    """Test that PostProcessingOptions.LIFECYCLE_COST_REPORT adds the human-readable outputs.
+
+    The report option implies the computation — the postprocessing block runs for either — so the
+    numeric exports have to be there too; what it adds is `cost_summary.md` and the self-contained
+    `lifecycle_report.html`.
+    """
+    postprocessing_option_framework.run(
+        PostProcessingOptions.LIFECYCLE_COST_REPORT,
+        expected_files=[
+            "lifecycle_costs.json",
+            "cost_summary.md",
+            "lifecycle_report.html",
+        ],
+    )
+
+
 def test_each_postprocessing_option_has_a_named_test() -> None:
     """Guard against adding enum values without adding a dedicated runtime-statistics test."""
 

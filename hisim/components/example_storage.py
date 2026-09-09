@@ -13,6 +13,7 @@ from hisim.component import Component, SingleTimeStepValues, ComponentInput, Com
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
+from hisim.economics.facts import CostRelevance
 
 
 class ExampleStorageState:
@@ -93,6 +94,8 @@ class SimpleStorageConfig(ConfigBase):
 
 class SimpleStorage(Component):
     """A class to simulate the Simple Storage."""
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     ChargingAmount: str = "ChargingAmount"
     DischargingAmount: str = "DischargingAmount"

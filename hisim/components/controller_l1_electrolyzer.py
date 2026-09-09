@@ -15,6 +15,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.economics.facts import CostRelevance
 
 
 @dataclass_json
@@ -106,6 +107,8 @@ class L1GenericElectrolyzerController(cp.Component):
     (1) energy management system (controller_l2_energy_management_system)
     (2) hydrogen storage (generic_h2storage)
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     ElectricityTarget = "ElectricityTarget"

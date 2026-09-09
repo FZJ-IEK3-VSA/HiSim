@@ -18,6 +18,7 @@ from hisim import utils
 from hisim import loadtypes as lt
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -99,7 +100,24 @@ class PriceSignal(cp.Component):
 
     Class component that provides price for electricity.
     Outputs: Price for injection: cents/kWh, Price for purchase: cents/kWh
+
+    **Superseded by `tariff_provider.TariffProvider` (cost_spec.md §8.3).** This component carries
+    price data of its own, in cents per kilowatt-timestep, with no relation to the tariff contract
+    the lifecycle cost engine bills a finished run with — so a controller optimizing against it is
+    optimizing against prices the bill never charges (§8.1). The successor reads its prices from a
+    `hisim.economics.tariffs.TariffContract`, the same object the billing engine reads, and stays
+    the component to reach for in a new setup. This one is kept for the parallel phase and for
+    setups that already use it.
+
+    **Only one of the two may publish the shared forecast keys in a setup.** Both write
+    `SingletonDictKeyEnum.PRICEPURCHASEFORECAST24H` and `PRICEINJECTIONFORECAST24H` to the
+    `SingletonSimRepository`, in different units and from different data, and the repository holds
+    one value per key: two publishers means whichever ran last silently decides what every MPC
+    controller in the run optimizes against. Put a `PriceSignal` **or** a `TariffProvider` in a
+    setup, never both.
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Forecasts
     Price_Injection_Forecast_24h = "Price_Injection_Forecast_24h"

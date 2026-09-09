@@ -35,6 +35,7 @@ from hisim.loadtypes import LoadTypes, Units
 from hisim.components.weather import Weather
 from hisim.components.building import Building
 from hisim import utils
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "HiSim Project"
 __copyright__ = "Copyright 2025, the House Infrastructure Project"
@@ -96,6 +97,8 @@ class SimpleAirConditioner(cp.Component):
     negative thermal power (heat removed from the space).  Otherwise all outputs
     are zero.
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # Input channel names
     TemperatureOutside: str = "TemperatureOutside"
@@ -573,6 +576,8 @@ class SimpleAirConditionerController(cp.Component):
     The controller outputs a signed modulating power signal:
     ``-1.0`` for cooling at full capacity, ``0.0`` when off.
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Input channel names
     TemperatureIndoorAir: str = "TemperatureIndoorAir"

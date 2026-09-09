@@ -26,6 +26,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -134,6 +135,8 @@ class SmartDevice(cp.Component):
     Class component that provides availablity and profiles of flexible smart devices like shiftable (in time) washing machines and dishwashers.
     Data provided or based on LPG exports.
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # mandatory Inputs
     L3DeviceActivation: ClassVar[str] = "l3_DeviceActivation"

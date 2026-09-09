@@ -27,6 +27,7 @@ from hisim.postprocessing.cost_and_emission_computation.capex_computation import
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.components.lpg_car_information import CarProfileHandover
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -185,6 +186,8 @@ class Car(cp.Component):
     at all, the lookup raises and names the household and the car rather than letting the run
     continue with a vehicle that never moves.
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # Outputs
     FuelConsumption = "FuelConsumption"

@@ -27,6 +27,7 @@ from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRep
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 from hisim.config import DisplayConfig
+from hisim.economics.facts import CostRelevance
 
 
 class BuildingState:
@@ -85,6 +86,8 @@ class Building(cp.Component):
         Simulator object used to carry the simulation using this class
 
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs -> heating device
     ThermalPowerDelivered = "ThermalPowerDelivered"

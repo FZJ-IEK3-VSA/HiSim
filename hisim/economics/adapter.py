@@ -255,6 +255,21 @@ class FactsExtractors:
             size_unit=Units.ANY,
             kpi_tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
         ),
+        # The two devices of the electrolyzer setup. Both are industrial equipment priced from the
+        # proposed rows migrated into devices_DE.json, not household appliances; see the `notes` of
+        # those entries for what "proposed" means for a figure that rests on them.
+        "Electrolyzer": lambda config: ComponentCostFacts(
+            asset_class=ComponentType.ELECTROLYZER,
+            size=config.nom_load,
+            size_unit=Units.KILOWATT,
+            kpi_tag=KpiTagEnumClass.ELECTROLYZER,
+        ),
+        "Transformer": lambda config: ComponentCostFacts(
+            asset_class=ComponentType.TRANSFORMER_AND_RECTIFIER,
+            size=config.rated_power_in_kilowatt,
+            size_unit=Units.KILOWATT,
+            kpi_tag=KpiTagEnumClass.TRANSFORMER,
+        ),
     }
 
 

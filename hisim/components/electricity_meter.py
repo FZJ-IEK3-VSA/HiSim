@@ -14,6 +14,13 @@ from hisim.component import ComponentInput, OpexCostDataClass, CapexCostDataClas
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.config.channels import DispatchRule, DynamicConnectionChannel
+from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.facts import (
+    ComponentCostFacts,
+    CostRelevance,
+    EnergyFlowFacts,
+    missing_meter_column_error,
+)
 from hisim.dynamic_component import (
     DynamicComponent,
     DynamicConnectionInput,
@@ -91,6 +98,10 @@ class ElectricityMeter(DynamicComponent):
 
     It calculates the electricity production and consumption dynamically for all components.
     """
+
+    # Lifecycle cost engine declaration (cost_spec.md §9.2): energy is billed at this
+    # carrier boundary; the meter hardware itself is additionally priced via get_cost_facts().
+    cost_relevance = CostRelevance.METER
 
     # Outputs
     ElectricityAvailable = "ElectricityAvailable"
@@ -698,6 +709,99 @@ class ElectricityMeter(DynamicComponent):
         )
 
         return opex_cost_data_class
+
+    def get_cost_facts(self) -> ComponentCostFacts:
+        """Cost facts of the meter hardware for the lifecycle cost engine (cost_spec.md §3.3).
+
+        A meter is `METER`-relevant for *energy*, but it is also a physical device that had to be
+        bought, so it declares facts like any other priced subject. It has no meaningful capacity,
+        hence `size=1.0` with `Units.ANY`: the database entry for `ELECTRICITY_METER` is priced
+        per device, and `count` stays at its default of one. Reading the size as kW or kWh here
+        would be a category error, not just a scaling one.
+
+        Note the strict separation from `get_energy_flow_facts` below: this method describes the
+        box on the wall, that one describes the kWh that flowed through it. Nothing about energy
+        prices appears in either.
+
+        Returns:
+            The facts for this meter device; never None, since the class declares `METER`.
+        """
+        return ComponentCostFacts(
+            asset_class=lt.ComponentType.ELECTRICITY_METER,
+            size=1.0,
+            size_unit=lt.Units.ANY,
+            kpi_tag=KpiTagEnumClass.ELECTRICITY_METER,
+            investment_cost_override_in_euro=self.config.investment_costs_in_euro,
+            lifetime_override_in_years=self.config.lifetime_in_years,
+            # Either override needs the provenance, not just the investment one (§3.10).
+            override_source=(
+                "component config"
+                if (
+                    self.config.investment_costs_in_euro is not None
+                    or self.config.lifetime_in_years is not None
+                )
+                else None
+            ),
+        )
+
+    def get_energy_flow_facts(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> EnergyFlowFacts:
+        """Carrier flows at the grid boundary for the lifecycle cost engine (cost_spec.md §3.4).
+
+        Integrates the two directions of the grid connection over the whole simulated period:
+        `ElectricityFromGrid` becomes the energy bought, `ElectricityToGrid` the energy sold.
+        This meter is the *only* boundary at which electricity enters the cost model — every
+        consumer inside the building is billed implicitly through it — which is what makes double
+        counting structurally impossible rather than a thing to watch out for.
+
+        This is the §3.4 declaration of that boundary, and it is the path the pipeline actually
+        uses: `hisim.economics.bridge` asks this hook first and falls back to reading the columns
+        itself, guided by `adapter.get_meter_spec`, only for meters that have not adopted it. The
+        peak series for capacity charges, which `EnergyFlowFacts` cannot carry, still comes from
+        that `MeterSpec`, so the two paths must stay in agreement about which outputs constitute
+        the boundary.
+
+        Both source outputs are in **watt-hours** per timestep, so the summed column is scaled by
+        `1e-3` into the kilowatt-hours the tariff engine prices; the unit filter on
+        `lt.Units.WATT_HOUR` makes sure a same-named power output in watts can never be summed
+        here by accident. Outputs are located positionally, because the results frame carries no
+        names the engine could rely on. The two directions are reported separately rather than as
+        one signed net flow, because they are priced at different rates; the engine's sign
+        convention (cost positive, revenue negative) is applied later, when the bill is booked
+        onto the timeline.
+
+        Args:
+            all_outputs: All component outputs, aligned with the columns of the results frame.
+            postprocessing_results: The simulation results frame.
+
+        Returns:
+            The electricity bought and sold at this meter, in kWh over the simulated period.
+
+        Raises:
+            CostDataError: If either declared column is not among this run's outputs. Both are
+                declarations of this class, so a run without one is a broken extraction, not an
+                unused direction — and the two of them are the only place electricity enters the
+                cost model. Reporting 0.0 instead published a grid bill of zero and a feed-in
+                revenue of zero as if they had been measured; the bridge's `MeterSpec` fallback has
+                always refused the same run, and it is the same refusal (`missing_meter_column_error`)
+                so the hook and the fallback cannot disagree about what a missing column means.
+        """
+        totals = {}
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.component_name and output.unit == lt.Units.WATT_HOUR:
+                if output.field_name in (self.ElectricityFromGrid, self.ElectricityToGrid):
+                    totals[output.field_name] = float(postprocessing_results.iloc[:, index].sum()) * 1e-3
+        for field_name, role in ((self.ElectricityFromGrid, "bought energy"), (self.ElectricityToGrid, "sold energy")):
+            if field_name not in totals:
+                raise missing_meter_column_error(self.component_name, field_name, role)
+        return EnergyFlowFacts(
+            carrier=EnergyCarrier.ELECTRICITY,
+            energy_bought_in_kwh=totals[self.ElectricityFromGrid],
+            energy_sold_in_kwh=totals[self.ElectricityToGrid],
+        )
 
     @staticmethod
     def get_cost_capex(config: ElectricityMeterConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument

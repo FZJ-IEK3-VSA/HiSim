@@ -78,7 +78,12 @@
                 "eff_el_max": 0.4,
                 "eff_th_max": 0.55,
                 "temperature_max": 80,
-                "delta_temperature": 10
+                "delta_temperature": 10,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
             },
             "config_full_classname": "hisim.components.advanced_fuel_cell.CHPConfig",
             "inputs": [],
@@ -108,7 +113,12 @@
                 "eff_el_max": 0.4,
                 "eff_th_max": 0.55,
                 "temperature_max": 80,
-                "delta_temperature": 10
+                "delta_temperature": 10,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
             },
             "config_full_classname": "hisim.components.advanced_fuel_cell.CHPConfig",
             "inputs": [],

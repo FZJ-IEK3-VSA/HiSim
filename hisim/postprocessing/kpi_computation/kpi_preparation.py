@@ -669,43 +669,52 @@ class KpiPreparation:
         This function will read the opex and capex costs from the results.
         """
         # get costs and emissions from electricity meter and gas meter
-        electricity_costs_in_euro: float = 0
-        electricity_co2_in_kg: float = 0
-        electricity_from_grid_in_kwh: float = 0
-        gas_costs_in_euro: float = 0
-        gas_co2_in_kg: float = 0
-        gas_from_grid_in_kwh: float = 0
-        total_gas_consumption_in_kwh: float = 0
-        other_fuel_costs_in_euro: float = 0
-        other_fuel_co2_in_kg: float = 0
-        other_fuel_energy_consumption_kwh: float = 0
+        electricity_costs_in_euro: float = 0.0
+        electricity_co2_in_kg: float = 0.0
+        electricity_from_grid_in_kwh: float = 0.0
+        gas_costs_in_euro: float = 0.0
+        gas_co2_in_kg: float = 0.0
+        gas_from_grid_in_kwh: float = 0.0
+        total_gas_consumption_in_kwh: float = 0.0
+        other_fuel_costs_in_euro: float = 0.0
+        other_fuel_co2_in_kg: float = 0.0
+        other_fuel_energy_consumption_kwh: float = 0.0
 
-        for kpi_name, kpi_entry in self.kpi_collection_dict_unsorted[building_object].items():
+        # Matched on the entry's own "name", never on the collection key: a key is qualified
+        # with the source component as soon as a second component of the building reports the
+        # same KPI name (see keyed_component_entries), and a meter's entries have to be found
+        # whether or not such a collision exists.
+        # Summed rather than assigned, because a building may hold several meters of one tag --
+        # an oil and a pellet fuel meter, say -- and each of them now keeps its own entry under a
+        # qualified key. Assigning let whichever meter came last stand for all of them, so the
+        # building's heating fuel bill was the bill of one arbitrary meter.
+        for kpi_entry in self.kpi_collection_dict_unsorted[building_object].values():
+            kpi_name = kpi_entry["name"]
             if kpi_entry["tag"] == KpiTagEnumClass.ELECTRICITY_METER.value:
                 if kpi_name == "Opex costs of electricity consumption from grid":
-                    electricity_costs_in_euro = kpi_entry["value"]
+                    electricity_costs_in_euro += kpi_entry["value"]
                 if kpi_name == "CO2 footprint of electricity consumption from grid":
-                    electricity_co2_in_kg = kpi_entry["value"]
+                    electricity_co2_in_kg += kpi_entry["value"]
                 if kpi_name == "Total energy from grid":
-                    electricity_from_grid_in_kwh = kpi_entry["value"]
+                    electricity_from_grid_in_kwh += kpi_entry["value"]
 
             elif kpi_entry["tag"] == KpiTagEnumClass.GAS_METER.value:
                 if kpi_name == "Opex costs of gas consumption from grid":
-                    gas_costs_in_euro = kpi_entry["value"]
+                    gas_costs_in_euro += kpi_entry["value"]
                 if kpi_name == "CO2 footprint of gas consumption from grid":
-                    gas_co2_in_kg = kpi_entry["value"]
+                    gas_co2_in_kg += kpi_entry["value"]
                 if kpi_name == "Total gas demand from grid":
-                    gas_from_grid_in_kwh = kpi_entry["value"]
+                    gas_from_grid_in_kwh += kpi_entry["value"]
                 if kpi_name == "Total gas consumption":
-                    total_gas_consumption_in_kwh = kpi_entry["value"]
+                    total_gas_consumption_in_kwh += kpi_entry["value"]
 
             elif kpi_entry["tag"] == KpiTagEnumClass.FUEL_METER.value:
                 if kpi_name == "OPEX - Energy costs":
-                    other_fuel_costs_in_euro = kpi_entry["value"]
+                    other_fuel_costs_in_euro += kpi_entry["value"]
                 if kpi_name == "OPEX - CO2 Footprint":
-                    other_fuel_co2_in_kg = kpi_entry["value"]
+                    other_fuel_co2_in_kg += kpi_entry["value"]
                 if kpi_name == "Total energy consumption":
-                    other_fuel_energy_consumption_kwh = kpi_entry["value"]
+                    other_fuel_energy_consumption_kwh += kpi_entry["value"]
 
         # calculate total energy self-suffciency for gas, heat and electricity
         total_energy_self_sufficiency_in_percent = self.get_total_energy_self_sufficiency(
@@ -1819,33 +1828,93 @@ class KpiPreparation:
             )
 
     def get_all_component_kpis(self, wrapped_components: List[ComponentWrapper]) -> None:
-        """Go through all components and get their KPIs if implemented."""
+        """Go through all components and get their KPIs if implemented.
+
+        One building's entries are collected first and keyed together at the end, rather than
+        inserted one by one, because the key is what tells two components of one class apart:
+        keying incrementally by bare name is exactly what made a second same-class instance
+        silently overwrite the first (see :meth:`keyed_component_entries`).
+        """
         my_component_kpi_entry_list: List[KpiEntry]
 
-        self.kpi_collection_dict_unsorted = {
-            building_objects: {} for building_objects in self.building_objects_in_district_list
+        entries_per_building: Dict[str, List[KpiEntry]] = {
+            building_objects: [] for building_objects in self.building_objects_in_district_list
         }
 
         for wrapped_component in wrapped_components:
             my_component = wrapped_component.my_component
-            # get KPIs of respective component
-            my_component_kpi_entry_list = my_component.get_component_kpi_entries(
+            # get KPIs of respective component; the base-class method is the one that fills in
+            # each entry's source component, which is what the keying tells instances apart by.
+            my_component_kpi_entry_list = my_component.component_kpi_entries(
                 all_outputs=self.all_outputs, postprocessing_results=self.results
             )
 
             if my_component_kpi_entry_list != []:
-                # add all KPI entries to kpi dict
-                for kpi_entry in my_component_kpi_entry_list:
-
-                    for object_name in self.kpi_collection_dict_unsorted.keys():
-                        # The component's building comes from its structured identity rather than
-                        # from taking its runtime name apart.
-                        if object_name == my_component.component_id.building_label:
-                            self.kpi_collection_dict_unsorted[object_name][kpi_entry.name] = kpi_entry.to_dict()
-                            break
+                # The component's building comes from its structured identity rather than
+                # from taking its runtime name apart.
+                building_label = my_component.component_id.building_label
+                if building_label in entries_per_building:
+                    entries_per_building[building_label].extend(my_component_kpi_entry_list)
             else:
                 log.debug(
                     "KPI generation for "
                     + my_component.component_name
                     + " was not successful. KPI method is maybe not implemented yet."
                 )
+
+        self.kpi_collection_dict_unsorted = {
+            building_objects: self.keyed_component_entries(entries)
+            for building_objects, entries in entries_per_building.items()
+        }
+
+    @staticmethod
+    def keyed_component_entries(kpi_entries: List[KpiEntry]) -> Dict[str, Dict]:
+        """Keys one building's component KPI entries, telling same-named entries apart by source.
+
+        The key is what the report table, the webtool JSON and the flattened golden comparison
+        address a KPI by. Two components of one class emit the same entry names — the two CHPs of
+        the ``dynamic_components`` setup both report "Electrical energy produced" — and keying by
+        name alone let the second instance silently overwrite the first, so one of the two CHPs
+        vanished from every KPI consumer without anything failing. Where several components share
+        an entry name, each of their entries is keyed as ``"<name> (<source component>)"`` instead,
+        so every instance stays visible; a building where a name is emitted by exactly one
+        component keeps the unqualified name, so single-instance setups do not rename anything.
+
+        Args:
+            kpi_entries: Every component KPI entry of one building object.
+
+        Returns:
+            The entries as the collection stores them, ``{key: entry.to_dict()}``.
+
+        Raises:
+            ValueError: If same-named entries collide and one of them names no source component,
+                leaving nothing to tell them apart by — entries collected through
+                :meth:`hisim.component.Component.component_kpi_entries` always name their source,
+                so that can only come from a caller keying entries it built itself; or if two
+                entries still produce one key, which means one component emitted the same KPI
+                name twice and no consumer could have read both of them.
+        """
+        sources_per_name: Dict[str, List[Optional[str]]] = {}
+        for entry in kpi_entries:
+            sources_per_name.setdefault(entry.name, []).append(entry.name_of_source_component)
+
+        keyed: Dict[str, Dict] = {}
+        for entry in kpi_entries:
+            if len(sources_per_name[entry.name]) == 1:
+                key = entry.name
+            elif entry.name_of_source_component is None or None in sources_per_name[entry.name]:
+                raise ValueError(
+                    f"Several components report a KPI named '{entry.name}' and at least one of "
+                    "them carries no name_of_source_component, so their entries cannot be told "
+                    "apart. Every component KPI entry has to name its source component."
+                )
+            else:
+                key = f"{entry.name} ({entry.name_of_source_component})"
+            if key in keyed:
+                raise ValueError(
+                    f"Two KPI entries of one building key as '{key}'. A component must not emit "
+                    "the same KPI name twice, or every consumer would silently read only the "
+                    "last one."
+                )
+            keyed[key] = entry.to_dict()
+        return keyed

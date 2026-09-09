@@ -19,6 +19,7 @@ from hisim.components.weather import Weather
 
 from hisim import log
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Marwa Alfouly"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -178,6 +179,8 @@ class MPCcontrollerState:
 
 class MpcController(cp.Component):
     """MPC Controller class."""
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     # weather

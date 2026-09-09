@@ -15,6 +15,7 @@ from hisim.components import advanced_fuel_cell as chp
 from hisim.components.configuration import ExtendedControllerConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from hisim.economics.facts import CostRelevance
 
 
 class ExtendedControllerSimulation:
@@ -289,6 +290,8 @@ class ExtendedControllerSimulation:
 
 class ExtendedController(Component):
     """Extended Controller class."""
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # inputs
     ElectricityDemand: str = "ElectricityDemand"  # W

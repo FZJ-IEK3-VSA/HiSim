@@ -34,6 +34,7 @@ from hisim.config import (
 )
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -146,6 +147,8 @@ class HeatDistribution(cp.Component):
     It simulates the heat exchange between heat generator and building.
 
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     State = "State"
@@ -1009,6 +1012,8 @@ class HeatDistributionController(cp.Component):
     activation or deactivation.
 
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"

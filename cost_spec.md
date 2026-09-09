@@ -315,9 +315,10 @@ class Component:
         return None
 ```
 
-Differences from today: default is **None = not part of the cost model** (controllers, weather,
-occupancy simply don't override the hook); overrides are per-field; no dataframe access — the typical
-implementation shrinks from ~40 lines to ~6. Energy-consumption *attribution* for KPI display stays in
+Differences from today: default is **None = this component contributes no cost facts** (controllers,
+weather, occupancy simply don't override the hook — whether that is *legitimate* is decided by
+`cost_relevance`, not by the None, see §9.2); overrides are per-field; no dataframe access — the
+typical implementation shrinks from ~40 lines to ~6. Energy-consumption *attribution* for KPI display stays in
 `get_component_kpi_entries()` and is no longer entangled with billing.
 
 ### 3.4 What meters provide: `EnergyFlowFacts`
@@ -449,7 +450,13 @@ triplets; every step below is evaluated in the three slots of §3.9):
 2. **Replacements** at years `n·L` while `n·L < T` (L = service life; for brownfield assets the first
    replacement is at `L − current_age`): replacement cost `I_gross · (1 + r_inv)^t`, discounted.
 3. **Residual value** at year `T`: straight-line share of the last-installed unit's escalated purchase
-   price, entered as negative cost (VDI 2067).
+   price, entered as negative cost (VDI 2067). This is a **book value**, not a market-value estimate:
+   the price is escalated to the unit's own *installation* year and never to the horizon, then written
+   down straight-line over the service life and discounted from year `T`. What a used device would
+   actually fetch after `T` years is a resale question the engine deliberately does not model —
+   VDI 2067-1 and DIN EN 15459-1 both prescribe the book value, and it is the figure a reviewer can
+   re-derive from the timeline. Worked example:
+   `tests/worked_examples/end_to_end/replacement_and_residual_value.xlsx`.
 4. **Maintenance & fixed operation**: `(maintenance_rate · I_gross + fixed_operation_cost) · (1+r_gen)^t`.
 5. **Energy costs** per carrier: year-1 cost from `EnergyFlowFacts` (or the meter's simulated dynamic-
    tariff cost), split into working price (escalated), standing charge (escalated with the general
@@ -1237,7 +1244,23 @@ carry a slot-reordered band while their sum cannot; two separately booked entrie
 to the rent increase the tenant actually pays (the same representability limit as §6.5/B11). One
 consequence worth stating: the zero floor of the basis applies per paragraph pool, so an
 over-subsidized heating measure no longer nets its surplus against the envelope measures of the same
-package. Worked example: `tests/worked_examples/end_to_end/heating_levy_559e_mixed_package.xlsx`.
+package. Worked example: `tests/worked_examples/modernization_levy/heating_levy_559e_mixed_package.xlsx`.
+
+*Two simplifications, stated.* The levy model is deliberately narrower than the statute in two
+places, and both are conservative — they understate the rent a landlord may reach, never overstate
+it.
+
+1. **The §559 Abs. 3a cap is a six-year window, not a lifetime ceiling.** The statute caps the
+   increase *within six years*; after six years another increase is permitted. The engine models one
+   constant levy over the whole horizon, so a 20-year evaluation charges the tenant six years' worth
+   of cap for twenty years and credits the landlord the same. Modelling the real thing needs a
+   staircase of levy entries plus an assumption about whether a landlord actually re-raises, which is
+   rent-market behavior — see the non-goal below.
+2. **The comparable-rent ceiling (ortsübliche Vergleichsmiete) is out of scope.** A modernization
+   levy that pushes the rent past the locally comparable rent is contestable under German tenancy
+   law, but the engine has no rent-index data and no locality model, so it computes the levy from
+   §559/§559e alone. This is the same boundary as the "rent-market feedback" non-goal of §2: whether
+   the market bears the increase is not modelled, only what the legal cap allows.
 
 ### 6.5 Actor-level results and KPIs
 
@@ -1567,10 +1590,33 @@ implementation silently drops a component from every cost result. Countermeasure
   `cost_relevance: ClassVar[CostRelevance]` with values `PRICED` (must return facts),
   `FREE_OF_COST` (controllers, weather, idealized devices — must return `None`), or `METER`
   (must provide `EnergyFlowFacts`). The base class default is `UNDECLARED`.
-- **Completeness check at simulation start, not end.** During component registration, any `UNDECLARED`
-  component, or a `PRICED` component whose facts don't build, aborts with a message naming the class
-  and file. Strictness is configurable (`strict_cost_completeness`): hard error in CI and tests,
-  downgradeable to a warning for legacy system setups during migration.
+- **Completeness check at simulation start, not end.** `Simulator.check_cost_declarations` runs at
+  the top of `run_all_timesteps`, before the result directory is prepared and before the first
+  timestep: when `COMPUTE_LIFECYCLE_COSTS` (or `LIFECYCLE_COST_REPORT`) was requested, any
+  `UNDECLARED` component aborts the run with a message naming the class and its module, so a
+  year-long simulation cannot run for hours and then die in postprocessing. A `PRICED` component
+  whose facts don't build cannot be judged without the cost database and is caught by the
+  resolution check (§9.3) instead. There is no lenient mode and no `strict_cost_completeness`
+  flag: an undeclared component is always a hard error, because the alternative is a cost result
+  that is quietly incomplete. The bridge enforces the same rule independently — an `UNDECLARED`
+  component becomes an unresolved subject and aborts the evaluation under D7 — because the pre-run
+  check only sees the components one run registered, while a stored `economic_inputs.json` re-priced
+  later passes through no simulator at all.
+- **Fleet-wide, machine-checked.** Every `Component` subclass under `hisim.components` declares
+  `cost_relevance` in its *own* class body — inheriting a parent component's declaration does not
+  count, or a controller subclassing a priced device would be priced as one.
+  `tests/test_economics_adapter_contract.py::test_every_component_class_declares_cost_relevance`
+  is what makes that true rather than aspirational. The classification rule for the fleet: real
+  hardware is `PRICED` even when the cost database has no row for it yet (it then fails loudly
+  until someone adds the row), and `FREE_OF_COST` is reserved for controllers, weather,
+  load-profile providers, price signals and idealized or pass-through helpers. Building envelope
+  measures are *not* declared on the `Building` component; they enter as
+  `EconomicContext.extra_cost_facts` per element (§3.2b), which is why `Building` itself is
+  `FREE_OF_COST`.
+- **The same rule applies to the compatibility adapter** (§10.0): relevance is read off the class
+  declaration only — never inferred from the adapter's own tables — and every way of producing no
+  facts other than "this class is unknown and claims nothing" carries a reason that fails the
+  evaluation.
 
 Forgetting the cost model on a new component thus fails the very first test run — today, forgetting
 `get_cost_opex` merely produces a silent `NotImplementedError` swallowed by the None-filtering in
@@ -1689,8 +1735,9 @@ explicit final phase. Concretely, the following rules bind every phase except Ph
    CSV re-parse — is neither edited nor refactored.
 2. **Changes to existing files are purely additive**: a new `PostProcessingOptions` flag
    (`COMPUTE_LIFECYCLE_COSTS`), new optional methods on `Component` with a no-op default
-   (`get_cost_facts()` returning `None`), the `cost_relevance` class attribute (§9.2, metadata only,
-   warning-mode during the parallel phase). No existing line of calculation logic changes.
+   (`get_cost_facts()` returning `None`), the `cost_relevance` class attribute (§9.2 — metadata for
+   everything except the cost engine, which requires it). No existing line of calculation logic
+   changes.
 3. **Activation is opt-in and side-effect-free.** With the flag off, behavior is bit-identical to
    today. With the flag on, the new engine runs *in addition* and writes only new files
    (`lifecycle_costs.json`, `component_costs.*`, `cash_flow_timeline.csv`, `cost_audit.csv`,
@@ -1731,9 +1778,11 @@ data source as data-only PRs, whose effect is visible in the audit diff (§9.5).
 `observation_period = simulated period`, all rates 0, the engine reproduces today's
 "per simulated period" numbers exactly — verified via the shadow-mode parity report, not by modifying
 the old path. Unit tests against hand-calculated VDI 2067 / EN 15459 examples. This phase also ships
-the maintenance infrastructure of §9: `cost_relevance` declarations (additive, warning-mode), the
-pre-run resolution check, the auto-discovered contract test, the cost audit report, and the data-file
-CI (schema + coverage matrix) — so the safety net exists *before* any component adopts the new API.
+the maintenance infrastructure of §9: `cost_relevance` declarations (mandatory fleet-wide, machine-
+checked by the contract test, and enforced twice at run time — the pre-run completeness check and
+the bridge's D7 abort), the pre-run resolution check, the auto-discovered contract test, the cost
+audit report, and the data-file CI (schema + coverage matrix) — so the safety net exists *before*
+any component adopts the new API.
 
 **Phase 2 — parallel KPI set + per-component breakdowns.**
 The new lifecycle KPIs (§7.3) and the per-component visualization exports (§7.4) are emitted under
@@ -1911,9 +1960,11 @@ revertable by turning the flag off.
     re-running scheme selection per scenario.
 
 **Cross-cutting (maintainability, §9)**
-14. Enforcement strictness rollout: when does `strict_cost_completeness` flip from warning to hard
-    error — per system setup, or globally at cutover (Phase 7)? Proposal: error in CI from Phase 1,
-    error everywhere at cutover.
+14. ~~Enforcement strictness rollout: when does `strict_cost_completeness` flip from warning to hard
+    error — per system setup, or globally at cutover (Phase 7)?~~ **Decided: no rollout and no
+    flag.** Declaration is mandatory from the start and an undeclared component aborts the
+    evaluation everywhere (§9.2). The flag was never implemented; the leniency it promised is what
+    would have let a component disappear from a cost result.
 15. Capacity-field convention for the contract test's scaling check: dataclass field metadata
     (`field(metadata={"capacity": True})`, proposal) vs. a `get_capacity_field_name()` classmethod on
     `ConfigBase`.

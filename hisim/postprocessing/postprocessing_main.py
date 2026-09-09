@@ -73,6 +73,29 @@ def _load_attribute(module_name: str, attribute_name: str) -> Any:
     return getattr(importlib.import_module(module_name), attribute_name)
 
 
+def _propagating_cost_errors() -> Tuple[type, ...]:
+    """Exception types a lifecycle-cost failure must propagate instead of logging and continuing.
+
+    Computing lifecycle costs is opt-in, so a cost model that cannot describe the simulated fleet
+    is a failed run rather than a log line (cost_spec.md §9.2, decision D7). `CostDataError` is
+    the typed marker for exactly that class of failure — `UnresolvableSubjectsError`, raised for
+    an undeclared or otherwise undescribable component, is one — while everything else coming out
+    of the engine is an accident that must still not cost a user their simulation results.
+
+    Resolved through `_load_attribute` and behind a guard so that the *handler* can never fail:
+    if `hisim.economics` itself will not import, there is no typed error to recognize and the
+    caller's broad handler should log whatever went wrong rather than re-raise blindly.
+
+    Returns:
+        A tuple usable directly as the second argument of `isinstance`; empty when the cost
+        package could not be imported, which makes every exception fall through to the log.
+    """
+    try:
+        return (_load_attribute("hisim.economics.catalog_entries", "CostDataError"),)
+    except Exception:  # pylint: disable=broad-except
+        return ()
+
+
 class PostProcessor:
     """Entry point that orchestrates HiSim's post-processing stage.
 
@@ -293,6 +316,47 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Writing network charts to report took " + f"{duration:1.2f}s.")
+        # Parallel lifecycle cost engine (cost_spec.md §10): strictly additive, writes only new
+        # files. It runs BEFORE the legacy COMPUTE_OPEX/COMPUTE_CAPEX blocks because the legacy
+        # get_cost_capex mutates component configs as a side effect (overwrite_config_values...)
+        # and would contaminate the facts the new engine reads (§10.0 rule 4). The parity
+        # report, which needs the legacy CSVs, is written in a second block further down.
+        # LIFECYCLE_COST_REPORT implies the computation and adds the human-readable reports.
+        if (
+            PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS in ppdt.post_processing_options
+            or PostProcessingOptions.LIFECYCLE_COST_REPORT in ppdt.post_processing_options
+        ):
+            log.information("Computing lifecycle costs (parallel cost engine).")
+            start = timer()
+            try:
+                compute_lifecycle_costs = _load_attribute("hisim.economics.bridge", "compute_lifecycle_costs")
+                compute_lifecycle_costs(
+                    wrapped_components=ppdt.wrapped_components,
+                    all_outputs=ppdt.all_outputs,
+                    postprocessing_results=ppdt.results,
+                    simulation_parameters=ppdt.simulation_parameters,
+                    generate_report=(
+                        PostProcessingOptions.LIFECYCLE_COST_REPORT in ppdt.post_processing_options
+                    ),
+                )
+            except Exception as err:  # pylint: disable=broad-except
+                # Asking for lifecycle costs is opt-in, so an answer that cannot be produced is a
+                # failed run rather than a log line: a CostDataError — and hence the D7
+                # UnresolvableSubjectsError raised for an undeclared or otherwise undescribable
+                # component (cost_spec.md §9.2, §8) — propagates and fails postprocessing.
+                # Everything else is an accident in the parallel engine and must still not cost a
+                # user their simulation results, so it stays a logged error. What that leniency
+                # must not do is leave a *partial* cost export set behind for a later reader to
+                # take as complete, and it does not: `compute_lifecycle_costs` removes the files it
+                # had already written before letting anything propagate, so this branch is reached
+                # with the cost files either all there or none of them.
+                if isinstance(err, _propagating_cost_errors()):
+                    raise
+                log.error(f"Lifecycle cost engine failed (legacy outputs are unaffected): {err}")
+            end = timer()
+            duration = end - start
+            log.information("Computing lifecycle costs took " + f"{duration:1.2f}s.")
+
         if PostProcessingOptions.COMPUTE_OPEX in ppdt.post_processing_options:
             log.information(
                 "Computing and writing operational costs and C02 emissions produced in operation to report."
@@ -324,6 +388,21 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Computing and writing KPIs to report took " + f"{duration:1.2f}s.")
+
+        # Shadow-mode parity (cost_spec.md §9.7): compares the legacy CSVs written above
+        # (read-only) against the facts the lifecycle engine captured BEFORE the legacy path
+        # ran, so legacy config mutation cannot fake agreement.
+        if (
+            PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS in ppdt.post_processing_options
+            or PostProcessingOptions.LIFECYCLE_COST_REPORT in ppdt.post_processing_options
+        ) and PostProcessingOptions.COMPUTE_CAPEX in ppdt.post_processing_options:
+            try:
+                write_parity_from_stored_inputs = _load_attribute(
+                    "hisim.economics.bridge", "write_parity_from_stored_inputs"
+                )
+                write_parity_from_stored_inputs(simulation_parameters=ppdt.simulation_parameters)
+            except Exception as err:  # pylint: disable=broad-except
+                log.error(f"Lifecycle cost parity report failed (legacy outputs are unaffected): {err}")
 
         # only a single day has been calculated. This gets special charts for debugging.
         if (

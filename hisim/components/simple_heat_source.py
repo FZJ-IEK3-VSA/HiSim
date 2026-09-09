@@ -21,6 +21,7 @@ from hisim.component import ComponentInput, ComponentConnection, OpexCostDataCla
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components import weather
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -277,6 +278,8 @@ class SimpleHeatSourceState:
 
 class SimpleHeatSource(cp.Component):
     """Heat Source implementation."""
+
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"

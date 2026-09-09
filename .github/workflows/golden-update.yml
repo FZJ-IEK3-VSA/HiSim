@@ -26,8 +26,20 @@ jobs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
       - uses: actions/checkout@v6
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
       - id: gen
         run: echo "matrix=$(python3 scripts/golden_matrix.py)" >> "$GITHUB_OUTPUT"
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report
 
   update:
     name: regenerate ${{ matrix.setup }} / ${{ matrix.param }}
@@ -43,6 +55,12 @@ jobs:
       matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v6
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
+          scope: ${{ matrix.setup }}-${{ matrix.param }}
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
@@ -55,6 +73,14 @@ jobs:
           name: golden-${{ matrix.setup }}-${{ matrix.param }}
           path: golden_references/${{ matrix.setup }}__${{ matrix.param }}.json
           if-no-files-found: error
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report
+          scope: ${{ matrix.setup }}-${{ matrix.param }}
 
   collect:
     name: assemble goldens and open PR
@@ -69,6 +95,11 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v6
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Download all regenerated goldens
@@ -142,3 +173,10 @@ jobs:
           except urllib.error.HTTPError as exc:  # surface the API error body, not just a code
               raise SystemExit(f"PR creation failed ({exc.code}): {exc.read().decode()}")
           PY
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report

@@ -12,6 +12,7 @@ from hisim.component import Component, ComponentInput, ComponentOutput, SingleTi
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, IEK-3"
@@ -97,6 +98,8 @@ class FuelCellControllerConfig(ConfigBase):
 
 class FuelCellController(Component):
     """Fuel Cell Controller class."""
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     DemandProfile = "DemandProfile"

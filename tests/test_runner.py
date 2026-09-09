@@ -124,7 +124,12 @@ def test_load_config_real_file_setups_and_params() -> None:
     factories = {p.factory for p in cfg.parameter_sets}
     assert factories == {"one_week_only", "full_year"}
     for ps in cfg.parameter_sets:
-        assert set(ps.post_processing_options) == {"COMPUTE_KPIS", "WRITE_KPIS_TO_JSON"}
+        assert set(ps.post_processing_options) == {
+            "COMPUTE_OPEX",
+            "COMPUTE_CAPEX",
+            "COMPUTE_KPIS",
+            "WRITE_KPIS_TO_JSON",
+        }
 
 
 def test_load_config_real_file_setups_exist_on_disk() -> None:

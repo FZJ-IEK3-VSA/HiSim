@@ -24,6 +24,7 @@ from hisim import utils
 from hisim import component as cp
 from hisim.simulationparameters import SimulationParameters
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.economics.facts import CostRelevance
 
 
 @dataclass_json
@@ -140,6 +141,8 @@ class CSVLoader(cp.Component):
     component state.
 
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     Output1: str = "CSVProfile"
 

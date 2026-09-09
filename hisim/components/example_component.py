@@ -12,6 +12,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim import loadtypes as lt
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -84,6 +85,8 @@ class ExampleComponent(Component):
         Defaults to an empty :py:class:`~hisim.config.DisplayConfig`.
 
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     ThermalEnergyDelivered: str = "ThermalEnergyDelivered"
 

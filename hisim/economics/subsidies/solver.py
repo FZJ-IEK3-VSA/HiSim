@@ -440,7 +440,9 @@ def solve_cumulation(
 
     Returns:
         The full :class:`SubsidyDecision`: the chosen combination's awards, plus rejected,
-        undetermined, the optimistic bound and the per-slot alternatives.
+        undetermined, the optimistic bound, the per-slot alternatives and the objective value the
+        chosen combination scored (``discounted_support_in_euro``, the BEST_ESTIMATE-slot
+        :func:`_support_value` of ``applied``).
 
     Raises:
         SubsidyDataError: If either scheme set exceeds MAX_CUMULATION_SCHEMES.
@@ -503,6 +505,8 @@ def solve_cumulation(
         best_per_slot[slot_name] = slot_best[1] if slot_best and slot_best[1] != chosen_key else None
     decision.applied = best_awards
     decision.other_slot_optimal_combination = best_per_slot
+    # The objective value the choice was made on, published rather than recomputed downstream.
+    decision.discounted_support_in_euro = best_value
     # Optimistic upper bound over undetermined schemes: value if they all were eligible too.
     # Re-solving over eligible + undetermined (rather than adding the undetermined schemes' values)
     # is necessary because exclusions and caps make the best combination change, not just grow. The

@@ -24,6 +24,7 @@ import pandas as pd
 from hisim import config as cfg
 from hisim import loadtypes as lt
 from hisim import log
+from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
@@ -214,6 +215,15 @@ class SingleTimeStepValues:
 
 class Component:
     """Base class for all components."""
+
+    # Cost role declaration for the lifecycle cost engine (cost_spec.md §9.2). PRICED
+    # components must return facts from `get_cost_facts()` or have an adapter table entry,
+    # FREE_OF_COST components must return None, METER components provide
+    # `get_energy_flow_facts()`. Every subclass must override this in its own class body:
+    # UNDECLARED is only the loadable default, and a component that still carries it aborts any
+    # lifecycle-cost run it appears in — at simulation start via
+    # `Simulator.check_cost_declarations`, and again in the postprocessing bridge under D7.
+    cost_relevance: ClassVar[CostRelevance] = CostRelevance.UNDECLARED
 
     @classmethod
     def get_classname(cls):
@@ -537,6 +547,64 @@ class Component:
         """Calculates lifetime, total capital expenditure cost and total co2 footprint of production of device."""
         raise NotImplementedError(f"{config.get_main_classname()} has no capex costs implemented.")
 
+    def get_cost_facts(self) -> Optional[ComponentCostFacts]:
+        """Return cost-relevant facts for the lifecycle cost engine, or None (cost_spec.md §3.3).
+
+        Components declare, the engine computes: no prices, no discounting, no dataframe
+        access here. The default (None) means "this component contributes no cost facts" —
+        controllers, weather and occupancy simply don't override this hook. It does *not* mean
+        "not part of the cost model": that is decided by `cost_relevance` alone, and a component
+        returning None while declaring `PRICED` is a hard failure rather than a free device.
+
+        Called once per component after the simulation and before any legacy cost code runs, via
+        `hisim.economics.adapter.get_cost_facts` (which falls back to a compatibility table for
+        components that have not adopted this hook); the returned facts become one priced subject
+        of every perspective. An overriding component states what it *is* (asset class, size and unit,
+        technical attributes) and at most a per-field override where it genuinely knows better
+        than the cost database — never a price it computed itself. Which of the two behaviors is
+        expected is declared by the class attribute `cost_relevance` above, so a forgotten
+        override is caught by the completeness check instead of silently dropping the component
+        from the cost report. That declaration is mandatory: see `cost_relevance` for the two
+        places an undeclared component aborts.
+        """
+        return None
+
+    def get_energy_flow_facts(
+        self,
+        all_outputs: List,  # pylint: disable=unused-argument
+        postprocessing_results: pd.DataFrame,  # pylint: disable=unused-argument
+    ) -> Optional[EnergyFlowFacts]:
+        """Return the carrier flows a meter measured, or None for non-meters (cost_spec.md §3.4).
+
+        The billing counterpart of `get_cost_facts`: only components sitting at a carrier boundary
+        (the electricity/gas/fuel/heating meters) override it, and they report the energy that
+        actually crossed that boundary over the simulated period. Billing energy exclusively at
+        those boundaries is what makes double counting impossible by construction — a device's own
+        consumption is never priced a second time.
+
+        Unlike `get_cost_facts` this hook needs the results frame, because the answer is an
+        integral over the whole run rather than a property of the configuration.
+
+        It is the *first* thing `hisim.economics.bridge` asks a component about its flows, exactly
+        as `get_cost_facts` is asked before the adapter's cost table (§9.1); only a component that
+        returns None here falls back to the class-name `adapter.get_meter_spec` table. One
+        determinant of the richer `BillingDeterminants` of §8.4 cannot be expressed in this record
+        — the capacity-charge peaks — and it keeps coming from the `MeterSpec` of a component that
+        also has a table entry. The energy itself is always kWh, whatever the carrier; fuels the
+        market quotes per ton or per liter are converted on the price side (D26), so a meter never
+        has to report anything but kWh. A meter with no table entry is billed without capacity
+        charges, and it must declare `cost_relevance = METER` itself, since the relevance
+        inference cannot call a hook that needs the results frame.
+
+        Args:
+            all_outputs: All component outputs, positionally aligned with the result columns.
+            postprocessing_results: The simulation results frame.
+
+        Returns:
+            The measured flows for one carrier, or None if this component is not a meter.
+        """
+        return None
+
     def get_component_kpi_entries(
         self,
         all_outputs: List,  # pylint: disable=unused-argument
@@ -553,6 +621,38 @@ class Component:
         if self.MODELS_NO_DEVICE:
             return []
         raise NotImplementedError(f"{self.component_name} has no kpis implemented.")
+
+    def component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Return this component's KPI entries, each of them naming this component as its source.
+
+        Callers use this rather than :meth:`get_component_kpi_entries` directly, because an entry
+        has to know which component produced it and the overridable method cannot be relied on to
+        say so: the source name is what tells two instances of one class apart once their entries
+        meet in one building's KPI collection, and roughly forty components build their entries by
+        hand, so leaving the field to them means every one of them is one forgotten argument away
+        from a KPI that silently overwrites its sibling. Stamping it here, on the instance that
+        knows its own name, makes the field a property of the collection rather than of each
+        component's discipline. An entry that already names a source keeps it, so a component that
+        reports on behalf of another one is not relabelled.
+
+        Args:
+            all_outputs: Every output of the simulation, as the KPI methods expect them.
+            postprocessing_results: The result time series, column-aligned with ``all_outputs``.
+
+        Returns:
+            List[KpiEntry]: the component's entries, with ``name_of_source_component`` filled in.
+        """
+        kpi_entries = self.get_component_kpi_entries(
+            all_outputs=all_outputs, postprocessing_results=postprocessing_results
+        )
+        for kpi_entry in kpi_entries:
+            if kpi_entry.name_of_source_component is None:
+                kpi_entry.name_of_source_component = self.component_name
+        return kpi_entries
 
     def capital_cost_data(
         self, simulation_parameters: Optional[SimulationParameters] = None

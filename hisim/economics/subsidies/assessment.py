@@ -377,6 +377,13 @@ class SubsidyDecision:
     Produced by :func:`solve_cumulation`, carried on the subsidy application result, and surfaced
     to users in three places: the subsidy decision cards of the HTML report, the ``cost_audit.csv``
     row of the measure, and the exported JSON via :meth:`to_json`.
+
+    ``discounted_support_in_euro`` is the solver's own objective value for the combination it
+    chose — the present value of everything the applied awards pay, on the BEST_ESTIMATE slot, as
+    computed by ``solver._support_value``. It is reported because it is the number the choice was
+    actually made on: without it a reader can see *which* schemes won but not by how much, and any
+    consumer wanting the figure would have to re-add the awards under its own discounting
+    convention, which is how two "support NPVs" that disagree get into a report.
     """
 
     measure_subject: str
@@ -388,6 +395,8 @@ class SubsidyDecision:
     undetermined_upper_bound_in_euro: float = 0.0
     # Whether a different combination would have been optimal in LOW or HIGH (§3.9):
     other_slot_optimal_combination: Dict[str, Optional[str]] = field(default_factory=dict)
+    # The solver's objective value for `applied`, on the BEST_ESTIMATE slot (see class doc):
+    discounted_support_in_euro: float = 0.0
 
     def to_json(self) -> dict:
         """Serializes the audit trail.
@@ -421,6 +430,7 @@ class SubsidyDecision:
             "undetermined": self.undetermined,
             "undetermined_upper_bound_in_euro": self.undetermined_upper_bound_in_euro,
             "other_slot_optimal_combination": self.other_slot_optimal_combination,
+            "discounted_support_in_euro": self.discounted_support_in_euro,
         }
 
 

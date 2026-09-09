@@ -84,6 +84,7 @@ class CheckIds:
     CHECK_MAINTENANCE_RATIO = "maintenance_to_investment_ratio"
     CHECK_BAND_WIDTH = "band_width"
     CHECK_FLEXIBILITY_VALUE = "flexibility_value_sign"
+    CHECK_SIMULATED_PERIOD = "simulated_period_extrapolated"
 
 
 class PlausibilityCategories:
@@ -530,8 +531,48 @@ def _magnitude_findings(
     return findings
 
 
+def _extrapolation_findings(simulated_period_fraction: Optional[float]) -> List[PlausibilityFinding]:
+    """A WARN when the results were extrapolated from less than a simulated year (§8.5).
+
+    A run shorter than a year is annualized by dividing its energy quantities by the simulated
+    fraction, so a one-day run multiplies everything by 365 — and the resulting lifecycle figures
+    are an extrapolation of one day's weather, occupancy and control behaviour, not a measurement.
+    Nothing in the output said so: the numbers look exactly like a full-year run's, and the
+    factor lives nowhere a reader of `cost_summary.md` or the HTML report can see it.
+
+    It is a check rather than only a log line because a log line is gone by the time anyone reads
+    the report, and it is WARN rather than FAIL because such a run is a perfectly legitimate thing
+    to do — the figures are just not what they appear to be. The finding carries the fraction as
+    its value and the extrapolation factor in `context`, so a renderer can quote either.
+
+    Args:
+        simulated_period_fraction: The share of a year the simulation covered, or None when the
+            caller does not know it (the `report` CLI on stored results, the golden fixtures).
+
+    Returns:
+        One WARN finding for a partial year, and nothing at all for a full year or an unknown
+        fraction — a panel row saying "this run covered a whole year" is noise.
+    """
+    if simulated_period_fraction is None or simulated_period_fraction >= 1.0:
+        return []
+    fraction = max(simulated_period_fraction, 1e-12)
+    return [
+        PlausibilityFinding(
+            check_id=CheckIds.CHECK_SIMULATED_PERIOD,
+            name="simulated period covers a full year",
+            status=CheckStatus.WARN,
+            value=simulated_period_fraction,
+            unit="of a year",
+            bounds=(1.0, 1.0),
+            context={"extrapolation_factor": 1.0 / fraction},
+        )
+    ]
+
+
 def run_plausibility_checks(
-    matrix: EvaluationMatrix, config: Optional[PlausibilityConfig] = None
+    matrix: EvaluationMatrix,
+    config: Optional[PlausibilityConfig] = None,
+    simulated_period_fraction: Optional[float] = None,
 ) -> PlausibilityReport:
     """The automated panel: structural invariants (FAIL) and magnitude ranges (WARN).
 
@@ -552,6 +593,9 @@ def run_plausibility_checks(
             emitted in.
         config: Thresholds to judge against; loaded from `cost_database/plausibility_checks.json`
             when omitted.
+        simulated_period_fraction: The share of a year the run covered, when the caller knows it.
+            Only the postprocessing bridge does; passing it adds the §8.5 extrapolation warning to
+            the panel, and omitting it leaves the panel exactly as it was.
 
     Returns:
         A `PlausibilityReport` whose findings are ordered structural-first, then magnitude.
@@ -573,6 +617,7 @@ def run_plausibility_checks(
             ]
         )
     reference = next(iter(matrix.results.values()))
-    findings = _structural_findings(matrix, config)
+    findings = _extrapolation_findings(simulated_period_fraction)
+    findings.extend(_structural_findings(matrix, config))
     findings.extend(_magnitude_findings(reference, config))
     return PlausibilityReport(findings)

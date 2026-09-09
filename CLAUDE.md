@@ -114,6 +114,14 @@ Central registry of enums: `LoadTypes`, `Units`, `ComponentType`, `InandOutputTy
 ### units.py
 Provides a typed `Quantity` system (`Watt`, `KiloWattHour`, etc.) for stronger unit safety. Distinct from the `lt.Units` enum used in I/O declarations.
 
+### CI resource monitoring (`.github/actions/resource-monitor/`, `scripts/ci_*.py`)
+Every CI job measures its own wall time, CPU time and peak memory (cgroup v2) via the
+`resource-monitor` composite action, called `mode: start` after checkout and `mode: report`
+under `if: always()`. The nightly `ci-usage` workflow sweeps the jobs API plus those
+artifacts and writes an overview — per-workflow runner-minutes, jobs that got slower or
+hungrier, jobs near the 16 GB runner limit — into its own job summary. Nothing is committed.
+See `.github/ci-monitoring.md`; the probe never fails the job it measures.
+
 ### RenoVisor translator (`hisim/renovisor/`)
 All RenoVisor translation code lives in `hisim/renovisor/` — schema validation (`schema.py`), measure application (`measures.py`), request→setup mapping (`mapping.py`), TABULA lookup (`tabula_ie.py`), in-process simulation runner (`runner.py`), REST upload (`uploader.py`), and the CLI (`__main__.py`). Spec: `hisim/renovisor/spec.md`; usage: `hisim/renovisor/how_to_use.md`; example requests in `hisim/renovisor/examples/`. Tests: `tests/test_renovisor_*.py`. Run via `python -m hisim.renovisor run <request.json> --variant {base|measures}`.
 

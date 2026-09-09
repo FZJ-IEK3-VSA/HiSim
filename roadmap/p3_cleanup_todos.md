@@ -10,12 +10,23 @@ open, so nothing survives only in a conversation. Items are removed when done, n
 
 ## Missing deliverables (code)
 
-- [ ] **Multi-instance KPI collision (found 2026-09-05 while implementing the CHP KPIs).** Two
-  components of one class in one building collapse into a single flattened KPI group: the two
-  batteries of `dynamic_components` report one `BUI1.Battery.*` set, one instance silently
-  overwriting the other, and the two CHPs now do the same. Pre-existing and systemic — the flatten
-  key is building.tag.name and ignores the entry's source component. Fixing it renames KPIs and
-  therefore re-blesses references; its own PR, after the gate has settled.
+- [x] **Multi-instance KPI collision — fixed 2026-09-07 on `kpi_multi_instance`.**
+  `Component.component_kpi_entries` is now the method the collector calls: it asks the overridable
+  `get_component_kpi_entries` and stamps every entry that names no source with the component's own
+  name, so no component has to remember the field. `KpiPreparation.keyed_component_entries` then
+  keys one building's entries: where several components share an entry name, each keys as
+  `"<name> (<source component>)"`, a collision whose colliders do not all name a source is refused
+  rather than silently overwritten, and one component emitting a name twice is refused too.
+  `Building`'s duplicate emission is hoisted out of its per-output loop, the diesel car's two
+  entries got distinct names, and the meter lookup in `read_opex_and_capex_costs_from_results`
+  matches an entry's own `name` instead of the collection key and sums across the meters of a
+  building, so qualification neither zeroes a general KPI nor lets one of two meters stand for
+  both. Seven goldens re-blessed (`dynamic_components` plus the six setups whose collisions had
+  been hiding a component). Remove this entry once it is on main.
+- [ ] **Stable KPI addresses.** Keys are still volatile (bare unless a collision exists) and
+  consumers rebuild key strings by hand. Spec: `roadmap/kpi_address_spec.md`; its own PR after #653
+  is on main.
+
 
 ## Decision needed (owner)
 
@@ -35,8 +46,9 @@ open, so nothing survives only in a conversation. Items are removed when done, n
   `full_year_all_options`, and COMPUTE_OPEX/COMPUTE_CAPEX run before COMPUTE_KPIS — both
   components are real devices (MODELS_NO_DEVICE would be a lie) with no `get_cost_opex`/
   `get_cost_capex`, so the stock all-options run still dies before the new KPIs compute.
-  Pre-existing, and the golden gate runs the setup KPI-only; fixing it means real cost data for
-  both devices, its own small PR.
+  Pre-existing, and the golden gate now runs COMPUTE_OPEX and COMPUTE_CAPEX as well (from
+  `golden_gate_costs` on), so the building-level cost KPIs are pinned by the references; fixing it
+  means real cost data for both devices, its own small PR.
 - [ ] **Extract the shared child-recorder helper** (decided 2026-09-05, #638 review round; both
   #636 and #638 are on main, so this is unblocked). `scripts/record_all_setups.py::Recorder` and
   `hisim/energy_system/recording/probe_session.py::ProbeRunner` both build the identical child
@@ -44,13 +56,6 @@ open, so nothing survives only in a conversation. Items are removed when done, n
   variable and run the same subprocess shape — deliberate duplication while the two lived on
   different stack branches. The helper's home is the recording package, with the script importing
   it.
-- [ ] **Flip `energy-system-freshness` from advisory to blocking after its burn-in** (decided
-  2026-09-05, #636 review round). The gate merged with `continue-on-error: true` because
-  byte-identical re-recording is proven by test for one setup and only by design for the other
-  twenty-one; after a week of green runs on main (first green run 2026-09-06, so due around
-  2026-09-13), delete that one line (the workflow header carries the same instruction) and the
-  gate blocks. That first green run on development-box twins is also AC-P3.4's cross-machine
-  evidence; the week of them is the confidence.
 
 ## Deferred by design (not P3's debt, listed so it is findable)
 
@@ -74,3 +79,7 @@ probe column of every one of them reproduces its flat recording byte for byte; t
 single-configuration setups stay flat by decision. State page:
 `roadmap/declarative_energy_systems/grouping_overview.md`; what each setup cost and what it
 turned up: `roadmap/declarative_energy_systems/grouping_worklist.md`.
+
+The freshness gate flipped to blocking: 2026-09-08, #654 — eleven green runs on main
+across 2026-09-06..08 (one cancelled by a newer push, none failed), which the owner judged
+sufficient to grant the bit ahead of the nominal week.

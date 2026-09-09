@@ -1,0 +1,51 @@
+# GENERATED from loan_interest_only_bullet_10y_4pct.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "loan_interest_only_bullet_10y_4pct"
+group: "financing"
+spec_section: "4.4"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "50,000 EUR interest-only loan over 10 years at 4 %. Nothing amortizes before maturity, so every year carries the same interest on the full principal and the whole principal is repaid as a bullet in the final year."
+inputs:
+  principal_in_euro: 50000
+  interest_rate: 0.04
+  duration_in_years: 10
+  loan_type: "INTEREST_ONLY_WITH_BULLET"
+expected:
+  interest_year_1_in_euro:
+    value: 2000.00
+    abs_tol: 0.01
+    derivation: "principal_in_euro*interest_rate"
+  interest_year_5_in_euro:
+    value: 2000.00
+    abs_tol: 0.01
+    derivation: "principal_in_euro*interest_rate"
+    note: "the debt never shrinks, so every year pays the same interest"
+  interest_year_10_in_euro:
+    value: 2000.00
+    abs_tol: 0.01
+    derivation: "principal_in_euro*interest_rate"
+  principal_repayment_year_9_in_euro:
+    value: 0.00
+    abs_tol: 0.01
+    note: "constant, not a formula: an interest-only loan amortizes nothing before maturity"
+  principal_repayment_year_10_in_euro:
+    value: 50000.00
+    abs_tol: 0.01
+    derivation: "principal_in_euro"
+    note: "the bullet"
+  remaining_debt_year_9_in_euro:
+    value: 50000.00
+    abs_tol: 0.01
+    derivation: "principal_in_euro"
+  remaining_debt_year_10_in_euro:
+    value: 0.00
+    abs_tol: 0.01
+    derivation: "principal_in_euro-principal_repayment_year_10_in_euro"
+  total_interest_in_euro:
+    value: 20000.00
+    abs_tol: 0.01
+    derivation: "principal_in_euro*interest_rate*duration_in_years"
+  total_payments_in_euro:
+    value: 70000.00
+    abs_tol: 0.01
+    derivation: "total_interest_in_euro+principal_in_euro"

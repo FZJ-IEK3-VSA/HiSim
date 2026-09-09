@@ -55,6 +55,11 @@ jobs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
       - uses: actions/checkout@v6
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
       - id: gen
         # week for automatic triggers; the chosen horizon for a manual dispatch.
         # golden_matrix.py is stdlib-only, so no dependency install is needed here.
@@ -66,6 +71,13 @@ jobs:
           fi
           echo "horizon=$horizon"
           echo "matrix=$(python3 scripts/golden_matrix.py --horizon "$horizon")" >> "$GITHUB_OUTPUT"
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report
 
   golden-yaml:
     name: golden-yaml ${{ matrix.setup }} / ${{ matrix.param }}
@@ -81,6 +93,12 @@ jobs:
       matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v6
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
+          scope: ${{ matrix.setup }}-${{ matrix.param }}
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
@@ -96,8 +114,9 @@ jobs:
           python scripts/golden_check.py \
             --mode yaml \
             --setup "${{ matrix.setup }}" --param "${{ matrix.param }}"
+      # Failure-only, for the reason spelled out in golden-json-check.yml.
       - name: Upload deviation report
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v6
         with:
           name: golden-yaml-report-${{ matrix.setup }}-${{ matrix.param }}
@@ -110,6 +129,14 @@ jobs:
         with:
           mode: save
           scope: ${{ github.workflow }}-${{ matrix.setup }}-${{ matrix.param }}
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report
+          scope: ${{ matrix.setup }}-${{ matrix.param }}
 
   summary:
     name: golden-yaml-check summary

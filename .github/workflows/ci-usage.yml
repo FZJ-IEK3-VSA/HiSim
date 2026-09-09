@@ -1,0 +1,116 @@
+# Reports what the repository's CI cost overnight and, more usefully, what changed: which
+# jobs have got slower or hungrier than they were, which are close to the runner's memory
+# limit, and where the runner-minutes go. The numbers come from two places -- job durations
+# from the jobs API, which reports them for free, and peak memory and real CPU time from the
+# artifacts the resource-monitor action uploads from every job, because GitHub reports
+# neither anywhere.
+#
+# The report lands in this workflow's own job summary, which is the whole user interface:
+# open the newest run and read it. Nothing is committed to the repository.
+#
+# The sweep is incremental, and has to be. At roughly 150 runs a day it would take some 9000
+# API requests to re-read the last month, against the 1000 an hour GITHUB_TOKEN allows, so
+# each night downloads the previous night's index, reads only what is newer, and uploads the
+# index again. The first run after the index expires or is deleted starts cold and covers
+# only as far back as its request budget reaches; the following nights fill in from there.
+
+name: ci-usage
+
+on:
+  schedule:
+    # Nightly, off the hour: scheduled runs queue behind everyone else's on the hour.
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+    inputs:
+      window-days:
+        description: How far back to report.
+        required: false
+        default: '30'
+      recent-days:
+        description: How much of the window counts as recent when looking for regressions.
+        required: false
+        default: '3'
+
+permissions:
+  # actions: read is what lets the collector see other workflows' runs, jobs and artifacts.
+  actions: read
+  contents: read
+
+concurrency:
+  group: ci-usage
+  # Two sweeps writing the index over each other would leave a torn watermark behind.
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: report CI resource usage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # This job measures itself too, which is the cheapest possible check that the action
+      # still works: if the summary below has no resource table, the monitor is broken.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
+
+      - name: Restore the previous index
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The newest unexpired artifact under the fixed index name, whichever run wrote it.
+          # Every failure here is survivable -- a missing index means a cold start, not a
+          # broken report -- so nothing in this step is allowed to fail the job.
+          set +e
+          artifact_id="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=ci-usage-index&per_page=1" \
+            --jq '.artifacts[] | select(.expired == false) | .id' 2>/dev/null | head -1)"
+          if [ -z "$artifact_id" ]; then
+            echo "No previous index found; starting cold."
+            exit 0
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > index.zip 2>/dev/null \
+            && unzip -o index.zip >/dev/null 2>&1 \
+            && echo "Restored index from artifact ${artifact_id}." \
+            || echo "Could not restore artifact ${artifact_id}; starting cold."
+          rm -f index.zip
+          exit 0
+
+      - name: Collect and report
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WINDOW_DAYS: ${{ inputs.window-days || '30' }}
+          RECENT_DAYS: ${{ inputs.recent-days || '3' }}
+        run: |
+          python3 scripts/ci_usage_report.py \
+            --window-days "$WINDOW_DAYS" \
+            --recent-days "$RECENT_DAYS" \
+            --index ci-usage-index.json \
+            --out ci-usage-report.md
+
+      # A fixed name, so tomorrow night knows what to look for. Kept short: it is rewritten
+      # every night and only has to outlive a run of failed ones.
+      - name: Save the index for tomorrow
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ci-usage-index
+          path: ci-usage-index.json
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ci-usage-report
+          path: ci-usage-report.md
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report

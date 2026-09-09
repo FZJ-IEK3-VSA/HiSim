@@ -394,6 +394,79 @@ class TestBrownfieldAndStatusQuo:
         like_for_like = database.get_device_entry(ComponentType.GAS_HEATER, 2024, "DE").investment_for_size(15.0)
         assert result.sunk_cost_written_off_in_euro.best_estimate == pytest.approx(like_for_like.best_estimate / 18.0)
 
+    def test_the_anyway_share_scales_the_credit(self, database):
+        """`credit = share x like-for-like cost`, and the default 1.0 is the old behaviour.
+
+        The methodology fix. Before it, replacing an existing asset credited **100 %** of the
+        like-for-like replacement against the measure, whatever the measure was — which credited a
+        first-time facade insulation with the full price of the insulation, against a facade that
+        would only ever have been repaired. The share is the fraction the counterfactual would
+        truly have spent, and this pins both that it is applied and that leaving it at its default
+        reproduces the previous figure exactly.
+        """
+        params = zero_rate_parameters(horizon=20)
+        evaluator = EconomicEvaluator(database, params)
+
+        def credit_at(share: float) -> float:
+            """The ANYWAY_COST_CREDIT NPV of the standard replacement case at the given share."""
+            register = self._register(age_years=17, replaced=True)
+            register.assets[0].anyway_share = share
+            inputs = EvaluationInputs(
+                simulation_year=2024,
+                simulated_period_fraction=1.0,
+                cost_facts=[SubjectCostFacts("HeatPump", make_facts(16000.0, 18.0))],
+                existing_assets=register,
+            )
+            perspective = Perspective(
+                id="brownfield",
+                installation_context=InstallationContext.BROWNFIELD,
+                subsidy_mode=SubsidyMode.none(),
+            )
+            result = evaluator.evaluate(inputs, perspective)
+            return result.npv_by_category[CostCategory.ANYWAY_COST_CREDIT].best_estimate
+
+        full = credit_at(1.0)
+        third = credit_at(0.3)
+        assert third == pytest.approx(full * 0.3)
+        assert full < 0  # a credit, cost-negative
+
+    def test_the_applied_anyway_share_reaches_the_result_and_the_ledger(self, database):
+        """The share is disclosed, not just applied: on the result and in the provenance trail."""
+        from hisim.economics.provenance import ProvenanceLedger
+
+        params = zero_rate_parameters(horizon=20)
+        evaluator = EconomicEvaluator(database, params)
+        register = self._register(age_years=17, replaced=True)
+        register.assets[0].anyway_share = 0.3
+        inputs = EvaluationInputs(
+            simulation_year=2024,
+            simulated_period_fraction=1.0,
+            cost_facts=[SubjectCostFacts("HeatPump", make_facts(16000.0, 18.0))],
+            existing_assets=register,
+        )
+        perspective = Perspective(
+            id="brownfield", installation_context=InstallationContext.BROWNFIELD, subsidy_mode=SubsidyMode.none()
+        )
+        ledger = ProvenanceLedger()
+        result = evaluator.evaluate(inputs, perspective, ledger)
+        assert result.anyway_share_by_subject == {"HeatPump": 0.3}
+        credit = -result.npv_by_category[CostCategory.ANYWAY_COST_CREDIT].best_estimate
+        assert result.anyway_basis_by_subject["HeatPump"] == pytest.approx(credit / 0.3)
+        details = [record.detail or "" for record in ledger.records]
+        assert any("anyway credit = 30% x like-for-like cost" in detail for detail in details), details
+
+    def test_an_anyway_share_outside_the_unit_interval_is_refused(self):
+        """A share of 0, a negative one or one above 1 is a data error, named at the asset."""
+        for share in (0.0, -0.2, 1.5, float("nan")):
+            with pytest.raises(ValueError, match="anyway_share"):
+                ExistingAsset(
+                    asset_class=ComponentType.GAS_HEATER,
+                    size=15.0,
+                    size_unit=Units.KILOWATT,
+                    installation_year=2010,
+                    anyway_share=share,
+                )
+
     def test_kept_asset_outliving_the_horizon_earns_no_residual(self, database):
         """A kept asset whose install was never charged gets no year-T residual (§3.6 rule 3).
 

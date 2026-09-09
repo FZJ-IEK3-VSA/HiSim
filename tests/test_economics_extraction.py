@@ -51,7 +51,7 @@ import pandas as pd
 import pytest
 
 from hisim import loadtypes as lt
-from hisim.economics import adapter
+from hisim.economics import adapter, bridge
 from hisim.economics.bridge import (
     _peaks_from_power_series,
     _sum_output_column,
@@ -979,3 +979,138 @@ class _PvConfigStub:
         self.investment_costs_in_euro = investment_costs_in_euro
         self.lifetime_in_years = lifetime_in_years
         self.device_co2_footprint_in_kg = device_co2_footprint_in_kg
+
+
+def _device(class_name: str):
+    """A component stub whose *class name* is the one the energy-balance table keys on.
+
+    `adapter.DeviceEnergySpecs` is keyed by class name, exactly like the cost-facts table, so the
+    class name is the whole contract a device has with the collector — and building the stub with
+    `type()` states that instead of hiding it behind a hand-written class whose name happens to
+    match. `component_name` is the only attribute the collector reads off the instance.
+
+    Args:
+        class_name: The component class name the table is expected to know.
+
+    Returns:
+        An instance of a freshly made class of that name.
+    """
+    return type(class_name, (), {"component_name": class_name})()
+
+
+class TestDeviceEnergyFlows:
+    """The household energy balance's collector: role -> kWh, unit-aware and sign-aware.
+
+    Three things can go wrong here and each of them produces a chart that is silently wrong rather
+    than a run that fails: a power column summed as if it were energy (a factor of 3,600 over the
+    timestep), a kWh column divided by a thousand a second time, and a battery's signed channel
+    summed net so the round trip disappears. Every expected value below is hand-computed from the
+    stub series, and the timestep is 900 s so the watt conversion is a visible 0.25 h per step.
+
+    The collector is deliberately exercised directly rather than through
+    `build_evaluation_inputs`, because the question is the conversion table and the sign split —
+    everything the surrounding walk adds (cost relevance, meter contracts, the D7 check) belongs
+    to the cost path and would only obscure a unit bug.
+    """
+
+    SECONDS_PER_TIMESTEP = 900
+
+    def _flows(self, component, columns):
+        """Runs the collector over one component and the columns it declares.
+
+        Args:
+            component: The stub component; its class name selects the declared specs.
+            columns: `(field_name, unit, values)` triples, in the frame's column order.
+
+        Returns:
+            The role -> kWh map the collector produced.
+        """
+        outputs = [
+            _Output(component.component_name, field_name, unit=unit)
+            for field_name, unit, _ in columns
+        ]
+        frame = _results_frame([(field_name, values) for field_name, _, values in columns])
+        return bridge._device_energy_flows(  # pylint: disable=protected-access
+            component, outputs, frame, self.SECONDS_PER_TIMESTEP
+        )
+
+    def test_watt_hours_are_divided_by_a_thousand(self):
+        """A Wh channel is energy already: 1,000 + 2,000 + 3,000 Wh = 6 kWh."""
+        flows = self._flows(
+            _device("PVSystem"),
+            [("ElectricityEnergyOutput", lt.Units.WATT_HOUR, [1000.0, 2000.0, 3000.0])],
+        )
+        assert flows == {"PV_GENERATION": pytest.approx(6.0)}
+
+    def test_kilowatt_hours_are_taken_as_they_are(self):
+        """A kWh channel needs no conversion; a second division would be a factor of 1,000."""
+        flows = self._flows(
+            _device("ElectricityMeter"),
+            [
+                ("ElectricityFromGrid", lt.Units.KWH, [1.5, 2.5]),
+                ("ElectricityToGrid", lt.Units.KWH, [0.25, 0.75]),
+            ],
+        )
+        assert flows == {"GRID_IMPORT": pytest.approx(4.0), "GRID_EXPORT": pytest.approx(1.0)}
+
+    def test_watts_are_integrated_over_the_timestep(self):
+        """A power channel is integrated: 2 x 4,000 W over 900 s each = 2 kWh, not 8 kWh."""
+        flows = self._flows(
+            _device("MoreAdvancedHeatPumpHPLib"),
+            [("ElectricalInputPowerTotalHeatpump", lt.Units.WATT, [4000.0, 4000.0])],
+        )
+        assert flows == {"HEAT_PUMP_ELECTRICITY": pytest.approx(2.0)}
+
+    def test_a_signed_battery_series_becomes_two_positive_roles(self):
+        """Charging and discharging are two roles of one column, both positive magnitudes.
+
+        4,000 + 1,000 W of charging over 0.25 h each = 1.25 kWh in; 2,000 W of discharging over
+        0.25 h = 0.5 kWh out. Summing the column net would report 0.75 kWh of "something" and lose
+        the round-trip loss the balance exists to show.
+        """
+        flows = self._flows(
+            _device("Battery"),
+            [("AcBatteryPowerUsed", lt.Units.WATT, [4000.0, -2000.0, 1000.0])],
+        )
+        assert flows == {
+            "BATTERY_CHARGE": pytest.approx(1.25),
+            "BATTERY_DISCHARGE": pytest.approx(0.5),
+        }
+
+    def test_an_unconvertible_unit_is_left_out_rather_than_guessed(self):
+        """A column declared in something that is neither energy nor power contributes nothing."""
+        flows = self._flows(
+            _device("PVSystem"),
+            [("ElectricityEnergyOutput", lt.Units.CELSIUS, [1000.0, 2000.0])],
+        )
+        assert not flows
+
+    def test_a_component_the_table_does_not_know_contributes_nothing(self):
+        """Most components move no electricity across a balance node; that is not a defect."""
+        assert not self._flows(FakeHeatPump(), [])
+
+    def test_the_collector_reaches_the_extract_for_every_component(self):
+        """A meter contributes its two grid roles alongside its billing determinants.
+
+        The energy question is asked before and independently of the cost-relevance branch, so
+        this also pins that a component's flows are not conditional on it being priced.
+        """
+        meter = ElectricityMeter()
+        outputs = [
+            _Output("ElectricityMeter", "ElectricityFromGrid", unit=lt.Units.WATT_HOUR),
+            _Output("ElectricityMeter", "ElectricityToGrid", unit=lt.Units.WATT_HOUR),
+            _Output("ElectricityMeter", "ElectricityFromGridInWatt", unit=lt.Units.WATT),
+        ]
+        frame = _results_frame(
+            [
+                ("from_grid", [1000.0] * 96),
+                ("to_grid", [500.0] * 96),
+                ("power", [4000.0] * 96),
+            ]
+        )
+        inputs = bridge.build_evaluation_inputs(
+            [_Wrapper(meter)], outputs, frame, _SimulationParameters(days=1)
+        )
+        attribution = inputs.energy_attribution_by_subject_in_kwh["ElectricityMeter"]
+        assert attribution["GRID_IMPORT"] == pytest.approx(96.0)
+        assert attribution["GRID_EXPORT"] == pytest.approx(48.0)

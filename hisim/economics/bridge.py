@@ -55,7 +55,7 @@ independent of cost-database state (cost-spec-v2 W1.1).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Dict, List, Optional, Tuple
+from typing import Any, Callable, ClassVar, Dict, List, Optional, Tuple
 
 import pandas as pd
 
@@ -91,6 +91,7 @@ from hisim.economics.perspectives import load_default_bundle, select_applicable
 from hisim.economics.scenarios import ScenarioSet
 from hisim.economics.serialization import write_inputs
 from hisim.economics.subsidies import SubsidyCatalog, SubsidyContext
+from hisim.loadtypes import Units
 
 
 #: The length of a reference year, used to turn a simulation's start/end dates into
@@ -207,22 +208,122 @@ class EconomicContext:
             )
 
 
+def _output_column_and_unit(
+    component_name: str, field_name: str, all_outputs: List[Any], results: pd.DataFrame
+) -> Optional[Tuple[pd.Series, str]]:
+    """One output's per-timestep column together with the unit it was declared in.
+
+    The results DataFrame has no named columns the engine could rely on, so an output is located
+    positionally: `all_outputs` and the frame's columns are in the same order, and this is the one
+    place in the bridge that knows it. The declared unit travels with the column because the energy
+    balance reads channels that are sometimes power and sometimes energy, so it has to see what the
+    component declared rather than assume the Wh the meter contract fixes.
+    """
+    for index, output in enumerate(all_outputs):
+        if output.component_name == component_name and output.field_name == field_name:
+            unit = getattr(output, "unit", None)
+            return results.iloc[:, index], str(getattr(unit, "value", unit))
+    return None
+
+
 def _output_column(
     component_name: str, field_name: str, all_outputs: List[Any], results: pd.DataFrame
 ) -> Optional[pd.Series]:
     """One output's per-timestep column, or None when the run declares no such output.
 
-    The results DataFrame has no named columns the engine could rely on, so an output is located
-    positionally: `all_outputs` and the frame's columns are in the same order, and this is the one
-    place in the bridge that knows it. Returning None rather than an empty series for a missing
-    output is what lets the callers distinguish "this meter measured nothing" from "this meter's
-    declared field does not exist" — the second is a broken extraction and they refuse the run
-    over it.
+    Returning None rather than an empty series for a missing output is what lets the callers
+    distinguish "this meter measured nothing" from "this meter's declared field does not exist" —
+    the second is a broken extraction and they refuse the run over it.
     """
-    for index, output in enumerate(all_outputs):
-        if output.component_name == component_name and output.field_name == field_name:
-            return results.iloc[:, index]
-    return None
+    found = _output_column_and_unit(component_name, field_name, all_outputs, results)
+    return None if found is None else found[0]
+
+
+class EnergyUnitConversion:
+    """Factors that turn a summed output column into kilowatt hours, keyed by its declared unit.
+
+    HiSim components publish power and energy channels side by side — a PV system has both
+    `ElectricityOutput` in W and `ElectricityEnergyOutput` in Wh — so the energy-balance collector
+    reads the *declared* unit of the column it found instead of assuming one. `WATT` needs the
+    timestep length as well, which is why it is a callable rather than a number.
+
+    A unit not in this table is not converted at all: the collector logs the column and skips it,
+    which keeps a mis-declared output out of the energy balance instead of putting a number three
+    orders of magnitude wrong on a chart.
+    """
+
+    WATT_HOURS_PER_KWH = 1000.0
+    SECONDS_PER_HOUR = 3600.0
+    #: Declared unit string (`loadtypes.Units` value) -> factor from the summed column to kWh,
+    #: given the timestep length in seconds.
+    BY_UNIT: Dict[str, Callable[[int], float]] = {
+        Units.WATT_HOUR.value: lambda seconds: 1.0 / EnergyUnitConversion.WATT_HOURS_PER_KWH,
+        Units.KWH.value: lambda seconds: 1.0,
+        Units.WATT.value: lambda seconds: seconds / (
+            EnergyUnitConversion.SECONDS_PER_HOUR * EnergyUnitConversion.WATT_HOURS_PER_KWH
+        ),
+    }
+
+
+def _device_energy_flows(
+    component: Any,
+    all_outputs: List[Any],
+    results: pd.DataFrame,
+    seconds_per_timestep: int,
+) -> Dict[str, float]:
+    """One component's energy-balance flows over the simulated period, as role -> kWh.
+
+    The physical counterpart of `_billing_determinants`, and the data behind the household energy
+    balance: for every `adapter.DeviceEnergySpec` this component's class declares, the named output
+    column is located positionally, summed, converted to kWh by its own declared unit and filed
+    under the spec's role. A battery's signed AC-power channel is split by sign so charging and
+    discharging come out as two roles rather than one net number that would hide the round trip.
+
+    Nothing here is priced and nothing here crosses the system boundary, which is why it is
+    separate from the billing path: the flows of a component that is free of cost or not declared
+    at all are just as real, and dropping them would leave the balance unattributed.
+
+    Args:
+        component: The finished simulation's component; its class name and `component_name` are
+            read.
+        all_outputs: The run's output declarations, in the frame's column order.
+        results: The per-timestep results frame.
+        seconds_per_timestep: Needed to integrate the columns declared in W.
+
+    Returns:
+        Role value -> kWh over the simulated period, positive magnitudes, zero-valued roles
+        omitted. Empty for a class with no declared specs and for a declared column this run did
+        not produce (warned about once, since a renamed output is a real defect).
+    """
+    flows: Dict[str, float] = {}
+    for spec in adapter.get_device_energy_specs(component):
+        column = _output_column_and_unit(component.component_name, spec.field_name, all_outputs, results)
+        if column is None:
+            log.warning(
+                f"Energy balance: component {component.component_name} declares output "
+                f"{spec.field_name!r} for role {spec.role.value}, which this run did not produce; "
+                "the flow is left out of the household energy balance."
+            )
+            continue
+        series, unit = column
+        factor = EnergyUnitConversion.BY_UNIT.get(unit)
+        if factor is None:
+            log.warning(
+                f"Energy balance: output {component.component_name}.{spec.field_name} is declared "
+                f"in {unit!r}, which is not an energy or power unit this collector converts; the "
+                "flow is left out of the household energy balance."
+            )
+            continue
+        if spec.positive_part is True:
+            total = float(series.clip(lower=0.0).sum())
+        elif spec.positive_part is False:
+            total = -float(series.clip(upper=0.0).sum())
+        else:
+            total = float(series.sum())
+        value = total * factor(seconds_per_timestep)
+        if value:
+            flows[spec.role.value] = flows.get(spec.role.value, 0.0) + value
+    return flows
 
 
 def _sum_output_column(
@@ -474,12 +575,15 @@ def build_evaluation_inputs(
     """Collects facts and billing determinants from a finished simulation.
 
     The extraction half of the cost-spec-v2 seam-1 cut: it walks every wrapped component once and
-    asks three questions — is this component priced, free of cost or a meter
-    (`effective_cost_relevance`); what are its `ComponentCostFacts`; and, for meters, what crossed
-    the boundary (`_billing_determinants`, hook first and `MeterSpec` second). A component can
-    answer more than one of them: a meter with capex contributes both billing determinants and
-    cost facts, which is why the two branches below are sequential rather than exclusive. The
-    result is the plain-data record that `write_inputs` persists and the evaluator prices — no
+    asks four questions — which energy-balance flows does it publish (`_device_energy_flows`); is
+    this component priced, free of cost or a meter (`effective_cost_relevance`); what are its
+    `ComponentCostFacts`; and, for meters, what crossed the boundary (`_billing_determinants`,
+    hook first and `MeterSpec` second). A component can answer more than one of them: a meter with
+    capex contributes billing determinants, cost facts *and* the grid import/export flows, which
+    is why the branches below are sequential rather than exclusive. The energy question is asked
+    first and unconditionally, because the household energy balance is physics rather than
+    accounting — a free-of-cost PV system and an undeclared load profile move real kilowatt hours.
+    The result is the plain-data record that `write_inputs` persists and the evaluator prices — no
     prices, no perspective, no economics of any kind are decided here.
 
     Five things it also decides, and none of them is silent. An `UNDECLARED` component becomes an
@@ -518,12 +622,25 @@ def build_evaluation_inputs(
     """
     cost_facts: List[SubjectCostFacts] = []
     billing: List[BillingDeterminants] = []
+    attribution: Dict[str, Dict[str, float]] = {}
     unresolved: List[UnresolvedSubject] = []
     not_installed: List[str] = []
     billing_intervals = _capacity_billing_intervals(wrapped_components)
     for wrapper in wrapped_components:
         component = wrapper.my_component
         subject = component.component_name
+        # The energy balance is a physical record, not a cost classification: it is collected for
+        # every component, before and independently of the cost-relevance branch below, because a
+        # PV system that is FREE_OF_COST or a load profile that is UNDECLARED still moves the
+        # kilowatt hours the household balance is made of.
+        energy_flows = _device_energy_flows(
+            component,
+            all_outputs,
+            postprocessing_results,
+            simulation_parameters.seconds_per_timestep,
+        )
+        if energy_flows:
+            attribution[subject] = energy_flows
         try:
             relevance = adapter.effective_cost_relevance(component)
             if relevance == CostRelevance.UNDECLARED:
@@ -623,6 +740,7 @@ def build_evaluation_inputs(
         simulated_period_fraction=fraction,
         cost_facts=cost_facts,
         billing=billing,
+        energy_attribution_by_subject_in_kwh=attribution,
         unresolved_subjects=unresolved,
     )
     context: Optional[EconomicContext] = getattr(simulation_parameters, "economic_context", None)

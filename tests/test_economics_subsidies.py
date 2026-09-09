@@ -758,6 +758,28 @@ class TestScenarioDataOverlays:
         assert database.get_device_entry(ComponentType.HEAT_PUMP, 2024, "DE").specific_investment.best_estimate == 1600.0
         assert overlaid.overlay_records and overlaid.overlay_records[0].detail == "cheap_hp"
 
+    def test_an_override_that_breaks_the_parameters_is_refused(self):
+        """A scenario axis cannot set a value the constructor would have rejected (§4.6).
+
+        `apply_parameter_overrides` assigns with `setattr`, which bypasses
+        `EconomicParameters.__post_init__` — so before the re-validation an axis could set
+        `interest_rate` to -1.5 or the observation period to 0 and the cube would happily evaluate
+        a cell whose discount factor divides by zero or flips sign. Both are meaningless rather
+        than merely extreme, which is why they are the two the parameter object validates at all,
+        and the refusal has to name them where the axis is declared.
+        """
+        from hisim.economics.scenarios import apply_parameter_overrides
+
+        base = EconomicParameters(price_basis_year=2024)
+        with pytest.raises(ValueError, match="interest_rate"):
+            apply_parameter_overrides(base, {"interest_rate": -1.5})
+        with pytest.raises(ValueError, match="observation_period_in_years"):
+            apply_parameter_overrides(base, {"observation_period_in_years": 0})
+        # The caller's parameters are untouched by the refused attempt, and a legal override still
+        # comes back applied.
+        assert base.interest_rate == EconomicParameters(price_basis_year=2024).interest_rate
+        assert apply_parameter_overrides(base, {"interest_rate": 0.05}).interest_rate == 0.05
+
     def test_legacy_flat_subsidy_share_is_not_overlayable(self):
         """W2.6: the §10.1 shim is subsidy data and left the device overlay surface."""
         from hisim.economics.database import CostDataError

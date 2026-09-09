@@ -549,6 +549,141 @@ class TestSerializationRoundtrip:
         )
         assert context.building.existing_heating is None
 
+    def test_roundtrip_preserves_the_per_subject_energy_attribution(self, tmp_path):
+        """The energy-balance flows survive `economic_inputs.json` and reach the result again.
+
+        Nothing prices this map, so a writer that dropped it would leave every published figure
+        untouched and only the household energy balance would quietly disappear from a report
+        rendered off an archived run — the exact failure mode an additive field invites. The
+        fraction is 0.5, so the reloaded values are also visibly annualized rather than copied.
+        """
+        from hisim.economics.serialization import read_inputs, write_inputs
+
+        inputs = self._inputs()
+        inputs.energy_attribution_by_subject_in_kwh = {
+            "ElectricityMeter": {"GRID_IMPORT": 2500.0, "GRID_EXPORT": 100.0},
+            "Battery": {"BATTERY_CHARGE": 400.0, "BATTERY_DISCHARGE": 340.0},
+        }
+        write_inputs(inputs, str(tmp_path))
+        reloaded = read_inputs(str(tmp_path))
+        assert reloaded.energy_attribution_by_subject_in_kwh == inputs.energy_attribution_by_subject_in_kwh
+        parameters = EconomicParameters(price_basis_year=2024)
+        perspective = Perspective(
+            id="gross", installation_context=InstallationContext.GREENFIELD, subsidy_mode=SubsidyMode.none()
+        )
+        result = EconomicEvaluator(CostDatabase(), parameters).evaluate(reloaded, perspective)
+        assert result.energy_attribution_by_subject_in_kwh["Battery"]["BATTERY_CHARGE"] == pytest.approx(800.0)
+
+    def test_an_extract_without_the_attribution_key_still_reads(self):
+        """Every additive field defaults to empty, so an archive written before it still loads."""
+        from hisim.economics.serialization import inputs_from_json
+
+        restored = inputs_from_json({"simulation_year": 2024, "simulated_period_fraction": 1.0})
+        assert restored.energy_attribution_by_subject_in_kwh == {}
+
+    def test_result_roundtrip_preserves_the_additive_result_fields(self, tmp_path):
+        """The result fields the report reads survive `lifecycle_costs.json` unchanged.
+
+        One assertion per group added on the result side — the energy attribution, the anyway
+        share with its basis, the levy verdict and the resolved assumptions — because each of them
+        is read by exactly one section of the report and a lost one is invisible everywhere else.
+        """
+        from hisim.economics.exports import write_lifecycle_costs_json
+        from hisim.economics.results import (
+            EconomicAssumptions,
+            EmbodiedCo2Basis,
+            EvaluationMatrix,
+            ModernizationLevySummary,
+            RateOrigin,
+            ResolvedRate,
+        )
+        from hisim.economics.serialization import read_results
+
+        parameters = EconomicParameters(price_basis_year=2024)
+        perspective = Perspective(
+            id="gross", installation_context=InstallationContext.GREENFIELD, subsidy_mode=SubsidyMode.none()
+        )
+        result = EconomicEvaluator(CostDatabase(), parameters).evaluate(self._inputs(), perspective)
+        result.energy_attribution_by_subject_in_kwh = {"PVSystem": {"PV_GENERATION": 4200.0}}
+        result.anyway_share_by_subject = {"HeatPump": 0.3}
+        result.anyway_basis_by_subject = {"HeatPump": 9000.0}
+        result.modernization_levy = ModernizationLevySummary(
+            annual_amount_in_euro=UncertainValue.exact(1800.0),
+            general_leg_in_euro=UncertainValue.exact(1200.0),
+            heating_leg_in_euro=UncertainValue.exact(600.0),
+            cap_binding=True,
+            cap_in_euro_per_m2_per_month=3.0,
+            binding_mechanism_by_slot={"best_estimate": "§559 general cap 3.00 EUR/m2*mo"},
+        )
+        result.assumptions = EconomicAssumptions(
+            escalation_rates={"general": ResolvedRate(rate=0.02, origin=RateOrigin.COUNTRY_DEFAULTS)},
+            annual_heat_demand_in_kwh=15000.0,
+        )
+        result.lifecycle_co2_result.emission_factor_by_carrier_in_kg_per_kwh = {"ELECTRICITY": 0.38}
+        result.lifecycle_co2_result.embodied_basis_by_subject = {
+            "HeatPump": EmbodiedCo2Basis(
+                factor_in_kg_per_unit=120.0,
+                size=10.0,
+                size_unit="kW",
+                per_installation_in_kg=1200.0,
+                installations=2,
+            )
+        }
+
+        write_lifecycle_costs_json(EvaluationMatrix(results={"gross": result}), str(tmp_path))
+        restored = read_results(str(tmp_path))
+        assert restored is not None
+        reloaded = restored.results["gross"]
+        assert reloaded.energy_attribution_by_subject_in_kwh == {"PVSystem": {"PV_GENERATION": 4200.0}}
+        assert reloaded.anyway_share_by_subject == {"HeatPump": 0.3}
+        assert reloaded.anyway_basis_by_subject == {"HeatPump": 9000.0}
+        assert reloaded.modernization_levy is not None
+        assert reloaded.modernization_levy.cap_binding
+        assert reloaded.modernization_levy.binding_mechanism_by_slot["best_estimate"].startswith("§559")
+        assert reloaded.assumptions is not None
+        assert reloaded.assumptions.escalation_rates["general"].origin == RateOrigin.COUNTRY_DEFAULTS
+        assert reloaded.assumptions.annual_heat_demand_in_kwh == pytest.approx(15000.0)
+        assert reloaded.lifecycle_co2_result.emission_factor_by_carrier_in_kg_per_kwh == {"ELECTRICITY": 0.38}
+        assert reloaded.lifecycle_co2_result.embodied_basis_by_subject["HeatPump"].installations == 2
+
+    def test_a_result_written_before_the_additive_fields_still_reads(self, tmp_path):
+        """A stored result missing every new key loads with empty/None, never with an invention."""
+        import json
+
+        from hisim.economics.exports import write_lifecycle_costs_json
+        from hisim.economics.results import EvaluationMatrix
+        from hisim.economics.serialization import read_results
+
+        parameters = EconomicParameters(price_basis_year=2024)
+        perspective = Perspective(
+            id="gross", installation_context=InstallationContext.GREENFIELD, subsidy_mode=SubsidyMode.none()
+        )
+        result = EconomicEvaluator(CostDatabase(), parameters).evaluate(self._inputs(), perspective)
+        write_lifecycle_costs_json(EvaluationMatrix(results={"gross": result}), str(tmp_path))
+        path = os.path.join(str(tmp_path), "lifecycle_costs.json")
+        with open(path, encoding="utf-8") as file:
+            raw = json.load(file)
+        for key in (
+            "energy_attribution_by_subject_in_kwh",
+            "anyway_share_by_subject",
+            "anyway_basis_by_subject",
+            "modernization_levy",
+            "assumptions",
+        ):
+            raw["gross"].pop(key, None)
+        raw["gross"]["lifecycle_co2"].pop("emission_factor_by_carrier_in_kg_per_kwh", None)
+        raw["gross"]["lifecycle_co2"].pop("embodied_basis_by_subject", None)
+        with open(path, "w", encoding="utf-8") as file:
+            json.dump(raw, file)
+        reloaded = read_results(str(tmp_path))
+        assert reloaded is not None
+        older = reloaded.results["gross"]
+        assert older.energy_attribution_by_subject_in_kwh == {}
+        assert older.anyway_share_by_subject == {} and older.anyway_basis_by_subject == {}
+        assert older.modernization_levy is None and older.assumptions is None
+        assert older.lifecycle_co2_result.emission_factor_by_carrier_in_kg_per_kwh == {}
+        assert older.lifecycle_co2_result.embodied_basis_by_subject == {}
+
 
 class TestVariantComparison:
     """§3.7 differential analysis."""

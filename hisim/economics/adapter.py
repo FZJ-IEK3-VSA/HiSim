@@ -54,11 +54,11 @@ agree (this is what closed issue #11 / §2.1 issue #21).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from hisim import log
 from hisim import loadtypes as lt
-from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.carriers import EnergyCarrier, EnergyFlowRole
 from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
 from hisim.loadtypes import ComponentType, Units
@@ -515,6 +515,76 @@ class FactsExtraction:
                 "unresolved_reason and not_installed_reason may be set, because the caller reads "
                 "them by branch order and would silently drop the rest."
             )
+
+
+@dataclass(frozen=True)
+class DeviceEnergySpec:
+    """How to read one energy-balance flow of a component out of the results frame.
+
+    The energy-balance counterpart of `MeterSpec`, and deliberately the same shape of contract: a
+    declarative "this class's output column *X* is that role", so `bridge.py` can collect the
+    household energy balance generically instead of special-casing devices. Where `MeterSpec`
+    describes the *billing* boundary, this describes the *physical* one — flows nobody is ever
+    charged for (PV generation, battery charging) belong here and never reach a price.
+
+    Units are not assumed: the summing side reads the declared unit of the output
+    (`Units.WATT`, `Units.WATT_HOUR`, `Units.KWH`) and converts to kWh accordingly, because HiSim
+    components publish power and energy channels side by side and guessing wrong is a factor of
+    3600 away from the truth.
+
+    `positive_part` handles the one channel that carries two roles: a battery's AC power is
+    signed, charging one way and discharging the other, so the charge role takes the positive
+    part of the series and the discharge role the negative part's magnitude. None means "sum the
+    whole column", which is what every single-direction channel needs.
+    """
+
+    role: EnergyFlowRole
+    field_name: str
+    positive_part: Optional[bool] = None
+
+
+class DeviceEnergySpecs:
+    """Which component classes contribute which flows to the household energy balance.
+
+    The compatibility table for energy the way `FactsExtractors.BY_CLASS_NAME` is the one for
+    cost, and the honest answer to "where do the numbers on the energy-balance chart come from":
+    every one of them is a named output column of a named component class, summed over the
+    simulated period. A class that is not in this table contributes nothing — the balance then
+    shows an unattributed remainder rather than inventing a flow for it.
+
+    The table is keyed by class name rather than by type so this module keeps importing no
+    component, which is what the import lint pins. Adding a device to the balance is adding a row
+    here; no chart, view or renderer changes with it.
+    """
+
+    BY_CLASS_NAME: Dict[str, Tuple[DeviceEnergySpec, ...]] = {
+        "PVSystem": (DeviceEnergySpec(EnergyFlowRole.PV_GENERATION, "ElectricityEnergyOutput"),),
+        "Battery": (
+            DeviceEnergySpec(EnergyFlowRole.BATTERY_CHARGE, "AcBatteryPowerUsed", positive_part=True),
+            DeviceEnergySpec(EnergyFlowRole.BATTERY_DISCHARGE, "AcBatteryPowerUsed", positive_part=False),
+        ),
+        "MoreAdvancedHeatPumpHPLib": (
+            DeviceEnergySpec(EnergyFlowRole.HEAT_PUMP_ELECTRICITY, "ElectricalInputPowerTotalHeatpump"),
+        ),
+        "UtspLpgConnector": (
+            DeviceEnergySpec(EnergyFlowRole.HOUSEHOLD_ELECTRICITY, "ElectricalEnergyConsumption"),
+        ),
+        "ElectricityMeter": (
+            DeviceEnergySpec(EnergyFlowRole.GRID_IMPORT, "ElectricityFromGrid"),
+            DeviceEnergySpec(EnergyFlowRole.GRID_EXPORT, "ElectricityToGrid"),
+        ),
+    }
+
+
+def get_device_energy_specs(component: Any) -> Tuple[DeviceEnergySpec, ...]:
+    """The energy-balance flows this component class publishes, or an empty tuple.
+
+    The lookup `bridge.py` calls for every wrapped component, whatever its cost relevance: the
+    energy balance is a physical record, so a component that is free of cost or not declared at
+    all still contributes its kilowatt hours. Returning an empty tuple for an unknown class is the
+    normal case and never a warning — most components move no electricity across a balance node.
+    """
+    return DeviceEnergySpecs.BY_CLASS_NAME.get(type(component).__name__, ())
 
 
 # The eight returns are the precedence rule this function exists to state -- hook, declared

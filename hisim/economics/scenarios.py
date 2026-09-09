@@ -314,6 +314,12 @@ def apply_parameter_overrides(base: EconomicParameters, overrides: Dict[str, Any
     a dict-typed field, a whole dict merged key by key into a dict-typed field, and a plain
     attribute assignment.
 
+    The result is re-validated by re-running `EconomicParameters.__post_init__`, because a
+    `setattr` bypasses the constructor: without it a scenario axis could set `interest_rate` to
+    -1.5 or `observation_period_in_years` to 0 and the cube would evaluate a cell whose discounting
+    and annuity formulas are meaningless, silently, rather than the axis being refused where it is
+    declared.
+
     Args:
         base: The run's parameters; left untouched.
         overrides: Dotted path or field name -> value, from one `Scenario`.
@@ -323,6 +329,7 @@ def apply_parameter_overrides(base: EconomicParameters, overrides: Dict[str, Any
 
     Raises:
         ScenarioDataError: If a dotted path targets a field that is not a dict.
+        ValueError: If the overridden parameters fail their own validation.
     """
     params = copy.deepcopy(base)
     for fieldname, value in overrides.items():
@@ -338,6 +345,7 @@ def apply_parameter_overrides(base: EconomicParameters, overrides: Dict[str, Any
                 container[_coerce_dict_key(fieldname, key)] = sub_value
         else:
             setattr(params, fieldname, value)
+    params.__post_init__()
     return params
 
 

@@ -207,18 +207,28 @@ def nominal_annual_matrix_by_category(
 
 @dataclass(frozen=True)
 class LoanAmortization:
-    """Interest and principal per year 0..T (index = year), nominal euros (§4.4).
+    """Interest, principal and outstanding balance per year 0..T (index = year), nominal (§4.4).
 
     The two components of a financed perspective's debt service, split so the report can stack
     them and a reviewer can see the shape an annuity loan has (falling interest, rising
-    principal) or fails to have. Both lists always span the full horizon, zero-padded, so they
+    principal) or fails to have. All lists always span the full horizon, zero-padded, so they
     index by year directly and can be zipped with each other and with any other year series in
-    this module. The disbursement itself is *not* here — it is a year-0 flow of the
-    `LOAN_DISBURSEMENT` category and shows up in the investment waterfall instead.
+    this module. The disbursement itself is *not* one of the bar series — it is a year-0 flow of
+    the `LOAN_DISBURSEMENT` category and shows up in the investment waterfall instead — but it
+    is carried here as `disbursement_in_euro` because the balance line starts from it.
+
+    `outstanding_balance_in_euro` is the disbursement minus the cumulative principal repayments
+    up to and including that year, so it reconciles with the plotted bars by construction rather
+    than by a second schedule computation. Year 0 therefore carries the full disbursement, and a
+    fully amortizing plan ends at zero within float tolerance.
     """
 
     interest_in_euro: List[float]
     principal_in_euro: List[float]
+    #: Disbursement at year 0 as a positive amount (the timeline books it negative).
+    disbursement_in_euro: float = 0.0
+    #: Debt still outstanding at the end of each year 0..T; index = year.
+    outstanding_balance_in_euro: List[float] = field(default_factory=list)
 
     def has_flows(self) -> bool:
         """True when the perspective is financed at all."""
@@ -236,11 +246,16 @@ def loan_amortization_series(
     decide whether the perspective is financed at all and skip the chart when it is not, which
     is the common case (cash purchase).
 
+    The outstanding-balance series is built here from the same entries (disbursement minus the
+    running principal repayments), which is what keeps a balance line and the bars drawn beside it
+    from disagreeing.
+
     Replaces `reporting.py:517-526` (the amortization chart's accumulation loop).
     """
     horizon = result.parameters.observation_period_in_years
     interest_per_year = [0.0] * (horizon + 1)
     principal_per_year = [0.0] * (horizon + 1)
+    disbursement = 0.0
     for entry in result.scoped_timeline().entries:
         if not 0 <= entry.year <= horizon:
             continue
@@ -248,7 +263,19 @@ def loan_amortization_series(
             interest_per_year[entry.year] += entry.amount_in_euro.slot(slot)
         elif entry.category == CostCategory.LOAN_PRINCIPAL:
             principal_per_year[entry.year] += entry.amount_in_euro.slot(slot)
-    return LoanAmortization(interest_in_euro=interest_per_year, principal_in_euro=principal_per_year)
+        elif entry.category == CostCategory.LOAN_DISBURSEMENT:
+            disbursement += -entry.amount_in_euro.slot(slot)
+    balance: List[float] = []
+    outstanding = disbursement
+    for year in range(horizon + 1):
+        outstanding -= principal_per_year[year]
+        balance.append(outstanding)
+    return LoanAmortization(
+        interest_in_euro=interest_per_year,
+        principal_in_euro=principal_per_year,
+        disbursement_in_euro=disbursement,
+        outstanding_balance_in_euro=balance,
+    )
 
 
 def cumulative_operational_co2_in_kg(result: LifecycleCostResult) -> List[float]:

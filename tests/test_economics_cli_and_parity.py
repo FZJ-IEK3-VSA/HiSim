@@ -167,14 +167,16 @@ class TestCliAndExports:
 
         Pins the whole chain of the fix: `evaluate --parameters` stores the parameters on every
         result, `read_stored_parameters` reads them back, and the later invocation prices at the
-        run's basis year with the run's catalog. The basis year is the observable: the default
-        would resolve to something else entirely, and the provenance lines name the year every
-        database entry was read at.
+        run's basis year and interest rate with the run's catalog. The **NPV** is the observable —
+        the value `explain` traced has to be the value the stored evaluation published — because
+        that is the figure the assumptions actually move: 20 years at the stored 7 % is a different
+        present value from `EconomicParameters()`'s 3 %, which the second invocation below shows
+        rather than assumes.
         """
         import json
 
         from hisim.economics.__main__ import main
-        from hisim.economics.serialization import read_stored_parameters, write_inputs
+        from hisim.economics.serialization import read_results, read_stored_parameters, write_inputs
 
         inputs = EvaluationInputs(
             simulation_year=2024,
@@ -198,7 +200,29 @@ class TestCliAndExports:
         assert main(["explain", str(tmp_path), "--value", "greenfield_gross/total_npv_in_euro",
                      "--json"]) == 0
         report = json.loads(capsys.readouterr().out)
-        assert json.dumps(report).count("2026") > 0  # priced at the run's basis year, not the default
+        # `explain` re-evaluates, so the only proof that it did so under the *stored* assumptions
+        # is that the value it traced is the one the stored evaluation published. A grep for the
+        # basis year would not be that proof: 2026 also appears as a `valid_from_year` on entries
+        # a default-priced run would resolve just as happily. The NPV is the sensitive figure —
+        # 20 years at 7 % against `EconomicParameters()`'s 3 % is a different number entirely — so
+        # this fails the moment `_load_parameters` falls back to the engine defaults.
+        stored_results = read_results(str(tmp_path))
+        assert stored_results is not None
+        published = stored_results.results["greenfield_gross"].total_npv_in_euro
+        assert UncertainValue.from_json(report["value"]).best_estimate == pytest.approx(
+            published.best_estimate
+        )
+        # And the run under the defaults really is a different number, so the equality above is a
+        # discriminating assertion rather than an accident of this fixture.
+        defaults_path = os.path.join(str(tmp_path), "defaults.json")
+        with open(defaults_path, "w", encoding="utf-8") as file:
+            json.dump(EconomicParameters(price_basis_year=2026).to_dict(), file)
+        assert main(["explain", str(tmp_path), "--value", "greenfield_gross/total_npv_in_euro",
+                     "--json", "--parameters", defaults_path]) == 0
+        at_defaults = json.loads(capsys.readouterr().out)
+        assert UncertainValue.from_json(at_defaults["value"]).best_estimate != pytest.approx(
+            published.best_estimate
+        )
 
     def test_exported_figures_are_not_minted_by_the_writer(self, tmp_path):
         """W4.1: every derived number in an export equals its independent recomputation.

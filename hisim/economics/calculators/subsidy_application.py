@@ -50,6 +50,7 @@ from hisim.economics.subsidies import (
     SubsidyCatalog,
     SubsidyContext,
     SubsidyDecision,
+    SubsidySchemeLabels,
     solve_cumulation,
 )
 from hisim.economics.timeline import CashFlowEntry, CostCategory
@@ -129,7 +130,9 @@ def _legacy_flat_shim(costing: DeviceCosting, ledger: ProvenanceLedger) -> Subsi
                 amount_in_euro=amount.as_revenue(),
                 category=CostCategory.SUBSIDY,
                 subject=costing.subject,
-                subsidy_scheme_id="LEGACY_FLAT",
+                # The reader of this id is `views.scheme_display_names`, which turns it into an
+                # honest label; the constant is what ties the two ends together (Q20).
+                subsidy_scheme_id=SubsidySchemeLabels.LEGACY_FLAT_ID,
                 provenance_ids=costing.provenance_ids + (shim_provenance,),
             )
         )

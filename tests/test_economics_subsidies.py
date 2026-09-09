@@ -643,6 +643,37 @@ class TestConfiguredCatalogPathResolution:
         with pytest.raises(CostDataError, match="legacy flat-shim"):
             SubsidyCatalog.load_configured("DE", "catalogs/that/never/existed")
 
+    def test_a_shadowing_directory_in_the_cwd_is_refused_rather_than_preferred(self, monkeypatch, tmp_path):
+        """Two candidates exist, so neither is chosen: the answer would depend on the cwd.
+
+        The three roots used to be tried in order with the first hit winning, so a directory named
+        `subsidy_catalog/` in whatever directory the command happened to be started from silently
+        shadowed the shipped catalog — and the run reported catalog-priced subsidies from a catalog
+        nobody had chosen, with nothing in the output saying which one it read. The error has to
+        name both places, because the reader's next question is which of the two they meant.
+        """
+        from hisim.economics.catalog_entries import CostDataError
+
+        shadow = tmp_path / "subsidy_catalog"
+        shadow.mkdir()
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(CostDataError, match="ambiguous") as raised:
+            SubsidyCatalog.resolve_base_path("subsidy_catalog")
+        message = str(raised.value)
+        assert str(shadow) in message  # the one that would have won
+        assert os.path.dirname(SubsidyCatalog.DEFAULT_PATH) in message  # the shipped one
+        assert "absolute" in message  # and the fix
+
+    def test_an_absolute_path_is_taken_as_given_even_beside_a_shadow(self, monkeypatch, tmp_path):
+        """An absolute path names one directory, so no other root is ever tried against it."""
+        shadow = tmp_path / "subsidy_catalog"
+        shadow.mkdir()
+        monkeypatch.chdir(tmp_path)
+        assert SubsidyCatalog.resolve_base_path(str(shadow)) == str(shadow)
+        # And the unambiguous relative case still resolves: nothing shadows this one.
+        resolved = SubsidyCatalog.resolve_base_path(os.path.join("hisim", "subsidy_catalog"))
+        assert os.path.isfile(os.path.join(resolved, "DE.json"))
+
     def test_no_configured_catalog_still_reaches_the_shim(self):
         """A parameter set that names no catalog gets None — the §10.1 shim's legitimate case."""
         assert SubsidyCatalog.load_configured("IE", None) is None

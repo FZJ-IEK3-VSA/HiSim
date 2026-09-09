@@ -54,6 +54,7 @@ from hisim.economics.subsidies import (
     SubsidyBuildingContext,
     SubsidyCatalog,
     SubsidyContext,
+    SubsidySchemeLabels,
 )
 from hisim.economics.timeline import Actor, CostCategory
 from hisim.economics.uncertainty import Slot, UncertainValue
@@ -644,15 +645,68 @@ class TestYearZeroAndSubsidies:
         assert uncapped.arithmetic == ""  # a lump sum states no rate
         assert uncapped.cap_verdict == "cap not binding (30,000 EUR eligible cost)"
 
-    def test_scheme_display_names_cover_the_ids_a_report_can_show(self, result):
-        """Q20: every id a renderer can look up resolves to a name, never to an empty cell."""
-        names = views.scheme_display_names(result)
+    def test_the_arithmetic_names_both_ceilings_that_cut_the_rate(self):
+        """Q26 F8: a rate cut twice says so twice, so the binding limit is identifiable.
 
-        assert names[""] == views.SubsidySchemeLabels.UNATTRIBUTED
-        assert names[views.SubsidySchemeLabels.LEGACY_FLAT_ID] == views.SubsidySchemeLabels.LEGACY_FLAT
-        for decision in result.subsidy_decisions:
-            for award in decision.applied:
-                assert names[award.scheme_id] == award.label
+        The EU state-aid overall cap rescales the award's amount after a cumulation group's
+        combined-rate cap has already scaled its rate. Both cuts reach the reader through the same
+        caption, and the product still has to be the amount beside it — which is what the solver's
+        `_apply_overall_cap` guarantees and what this pins on the formatting side.
+        """
+        from hisim.economics.subsidies import PayoutKind, SubsidyAward
+
+        both = views.describe_award(
+            SubsidyAward(
+                scheme_id="S",
+                payout_kind=PayoutKind.UPFRONT_GRANT,
+                upfront_amount=UncertainValue.exact(5000.0),
+                benefit_rate=0.25,
+                benefit_rate_before_group_cap=0.35,
+                benefit_rate_before_overall_cap=0.30,
+                eligible_basis_in_euro=UncertainValue.exact(20000.0),
+            )
+        )
+        assert both.arithmetic == (
+            "25.0% (of 35.0%, cut back by the cumulation group's combined-rate cap) "
+            "(of 30.0%, cut back by the state-aid overall cap) "
+            "x 20,000 EUR eligible basis = 5,000 EUR"
+        )
+
+        only_overall = views.describe_award(
+            SubsidyAward(
+                scheme_id="S",
+                payout_kind=PayoutKind.UPFRONT_GRANT,
+                upfront_amount=UncertainValue.exact(5000.0),
+                benefit_rate=0.25,
+                benefit_rate_before_overall_cap=0.50,
+                eligible_basis_in_euro=UncertainValue.exact(20000.0),
+            )
+        )
+        assert only_overall.arithmetic == (
+            "25.0% (of 50.0%, cut back by the state-aid overall cap) "
+            "x 20,000 EUR eligible basis = 5,000 EUR"
+        )
+
+    def test_scheme_display_names_cover_the_ids_a_report_can_show(self, result):
+        """Q20: every id a renderer can look up resolves to a name, never to an empty cell.
+
+        The per-award names are checked against the *shipped catalog's* `display_name` for that
+        scheme id rather than against the award's own label: the label is what the mapping is built
+        from, so comparing the two would assert nothing at all. Read against the catalog it becomes
+        the claim that matters — the name a report shows is the name the catalog gives the scheme,
+        having travelled with the award through an evaluation that a report need never repeat.
+        """
+        names = views.scheme_display_names(result)
+        catalog = SubsidyCatalog.load(result.parameters.country)
+
+        assert names[""] == SubsidySchemeLabels.UNATTRIBUTED
+        assert names[SubsidySchemeLabels.LEGACY_FLAT_ID] == SubsidySchemeLabels.LEGACY_FLAT
+        applied = [award for decision in result.subsidy_decisions for award in decision.applied]
+        assert applied, "no award was applied — the loop below would prove nothing"
+        for award in applied:
+            scheme = catalog.scheme_by_id(award.scheme_id)
+            assert scheme is not None, award.scheme_id
+            assert names[award.scheme_id] == (scheme.display_name or award.scheme_id)
 
     def test_total_subsidies_is_none_without_support_flows(self, result):
         """A timeline without a SUBSIDY entry omits the KPI rather than publishing a zero."""

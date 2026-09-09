@@ -48,7 +48,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, TypeVar
 from hisim.economics.calculators.subsidy_application import nominal_support_from_entries
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.results import LifecycleCostResult
-from hisim.economics.subsidies import PayoutKind, SubsidyAward
+from hisim.economics.subsidies import PayoutKind, SubsidyAward, SubsidySchemeLabels
 from hisim.economics.timeline import Actor, CategoryRules, CostCategory, discount_factor
 from hisim.economics.uncertainty import Slot, UncertainValue
 
@@ -647,22 +647,6 @@ def payer_npv_total(result: LifecycleCostResult) -> UncertainValue:
     return UncertainValue.sum(result.npv_by_payer.values())
 
 
-class SubsidySchemeLabels:
-    """The names of the support sources a timeline can carry that no catalog scheme covers (Q20).
-
-    Two ids reach the report without ever having been a `SubsidyScheme`: the §10.1 legacy flat
-    share, which is subsidy data carried in the *device* catalog for countries that have no
-    subsidy catalog yet, and the fallback for a support entry that names no scheme at all. Both
-    used to be printed raw — a reader of the Irish report saw a node called `LEGACY_FLAT` — and
-    both deserve an honest label rather than an invented programme name: what the legacy shim
-    models is a flat percentage with no scheme behind it, and the label says exactly that.
-    """
-
-    LEGACY_FLAT_ID = "LEGACY_FLAT"
-    LEGACY_FLAT = "flat legacy support share (no catalog)"
-    UNATTRIBUTED = "subsidy (unattributed)"
-
-
 def scheme_display_names(result: LifecycleCostResult) -> Dict[str, str]:
     """Every support id this result can show, mapped to the name a reader sees (Q20).
 
@@ -672,6 +656,11 @@ def scheme_display_names(result: LifecycleCostResult) -> Dict[str, str]:
     seam-4 violation and unreliable. Ids with no award (the legacy shim, an unattributed support
     entry) get their labels from `SubsidySchemeLabels`, and an id the mapping does not know maps
     to itself, so nothing ever renders as an empty cell.
+
+    It has no production caller in this slice of the cost stack: its consumer is the subsidy
+    Sankey view of a later slice, which labels the nodes of a support flow diagram and is the
+    reason the mapping has to cover ids that never were an award. Kept here rather than deferred
+    with it, because the definition belongs beside the awards it is built from.
 
     Args:
         result: The evaluated perspective whose timeline and decisions are about to be rendered.
@@ -736,6 +725,16 @@ class AwardPresentation:
     financing plan or the energy flows and is booked by another calculator. Those awards are
     still *applied* and must still be listed, which is what `payout_note` is for: it names the
     terms instead of a euro band.
+
+    A loan award's **repayment grant** is the one figure deliberately withheld even though euros
+    for it exist: the solver values the forgiven share in its objective (`solver._support_value`,
+    which is how a soft loan can win a combination at all), and `calculators/financing_application`
+    later books it onto the timeline as a SUBSIDY entry. Those two are not the same number — §7 B3:
+    the solver applies the share to the measure's gross cost, the calculator applies it to the loan
+    *principal*, which the financing plan decides — so neither is a euro figure this award line can
+    stand behind, and it states the share through `payout_note` instead. Resolving that
+    disagreement is the trigger for showing the euros: once the award's own valuation is the amount
+    the plan actually pays, the presentation can read it rather than pick one of two answers.
     """
 
     scheme_id: str
@@ -805,7 +804,7 @@ def describe_award(award: SubsidyAward) -> AwardPresentation:
         payout_note=note,
         caps_binding=caps,
         arithmetic=award_arithmetic(award, total),
-        cap_verdict=award_cap_verdict(award),
+        cap_verdict=award_cap_verdict(award, caps),
     )
 
 
@@ -821,8 +820,15 @@ def award_arithmetic(award: SubsidyAward, total: UncertainValue) -> str:
     The lump-sum, per-unit, loan-terms and VAT forms return the empty string on purpose: they
     have no rate, and `describe_award`'s `payout_note` already states their own terms.
 
+    Two ceilings can each have cut the rate down, and both are named where they applied: a
+    cumulation group's combined-rate cap and the EU state-aid overall cap. They compose — a rate
+    that first lost the group's stack and then the state-aid ceiling reads as "17.5 % (of 20.0 %,
+    …combined-rate cap) (of 17.5 %, …state-aid overall cap)" — because a reader who sees only the
+    final rate cannot tell which limit is the binding one, and those imply different answers about
+    what a second measure would earn.
+
     Args:
-        award: The applied award, read for its rate, its eligible basis and the pre-cap rate.
+        award: The applied award, read for its rate, its eligible basis and the two pre-cap rates.
         total: The award's value as `award_total_amount` computed it, for the product.
 
     Returns:
@@ -836,13 +842,18 @@ def award_arithmetic(award: SubsidyAward, total: UncertainValue) -> str:
             f"{rate_text} (of {award.benefit_rate_before_group_cap:.1%}, cut back by the "
             "cumulation group's combined-rate cap)"
         )
+    if award.benefit_rate_before_overall_cap is not None:
+        rate_text = (
+            f"{rate_text} (of {award.benefit_rate_before_overall_cap:.1%}, cut back by the "
+            "state-aid overall cap)"
+        )
     return (
         f"{rate_text} x {award.eligible_basis_in_euro.best_estimate:,.0f} EUR eligible basis = "
         f"{total.best_estimate:,.0f} EUR"
     )
 
 
-def award_cap_verdict(award: SubsidyAward) -> str:
+def award_cap_verdict(award: SubsidyAward, binding: Optional[Tuple[str, ...]] = None) -> str:
     """What the eligible-cost ceiling did to this award, in the solver's own terms (Q26 F8).
 
     The second half of an award line a reader cannot otherwise reconstruct: below the ceiling the
@@ -852,17 +863,26 @@ def award_cap_verdict(award: SubsidyAward) -> str:
 
     Args:
         award: The applied award.
+        binding: The slots whose cap bound, when the caller already has them — `describe_award`
+            computes exactly this tuple for `AwardPresentation.caps_binding`, so passing it
+            through keeps the list from being derived twice from the same field. Omitted, it is
+            read off the award.
 
     Returns:
-        "capped at X EUR (slots: ...)", "cap not binding", or "" when the scheme declares no cap.
+        "capped at X EUR eligible cost (slot, ...)" naming the slots whose cap bound,
+        "cap not binding (X EUR eligible cost)", or "" when the scheme declares no cap at all.
     """
     if award.eligible_basis_cap_in_euro is None:
         return ""
-    binding = [slot for slot, bound in award.caps_binding_per_slot.items() if bound]
-    if binding:
+    slots = (
+        binding
+        if binding is not None
+        else tuple(slot for slot, bound in award.caps_binding_per_slot.items() if bound)
+    )
+    if slots:
         return (
             f"capped at {award.eligible_basis_cap_in_euro:,.0f} EUR eligible cost "
-            f"({', '.join(binding)})"
+            f"({', '.join(slots)})"
         )
     return f"cap not binding ({award.eligible_basis_cap_in_euro:,.0f} EUR eligible cost)"
 

@@ -21,6 +21,7 @@ from typing import (
     Iterable,
     List,
     Optional,
+    Set,
     Tuple,
 )
 
@@ -842,42 +843,68 @@ class SubsidyCatalog:
 
     @classmethod
     def resolve_base_path(cls, configured_path: str) -> str:
-        """Turns a configured catalog path into a directory that exists, or says where it looked.
+        """Turns a configured catalog path into the one directory that exists, or refuses.
 
         A `subsidy_catalog_path` is written into `EconomicParameters` by a system setup, a scenario
         file or a RenoVisor request, and is then read back by a CLI invocation whose working
         directory is nobody's business — so resolving a relative path against the current directory
         alone makes the same parameter file work from the repository root and fail from anywhere
-        else. Three roots are tried, in order: the current working directory (an absolute path is
+        else. Three roots are therefore tried: the current working directory (an absolute path is
         used as given), the repository/installation root that contains the `hisim` package, and the
         package's own data directory, so that both `hisim/subsidy_catalog` and `subsidy_catalog`
         resolve to the shipped catalog wherever the command runs.
+
+        **Ambiguity is refused, not resolved by order.** The three roots used to be tried in
+        sequence with the first hit winning, which made the answer depend on where the command was
+        started: a directory named `subsidy_catalog/` in whatever the caller's cwd happened to be —
+        a scratch copy, an unrelated project's data — silently shadowed the shipped catalog, and
+        the run reported catalog-priced subsidies from a catalog nobody had chosen. Candidates are
+        now deduplicated by `realpath` (cwd and installation root routinely coincide, and so do a
+        path and a symlink to it) and *all* the surviving existing ones are counted: exactly one is
+        the answer, more than one is an error naming each of them. The fix a user needs is always
+        the same, and the message says it — make the configured path absolute, which names the
+        directory rather than describing where to look for it.
 
         Args:
             configured_path: The non-empty path a parameter set names.
 
         Returns:
-            An existing directory to load the catalog from.
+            The single existing directory to load the catalog from.
 
         Raises:
-            CostDataError: If no candidate exists. Named catalog data that cannot be found is a
+            CostDataError: If no candidate exists, or if more than one does. Named catalog data
+                that cannot be found — or that could be one of two different directories — is a
                 fail-fast condition (D25): the alternative is a full result priced by the §10.1
-                flat shim under a catalog the caller believed was active.
+                flat shim, or by the wrong catalog, under a catalog the caller believed was active.
         """
-        package_directory = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        package_directory = os.path.dirname(cls.DEFAULT_PATH)
         install_root = os.path.dirname(package_directory)
         candidates = [os.path.abspath(configured_path)]
         if not os.path.isabs(configured_path):
             candidates.append(os.path.abspath(os.path.join(install_root, configured_path)))
             candidates.append(os.path.abspath(os.path.join(package_directory, configured_path)))
+        unique: List[str] = []
+        seen: Set[str] = set()
         for candidate in candidates:
-            if os.path.isdir(candidate):
-                return candidate
+            real = os.path.realpath(candidate)
+            if real not in seen:
+                seen.add(real)
+                unique.append(candidate)
+        existing = [candidate for candidate in unique if os.path.isdir(candidate)]
+        if len(existing) == 1:
+            return existing[0]
+        if not existing:
+            raise CostDataError(
+                f"Configured subsidy catalog path {configured_path!r} does not resolve to a "
+                f"directory (tried: {', '.join(unique)}). Fix the path or remove "
+                "`subsidy_catalog_path` from the parameters — a catalog that was named but cannot "
+                "be read is never replaced by the §10.1 legacy flat-shim support."
+            )
         raise CostDataError(
-            f"Configured subsidy catalog path {configured_path!r} does not resolve to a directory "
-            f"(tried: {', '.join(candidates)}). Fix the path or remove `subsidy_catalog_path` from "
-            "the parameters — a catalog that was named but cannot be read is never replaced by the "
-            "§10.1 legacy flat-shim support."
+            f"Configured subsidy catalog path {configured_path!r} is ambiguous: it exists at "
+            f"{' and at '.join(existing)}. Which one a run would have used depends on the working "
+            "directory it was started from, so neither is chosen. Make `subsidy_catalog_path` "
+            "absolute to name the catalog you mean."
         )
 
     @classmethod

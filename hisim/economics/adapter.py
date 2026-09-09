@@ -464,9 +464,15 @@ class FactsExtraction:
     ever gets here) from a class that should have produced facts and did not
     (`unresolved_reason` set — an unresolved subject under decision D7).
 
-    Exactly one of the three fields is meaningful at a time: facts present means resolved,
-    `unresolved_reason` present means the component should have had facts and does not, and
-    `not_installed_reason` present means the component described itself perfectly well as absent.
+    **At most one of the three fields is set**, and the all-None state is a legitimate fourth
+    answer rather than a defect: it is what a class declared `FREE_OF_COST` returns, and what an
+    unknown class with no declaration and no adapter entry returns — a component the cost model
+    has nothing to price and nothing to complain about. Of the three that carry something: facts
+    present means resolved, `unresolved_reason` present means the component should have had facts
+    and does not, and `not_installed_reason` present means the component described itself
+    perfectly well as absent. Two of them together would be a contradiction the one caller that
+    reads them (`bridge.py`) resolves by branch order rather than by noticing, so `__post_init__`
+    refuses the combination instead.
 
     The third state exists because "cannot be described" and "is not there" have opposite
     consequences: an unresolved subject aborts the evaluation under D7, while a device configured
@@ -481,6 +487,34 @@ class FactsExtraction:
     #: Why a component that *could* be described contributes nothing anyway: it is configured at
     #: zero size. Reported and logged, never a failure — see the class docstring.
     not_installed_reason: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Refuses a record that states two answers at once.
+
+        The three fields are a union the caller reads by branch order, so a record carrying facts
+        *and* a reason would be read as resolved and its reason would vanish — the exact silent
+        outcome this record exists to prevent. Cheap to state, and it fails at the construction
+        site rather than three layers downstream.
+
+        Raises:
+            ValueError: If more than one of `facts`, `unresolved_reason` and `not_installed_reason`
+                is set.
+        """
+        stated = [
+            name
+            for name, value in (
+                ("facts", self.facts),
+                ("unresolved_reason", self.unresolved_reason),
+                ("not_installed_reason", self.not_installed_reason),
+            )
+            if value is not None
+        ]
+        if len(stated) > 1:
+            raise ValueError(
+                f"FactsExtraction states {' and '.join(stated)} at once; at most one of facts, "
+                "unresolved_reason and not_installed_reason may be set, because the caller reads "
+                "them by branch order and would silently drop the rest."
+            )
 
 
 # The eight returns are the precedence rule this function exists to state -- hook, declared
@@ -583,9 +617,14 @@ def _resolved_or_not_installed(component: Any, facts: ComponentCostFacts) -> Fac
 
     The one place the "declared but not built" case is recognized, shared by the adopted-hook and
     the compatibility-table branches so both behave identically. A zero-size component is dropped
-    from pricing entirely, exactly as if the setup had not built it; it needs no separate handling
-    on the energy side, because a device configured at zero size moves no energy and its output
-    columns sum to zero of their own accord.
+    from pricing entirely, exactly as if the setup had not built it.
+
+    On the energy side the expectation is that a device configured at zero size moves no energy and
+    its output columns sum to zero of their own accord — but that is an assumption about every
+    component in the fleet, and it is no longer taken on trust here: `bridge.py` checks the
+    component's `BillingDeterminants` against it (`_non_zero_energy_flows`) and turns a
+    contradiction into an unresolved subject, so a device excluded from capex can never have its
+    energy quietly billed.
 
     Args:
         component: Only its class name is read, for the reason string.

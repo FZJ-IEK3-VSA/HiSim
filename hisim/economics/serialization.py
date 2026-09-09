@@ -561,6 +561,7 @@ def _decision_from_json(raw: dict) -> SubsidyDecision:
                 # where the report states the amount without the multiplication behind it.
                 benefit_rate=item.get("benefit_rate"),
                 benefit_rate_before_group_cap=item.get("benefit_rate_before_group_cap"),
+                benefit_rate_before_overall_cap=item.get("benefit_rate_before_overall_cap"),
                 eligible_basis_in_euro=(
                     UncertainValue.from_json(item["eligible_basis_in_euro"])
                     if item.get("eligible_basis_in_euro") is not None

@@ -464,15 +464,41 @@ class TestAwardsOfEveryPayoutKindAreReported:
         The KPI set filtered on a non-zero upfront amount too, so the same award was missing from
         the machine-readable side; an award that has no euro amount at all (loan terms, an
         operational rate) still gets none, because inventing one would be worse than omitting it.
+
+        The key carries the friendly name **and** the catalog id. The name alone is neither unique
+        — two schemes may share a display name, and a run's KPI namespace is flat, so one would
+        overwrite the other — nor greppable back to the catalog. These fixture awards declare no
+        display name, so their label falls back to the id and the key repeats it; that is the
+        honest rendering of "this scheme has no name", not a special case worth suppressing.
         """
         from hisim.economics.exports import build_lifecycle_kpi_entries
 
         entries = {entry.name: entry for entry in build_lifecycle_kpi_entries(self._matrix_with_awards(database))}
-        assert "Subsidy TAX_CREDIT_SCHEME [EUR] (greenfield_net)" in entries
-        assert entries["Subsidy TAX_CREDIT_SCHEME [EUR] (greenfield_net)"].value == pytest.approx(2060.40)
-        assert "Subsidy GRANT_SCHEME [EUR] (greenfield_net)" in entries
-        assert "Subsidy LOAN_SCHEME [EUR] (greenfield_net)" not in entries
-        assert "Subsidy OPERATIONAL_SCHEME [EUR] (greenfield_net)" not in entries
+        credit = "Subsidy TAX_CREDIT_SCHEME (TAX_CREDIT_SCHEME) [EUR] (greenfield_net)"
+        assert credit in entries
+        assert entries[credit].value == pytest.approx(2060.40)
+        assert "Subsidy GRANT_SCHEME (GRANT_SCHEME) [EUR] (greenfield_net)" in entries
+        assert not [name for name in entries if name.startswith("Subsidy LOAN_SCHEME")]
+        assert not [name for name in entries if name.startswith("Subsidy OPERATIONAL_SCHEME")]
+
+    def test_the_kpi_key_of_a_named_scheme_carries_both_the_name_and_the_id(self, database):
+        """A display name does not displace the catalog key it belongs to.
+
+        The awards above have no name, so the key would look the same under the old naming; this
+        is the case the change is actually about — the shipped catalogs all declare display names,
+        and their KPI keys used to identify a scheme by a prose label alone.
+        """
+        from hisim.economics.exports import build_lifecycle_kpi_entries
+
+        matrix = self._matrix_with_awards(database)
+        award = matrix.results["greenfield_net"].subsidy_decisions[0].applied[0]
+        award.display_name = "BEG EM heat pump — base grant (30 %)"
+        entries = {entry.name: entry for entry in build_lifecycle_kpi_entries(matrix)}
+        expected = (
+            "Subsidy BEG EM heat pump — base grant (30 %) (GRANT_SCHEME) [EUR] (greenfield_net)"
+        )
+        assert expected in entries
+        assert (entries[expected].description or "").startswith("HeatPump; scheme GRANT_SCHEME")
 
 
 class TestPngsAndCli:

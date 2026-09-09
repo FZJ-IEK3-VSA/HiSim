@@ -48,8 +48,9 @@ the same thing in each, the flag taking precedence over the path stored in the p
 
 **Where the assumptions come from.** ``--parameters`` states them; without the flag every
 subcommand reads the parameters the run itself was priced under out of its `lifecycle_costs.json`
-(`_load_parameters`). The engine defaults are never a fallback: a directory that carries neither is
-an error naming both files, because re-pricing an archived study at default assumptions answers a
+(`_load_parameters`). The engine defaults are never a fallback: a directory with neither the flag
+nor a `lifecycle_costs.json` carrying its parameters is an error naming that file and the flag that
+supplies them instead, because re-pricing an archived study at default assumptions answers a
 question nobody asked. The subsidy catalog those parameters name is loaded for every subcommand,
 `explain` included, through `SubsidyCatalog.load_configured` — a named catalog that cannot be
 resolved is an error (D25), never a quiet fall-through to the §10.1 legacy flat shim.
@@ -197,12 +198,15 @@ def _load_parameters(args: argparse.Namespace, results_dir: Optional[str] = None
 
     Neither source is allowed to fall back to the engine defaults. A directory holding only
     `economic_inputs.json` has no stored assumptions, and pricing it silently at the defaults is
-    exactly the failure this function exists to prevent — so it fails and names the two files.
-    *Passing* a path that does not exist fails for the same reason (issue #23).
+    exactly the failure this function exists to prevent — so it fails, naming the file it looked
+    in and the flag that would supply them. *Passing* a path that does not exist fails for the same
+    reason (issue #23).
 
     Args:
         args: The parsed CLI namespace, for `--parameters`.
-        results_dir: The invocation's result directory, or None for a subcommand that has none.
+        results_dir: The invocation's result directory. Every caller is a subcommand that has one
+            (`_build_context` passes its `results_dir`); the parameter is optional only so the
+            signature reads the same as the resolution it performs.
 
     Returns:
         The caller's parameters, or the ones stored with the run.
@@ -475,6 +479,11 @@ def _load_or_evaluate(
     Two things send this to the engine instead: a directory holding nothing but
     `economic_inputs.json`, and a re-pricing flag (`_repricing_flags`), which is a request to
     render *these* assumptions rather than the stored ones.
+
+    The first of those only gets as far as the engine *with* `--parameters`. An inputs-only
+    directory carries no stored assumptions to price under, and the engine defaults are never a
+    fallback (`_load_parameters`), so without the flag the re-evaluation it announces fails
+    immediately with the message naming both ways to supply them.
 
     The distinction matters to a reader of the output: rendered stored results show the numbers the
     original run published, while a re-priced directory shows what today's data and the given

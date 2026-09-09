@@ -378,6 +378,16 @@ class SubsidyAward:
     #: The pair is what lets the report say "20 % capped to 17.5 %" instead of showing a rate the
     #: catalog does not contain.
     benefit_rate_before_group_cap: Optional[float] = None
+    #: The same rate before the EU state-aid overall cap rescaled the award, when that cap bit;
+    #: None otherwise. That cap scales the *amounts* (`solver._scaled_to_cap`), not the rates, so
+    #: without this the caption would print a rate times a basis whose product is not the amount
+    #: beside it. What is recorded is the **best-estimate slot's** arithmetic: `benefit_rate` is
+    #: set to whatever makes ``eligible_basis_in_euro.scale(benefit_rate)`` equal the capped
+    #: ``upfront_amount`` in that slot, and this field keeps the rate it had before. The cap ratio
+    #: is a per-slot figure (`solver._overall_cap_ratios`), so where the three ratios differ the
+    #: LOW and HIGH slots of the product no longer reproduce their own amounts — the best-estimate
+    #: slot is the one the caption prints, and the one this pair describes.
+    benefit_rate_before_overall_cap: Optional[float] = None
     #: The eligible-cost basis the rate was applied to, after proration and after the
     #: per-dwelling-unit cap — the second factor of `rate x basis = amount`.
     eligible_basis_in_euro: Optional[UncertainValue] = None
@@ -393,6 +403,28 @@ class SubsidyAward:
             The display name captured at award time, or the scheme id when it had none.
         """
         return self.display_name or self.scheme_id
+
+
+class SubsidySchemeLabels:
+    """The names of the support sources a timeline can carry that no catalog scheme covers (Q20).
+
+    Two ids reach the report without ever having been a `SubsidyScheme`: the §10.1 legacy flat
+    share, which is subsidy data carried in the *device* catalog for countries that have no
+    subsidy catalog yet, and the fallback for a support entry that names no scheme at all. Both
+    used to be printed raw — a reader of the Irish report saw a node called `LEGACY_FLAT` — and
+    both deserve an honest label rather than an invented programme name: what the legacy shim
+    models is a flat percentage with no scheme behind it, and the label says exactly that.
+
+    It sits beside :class:`SubsidyAward` rather than in `views.py` because both ends of the
+    convention have to agree on it: `calculators/subsidy_application.py` *writes*
+    ``LEGACY_FLAT_ID`` onto the shim's timeline entry, and the views read it back to name the
+    node. While the id was a literal at the writer and a constant at the reader, nothing tied the
+    two together. `views` re-exports nothing; both import it from here.
+    """
+
+    LEGACY_FLAT_ID = "LEGACY_FLAT"
+    LEGACY_FLAT = "flat legacy support share (no catalog)"
+    UNATTRIBUTED = "subsidy (unattributed)"
 
 
 @dataclass
@@ -460,6 +492,7 @@ class SubsidyDecision:
                     # stored result can show `rate x basis = amount` and the cap verdict.
                     "benefit_rate": award.benefit_rate,
                     "benefit_rate_before_group_cap": award.benefit_rate_before_group_cap,
+                    "benefit_rate_before_overall_cap": award.benefit_rate_before_overall_cap,
                     "eligible_basis_in_euro": (
                         award.eligible_basis_in_euro.to_json()
                         if award.eligible_basis_in_euro is not None

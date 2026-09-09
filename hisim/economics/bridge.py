@@ -427,6 +427,44 @@ def _billing_determinants(
     return determinants
 
 
+def _non_zero_energy_flows(determinants: Optional[BillingDeterminants]) -> Tuple[str, ...]:
+    """The energy figures a set of billing determinants reports as non-zero, named (D7).
+
+    The check behind the adapter's zero-size rule. `adapter._resolved_or_not_installed` excludes a
+    component configured at zero size from pricing on the grounds that such a device moves no
+    energy and its output columns sum to zero of their own accord — a plausible claim about every
+    component that exists today, but a claim, and one whose failure mode is silent: a device
+    excluded from capex whose meter still reports kilowatt-hours would have its energy billed
+    while its hardware is free. This turns the claim into evidence the bridge can act on.
+
+    Only the *energy* determinants are inspected, since they are what a bill is raised on: energy
+    bought and sold, the per-band split a time-of-use contract is billed by, and the integrated
+    cost and revenue a dynamic contract carries instead of a price lookup. Peaks are deliberately
+    not included — a capacity peak is derived from a power series and is a shape, not a quantity
+    that crossed the boundary — and neither is the mean spot price, which is a price.
+
+    Args:
+        determinants: The component's determinants, or None when it meters nothing.
+
+    Returns:
+        The names of the non-zero figures, in a fixed order, for the refusal message; empty when
+        the component metered nothing or metered exactly zero.
+    """
+    if determinants is None:
+        return ()
+    figures: List[Tuple[str, Optional[float]]] = [
+        ("energy_bought_in_kwh", determinants.energy_bought_in_kwh),
+        ("energy_sold_in_kwh", determinants.energy_sold_in_kwh),
+        ("cost_integrated_in_euro", determinants.cost_integrated_in_euro),
+        ("revenue_integrated_in_euro", determinants.revenue_integrated_in_euro),
+    ]
+    figures.extend(
+        (f"energy_bought_per_band_in_kwh[{band}]", value)
+        for band, value in sorted(determinants.energy_bought_per_band_in_kwh.items())
+    )
+    return tuple(name for name, value in figures if value)
+
+
 def build_evaluation_inputs(
     wrapped_components: List[Any],
     all_outputs: List[Any],
@@ -444,7 +482,7 @@ def build_evaluation_inputs(
     result is the plain-data record that `write_inputs` persists and the evaluator prices — no
     prices, no perspective, no economics of any kind are decided here.
 
-    Four things it also decides, and none of them is silent. An `UNDECLARED` component becomes an
+    Five things it also decides, and none of them is silent. An `UNDECLARED` component becomes an
     `UnresolvedSubject` naming its class: §9.2 makes the declaration mandatory, so a component
     that reaches the cost engine without one is a defect in that component, not a component
     outside the cost model, and the downstream D7 check aborts the evaluation on it. A component
@@ -452,9 +490,13 @@ def build_evaluation_inputs(
     nothing, a meter whose configured fuel maps to no carrier — becomes an `UnresolvedSubject` the
     same way (issues #2 and #3), rather than quietly missing from the cost report. So does a meter
     whose class declares an output column this run does not contain: it used to warn and leave the
-    carrier unbilled, which published a bill missing a flow. A run with no meter flows *at all*
-    stays a warning, because a system with nothing metered is a legitimate — if unpriced —
-    configuration rather than a broken meter (§3.4). And the simulated
+    carrier unbilled, which published a bill missing a flow. So does a component excluded from
+    pricing as *not installed* whose meter nevertheless reported energy (`_non_zero_energy_flows`):
+    the zero-size exclusion rests on the claim that such a device moves no energy, and where the
+    determinants contradict it, billing the flows of a device the result says is absent is not an
+    answer this layer may pick. A run with no meter flows *at all* stays a warning, because a
+    system with nothing metered is a legitimate — if unpriced — configuration rather than a broken
+    meter (§3.4). And the simulated
     period is converted into `simulated_period_fraction`, which the engine uses to annualize; runs
     longer than a year are clamped to one full year with a warning (cost_module_issues.md #15).
 
@@ -505,6 +547,25 @@ def build_evaluation_inputs(
             # price, and the D7 check downstream refuses to produce partial results.
             unresolved.append(UnresolvedSubject(subject=subject, reason=str(err)))
             continue
+        flows = _non_zero_energy_flows(determinants) if extraction.not_installed_reason else ()
+        if flows:
+            # A component excluded from capex as "not installed" that nevertheless metered energy
+            # is a contradiction, not a skip: the adapter's zero-size rule rests on a zero-size
+            # device moving no energy, and here it moved some. Billing it would charge a device
+            # the result says does not exist; not billing it would drop measured energy off the
+            # boundary. Both are wrong answers, so the run refuses (D7) and names the flows.
+            unresolved.append(
+                UnresolvedSubject(
+                    subject=subject,
+                    reason=(
+                        f"{extraction.not_installed_reason}, yet its meter reported energy flows "
+                        f"({', '.join(flows)}). A device configured at zero size cannot move "
+                        "energy: either the size or the metering is wrong, and pricing the run "
+                        "either way would publish a bill the cost model does not stand behind."
+                    ),
+                )
+            )
+            continue
         if determinants is not None:
             billing.append(determinants)
         if extraction.facts is not None:
@@ -514,9 +575,10 @@ def build_evaluation_inputs(
             # — the §9.2 hole issue #2 closed.
             unresolved.append(UnresolvedSubject(subject=subject, reason=extraction.unresolved_reason))
         elif extraction.not_installed_reason is not None:
-            # Configured at zero size: absent from the building, so absent from the cost model -
-            # a skip, not a failure. It is a warning rather than a note because an asset that
-            # silently leaves the cost model is exactly the omission a reader has to notice.
+            # Configured at zero size and, per the check above, metering nothing: absent from the
+            # building, so absent from the cost model - a skip, not a failure. It is a warning
+            # rather than a note because an asset that silently leaves the cost model is exactly
+            # the omission a reader has to notice.
             not_installed.append(f"{subject}: {extraction.not_installed_reason}")
     if not_installed:
         log.warning(

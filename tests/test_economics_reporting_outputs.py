@@ -480,7 +480,7 @@ class TestAwardsOfEveryPayoutKindAreReported:
             '<span title="TAX_CREDIT_SCHEME">TAX_CREDIT_SCHEME</span>: '
             "2,060 EUR, tax credit paid over 3 years"
         ) in html
-        section = html.split("<h2>5 - Subsidy decisions</h2>")[1].split("</section>")[0]
+        section = html.split('<section id="building-subsidies">')[1].split("</section>")[0]
         assert "0.00 EUR" not in section
         assert "0.90% interest, 20 years term, 25% repayment grant" in html
         assert "0.0800 EUR/kWh on ELECTRICITY for 10 years" in html

@@ -204,19 +204,20 @@ class TestHtmlReport:
         checks = run_plausibility_checks(matrix)
         text = build_lifecycle_report_html(matrix, checks, _audit(database, make_inputs(), matrix))
         for marker in (
-            "0 - Plausibility panel",
-            "1 - Input audit",
+            ">How to read this report",  # the primer, once and first
+            ">Plausibility",
+            ">Input audit",
             "sources used",  # §3.10 registry table
-            "2 - Investment build-up",
+            ">Investment build-up",
             "investment table",
-            "3 - Cash-flow timeline",
+            ">Cash-flow timeline",
             "NPV by cost category",  # §3.7 result table
-            "4 - Year-1 energy bill",
-            "4b - Lifecycle CO2",  # §3.8
-            "6 - Perspectives at a glance",
-            "7 - Per-component breakdown",
+            ">Energy bill",
+            ">CO2",  # §3.8
+            ">Perspectives",
+            ">Component breakdown",
             "subject table",
-            "10 - Lifecycle KPIs",  # §7.3
+            ">KPIs",  # §7.3
         ):
             assert marker in text, marker
         assert text.count("<svg") >= 5
@@ -224,15 +225,38 @@ class TestHtmlReport:
         assert "prefers-color-scheme: dark" in text  # theme-aware
 
     def test_report_with_comparison_section(self, database, matrix):
-        """Section 8 renders the delta waterfall and the payback curve."""
+        """The comparison section renders the delta waterfall and the payback curve."""
         evaluator = EconomicEvaluator(database, EconomicParameters(country="DE", price_basis_year=2026))
         perspective = select_applicable(load_default_bundle(), has_register=False)[0]
         reference = evaluator.evaluate(make_inputs(energy_kwh=15000.0, investment=2000.0), perspective)
         comparison = compare(reference, matrix.results[perspective.id], "base", "measures")
         checks = run_plausibility_checks(matrix)
         text = build_lifecycle_report_html(matrix, checks, _audit(database, make_inputs(), matrix), comparison)
-        assert "8 - Variant comparison" in text
+        assert ">Comparison" in text
         assert "Discounted payback" in text
+
+    def test_the_npv_bridge_needs_the_reference_result_the_comparison_does_not_carry(
+        self, database, matrix
+    ):
+        """A `VariantComparison` publishes no split by cost group, so the bridge asks for both.
+
+        Handed the baseline result the bridge decomposes, the section renders; without it the
+        section is skipped rather than drawn from deltas that cannot be split — which is the
+        whole reason `build_lifecycle_report_html` grew a sixth argument.
+        """
+        evaluator = EconomicEvaluator(database, EconomicParameters(country="DE", price_basis_year=2026))
+        perspective = select_applicable(load_default_bundle(), has_register=False)[0]
+        reference = evaluator.evaluate(make_inputs(energy_kwh=15000.0, investment=2000.0), perspective)
+        comparison = compare(reference, matrix.results[perspective.id], "base", "measures")
+        checks = run_plausibility_checks(matrix)
+        audit = _audit(database, make_inputs(), matrix)
+        without = build_lifecycle_report_html(matrix, checks, audit, comparison)
+        with_reference = build_lifecycle_report_html(
+            matrix, checks, audit, comparison, reference_result=reference
+        )
+        assert 'id="building-npv-bridge"' not in without
+        assert 'id="building-npv-bridge"' in with_reference
+        assert "Net NPV difference" in with_reference
 
 
 class TestDegenerateBandBanner:
@@ -355,8 +379,8 @@ class TestEconomicContextAndNewSections:
         cube = evaluate_cube(inputs, parameters, perspectives, scenario_set, database)
         checks = run_plausibility_checks(matrix)
         text = build_lifecycle_report_html(matrix, checks, _audit(database, inputs, matrix), scenario_cube=cube)
-        assert "6b - Who pays what" in text
-        assert "9 - Scenario analysis" in text
+        assert ">Who pays what" in text
+        assert ">Scenarios" in text
         assert "interest=high" in text
         # The cumulative NPV chart carries its uncertainty band (banded data -> polygon).
         assert "<polygon" in text

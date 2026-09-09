@@ -3,8 +3,8 @@
 The remaining sections (perspectives, actors, scenarios, KPIs, components, checks,
 variant comparison) and the two entry points `build_lifecycle_report_html` and
 `write_lifecycle_report` that stitch every section into the final self-contained
-document. Split out of the former single-module `reporting.py` (PR-3 review); the
-package `__init__` re-exports everything.
+document, in the order `scaffold.ReportSections.ORDER` declares. Split out of the former
+single-module `reporting.py` (PR-3 review); the package `__init__` re-exports everything.
 """
 
 
@@ -14,11 +14,13 @@ import datetime
 import os
 from typing import Dict, List, Optional, Tuple
 
+from hisim import log
 from hisim.economics import views
 from hisim.economics.input_audit import InputAuditReport
 from hisim.economics.plausibility import PlausibilityReport
 from hisim.economics.presentation_style import PresentationStyle, group_name, group_of
-from hisim.economics.results import EvaluationMatrix, VariantComparison
+from hisim.economics.results import EvaluationMatrix, LifecycleCostResult, VariantComparison
+from hisim.economics.timeline import Actor
 from hisim.economics.uncertainty import UncertainValue
 
 
@@ -33,7 +35,6 @@ from hisim.economics.reporting.summary import (
 )
 from hisim.economics.reporting.charts import (
     _bar_row,
-    _co2_section_html,
     _details,
     _esc,
     _legend_html,
@@ -45,18 +46,40 @@ from hisim.economics.reporting.charts import (
     _waterfall_svg,
     _whisker_svg,
 )
+from hisim.economics.reporting.scaffold import (
+    ReportChapters,
+    ReportSections,
+    _ChapterContext,
+    _chapter_open,
+    _explanation_html,
+    _how_to_read_section_html,
+    _section_open,
+    _table_of_contents_html,
+)
 from hisim.economics.reporting.sections import (
     _ReportCss,
     _audit_section_html,
+    _co2_section_html,
     _energy_section_html,
     _investment_section_html,
     _subsidy_section_html,
     _timeline_section_html,
 )
+from hisim.economics.reporting.sections_charts import (
+    _actor_flow_section_html,
+    _comparison_bridge_section_html,
+    _component_events_section_html,
+    _cost_of_credit_section_html,
+    _first_result_where,
+    _landlord_statement_section_html,
+    _liquidity_section_html,
+    _loan_section_html,
+    _uncertainty_section_html,
+)
 
 
-def _perspective_section_html(matrix: EvaluationMatrix) -> str:
-    """Section 6: equivalent annual cost across perspectives, with bands and the result table.
+def _perspective_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
+    """The perspectives section: equivalent annual cost across them, with bands and the table.
 
     Answers "is the perspective model itself behaving?" All perspectives on one axis make the
     orderings that must hold visible without arithmetic: a gross view sits above its net
@@ -70,6 +93,13 @@ def _perspective_section_html(matrix: EvaluationMatrix) -> str:
     the unit they think in. The sunk-cost column is added only when some perspective wrote off
     residual book value, and is marked "(info)": §4.1 reports it but keeps it out of the
     decision KPIs.
+
+    Args:
+        matrix: Every evaluated perspective; one whisker row and one table row each.
+        context: The chapter this section is being rendered into.
+
+    Returns:
+        The section, always non-empty for a matrix with at least one perspective.
     """
     rows = [
         (perspective_id, result.equivalent_annual_cost_in_euro)
@@ -92,17 +122,16 @@ def _perspective_section_html(matrix: EvaluationMatrix) -> str:
             row.append(_esc(_band_str(result.sunk_cost_written_off_in_euro)))
         table_rows.append(row)
     return (
-        "<section><h2>6 - Perspectives at a glance</h2>"
-        '<p class="sub">Equivalent annual cost with min/best_estimate/max whiskers. Sanity: gross &#8805; net; '
-        "operating &#8804; brownfield; macroeconomic differs only by transfers + CO2 damage.</p>"
+        _section_open(ReportSections.PERSPECTIVES, context)
+        + _explanation_html(ReportSections.PERSPECTIVES, context)
         + _whisker_svg(rows, "EUR/a")
         + _table(headers, table_rows)
         + "</section>"
     )
 
 
-def _actor_section_html(matrix: EvaluationMatrix) -> str:
-    """Section 6b: who pays what — payer NPVs per allocated perspective (§6.5).
+def _actor_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
+    """Who pays what: payer NPVs per allocated perspective (§6.5).
 
     Answers "does the landlord/tenant split move money between actors without creating or
     destroying any?" Each allocated perspective gets payer whiskers plus a payer × cost-group
@@ -116,9 +145,14 @@ def _actor_section_html(matrix: EvaluationMatrix) -> str:
     and perspectives that were never allocated are skipped entirely — recognized by having fewer
     than two real payers while carrying a SYSTEM entry. The section disappears when no
     perspective in the matrix is allocated, which is the case for a plain owner-occupier run.
-    """
-    from hisim.economics.timeline import Actor
 
+    Args:
+        matrix: Every evaluated perspective; the unallocated ones are skipped.
+        context: The chapter this section is being rendered into.
+
+    Returns:
+        The section, or the empty string when no perspective in the matrix is allocated.
+    """
     blocks = []
     for perspective_id, result in matrix.results.items():
         payers = {payer: band for payer, band in result.npv_by_payer.items() if payer != Actor.SYSTEM}
@@ -152,10 +186,9 @@ def _actor_section_html(matrix: EvaluationMatrix) -> str:
     if not blocks:
         return ""
     return (
-        "<section><h2>6b - Who pays what (actor split)</h2>"
-        '<p class="sub">Landlord/tenant allocation per the DE_2024 ruleset: tenant pays energy and '
-        "apportionable operation plus the modernization levy; landlord pays investment minus "
-        "subsidies and receives the levy. Negative = net gain.</p>" + "".join(blocks) + "</section>"
+        _section_open(ReportSections.WHO_PAYS_WHAT, context)
+        + _explanation_html(ReportSections.WHO_PAYS_WHAT, context)
+        + "".join(blocks) + "</section>"
     )
 
 
@@ -206,8 +239,8 @@ def _tornado_svg(rows: List[Tuple[str, float]], base_value: float) -> str:
     return "".join(parts)
 
 
-def _scenario_section_html(scenario_cube, matrix: EvaluationMatrix) -> str:
-    """Section 9: scenario analysis — tornado of the headline KPI plus the full table (§4.6).
+def _scenario_section_html(scenario_cube, matrix: EvaluationMatrix, context: _ChapterContext) -> str:
+    """The scenarios section: a tornado of the headline KPI plus the full table (§4.6).
 
     Answers "how much of the conclusion survives the assumptions?" The tornado ranks the
     scenarios by how far they move the headline KPI, the all-scenarios table gives NPV, EAC and
@@ -215,16 +248,23 @@ def _scenario_section_html(scenario_cube, matrix: EvaluationMatrix) -> str:
     figure that says whether a ranking between two options holds across the whole scenario set
     or only under the base assumptions.
 
-    The caption states the distinction reviewers most often miss: scenario axes and uncertainty
-    bands are two *orthogonal* mechanisms (§4.6). A scenario varies rates and datapoints
-    deliberately; the min/best_estimate/max band varies the cost data within each scenario. They must not
-    be read as one interval, and the report never combines them.
+    The authored prose states the distinction reviewers most often miss: scenario axes and
+    uncertainty bands are two *orthogonal* mechanisms (§4.6). A scenario varies rates and
+    datapoints deliberately; the min/best_estimate/max band varies the cost data within each
+    scenario. They must not be read as one interval, and the report never combines them.
 
     `scenario_cube` is taken untyped on purpose — presentation may render a cube but may not
     import the module that builds one (the seam-4 import rule), so it is duck-typed for
     `results`, `base_id`, `equivalent_annual_cost_swings` and `equivalent_annual_cost_spreads`.
-    The section disappears when no cube was computed, or when the cube has no base result for
-    the reference perspective.
+
+    Args:
+        scenario_cube: The evaluated cube, or None when the run computed none.
+        matrix: Every evaluated perspective; the first is the one the tornado is drawn for.
+        context: The chapter this section is being rendered into.
+
+    Returns:
+        The section, or the empty string when no cube was computed or the cube has no base
+        result for the reference perspective.
     """
     if scenario_cube is None or not scenario_cube.results:
         return ""
@@ -257,11 +297,9 @@ def _scenario_section_html(scenario_cube, matrix: EvaluationMatrix) -> str:
         _table(["Perspective", "Min", "Max", "Spread"], robustness_rows),
     )
     return (
-        f"<section><h2>9 - Scenario analysis ({_esc(perspective_id)})</h2>"
-        '<p class="sub">Equivalent annual cost swing per economic scenario vs. the base assumptions '
-        "(red = more expensive, aqua = cheaper). Scenario axes vary rates and datapoints; the "
-        "min/best_estimate/max bands vary the cost data within each scenario — two orthogonal uncertainty "
-        "mechanisms (§4.6). Full cube: scenario_cube.csv / scenario_cube.json.</p>"
+        _section_open(ReportSections.SCENARIOS, context, perspective_id)
+        + _explanation_html(ReportSections.SCENARIOS, context)
+        + "<p class='sub'>Full cube: scenario_cube.csv / scenario_cube.json.</p>"
         + _tornado_svg(rows, base_value)
         + "<details open><summary>all scenarios</summary><table>"
         "<tr><th>Scenario</th><th>NPV</th><th>Equivalent annual cost</th><th>Swing [EUR/a]</th></tr>"
@@ -269,8 +307,8 @@ def _scenario_section_html(scenario_cube, matrix: EvaluationMatrix) -> str:
     )
 
 
-def _kpi_section_html(matrix: EvaluationMatrix) -> str:
-    """Section 10: the namespaced lifecycle KPI set (§7.3) as a table with bands.
+def _kpi_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
+    """The KPIs section: the namespaced lifecycle KPI set (§7.3) as a table with bands.
 
     Answers "what exactly will downstream consumers see?" — the section prints the published KPI
     set verbatim, so the reviewer who has just followed the calculation chain can confirm that
@@ -282,6 +320,13 @@ def _kpi_section_html(matrix: EvaluationMatrix) -> str:
     disagree; that import is one of the explicitly allowed presentation→engine-output imports.
     `value` is the BEST_ESTIMATE slot and the band column is min | max, both stated in the caption
     because a KPI name alone does not say which slot it carries.
+
+    Args:
+        matrix: Every evaluated perspective; the KPI set is built from all of them.
+        context: The chapter this section is being rendered into.
+
+    Returns:
+        The section, or the empty string when the matrix publishes no KPI entry.
     """
     from hisim.economics.exports import build_lifecycle_kpi_entries
 
@@ -298,29 +343,37 @@ def _kpi_section_html(matrix: EvaluationMatrix) -> str:
         )
         rows.append([_esc(entry.name), value, band, _esc(entry.unit)])
     return (
-        "<section><h2>10 - Lifecycle KPIs</h2>"
-        '<p class="sub">The namespaced KPI set (§7.3) as published to lifecycle_kpis.json; '
-        "`value` is the BEST_ESTIMATE slot, the band column is min | max.</p>"
+        _section_open(ReportSections.KPIS, context)
+        + _explanation_html(ReportSections.KPIS, context)
+        + "<p class='sub'>Published to lifecycle_kpis.json; <code>value</code> is the "
+          "BEST_ESTIMATE slot, the band column is min | max.</p>"
         + _table(["KPI", "Value", "Band (min | max)", "Unit"], rows)
         + "</section>"
     )
 
 
-def _components_section_html(matrix: EvaluationMatrix) -> str:
-    """Section 7: per-subject stacked NPV bars per perspective (§7.4).
+def _components_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
+    """The component breakdown: per-subject stacked NPV bars per perspective (§7.4).
 
     Answers "which component actually drives the result, and does the sum of the parts equal the
     whole?" The diverging stacks put each subject's cost blocks right of zero and its credits
     (residual value, subsidies, feed-in, anyway credit) left, with a marker at the net NPV band,
     so `net = costs - credits` is geometry rather than a claim. The §7.4 reconciliation — the
-    subject nets summing to the headline — is checked automatically in section 0; this is where
-    a reader sees *why* it holds or which subject is responsible when it does not.
+    subject nets summing to the headline — is checked automatically in the plausibility panel;
+    this is where a reader sees *why* it holds or which subject is responsible when it does not.
 
     One collapsible block per perspective, the first open, each with a legend restricted to the
     groups that perspective's breakdowns contain and a table repeating the same subjects with
     NPV, equivalent annual cost, year-0 investment, support and lifecycle CO2. Keeping the
     credits unnetted is deliberate: an expensive component with an equally large subsidy looks
     nothing like a cheap one, and a netted bar would hide the difference.
+
+    Args:
+        matrix: Every evaluated perspective; one block each.
+        context: The chapter this section is being rendered into.
+
+    Returns:
+        The section, always non-empty for a matrix with at least one perspective.
     """
     blocks = []
     for index, (perspective_id, result) in enumerate(matrix.results.items()):
@@ -351,22 +404,19 @@ def _components_section_html(matrix: EvaluationMatrix) -> str:
             + _legend_html(groups_present) + _stacked_subject_svg(result) + subject_table + "</details>"
         )
     return (
-        "<section><h2>7 - Per-component breakdown</h2>"
-        '<p class="sub">Diverging stacks per subject: costs right of the zero line, credits '
-        "(residual value, subsidies, feed-in, anyway credit) left — never added onto the cost "
-        "side. The whisker + dot mark the net NPV band; net = costs - credits reconciles with "
-        "the headline by construction (§7.4).</p>"
+        _section_open(ReportSections.COMPONENT_BREAKDOWN, context)
+        + _explanation_html(ReportSections.COMPONENT_BREAKDOWN, context)
         + "".join(blocks) + "</section>"
     )
 
 
-def _checks_section_html(plausibility: PlausibilityReport) -> str:
-    """Section 0: the plausibility panel.
+def _checks_section_html(plausibility: PlausibilityReport, context: _ChapterContext) -> str:
+    """The plausibility panel.
 
     Answers, before anything else is read, "is there a reason not to trust the rest of this
-    report?" It is section 0 because a reviewer's time is better spent on the automated verdict
-    than on rediscovering a unit mix-up by inspection, and the heading carries the count of
-    flagged checks so that verdict is visible without scrolling. WARN means a magnitude left a
+    report?" It opens the analysis because a reviewer's time is better spent on the automated
+    verdict than on rediscovering a unit mix-up by inspection, and the heading carries the count
+    of flagged checks so that verdict is visible without scrolling. WARN means a magnitude left a
     deliberately generous range (usually a unit or a rate stored as an absolute); FAIL means a
     structural invariant is broken and the numbers below contradict each other.
 
@@ -380,6 +430,13 @@ def _checks_section_html(plausibility: PlausibilityReport) -> str:
     paths even though `PlausibilityCheck` now refuses anything but PASS/WARN/FAIL: an unescaped
     value interpolated into a quoted attribute is a markup injection waiting for the day the
     constraint is relaxed, and escaping the three legal spellings costs nothing.
+
+    Args:
+        plausibility: The report whose findings are rendered as the panel's rows.
+        context: The chapter this section is being rendered into.
+
+    Returns:
+        The section, always non-empty; the verdict is in the heading.
     """
     checks = render_plausibility_findings(plausibility)
     rows = "".join(
@@ -391,15 +448,15 @@ def _checks_section_html(plausibility: PlausibilityReport) -> str:
     n_bad = sum(1 for check in checks if check.status != "PASS")
     headline = "all checks passed" if n_bad == 0 else f"{n_bad} check(s) need a look"
     return (
-        f"<section><h2>0 - Plausibility panel — {headline}</h2>"
-        '<p class="sub">Automated ratio and invariant checks (thresholds: '
-        "cost_database/plausibility_checks.json). WARN = outside the generous range, FAIL = structural.</p>"
-        f"<table><tr><th></th><th>Check</th><th>Value</th><th>Expected</th><th>Note</th></tr>{rows}</table></section>"
+        _section_open(ReportSections.PLAUSIBILITY, context, headline)
+        + _explanation_html(ReportSections.PLAUSIBILITY, context)
+        + f"<table><tr><th></th><th>Check</th><th>Value</th><th>Expected</th><th>Note</th></tr>{rows}"
+        "</table></section>"
     )
 
 
-def _comparison_section_html(comparison: VariantComparison) -> str:
-    """Section 8/D: delta waterfall by subject + discounted payback curve.
+def _comparison_section_html(comparison: VariantComparison, context: _ChapterContext) -> str:
+    """The comparison section (§D): delta waterfall by subject + discounted payback curve.
 
     Answers the only question that is actually a decision: "is the variant worth it compared to
     the reference, and when does it pay back?" The waterfall attributes the total NPV delta to
@@ -416,6 +473,16 @@ def _comparison_section_html(comparison: VariantComparison) -> str:
 
     Subjects whose delta is below half a cent are dropped from the waterfall as float noise;
     the delta table below it lists every subject, so nothing is hidden.
+
+    The NPV bridge beside it answers the same question decomposed by *cost group* rather than by
+    subject, which is why the two are separate sections rather than two charts in one.
+
+    Args:
+        comparison: The variant-vs-reference comparison to state.
+        context: The chapter this section is being rendered into.
+
+    Returns:
+        The section, always non-empty for a comparison that was computed at all.
     """
     steps: List[Tuple[str, float, str]] = []
     for subject, delta in sorted(comparison.npv_delta_by_subject.items(), key=lambda item: item[1].best_estimate):
@@ -439,9 +506,8 @@ def _comparison_section_html(comparison: VariantComparison) -> str:
         for subject, delta in sorted(comparison.npv_delta_by_subject.items(), key=lambda item: item[1].best_estimate)
     ]
     return (
-        f"<section><h2>8 - Variant comparison ({_esc(comparison.perspective_id)})</h2>"
-        '<p class="sub">NPV delta by subject (variant - reference; red adds cost, aqua saves) and the '
-        "cumulative discounted savings whose zero-crossing is the payback.</p>"
+        _section_open(ReportSections.COMPARISON, context, comparison.perspective_id)
+        + _explanation_html(ReportSections.COMPARISON, context)
         + _waterfall_svg(steps, "Net NPV delta", comparison.npv_delta_in_euro.best_estimate)
         + _details("delta table (best-case | expected | worst-case, §3.9 envelope)",
                    _table(["Subject", "NPV delta"], delta_rows))
@@ -458,15 +524,22 @@ def build_lifecycle_report_html(
     audit: Optional[InputAuditReport] = None,
     comparison: Optional[VariantComparison] = None,
     scenario_cube=None,
+    reference_result: Optional[LifecycleCostResult] = None,
 ) -> str:
     """The self-contained HTML report, sections along the calculation chain.
 
     The module's main entry point and the assembly of everything above: a header stating the
-    run's parameters, the twelve-odd `_*_section_html` blocks in the fixed order 0, 1, 2, 3, 4,
-    4b, 5, 6, 6b, 7, 9, 10 (plus 8 when comparing), and a footer telling the reader how to trace
-    any figure back to its sources with `python -m hisim.economics explain`. The order is the
-    calculation chain, not a menu: each section is placed where a mistake made upstream of it
-    first becomes visible.
+    run's parameters, a table of contents, every `_*_section_html` block in the order
+    `ReportSections.ORDER` declares (the comparison pair only when comparing), and a footer
+    telling the reader how to trace any figure back to its sources with
+    `python -m hisim.economics explain`. The order is the calculation chain, not a menu: each
+    section is placed where a mistake made upstream of it first becomes visible, which is why the
+    contents are a navigation aid rather than the structure itself.
+
+    The whole document is rendered as one chapter, `ReportChapters.THE_BUILDING`: splitting the
+    story chapters apart needs the per-party statement sections, which land with the second half
+    of the chart set, so until then every section carries the `building-` anchor prefix and the
+    contents have a single top-level entry.
 
     The returned document is a **single file with no external references** — stylesheet inlined
     from `_ReportCss`, charts as inline SVG, tooltips native, no script and no font, image or
@@ -482,11 +555,15 @@ def build_lifecycle_report_html(
     Args:
         matrix: Evaluated perspectives; the first is the reference used for the single-result
             sections (investment, energy bill, CO2) and for the scenario section's base.
-        plausibility: The panel rendered as section 0.
-        audit: Optional resolved-input audit; section 1 is omitted without it.
-        comparison: Optional variant-vs-reference comparison; appends section 8.
-        scenario_cube: Optional `ScenarioCube` (untyped by the seam-4 import rule); adds
-            section 9.
+        plausibility: The panel rendered as the plausibility section.
+        audit: Optional resolved-input audit; the input-audit section is omitted without it.
+        comparison: Optional variant-vs-reference comparison; appends the comparison sections.
+        scenario_cube: Optional `ScenarioCube` (untyped by the seam-4 import rule); adds the
+            scenarios section.
+        reference_result: The comparison's baseline result. Needed by the NPV bridge, which
+            decomposes a comparison by cost group rather than restating it, because a
+            `VariantComparison` publishes no such split. Without it that section is omitted and
+            the omission is logged.
 
     Returns:
         The complete HTML document as one string.
@@ -508,22 +585,11 @@ def build_lifecycle_report_html(
             "<section style='border-left:4px solid var(--warning)'><b>No uncertainty bands in "
             f"this run.</b> <span class='sub'>{_esc(_degenerate_note(matrix))}</span></section>"
         )
-    sections = [
-        _checks_section_html(plausibility),
-        _audit_section_html(audit) if audit is not None else "",
-        _investment_section_html(reference),
-        _timeline_section_html(matrix),
-        _energy_section_html(reference),
-        _co2_section_html(matrix),
-        _subsidy_section_html(matrix),
-        _perspective_section_html(matrix),
-        _actor_section_html(matrix),
-        _components_section_html(matrix),
-        _scenario_section_html(scenario_cube, matrix),
-        _kpi_section_html(matrix),
-    ]
-    if comparison is not None:
-        sections.append(_comparison_section_html(comparison))
+    context = _ChapterContext(chapter=ReportChapters.THE_BUILDING)
+    document = _chapter_open(ReportChapters.THE_BUILDING) + "".join(
+        _document_sections(matrix, plausibility, audit, comparison, scenario_cube,
+                           reference_result, context)
+    )
     footer = (
         "<footer>Every number is traceable: "
         "<code>python -m hisim.economics explain &lt;results_dir&gt; --value "
@@ -533,8 +599,86 @@ def build_lifecycle_report_html(
         "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
         f"<title>Lifecycle cost report</title><style>{_ReportCss.CSS}</style></head>"
-        f"<body><main>{header}{''.join(sections)}{footer}</main></body></html>"
+        f"<body><main>{header}{_table_of_contents_html(document)}{document}{footer}</main></body></html>"
     )
+
+
+def _document_sections(
+    matrix: EvaluationMatrix,
+    plausibility: PlausibilityReport,
+    audit: Optional[InputAuditReport],
+    comparison: Optional[VariantComparison],
+    scenario_cube,
+    reference_result: Optional[LifecycleCostResult],
+    context: _ChapterContext,
+) -> List[str]:
+    """Every section of the document, in `ReportSections.ORDER`.
+
+    Split out of `build_lifecycle_report_html` because the document has to be *rendered* before
+    its table of contents can be built — the contents list the sections that actually appeared,
+    not the ones that might have — so the assembly and the shell around it are two steps rather
+    than one expression.
+
+    Most sections take the matrix's first perspective, which is the reference view of the run.
+    Three cannot and use `_first_result_where` instead: the cost-of-credit panel needs a financed
+    perspective, the who-pays-whom Sankey needs one with more than one payer, and the landlord
+    statement needs a landlord-scoped one. Each of them names the perspective it is showing in
+    its own heading, and skips itself with a log line when the run has none.
+
+    Args:
+        matrix: Evaluated perspectives.
+        plausibility: The panel for the plausibility section.
+        audit: Optional input audit.
+        comparison: Optional variant comparison.
+        scenario_cube: Optional scenario cube.
+        reference_result: Optional baseline result for the NPV bridge.
+        context: The chapter every section is rendered into; **mutated** as the explanations are
+            recorded.
+
+    Returns:
+        The sections in page order; the empty ones are kept and concatenate to nothing.
+    """
+    reference = _reference_result(matrix)
+    financed = _first_result_where(
+        matrix, lambda result: views.loan_amortization_series(result).has_flows()
+    ) or reference
+    multi_actor = _first_result_where(
+        matrix, lambda result: len({entry.payer for entry in result.timeline.entries}) > 1
+    ) or reference
+    landlord = _first_result_where(matrix, lambda result: result.scope_payer == Actor.LANDLORD)
+    sections = [
+        _how_to_read_section_html(context),
+        _checks_section_html(plausibility, context),
+        _audit_section_html(audit, context) if audit is not None else "",
+        _investment_section_html(reference, context),
+        _component_events_section_html(reference, context),
+        _timeline_section_html(matrix, context),
+        _liquidity_section_html(reference, comparison, context),
+        _loan_section_html(matrix, context),
+        _cost_of_credit_section_html(financed, context),
+        _energy_section_html(reference, context),
+        _co2_section_html(matrix, context),
+        _subsidy_section_html(matrix, context),
+        _perspective_section_html(matrix, context),
+        _landlord_statement_section_html(landlord, context) if landlord is not None else "",
+        _actor_section_html(matrix, context),
+        _actor_flow_section_html(multi_actor, context),
+        _uncertainty_section_html(reference, context),
+        _components_section_html(matrix, context),
+        _scenario_section_html(scenario_cube, matrix, context),
+        _kpi_section_html(matrix, context),
+    ]
+    if comparison is not None:
+        sections.append(_comparison_section_html(comparison, context))
+        variant = matrix.results.get(comparison.perspective_id, reference)
+        if reference_result is not None:
+            sections.append(_comparison_bridge_section_html(reference_result, variant, context))
+        else:
+            log.information(
+                "NPV bridge skipped: the report was built with a comparison but without the "
+                "reference result it decomposes."
+            )
+    return sections
 
 
 def write_lifecycle_report(
@@ -544,6 +688,7 @@ def write_lifecycle_report(
     audit: Optional[InputAuditReport] = None,
     comparison: Optional[VariantComparison] = None,
     scenario_cube=None,
+    reference_result: Optional[LifecycleCostResult] = None,
 ) -> str:
     """Writes the HTML report as `ReportFileNames.LIFECYCLE_REPORT_FILE_NAME`.
 
@@ -556,11 +701,13 @@ def write_lifecycle_report(
 
     Args:
         matrix: Evaluated perspectives.
-        plausibility: The panel for section 0.
+        plausibility: The panel for the plausibility section.
         result_directory: Directory to write into (the run's `results/`).
-        audit: Optional input audit for section 1.
-        comparison: Optional variant comparison for section 8.
-        scenario_cube: Optional scenario cube for section 9.
+        audit: Optional input audit for the input-audit section.
+        comparison: Optional variant comparison for the comparison section.
+        scenario_cube: Optional scenario cube for the scenarios section.
+        reference_result: The comparison's baseline, for the NPV bridge that decomposes it; see
+            `build_lifecycle_report_html`.
 
     Returns:
         The path written.
@@ -568,6 +715,8 @@ def write_lifecycle_report(
     path = os.path.join(result_directory, ReportFileNames.LIFECYCLE_REPORT_FILE_NAME)
     with open(path, "w", encoding="utf-8") as file:
         file.write(
-            build_lifecycle_report_html(matrix, plausibility, audit, comparison, scenario_cube)
+            build_lifecycle_report_html(
+                matrix, plausibility, audit, comparison, scenario_cube, reference_result
+            )
         )
     return path

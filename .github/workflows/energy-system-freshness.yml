@@ -23,13 +23,14 @@
 # On failure the fix is: run 'python scripts/record_all_setups.py' locally,
 # resolve any recorder errors, and commit what it writes.
 #
-# Gate: ADVISORY for its burn-in (continue-on-error below). The step itself
-# still exits non-zero on drift, a missing twin, a setup that cannot be
-# recorded, or two parameter files describing the same run, and the drift diff
-# is still uploaded — but a failure does not block a merge yet. Byte-identical
-# re-recording is proven by test for one setup and by design for the rest, so
-# the fleet earns the blocking bit empirically: after a week of green runs on
-# main, delete the continue-on-error line and this gate is blocking.
+# Gate: BLOCKING. The step exits non-zero on drift, a missing twin, a setup that
+# cannot be recorded, or two parameter files describing the same run, and the drift
+# diff is uploaded with the failure, so a PR that leaves a twin stale cannot be
+# merged. The gate was advisory for a burn-in first: byte-identical re-recording is
+# proven by test for one setup and only by design for the other twenty-one, so the
+# fleet earned the blocking bit empirically — eleven green runs on main between
+# 2026-09-06 and 2026-09-08, none of them a failure, which was judged enough to grant
+# the bit without waiting out the nominal week.
 #
 # Note: this is heavy, like the scenario-JSON gate, because it constructs every
 # setup (occupancy setups trigger LPG) and then builds each recorded file back
@@ -58,9 +59,6 @@ concurrency:
 jobs:
   freshness:
     name: re-record every setup and check for drift
-    # Burn-in: failures are reported, uploaded and annotated, but do not block. Delete this
-    # line after a week of green runs on main to make the gate blocking (see the header).
-    continue-on-error: true
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
@@ -69,6 +67,11 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v6
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
@@ -115,3 +118,10 @@ jobs:
         with:
           mode: save
           scope: ${{ github.workflow }}
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report

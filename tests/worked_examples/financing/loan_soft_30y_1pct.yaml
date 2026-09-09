@@ -1,0 +1,37 @@
+# GENERATED from loan_soft_30y_1pct.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "loan_soft_30y_1pct"
+group: "financing"
+spec_section: "4.4"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "100,000 EUR promotional loan over 30 years at 1 %. A long term and a low rate make the annuity barely larger than pure amortization; the closed-form remaining debt after 15 years is still more than half the principal because early payments are interest-heavy."
+inputs:
+  principal_in_euro: 100000
+  interest_rate: 0.01
+  duration_in_years: 30
+expected:
+  annuity_in_euro:
+    value: 3874.81
+    abs_tol: 0.01
+    derivation: "principal_in_euro*interest_rate*(1+interest_rate)^duration_in_years/((1+interest_rate)^duration_in_years-1)"
+  annuity_via_pmt_in_euro:
+    value: 3874.81
+    abs_tol: 0.01
+    derivation: "-PMT(interest_rate,duration_in_years,principal_in_euro)"
+    note: "Excel's finance library as the independent second implementation"
+  interest_year_1_in_euro:
+    value: 1000.00
+    abs_tol: 0.01
+    derivation: "principal_in_euro*interest_rate"
+  principal_repayment_year_1_in_euro:
+    value: 2874.81
+    abs_tol: 0.01
+    derivation: "annuity_in_euro-interest_year_1_in_euro"
+  remaining_debt_year_15_in_euro:
+    value: 53724.46
+    abs_tol: 0.01
+    derivation: "principal_in_euro*(1+interest_rate)^15-annuity_in_euro*((1+interest_rate)^15-1)/interest_rate"
+  total_interest_in_euro:
+    value: 16244.34
+    abs_tol: 0.01
+    derivation: "annuity_in_euro*duration_in_years-principal_in_euro"

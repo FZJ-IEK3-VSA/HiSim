@@ -13,6 +13,7 @@ from hisim.components import generic_chp
 from hisim.components import generic_electrolyzer
 from hisim.simulationparameters import SimulationParameters
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -108,6 +109,8 @@ class GenericHydrogenStorage(cp.Component):
     (1) Fuel cell (generic_CHP)
     (2) Electrolyzer (generic_electrolyzer)
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # input
     HydrogenInput = "HydrogenInput"  # kg/s

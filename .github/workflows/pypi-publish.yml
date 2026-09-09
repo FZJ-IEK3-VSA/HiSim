@@ -21,6 +21,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+    # Wall time, CPU time and peak memory for this job; see the action.
+    - name: Start the resource monitor
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: start
     - name: Set up Python 3.11
       uses: actions/setup-python@v6
       with:
@@ -37,3 +42,10 @@ jobs:
       run: python setup.py sdist bdist_wheel
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
+    # Kept on failure too: a job killed for running out of memory is the one
+    # whose measurement matters most.
+    - name: Report the resource usage
+      if: always()
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: report

@@ -26,6 +26,7 @@ from hisim.dynamic_component import (
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -48,6 +49,12 @@ class FuelMeterConfig(ConfigBase):
 
     component_id: ComponentID
     fuel_loadtype: lt.LoadTypes
+    #: Lower heating value used by this component's *own* legacy OPEX report (`get_cost_opex`),
+    #: which still converts kWh into liters and kilograms to price them against
+    #: `EmissionFactorsAndCostsForFuelsConfig`. It no longer plays any part in lifecycle-cost
+    #: pricing: since decision D26 the cost engine bills every carrier in kWh and converts the
+    #: EUR/l resp. EUR/t database quote itself, using the `PhysicsConfig` heating value as the
+    #: single source. Setting this field therefore changes the legacy OPEX numbers only.
     heating_value_of_fuel_in_kwh_per_liter: Optional[float]
     fuel_density_in_kg_per_m3: Optional[float]
 
@@ -72,6 +79,8 @@ class FuelMeterConfig(ConfigBase):
 
 class FuelMeter(DynamicComponent):
     """Fuel meter class."""
+
+    cost_relevance = CostRelevance.METER
 
     # Outputs
     HeatConsumption: ClassVar[str] = "HeatConsumption"

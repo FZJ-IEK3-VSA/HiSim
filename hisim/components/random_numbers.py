@@ -13,6 +13,7 @@ from hisim.component import Component, SingleTimeStepValues
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+from hisim.economics.facts import CostRelevance
 
 
 @dataclass_json
@@ -87,6 +88,8 @@ class RandomNumbers(Component):
     Key methods:
         - i_simulate: Outputs the pre-generated random value for the current timestep
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # A generator of random values is not a device: it has nothing to buy and nothing to run.
     # Declaring that is what lets a setup built from it ask for costs at all;

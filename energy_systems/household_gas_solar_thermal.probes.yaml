@@ -1,0 +1,30 @@
+# The module configurations household_gas_solar_thermal is recorded under.
+# This setup is the fleet's hidden configuration consumer: it demands an energy-system config,
+# falls back to the gas-and-solar-thermal default when none is given, and then reads exactly one
+# field out of the whole document - the dwelling count on the archetype half. All four
+# EnergySystemConfig fields are ignored, so the photovoltaic share, the battery-and-manager flag and
+# the heat-distribution enum are not axes of this setup and no probe here can pretend they are; and
+# the building code, which every sizer probes, is not read either.
+#
+# So the one axis it has is the one probed: the dwelling count, which reaches the domestic hot water
+# storage and stops. Two columns are the smallest list that proves that - a baseline alone would
+# make the grouped file a copy of the twin with a header line added and assert nothing the twin does
+# not already assert.
+setup: system_setups/household_gas_solar_thermal.py
+defaults: hisim.building_sizer_utils.interface_configs.modular_household_config.ModularHouseholdConfig.get_default_config_for_household_gas_solar_thermal
+probes:
+  - column: baseline
+    description: >-
+      The class defaults, recorded with no module configuration at all, which is what makes this
+      column's flat file the committed twin: one dwelling, the condensing gas boiler and the solar
+      thermal collector that preheats its domestic hot water.
+
+  - column: two_dwellings
+    description: >-
+      Two dwellings instead of one. The only field this setup reads, moved to its next value: the
+      domestic hot water storage is scaled per dwelling and follows it, and nothing else in the
+      household does. The column exists to make that claim provable rather than assumed - the
+      boiler, the collector, the emitter and the meters are recorded twice and have to come back
+      identical.
+    module_config:
+      archetype_config_.number_of_dwellings_per_building: 2

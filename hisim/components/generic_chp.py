@@ -17,6 +17,7 @@ from hisim import loadtypes as lt
 from hisim.components import controller_l1_chp
 from hisim.simulationparameters import SimulationParameters
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -127,6 +128,8 @@ class SimpleCHP(cp.Component):
     Components to connect to:
     (1) CHP or fuel cell controller (controller_l1_chp)
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     CHPControllerOnOffSignal: ClassVar[str] = "CHPControllerOnOffSignal"

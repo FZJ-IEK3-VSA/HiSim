@@ -26,8 +26,9 @@ hash, list of golden files). The checker does **not** read it.
 [`../scripts/golden_config.json`](../scripts/golden_config.json) is the single,
 hand-maintained source of truth for **which** setups and parameter sets are in the
 gate. Edit it to add or remove a setup; everything downstream (runner, check,
-update, CI matrix) follows. Every parameter set must enable
-`["COMPUTE_KPIS", "WRITE_KPIS_TO_JSON"]`, and every setup must be **offline-runnable**
+update, CI matrix) follows. Every parameter set must enable the cost stages plus the
+KPIs — `["COMPUTE_OPEX", "COMPUTE_CAPEX", "COMPUTE_KPIS", "WRITE_KPIS_TO_JSON"]`, so
+the building-level cost KPIs are pinned — and every setup must be **offline-runnable**
 and **KPI-complete** — validate with:
 
 ```bash

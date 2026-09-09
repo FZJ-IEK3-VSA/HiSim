@@ -164,6 +164,36 @@ class ResolvedInputRow:
         )
 
 
+def price_basis(row: ResolvedInputRow) -> str:
+    """What a row's unit price is measured in, for whichever renderer is printing it.
+
+    The three unit-price slots hold one number per slot but not one *kind* of number: a DATABASE
+    row states the entry's specific investment, euro per unit of the declared size (EUR/kW, EUR/m²,
+    …), while an OVERRIDE row states an absolute euro amount for the whole subject, which is why
+    the two are never multiplied by the size the same way downstream. Labelling both "EUR/unit" and
+    nothing else made a per-kW figure and a total look like the same quantity in one column, and
+    understating a subject by orders of magnitude is exactly the reading mistake the audit exists to
+    prevent.
+
+    It lives here, next to the row rather than in either renderer, because both of them print the
+    same price: `cost_audit.csv` in its "Price basis" column and section 1 of the HTML report next
+    to the figure. Two spellings of one fact is how the CSV and the report came to disagree about
+    an override before W4.6.
+
+    Args:
+        row: The resolved row whose price is being printed.
+
+    Returns:
+        The basis as a label, or the empty string for an UNRESOLVED row, which has no price to
+        measure.
+    """
+    if row.origin_kind == OriginKind.ORIGIN_OVERRIDE:
+        return "EUR absolute (override)"
+    if row.origin_kind == OriginKind.ORIGIN_DATABASE:
+        return f"EUR/{row.size_unit} (database)"
+    return ""
+
+
 @dataclass(frozen=True)
 class InputAuditReport:
     """The resolved-input audit: its rows, the price basis they resolved at, its sources.

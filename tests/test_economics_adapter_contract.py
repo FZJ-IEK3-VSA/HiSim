@@ -14,6 +14,12 @@ The second half checks the adapter's failure semantics rather than its table: no
 relevance must be read off the class declaration only. Both are the "fail loudly" rule seen from
 the extraction side.
 
+``test_every_component_class_declares_cost_relevance`` closes that rule fleet-wide. Because the
+adapter no longer guesses, an undeclared component aborts every lifecycle-cost run it appears in —
+which is right for a component someone forgot and wrong for a component this repository ships. So
+every ``Component`` subclass under ``hisim.components`` must declare `cost_relevance` in its own
+class body, inheritance explicitly not counting.
+
 A single module of ``hisim.components`` failing to import for lack of an optional third-party
 package must not shrink the scan, so those failures are tolerated — but a table key that cannot be
 resolved because its module refused to import fails, since an unresolvable key is precisely the
@@ -31,8 +37,10 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import pytest
 
+from hisim.component import Component
 from hisim.components.heat_distribution_system import HeatDistributionConfig, HeatDistributionSystemType
 from hisim.config import auto_fields, presets_of
+from hisim.dynamic_component import DynamicComponent
 from hisim.economics.adapter import (
     FactsExtractors,
     MeterOutputContracts,
@@ -570,3 +578,57 @@ def test_a_declared_relevance_is_reported_verbatim():
     for relevance in CostRelevance:
         component = FakeComponents.named("SomeDeclaredComponent", SimpleNamespace(), relevance)
         assert effective_cost_relevance(component) == relevance
+
+
+@pytest.mark.base
+def test_every_component_class_declares_cost_relevance(scan):
+    """Every component class in ``hisim.components`` declares ``cost_relevance`` in its own body.
+
+    The fleet-wide half of §9.2, and the reason the adapter may refuse to guess: since relevance
+    is read off the declaration only, a class that declares nothing is `UNDECLARED`, and an
+    `UNDECLARED` component turns into an unresolved subject that aborts any lifecycle-cost run it
+    appears in (decision D7). That is the intended behavior for a component someone forgot, and an
+    unacceptable one for the components this repository ships — so the whole fleet is checked here
+    instead of one setup at a time.
+
+    ``vars(cls)`` rather than ``getattr`` is the point of the assertion: inheriting a parent
+    component's declaration is not a declaration. A heat pump controller that happens to subclass
+    a priced heat pump would otherwise be silently priced as one, and the base class's own default
+    (`UNDECLARED` on `Component`) would satisfy a ``getattr`` check for every class in the fleet.
+
+    Failure mode caught: a newly added component, or one whose declaration was dropped in a
+    refactor. The message names every offender with its module and the three values it may pick,
+    because the fix is a one-line edit in a file the reader has to find first.
+
+    Note the tolerance this inherits from the scan: a component module that fails to import for
+    lack of an optional third-party package (`AdapterContractScan.OPTIONAL_DEPENDENCIES`) is not
+    seen here at all. ``test_every_component_module_imports`` is what keeps that list honest.
+    """
+    found, _failures = scan
+    component_classes = [
+        candidate
+        for classes in found.values()
+        for candidate in classes
+        if issubclass(candidate, (Component, DynamicComponent))
+        and candidate not in (Component, DynamicComponent)
+    ]
+    # Non-vacuity: the fleet is dozens of classes, so a scan that suddenly sees a handful of them
+    # is a broken scan rather than a shrunken fleet, and must not silently pass this test.
+    assert len(component_classes) > 50, (
+        f"the component scan found only {len(component_classes)} Component subclasses, which is "
+        "too few to be the real fleet — the scan itself is broken"
+    )
+    undeclared = sorted(
+        f"{candidate.__module__}.{candidate.__name__}"
+        for candidate in component_classes
+        if "cost_relevance" not in vars(candidate)
+    )
+    assert not undeclared, (
+        f"{len(undeclared)} component class(es) declare no cost_relevance of their own, so a "
+        "lifecycle-cost run containing any of them aborts (cost_spec.md §9.2). Add exactly one of "
+        "`cost_relevance = CostRelevance.PRICED` (a device the cost model should price — including "
+        "hardware that has no database row yet, which must fail loudly rather than be priced at "
+        "zero), `CostRelevance.METER` (a component sitting at a carrier boundary) or "
+        "`CostRelevance.FREE_OF_COST` (controllers, weather, load-profile providers, idealized and "
+        "pass-through helpers — never real hardware) to the body of: " + ", ".join(undeclared)
+    )

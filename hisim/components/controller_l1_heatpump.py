@@ -26,6 +26,7 @@ from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "edited Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -182,6 +183,8 @@ class L1HeatPumpController(cp.Component):
     (1) Building or Buffer Storage (generic_hot_water_storage_modular)
     (2) Energy Management System (controller_l2_energy_management_system) -> optional if set temperatures are increased when surplus is available.
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     StorageTemperature = "StorageTemperature"

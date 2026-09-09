@@ -28,6 +28,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+    # Wall time, CPU time and peak memory for this job; see the action.
+    - name: Start the resource monitor
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: start
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v4
     - name: Login to GitHub Container Registry
@@ -45,3 +50,10 @@ jobs:
         tags: ${{ env.TEST_IMAGE }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+    # Kept on failure too: a job killed for running out of memory is the one
+    # whose measurement matters most.
+    - name: Report the resource usage
+      if: always()
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: report

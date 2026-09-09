@@ -18,6 +18,7 @@ from hisim.components.building import Building
 from hisim import log
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Marwa Alfouly"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -358,6 +359,8 @@ class PIDController(cp.Component):
     The controller has a derivative gain = 0 which makes it PI Only
     Thermal power delived by the air consitioner is manipulated to achieve desired setpoint temperature
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     TemperatureMean: str = "ResidenceTemperature"  # uncontrolled temperature

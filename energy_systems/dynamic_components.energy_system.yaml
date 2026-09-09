@@ -53,6 +53,11 @@ components:
       eff_th_max: 0.55
       temperature_max: 80.0
       delta_temperature: 10.0
+      device_co2_footprint_in_kg: null
+      investment_costs_in_euro: null
+      lifetime_in_years: null
+      maintenance_costs_in_euro_per_year: null
+      subsidy_as_percentage_of_investment_costs: null
   CHP2:
     class: hisim.components.advanced_fuel_cell.CHP
     config:
@@ -72,6 +77,11 @@ components:
       eff_th_max: 0.55
       temperature_max: 80.0
       delta_temperature: 10.0
+      device_co2_footprint_in_kg: null
+      investment_costs_in_euro: null
+      lifetime_in_years: null
+      maintenance_costs_in_euro_per_year: null
+      subsidy_as_percentage_of_investment_costs: null
   L2EMSElectricityController:
     class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     preset: optimize_own_consumption

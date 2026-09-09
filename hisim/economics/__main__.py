@@ -108,15 +108,14 @@ class CliFileNames:
 
 
 class AuditLayerProbe:
-    """Whether the audit layer this stack's later part adds is importable yet.
+    """Whether the module `evaluate` writes its audit files with is importable.
 
     `evaluate` writes `cost_audit.csv`/`.json` alongside the numeric exports, using
-    `hisim.economics.audit` — a module that arrives with the presentation part of this stack. Until
-    then the lazy import fails, and it used to fail *after* four export files had been written,
-    leaving a half-written directory that a later `report` would happily render as complete. The
-    probe answers the same question before anything is written, so the subcommand refuses instead
-    of half-succeeding. Once the presentation part is merged the probe always passes and the lazy
-    imports below simply work.
+    `hisim.economics.audit`, and it used to reach that lazy import *after* four export files had
+    already been written. An installation without the module — or a stack state in which it had
+    not been merged yet, which is how this was found — therefore left a half-written directory
+    behind that a later `report` would happily render as complete. The probe answers the same
+    question before anything is written, so the subcommand refuses instead of half-succeeding.
     """
 
     #: Module that must be importable for `evaluate` to write a complete export set.
@@ -136,9 +135,9 @@ class AuditLayerProbe:
         if importlib.util.find_spec(cls.MODULE_NAME) is not None:
             return
         raise CostDataError(
-            f"{cls.MODULE_NAME} is not importable: the audit/reporting layer arrives with a later "
-            "PR of this stack, and `evaluate` cannot run yet because it would leave a "
-            "half-written export set behind. Nothing was written."
+            f"{cls.MODULE_NAME} is not importable, so `evaluate` cannot write the input audit that "
+            "belongs to a stored evaluation (W4.5) and would leave a half-written export set "
+            "behind. Nothing was written."
         )
 
 
@@ -327,7 +326,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         # The audit belongs to the stored evaluation: without it a later `report` could not
         # render section 1 without reopening the cost database (W4.5). The probe above has
         # already established that this import will succeed.
-        from hisim.economics.audit import (  # pylint: disable=no-name-in-module,import-error
+        from hisim.economics.audit import (
             build_input_audit,
             write_cost_audit,
         )
@@ -395,11 +394,12 @@ def _evaluate_directory(
         The evaluated matrix and its input audit (None only when no perspective was evaluated).
 
     Raises:
-        CostDataError: If the audit layer is not importable yet, or the data will not load.
+        CostDataError: If the audit layer is not importable, or the data will not load.
     """
     AuditLayerProbe.require()
-    # See `AuditLayerProbe`: `audit` is part of the presentation layer of this stack.
-    from hisim.economics.audit import build_input_audit  # pylint: disable=no-name-in-module,import-error
+    # Imported here rather than at module level so that `AuditLayerProbe` can report a missing
+    # audit layer as a message instead of an import traceback during startup.
+    from hisim.economics.audit import build_input_audit
 
     context = _build_context(results_dir, args)
     matrix = _evaluate_perspectives(context)
@@ -496,12 +496,8 @@ def _cmd_report(args: argparse.Namespace) -> int:
     """
     from hisim.economics.plausibility import run_plausibility_checks
 
-    # Both renderers are the presentation layer of this stack, as `audit` above.
-    from hisim.economics.report_plots import (  # pylint: disable=no-name-in-module,import-error
-        plot_payback_curve,
-        write_report_plots,
-    )
-    from hisim.economics.reporting import (  # pylint: disable=no-name-in-module,import-error
+    from hisim.economics.report_plots import write_report_plots
+    from hisim.economics.reporting import (
         write_cost_summary,
         write_lifecycle_report,
     )
@@ -537,13 +533,11 @@ def _cmd_report(args: argparse.Namespace) -> int:
     write_lifecycle_report(
         matrix, plausibility, args.results_dir, audit, comparison, scenario_cube=scenario_cube,
     )
-    write_report_plots(matrix, args.results_dir)
-    if comparison is not None and reference_result is not None:
-        plot_payback_curve(
-            reference_result,
-            matrix.results[comparison.perspective_id],
-            os.path.join(args.results_dir, "lifecycle_payback_curve.png"),
-        )
+    # One function owns the PNG set: handing it the comparison's reference makes it write the
+    # payback curve as part of that set, rather than the CLI writing a fifth file beside it under
+    # a name only it knew. `write_report_plots` picks the variant side by perspective id, which is
+    # the same result this call site used to look up.
+    write_report_plots(matrix, args.results_dir, reference_result)
     print(
         f"Wrote cost_summary.md, lifecycle_report.html and PNG charts to {args.results_dir} "
         f"({len(plausibility)} plausibility checks, {len(plausibility.flagged())} flagged)."

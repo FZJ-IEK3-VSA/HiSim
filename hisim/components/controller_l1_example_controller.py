@@ -18,6 +18,7 @@ from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -65,6 +66,8 @@ class SimpleController(Component):
     output to 1 (on) when the level drops below the low threshold and to 0
     (off) when it exceeds the high threshold.
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     StorageFillLevel: str = "FillLevelPercent"
     GasHeaterPowerPercent: str = "GasHeaterPowerLevel"

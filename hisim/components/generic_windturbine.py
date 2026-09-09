@@ -21,6 +21,7 @@ from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -131,6 +132,8 @@ class WindturbineConfig(ConfigBase):
 
 class Windturbine(cp.Component):
     """windturbine calculates electrical output power based on windturbine type and weather data."""
+
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     TemperatureOutside = "TemperatureOutside"

@@ -69,6 +69,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiTagEnumClass,
 )
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Frank Burkrad, Maximilian Hillen, Markus Blasberg, Katharina Rieck, Kristina Dabrock"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -257,6 +258,8 @@ class GenericBoiler(Component):
 
     Get Control Signal and calculate on base of it Massflow and Temperature of Massflow.
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # Input
     ControlSignal = "ControlSignal"  # at which Procentage is the GenericBoiler modulating [0..1]
@@ -1232,6 +1235,8 @@ class GenericBoilerController(Component):
     (1) Generic_boiler (control_signal)
 
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     WaterTemperatureInputFromWaterStorage = "WaterTemperatureInputFromWaterStorage"

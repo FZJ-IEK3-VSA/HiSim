@@ -14,6 +14,7 @@ from hisim.simulationparameters import SimulationParameters
 
 from hisim.components.configuration import PhysicsConfig
 from hisim import log
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -253,6 +254,8 @@ class ElectrolyzerSimulation:
 
 class AdvancedElectrolyzer(Component):
     """Advanced Electrolyzer class."""
+
+    cost_relevance = CostRelevance.PRICED
 
     # input
     ElectricityInput = "ElectricityInput"  # W
@@ -621,6 +624,8 @@ class HydrogenStorageSimulation:
 
 class HydrogenStorage(Component):
     """Hydrogen storage class."""
+
+    cost_relevance = CostRelevance.PRICED
 
     # input
     ChargingHydrogenAmount = "ChargingHydrogenAmount"  # kg/s

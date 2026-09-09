@@ -19,6 +19,7 @@ from hisim.component import Component, ComponentInput, ComponentOutput, SingleTi
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim import loadtypes
 from hisim.simulationparameters import SimulationParameters
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Tjarko Tjaden, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -71,6 +72,8 @@ class ComponentName(Component):
         OutputWithState: Name of the output field whose value is held in state.
         OutputWithoutState: Name of the stateless output field.
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     InputFromOtherComponent: str = "InputFromState"

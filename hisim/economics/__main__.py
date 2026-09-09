@@ -329,10 +329,10 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
 
     Reads `economic_inputs.json`, applies the caller's parameters and catalog, runs the D7
     resolution check and then either evaluates the applicable perspectives — overwriting the
-    directory's export set in place, audit included so a later `report` needs no cost database
-    (W4.5) — or, with ``--scenarios``, evaluates the scenario cube instead and writes only
-    `scenario_cube.csv`/`.json`. The two are exclusive: a scenario run does not refresh the base
-    exports.
+    directory's export set in place, audit tables and their ledger heatmap PNG included, so a
+    later `report` needs no cost database (W4.5) — or, with ``--scenarios``, evaluates the
+    scenario cube instead and writes only `scenario_cube.csv`/`.json`. The two are exclusive: a
+    scenario run does not refresh the base exports.
 
     The audit-layer probe runs first, before any file is opened for writing, so a stack state in
     which `hisim.economics.audit` is not merged yet fails with a message instead of leaving a
@@ -365,10 +365,14 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
             build_input_audit,
             write_cost_audit,
         )
+        from hisim.economics.report_plots import write_audit_plots
 
         audit = build_input_audit(context.inputs, context.database, context.parameters, first)
         write_cost_audit(audit, args.results_dir)
         write_input_audit(audit, args.results_dir)
+        # V6 travels with the audit tables, not with the report (owner decision Q9): the ledger
+        # heatmap answers the audit's question, so it is refreshed exactly when the audit is.
+        write_audit_plots(first, args.results_dir)
     print(f"Re-evaluated {len(matrix.results)} perspectives into {args.results_dir}.")
     return 0
 

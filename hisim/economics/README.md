@@ -90,7 +90,7 @@ my_simulation_parameters.post_processing_options.append(PostProcessingOptions.CO
 
 # Additionally write the human-readable reports (implies the computation):
 # cost_summary.md, lifecycle_report.html (plausibility panel + charts along the
-# calculation chain) and matplotlib PNGs:
+# calculation chain) and the matplotlib PNG set listed in section 2:
 my_simulation_parameters.post_processing_options.append(PostProcessingOptions.LIFECYCLE_COST_REPORT)
 
 # Optionally attach parameters (otherwise defaults with the simulation's country apply):
@@ -207,7 +207,7 @@ simulation in shadow mode).
 | `bridge.py` | The postprocessing entry point behind `COMPUTE_LIFECYCLE_COSTS`: collects facts/flows from a finished run, picks a covered price basis year, evaluates the default bundle, writes everything. Opt-in, and loud: a fleet the cost model cannot describe — an undeclared component (§9.2), a recognized one whose facts don't build, a meter missing a column it declares, a declared fact the database can't price — fails the run rather than producing a cost report with a hole in it (D7). |
 | `validation.py` | Data-file CI: source completeness, coverage matrix, question coverage, staleness (§9.6). |
 | `reporting.py` | Human-readable reports (option `LIFECYCLE_COST_REPORT`): plausibility panel, `cost_summary.md`, self-contained `lifecycle_report.html` with inline-SVG charts, variant-comparison section. |
-| `report_plots.py` | Matplotlib PNG companions (annual cash flows, investment build-up, perspective whiskers, component stacks, payback curve) — same display groups and colors as the HTML. |
+| `report_plots.py` | Matplotlib PNG companions, same display groups and colors as the HTML. `write_report_plots` writes the report-side set for the matrix's first perspective — `lifecycle_annual_cash_flows`, `lifecycle_investment_waterfall`, `lifecycle_perspective_costs`, `lifecycle_component_costs`, `lifecycle_swimlane` (V9), `lifecycle_liquidity_fan` (V2), `lifecycle_sources_and_uses` (V10), `lifecycle_cost_treemap` (V8), `lifecycle_actor_flows` (V1), `lifecycle_monthly_burden` (V14) — and, only when a comparison reference is given, `lifecycle_payback_curve`, `lifecycle_comparison_bridge` (V4) and `lifecycle_wealth_benchmark` (V13). `write_audit_plots` writes `cost_audit_timeline_heatmap.png` (V6) next to `cost_audit.csv` instead, because it has the audit's audience. A chart whose view has nothing to draw writes no file and logs the skip. |
 | `__main__.py` | The `evaluate` / `explain` / `report` / `validate` CLI. |
 
 Related but outside this package: `hisim/components/tariff_provider.py` (the in-simulation

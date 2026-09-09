@@ -2,8 +2,9 @@
 
 Activation is opt-in via ``PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS`` and side-effect
 free: it only writes *new* files (lifecycle_costs.json, component_costs.*,
-cash_flow_timeline.csv, cost_audit.csv, cost_parity_report.csv, lifecycle_kpis.json,
-economic_inputs.json, cost_provenance.json). It never calls the legacy cost methods.
+cash_flow_timeline.csv, cost_audit.csv, cost_audit_timeline_heatmap.png,
+cost_parity_report.csv, lifecycle_kpis.json, economic_inputs.json,
+cost_provenance.json). It never calls the legacy cost methods.
 
 **This is the only place where `hisim.economics` meets the rest of HiSim.** Everything else in
 the package is a pure function of `EvaluationInputs` plus data files; this module is what walks a
@@ -1019,10 +1020,11 @@ def compute_lifecycle_costs(
     Files written on a plain COMPUTE_LIFECYCLE_COSTS run: `economic_inputs.json` first — before any
     pricing, so it exists even when the resolution check then aborts — then `lifecycle_costs.json`,
     `component_costs.json`/`.csv`,
-    `cash_flow_timeline.csv`, `cost_provenance.json`, `lifecycle_kpis.json`, `cost_audit.csv` and
-    `cost_audit.json`. With a declared scenario set additionally `scenario_cube.csv`/`.json`, and
-    with ``generate_report`` additionally `cost_summary.md`, `lifecycle_report.html` and the PNG
-    charts. No legacy file is read, written or otherwise touched.
+    `cash_flow_timeline.csv`, `cost_provenance.json`, `lifecycle_kpis.json`, `cost_audit.csv`,
+    `cost_audit.json` and the audit's own `cost_audit_timeline_heatmap.png`. With a declared
+    scenario set additionally `scenario_cube.csv`/`.json`, and with ``generate_report``
+    additionally `cost_summary.md`, `lifecycle_report.html` and the report's PNG set. No
+    legacy file is read, written or otherwise touched.
 
     Failure behaviour (see the module docstring): everything propagates. A cost database or a
     subsidy catalog that will not load, a declared scenario cube that will not evaluate and the D7
@@ -1084,6 +1086,14 @@ def compute_lifecycle_costs(
             input_audit = build_input_audit(inputs, database, parameters, first_result)
             written.append(write_cost_audit(input_audit, result_directory))
             written.append(write_input_audit(input_audit, result_directory))
+            # The year x category ledger heatmap is the visual twin of the audit table, so it is
+            # written here, beside `cost_audit.csv`, rather than with the report's PNG set — and
+            # from here rather than from `audit.py`, which the seam-4 import lint keeps free of
+            # renderers. It joins `written` like every other export, so a failure further down
+            # removes the PNG together with the CSVs it belongs to.
+            from hisim.economics.report_plots import write_audit_plots
+
+            written.extend(write_audit_plots(first_result, result_directory))
         # The parity report is written later, after the legacy COMPUTE_OPEX/COMPUTE_CAPEX blocks
         # produced their CSVs (see write_parity_from_stored_inputs and postprocessing_main).
         # Scenario analysis (§4.6) when the setup declared a scenario set.

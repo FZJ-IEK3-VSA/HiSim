@@ -533,9 +533,25 @@ class TestPngsAndCli:
     """Matplotlib companions and the `report` CLI."""
 
     def test_pngs_are_written(self, matrix, tmp_path):
-        """The PNG set exists and is non-empty."""
+        """The PNG set exists and is non-empty.
+
+        The names are listed rather than counted: the set grew with the visualization extension,
+        and a bare count would be satisfied by any eight files. What the list pins is which charts
+        this run can draw at all — its first perspective is `greenfield_gross`, a single-actor,
+        own-capital, unfinanced evaluation, so the actor Sankey and the funding statement skip
+        themselves, and with no reference variant the three comparison charts do too.
+        """
         written = write_report_plots(matrix, str(tmp_path))
-        assert len(written) == 4
+        assert {os.path.basename(path) for path in written} == {
+            "lifecycle_annual_cash_flows.png",
+            "lifecycle_investment_waterfall.png",
+            "lifecycle_perspective_costs.png",
+            "lifecycle_component_costs.png",
+            "lifecycle_swimlane.png",
+            "lifecycle_liquidity_fan.png",
+            "lifecycle_cost_treemap.png",
+            "lifecycle_monthly_burden.png",
+        }
         for path in written:
             assert os.path.getsize(path) > 5000
 

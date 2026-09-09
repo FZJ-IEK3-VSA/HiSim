@@ -677,6 +677,33 @@ class ReferenceAreas:
         }
 
 
+class HeatCostNaming:
+    """What the heat-cost figure is *called* wherever a reader sees it (owner decision Q27 R1).
+
+    The figure divides a perspective's whole NPV — every subject it books, the PV system and the
+    battery included — by the heat delivered, so it is not the levelized cost of heat the
+    literature publishes: an LCOH counts heating-attributable cost only, and this evaluation has
+    no heating-only attribution. Calling it one over-promised, so every user-visible occurrence
+    now reads "system cost per unit of heat": the KPI name in `lifecycle_kpis.json` and the report
+    KPI table, the perspectives-table column in both renderings, the plausibility-check row and
+    the derivation caption. The names live here, next to the field they name, so a future
+    re-wording is one edit rather than a grep across three modules on both sides of seam 4.
+
+    The **field** name `LifecycleCostResult.levelized_cost_of_heat_in_euro_per_kwh` deliberately
+    stays: it is the serialization key of every stored `lifecycle_costs.json`, and renaming it
+    would either break archived results or force an alias that buys nothing — the display name is
+    what a reader reads, and no reader reads the key. Docstrings keep saying LCOH where they
+    explain *why* this figure is not one.
+    """
+
+    #: The published KPI name and the caption's lead-in.
+    FULL = "System cost per unit of heat"
+    #: Column-header form, for the perspectives table where the full name would not fit.
+    COLUMN = "System cost/kWh heat"
+    #: Lower-case form for the plausibility panel, whose check names are sentences-in-lower-case.
+    CHECK_LABEL = "system cost per unit of heat"
+
+
 @dataclass
 class LifecycleCostResult:
     """The evaluation of one variant under one perspective (§3.7).

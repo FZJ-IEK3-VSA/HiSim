@@ -44,7 +44,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 from hisim.economics import views
-from hisim.economics.results import EvaluationMatrix, VariantComparison
+from hisim.economics.results import EvaluationMatrix, HeatCostNaming, VariantComparison
 from hisim.economics.timeline import Actor, discount_factor
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 
@@ -266,8 +266,8 @@ def build_lifecycle_kpi_entries(
     """The new namespaced KPI set; every monetary KPI carries its uncertainty band.
 
     Builds the §7.3 KPI list from an evaluated matrix: per perspective the equivalent annual cost,
-    the net present cost over the horizon, the year-1 monthly cost and the levelized cost of heat,
-    plus one KPI per applied subsidy scheme and the perspective's total support; then the §6.5
+    the net present cost over the horizon, the year-1 monthly cost and the system cost per unit of
+    heat, plus one KPI per applied subsidy scheme and the perspective's total support; then the §6.5
     per-actor net present costs of `actor_kpi_entries` for whichever perspectives allocated flows
     to a payer; and, when a variant comparison is supplied, the NPV delta, the discounted payback
     and the warm-rent figures. Each
@@ -323,7 +323,7 @@ def build_lifecycle_kpi_entries(
         )
         add(f"Monthly cost year 1 [EUR/month] ({perspective})", "EUR/month", result.monthly_cost_year1_in_euro)
         add(
-            f"Levelized cost of heat [EUR/kWh] ({perspective})",
+            f"{HeatCostNaming.FULL} [EUR/kWh] ({perspective})",
             "EUR/kWh",
             result.levelized_cost_of_heat_in_euro_per_kwh,
         )

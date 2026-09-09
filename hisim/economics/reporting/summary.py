@@ -20,7 +20,12 @@ from hisim.economics import views
 from hisim.economics.plausibility import CheckIds, CheckStatus, PlausibilityFinding, PlausibilityReport
 from hisim.economics.presentation_style import PresentationStyle, group_name
 from hisim.economics.report_prose import format_euro
-from hisim.economics.results import EvaluationMatrix, LifecycleCostResult, VariantComparison
+from hisim.economics.results import (
+    EvaluationMatrix,
+    HeatCostNaming,
+    LifecycleCostResult,
+    VariantComparison,
+)
 from hisim.economics.uncertainty import UncertainValue
 
 
@@ -427,7 +432,9 @@ def build_cost_summary_markdown(
     lines.append("")
     lines.append("## Perspectives")
     lines.append("")
-    lines.append("| Perspective | NPV | Equivalent annual cost | Monthly (year 1) | LCOH |")
+    lines.append(
+        f"| Perspective | NPV | Equivalent annual cost | Monthly (year 1) | {HeatCostNaming.COLUMN} |"
+    )
     lines.append("|---|---|---|---|---|")
     for perspective_id, result in matrix.results.items():
         lines.append(

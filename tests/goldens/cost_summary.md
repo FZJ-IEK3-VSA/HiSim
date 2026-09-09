@@ -20,7 +20,7 @@ Simulation year 2026, country DE, horizon 20 a, interest 3.0%, price basis 2026.
 | OK | subsidies <= eligible basis (landlord) | 14,366 vs 37,000 EUR | support below its cost basis |
 | OK | effective ELECTRICITY price (year 1) | 0.351 EUR/kWh | 0.1 - 0.6 EUR/kWh |
 | OK | equivalent annual cost per m2 (brownfield_gross) | 16.940 EUR/m2a | 5 - 80 EUR/m2a |
-| OK | levelized cost of heat | 0.169 EUR/kWh | 0.05 - 0.5 EUR/kWh |
+| OK | system cost per unit of heat | 0.169 EUR/kWh | 0.05 - 0.5 EUR/kWh |
 | OK | maintenance / investment NPV ratio (brownfield_gross) | 0.099  | 0.02 - 0.8  |
 | WARN(!) | uncertainty band width max/min (brownfield_gross) | 13.822 x | 1 - 3.5 x |
 
@@ -28,7 +28,7 @@ Simulation year 2026, country DE, horizon 20 a, interest 3.0%, price basis 2026.
 
 ## Perspectives
 
-| Perspective | NPV | Equivalent annual cost | Monthly (year 1) | LCOH |
+| Perspective | NPV | Equivalent annual cost | Monthly (year 1) | System cost/kWh heat |
 |---|---|---|---|---|
 | brownfield_gross | 37,803 [5,596 | 77,346] EUR | 2,541 [376 | 5,199] EUR/a | -728 [-1,023 | -464] EUR/mo | 0.17 [0.03 | 0.35] EUR/kWh |
 | brownfield_net | 23,437 [-12,948 | 66,118] EUR | 1,575 [-870 | 4,444] EUR/a | -850 [-1,178 | -553] EUR/mo | 0.11 [-0.06 | 0.30] EUR/kWh |

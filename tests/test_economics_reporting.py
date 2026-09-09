@@ -113,7 +113,7 @@ PANEL_BEFORE_W42 = [
     ("effective ELECTRICITY price (year 1)", "PASS", "0.352 EUR/kWh", "0.1 - 0.6 EUR/kWh",
      "1,760 EUR for 5,000 kWh — catches unit mix-ups"),
     ("equivalent annual cost per m2 (greenfield_gross)", "PASS", "24.032 EUR/m2a", "5 - 80 EUR/m2a", ""),
-    ("levelized cost of heat", "PASS", "0.240 EUR/kWh", "0.05 - 0.5 EUR/kWh", ""),
+    ("system cost per unit of heat", "PASS", "0.240 EUR/kWh", "0.05 - 0.5 EUR/kWh", ""),
     ("maintenance / investment NPV ratio (greenfield_gross)", "PASS", "0.145 ", "0.02 - 0.8 ",
      "a huge ratio usually means an absolute fee stored as a rate (issues #1)"),
     ("uncertainty band width max/min (greenfield_gross)", "PASS", "1.994 x", "1 - 3.5 x",

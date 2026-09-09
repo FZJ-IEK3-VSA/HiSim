@@ -267,6 +267,12 @@ def _audit_section_html(audit: InputAuditReport, context: _ChapterContext) -> st
     while an override states an absolute amount for the whole subject, and printing the two under
     one label made a per-kW figure and a total look like the same quantity.
 
+    The anyway-credit column is here for the same reason the unit price is (Q22): the Sowieso
+    share decides how much of a measure the counterfactual pays for, which makes it an input of
+    the same standing as a price and therefore something to audit rather than to discover in the
+    timeline. It states the whole multiplication, `share x basis = credit` (Q26 F7), so the
+    credited amount can be reproduced from the row that produced it.
+
     Args:
         audit: The resolved-input audit to render.
         context: The chapter this section is being rendered into; it supplies the anchor and
@@ -275,17 +281,21 @@ def _audit_section_html(audit: InputAuditReport, context: _ChapterContext) -> st
     Returns:
         The section, always non-empty — a run with no priced fact still has a sources table.
     """
-    # A named template beats an f-string here: seven placeholders, three of them formatted,
+    # A named template beats an f-string here: eight placeholders, three of them formatted,
     # and the row's shape stays readable as HTML.
     rows = [
         "<tr><td>{subject}</td><td>{cls}</td><td>{size:,.1f} {unit}</td><td>{price}</td>"  # pylint: disable=consider-using-f-string
-        "<td>{life}</td><td>{origin}</td><td class=\"flag\">{flags}</td></tr>".format(
+        "<td>{life}</td><td>{share}</td><td>{origin}</td><td class=\"flag\">{flags}</td></tr>".format(
             subject=_esc(row.subject),
             cls=_esc(row.asset_class),
             size=row.size,
             unit=_esc(row.size_unit),
             price=_esc(_band_str(row.unit_price_in_euro, price_basis(row))),
             life=f"{row.lifetime_in_years:g} a" if row.lifetime_in_years else "-",
+            # Q22: the Sowieso share is an input of the same standing as the unit price — it
+            # decides how much of a measure the counterfactual pays for — so it is audited here.
+            # Q26 F7: the share and the cost it applies to, so the credit multiplies out here.
+            share=_anyway_credit_cell(row),
             origin=_esc(_origin_label(row)),
             flags=_esc("; ".join(row.flags)),
         )
@@ -295,9 +305,36 @@ def _audit_section_html(audit: InputAuditReport, context: _ChapterContext) -> st
         _section_open(ReportSections.INPUT_AUDIT, context)
         + _explanation_html(ReportSections.INPUT_AUDIT, context)
         + "<table><tr><th>Subject</th><th>Asset class</th><th>Size</th><th>Unit price</th>"
-        "<th>Lifetime</th><th>Origin</th><th>Flags</th></tr>" + "".join(rows) + "</table>"
+        "<th>Lifetime</th><th>Anyway credit (share x basis)</th><th>Origin</th><th>Flags</th></tr>"
+        + "".join(rows) + "</table>"
         + _sources_table_html(audit)
         + "</section>"
+    )
+
+
+def _anyway_credit_cell(row: ResolvedInputRow) -> str:
+    """One audit row's anyway credit as `share x basis = credit`, or the empty-cell dash (Q26 F7).
+
+    A share on its own states a factor without its base, so the credit the timeline booked could
+    not be reproduced from the audited row; with both, the multiplication is on the page next to
+    the unit price that produced the basis. A row whose subject earned no such credit — most of
+    them — reads as the same dash the lifetime cell uses for an absent value, and a share
+    recorded without a basis (an archived audit from before the basis field) still states the
+    share alone rather than nothing.
+
+    Args:
+        row: The resolved input row to render the cell for.
+
+    Returns:
+        The cell's text, already safe for HTML: it is built from numbers only.
+    """
+    if row.anyway_share is None:
+        return "-"
+    if not row.anyway_basis_in_euro:
+        return f"{row.anyway_share:.0%}"
+    return (
+        f"{row.anyway_share:.0%} x {row.anyway_basis_in_euro:,.0f} EUR = "
+        f"{row.anyway_share * row.anyway_basis_in_euro:,.0f} EUR"
     )
 
 
@@ -530,16 +567,32 @@ def _timeline_detail_table(result: LifecycleCostResult) -> str:
     §3.6 canonical timeline, laid out for checking.
 
     Rows, ordering, the float-noise cut-off and the subtotals all come from
-    `views.timeline_detail_rows`; this only lays them out.
+    `views.timeline_detail_rows`; this only lays them out. The one thing the layout adds is the
+    anyway credit's own multiplication in its category cell (Q22, Q26 F7): a credit row whose
+    share and like-for-like basis the reader cannot see is a figure to be trusted rather than
+    checked, and both are on the result.
     """
     rows: List[List[str]] = []
+    shares = result.anyway_share_by_subject
+    bases = result.anyway_basis_by_subject
     for detail_year in views.timeline_detail_rows(result):
         for row in detail_year.rows:
+            # Q22: an anyway credit is `share x like-for-like cost`, so the category cell of that
+            # one row carries the share it was computed at. Without it the table states a credit
+            # whose basis the reader cannot reconstruct from anything else on the page. Q26 F7
+            # adds the basis itself, so the row multiplies out to the amount beside it.
+            category = row.category.value
+            if row.category == CostCategory.ANYWAY_COST_CREDIT and row.subject in shares:
+                basis = bases.get(row.subject)
+                category = (
+                    f"{category} (anyway {shares[row.subject]:.0%} x {basis:,.0f} EUR)"
+                    if basis else f"{category} (anyway share {shares[row.subject]:.0%})"
+                )
             rows.append(
                 [
                     str(row.year),
                     _esc(row.subject),
-                    _esc(row.category.value),
+                    _esc(category),
                     _esc(_band_str(row.nominal_in_euro)),
                     _fmt(row.discounted_best_estimate_in_euro),
                 ]
@@ -606,7 +659,48 @@ def _timeline_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -
     return (
         _section_open(ReportSections.CASH_FLOW_TIMELINE, context)
         + _explanation_html(ReportSections.CASH_FLOW_TIMELINE, context)
+        + _anyway_share_caption(next(iter(matrix.results.values())))
         + "".join(blocks) + "</section>"
+    )
+
+
+def _anyway_share_caption(result: LifecycleCostResult) -> str:
+    """The run-specific line stating at which Sowieso share each anyway credit was computed (Q22).
+
+    The authored prose explains what an anyway share *is*; this says what it *was* here, which is
+    the half a reader cannot get anywhere else on the page. A share below 100 % is the interesting
+    case — it means the measure was a first-time improvement and only the repair share of it was a
+    cost the building would have caused regardless — so the sentence names it per subject rather
+    than averaging it away. Q26 F7 states the full multiplication, `share x like-for-like cost =
+    credit`, because a share printed beside a credit lets a reader check neither of them.
+
+    Args:
+        result: The perspective the caption is written for; only its recorded shares and bases are
+            read, so any perspective of the matrix gives the same sentence.
+
+    Returns:
+        The caption, or the empty string when the run credits nothing — which is most runs, and
+        for a result serialized before the fields existed.
+    """
+    shares = result.anyway_share_by_subject
+    if not shares:
+        return ""
+    bases = result.anyway_basis_by_subject
+    parts = []
+    for subject, share in sorted(shares.items()):
+        basis = bases.get(subject)
+        if basis:
+            parts.append(
+                f"{_esc(subject)} {share:.0%} x {basis:,.0f} EUR = {share * basis:,.0f} EUR"
+            )
+        else:
+            parts.append(f"{_esc(subject)} {share:.0%}")
+    stated = "; ".join(parts)
+    return (
+        "<p class='sub'>Anyway credits in this run are booked at "
+        f"<b>share x like-for-like cost = credit</b>: {stated} (nominal, in the credit's own "
+        "year). A share below 100 % means the measure was a first-time improvement, so only that "
+        "fraction of it would have been spent without the renovation.</p>"
     )
 
 

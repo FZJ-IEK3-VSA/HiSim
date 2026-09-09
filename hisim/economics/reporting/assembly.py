@@ -71,11 +71,20 @@ from hisim.economics.reporting.sections_charts import (
     _comparison_bridge_section_html,
     _component_events_section_html,
     _cost_of_credit_section_html,
+    _energy_balance_section_html,
+    _equity_section_html,
     _first_result_where,
+    _has_year_zero_funding,
     _landlord_statement_section_html,
+    _lifecycle_overview_section_html,
     _liquidity_section_html,
     _loan_section_html,
+    _monthly_burden_section_html,
+    _sources_uses_section_html,
+    _subject_flows_section_html,
+    _treemap_section_html,
     _uncertainty_section_html,
+    _wealth_benchmark_section_html,
 )
 
 
@@ -558,10 +567,11 @@ def build_lifecycle_report_html(
         comparison: Optional variant-vs-reference comparison; appends the comparison sections.
         scenario_cube: Optional `ScenarioCube` (untyped by the seam-4 import rule); adds the
             scenarios section.
-        reference_result: The comparison's baseline result. Needed by the NPV bridge, which
-            decomposes a comparison by cost group rather than restating it, because a
-            `VariantComparison` publishes no such split. Without it that section is omitted and
-            the omission is named under the contents like every other.
+        reference_result: The comparison's baseline result. Needed by the two sections that
+            decompose a comparison rather than restating it — the NPV bridge, which splits it by
+            cost group, and the bank benchmark, which needs the per-year differential flows —
+            because a `VariantComparison` publishes neither. Without it both are omitted and the
+            omission is named under the contents like every other.
 
     Returns:
         The complete HTML document as one string.
@@ -619,13 +629,15 @@ def _document_sections(
     than one expression.
 
     Most sections take the matrix's first perspective, which is the reference view of the run.
-    Two cannot and use `_first_result_where` instead: the who-pays-whom Sankey needs a
-    perspective with more than one payer, and the landlord statement a landlord-scoped one. Both
-    name the perspective they are showing in their own heading, and record a reason on the
-    context when the run has none. The loan and cost-of-credit sections take the whole matrix,
-    because they draw a block per financed perspective rather than picking one.
+    Five cannot and use `_first_result_where` instead: the equity build-up needs a financed
+    perspective, the who-pays-whom Sankey one with more than one payer, the funding statement one
+    whose year 0 carries support or a loan, the energy balance one that carries device flows, and
+    the landlord statement a landlord-scoped one. Each of them names the perspective it is showing
+    in its own heading, and records a reason on the context when the run has none. The loan and
+    cost-of-credit sections take the whole matrix, because they draw a block per financed
+    perspective rather than picking one.
 
-    The cash curve is the fourth: with a comparison it draws the perspective the comparison was
+    The cash curve is the sixth: with a comparison it draws the perspective the comparison was
     computed *for*, not the matrix's first, because the payback sentence under it comes from that
     comparison and a payback drawn under somebody else's cash position is simply a wrong chart.
     The section refuses the mix rather than trusting this call site (§seam 4 is about numbers;
@@ -645,24 +657,32 @@ def _document_sections(
         The sections in page order; the empty ones are kept and concatenate to nothing.
     """
     reference = _reference_result(matrix)
+    financed = _first_result_where(
+        matrix, lambda result: views.loan_amortization_series(result).has_flows()
+    ) or reference
     multi_actor = _first_result_where(
         matrix, lambda result: len({entry.payer for entry in result.timeline.entries}) > 1
     ) or reference
+    funded = _first_result_where(matrix, _has_year_zero_funding) or reference
+    attributed = _first_result_where(matrix, views.has_energy_balance) or reference
     landlord = _first_result_where(matrix, lambda result: result.scope_payer == Actor.LANDLORD)
     # The comparison names its own perspective; drawing the cash curve on any other one would
     # put its payback sentence under a stranger's curve.
     liquidity = matrix.results.get(comparison.perspective_id, reference) if comparison else reference
     sections = [
         _how_to_read_section_html(context),
+        _lifecycle_overview_section_html(reference, comparison, context),
         _checks_section_html(plausibility, context),
         _audit_section_html(audit, context) if audit is not None else "",
         _investment_section_html(reference, context),
+        _sources_uses_section_html(funded, context),
         _component_events_section_html(reference, context),
         _timeline_section_html(matrix, context),
         _liquidity_section_html(liquidity, comparison, context),
         _loan_section_html(matrix, context),
         _cost_of_credit_section_html(matrix, context),
         _energy_section_html(reference, context),
+        _energy_balance_section_html(attributed, context),
         _co2_section_html(matrix, context),
         _subsidy_section_html(matrix, context),
         _perspective_section_html(matrix, context),
@@ -676,7 +696,11 @@ def _document_sections(
         _actor_flow_section_html(multi_actor, context),
         _uncertainty_section_html(reference, context),
         _components_section_html(matrix, context),
+        _treemap_section_html(reference, context),
+        _subject_flows_section_html(reference, context),
+        _equity_section_html(financed, context),
         _scenario_section_html(scenario_cube, matrix, context),
+        _monthly_burden_section_html(reference, context),
         _kpi_section_html(matrix, context),
     ]
     if comparison is not None:
@@ -686,11 +710,18 @@ def _document_sections(
             sections.append(
                 _comparison_bridge_section_html(reference_result, variant, comparison, context)
             )
+            sections.append(_wealth_benchmark_section_html(reference_result, variant, context))
         else:
             sections.append(context.skip(
                 ReportSections.NPV_BRIDGE,
                 "The report was built with a comparison but without the reference result the "
                 "bridge decomposes, so there is nothing to split by cost group.",
+            ))
+            sections.append(context.skip(
+                ReportSections.BANK_BENCHMARK,
+                "The report was built with a comparison but without the reference result the "
+                "fixed-interest benchmark needs, so there are no per-year differential flows to "
+                "compare against a savings account.",
             ))
     return sections
 
@@ -720,8 +751,8 @@ def write_lifecycle_report(
         audit: Optional input audit for the input-audit section.
         comparison: Optional variant comparison for the comparison section.
         scenario_cube: Optional scenario cube for the scenarios section.
-        reference_result: The comparison's baseline, for the NPV bridge that decomposes it; see
-            `build_lifecycle_report_html`.
+        reference_result: The comparison's baseline, for the NPV bridge and the bank benchmark
+            that decompose it; see `build_lifecycle_report_html`.
 
     Returns:
         The path written.

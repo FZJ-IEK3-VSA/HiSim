@@ -789,9 +789,23 @@ class TestTheDocumentSaysWhatItDidNotDraw:
         block = thin_report.split("Not drawn for this run", maxsplit=1)[1].split("</div>")[0]
         assert block.count("<span class='chapter-tag'>The building</span>") >= 2
 
-    def test_a_run_that_drew_everything_says_nothing(self, report):
-        """An empty "nothing was skipped" box would be noise on every complete report."""
-        assert "Not drawn for this run" not in report
+    def test_a_run_that_drew_everything_says_nothing(self):
+        """An empty "nothing was skipped" box would be noise on every complete report.
+
+        Pinned on the renderer rather than on a rendered document: since the second half of the
+        chart set landed there is no fixture in this suite that draws every section it has a
+        builder for — the rich report cannot draw the energy balance, because its inputs carry
+        no device energy flows — so asserting the absence of the box on a report would only be
+        restating that fixture's inputs.
+        """
+        assert _not_drawn_html([]) == ""
+
+    def test_the_rich_report_names_the_one_section_it_cannot_draw(self, report):
+        """Its counterpart on a real document: what is missing is listed, and only what is."""
+        block = report.split("Not drawn for this run", maxsplit=1)[1].split("</div>")[0]
+        assert "<b>Energy balance</b>" in block
+        assert "fewer than two device energy flows" in block
+        assert block.count("<li>") == 1
 
     def test_the_bridge_says_why_it_could_not_decompose_a_comparison(self, database):
         """A comparison without its reference result: the section is named, not logged away."""

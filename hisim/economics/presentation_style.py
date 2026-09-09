@@ -132,10 +132,9 @@ class ChromeColors:
     a role name to its hex value, so a caller reads `ChromeColors.LIGHT["surface"]` rather than
     remembering a position in a list.
 
-    Note for the renderer slices: `report_plots._Palette` and the `:root` block of
-    `reporting/sections.py` carry their own copies of these four values until the slices that own
-    those modules rewire them to this namespace — that rewiring lives higher in this stack, not
-    here; this slice only establishes the single source they read.
+    The `:root` block of `reporting/sections.py` reads these values rather than transcribing
+    them. `report_plots._Palette` still carries its own copy; rewiring it belongs with that
+    module and its own slice.
 
     Both maps are read-only proxies rather than plain dicts. A palette is a constant of the
     document, and a renderer that reached in and assigned one role would change every chart drawn

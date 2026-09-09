@@ -318,12 +318,19 @@ class TestFixtureIsRich:
         whose anchor moved is a broken document, and only the anchor catches that. The sections
         are named rather than numbered since the mnemonic switch-over, so this list is also the
         readable inventory of what the fixture reaches.
+
+        The energy balance is the one section of the set deliberately absent from it: its
+        quantities come from the simulation's own output columns, which `bridge.py` collects and
+        no in-memory fixture produces, so the section skips itself here with a log line and is
+        covered by `tests/test_economics_sections_b.py` instead.
         """
         for anchor in (
             "building-how-to-read",
+            "building-at-a-glance",
             "building-plausibility",
             "building-input-audit",
             "building-investment-build-up",
+            "building-funding",
             "building-lifetimes",
             "building-cash-flow-timeline",
             "building-cash-curve",
@@ -338,10 +345,15 @@ class TestFixtureIsRich:
             "building-who-pays-whom",
             "building-uncertainty-drivers",
             "building-component-breakdown",
+            "building-cost-structure",
+            "building-cost-shapes",
+            "building-equity-build-up",
             "building-scenarios",
+            "building-monthly-burden",
             "building-kpis",
             "building-comparison",
             "building-npv-bridge",
+            "building-bank-benchmark",
         ):
             assert f'id="{anchor}"' in rendered.report, anchor
         assert "sources used" in rendered.report  # §3.10 registry table, inside the input audit

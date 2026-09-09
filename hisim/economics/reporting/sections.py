@@ -13,11 +13,11 @@ authored explanation come from one place. Assembly order and the document shell 
 
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
+from typing import List, Mapping, Optional, Tuple
 
 from hisim.economics import views
 from hisim.economics.input_audit import InputAuditReport, OriginKind, ResolvedInputRow, price_basis
-from hisim.economics.presentation_style import PresentationStyle, group_of
+from hisim.economics.presentation_style import ChromeColors, PresentationStyle, group_of
 from hisim.economics.results import EvaluationMatrix, LifecycleCostResult
 from hisim.economics.timeline import CostCategory
 from hisim.economics.uncertainty import UncertainValue
@@ -100,6 +100,39 @@ def _group_color_declarations(colors: List[str]) -> str:
     return " ".join(f"--g{index}:{color};" for index, color in enumerate(colors))
 
 
+def _neutral_color_declarations(
+    chrome: Mapping[str, str], page: str, ink_2: str, baseline: str, border: str
+) -> str:
+    """One theme's neutral declarations, with the four shared chrome roles read from the palette.
+
+    `presentation_style.ChromeColors` is the single source of the roles both renderers draw with —
+    the surface a chart sits on, the ink its text is set in, the muted tone of secondary labels
+    and the tone of the gridlines — and the stylesheet used to carry its own copy of those four
+    hex values. Two copies is how an SVG gridline ends up a different grey from the gridline of
+    its PNG companion, which is a defect nobody reads as one. The four neutrals only the HTML has
+    stay arguments, because no chart draws them: the page behind the section cards, the secondary
+    ink of the captions, the baseline rule and the card border.
+
+    The output is byte-for-byte the two hand-written lines it replaces, line break and indent
+    included, so the stylesheet inside the golden report does not move.
+
+    Args:
+        chrome: One theme of `ChromeColors` — `LIGHT` or `DARK`.
+        page: Background behind the section cards.
+        ink_2: Secondary text colour, for captions and definitions.
+        baseline: Colour of the chart baselines and of the table header rule.
+        border: Border colour of a section card.
+
+    Returns:
+        The declarations as the two lines they occupy in the stylesheet.
+    """
+    return (
+        f"--surface:{chrome['surface']}; --page:{page}; --ink-1:{chrome['ink']}; "
+        f"--ink-2:{ink_2}; --muted:{chrome['muted']};\n"
+        f"  --grid:{chrome['grid']}; --baseline:{baseline}; --border:{border};"
+    )
+
+
 class _ReportCss:
     """The report stylesheet, inlined into the self-contained HTML.
 
@@ -119,9 +152,10 @@ class _ReportCss:
     `--muted`, `--surface`, `--grid` and `--baseline`
     are the chrome roles, and `--good`/`--warning`/`--critical` back the `.status.PASS` /
     `.status.WARN` / `.status.FAIL` classes the plausibility panel emits from the finding status
-    verbatim. (The four roles `presentation_style.ChromeColors` also publishes are still
-    transcribed here rather than generated from it, which the group hues no longer are; rewiring
-    them belongs with the matplotlib palette that carries the third copy.)
+    verbatim. The four roles both renderers share — surface, ink, muted, grid — come from
+    `presentation_style.ChromeColors` through `_neutral_color_declarations` for the same reason
+    the group hues come from the palette; the neutrals only the HTML has are still written out
+    here, because no chart draws them.
 
     The chapter rules (`h2.chapter`, `p.chapter-intro`, `.chapter-tag`) style the Q24 structure:
     a chapter is a rule-topped heading *between* the section cards rather than a card of its own,
@@ -138,13 +172,15 @@ class _ReportCss:
 
     CSS = """
 :root { color-scheme: light dark;
-  --surface:#fcfcfb; --page:#f9f9f7; --ink-1:#0b0b0b; --ink-2:#52514e; --muted:#898781;
-  --grid:#e1e0d9; --baseline:#c3c2b7; --border:rgba(11,11,11,0.10);
+  """ + _neutral_color_declarations(
+        ChromeColors.LIGHT, "#f9f9f7", "#52514e", "#c3c2b7", "rgba(11,11,11,0.10)"
+    ) + """
   --good:#0ca30c; --warning:#fab219; --critical:#d03b3b;
   """ + _group_color_declarations(PresentationStyle.GROUP_COLORS_LIGHT) + """ }
 @media (prefers-color-scheme: dark) { :root {
-  --surface:#1a1a19; --page:#0d0d0d; --ink-1:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
-  --grid:#2c2c2a; --baseline:#383835; --border:rgba(255,255,255,0.10);
+  """ + _neutral_color_declarations(
+        ChromeColors.DARK, "#0d0d0d", "#c3c2b7", "#383835", "rgba(255,255,255,0.10)"
+    ) + """
   """ + _group_color_declarations(PresentationStyle.GROUP_COLORS_DARK) + """ } }
 body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--page);
   color: var(--ink-1); margin: 0; padding: 24px; }

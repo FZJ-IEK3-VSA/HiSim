@@ -3,8 +3,9 @@
 The drawing layer: escaping, `_svg_open`/`_rect`/`_text` primitives, tables and
 `<details>` blocks, and the charts built from them — annual flows, cumulative NPV,
 waterfall, whiskers, stacked subjects, loan and payback, plus the shared builders of the
-visualization set (the column Sankey, the xy line chart, the Gantt strip, the NPV bridge,
-the attribution tornado and the cost-of-credit bar). Everything here renders from
+visualization set (the column Sankey, the xy line chart, the Gantt strip, the squarified
+treemap, the NPV bridge, the attribution tornado, the monthly-burden stack and the
+cost-of-credit bar). Everything here renders from
 already-computed results; no section layout, and nothing here reads `report_prose`. That
 is what keeps this the bottom module of the package: `scaffold.py` borrows `_esc` and
 `_details` from here, `sections.py` and `sections_charts.py` build on both, and
@@ -27,6 +28,7 @@ from hisim.economics.presentation_style import (
     SankeyLayout,
     group_name,
     sankey_node_boxes,
+    squarified_layout,
 )
 from hisim.economics.results import LifecycleCostResult, VariantComparison
 from hisim.economics.uncertainty import Slot, UncertainValue
@@ -1204,6 +1206,43 @@ def _gantt_event_marks(
     return parts
 
 
+def _treemap_svg(tiles: List[Tuple[str, float, str]], height: int = 240) -> str:
+    """A squarified treemap — the cost-structure panels, one call per basis.
+
+    Areas rather than lengths, because the question the cost-structure section answers ("what is
+    this made of") is a composition and reads at a glance in an area encoding. The layout itself
+    is `presentation_style.squarified_layout`, the same function the matplotlib companion calls,
+    so the two panels are one picture drawn twice rather than two pictures of the same numbers.
+
+    A label is printed only where the tile can hold two baselines; every tile carries its full
+    label and its amount as a native tooltip, which is what the inline-SVG variant has over the
+    PNG and why a small tile losing its text loses nothing a reader cannot recover by hovering.
+
+    Args:
+        tiles: `(label, area in euro, colour)` per rectangle, in the order they are laid out;
+            non-positive areas are dropped here, since a treemap cannot draw one.
+        height: Canvas height in user units; the width is half the chart column, because the
+            section draws the gross and the net basis side by side.
+
+    Returns:
+        The complete `<svg>` element, or the empty string when no tile carries a positive area.
+    """
+    drawable = [tile for tile in tiles if tile[1] > 0]
+    if not drawable:
+        return ""
+    width = _ChartGeometry.WIDTH // 2 - 20
+    parts = _svg_open(width, height)
+    layout = squarified_layout([tile[1] for tile in drawable], 0.0, 0.0, float(width), float(height))
+    for (label, area, color), (x, y, tile_w, tile_h) in zip(drawable, layout):
+        parts.append(_rect(x + 1, y + 1, max(tile_w - 2, 0.5), max(tile_h - 2, 0.5), color,
+                           f"{label}: {_fmt(area)} EUR", rx=2))
+        if tile_w > 70 and tile_h > 26:
+            parts.append(_text(x + 6, y + 16, label, 9, "start", "var(--surface)"))
+            parts.append(_text(x + 6, y + 28, _fmt(area), 9, "start", "var(--surface)"))
+    parts.append("</svg>")
+    return "".join(parts)
+
+
 def _bridge_svg(
     anchors: Tuple[Tuple[str, UncertainValue], Tuple[str, UncertainValue]],
     steps: List[Tuple[str, float, str]],
@@ -1405,6 +1444,132 @@ def _attribution_tornado_svg(rows: List[views.AttributionRow], total: UncertainV
         height,
         f"total band {_band_str(total)}",
     )
+
+
+def _monthly_burden_svg(result: LifecycleCostResult) -> str:
+    """Stacked monthly bars with a whisker on the total — the household's own unit.
+
+    The same geometry as the annual cash-flow chart, with separate baselines above and below zero
+    so a credit is never netted against a cost inside a bar, drawn on the monthly recurring
+    figures of `views.monthly_burden_series` and `views.monthly_burden_by_group`. The whiskers are
+    the min/max band of the monthly *total*, which is this chart's one banded mark: banding every
+    segment of a stack would produce a picture nobody can read.
+
+    The capital events the bars deliberately exclude come back as a dashed overlay segment per
+    year, drawn at that year's recurring total plus the replacement reserve — what the month costs
+    once the sinking fund for the replacements is paid into, which is the figure a bank quotes.
+
+    Args:
+        result: The perspective whose recurring burden is drawn.
+
+    Returns:
+        The complete `<svg>` element, or the empty string when the perspective books no month at
+        all (a horizon of zero years).
+    """
+    burden = views.monthly_burden_series(result)
+    totals = burden.series
+    per_group = views.monthly_burden_by_group(result, PresentationStyle.CATEGORY_TO_GROUP)
+    if not totals:
+        return ""
+    reserve = burden.replacement_reserve_per_month
+    horizon = len(totals) - 1
+    max_pos = max([sum(v for v in row.values() if v > 0) for row in per_group] +
+                  [value.maximum for value in totals] +
+                  [value.best_estimate + reserve for value in totals] + [1.0])
+    max_neg = max([-sum(v for v in row.values() if v < 0) for row in per_group] +
+                  [-min(value.minimum, 0.0) for value in totals] + [0.0])
+    width, height, left, top, bottom = _ChartGeometry.WIDTH, 260, 70, 16, 30
+    plot_h = height - top - bottom
+    scale = plot_h / max(max_pos + max_neg, 1e-9)
+    zero_y = top + max_pos * scale
+    bar_w = (width - left - 20) / (horizon + 1)
+    parts = _svg_open(width, height)
+    parts.append(_hline(left, width - 10, zero_y))
+    for year, groups in enumerate(per_group):
+        x = left + year * bar_w
+        y_pos, y_neg = zero_y, zero_y
+        for index, _display_group in enumerate(PresentationStyle.DISPLAY_GROUPS):
+            value = groups.get(index, 0.0)
+            if not value:
+                continue
+            bar_h = abs(value) * scale
+            tooltip = (
+                f"year {year} - {PresentationStyle.DISPLAY_GROUPS[index][0]}: {_fmt(value)} EUR/month"
+            )
+            if value > 0:
+                y_pos -= bar_h
+                parts.append(_rect(x + 1, y_pos, bar_w - 2, bar_h, f"var(--g{index})", tooltip))
+            else:
+                parts.append(_rect(x + 1, y_neg, bar_w - 2, bar_h, f"var(--g{index})", tooltip))
+                y_neg += bar_h
+        band = totals[year]
+        if not band.is_exact():
+            centre = x + bar_w / 2
+            parts.append(
+                f'<line x1="{centre:.1f}" y1="{zero_y - band.maximum * scale:.1f}" '
+                f'x2="{centre:.1f}" y2="{zero_y - band.minimum * scale:.1f}" stroke="var(--ink-1)" '
+                f'stroke-width="1"><title>year {year} total: {_esc(_band_str(band, "EUR/month"))}'
+                f"</title></line>"
+            )
+        if year % max(1, horizon // 10) == 0:
+            parts.append(_text(x + bar_w / 2, height - 12, str(year), 9, "middle", "var(--muted)"))
+    parts.extend(_replacement_reserve_marks(totals, reserve, left, top, zero_y, bar_w, scale))
+    parts.append(_text(left - 6, top + 10, _fmt(max_pos), 9, "end", "var(--muted)"))
+    parts.append(_text(left - 6, zero_y + 4, "0", 9, "end", "var(--muted)"))
+    parts.append(_text(width - 10, height - 12, "year", 9, "end", "var(--muted)"))
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def _replacement_reserve_marks(
+    totals: Sequence[UncertainValue],
+    reserve: float,
+    left: float,
+    top: float,
+    zero_y: float,
+    bar_w: float,
+    scale: float,
+) -> List[str]:
+    """The dashed reserve overlay of the monthly-burden chart, plus the legend that names it.
+
+    Its own function because it is the one part of the chart that is not a bar: a replacement is
+    capital expenditure and leaves the bars for that reason, so the line above them is what the
+    month costs once the sinking fund for those replacements is paid into. Drawn per year rather
+    than as one flat rule, because the recurring total it sits on top of moves with the years.
+
+    Nothing is drawn for an evaluation that books no replacement — a flat line at the bar tops
+    would read as a second, redundant series rather than as "there is no reserve here".
+
+    Args:
+        totals: The monthly total per year, index = year.
+        reserve: The constant monthly replacement reserve; zero means no overlay.
+        left: Left edge of the plot area in user units.
+        top: Top of the plot area, where the legend line is printed.
+        zero_y: User-unit y of the zero baseline.
+        bar_w: Width of one year's bar, which each segment spans.
+        scale: Euros-per-month to user units.
+
+    Returns:
+        The segments and the legend, or an empty list when there is no reserve.
+    """
+    if not reserve:
+        return []
+    parts: List[str] = []
+    for year, band in enumerate(totals):
+        x = left + year * bar_w
+        line_y = zero_y - (band.best_estimate + reserve) * scale
+        parts.append(
+            f'<line x1="{x + 1:.1f}" y1="{line_y:.1f}" x2="{x + bar_w - 1:.1f}" '
+            f'y2="{line_y:.1f}" stroke="var(--ink-1)" stroke-width="1.4" '
+            f'stroke-dasharray="5 3"><title>year {year} with replacement reserve: '
+            f"{_fmt(band.best_estimate + reserve)} EUR/month (of which {_fmt(reserve)} reserve)"
+            f"</title></line>"
+        )
+    parts.append(
+        _text(left + 4, top + 10, f"— — with replacement reserve (+{_fmt(reserve)} EUR/month)",
+              9, "start", "var(--muted)")
+    )
+    return parts
 
 
 def _cost_of_credit_svg(credit: views.TotalCostOfCredit) -> str:

@@ -742,30 +742,29 @@ class KpiPreparation:
             if self.simulation_parameters.multiple_buildings:
                 total_maintenance_cost_per_simulated_period = self._read_cost_table_value(
                     cost_df=opex_df,
-                    column_name="Maintenance costs per year [EUR]",
+                    column_name="Maintenance costs for simulated period [EUR]",
                     preferred_row_name=building_object + "_Total",
                     fallback_row_name="Total",
                 )
                 total_maintenance_cost_per_simulated_period_without_hp = self._read_cost_table_value(
                     cost_df=opex_df,
-                    column_name="Maintenance costs per year [EUR]",
+                    column_name="Maintenance costs for simulated period [EUR]",
                     preferred_row_name=building_object + "_Total_without_heatpump",
                     fallback_row_name="Total_without_heatpump",
                 )
                 total_maintenance_cost_per_simulated_period_only_hp = self._read_cost_table_value(
                     cost_df=opex_df,
-                    column_name="Maintenance costs per year [EUR]",
+                    column_name="Maintenance costs for simulated period [EUR]",
                     preferred_row_name=building_object + "_Total_only_heatpump",
                     fallback_row_name="Total_only_heatpump",
                 )
             if not self.simulation_parameters.multiple_buildings:
-                total_maintenance_cost_per_simulated_period = opex_df["Maintenance costs per year [EUR]"].loc["Total"]
-                total_maintenance_cost_per_simulated_period_without_hp = opex_df[
-                    "Maintenance costs per year [EUR]"
-                ].loc["Total_without_heatpump"]
-                total_maintenance_cost_per_simulated_period_only_hp = opex_df["Maintenance costs per year [EUR]"].loc[
-                    "Total_only_heatpump"
+                maintenance_column = opex_df["Maintenance costs for simulated period [EUR]"]
+                total_maintenance_cost_per_simulated_period = maintenance_column.loc["Total"]
+                total_maintenance_cost_per_simulated_period_without_hp = maintenance_column.loc[
+                    "Total_without_heatpump"
                 ]
+                total_maintenance_cost_per_simulated_period_only_hp = maintenance_column.loc["Total_only_heatpump"]
         else:
             log.warning("OPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_OPEX")
             total_maintenance_cost_per_simulated_period = 0

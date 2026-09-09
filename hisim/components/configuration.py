@@ -506,14 +506,18 @@ capex_techno_economic_parameters = {
             # CAPEX per device
             ComponentType.ELECTRICITY_METER: {
                 "investment_costs_in_euro": 100,  # EUR, Source: [26]
-                "maintenance_costs_as_percentage_of_investment_per_year": 2.4,  # assume 20€ per month, check on verivox, meaning 240€/year
+                # A fraction of the investment per year, like every other row:
+                # 2.4 * 100 EUR = 240 EUR/year, i.e. 20 EUR per month (check on verivox).
+                "maintenance_costs_as_percentage_of_investment_per_year": 2.4,
                 "technical_lifetime_in_years": 20,  # no idea, assumption
                 "co2_footprint_in_kg": 0,  # no idea, assume 0
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             ComponentType.GAS_METER: {
                 "investment_costs_in_euro": 200,  # EUR, Source: [27]
-                "maintenance_costs_as_percentage_of_investment_per_year": 1.8,  # assume around 30€ per year, check on verivox, meaning 360€/year
+                # A fraction of the investment per year, like every other row:
+                # 1.8 * 200 EUR = 360 EUR/year, i.e. 30 EUR per month (check on verivox).
+                "maintenance_costs_as_percentage_of_investment_per_year": 1.8,
                 "technical_lifetime_in_years": 20,  # no idea, assumption
                 "co2_footprint_in_kg": 0,  # no idea, assume 0
                 "subsidy_as_percentage_of_investment_costs": 0,

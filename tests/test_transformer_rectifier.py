@@ -325,11 +325,11 @@ def test_transformer_capex_scales_with_the_rated_power() -> None:
 
     assert small.capex_investment_cost_in_euro > 0.0
     assert small.device_co2_footprint_in_kg > 0.0
-    assert small.maintenance_costs_in_euro > 0.0
+    assert small.maintenance_costs_in_euro_per_year > 0.0
     assert 20.0 < small.lifetime_in_years < 40.0, "a transformer and rectifier are a multi-decade asset"
     assert large.capex_investment_cost_in_euro == pytest.approx(2 * small.capex_investment_cost_in_euro)
     assert large.device_co2_footprint_in_kg == pytest.approx(2 * small.device_co2_footprint_in_kg)
-    assert large.maintenance_costs_in_euro == pytest.approx(2 * small.maintenance_costs_in_euro)
+    assert large.maintenance_costs_in_euro_per_year == pytest.approx(2 * small.maintenance_costs_in_euro_per_year)
     # The rating is stated in kilowatts, so the price per kilowatt has to land in the range the
     # database entry cites (100-200 EUR/kW) rather than being off by a factor of a thousand.
     assert 100.0 <= small.capex_investment_cost_in_euro / 500.0 <= 200.0
@@ -360,7 +360,7 @@ def test_transformer_capex_prefers_explicit_config_values_over_the_database() ->
     assert capex.capex_investment_cost_in_euro == pytest.approx(45000.0)
     assert capex.device_co2_footprint_in_kg == pytest.approx(1234.0)
     assert capex.lifetime_in_years == pytest.approx(30.0)
-    assert capex.maintenance_costs_in_euro == pytest.approx(900.0)
+    assert capex.maintenance_costs_in_euro_per_year == pytest.approx(900.0)
     assert capex.subsidy_as_percentage_of_investment_costs == pytest.approx(0.1)
 
 

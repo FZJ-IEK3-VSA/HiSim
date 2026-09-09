@@ -21,6 +21,7 @@ from hisim.component import ComponentInput, ComponentConnection, OpexCostDataCla
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components import weather
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import prorate_to_simulated_period
 from hisim.economics.facts import CostRelevance
 
 __authors__ = "Jonas Hoppe"
@@ -510,19 +511,21 @@ class SimpleHeatSource(cp.Component):
         simulation_parameters: SimulationParameters
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year_in_s = 365 * 24 * 60 * 60
-        capex_per_simulated_period_in_euro = (config.investment_costs_in_euro / config.lifetime_in_years) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year_in_s
-        )
-        device_co2_footprint_per_simulated_period_in_kg = (config.device_co2_footprint_in_kg / config.lifetime_in_years) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year_in_s
+        prorated = prorate_to_simulated_period(
+            investment_in_euro=config.investment_costs_in_euro,
+            co2_footprint_in_kg=config.device_co2_footprint_in_kg,
+            maintenance_in_euro_per_year=config.maintenance_costs_in_euro_per_year,
+            lifetime_in_years=config.lifetime_in_years,
+            simulation_parameters=simulation_parameters,
         )
         capex_cost_data_class = CapexCostDataClass(
             capex_investment_cost_in_euro=config.investment_costs_in_euro,
             device_co2_footprint_in_kg=config.device_co2_footprint_in_kg,
             lifetime_in_years=config.lifetime_in_years,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period_in_euro,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period_in_kg,
+            capex_investment_cost_for_simulated_period_in_euro=prorated.investment_for_simulated_period_in_euro,
+            device_co2_footprint_for_simulated_period_in_kg=prorated.co2_footprint_for_simulated_period_in_kg,
+            maintenance_costs_in_euro_per_year=config.maintenance_costs_in_euro_per_year,
+            maintenance_cost_per_simulated_period_in_euro=prorated.maintenance_for_simulated_period_in_euro,
             kpi_tag=KpiTagEnumClass.GENERIC_HEAT_SOURCE
         )
         return capex_cost_data_class

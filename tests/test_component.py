@@ -432,7 +432,7 @@ def test_component_default_opex_and_capex() -> None:
     assert capex_default.lifetime_in_years == 1
     assert capex_default.capex_investment_cost_for_simulated_period_in_euro == 0
     assert capex_default.device_co2_footprint_for_simulated_period_in_kg == 0
-    assert capex_default.maintenance_costs_in_euro == 0
+    assert capex_default.maintenance_costs_in_euro_per_year == 0
     assert capex_default.maintenance_cost_per_simulated_period_in_euro == 0
     assert capex_default.subsidy_as_percentage_of_investment_costs == 0
     assert capex_default.kpi_tag is None
@@ -462,7 +462,7 @@ def test_component_default_opex_and_capex() -> None:
         lifetime_in_years=20,
         capex_investment_cost_for_simulated_period_in_euro=500,
         device_co2_footprint_for_simulated_period_in_kg=25,
-        maintenance_costs_in_euro=100,
+        maintenance_costs_in_euro_per_year=100,
         maintenance_cost_per_simulated_period_in_euro=5,
         subsidy_as_percentage_of_investment_costs=10,
         kpi_tag=None,
@@ -473,7 +473,7 @@ def test_component_default_opex_and_capex() -> None:
     assert custom_capex.lifetime_in_years == 20
     assert custom_capex.capex_investment_cost_for_simulated_period_in_euro == 500
     assert custom_capex.device_co2_footprint_for_simulated_period_in_kg == 25
-    assert custom_capex.maintenance_costs_in_euro == 100
+    assert custom_capex.maintenance_costs_in_euro_per_year == 100
     assert custom_capex.maintenance_cost_per_simulated_period_in_euro == 5
     assert custom_capex.subsidy_as_percentage_of_investment_costs == 10
 

@@ -31,6 +31,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiTagEnumClass,
 )
 from hisim.simulationparameters import SimulationParameters
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import prorate_to_simulated_period
 from hisim.loadtypes import LoadTypes, Units
 from hisim.components.weather import Weather
 from hisim.components.building import Building
@@ -331,24 +332,27 @@ class SimpleAirConditioner(cp.Component):
         simulation_parameters: SimulationParameters,
     ) -> CapexCostDataClass:
         """Return capital expenditure (CAPEX) and CO2 footprint for the simulation duration."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        duration_ratio = (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-
         investment_cost = 1500.0
         co2_footprint_in_kg = 100.0
         lifetime_in_years = 15
 
-        capex_per_period = (investment_cost / lifetime_in_years) * duration_ratio
-        co2_footprint_for_simulated_period_in_kg = (co2_footprint_in_kg / lifetime_in_years) * duration_ratio
+        # No maintenance rate is configured for this component -- its cost figures are the
+        # three hardcoded above -- so the proration receives zero and the maintenance fields
+        # keep their zero defaults.
+        prorated = prorate_to_simulated_period(
+            investment_in_euro=investment_cost,
+            co2_footprint_in_kg=co2_footprint_in_kg,
+            maintenance_in_euro_per_year=0.0,
+            lifetime_in_years=lifetime_in_years,
+            simulation_parameters=simulation_parameters,
+        )
 
         return CapexCostDataClass(
             capex_investment_cost_in_euro=investment_cost,
             device_co2_footprint_in_kg=co2_footprint_in_kg,
             lifetime_in_years=lifetime_in_years,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_period,
-            device_co2_footprint_for_simulated_period_in_kg=co2_footprint_for_simulated_period_in_kg,
+            capex_investment_cost_for_simulated_period_in_euro=prorated.investment_for_simulated_period_in_euro,
+            device_co2_footprint_for_simulated_period_in_kg=prorated.co2_footprint_for_simulated_period_in_kg,
             kpi_tag=KpiTagEnumClass.AIR_CONDITIONER,
         )
 

@@ -38,7 +38,7 @@ def opex_calculation(
         "Total energy consumption [kWh]",
         "CO2-emissions of energy consumption [kg]",
         "Costs of energy consumption [EUR]",
-        "Maintenance costs per year [EUR]",
+        "Maintenance costs for simulated period [EUR]",
     ]
 
     opex_rows: List[List[Union[str, float, None]]] = []

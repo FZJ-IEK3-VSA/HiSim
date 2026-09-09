@@ -9,6 +9,7 @@ from typing import Iterator
 import pytest
 
 from hisim import hisim_main
+from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.result_path_provider import ResultPathProviderSingleton
 from hisim import utils
 
@@ -75,10 +76,15 @@ def test_electrolyzer_with_renewables(isolated_result_directory: str) -> None:
     setup died in COMPUTE_OPEX before any KPI was computed. The cost tables asserted below are
     what catches that regression -- the log and the flag alone would not, because they are
     written even by a run whose cost stage was never asked to answer.
+
+    WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER is switched on here on top of those options because
+    this setup has no Building component: the sizer writer used to die on the missing
+    "Conditioned floor area" KPI, and now skips the building object with a log line instead.
     """
     path = ELECTROLYZER_SETUP_PATH
 
     sim_params = SetupTestParameters.one_day_with_kpis(year=2021, seconds_per_timestep=60)
+    sim_params.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER)
     # Route results into the isolated, test-scoped directory provided by the fixture so
     # that stale artefacts from a previous run cannot mask a regression and so the test
     # cleans up after itself.
@@ -120,4 +126,13 @@ def test_electrolyzer_with_renewables(isolated_result_directory: str) -> None:
     # WRITE_KPIS_TO_JSON is on, so the KPI stage after the cost stages ran too.
     assert (results_dir / "all_kpis.json").is_file(), (
         f"all_kpis.json missing in results directory: {results_dir}"
+    )
+    # No Building means no conditioned floor area, so the building-sizer writer has nothing to
+    # normalize by: it must skip the building object out loud rather than write a file or raise.
+    assert not list(results_dir.glob("*_kpi_config_for_building_sizer.json")), (
+        f"A building-sizer KPI JSON was written for a setup without a Building: {results_dir}"
+    )
+    simulation_log = (results_dir / "hisim_simulation.log").read_text(encoding="utf-8")
+    assert "Skipping the building-sizer KPI JSON" in simulation_log, (
+        f"The skipped building object was not reported in the simulation log: {results_dir}"
     )

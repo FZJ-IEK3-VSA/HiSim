@@ -33,6 +33,8 @@ class PostProcessingOptions(IntEnum):
     COMPUTE_KPIS = 19
     PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION = 20
     WRITE_COMPONENT_CONFIGS_TO_JSON = 21
+    # A run without a Building component writes no sizer JSON at all: its KPIs carry no
+    # conditioned floor area, which every per-m2 field of that file is normalized by.
     WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER = 22
     WRITE_KPIS_TO_JSON = 23
     EXPORT_TO_PKL = 24

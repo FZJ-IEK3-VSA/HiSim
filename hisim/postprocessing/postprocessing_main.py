@@ -68,6 +68,11 @@ if TYPE_CHECKING:
     from hisim.simulator import Simulator
 
 
+#: KPI that only a ``Building`` component produces. The building-sizer JSON normalizes almost
+#: every field by it, so a building object whose KPI collection lacks it has no Building at all.
+BUILDING_OWN_KPI_NAME: str = "Conditioned floor area"
+
+
 def _load_attribute(module_name: str, attribute_name: str) -> Any:
     """Import an optional postprocessing helper only when its feature is used."""
     return getattr(importlib.import_module(module_name), attribute_name)
@@ -1225,7 +1230,13 @@ class PostProcessor:
     def write_kpis_to_json_for_building_sizer(
         self, ppdt: PostProcessingDataTransfer, building_objects_in_district_list: list
     ) -> None:
-        """Write KPIs to json file for building sizer."""
+        """Write KPIs to json file for building sizer.
+
+        Every field of the sizer JSON that is normalized per square metre divides by the
+        "Conditioned floor area" KPI, which only a ``Building`` component produces. A building
+        object whose KPI collection carries no such entry therefore has no Building in the run,
+        and is skipped with one log line instead of writing a file the sizer cannot use.
+        """
 
         def get_kpi_entries_for_building_sizer(data, target_key):
             """Get kpi entries for building sizer."""
@@ -1241,6 +1252,14 @@ class PostProcessor:
                 raise KeyError(f"No key is matching the target key {target_key}.")
             return result
 
+        def building_kpis_were_computed(data) -> bool:
+            """Say whether a Building component contributed its own KPIs to this collection."""
+            try:
+                get_kpi_entries_for_building_sizer(data=data, target_key=BUILDING_OWN_KPI_NAME)
+            except KeyError:
+                return False
+            return True
+
         kpi_dict = {}
 
         # Check if important options were set
@@ -1249,9 +1268,15 @@ class PostProcessor:
                 # Get KPIs from ppdt
 
                 kpi_collection_dict = ppdt.kpi_collection_dict[building_object]
+                if not building_kpis_were_computed(kpi_collection_dict):
+                    log.information(
+                        f"Skipping the building-sizer KPI JSON for {building_object}: the run has no "
+                        "Building component, so there is nothing for the building sizer to consume."
+                    )
+                    continue
                 # conditioned floor area
                 conditioned_floor_area_in_m2 = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Conditioned floor area"
+                    data=kpi_collection_dict, target_key=BUILDING_OWN_KPI_NAME
                 )
                 # Total costs
                 annualized_total_costs_in_euro = get_kpi_entries_for_building_sizer(

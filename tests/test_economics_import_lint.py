@@ -196,9 +196,16 @@ class TestEngineDoesNotImportPresentation:
 
     @pytest.mark.parametrize("module_name", NON_PRESENTATION_MODULES)
     def test_no_engine_side_module_imports_a_renderer(self, module_name):
-        """A result serializer or a parity harness that renders is a seam violation."""
+        """A result serializer or a parity harness that renders is a seam violation.
+
+        The forbidden set is the presentation side of `PRESENTATION_MODULES` minus the one module
+        that is shared on purpose. `presentation_style` is deliberately importable from either
+        side — it is geometry and colour, and the whole point of W4.7 — but `report_prose` is not:
+        it is authored wording, and an engine-side module that reached for a section's explanation
+        would be formatting, which is exactly what this direction of the seam forbids.
+        """
         imported = {item.module for item in _economics_imports(module_name)}
-        assert not imported & {"reporting", "report_plots"}, (
+        assert not imported & {"reporting", "report_plots", "report_prose"}, (
             f"{module_name}.py imports a renderer; exports serialize and audit verifies — "
             "neither formats (cost-spec-v2 §2.4, W4.6)."
         )

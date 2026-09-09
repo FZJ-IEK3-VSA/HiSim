@@ -24,8 +24,10 @@ import-lint that pins that is `tests/test_economics_import_lint.py`.
 
 from __future__ import annotations
 
+import math
+import types
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
+from typing import Dict, List, Mapping, Tuple
 
 from hisim.economics.timeline import CostCategory
 
@@ -131,23 +133,29 @@ class ChromeColors:
     remembering a position in a list.
 
     Note for the renderer slices: `report_plots._Palette` and the `:root` block of
-    `reporting/sections.py` still carry their own copies of these four values. Rewiring both to
-    this namespace belongs with those modules and is deliberately not done here — this slice only
-    establishes the single source they will read.
+    `reporting/sections.py` carry their own copies of these four values until the slices that own
+    those modules rewire them to this namespace — that rewiring lives higher in this stack, not
+    here; this slice only establishes the single source they read.
+
+    Both maps are read-only proxies rather than plain dicts. A palette is a constant of the
+    document, and a renderer that reached in and assigned one role would change every chart drawn
+    after it in the same process — including the other renderer's — with nothing in the output
+    saying where the colour came from. Item access is unchanged, so `ChromeColors.LIGHT["surface"]`
+    reads exactly as it did; only assignment is refused, at the point that attempts it.
     """
 
-    LIGHT: Dict[str, str] = {
+    LIGHT: Mapping[str, str] = types.MappingProxyType({
         "surface": "#fcfcfb",
         "ink": "#0b0b0b",
         "muted": "#898781",
         "grid": "#e1e0d9",
-    }
-    DARK: Dict[str, str] = {
+    })
+    DARK: Mapping[str, str] = types.MappingProxyType({
         "surface": "#1a1a19",
         "ink": "#ffffff",
         "muted": "#898781",
         "grid": "#2c2c2a",
-    }
+    })
 
 
 def squarified_layout(
@@ -155,10 +163,25 @@ def squarified_layout(
 ) -> List[Tuple[float, float, float, float]]:
     """The classic squarified-treemap layout: one rectangle per value, in the input's order.
 
-    Lays descending areas out in rows (or columns, whichever the remaining rectangle is wider
-    in) so that the tiles stay as close to square as possible, which is what makes areas
-    comparable by eye at all. The returned rectangles tile the given box exactly, so a treemap's
-    "areas sum to the total" invariant survives the layout.
+    Lays the areas out in rows (or columns, whichever the remaining rectangle is wider in) so
+    that the tiles stay as close to square as possible, which is what makes areas comparable by
+    eye at all. The returned rectangles tile the given box exactly, so a treemap's "areas sum to
+    the total" invariant survives the layout.
+
+    **Descending order is a precondition of the near-square guarantee**, not something this
+    function arranges: it lays the values out in the order it is given, because the caller's order
+    is what pairs each rectangle with its label and its colour, and sorting here would silently
+    break that pairing. Squarify's quality argument assumes the largest areas are placed first —
+    hand it an ascending list and it still tiles the box exactly, still returns the rectangles in
+    input order, and still guarantees nothing about their aspect ratios. Callers that group tiles
+    by colour before sorting by size within the group therefore get near-square tiles per group
+    rather than over the whole box, which is the trade they are making knowingly.
+
+    **Every value has to be a positive, finite area** and a violation raises rather than drawing:
+    a zero or negative area has no rectangle, and a caller that passes one is either showing the
+    reader a tile that means nothing or has an amount whose sign it has not decided about. The
+    tiling arithmetic would not notice — a zero tile comes back as a zero-height rectangle and a
+    negative one eats into its row — so the wrong picture would be drawn in silence.
 
     It lives in this module — with the display grouping and the palette rather than with either
     renderer — for the same reason those do: the matplotlib PNG and the inline-SVG report both
@@ -168,7 +191,8 @@ def squarified_layout(
     deliberately not depended on (visualization spec §3, V8).
 
     Args:
-        values: Tile areas in any unit; non-positive values are the caller's to filter out.
+        values: Tile areas in any unit, every one of them positive and finite, largest first (see
+            above). An empty list is not an error and lays nothing out.
         x: Left edge of the box to fill.
         y: Bottom (or top — the caller's coordinate convention) edge of the box.
         width: Box width in the same units as `x`.
@@ -176,7 +200,19 @@ def squarified_layout(
 
     Returns:
         One `(x, y, width, height)` per input value, in input order.
+
+    Raises:
+        ValueError: If any value is zero, negative or not finite; the message names the index and
+            the value.
     """
+    for index, value in enumerate(values):
+        if not math.isfinite(value) or value <= 0.0:
+            raise ValueError(
+                f"squarified_layout needs positive, finite areas, but values[{index}] is {value!r}. "
+                "A treemap tile is an area: zero has no rectangle, a negative one has no meaning, "
+                "and either would be laid out without complaint. Filter or fix the amount at the "
+                "call site, where it is known whether it is an empty category or a sign error."
+            )
     total = sum(values) or 1.0
     scaled = [value * width * height / total for value in values]
     rectangles: List[Tuple[float, float, float, float]] = []
@@ -216,13 +252,18 @@ def _worst_aspect(row: List[float], side: float) -> float:
     """Worst width/height ratio of a candidate treemap row — squarify's quality measure.
 
     The algorithm keeps adding tiles to a row while this does not get worse and closes the row
-    the moment it does. A zero-area row is reported as infinitely bad so that it can never win a
-    comparison and stall the layout.
+    the moment it does. A zero-area row, or a row holding a zero-area tile, is reported as
+    infinitely bad so that it can never win a comparison and stall the layout. `squarified_layout`
+    already refuses a non-positive value before any row is built, so neither guard can fire on the
+    public path; they stay as defence in depth, because the alternative to an `inf` here is a
+    `ZeroDivisionError` from inside a layout, which says nothing about the amount that caused it.
     """
     total = sum(row)
     if total <= 0:
         return float("inf")
     largest, smallest = max(row), min(row)
+    if smallest <= 0:
+        return float("inf")
     return max(side * side * largest / (total * total), (total * total) / (side * side * smallest))
 
 
@@ -278,8 +319,10 @@ class RibbonSegment:
     leg, which is the shape every ribbon used to have.
 
     `out_anchor` is the offset of the leg's start above the bottom of the source node's right
-    face, `in_anchor` the same for the target node's left face — the same convention as
-    `SankeyGeometry.ribbon_anchors`, which is now the first and last leg of the chain.
+    face, `in_anchor` the same for the target node's left face. The two ends of the whole ribbon
+    are therefore the first leg's `out_anchor` and the last leg's `in_anchor`; there is no
+    separate projection of that pair, because a renderer that draws the chain already walks past
+    both and one that draws only the ends would draw a curve through whatever lies between.
     """
 
     source: str
@@ -318,26 +361,26 @@ class SankeyGeometry:
     maps a node id to `(x of its left edge, y of its bottom, height)` in the unit square;
     `unit_scale` is the height one unit of flow occupies — *the same number in every column*, which
     is what makes a ribbon keep its width from end to end (visualization spec rule 2.7); and
-    `ribbon_anchors` gives, per input ribbon and in the input's order, the offsets of its two ends
-    above the bottom of their node, so the ribbons on a face tile it exactly in the crossing-
-    minimizing order (Q19).
+    `ribbon_segments` gives, per input ribbon and in the input's order, the chain of legs it is
+    drawn as (Q29 R7): one leg per column gap, each carrying the offsets of its two ends above the
+    bottom of their node, so the ribbons on a face tile it exactly in the crossing-minimizing order
+    (Q19). A ribbon between neighbouring columns is a chain of one, which is the shape every ribbon
+    used to have; the ribbon's own two ends are the first leg's `out_anchor` and the last leg's
+    `in_anchor`.
 
     Handing the scale out rather than letting each renderer re-derive it from a node's height is
     the whole point: dividing a node's height by what it carries reproduces a per-node scale, and
     a middle column that carries each unit twice then gets a different one from its neighbours —
     which is exactly the defect this replaced.
 
-    `ribbon_segments` is the routed form of the same ribbons (Q29 R7): one leg per column gap, so
-    a renderer draws a chain rather than one curve across whatever lies between. `ribbon_anchors`
-    remains the (first out, last in) pair of each chain. `boxes` also contains the virtual nodes
-    the routing introduced — their ids start with `SankeyLayout.VIRTUAL_NODE_PREFIX` and they are
-    deliberately *not* in any caller's column list, so a renderer that draws the columns it was
-    handed never draws them. `net_stubs` closes the faces that ribbons do not fill.
+    `boxes` also contains the virtual nodes the routing introduced — their ids start with
+    `SankeyLayout.VIRTUAL_NODE_PREFIX` and they are deliberately *not* in any caller's column list,
+    so a renderer that draws the columns it was handed never draws them. `net_stubs` closes the
+    faces that ribbons do not fill.
     """
 
     boxes: Dict[str, Tuple[float, float, float]]
     unit_scale: float
-    ribbon_anchors: List[Tuple[float, float]]
     ribbon_segments: List[List[RibbonSegment]] = field(default_factory=list)
     net_stubs: List[NetStub] = field(default_factory=list)
 
@@ -458,6 +501,13 @@ def _crossing_count(
     positions and needs no geometry. It is what the ordering is now *scored* by — barycenter
     sweeps are a heuristic and can make a picture worse, as run 1's rented view showed, so the
     layout keeps the best-scoring pass rather than the last one.
+
+    Cost: every call recounts every crossing from scratch, and `_transposed` calls it once per
+    candidate swap, which is quadratic in a column's nodes and quadratic again in the legs of a
+    gap. That is the right trade for the diagrams this report draws — a dozen nodes and a couple
+    of dozen ribbons, where the whole layout is microseconds. The upgrade, if a diagram ever grows
+    past a few dozen nodes, is delta scoring: a single adjacent swap changes only the crossings
+    within that one gap pair, so the count can be updated rather than recomputed.
     """
     position = {node: index for nodes in order for index, node in enumerate(nodes)}
     by_gap: Dict[int, List[Tuple[str, str]]] = {}
@@ -484,6 +534,11 @@ def _transposed(
     last tangles, and it is the standard companion pass. Deterministic: columns are visited left
     to right, pairs bottom to top, and a swap is kept only on a strict improvement, so equal-cost
     alternatives never flip a re-render.
+
+    Cost: each candidate swap is scored by a full `_crossing_count` of the whole drawing rather
+    than by the change it makes in its own gap. Recounting is fine at report scale (a dozen nodes)
+    and delta scoring per gap is the upgrade when a diagram exceeds a few dozen; nothing here is
+    on a path where that has ever mattered.
     """
     current = [list(nodes) for nodes in order]
     score = _crossing_count(current, legs, column_of)
@@ -566,19 +621,41 @@ def sankey_node_boxes(
     Coordinates are fractions of a unit square with y growing upward; a renderer whose y grows
     downward (SVG) flips them itself.
 
+    **Bad input is refused, not drawn.** A ribbon amount has to be positive and finite, and both
+    of a ribbon's nodes have to be declared by some column. A zero-width ribbon is a flow the
+    reader cannot see but which still claims height on both faces it touches; a negative one is a
+    sign the caller has not resolved, and a Sankey encodes direction in the node pair rather than
+    in a sign; and a ribbon naming an undeclared node used to be kept, silently skipped by every
+    renderer, and yet counted into its source node's face height — a node drawn taller than the
+    ribbons that tile it, for a reason nothing in the picture states.
+
     Args:
         columns: Node ids per column, left to right. The order within a column is the sweep's
             starting point.
-        ribbons: `(source id, target id, amount)` triples; only the amounts are read here.
-            Amounts are expected non-negative — a Sankey ribbon has no sign, and the callers
-            encode direction in the node pair.
+        ribbons: `(source id, target id, amount)` triples; only the amounts are read here. Every
+            amount has to be positive and finite and both node ids have to appear in `columns`.
+            An empty list is not an error: the declared nodes are placed with height zero and
+            `unit_scale` comes back as `0.0`, which is the honest geometry of a diagram with
+            nothing in it.
 
     Returns:
-        A `SankeyGeometry` whose `ribbon_anchors` are index-aligned with `ribbons`. A node named
+        A `SankeyGeometry` whose `ribbon_segments` are index-aligned with `ribbons`. A node named
         in `columns` but carrying no flow gets height zero: under one global scale "no flow" is
         genuinely no height, and inventing a share for it would re-introduce a second scale
         through the back door.
+
+    Raises:
+        ValueError: If a ribbon amount is zero, negative or not finite, or if a ribbon names a
+            node no column declares; the message names the ribbon.
     """
+    for index, (source, target, amount) in enumerate(ribbons):
+        if not math.isfinite(amount) or amount <= 0.0:
+            raise ValueError(
+                f"Sankey ribbon {index} ({source!r} -> {target!r}) carries {amount!r}. A ribbon "
+                "amount has to be positive and finite: a Sankey has no sign — direction is the "
+                "node pair — and a zero-width ribbon is invisible while still claiming a slot on "
+                "both faces it touches. Drop or fix the flow where it is built."
+            )
     routed_columns, segments, legs_of_ribbon = _route_through_corridors(columns, ribbons)
     outgoing: Dict[str, float] = {}
     incoming: Dict[str, float] = {}
@@ -614,10 +691,6 @@ def sankey_node_boxes(
     return SankeyGeometry(
         boxes=boxes,
         unit_scale=unit_scale,
-        ribbon_anchors=[
-            (chain[0].out_anchor, chain[-1].in_anchor) if chain else (0.0, 0.0)
-            for chain in ribbon_segments
-        ],
         ribbon_segments=ribbon_segments,
         net_stubs=_net_stubs(columns, incoming, outgoing, unit_scale),
     )
@@ -639,13 +712,22 @@ def _route_through_corridors(
     function of the input and a re-render is byte-identical. They are appended to the intermediate
     column in ribbon order; where they end up vertically is the barycenter sweeps' business.
 
+    A ribbon naming a node no column declares is refused here rather than routed. It used to be
+    kept as a single leg with no geometry: every renderer skipped it, so the flow was invisible,
+    while its amount still counted into the source node's outgoing total and made that node taller
+    than the ribbons tiling it. A misspelt or unlisted node is a caller bug, and the only place it
+    is still identifiable is here, where the id is in hand.
+
     Args:
         columns: The caller's columns, left to right; read for membership and column index.
         ribbons: `(source, target, amount)` triples in the caller's order.
 
     Returns:
-        `(columns including the virtual nodes, legs, leg indices per ribbon)`. A ribbon naming a
-        node no column declares keeps its single leg, which the renderers skip as they always did.
+        `(columns including the virtual nodes, legs, leg indices per ribbon)`.
+
+    Raises:
+        ValueError: If a ribbon names a node that appears in no column; the message names both
+            the node and the ribbon it belongs to.
     """
     column_of = {node: index for index, nodes in enumerate(columns) for node in nodes}
     routed = [list(nodes) for nodes in columns]
@@ -653,7 +735,15 @@ def _route_through_corridors(
     legs_of_ribbon: List[List[int]] = []
     for index, (source, target, amount) in enumerate(ribbons):
         source_column, target_column = column_of.get(source), column_of.get(target)
-        if source_column is None or target_column is None or abs(target_column - source_column) <= 1:
+        if source_column is None or target_column is None:
+            missing = source if source_column is None else target
+            raise ValueError(
+                f"Sankey ribbon {index} ({source!r} -> {target!r}) names {missing!r}, which no "
+                "column declares. Such a ribbon has nowhere to be drawn, so every renderer used "
+                "to drop it while its amount still made the node it left taller than the ribbons "
+                "that tile it. List the node in a column, or do not emit the flow."
+            )
+        if abs(target_column - source_column) <= 1:
             legs_of_ribbon.append([len(segments)])
             segments.append((source, target, amount))
             continue
@@ -723,20 +813,19 @@ def _ribbon_anchors(
     cumulative and uses the global scale, which is what makes the ribbons tile the face exactly.
 
     Returns the anchors index-aligned with `ribbons`, so a renderer can iterate the flows in its
-    own order (colour, credit-versus-cost) without disturbing the geometry. A ribbon naming a node
-    the layout does not know gets `(0.0, 0.0)`; renderers skip those anyway.
+    own order (colour, credit-versus-cost) without disturbing the geometry. Every node named here
+    is in `boxes`: this runs on the routed legs, and `sankey_node_boxes` has already refused a
+    ribbon naming a node no column declares, so there is no unplaceable end left to skip.
     """
     def centre(node: str) -> float:
         """Vertical middle of a node, the key both stacking orders sort on."""
-        _x, y, height = boxes.get(node, (0.0, 0.0, 0.0))
+        _x, y, height = boxes[node]
         return y + height / 2.0
 
     anchors: List[Tuple[float, float]] = [(0.0, 0.0)] * len(ribbons)
     for is_outgoing in (True, False):
         by_node: Dict[str, List[int]] = {}
         for index, (source, target, _amount) in enumerate(ribbons):
-            if source not in boxes or target not in boxes:
-                continue
             by_node.setdefault(source if is_outgoing else target, []).append(index)
         for indices in by_node.values():
             offset = 0.0

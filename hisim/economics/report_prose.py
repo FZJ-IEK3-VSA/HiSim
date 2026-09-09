@@ -11,7 +11,9 @@ Two mappings live here: `SECTIONS`, the four-part explanation of every report se
 `CHAPTER_INTROS`, the short authored lead-in of each story chapter (owner decision Q24). A chapter
 intro is deliberately not four-part — a chapter has no chart to show, nothing to add and nothing
 to calculate; it is the sentence that says which of the reader's three questions the sections
-below it answer.
+below it answer. Both are keyed by the names of registries — `ReportSections` and
+`ReportChapters` — that arrive with the renderer slices further up this stack, so the keys here
+are the strings those registries will publish rather than anything this slice can import.
 
 **Verbatim.** The text is the owner-reviewed explanation copy, transcribed without rewording from
 the authoring document it was reviewed in (which is not in the tree — this module is the copy of
@@ -24,9 +26,14 @@ non-linearly and a reader landing mid-page must not have to find the primer firs
 **Markup.** The strings carry markdown emphasis (`*term*`, `**emphasis**`, `` `code` ``) rather
 than HTML, because both renderers need them: the `reporting` package turns them into `<em>` /
 `<strong>` / `<code>` with `to_html`, and `report_plots.py` strips them for the caption of the
-ledger heatmap with `to_plain_text`. The `<details>` summaries are constants here for the same
-reason a section name is a constant in `ReportSections`: the test suite asserts on them, and two
-spellings of "Terms used here" would make that assertion meaningless.
+ledger heatmap with `to_plain_text` — both of those renderers arrive with later slices of this
+stack, and what lands here is the text plus the two conversions they will call. Markup that
+cannot be rendered is refused rather than passed through: an unbalanced or nested marker raises
+out of *both* conversions, and the test suite runs both over every authored string, so a stray
+asterisk fails in CI instead of reaching a reader as a literal one. The `<details>` summaries are
+constants for the same reason the section names are: they are the one source of the two
+disclosure titles the renderer slices read, and two spellings of "Terms used here" would put both
+of them in one report.
 """
 
 # clean
@@ -34,7 +41,7 @@ spellings of "Terms used here" would make that assertion meaningless.
 import html
 import re
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 
 @dataclass(frozen=True)
@@ -1910,26 +1917,115 @@ class ReportProse:
             raise KeyError(f"No authored explanation for report section {name!r}")
         return cls.SECTIONS[name]
 
+    #: Code spans first, then strong, then emphasis — see `_rendered` for why the order matters.
+    _CODE_SPAN = re.compile(r"`([^`]+)`")
+    _STRONG = re.compile(r"\*\*([^*]+)\*\*")
+    _EMPHASIS = re.compile(r"\*([^*]+)\*")
+    #: Stands in for an already-rendered code span while the emphasis patterns run over the rest
+    #: of the text. NUL is the one character authored prose cannot contain — it is not typeable,
+    #: not in any of the transcribed source documents, and would not survive a JSON round trip —
+    #: so a slot can never collide with the text it is embedded in.
+    _SPAN_SLOT = "\x00{}\x00"
+    _SPAN_SLOT_PATTERN = re.compile("\x00(\\d+)\x00")
+
+    @classmethod
+    def _rendered(
+        cls,
+        text: str,
+        code: Tuple[str, str],
+        strong: Tuple[str, str],
+        emphasis: Tuple[str, str],
+    ) -> str:
+        """One markup pass with the three delimiter pairs the caller wants, validated at the end.
+
+        Both renderers run this, with tags for HTML and with empty strings for plain text, so the
+        two can never disagree about what the markup *is*: a string either renders in both or is
+        refused by both. Order is part of the contract. Code spans are substituted first and
+        their content parked in a slot, so an asterisk between backticks stays an asterisk instead
+        of being read as emphasis inside a `<code>` element; strong runs before emphasis, because
+        `**x**` would otherwise be consumed as two empty emphases.
+
+        The patterns are not "non-greedy" — they exclude their own marker character
+        (`[^*]+`, `` [^`]+ ``), which is stronger: a run cannot span from one term to the next
+        even where a lazy quantifier would have been allowed to. The price is that nested
+        emphasis (`**bold with *italic* inside**`) is not expressible, and rather than
+        rendering it as something the author did not write, it is refused: whatever the three
+        passes could not consume is left in the text, and a leftover marker raises.
+
+        Args:
+            text: The authored string, already escaped if the caller escapes.
+            code: `(opening, closing)` around the content of a code span.
+            strong: `(opening, closing)` around strong emphasis.
+            emphasis: `(opening, closing)` around ordinary emphasis.
+
+        Returns:
+            The text with all three markups replaced by the given delimiters.
+
+        Raises:
+            ValueError: If any marker character survives the three passes.
+        """
+        spans: List[str] = []
+
+        def stash(match: "re.Match[str]") -> str:
+            """Renders one code span and parks it, so emphasis cannot reach inside it."""
+            spans.append(f"{code[0]}{match.group(1)}{code[1]}")
+            return cls._SPAN_SLOT.format(len(spans) - 1)
+
+        parked = cls._CODE_SPAN.sub(stash, text)
+        rendered = cls._EMPHASIS.sub(
+            lambda match: f"{emphasis[0]}{match.group(1)}{emphasis[1]}",
+            cls._STRONG.sub(lambda match: f"{strong[0]}{match.group(1)}{strong[1]}", parked),
+        )
+        cls._refuse_unrendered_markup(rendered, text)
+        return cls._SPAN_SLOT_PATTERN.sub(lambda match: spans[int(match.group(1))], rendered)
+
+    @classmethod
+    def _refuse_unrendered_markup(cls, rendered: str, source: str) -> None:
+        """Raises when a markup character survived the substitutions of `_rendered`.
+
+        A leftover `*` or backtick means one of two things, and neither may reach a report: the
+        marker is unbalanced (`value *`, a footnote star, a multiplication sign) and would be
+        printed raw where the author meant nothing by it, or the emphasis is nested
+        (`**a *b* c**`) and the passes have already rendered part of it into something the
+        author did not write. Both are editorial mistakes in a module whose entire content is
+        authored text, and both are invisible in a rendered report that is thousands of lines
+        long — a raw asterisk reads as punctuation and a mis-nested one reads as emphasis. The
+        message quotes the offending string, because the string is the bug report.
+        """
+        leftover = [marker for marker in ("*", "`") if marker in rendered]
+        if leftover:
+            raise ValueError(
+                f"Report prose carries markup that cannot be rendered: {' and '.join(leftover)} "
+                f"left over after the code, strong and emphasis passes of {source!r}. Emphasis "
+                "markers have to be balanced and cannot be nested; write the literal character "
+                "inside a code span if it is meant literally."
+            )
+
     @classmethod
     def to_html(cls, text: str) -> str:
         """Markdown emphasis to HTML, with the text escaped first.
 
         The only transformation the prose is allowed to undergo on its way into the report: the
-        markup characters become entities, `**x**` becomes `<strong>`, `*x*` becomes `<em>` and
-        `` `x` `` becomes `<code>`. Escaping runs first so a definition mentioning `<details>`
-        cannot open a tag, and the emphasis patterns are non-greedy and marker-free inside, so
-        they cannot span from one term to the next.
+        markup characters become entities, `` `x` `` becomes `<code>`, `**x**` becomes `<strong>`
+        and `*x*` becomes `<em>` — in that order, and refusing anything the three passes cannot
+        consume; `_rendered` carries the reasoning for both. Escaping runs first, so a definition
+        mentioning `<details>` cannot open a tag.
 
         The escaping is `html.escape(..., quote=True)`, the same call the `reporting` package's
         `_esc` makes, rather than a hand-rolled replacement of `&`, `<` and `>`. Two escapers in
         one document is one escaper too many: the hand-rolled one left quotes alone, so a
         paragraph that ever reached an attribute — a `title`, an SVG `aria-label` — would have
         closed it, and the two would have had to be kept in step by hand forever.
+
+        Raises:
+            ValueError: If the markup is unbalanced or nested, exactly as in `to_plain_text`.
         """
-        escaped = html.escape(text, quote=True)
-        with_strong = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", escaped)
-        with_em = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", with_strong)
-        return re.sub(r"`([^`]+)`", r"<code>\1</code>", with_em)
+        return cls._rendered(
+            html.escape(text, quote=True),
+            code=("<code>", "</code>"),
+            strong=("<strong>", "</strong>"),
+            emphasis=("<em>", "</em>"),
+        )
 
     @classmethod
     def to_plain_text(cls, text: str) -> str:
@@ -1938,5 +2034,13 @@ class ReportProse:
         For the one renderer that cannot carry markup: the matplotlib caption of the ledger
         heatmap. Dropping the markers rather than substituting anything keeps the caption
         character-for-character comparable with the authored source.
+
+        It runs the same pass `to_html` does, with empty delimiters, rather than three string
+        replacements. Stripping by `replace` accepted anything — `value *` came out as `value `,
+        silently — so the caption renderer would have printed prose that the HTML renderer
+        refuses. One validator, one verdict.
+
+        Raises:
+            ValueError: If the markup is unbalanced or nested, exactly as in `to_html`.
         """
-        return text.replace("**", "").replace("*", "").replace("`", "")
+        return cls._rendered(text, code=("", ""), strong=("", ""), emphasis=("", ""))

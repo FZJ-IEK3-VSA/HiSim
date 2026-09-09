@@ -1,0 +1,110 @@
+name: CI resource monitor
+description: >
+  Measures how much of a runner a job actually used -- wall time, real CPU time and peak memory --
+  and leaves the numbers in the job summary and in an artifact the nightly ci-usage report collects.
+  Called twice, exactly like the hisim-cache action next to it: 'start' right after checkout, 'report'
+  at the end of the job under if: always().
+
+  GitHub reports none of this on its own. The jobs API gives wall time per job, which the collector
+  reads for free, but nothing anywhere reports memory, and nothing reports CPU time as distinct from
+  the wall time a runner is billed for. Both matter here: a job at 90% of the runner's 16 GB is one
+  larger dataset away from being killed without a usable message, and a job that holds four cores for
+  forty minutes to keep one of them busy is thirty runner-minutes that could be spent elsewhere.
+
+  The measurement covers from the 'start' call to the 'report' call. Everything before checkout --
+  the runner booting, the container image being pulled -- is outside it, and shows up only as the
+  difference between this action's wall time and the job duration the collector reads from the API.
+
+  Nothing here can fail a job. The probe catches its own errors, reports them as warnings and exits
+  0; a missing measurement is a gap in a report, while a monitoring probe that breaks a build is a
+  reason to delete the monitoring.
+
+inputs:
+  mode:
+    description: >
+      'start' before the job's work, 'report' after it. Put if: always() on the report call, so a job
+      that failed -- or that was killed for running out of memory, the case most worth seeing -- is
+      still measured.
+    required: true
+  scope:
+    description: >
+      What distinguishes this job from its matrix siblings, its matrix cell typically. It names the
+      artifact and is carried into the record, so a trend can be followed per cell rather than
+      averaged over a whole matrix. Leave unset for a job that has no siblings.
+    required: false
+    default: ''
+  upload:
+    description: >
+      Whether 'report' uploads the record as an artifact. 'false' leaves the numbers in the job
+      summary only, which is enough for a job nobody tracks over time.
+    required: false
+    default: 'true'
+  retention-days:
+    description: >
+      How long the record is kept. The nightly report collects it within a day and keeps what it
+      needs in its own index, so this only has to outlive a run of failed nightly jobs.
+    required: false
+    default: '30'
+
+runs:
+  using: composite
+  steps:
+    - name: Check the mode
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+      run: |
+        case "$MODE" in
+          start|report) ;;
+          *) echo "::error::resource-monitor: mode must be 'start' or 'report', got '$MODE'"; exit 1 ;;
+        esac
+
+    # RUNNER_TEMP rather than the workspace: a job that wipes, moves or re-checks-out the
+    # workspace between the two calls would otherwise lose the baseline written by 'start'.
+    - name: Name this job's measurement
+      id: names
+      shell: bash
+      env:
+        SCOPE: ${{ inputs.scope }}
+      run: |
+        scope="$(printf '%s' "$SCOPE" | tr -c 'A-Za-z0-9_.-' '_')"
+        workflow="$(printf '%s' "$GITHUB_WORKFLOW" | tr -c 'A-Za-z0-9_.-' '_')"
+        job="$(printf '%s' "$GITHUB_JOB" | tr -c 'A-Za-z0-9_.-' '_')"
+        name="ci-usage-${workflow}-${job}"
+        [ -n "$scope" ] && name="${name}-${scope}"
+        # The attempt keeps a re-run from colliding with the artifact of the attempt it replaces.
+        echo "artifact=${name}-attempt${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+        echo "state_dir=${RUNNER_TEMP}/ci-resource-monitor" >> "$GITHUB_OUTPUT"
+        echo "record=${RUNNER_TEMP}/ci-resource-monitor/metrics.json" >> "$GITHUB_OUTPUT"
+        # The action lives at .github/actions/resource-monitor, so the repository root -- and
+        # with it the probe -- is three levels up from wherever the runner resolved it.
+        echo "probe=$(realpath "${GITHUB_ACTION_PATH}/../../../scripts/ci_resource_probe.py")" >> "$GITHUB_OUTPUT"
+
+    - name: Start measuring
+      if: inputs.mode == 'start'
+      shell: bash
+      run: |
+        python3 "${{ steps.names.outputs.probe }}" start \
+          --state-dir "${{ steps.names.outputs.state_dir }}"
+
+    - name: Report the measurement
+      if: inputs.mode == 'report'
+      shell: bash
+      env:
+        SCOPE: ${{ inputs.scope }}
+      run: |
+        python3 "${{ steps.names.outputs.probe }}" report \
+          --state-dir "${{ steps.names.outputs.state_dir }}" \
+          --scope "$SCOPE" \
+          --out "${{ steps.names.outputs.record }}"
+
+    - name: Upload the measurement
+      if: inputs.mode == 'report' && inputs.upload == 'true'
+      uses: actions/upload-artifact@v6
+      with:
+        name: ${{ steps.names.outputs.artifact }}
+        path: ${{ steps.names.outputs.record }}
+        retention-days: ${{ inputs.retention-days }}
+        # A job whose probe could not write a record still uploaded nothing wrong; the report
+        # notices the gap on its own and an error here would only add noise to a red job.
+        if-no-files-found: ignore

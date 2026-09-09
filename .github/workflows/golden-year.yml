@@ -39,6 +39,11 @@ jobs:
       SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - uses: actions/checkout@v6
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
       - name: Wait for quality + tests + golden-check (fail fast if any failed)
         # Only PRs have prerequisites to gate on; a manual workflow_dispatch run
         # goes straight to the full-year matrix.
@@ -47,6 +52,13 @@ jobs:
       - name: Build full-year matrix
         id: gen
         run: echo "matrix=$(python3 scripts/golden_matrix.py --horizon year)" >> "$GITHUB_OUTPUT"
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report
 
   golden-year:
     name: golden-year ${{ matrix.setup }} / ${{ matrix.param }}
@@ -64,6 +76,12 @@ jobs:
       matrix: ${{ fromJSON(needs.gate.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v6
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
+          scope: ${{ matrix.setup }}-${{ matrix.param }}
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
@@ -90,6 +108,14 @@ jobs:
         with:
           mode: save
           scope: ${{ github.workflow }}-${{ matrix.setup }}-${{ matrix.param }}
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report
+          scope: ${{ matrix.setup }}-${{ matrix.param }}
 
   summary:
     name: golden-year summary

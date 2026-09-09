@@ -34,6 +34,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
@@ -41,3 +46,10 @@ jobs:
         run: pip install openpyxl pyyaml
       - name: Check the generated YAML against the workbooks
         run: python tools/convert_worked_examples.py --check
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report

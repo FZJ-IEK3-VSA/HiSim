@@ -57,6 +57,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+    # Wall time, CPU time and peak memory for this job; see the action.
+    - name: Start the resource monitor
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: start
+        scope: ${{ matrix.name }}
     - name: Mark workspace as safe for git
       # The container runs as a different user than the one that owns the
       # checked-out workspace, so git would otherwise refuse with
@@ -107,6 +113,14 @@ jobs:
       with:
         mode: save
         scope: ${{ github.workflow }}-${{ matrix.name }}
+    # Kept on failure too: a job killed for running out of memory is the one
+    # whose measurement matters most.
+    - name: Report the resource usage
+      if: always()
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: report
+        scope: ${{ matrix.name }}
 
   coverage:
     name: combine coverage
@@ -121,6 +135,11 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
     - uses: actions/checkout@v6
+    # Wall time, CPU time and peak memory for this job; see the action.
+    - name: Start the resource monitor
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: start
     - name: Mark workspace as safe for git
       run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
     - name: Download coverage data from the pytest jobs
@@ -149,3 +168,10 @@ jobs:
           coverage.xml
           htmlcov/
         if-no-files-found: error
+    # Kept on failure too: a job killed for running out of memory is the one
+    # whose measurement matters most.
+    - name: Report the resource usage
+      if: always()
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: report

@@ -32,9 +32,21 @@ jobs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
       - uses: actions/checkout@v6
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
       - id: gen
         # golden_matrix.py is stdlib-only, so no dependency install is needed here.
         run: echo "matrix=$(python3 scripts/golden_matrix.py --horizon week)" >> "$GITHUB_OUTPUT"
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report
 
   golden:
     name: golden ${{ matrix.setup }} / ${{ matrix.param }}
@@ -50,6 +62,12 @@ jobs:
       matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v6
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
+          scope: ${{ matrix.setup }}-${{ matrix.param }}
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
@@ -76,6 +94,14 @@ jobs:
         with:
           mode: save
           scope: ${{ github.workflow }}-${{ matrix.setup }}-${{ matrix.param }}
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report
+          scope: ${{ matrix.setup }}-${{ matrix.param }}
 
   summary:
     name: golden-check summary

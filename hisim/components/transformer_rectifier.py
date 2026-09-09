@@ -45,19 +45,17 @@ class TransformerConfig(ConfigBase):
         percentage, a negative value or a zero is refused loudly instead of
         producing plausible but wrong outputs and negative loss indicators.
     rated_power_in_kilowatt : float
-        Nameplate throughput of the unit in kW, i.e. the electrical power it is
-        built to convert continuously. It does not enter the simulation at all —
+        Nameplate throughput of the unit in kW. It does not enter the simulation —
         :meth:`Transformer.i_simulate` converts whatever it is fed — and exists
-        because a transformer and rectifier are priced per kilowatt of rating:
-        it is the only sizing figure :meth:`Transformer.get_cost_capex` can scale
-        by. A unit rated at zero would therefore cost nothing and be reported as
-        an answer, so a non-positive rating is refused at construction.
+        because a transformer and rectifier are priced per kilowatt of rating: it
+        is the only sizing figure :meth:`Transformer.get_cost_capex` can scale by,
+        which is why a non-positive rating is refused at construction.
     device_co2_footprint_in_kg : Optional[float]
-        CO2 emitted producing the device, in kg. ``None`` — the default — means
-        postprocessing looks the figure up from the device database for the
-        simulated year and country and scales it by ``rated_power_in_kilowatt``;
-        a number here overrides that lookup. The five cost fields are read as a
-        set: the lookup happens only when all five are ``None``.
+        CO2 emitted producing the device, in kg, or ``None`` — the default — for
+        the database lookup. The five cost fields are read as a set: postprocessing
+        looks the figures up from the device database for the simulated year and
+        country and scales them by ``rated_power_in_kilowatt`` only while all five
+        are ``None``; all five set are used verbatim instead, for a quoted unit.
     investment_costs_in_euro : Optional[float]
         Purchase cost of the device in EUR, or ``None`` for the database lookup.
     lifetime_in_years : Optional[float]
@@ -337,15 +335,9 @@ class Transformer(StatelessComponent):
 
         A transformer and rectifier are bought, rated and replaced as one unit, so they are one
         cost subject (``ComponentType.TRANSFORMER_AND_RECTIFIER``) priced per kilowatt of
-        nameplate rating. The figures come from the device database for the simulated year and
-        country unless all five cost fields on the configuration carry values, in which case
-        those are used verbatim; that is the same rule every other costed component follows, and
-        it is why the database entry -- not this method -- is where the numbers are stated and
-        sourced.
-
-        The unit is deliberately *not* declared as modelling no device: it is real industrial
-        equipment with a real price, so answering zero here would understate the system total
-        silently instead of naming what is missing.
+        nameplate rating, which is what the figures scale by. Where they come from is the
+        all-or-nothing rule stated on :class:`TransformerConfig`: the device database unless all
+        five cost fields carry values.
 
         Args:
             config: the transformer configuration, read for its rating and its cost fields.
@@ -380,8 +372,7 @@ class Transformer(StatelessComponent):
         on, and the consumer downstream reports that share as its own. The two figures are
         therefore disjoint and can be added, which is what the system total does -- reporting the
         throughput here instead would count the same kilowatt-hours twice. The losses are priced
-        and carbon-accounted at the electricity factors for the simulated year and country, the
-        same way every other electricity consumer in the library prices what it draws.
+        and carbon-accounted at the electricity factors for the simulated year and country.
 
         Args:
             all_outputs: every output column of the run, searched for this component's output.

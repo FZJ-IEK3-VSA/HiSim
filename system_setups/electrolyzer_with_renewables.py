@@ -110,6 +110,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         config=TransformerConfig(
             component_id=ComponentID(name=name),
             efficiency=efficiency,
+            # Rated to carry the electrolyzer it feeds, so the two figures are tied on purpose.
             rated_power_in_kilowatt=my_electrolyzer_config.max_load,
         ),
     )

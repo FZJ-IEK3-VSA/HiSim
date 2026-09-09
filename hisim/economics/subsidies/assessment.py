@@ -341,6 +341,12 @@ class SubsidyAward:
 
     All amounts are in **nominal euro, positive, undiscounted, gross of any mirroring**: the sign
     flip to a revenue-type cash flow happens when the entry is booked (`as_revenue`), not here.
+
+    ``display_name`` is carried on the award rather than looked up when a report is rendered
+    (Q20): a report is regularly built from a serialized result, in a process that never loaded a
+    catalog, so the friendly name has to travel with the award or it is not available where it is
+    read. It is empty exactly when the scheme had none, and :attr:`label` then falls back to the
+    id.
     """
 
     scheme_id: str
@@ -361,6 +367,64 @@ class SubsidyAward:
     # For VAT_REDUCTION:
     reduced_vat_rate: Optional[float] = None
     caps_binding_per_slot: Dict[str, bool] = field(default_factory=dict)
+    #: The scheme's friendly name at the time of the award (Q20); empty when it had none.
+    display_name: str = ""
+    #: The rate this award was computed at, as a fraction, for the two percentage forms (a share
+    #: of eligible cost and a tax credit); None for lump sums, per-unit amounts, loan terms and
+    #: VAT reductions, which state their own terms instead. It is the rate **after** a cumulation
+    #: group's combined-rate cap scaled it down, i.e. the rate that actually produced the euros.
+    benefit_rate: Optional[float] = None
+    #: The same rate before that scaling, when the group's combined-rate cap bit; None otherwise.
+    #: The pair is what lets the report say "20 % capped to 17.5 %" instead of showing a rate the
+    #: catalog does not contain.
+    benefit_rate_before_group_cap: Optional[float] = None
+    #: The same rate before the EU state-aid overall cap rescaled the award, when that cap bit;
+    #: None otherwise. That cap scales the *amounts* (`solver._scaled_to_cap`), not the rates, so
+    #: without this the caption would print a rate times a basis whose product is not the amount
+    #: beside it. What is recorded is the **best-estimate slot's** arithmetic: `benefit_rate` is
+    #: set to whatever makes ``eligible_basis_in_euro.scale(benefit_rate)`` equal the capped
+    #: ``upfront_amount`` in that slot, and this field keeps the rate it had before. The cap ratio
+    #: is a per-slot figure (`solver._overall_cap_ratios`), so where the three ratios differ the
+    #: LOW and HIGH slots of the product no longer reproduce their own amounts — the best-estimate
+    #: slot is the one the caption prints, and the one this pair describes.
+    benefit_rate_before_overall_cap: Optional[float] = None
+    #: The eligible-cost basis the rate was applied to, after proration and after the
+    #: per-dwelling-unit cap — the second factor of `rate x basis = amount`.
+    eligible_basis_in_euro: Optional[UncertainValue] = None
+    #: The per-dwelling-unit eligible-cost ceiling that applied, in euro, or None where the scheme
+    #: declares none. With `caps_binding_per_slot` this is what turns "capped" into "capped at X".
+    eligible_basis_cap_in_euro: Optional[float] = None
+
+    @property
+    def label(self) -> str:
+        """The award's name for a reader — the scheme's display name, or its id (Q20).
+
+        Returns:
+            The display name captured at award time, or the scheme id when it had none.
+        """
+        return self.display_name or self.scheme_id
+
+
+class SubsidySchemeLabels:
+    """The names of the support sources a timeline can carry that no catalog scheme covers (Q20).
+
+    Two ids reach the report without ever having been a `SubsidyScheme`: the §10.1 legacy flat
+    share, which is subsidy data carried in the *device* catalog for countries that have no
+    subsidy catalog yet, and the fallback for a support entry that names no scheme at all. Both
+    used to be printed raw — a reader of the Irish report saw a node called `LEGACY_FLAT` — and
+    both deserve an honest label rather than an invented programme name: what the legacy shim
+    models is a flat percentage with no scheme behind it, and the label says exactly that.
+
+    It sits beside :class:`SubsidyAward` rather than in `views.py` because both ends of the
+    convention have to agree on it: `calculators/subsidy_application.py` *writes*
+    ``LEGACY_FLAT_ID`` onto the shim's timeline entry, and the views read it back to name the
+    node. While the id was a literal at the writer and a constant at the reader, nothing tied the
+    two together. `views` re-exports nothing; both import it from here.
+    """
+
+    LEGACY_FLAT_ID = "LEGACY_FLAT"
+    LEGACY_FLAT = "flat legacy support share (no catalog)"
+    UNATTRIBUTED = "subsidy (unattributed)"
 
 
 @dataclass
@@ -412,6 +476,7 @@ class SubsidyDecision:
             "applied": [
                 {
                     "scheme_id": award.scheme_id,
+                    "display_name": award.display_name,
                     "payout_kind": award.payout_kind.value,
                     "upfront_amount": award.upfront_amount.to_json(),
                     "schedule_amounts": [amount.to_json() for amount in award.schedule_amounts],
@@ -423,6 +488,17 @@ class SubsidyDecision:
                     "loan_repayment_grant_share": award.loan_repayment_grant_share,
                     "reduced_vat_rate": award.reduced_vat_rate,
                     "caps_binding_per_slot": award.caps_binding_per_slot,
+                    # Q26 F8: the arithmetic behind the amount, so a report rendered from a
+                    # stored result can show `rate x basis = amount` and the cap verdict.
+                    "benefit_rate": award.benefit_rate,
+                    "benefit_rate_before_group_cap": award.benefit_rate_before_group_cap,
+                    "benefit_rate_before_overall_cap": award.benefit_rate_before_overall_cap,
+                    "eligible_basis_in_euro": (
+                        award.eligible_basis_in_euro.to_json()
+                        if award.eligible_basis_in_euro is not None
+                        else None
+                    ),
+                    "eligible_basis_cap_in_euro": award.eligible_basis_cap_in_euro,
                 }
                 for award in self.applied
             ],

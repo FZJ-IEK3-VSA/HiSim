@@ -464,14 +464,57 @@ class FactsExtraction:
     ever gets here) from a class that should have produced facts and did not
     (`unresolved_reason` set — an unresolved subject under decision D7).
 
-    Exactly one of the two fields is meaningful at a time: facts present means resolved,
-    `unresolved_reason` present means the component should have had facts and does not.
+    **At most one of the three fields is set**, and the all-None state is a legitimate fourth
+    answer rather than a defect: it is what a class declared `FREE_OF_COST` returns, and what an
+    unknown class with no declaration and no adapter entry returns — a component the cost model
+    has nothing to price and nothing to complain about. Of the three that carry something: facts
+    present means resolved, `unresolved_reason` present means the component should have had facts
+    and does not, and `not_installed_reason` present means the component described itself
+    perfectly well as absent. Two of them together would be a contradiction the one caller that
+    reads them (`bridge.py`) resolves by branch order rather than by noticing, so `__post_init__`
+    refuses the combination instead.
+
+    The third state exists because "cannot be described" and "is not there" have opposite
+    consequences: an unresolved subject aborts the evaluation under D7, while a device configured
+    at zero size is simply left out of the cost model, exactly as if the setup had not built it.
+    Collapsing the two would let a `share_of_maximum_pv_potential = 0` run kill the whole engine.
     """
 
     facts: Optional[ComponentCostFacts] = None
     #: Why a component that should have had facts produced none; None when there is nothing to
     #: report (an unknown, undeclared class, or facts extracted successfully).
     unresolved_reason: Optional[str] = None
+    #: Why a component that *could* be described contributes nothing anyway: it is configured at
+    #: zero size. Reported and logged, never a failure — see the class docstring.
+    not_installed_reason: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Refuses a record that states two answers at once.
+
+        The three fields are a union the caller reads by branch order, so a record carrying facts
+        *and* a reason would be read as resolved and its reason would vanish — the exact silent
+        outcome this record exists to prevent. Cheap to state, and it fails at the construction
+        site rather than three layers downstream.
+
+        Raises:
+            ValueError: If more than one of `facts`, `unresolved_reason` and `not_installed_reason`
+                is set.
+        """
+        stated = [
+            name
+            for name, value in (
+                ("facts", self.facts),
+                ("unresolved_reason", self.unresolved_reason),
+                ("not_installed_reason", self.not_installed_reason),
+            )
+            if value is not None
+        ]
+        if len(stated) > 1:
+            raise ValueError(
+                f"FactsExtraction states {' and '.join(stated)} at once; at most one of facts, "
+                "unresolved_reason and not_installed_reason may be set, because the caller reads "
+                "them by branch order and would silently drop the rest."
+            )
 
 
 # The eight returns are the precedence rule this function exists to state -- hook, declared
@@ -503,14 +546,23 @@ def extract_cost_facts(component: Any) -> FactsExtraction:  # pylint: disable=to
     The only silent outcome left is a class the adapter has never heard of and that declared
     nothing, which the bridge rejects on its `UNDECLARED` relevance before it ever asks for facts.
 
+    A last subtlety, and the one that decides whether a run survives: facts that describe a
+    component of **zero size** are not facts about a cost at all, they are a statement that the
+    device is not installed (a building sizer that always constructs a PV system and then sets its
+    share of the roof to zero). Those come back as a `not_installed_reason` — a skip the bridge
+    logs — rather than as an unresolved subject, which would abort the whole evaluation, or as the
+    `ValueError` the facts' own validation used to raise before zero was distinguished from
+    negative and NaN.
+
     Args:
         component: The finished simulation's component object; only its class name, its
             `cost_relevance`, its `config` and the optional hook are read.
 
     Returns:
-        A `FactsExtraction` — facts when the component could be described, a reason when a
-        recognized or declared-priced component could not be, and neither when the adapter simply
-        does not know the class and the class claims nothing.
+        A `FactsExtraction` — facts when the component could be described, an unresolved reason
+        when a recognized or declared-priced component could not be, a not-installed reason when it
+        described itself as zero-sized, and none of the three when the adapter simply does not know
+        the class and the class claims nothing.
     """
     getter = getattr(component, "get_cost_facts", None)
     if getter is not None:
@@ -520,7 +572,7 @@ def extract_cost_facts(component: Any) -> FactsExtraction:  # pylint: disable=to
         except NotImplementedError:
             facts = None
         if facts is not None:
-            return FactsExtraction(facts=facts)
+            return _resolved_or_not_installed(component, facts)
         relevance = getattr(type(component), "cost_relevance", CostRelevance.UNDECLARED)
         if relevance == CostRelevance.FREE_OF_COST:
             return FactsExtraction()
@@ -557,7 +609,38 @@ def extract_cost_facts(component: Any) -> FactsExtraction:  # pylint: disable=to
                 "the cost model while counting as priced"
             )
         )
-    return FactsExtraction(facts=extracted)
+    return _resolved_or_not_installed(component, extracted)
+
+
+def _resolved_or_not_installed(component: Any, facts: ComponentCostFacts) -> FactsExtraction:
+    """Resolved facts, unless the component says it is sized at zero — then a "not installed" skip.
+
+    The one place the "declared but not built" case is recognized, shared by the adopted-hook and
+    the compatibility-table branches so both behave identically. A zero-size component is dropped
+    from pricing entirely, exactly as if the setup had not built it.
+
+    On the energy side the expectation is that a device configured at zero size moves no energy and
+    its output columns sum to zero of their own accord — but that is an assumption about every
+    component in the fleet, and it is no longer taken on trust here: `bridge.py` checks the
+    component's `BillingDeterminants` against it (`_non_zero_energy_flows`) and turns a
+    contradiction into an unresolved subject, so a device excluded from capex can never have its
+    energy quietly billed.
+
+    Args:
+        component: Only its class name is read, for the reason string.
+        facts: The facts the hook or the extractor produced.
+
+    Returns:
+        A resolved `FactsExtraction`, or one carrying `not_installed_reason` and nothing else.
+    """
+    if not facts.is_not_installed():
+        return FactsExtraction(facts=facts)
+    return FactsExtraction(
+        not_installed_reason=(
+            f"{type(component).__name__} ({facts.asset_class.value}) is configured at zero size — "
+            "not installed, so it is excluded from pricing"
+        )
+    )
 
 
 def get_cost_facts(component: Any) -> Optional[ComponentCostFacts]:

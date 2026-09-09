@@ -21,11 +21,13 @@ that is a restatement of the entry's year, not a decision.
 **The KPI naming scheme** (§7.3). New KPIs are namespaced by appending the perspective id in
 parentheses to a name that already carries its unit in brackets, e.g.
 ``"Equivalent annual cost [EUR/a] (brownfield_net)"``, ``"Net present cost over 20 years [EUR]
-(greenfield_gross)"``, ``"Subsidy DE_BEG_EM_HP_2024 [EUR] (brownfield_net)"``. The namespace is
-what makes nine perspectives coexist in one flat KPI namespace without collision, and what lets a
-consumer pick "the owner's monthly cost" rather than "a monthly cost". Every monetary KPI carries
-its uncertainty band in the additive `KpiEntry.value_min` / `value_max` fields, with `value` itself
-being the BEST_ESTIMATE slot.
+(greenfield_gross)"``, ``"Subsidy BEG EM heat pump (DE_BEG_EM_HP_2024) [EUR]
+(brownfield_net)"`` — the per-award KPI carries both the friendly name and the catalog id, so the
+key stays unique when two schemes share a display name and stays greppable back to the catalog.
+The namespace is what makes nine perspectives coexist in one flat KPI namespace without
+collision, and what lets a consumer pick "the owner's monthly cost" rather than "a monthly cost".
+Every monetary KPI carries its uncertainty band in the additive `KpiEntry.value_min` /
+`value_max` fields, with `value` itself being the BEST_ESTIMATE slot.
 
 **These are NEW files only.** During the parallel phase the legacy KPI names, the legacy CSVs and
 their values are untouched and remain the source of all published numbers; the lifecycle engine
@@ -327,12 +329,29 @@ def build_lifecycle_kpi_entries(
         )
         for decision in result.subsidy_decisions:
             for award in decision.applied:
-                if award.upfront_amount.maximum > 0:
+                # The award's *total* (upfront + instalments), not its upfront amount: a
+                # tax-credit schedule has a zero upfront amount and would otherwise be missing
+                # from the KPI set while the SUBSIDY category NPV counts it. Awards with no euro
+                # amount at all (loan terms, an operational rate) still have none and stay out —
+                # `describe_award` is what decides which is which.
+                presentation = views.describe_award(award)
+                if presentation.total_in_euro is not None and presentation.total_in_euro.maximum > 0:
+                    # Q20: the KPI reads as the scheme's friendly name, with the raw catalog id
+                    # beside it. The name alone was neither collision-proof — two schemes may
+                    # carry the same display name, and a catalog with no name at all falls back
+                    # to the id, so two awards could produce one key and silently overwrite each
+                    # other — nor greppable back to the catalog. The id stays in the description
+                    # as well, which is where a machine consumer already looks for it.
+                    detail = f"{decision.measure_subject}; scheme {presentation.scheme_id}"
                     add(
-                        f"Subsidy {award.scheme_id} [EUR] ({perspective})",
+                        f"Subsidy {presentation.display_name} ({presentation.scheme_id}) [EUR] "
+                        f"({perspective})",
                         "EUR",
-                        award.upfront_amount,
-                        description=decision.measure_subject,
+                        presentation.total_in_euro,
+                        description=(
+                            f"{detail}; {presentation.payout_note}"
+                            if presentation.payout_note else detail
+                        ),
                     )
         # The total is a view of the result, not a running sum kept while emitting KPIs (W4.1),
         # and since D2 it is the timeline-based nominal figure — so it is *not* the sum of the

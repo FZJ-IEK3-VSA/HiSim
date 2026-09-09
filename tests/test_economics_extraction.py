@@ -124,15 +124,28 @@ class FakeHeatPump:
 
     cost_relevance = CostRelevance.PRICED
 
-    def __init__(self, component_name: str = "FakeHeatPump", asset_class=ComponentType.HEAT_PUMP) -> None:
-        """A priced component of the given asset class."""
+    def __init__(
+        self,
+        component_name: str = "FakeHeatPump",
+        asset_class=ComponentType.HEAT_PUMP,
+        size: float = 9.0,
+    ) -> None:
+        """A priced component of the given asset class and size."""
         self.component_name = component_name
         self.config = _Config()
         self._asset_class = asset_class
+        self._size = size
 
     def get_cost_facts(self) -> ComponentCostFacts:
-        """9 kW of whatever asset class the test asked for."""
-        return ComponentCostFacts(asset_class=self._asset_class, size=9.0, size_unit=Units.KILOWATT)
+        """9 kW of whatever asset class the test asked for, or whatever size the test set.
+
+        The size is a constructor argument so the same stub can also play a device the setup
+        built and then sized away (0 kW) and one whose declaration is simply wrong (a negative
+        size), which are the two halves of the not-installed rule.
+        """
+        return ComponentCostFacts(
+            asset_class=self._asset_class, size=self._size, size_unit=Units.KILOWATT
+        )
 
 
 class FakeController:
@@ -268,6 +281,30 @@ class _CountingFlowHook:
         )
 
 
+class FakeZeroSizedMeteredDevice:
+    """A device configured at zero size that nevertheless reports boundary energy flows.
+
+    The counter-example to `adapter._resolved_or_not_installed`'s claim that a zero-size device
+    moves no energy. It is a `PRICED` component with an adopted `get_cost_facts()` returning a
+    0 kWp PV system — so the extraction comes back as "not installed" — and an adopted
+    `get_energy_flow_facts()` hook whose kWh the test dials, so the same component can play both
+    halves of the rule: the ordinary zero-size device that also metered zero, and the contradiction
+    that must stop the run.
+    """
+
+    cost_relevance = CostRelevance.PRICED
+
+    def __init__(self, bought_in_kwh: float = 0.0, component_name: str = "ZeroSizedPv") -> None:
+        """A 0 kWp PV system whose meter reports the given purchased energy."""
+        self.component_name = component_name
+        self.config = _Config()
+        self.get_energy_flow_facts: Any = _CountingFlowHook(bought_in_kwh=bought_in_kwh)
+
+    def get_cost_facts(self) -> ComponentCostFacts:
+        """0 kWp: the size that makes the adapter report the component as not installed."""
+        return ComponentCostFacts(asset_class=ComponentType.PV, size=0.0, size_unit=Units.KILOWATT)
+
+
 class _SimulationParameters:
     """The handful of attributes `build_evaluation_inputs` reads off SimulationParameters.
 
@@ -378,6 +415,80 @@ class TestFactsExtraction:
         assert inputs.billing == []
         assert inputs.unresolved_subjects == []
 
+    def test_zero_size_component_is_skipped_instead_of_killing_the_evaluation(self):
+        """A device the setup built and then sized to zero is "not installed", not invalid data.
+
+        `share_of_maximum_pv_potential = 0` still constructs a PV system, at 0 kWp; the whole
+        lifecycle evaluation used to die on its facts' validation. It must now be excluded from
+        pricing, and it must not become an unresolved subject either, because that aborts the
+        evaluation just as thoroughly under D7.
+        """
+        component = FakeHeatPump(component_name="ZeroSizedPv", size=0.0)
+        inputs = build_evaluation_inputs(
+            [_Wrapper(component)], [], pd.DataFrame(), _SimulationParameters()
+        )
+        assert inputs.cost_facts == []
+        assert inputs.unresolved_subjects == []
+
+    def test_a_not_installed_component_that_metered_nothing_is_still_billed_its_zeros(self):
+        """The rule as it stands: zero size, zero flows — skipped from pricing, determinants kept.
+
+        The determinants of a device that measured nothing are themselves zero, so keeping them
+        changes no bill; what they do is keep the carrier on the boundary, which is why the bridge
+        appends them rather than dropping the component wholesale. This is the control for the test
+        below: without it, the refusal there could just as well be "a not-installed component may
+        not meter at all".
+        """
+        inputs = build_evaluation_inputs(
+            [_Wrapper(FakeZeroSizedMeteredDevice(bought_in_kwh=0.0))],
+            [],
+            pd.DataFrame(),
+            _SimulationParameters(),
+        )
+        assert inputs.cost_facts == []
+        assert inputs.unresolved_subjects == []
+        assert [determinants.energy_bought_in_kwh for determinants in inputs.billing] == [0.0]
+
+    def test_a_not_installed_component_that_metered_energy_aborts_instead_of_being_billed(self):
+        """The adapter's assumption is checked, not trusted: flows from a zero-size device stop the run.
+
+        `adapter._resolved_or_not_installed` excludes a zero-size component from pricing on the
+        grounds that such a device moves no energy. Where that is false the two available answers
+        are both wrong — billing the flows charges energy to a device the result says is absent,
+        dropping them silently loses measured energy off the boundary — so the component becomes an
+        unresolved subject and the D7 check refuses to price the rest of the fleet around it. The
+        reason has to name the non-zero figure, because "zero size but metered" is a defect in the
+        setup and the reader has to know which of the two statements to believe.
+        """
+        inputs = build_evaluation_inputs(
+            [_Wrapper(FakeZeroSizedMeteredDevice(bought_in_kwh=1234.0))],
+            [],
+            pd.DataFrame(),
+            _SimulationParameters(),
+        )
+        assert inputs.cost_facts == []
+        assert inputs.billing == []  # not billed, which is the whole point
+        assert [item.subject for item in inputs.unresolved_subjects] == ["ZeroSizedPv"]
+        reason = inputs.unresolved_subjects[0].reason
+        assert "zero size" in reason
+        assert "energy_bought_in_kwh" in reason  # the field that contradicts it, by name
+        message = _fail_evaluation(inputs)
+        assert "ZeroSizedPv" in message
+        assert "no partial cost results" in message
+
+    def test_zero_size_extraction_carries_a_reason(self):
+        """The skip is stated, not silent: the adapter names the class and why it contributes nothing."""
+        extraction = adapter.extract_cost_facts(FakeHeatPump(size=0.0))
+        assert extraction.facts is None
+        assert extraction.unresolved_reason is None
+        assert "zero size" in (extraction.not_installed_reason or "")
+        assert "not installed" in (extraction.not_installed_reason or "")
+
+    def test_negative_size_still_fails_fast(self):
+        """The other direction: zero is a statement, a negative size is corrupt and must raise."""
+        with pytest.raises(ValueError, match="size"):
+            adapter.extract_cost_facts(FakeHeatPump(size=-3.0))
+
     def test_simulated_period_fraction_follows_the_date_range(self):
         """One simulated day of a 365-day year -> 1/365; a full year -> 1.0."""
         one_day = build_evaluation_inputs([], [], pd.DataFrame(), _SimulationParameters(days=1))
@@ -388,6 +499,35 @@ class TestFactsExtraction:
         # Longer runs are clamped to the first simulated year (cost_module_issues.md #15).
         two_years = build_evaluation_inputs([], [], pd.DataFrame(), _SimulationParameters(days=730))
         assert two_years.simulated_period_fraction == pytest.approx(1.0)
+
+
+class TestFactsExtractionRecordRefusesTwoAnswers:
+    """The three-field union may state at most one thing, and says so at construction."""
+
+    def test_two_fields_at_once_are_refused(self):
+        """Facts beside a reason would be read as resolved and the reason would vanish.
+
+        `bridge.py` reads the record by branch order — facts first, then `unresolved_reason`, then
+        `not_installed_reason` — so a record carrying two of them is not an ambiguity the caller
+        can notice: it silently drops the later one. That is the class of silent omission the
+        record exists to close, so the contradiction fails where it is built.
+        """
+        facts = ComponentCostFacts(
+            asset_class=ComponentType.HEAT_PUMP, size=9.0, size_unit=Units.KILOWATT
+        )
+        with pytest.raises(ValueError, match="at once"):
+            adapter.FactsExtraction(facts=facts, unresolved_reason="and also unpriceable")
+        with pytest.raises(ValueError, match="at once"):
+            adapter.FactsExtraction(
+                unresolved_reason="unpriceable", not_installed_reason="also absent"
+            )
+
+    def test_the_empty_record_is_a_legitimate_answer(self):
+        """All-None is what `FREE_OF_COST` and an unknown, undeclared class both return."""
+        empty = adapter.FactsExtraction()
+        assert empty.facts is None
+        assert empty.unresolved_reason is None
+        assert empty.not_installed_reason is None
 
 
 class TestMeterExtraction:

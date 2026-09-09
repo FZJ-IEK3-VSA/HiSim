@@ -120,6 +120,13 @@ JSON document) and `--subsidy-catalog <dir>`, and all three mean the same thing:
 neither flag is given — that is what keeps it a rendering step rather than a second
 evaluation — and re-evaluates, saying so on stdout, when one of them is.
 
+Without `--parameters`, every subcommand prices with the parameters the run itself was priced
+under: they are stored on each result in `lifecycle_costs.json` and read back automatically,
+subsidy catalog included. A directory carrying neither a `--parameters` file nor a stored
+evaluation is an error, never a run at the engine defaults. A `subsidy_catalog_path` that cannot
+be resolved is an error too, in the CLI and in the postprocessing bridge alike — a named catalog
+is never silently replaced by the §10.1 legacy flat shim.
+
 The report layer follows the money along the calculation chain — every spec feature has at
 least one visualization plus a result table: **0** automated plausibility panel (thresholds:
 `cost_database/plausibility_checks.json` — range checks WARN, structural invariants FAIL),

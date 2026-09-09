@@ -855,7 +855,10 @@ class EconomicEvaluator:
         """
         # Same values as self.parameters, but with the resolved price basis year recorded (W1.2).
         params = self.effective_parameters(inputs)
-        ledger = ledger or ProvenanceLedger()
+        # `is None`, not `or`: `ProvenanceLedger` defines `__len__`, so a caller-supplied but
+        # still-empty ledger is falsy and used to be silently replaced by a fresh one — the
+        # caller then held an object nothing ever recorded into.
+        ledger = ledger if ledger is not None else ProvenanceLedger()
         build = self.build_timeline(inputs, perspective, ledger)
         timeline = build.timeline
         co2_result = build.co2_result

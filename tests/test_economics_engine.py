@@ -136,6 +136,33 @@ class TestUncertainValue:
         assert (total.minimum, total.best_estimate, total.maximum) == (11, 22, 33)
 
 
+class TestCallerSuppliedLedger:
+    """§3.10: the ledger a caller hands in is the one the evaluation records into."""
+
+    def test_an_empty_ledger_passed_in_is_filled_rather_than_replaced(self, database):
+        """A caller-supplied but still-empty ledger must not be swapped for a fresh one.
+
+        `ProvenanceLedger` defines `__len__`, so an empty one is falsy: resolving it with `or`
+        instead of `is None` silently gave the evaluation a *different* object, and the caller was
+        left holding one that nothing ever recorded into — with no error anywhere, because the
+        result carries its own ledger and `explain()` keeps working. The only observable is the
+        caller's object, which is what this asserts.
+        """
+        from hisim.economics.provenance import ProvenanceLedger
+
+        ledger = ProvenanceLedger()
+        assert len(ledger) == 0
+        evaluator = EconomicEvaluator(database, zero_rate_parameters(horizon=10))
+        inputs = EvaluationInputs(
+            simulation_year=2024,
+            simulated_period_fraction=1.0,
+            cost_facts=[SubjectCostFacts("Device", make_facts(1000.0, 10.0, 0.01))],
+        )
+        result = evaluator.evaluate(inputs, GREENFIELD_GROSS, ledger=ledger)
+        assert len(ledger) > 0
+        assert result.ledger is ledger
+
+
 class TestHandComputedExamples:
     """VDI 2067 style hand examples (§9.4)."""
 

@@ -54,6 +54,7 @@ from hisim.economics.subsidies import (
     SubsidyBuildingContext,
     SubsidyCatalog,
     SubsidyContext,
+    SubsidySchemeLabels,
 )
 from hisim.economics.timeline import Actor, CostCategory
 from hisim.economics.uncertainty import Slot, UncertainValue
@@ -551,6 +552,161 @@ class TestYearZeroAndSubsidies:
                 else award.upfront_amount
             )
             assert views.award_total_amount(award).best_estimate == pytest.approx(expected.best_estimate)
+
+    def test_describe_award_values_every_payout_kind(self):
+        """Each payout kind gets a total or an explanation of why it has none (PR-9 finding).
+
+        The renderers used to read `upfront_amount`, which is zero for a tax-credit schedule, a
+        loan-terms award and an operational rate, so those awards were reported as "0.00 EUR" or
+        dropped entirely. `describe_award` is the one place that decides what an award is worth:
+        a euro band where one exists, and None plus the terms where the value is booked by the
+        financing or energy calculators instead.
+        """
+        from hisim.economics.subsidies import PayoutKind, SubsidyAward
+
+        grant = views.describe_award(
+            SubsidyAward(scheme_id="G", payout_kind=PayoutKind.UPFRONT_GRANT,
+                         upfront_amount=UncertainValue(3000.0, 2000.0, 4000.0))
+        )
+        assert grant.total_in_euro is not None
+        assert grant.total_in_euro.best_estimate == pytest.approx(3000.0)
+        assert grant.payout_note == ""
+
+        credit = views.describe_award(
+            SubsidyAward(scheme_id="T", payout_kind=PayoutKind.TAX_CREDIT_SCHEDULE,
+                         schedule_amounts=[UncertainValue.exact(721.14)] * 2
+                         + [UncertainValue.exact(618.12)])
+        )
+        assert credit.total_in_euro is not None
+        assert credit.total_in_euro.best_estimate == pytest.approx(2060.40)
+        assert credit.payout_note == "tax credit paid over 3 years"
+
+        loan = views.describe_award(
+            SubsidyAward(scheme_id="L", payout_kind=PayoutKind.LOAN_TERMS, loan_interest_rate=0.009,
+                         loan_term_in_years=20, loan_repayment_grant_share=0.25)
+        )
+        assert loan.total_in_euro is None
+        assert loan.payout_note == "loan terms: 0.90% interest, 20 years term, 25% repayment grant"
+
+        operational = views.describe_award(
+            SubsidyAward(scheme_id="O", payout_kind=PayoutKind.OPERATIONAL,
+                         operational_rate_per_kwh=0.08, operational_carrier=EnergyCarrier.ELECTRICITY,
+                         operational_duration_years=10)
+        )
+        assert operational.total_in_euro is None
+        assert operational.payout_note == "0.0800 EUR/kWh on ELECTRICITY for 10 years"
+
+        vat = views.describe_award(
+            SubsidyAward(scheme_id="V", payout_kind=PayoutKind.VAT_REDUCTION, reduced_vat_rate=0.07)
+        )
+        assert vat.total_in_euro is None
+        assert vat.payout_note == "reduced VAT rate 7.0%"
+
+    def test_describe_award_keeps_the_caps_that_bound(self):
+        """The binding slots travel with the presentation, so both renderers report them alike."""
+        from hisim.economics.subsidies import PayoutKind, SubsidyAward
+
+        presentation = views.describe_award(
+            SubsidyAward(
+                scheme_id="G",
+                payout_kind=PayoutKind.UPFRONT_GRANT,
+                upfront_amount=UncertainValue(3000.0, 2000.0, 4000.0),
+                caps_binding_per_slot={"low": False, "best_estimate": False, "high": True},
+            )
+        )
+        assert presentation.caps_binding == ("high",)
+
+    def test_describe_award_states_the_arithmetic_and_the_cap_verdict(self):
+        """Q26 F8: an amount a reader can check against the rate and the basis that produced it."""
+        from hisim.economics.subsidies import PayoutKind, SubsidyAward
+
+        capped = views.describe_award(
+            SubsidyAward(
+                scheme_id="S",
+                payout_kind=PayoutKind.UPFRONT_GRANT,
+                upfront_amount=UncertainValue.exact(9000.0),
+                benefit_rate=0.30,
+                eligible_basis_in_euro=UncertainValue.exact(30000.0),
+                eligible_basis_cap_in_euro=30000.0,
+                caps_binding_per_slot={"low": False, "best_estimate": True, "high": True},
+            )
+        )
+        assert capped.arithmetic == "30.0% x 30,000 EUR eligible basis = 9,000 EUR"
+        assert capped.cap_verdict == "capped at 30,000 EUR eligible cost (best_estimate, high)"
+
+        uncapped = views.describe_award(
+            SubsidyAward(
+                scheme_id="L",
+                payout_kind=PayoutKind.UPFRONT_GRANT,
+                upfront_amount=UncertainValue.exact(7500.0),
+                eligible_basis_cap_in_euro=30000.0,
+            )
+        )
+        assert uncapped.arithmetic == ""  # a lump sum states no rate
+        assert uncapped.cap_verdict == "cap not binding (30,000 EUR eligible cost)"
+
+    def test_the_arithmetic_names_both_ceilings_that_cut_the_rate(self):
+        """Q26 F8: a rate cut twice says so twice, so the binding limit is identifiable.
+
+        The EU state-aid overall cap rescales the award's amount after a cumulation group's
+        combined-rate cap has already scaled its rate. Both cuts reach the reader through the same
+        caption, and the product still has to be the amount beside it — which is what the solver's
+        `_apply_overall_cap` guarantees and what this pins on the formatting side.
+        """
+        from hisim.economics.subsidies import PayoutKind, SubsidyAward
+
+        both = views.describe_award(
+            SubsidyAward(
+                scheme_id="S",
+                payout_kind=PayoutKind.UPFRONT_GRANT,
+                upfront_amount=UncertainValue.exact(5000.0),
+                benefit_rate=0.25,
+                benefit_rate_before_group_cap=0.35,
+                benefit_rate_before_overall_cap=0.30,
+                eligible_basis_in_euro=UncertainValue.exact(20000.0),
+            )
+        )
+        assert both.arithmetic == (
+            "25.0% (of 35.0%, cut back by the cumulation group's combined-rate cap) "
+            "(of 30.0%, cut back by the state-aid overall cap) "
+            "x 20,000 EUR eligible basis = 5,000 EUR"
+        )
+
+        only_overall = views.describe_award(
+            SubsidyAward(
+                scheme_id="S",
+                payout_kind=PayoutKind.UPFRONT_GRANT,
+                upfront_amount=UncertainValue.exact(5000.0),
+                benefit_rate=0.25,
+                benefit_rate_before_overall_cap=0.50,
+                eligible_basis_in_euro=UncertainValue.exact(20000.0),
+            )
+        )
+        assert only_overall.arithmetic == (
+            "25.0% (of 50.0%, cut back by the state-aid overall cap) "
+            "x 20,000 EUR eligible basis = 5,000 EUR"
+        )
+
+    def test_scheme_display_names_cover_the_ids_a_report_can_show(self, result):
+        """Q20: every id a renderer can look up resolves to a name, never to an empty cell.
+
+        The per-award names are checked against the *shipped catalog's* `display_name` for that
+        scheme id rather than against the award's own label: the label is what the mapping is built
+        from, so comparing the two would assert nothing at all. Read against the catalog it becomes
+        the claim that matters — the name a report shows is the name the catalog gives the scheme,
+        having travelled with the award through an evaluation that a report need never repeat.
+        """
+        names = views.scheme_display_names(result)
+        catalog = SubsidyCatalog.load(result.parameters.country)
+
+        assert names[""] == SubsidySchemeLabels.UNATTRIBUTED
+        assert names[SubsidySchemeLabels.LEGACY_FLAT_ID] == SubsidySchemeLabels.LEGACY_FLAT
+        applied = [award for decision in result.subsidy_decisions for award in decision.applied]
+        assert applied, "no award was applied — the loop below would prove nothing"
+        for award in applied:
+            scheme = catalog.scheme_by_id(award.scheme_id)
+            assert scheme is not None, award.scheme_id
+            assert names[award.scheme_id] == (scheme.display_name or award.scheme_id)
 
     def test_total_subsidies_is_none_without_support_flows(self, result):
         """A timeline without a SUBSIDY entry omits the KPI rather than publishing a zero."""

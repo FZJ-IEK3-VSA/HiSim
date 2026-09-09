@@ -4,6 +4,7 @@
   "schemes": [
     {
       "id": "AT_RAUS_AUS_OEL_HP_2024",
+      "display_name": "Raus aus \u00d6l und Gas \u2014 heat pump (7,500 EUR lump sum)",
       "jurisdiction": {"country": "AT", "region": null},
       "valid_from": "2024-01-01",
       "valid_to": null,

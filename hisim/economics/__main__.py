@@ -46,6 +46,15 @@ the same thing in each, the flag taking precedence over the path stored in the p
   shipped data is internally inconsistent — an unsourced datapoint, a coverage or question-coverage
   hole, a malformed tariff contract — and the run that would have used it is not to be trusted.
 
+**Where the assumptions come from.** ``--parameters`` states them; without the flag every
+subcommand reads the parameters the run itself was priced under out of its `lifecycle_costs.json`
+(`_load_parameters`). The engine defaults are never a fallback: a directory with neither the flag
+nor a `lifecycle_costs.json` carrying its parameters is an error naming that file and the flag that
+supplies them instead, because re-pricing an archived study at default assumptions answers a
+question nobody asked. The subsidy catalog those parameters name is loaded for every subcommand,
+`explain` included, through `SubsidyCatalog.load_configured` — a named catalog that cannot be
+resolved is an error (D25), never a quiet fall-through to the §10.1 legacy flat shim.
+
 Across all commands, an `UnresolvableSubjectsError` — the fail-fast of decision D7 — is caught in
 `main` and turned into exit code 2 with the same message the postprocessing bridge logs. There are
 no partial cost results and no ``--allow-drops`` escape. Every other `CostDataError` — a cost
@@ -90,7 +99,7 @@ from hisim.economics.scenarios import (
     export_cube_csv,
     export_cube_json,
 )
-from hisim.economics.serialization import read_inputs, read_results
+from hisim.economics.serialization import read_inputs, read_results, read_stored_parameters
 from hisim.economics.subsidies import SubsidyCatalog
 from hisim.economics.validation import validate_all
 
@@ -155,7 +164,7 @@ class EvaluationContext:
 
     Attributes:
         inputs: The stored physical facts of one simulated variant (`economic_inputs.json`).
-        parameters: The caller's assumptions, from `--parameters` or the documented defaults.
+        parameters: The assumptions, from `--parameters` or from the stored run itself.
         database: The cost database the parameters point at.
         catalog: The subsidy catalog, or None when neither the flag nor the parameters name one.
         evaluator: The engine bound to database, parameters and catalog.
@@ -170,37 +179,62 @@ class EvaluationContext:
     perspectives: List[Perspective]
 
 
-def _load_parameters(args: argparse.Namespace) -> EconomicParameters:
-    """The economic assumptions for this invocation: a `--parameters` file, or the defaults.
+def _load_parameters(args: argparse.Namespace, results_dir: Optional[str] = None) -> EconomicParameters:
+    """The economic assumptions for this invocation: `--parameters`, or the run's own.
 
-    Shared by every subcommand so they all price identically. Note that the parameters come from the
-    *caller*, never from the result directory — that is the point of re-pricing: the stored file
-    carries the physical facts, the assumptions are supplied fresh (§4.6).
+    Shared by every subcommand so they all price identically, with a two-step resolution:
 
-    Omitting `--parameters` means "use the defaults" and is a legitimate invocation. *Passing* a
-    path that does not exist is not: it used to fall back to the defaults silently, so a typo in
-    the file name produced a full, plausible-looking result priced under assumptions the caller
-    never chose (issue #23). The two cases are therefore separated here, and only the second one
-    fails.
+    1. ``--parameters <file>`` — the caller states the assumptions, which is what re-pricing an
+       archived study under *new* assumptions means (§4.6).
+    2. otherwise the assumptions the run itself was priced under, read back from its
+       `lifecycle_costs.json` (`serialization.read_stored_parameters`).
+
+    Step 2 is the fix for a defect that made `explain` unusable on a real run: without
+    ``--parameters`` every subcommand priced with `EconomicParameters()`, so a run evaluated at
+    price basis year 2026 with a subsidy catalog was re-evaluated at the default basis year with
+    none — the explained numbers were not the run's, and on data valid from 2026 the invocation
+    died on the D7 resolution check instead. The parameters travel with the artifacts; the CLI now
+    reads them.
+
+    Neither source is allowed to fall back to the engine defaults. A directory holding only
+    `economic_inputs.json` has no stored assumptions, and pricing it silently at the defaults is
+    exactly the failure this function exists to prevent — so it fails, naming the file it looked
+    in and the flag that would supply them. *Passing* a path that does not exist fails for the same
+    reason (issue #23).
+
+    Args:
+        args: The parsed CLI namespace, for `--parameters`.
+        results_dir: The invocation's result directory. Every caller is a subcommand that has one
+            (`_build_context` passes its `results_dir`); the parameter is optional only so the
+            signature reads the same as the resolution it performs.
 
     Returns:
-        The parsed parameters, or the defaults when the flag was omitted.
+        The caller's parameters, or the ones stored with the run.
 
     Raises:
-        CostDataError: If `--parameters` names a path that is not a readable file. `main` turns it
-            into exit code 2 with the message on stderr.
+        CostDataError: If `--parameters` names a path that is not a readable file, or no path was
+            given and the directory carries no stored parameters. `main` turns both into exit code
+            2 with the message on stderr.
     """
-    if not args.parameters:
-        return EconomicParameters()
-    if not os.path.isfile(args.parameters):
-        raise CostDataError(
-            f"--parameters file not found: {args.parameters!r}. Omit the flag to price with the "
-            "default economic parameters; the defaults are never used as a fallback for a path "
-            "that was given explicitly."
-        )
-    with open(args.parameters, encoding="utf-8") as file:
-        parameters: EconomicParameters = EconomicParameters.from_dict(json.load(file))
-    return parameters
+    if args.parameters:
+        if not os.path.isfile(args.parameters):
+            raise CostDataError(
+                f"--parameters file not found: {args.parameters!r}. Omit the flag to price with "
+                "the parameters stored with the run; the defaults are never used as a fallback "
+                "for a path that was given explicitly."
+            )
+        with open(args.parameters, encoding="utf-8") as file:
+            parameters: EconomicParameters = EconomicParameters.from_dict(json.load(file))
+        return parameters
+    stored = read_stored_parameters(results_dir) if results_dir else None
+    if stored is not None:
+        return stored
+    raise CostDataError(
+        f"No economic parameters for {results_dir!r}: the directory has no lifecycle_costs.json "
+        "carrying the parameters the run was priced under, and pricing it with the engine "
+        "defaults would silently answer a different question. Pass --parameters <file>, or run "
+        "`evaluate --parameters <file>` on the directory first."
+    )
 
 
 def _build_context(results_dir: str, args: argparse.Namespace) -> EvaluationContext:
@@ -228,10 +262,11 @@ def _build_context(results_dir: str, args: argparse.Namespace) -> EvaluationCont
         CostDataError: If the parameters file, the database or the catalog cannot be loaded.
     """
     inputs = read_inputs(results_dir)
-    parameters = _load_parameters(args)
+    parameters = _load_parameters(args, results_dir)
     database = CostDatabase(parameters.cost_database_path)
-    catalog_path = getattr(args, "subsidy_catalog", None) or parameters.subsidy_catalog_path
-    catalog = SubsidyCatalog.load(parameters.country, catalog_path) if catalog_path else None
+    catalog = SubsidyCatalog.load_configured(
+        parameters.country, parameters.subsidy_catalog_path, getattr(args, "subsidy_catalog", None)
+    )
     evaluator = EconomicEvaluator(database, parameters, catalog)
     require_resolvable_subjects(inputs, evaluator)
     return EvaluationContext(
@@ -444,6 +479,11 @@ def _load_or_evaluate(
     Two things send this to the engine instead: a directory holding nothing but
     `economic_inputs.json`, and a re-pricing flag (`_repricing_flags`), which is a request to
     render *these* assumptions rather than the stored ones.
+
+    The first of those only gets as far as the engine *with* `--parameters`. An inputs-only
+    directory carries no stored assumptions to price under, and the engine defaults are never a
+    fallback (`_load_parameters`), so without the flag the re-evaluation it announces fails
+    immediately with the message naming both ways to supply them.
 
     The distinction matters to a reader of the output: rendered stored results show the numbers the
     original run published, while a re-priced directory shows what today's data and the given

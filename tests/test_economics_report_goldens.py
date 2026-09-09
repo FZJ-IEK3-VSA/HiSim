@@ -420,6 +420,69 @@ class TestStoredResultsRoundTrip:
             original.subsidy_decisions[0].applied[0].scheme_id
         )
 
+    def test_a_result_written_before_the_award_fields_existed_still_renders(self, rendered, tmp_path):
+        """Q20/Q26 F8: an archived `lifecycle_costs.json` predates every award field added since.
+
+        The fields the award caption is built from — the display name, the two factors, the two
+        pre-cap rates, the eligible-cost ceiling — were all added after results had already been
+        written, and `serialization` reads each with `dict.get` for exactly that reason. This
+        strips them back out of a freshly written file and renders both documents from what
+        remains, which is the archived shape: the awards still have to be listed, under their raw
+        scheme ids since no friendly name survives, and the caption has to say nothing at all
+        rather than print a multiplication with missing factors.
+        """
+        import json
+
+        from hisim.economics.exports import write_cash_flow_timeline, write_lifecycle_costs_json
+        from hisim.economics.serialization import read_results
+
+        directory = str(tmp_path)
+        write_lifecycle_costs_json(rendered.matrix, directory)
+        write_cash_flow_timeline(rendered.matrix, directory)
+        path = os.path.join(directory, "lifecycle_costs.json")
+        with open(path, encoding="utf-8") as file:
+            document = json.load(file)
+        removed = (
+            "display_name",
+            "benefit_rate",
+            "benefit_rate_before_group_cap",
+            "benefit_rate_before_overall_cap",
+            "eligible_basis_in_euro",
+            "eligible_basis_cap_in_euro",
+        )
+        stripped = 0
+        for result in document.values():
+            for decision in result.get("subsidy_decisions", []):
+                for award in decision.get("applied", []):
+                    stripped += sum(award.pop(field, None) is not None for field in removed)
+        assert stripped > 0, "the fixture wrote no award fields — nothing was stripped"
+        with open(path, "w", encoding="utf-8") as file:
+            json.dump(document, file)
+
+        reloaded = read_results(directory)
+        assert reloaded is not None
+        summary = build_cost_summary_markdown(reloaded, run_plausibility_checks(reloaded), None)
+        report = build_lifecycle_report_html(reloaded, run_plausibility_checks(reloaded), None, None)
+        applied = [
+            award
+            for result in reloaded.results.values()
+            for decision in result.subsidy_decisions
+            for award in decision.applied
+        ]
+        assert applied
+        for award in applied:
+            assert award.display_name == ""
+            assert award.label == award.scheme_id  # the id is what a reader gets, never a blank
+            assert award.scheme_id in summary
+            assert award.scheme_id in report
+        # No caption at all: both halves of the phrase `_award_arithmetic_str` appends are keyed
+        # on fields that are gone. The control is the unstripped rendering, which carries both —
+        # without it these would pass on any report that simply lost its subsidy section.
+        assert "EUR eligible basis" in rendered.summary and "EUR eligible cost" in rendered.summary
+        for document in (summary, report):
+            assert "EUR eligible basis" not in document
+            assert "EUR eligible cost" not in document
+
     def test_report_cli_prefers_stored_results(self, rendered, tmp_path, capsys):
         """`report` on a directory with stored results does not re-evaluate."""
         from hisim.economics.__main__ import main

@@ -175,6 +175,45 @@ def _scaled_to_cap(amount: UncertainValue, ratios: CapRatios) -> UncertainValue:
     return UncertainValue(best_estimate=best_estimate, minimum=minimum, maximum=maximum)
 
 
+def _apply_overall_cap(award: SubsidyAward, ratios: CapRatios) -> None:
+    """Scales one award to the state-aid cap **and** keeps the factors it states true (Q26 F8).
+
+    The cap used to rescale `upfront_amount` alone and leave `benefit_rate` and
+    `eligible_basis_in_euro` untouched, so `views.award_arithmetic` printed "30.0 % x 30,000 EUR =
+    7,200 EUR" — a multiplication whose result is not the amount beside it — wherever the ceiling
+    bound. An award's recorded factors have to multiply to the euros it actually pays, so the rate
+    moves with the amount: the pre-cap rate is preserved beside it (`benefit_rate_before_overall_cap`)
+    and the caption names both cuts, exactly as it already does for a cumulation group's
+    combined-rate cap.
+
+    The effective rate is read back off the **best-estimate** slot — `amount / basis` — rather than
+    multiplied by that slot's ratio, so the identity `basis x rate = amount` holds exactly even
+    where `_scaled_to_cap`'s downward clamp gave a slot less than its own ratio would have. The
+    other two slots keep no rate of their own; see the field's docstring.
+
+    Two cases deliberately keep their rate unchanged. A tax-credit schedule states a rate
+    but pays through `schedule_amounts`, which this cap does not touch (its zero `upfront_amount`
+    scales to zero), so its arithmetic is still true and rewriting its rate would be the falsehood.
+    An award with no basis, or a basis of zero, has no rate to re-derive.
+
+    Args:
+        award: The award to cap, modified in place.
+        ratios: The per-slot cap ratios from :func:`_overall_cap_ratios`.
+    """
+    scaled = _scaled_to_cap(award.upfront_amount, ratios)
+    basis = award.eligible_basis_in_euro
+    if (
+        award.benefit_rate is not None
+        and basis is not None
+        and basis.best_estimate > 0.0
+        and award.upfront_amount.best_estimate > 0.0
+        and scaled.best_estimate < award.upfront_amount.best_estimate
+    ):
+        award.benefit_rate_before_overall_cap = award.benefit_rate
+        award.benefit_rate = scaled.best_estimate / basis.best_estimate
+    award.upfront_amount = scaled
+
+
 def _combination_awards(
     schemes: List[SubsidyScheme],
     measure: MeasureForSubsidy,
@@ -199,7 +238,9 @@ def _combination_awards(
     lump sums and per-unit amounts are clamped to it, tax credits are spread over their schedule,
     loan terms and reduced VAT carry parameters rather than amounts. **The overall cap** finally
     bounds the total *upfront* support (grants and clamped lump sums; not tax-credit schedules, not
-    loans) by the country-level state-aid share of the gross cost, per slot.
+    loans) by the country-level state-aid share of the gross cost, per slot, and moves the recorded
+    rate of every award it cuts down with the amount (`_apply_overall_cap`), so no award ever states
+    factors that do not multiply to its own euros.
 
     Args:
         schemes: One admissible combination — assumed already checked against ``excludes``.
@@ -233,12 +274,21 @@ def _combination_awards(
                     payout_kind=scheme.payout_kind,
                     upfront_amount=basis.scale(rate),
                     caps_binding_per_slot=binding,
+                    # Q26 F8: both factors of the multiplication, and the pre-cap rate when the
+                    # group's combined-rate cap scaled this scheme down.
+                    benefit_rate=rate,
+                    benefit_rate_before_group_cap=scheme_rate if scale_down < 1.0 else None,
+                    eligible_basis_in_euro=basis,
+                    eligible_basis_cap_in_euro=scheme.eligible_cost.cap_for_units(
+                        context.building.dwelling_units
+                    ),
                 )
             )
     for scheme in schemes:
         if scheme.benefit_kind in (BenefitKind.SHARE_OF_ELIGIBLE_COST, BenefitKind.BONUS_SHARE):
             continue
         basis, binding = _eligible_cost_basis(scheme, measure, context)
+        basis_cap = scheme.eligible_cost.cap_for_units(context.building.dwelling_units)
         benefit = scheme.benefit
         if isinstance(benefit, LumpSumBenefit):
             # A grant never exceeds the cost it funds, so the lump sum is clamped to the eligible
@@ -252,6 +302,8 @@ def _combination_awards(
                     payout_kind=scheme.payout_kind,
                     upfront_amount=amount.clamp_upper(basis) if scheme.eligible_cost.categories else amount,
                     caps_binding_per_slot=binding,
+                    eligible_basis_in_euro=basis if scheme.eligible_cost.categories else None,
+                    eligible_basis_cap_in_euro=basis_cap,
                 )
             )
         elif isinstance(benefit, PerUnitBenefit):
@@ -262,6 +314,8 @@ def _combination_awards(
                     payout_kind=scheme.payout_kind,
                     upfront_amount=amount.clamp_upper(basis),
                     caps_binding_per_slot=binding,
+                    eligible_basis_in_euro=basis,
+                    eligible_basis_cap_in_euro=basis_cap,
                 )
             )
         elif isinstance(benefit, TaxCreditBenefit):
@@ -273,6 +327,11 @@ def _combination_awards(
                     payout_kind=PayoutKind.TAX_CREDIT_SCHEDULE,
                     schedule_amounts=schedule,
                     caps_binding_per_slot=binding,
+                    # Q26 F8: a tax credit is a percentage form like a share award, so it states
+                    # the same multiplication; the instalment split is the payout note's job.
+                    benefit_rate=benefit.rate,
+                    eligible_basis_in_euro=basis,
+                    eligible_basis_cap_in_euro=basis_cap,
                 )
             )
         elif isinstance(benefit, ReducedVatBenefit):
@@ -312,7 +371,14 @@ def _combination_awards(
         ratios = _overall_cap_ratios(total_upfront, cap)
         if any(ratio < 1.0 for ratio in ratios):
             for award in awards:
-                award.upfront_amount = _scaled_to_cap(award.upfront_amount, ratios)
+                _apply_overall_cap(award, ratios)
+    # Q20: the friendly name travels with the award, because the report that shows it is often
+    # built from a serialized result in a process that never loaded a catalog. Attached in one
+    # pass rather than at the seven construction sites above, so a new benefit kind cannot forget
+    # it.
+    names = {scheme.id: scheme.display_name for scheme in schemes}
+    for award in awards:
+        award.display_name = names.get(award.scheme_id) or ""
     return awards
 
 
@@ -452,11 +518,17 @@ def solve_cumulation(
     decision = SubsidyDecision(measure_subject=measure.subject)
     for assessment in assessments:
         if assessment.status == EligibilityStatus.INELIGIBLE:
-            decision.rejected.append({"scheme_id": assessment.scheme.id, "reason": assessment.rejected_reason})
+            decision.rejected.append({
+                "scheme_id": assessment.scheme.id,
+                "display_name": assessment.scheme.label,
+                "reason": assessment.rejected_reason,
+            })
         elif assessment.status == EligibilityStatus.UNDETERMINED:
-            decision.undetermined.append(
-                {"scheme_id": assessment.scheme.id, "missing_fields": assessment.missing_fields}
-            )
+            decision.undetermined.append({
+                "scheme_id": assessment.scheme.id,
+                "display_name": assessment.scheme.label,
+                "missing_fields": assessment.missing_fields,
+            })
 
     def admissible(combination: List[SubsidyScheme]) -> bool:
         """Whether the combination violates no `excludes` relation.

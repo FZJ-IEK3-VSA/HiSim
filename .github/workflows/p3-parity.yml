@@ -62,6 +62,11 @@ jobs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
       - uses: actions/checkout@v6
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
       - id: gen
         # p3_parity_matrix.py is stdlib-only, so no dependency install is needed here.
         run: |
@@ -69,6 +74,13 @@ jobs:
           if [ -n "${{ inputs.setup }}" ]; then ARGS="$ARGS --setup ${{ inputs.setup }}"; fi
           if [ "${{ inputs.window }}" != "all" ]; then ARGS="$ARGS --window ${{ inputs.window }}"; fi
           echo "matrix=$(python3 scripts/p3_parity_matrix.py $ARGS)" >> "$GITHUB_OUTPUT"
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report
 
   parity:
     name: parity ${{ matrix.setup }} / ${{ matrix.window }}
@@ -84,6 +96,12 @@ jobs:
       matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v6
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
+          scope: ${{ matrix.setup }}-${{ matrix.window }}
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
@@ -112,6 +130,14 @@ jobs:
           name: p3-parity-artifacts-${{ matrix.setup }}-${{ matrix.window }}
           path: results/p3-parity/${{ matrix.setup }}/${{ matrix.window }}/artifacts/
           if-no-files-found: warn
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report
+          scope: ${{ matrix.setup }}-${{ matrix.window }}
 
   summary:
     name: p3-parity summary
@@ -127,6 +153,11 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v6
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
@@ -146,3 +177,10 @@ jobs:
           python3 scripts/p3_parity_check.py --summarize verdicts | tee "$GITHUB_STEP_SUMMARY"
       - name: Fail if any triple did not reach parity
         run: '[ "${{ needs.parity.result }}" = "success" ] || exit 1'
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report

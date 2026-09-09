@@ -30,11 +30,7 @@ open, so nothing survives only in a conversation. Items are removed when done, n
 
 ## Decision needed (owner)
 
-- [ ] **Grouping coverage: 1 of 12 sizers is grouped.** G5/R10 read as one human judgement per
-  module-config setup; the stack ships the pass proven on the heat-pump sizer only. Either group the
-  remaining 11 inside P3 (11 probe lists plus table judgements), or amend the spec: the pass ships in
-  P3, each remaining sizer is grouped when P5 prepares its base file. Leaning: the amendment — P5 is
-  the consumer, so the judgement stays fresh and reviewable per file.
+*Nothing open.*
 
 ## Operational, after the stack merges
 
@@ -76,6 +72,14 @@ Rig headers say P6: #637. Channel migration: #645. Requirements doc R5.1/R5.2/R5
 AC-P3.10, AC-P3.11 and Q-P3.5 amended to the twenty-two-setup reality: 2026-09-07, this commit.
 The #625 fleet re-record: satisfied by #636 recording all twenty-two after #625, first freshness
 run green on main 2026-09-06. AC-P3.4 evidence: same run. #598 closed: 2026-09-07.
+Grouping coverage, the one decision this file was holding for the owner: decided 2026-09-07 to
+group inside P3 rather than amend the spec, and done the same day. All thirteen
+configuration-driven setups now carry a probe list, a grouping table and a grouped file, and every
+probe column of every one of them reproduces its flat recording byte for byte; the nine
+single-configuration setups stay flat by decision. State page:
+`roadmap/declarative_energy_systems/grouping_overview.md`; what each setup cost and what it
+turned up: `roadmap/declarative_energy_systems/grouping_worklist.md`.
+
 The freshness gate flipped to blocking: 2026-09-08, #654 — eleven green runs on main
 across 2026-09-06..08 (one cancelled by a newer push, none failed), which the owner judged
 sufficient to grant the bit ahead of the nominal week.

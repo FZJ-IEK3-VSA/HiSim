@@ -52,6 +52,7 @@ from typing import (
     List,
     Mapping,
     Optional,
+    Protocol,
     Sequence,
     Set,
     Tuple,
@@ -65,6 +66,8 @@ from hisim.economics.carriers import EnergyCarrier, EnergyFlowRole
 from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.numerics import bisect_root
 from hisim.economics.results import (
+    AnywayBasisKinds,
+    EvaluationMatrix,
     LifecycleCostResult,
     ModernizationLevySummary,
     RateOrigin,
@@ -4548,6 +4551,10 @@ class AssumptionKinds(str, enum.Enum):
     EURO_PER_TON = "euro_per_ton"
     KWH_PER_YEAR = "kwh_per_year"
     SQUARE_METERS = "square_meters"
+    #: A number whose unit the view cannot know — a scenario override reaching into a data file,
+    #: where no enumeration of fields exists. Printed with thousands separators and enough
+    #: significant digits that a fractional per-kWh price survives beside a five-figure price.
+    NUMBER = "number"
     #: Text that is already the value — the CO2 price scenario's name, not a quantity.
     PLAIN = "plain"
 
@@ -4956,3 +4963,763 @@ def co2_factor_rows(result: LifecycleCostResult) -> List[Co2FactorRow]:
             )
         )
     return rows
+
+
+# ----- 9/9 views, captions -----
+
+# =============================================== the cube seam, named once (rule 2.9 follow-up)
+
+
+class ScenarioDefinitionView(Protocol):
+    """The expanded definition of one scenario cell, as the captions read it (seam 4).
+
+    Presentation renders a scenario cube but may not import the module that builds one, so the
+    cube has always crossed this seam untyped — and a renamed attribute on `scenarios.Scenario`
+    would then have surfaced as an `AttributeError` inside a rendered report rather than as a type
+    error anywhere. These four protocols name exactly the attributes the report and the scenario
+    views read off a cube and nothing else, so the seam is *described* in one place: rename
+    anything on it and the type check fails here, at the description, instead of at render time.
+
+    The members are read-only properties rather than annotated attributes on purpose: a mutable
+    protocol attribute is invariant, which would reject the very `Dict` and `List` fields the real
+    cube declares.
+    """
+
+    @property
+    def id(self) -> str:
+        """The cell's id — the key of every per-scenario mapping the report prints."""
+
+    @property
+    def parameter_overrides(self) -> Mapping[str, Any]:
+        """Dotted `EconomicParameters` path -> the value this cell was evaluated at."""
+
+    @property
+    def data_overlays(self) -> Mapping[str, Any]:
+        """Dotted data-file path -> the value this cell overlaid the shipped data with."""
+
+
+class KpiSpreadView(Protocol):
+    """How far the headline KPI travelled across the cube, as the robustness table reads it."""
+
+    @property
+    def minimum(self) -> float:
+        """The lowest value the KPI took over the evaluated cells."""
+
+    @property
+    def maximum(self) -> float:
+        """The highest value the KPI took over the evaluated cells."""
+
+    @property
+    def spread(self) -> float:
+        """`maximum - minimum`, the travel of the KPI over the cube."""
+
+
+class ScenarioSetView(Protocol):
+    """What the two caption views need: the cell definitions and which of them is the central one."""
+
+    @property
+    def base_id(self) -> str:
+        """The id of the cell every swing is measured against."""
+
+    @property
+    def scenarios(self) -> Sequence[ScenarioDefinitionView]:
+        """The expanded cell definitions, the base cell included."""
+
+
+class ScenarioCubeView(ScenarioSetView, Protocol):
+    """Everything the report's scenario section reads off an evaluated cube (§4.6)."""
+
+    @property
+    def results(self) -> Mapping[str, Mapping[str, LifecycleCostResult]]:
+        """`[perspective][scenario]` -> the evaluated cell."""
+
+    def equivalent_annual_cost_swings(self, perspective: str) -> Dict[str, float]:
+        """Per-scenario EAC swing against the base cell, the base included as zero."""
+
+    def equivalent_annual_cost_spreads(self) -> Mapping[str, KpiSpreadView]:
+        """Min/max/spread of the headline KPI, per perspective."""
+
+
+#: Distinguishes "this dict has no such key" from "this key is present and holds None", which the
+#: central-value walk below must keep apart: the first may still have a rate recorded on the
+#: result, the second is an optional parameter the engine resolves elsewhere.
+_ABSENT: Any = object()
+
+
+# ============================================= the heat-cost KPI as its own division (Q26 F6)
+
+
+@dataclass(frozen=True)
+class LevelizedHeatCostDerivation:
+    """The heat-cost figure as its own division: numerator, denominator and the quotient (Q26 F6).
+
+    The engine publishes `system cost per unit of heat = equivalent annual cost / annual heat
+    demand`, and both of those figures are published beside it. Two things about the division are
+    invisible in the figure and are what this record exists to state.
+
+    First, the **attribution set**: there is none. The numerator is the perspective's *entire*
+    NPV — every subject and every category the perspective books, the PV system and the battery
+    included, not a heating-attributable subset — so on a multi-technology building the figure is
+    "what the whole installation costs per kWh of heat delivered", which is a defensible number
+    and not the one most readers assume. That is exactly why the KPI is no longer called a
+    levelized cost of heat (`results.HeatCostNaming`). Second, the equivalent form of the
+    denominator: dividing by the annuity factor is the same as dividing by the *discounted sum of
+    heat*, the annual demand repeated over the horizon and discounted, which is the form the LCOH
+    literature states. Both forms are given so a reader can reproduce the figure either way.
+
+    Every figure here is read off the result, never recomputed: the numerator is
+    `total_npv_in_euro`, the annualized numerator is the published
+    `equivalent_annual_cost_in_euro`, and the quotient is the published KPI. The derivation
+    *states* the division the engine did; it does not perform a second one that could disagree.
+    """
+
+    perspective_id: str
+    numerator_npv_in_euro: float
+    annuity_factor: float
+    equivalent_annual_cost_in_euro: float
+    annual_heat_demand_in_kwh: float
+    discounted_heat_in_kwh: float
+    levelized_cost_in_euro_per_kwh: float
+    #: The subjects the numerator covers, in timeline order — the truthful statement of what is
+    #: attributed to heat, which is everything the perspective books.
+    attributed_subjects: Tuple[str, ...] = ()
+    #: True when the result stored no heat demand and the denominator was divided back out of the
+    #: published figure instead. The division then reproduces the KPI by construction rather than
+    #: as a check, and the caption has to say so — see `levelized_heat_cost_derivation`.
+    demand_inferred_from_published: bool = False
+
+    def stated_figures(self) -> Tuple[Any, ...]:
+        """Everything the caption states *except* whose perspective it is.
+
+        The section prints one sentence when every perspective's division is the same one and a
+        line per perspective when they are not; this is the comparison that decides which — the
+        record's content minus its identity, so "the same division" is a property of the figures
+        rather than of the object.
+        """
+        return (
+            self.numerator_npv_in_euro,
+            self.annuity_factor,
+            self.equivalent_annual_cost_in_euro,
+            self.annual_heat_demand_in_kwh,
+            self.discounted_heat_in_kwh,
+            self.levelized_cost_in_euro_per_kwh,
+            self.attributed_subjects,
+            self.demand_inferred_from_published,
+        )
+
+
+def levelized_heat_cost_derivation(
+    result: LifecycleCostResult,
+) -> Optional[LevelizedHeatCostDerivation]:
+    """The division behind the published heat-cost KPI, or None when the run publishes none (F6).
+
+    Recomputes nothing the engine did: the numerator is `total_npv_in_euro`, its annualization is
+    the published `equivalent_annual_cost_in_euro`, and the quotient is checked against the
+    published `levelized_cost_of_heat_in_euro_per_kwh` — a mismatch would mean the caption is
+    describing a different figure from the one the KPI table prints, which is exactly the failure
+    the rule-2.9 round is about.
+
+    **The archived path.** The heat demand is only on the result from Q26 F2 onward. Without it
+    the denominator can still be divided back out of the published figure — arithmetically the
+    same number, which keeps an archived result explainable — but it is then *derived from the
+    quotient it would be checked against*, so reconciling the two would check nothing at all. That
+    path therefore sets `demand_inferred_from_published` and skips the check, and the caption says
+    where the denominator came from rather than presenting it as an independently known figure.
+
+    Args:
+        result: The perspective to explain. Returns None when it publishes no heat-cost figure
+            (no heat demand was declared, so none was computed).
+
+    Returns:
+        The derivation, or None.
+
+    Raises:
+        CostDataError: If the stated division does not reproduce the published figure.
+    """
+    published = result.levelized_cost_of_heat_in_euro_per_kwh
+    if published is None:
+        return None
+    annuity = result.parameters.annuity_factor()
+    equivalent_annual = result.equivalent_annual_cost_in_euro.best_estimate
+    recorded = (
+        result.assumptions.annual_heat_demand_in_kwh if result.assumptions is not None else None
+    )
+    inferred = not recorded
+    if recorded:
+        heat_demand = recorded
+        quotient = equivalent_annual / heat_demand
+        if abs(quotient - published.best_estimate) > ViewTolerances.RECONCILIATION_EPSILON:
+            raise CostDataError(
+                f"System cost per unit of heat does not reconcile for perspective "
+                f"{result.perspective_id!r}: equivalent annual cost {equivalent_annual:,.2f} "
+                f"EUR/a / {heat_demand:,.0f} kWh = {quotient:.4f} EUR/kWh, but the published "
+                f"figure is {published.best_estimate:.4f} EUR/kWh."
+            )
+    else:
+        if not published.best_estimate:
+            return None
+        heat_demand = equivalent_annual / published.best_estimate
+    if not heat_demand:
+        return None
+    return LevelizedHeatCostDerivation(
+        perspective_id=result.perspective_id,
+        numerator_npv_in_euro=result.total_npv_in_euro.best_estimate,
+        annuity_factor=annuity,
+        equivalent_annual_cost_in_euro=equivalent_annual,
+        annual_heat_demand_in_kwh=heat_demand,
+        # The annuity factor is `i(1+i)^T / ((1+i)^T - 1)` or `1/T`, both strictly positive for
+        # every parameter set `EconomicParameters.__post_init__` admits, so there is no zero to
+        # guard against here.
+        discounted_heat_in_kwh=heat_demand / annuity,
+        levelized_cost_in_euro_per_kwh=published.best_estimate,
+        attributed_subjects=tuple(
+            dict.fromkeys(entry.subject for entry in result.scoped_timeline().entries)
+        ),
+        demand_inferred_from_published=inferred,
+    )
+
+
+def levelized_heat_cost_derivations(
+    matrix: EvaluationMatrix,
+) -> Dict[str, LevelizedHeatCostDerivation]:
+    """One derivation per perspective that publishes the figure, in the matrix's order (F6).
+
+    The KPI table publishes the heat figure once *per perspective*, so a caption written for the
+    first of them explains one row and silently mis-describes the others: the numerator is that
+    perspective's whole NPV, and every perspective books a different set of flows. This returns
+    the division behind each published figure and lets the section decide whether they agree.
+
+    Args:
+        matrix: Every evaluated perspective.
+
+    Returns:
+        `{perspective id: derivation}`, omitting the perspectives that publish no such figure.
+
+    Raises:
+        CostDataError: If any perspective's stated division does not reproduce its published
+            figure — see `levelized_heat_cost_derivation`.
+    """
+    derivations: Dict[str, LevelizedHeatCostDerivation] = {}
+    for perspective_id, result in matrix.results.items():
+        derivation = levelized_heat_cost_derivation(result)
+        if derivation is not None:
+            derivations[perspective_id] = derivation
+    return derivations
+
+
+# ================================================== the anyway credit as a multiplication (F7)
+
+
+@dataclass(frozen=True)
+class AnywayCreditFact:
+    """One booked anyway credit as the three numbers behind it: share, basis and product (F7).
+
+    A credit stated on its own is a figure to be trusted; `share x basis = credit` is one to be
+    checked. What the basis *is* differs by branch — the avoided like-for-like replacement of the
+    old asset, or the non-energy share of the new measure's own gross cost (Q7) — so the kind
+    travels with it and the caption words the multiplication accordingly instead of calling both
+    by the name of one.
+    """
+
+    subject: str
+    share: float
+    #: The cost the share was applied to, or None for a result stored before the basis existed —
+    #: in which case the share is all that can honestly be stated.
+    basis_in_euro: Optional[float]
+    #: What that basis is, from `results.AnywayBasisKinds`; `UNRECORDED` for a stored result that
+    #: predates the kind, where the basis is known but its name is not.
+    basis_kind: str
+    #: `share x basis`, or None when there is no basis to multiply.
+    credit_in_euro: Optional[float]
+
+
+def anyway_credit_facts(result: LifecycleCostResult) -> Tuple[AnywayCreditFact, ...]:
+    """Every anyway credit this perspective booked, by subject, as a checkable product (F7).
+
+    Args:
+        result: The perspective to read the recorded shares, bases and kinds off.
+
+    Returns:
+        One fact per credited subject, sorted by subject; empty for a run that credits nothing,
+        which is most runs.
+    """
+    bases = result.anyway_basis_by_subject
+    kinds = result.anyway_basis_kind_by_subject
+    facts = []
+    for subject, share in sorted(result.anyway_share_by_subject.items()):
+        basis = bases.get(subject) or None
+        facts.append(
+            AnywayCreditFact(
+                subject=subject,
+                share=share,
+                basis_in_euro=basis,
+                basis_kind=kinds.get(subject, AnywayBasisKinds.UNRECORDED),
+                credit_in_euro=share * basis if basis is not None else None,
+            )
+        )
+    return tuple(facts)
+
+
+def anyway_credit_facts_by_perspective(
+    matrix: EvaluationMatrix,
+) -> Dict[str, Tuple[AnywayCreditFact, ...]]:
+    """The booked anyway credits of every perspective, in the matrix's order (F7).
+
+    A perspective that books no investment at all books no anyway credit either, so "the credits
+    of this run" is not a property of the run but of each perspective — which is what lets the
+    caption say "in this run" truthfully: it states every perspective's credits, and collapses to
+    one sentence only when they are in fact the same.
+
+    Args:
+        matrix: Every evaluated perspective.
+
+    Returns:
+        `{perspective id: facts}` for every perspective, the empty tuple included.
+    """
+    return {
+        perspective_id: anyway_credit_facts(result)
+        for perspective_id, result in matrix.results.items()
+    }
+
+
+# ================================================ what each scenario row actually changed (F1)
+
+
+class CentralCase(str, enum.Enum):
+    """How the central case's value of a scenario field is known, or why it is not (Q26 F1).
+
+    A scenario row pairs "what this cell was evaluated at" with "what the central case had", and
+    the second half is not always a number. It used to be a value or `None`, with `None` rendered
+    as "as shipped" — which collapsed three different situations into one sentence and stated the
+    wrong one in two of them: a dict key the run never configured, an optional parameter left
+    unset, and a path that is not on `EconomicParameters` at all were all reported as "the
+    shipped data files", a claim about data that only a *data overlay* can make.
+
+    Naming the four possibilities as an enum keeps the view free of wording (the section decides
+    how each reads) and makes the distinction the walk in `_central_case` draws visible in the
+    record rather than encoded in a sentinel.
+    """
+
+    #: A value was read off the base cell's parameters and travels in `central_value`.
+    VALUE = "value"
+    #: The field is optional and unset, and the engine resolved it to the general escalation rate;
+    #: that resolved rate is in `central_value` and the section says where it came from.
+    RESOLVED_FROM_GENERAL = "resolved_from_general"
+    #: A data overlay replaced shipped data outright — there is no central *parameter* to compare
+    #: against, only the data files as they ship.
+    AS_SHIPPED = "as_shipped"
+    #: The field is not reachable on `EconomicParameters` (a price-entry field), or a dict key the
+    #: run never configured and never recorded a resolved rate for. Nothing is claimed.
+    NOT_RECORDED = "not_recorded"
+
+
+@dataclass(frozen=True)
+class ScenarioAssumption:
+    """One field a scenario changed, with both of its values, as plain data (Q26 F1).
+
+    Plain data throughout, so the digits a reader sees are decided by the section and not here
+    (the same rule `AssumptionRow` sits on): `kind` says which conventional spelling the numbers
+    take, `scenario_band` carries the min/best_estimate/max of a data overlay when there is one,
+    and `key` is set only for the documented whole-dict override form, which renders one line per
+    key rather than as a dict repr.
+    """
+
+    field_name: str
+    #: The dict key this line is about, for a whole-dict override; empty for every other shape.
+    key: str
+    #: The value the cell was evaluated at — the best_estimate slot when `scenario_band` is set.
+    scenario_value: Any
+    #: `(min, best_estimate, max)` for a band overlay, None for a scalar value.
+    scenario_band: Optional[Tuple[float, float, float]]
+    central_case: CentralCase
+    #: The central case's value; meaningful for `VALUE` and `RESOLVED_FROM_GENERAL` only.
+    central_value: Any
+    kind: AssumptionKinds
+
+
+class ScenarioValueKinds:
+    """Which quantity each scenario-addressable field carries, by declaration (Q26 F1).
+
+    Scenario axes address `EconomicParameters` fields by dotted path and data files by their own,
+    and the values behind those paths are rates, counts of years, a calendar year, a damage cost,
+    scenario names and price bands. Whether `0.05` reads as `5.00 %` or as `0.05` is a property of
+    the *field*, not of the number, so it is declared here rather than guessed from the field's
+    spelling: a name-suffix heuristic printed `5` and `0.05` identically for the same rate and
+    would have silently mis-read any future field whose name did not end the expected way.
+
+    `BY_PARAMETER` is complete over `EconomicParameters` — a test pins that — so a new parameter
+    field is a failing test rather than a value printed as an anonymous number. Data-overlay paths
+    reach into the data files instead, where no such enumeration exists; `PERCENT_LEAVES` names the
+    leaf fields there that are fractions of one, and everything else prints as a plain number.
+    """
+
+    BY_PARAMETER = {
+        "observation_period_in_years": AssumptionKinds.YEARS,
+        "interest_rate": AssumptionKinds.PERCENT,
+        "general_price_escalation_rate": AssumptionKinds.PERCENT,
+        "energy_price_escalation_rates": AssumptionKinds.PERCENT,
+        "feed_in_escalation_rate": AssumptionKinds.PERCENT,
+        "investment_price_escalation_rate": AssumptionKinds.PERCENT,
+        "investment_price_escalation_rates": AssumptionKinds.PERCENT,
+        "co2_price_scenario": AssumptionKinds.PLAIN,
+        "co2_damage_cost_in_euro_per_ton": AssumptionKinds.EURO_PER_TON,
+        "price_basis_year": AssumptionKinds.YEAR,
+        "country": AssumptionKinds.PLAIN,
+        "apply_subsidies": AssumptionKinds.PLAIN,
+        "cost_database_path": AssumptionKinds.PLAIN,
+        "subsidy_catalog_path": AssumptionKinds.PLAIN,
+        "spread_escalation_rate": AssumptionKinds.PERCENT,
+        "grid_fee_escalation_rate": AssumptionKinds.PERCENT,
+        "anyway_threshold_years": AssumptionKinds.YEARS,
+        "allow_counterfactual_billing": AssumptionKinds.PLAIN,
+    }
+    #: Leaf names of *data-file* paths whose value is a fraction of one and reads as a percentage.
+    PERCENT_LEAVES = ("co2_price_exposure", "tax_and_levy_share", "energy_related_cost_share")
+    #: The optional parameters the engine resolves to `general_price_escalation_rate` when they
+    #: are left unset (`calculators/energy.py`), so an axis on one has a central value after all.
+    #: `spread_escalation_rate` is deliberately absent: it falls back to the *carrier's* rate,
+    #: which is a different number per carrier and therefore not one central value.
+    RESOLVED_FROM_GENERAL = ("grid_fee_escalation_rate",)
+
+
+def scenario_assumptions(
+    scenario_cube: Optional[ScenarioSetView], base_result: LifecycleCostResult
+) -> Dict[str, Tuple[ScenarioAssumption, ...]]:
+    """Per scenario id: the assumptions it changed, with both values (Q26 F1, rule 2.9).
+
+    A scenario row labelled `interest=high` says what was varied but not to what, and the swing
+    beside it is then a number without a cause. This reads the cube's own expanded scenario
+    definitions — the overrides `evaluate_cube` applied — and pairs each with the central case's
+    value of the same field, so the row can read "interest_rate 5.00% (central case: 3.00%)".
+
+    Args:
+        scenario_cube: The evaluated cube, or None.
+        base_result: The central cell's result, read for the parameter values a scenario deviates
+            from.
+
+    Returns:
+        `{scenario id: assumptions}`, empty for the base cell and for any scenario whose
+        definition the cube did not keep.
+
+    Raises:
+        CostDataError: If a field declared as a fraction of one carries a value that is not one —
+            a `5` where `0.05` was meant would otherwise print as `500.00 %` or, worse, be
+            silently re-read as a percentage the run was never evaluated at.
+    """
+    if scenario_cube is None:
+        return {}
+    assumptions: Dict[str, Tuple[ScenarioAssumption, ...]] = {}
+    for scenario in scenario_cube.scenarios:
+        parts: List[ScenarioAssumption] = []
+        for field_name, value in scenario.parameter_overrides.items():
+            parts.extend(_scenario_assumptions_for(field_name, value, base_result, overlay=False))
+        for field_name, value in scenario.data_overlays.items():
+            parts.extend(_scenario_assumptions_for(field_name, value, base_result, overlay=True))
+        if parts:
+            assumptions[scenario.id] = tuple(parts)
+    return assumptions
+
+
+def _scenario_assumptions_for(
+    field_name: str, value: Any, base_result: LifecycleCostResult, overlay: bool
+) -> List[ScenarioAssumption]:
+    """One override, as the one or more lines it states (F1).
+
+    Three shapes reach here. A band — a data overlay carrying the universal `min`/`best_estimate`/
+    `max` value syntax of §3.1 — is one line stating the band. A whole dict assigned to a
+    dict-typed field is the documented merge form (`scenarios.apply_parameter_overrides` applies
+    it key by key), so it states one line per key, each against that key's own central value; the
+    alternative, printing the dict, states a `repr` no reader can check. Everything else is a
+    scalar and is one line.
+    """
+    if isinstance(value, dict):
+        band = _value_band(value)
+        if band is None:
+            return [
+                _one_assumption(
+                    field_name,
+                    _key_name(key),
+                    f"{field_name}.{_key_name(key)}",
+                    sub_value,
+                    None,
+                    base_result,
+                    overlay,
+                )
+                for key, sub_value in value.items()
+            ]
+        return [_one_assumption(field_name, "", field_name, band[1], band, base_result, overlay)]
+    return [_one_assumption(field_name, "", field_name, value, None, base_result, overlay)]
+
+
+def _one_assumption(
+    field_name: str,
+    key: str,
+    path: str,
+    value: Any,
+    band: Optional[Tuple[float, float, float]],
+    base_result: LifecycleCostResult,
+    overlay: bool,
+) -> ScenarioAssumption:
+    """One rendered line's worth of data: the changed value and the central case beside it (F1).
+
+    `field_name` and `key` are what the line *reads* as — a dotted axis path keeps the spelling
+    the scenario declared it with, a merged dict names its key separately — while `path` is what
+    the central value and the kind are looked up under, which for both shapes is the full dotted
+    path.
+    """
+    kind = _scenario_value_kind(path)
+    for component in band if band is not None else (value,):
+        _refuse_non_fraction(path, component, kind)
+    central_case, central_value = (
+        (CentralCase.AS_SHIPPED, None) if overlay else _central_case(path, base_result)
+    )
+    if central_case in (CentralCase.VALUE, CentralCase.RESOLVED_FROM_GENERAL):
+        _refuse_non_fraction(path, central_value, kind)
+    return ScenarioAssumption(
+        field_name=field_name,
+        key=key,
+        scenario_value=value,
+        scenario_band=band,
+        central_case=central_case,
+        central_value=central_value,
+        kind=kind,
+    )
+
+
+def _value_band(value: Mapping[str, Any]) -> Optional[Tuple[float, float, float]]:
+    """`(min, best_estimate, max)` when this dict is the §3.1 band syntax, else None.
+
+    The one thing that separates a band overlay from the whole-dict merge form, and it is a
+    property of the keys: `UncertainValue.from_json` reads exactly these three, and no
+    dict-typed `EconomicParameters` field is keyed by them.
+    """
+    keys = ("min", "best_estimate", "max")
+    if not all(key in value for key in keys):
+        return None
+    return (float(value["min"]), float(value["best_estimate"]), float(value["max"]))
+
+
+def _scenario_value_kind(field_name: str) -> AssumptionKinds:
+    """Which conventional spelling one scenario-addressable path's value takes (F1)."""
+    declared = ScenarioValueKinds.BY_PARAMETER.get(field_name.split(".", 1)[0])
+    if declared is not None:
+        return declared
+    leaf = field_name.rsplit(".", 1)[-1]
+    if leaf in ScenarioValueKinds.PERCENT_LEAVES or leaf.endswith(("rate", "rates", "share", "shares")):
+        return AssumptionKinds.PERCENT
+    return AssumptionKinds.NUMBER
+
+
+def _refuse_non_fraction(field_name: str, value: Any, kind: AssumptionKinds) -> None:
+    """Refuses a percentage field whose value is not a fraction of one (F1).
+
+    `interest_rate: 5` and `interest_rate: 0.05` are the same typo apart, and the engine reads the
+    first as a 500 % rate. A caption that printed it as `5.00 %` would state an assumption the run
+    was never evaluated under — the one thing this section exists not to do — so the field is
+    named and the render refused instead.
+
+    Raises:
+        CostDataError: If `value` is a number outside [-1, 1] on a percentage field.
+    """
+    if kind is not AssumptionKinds.PERCENT:
+        return
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return
+    if -1.0 <= float(value) <= 1.0:
+        return
+    raise CostDataError(
+        f"Scenario field {field_name!r} is a fraction of one (it is printed as a percentage), but "
+        f"the value {value!r} is not a fraction: the engine reads it as "
+        f"{float(value):.2%}. State it as a fraction, or declare the field's kind in "
+        "views.ScenarioValueKinds."
+    )
+
+
+def _central_case(
+    field_name: str, base_result: LifecycleCostResult
+) -> Tuple[CentralCase, Any]:
+    """The central case's value of one dotted path, or the reason there is none (F1).
+
+    Walks the same path a scenario override writes to, over the *base cell's* parameters, so the
+    comparison is against what was actually priced rather than against the dataclass defaults.
+    Three things it deliberately keeps apart, which the previous single `None` return could not:
+    a key that is absent from a dict (the run configured no rate for that carrier, and the rate it
+    was priced at may still be on the result), a key that is present and set to `None` (an
+    optional parameter the engine resolves elsewhere), and a path that does not exist on
+    `EconomicParameters` at all (a data-file field, which has no central parameter by nature).
+    """
+    parts = field_name.split(".")
+    current: Any = base_result.parameters
+    for index, part in enumerate(parts):
+        if isinstance(current, dict):
+            match = next(
+                (value for key, value in current.items() if _key_name(key) == part), _ABSENT
+            )
+            if match is _ABSENT:
+                rate = _recorded_rate(parts, base_result)
+                return (CentralCase.VALUE, rate) if rate is not None else (CentralCase.NOT_RECORDED, None)
+            current = match
+            continue
+        if not hasattr(current, part):
+            return (CentralCase.NOT_RECORDED, None)
+        current = getattr(current, part)
+        if current is None:
+            if index == len(parts) - 1 and part in ScenarioValueKinds.RESOLVED_FROM_GENERAL:
+                return (
+                    CentralCase.RESOLVED_FROM_GENERAL,
+                    base_result.parameters.general_price_escalation_rate,
+                )
+            return (CentralCase.NOT_RECORDED, None)
+    return (CentralCase.VALUE, current)
+
+
+def _recorded_rate(parts: List[str], base_result: LifecycleCostResult) -> Optional[float]:
+    """The escalation rate the run resolved for a dict path the parameters do not state (F1).
+
+    An axis on `energy_price_escalation_rates.ELECTRICITY` in a run that configured no explicit
+    rate for electricity would otherwise be compared against nothing, when the run in fact priced
+    electricity at the country defaults file's rate. That rate is on the result (Q26 F2), keyed
+    by carrier, so the central value is knowable and is used.
+    """
+    assumptions = base_result.assumptions
+    if assumptions is None or len(parts) != 2:
+        return None
+    prefixes = {
+        "energy_price_escalation_rates": "energy",
+        "investment_price_escalation_rates": "investment",
+    }
+    prefix = prefixes.get(parts[0])
+    if prefix is None:
+        return None
+    for label, rate in assumptions.escalation_rates.items():
+        if ":" not in label:
+            continue
+        kind, subject = label.split(":", 1)
+        if kind == prefix and subject.upper() == parts[1].upper():
+            return rate.rate
+    return None
+
+
+def _key_name(key: Any) -> str:
+    """The name a dotted scenario path uses for a dict key (an enum's `name`, else its text)."""
+    return getattr(key, "name", str(key))
+
+
+# ============================================== why an axis that moved nothing was inert (R2)
+
+
+class ZeroSwingCauses:
+    """What each scenario axis prices, so an inert axis can name its own cause (Q27 R2).
+
+    A scenario row whose swing is exactly zero is the one row a reader cannot interpret: it looks
+    either like a bug in the cube or like a reassuring result ("carbon prices do not matter here"),
+    and neither is what it means. It means the axis moved a parameter that nothing in *this* run's
+    timeline depends on. This namespace holds the two field paths whose inert case is diagnosable
+    from a stored result, plus the honest refusal for every other one — the module states what it
+    observed in the booked flows and, when it observed nothing that explains the row, says exactly
+    that rather than offering a cause.
+    """
+
+    #: The CO2-price scenario axis; inert when no carrier books a carbon-price flow.
+    CO2_PRICE_FIELD = "co2_price_scenario"
+    #: The per-carrier energy escalation axis; inert when that carrier is not billed at all.
+    ENERGY_ESCALATION_STEM = "energy_price_escalation_rates"
+    #: Said when the booked flows explain nothing. A refusal, not a cause: the previous wording
+    #: ("no priced flow depends on this axis in this run") was a claim about every flow in the
+    #: run, which is more than the timeline of one perspective can support.
+    UNKNOWN = "no cause could be derived from the booked flows of this run"
+
+
+def zero_swing_notes(
+    scenario_cube: Optional[ScenarioSetView],
+    base_result: LifecycleCostResult,
+    swings: Mapping[str, float],
+) -> Dict[str, str]:
+    """Per scenario id with an exactly-zero swing: why that axis did nothing here (Q27 R2).
+
+    The scenarios table publishes a swing per row; a `+0` row is read as either a bug or a
+    finding, and it is neither. This derives the cause from the base cell's own scoped timeline —
+    which flows the perspective actually books — never from a table of known axes, so a run whose
+    carbon price *is* priced gets no note and an axis this function cannot diagnose says it cannot
+    rather than inventing a reason.
+
+    Only exact zeros qualify, and that is now a statement about the arithmetic rather than about
+    the rendering: the table prints a small swing to three significant digits, so a 0.42 EUR/a
+    effect reads as `+0.42` and reaches nobody as an inert row. A row that says zero moved by
+    zero.
+
+    Args:
+        scenario_cube: The evaluated cube, or None.
+        base_result: The base cell's result for the reference perspective — the timeline the
+            causes are read from.
+        swings: Per-scenario swing of the headline KPI, base included, as the table prints them.
+
+    Returns:
+        `{scenario id: cause}` for the zero-swing rows only; empty when the cube has none.
+    """
+    if scenario_cube is None:
+        return {}
+    entries = base_result.scoped_timeline().entries
+    # Both causes are questions about the same two observations, so they are made once for the
+    # run rather than re-derived per row: which carriers this perspective is billed for, and
+    # whether any carbon-price flow was booked at all.
+    billed = _billed_carriers(base_result)
+    co2_priced = any(entry.category == CostCategory.ENERGY_CO2_PRICE for entry in entries)
+    notes: Dict[str, str] = {}
+    for scenario in scenario_cube.scenarios:
+        if scenario.id == scenario_cube.base_id or swings.get(scenario.id) != 0.0:
+            continue
+        fields = list(scenario.parameter_overrides) + list(scenario.data_overlays)
+        causes = [
+            cause
+            for cause in (_inert_axis_cause(name, billed, co2_priced) for name in fields)
+            if cause
+        ]
+        notes[scenario.id] = "; ".join(causes) if causes else ZeroSwingCauses.UNKNOWN
+    return notes
+
+
+def _billed_carriers(result: LifecycleCostResult) -> Tuple[str, ...]:
+    """The carriers this perspective books a bill entry for, upper-cased and sorted (R2).
+
+    The single observation both zero-swing causes are built from: a carbon-price axis names the
+    carriers whose bills carry no CO2-price entry, and an escalation axis asks whether its own
+    carrier is among them at all. Deriving it once means the two can never disagree about what
+    the run bills.
+    """
+    return tuple(
+        sorted(
+            {
+                entry.subject.upper()
+                for entry in result.scoped_timeline().entries
+                if entry.subject_kind == SubjectKind.CARRIER
+                and entry.category in ViewCategories.BILL_CATEGORIES
+            }
+        )
+    )
+
+
+def _inert_axis_cause(field_name: str, billed: Tuple[str, ...], co2_priced: bool) -> str:
+    """The observed cause for one overridden field, or "" when it cannot be named (R2)."""
+    if field_name == ZeroSwingCauses.CO2_PRICE_FIELD:
+        return _co2_axis_cause(billed, co2_priced)
+    if field_name.split(".")[0] == ZeroSwingCauses.ENERGY_ESCALATION_STEM and "." in field_name:
+        carrier = field_name.split(".", 1)[1]
+        if carrier.upper() not in billed:
+            return f"the run books no {carrier.lower()} bill for the rate to escalate"
+    return ""
+
+
+def _co2_axis_cause(billed: Tuple[str, ...], co2_priced: bool) -> str:
+    """Why a CO2-price axis is inert: no carbon-price flow is booked, and beside which bills (R2).
+
+    States the observation and stops there. The engine books an `ENERGY_CO2_PRICE` entry only for
+    a carrier whose price entry declares `co2_price_exposure > 0` (§3.5), which makes a zero
+    exposure the *likely* reason — but a stored result carries no price entry, so naming the
+    parameter would be an inference presented as a reading, in a footnote whose whole purpose is
+    that it never states more than the data says.
+    """
+    if co2_priced or not billed:
+        return ""
+    names = " and ".join(carrier.lower() for carrier in billed)
+    return f"the stored timeline books no CO2-price entry for any carrier, {names} included"

@@ -42,7 +42,7 @@ def make_inputs(energy_kwh: float = 5000.0, investment: float = 16000.0) -> Eval
 
     One banded heat pump plus one bought-electricity carrier — the minimum that still produces
     every figure the reports need: an investment with whiskers, an energy bill, a heat demand for
-    the levelized cost of heat, and a living area for the per-m2 checks. The two arguments exist
+    the system cost per unit of heat, and a living area for the per-m2 checks. The two arguments exist
     so a *second*, deliberately worse variant (cheap device, high consumption) can be built from
     the same shape for the comparison sections.
     """

@@ -591,6 +591,7 @@ class TestSerializationRoundtrip:
         """
         from hisim.economics.exports import write_lifecycle_costs_json
         from hisim.economics.results import (
+            AnywayBasisKinds,
             EconomicAssumptions,
             EmbodiedCo2Basis,
             EvaluationMatrix,
@@ -608,6 +609,7 @@ class TestSerializationRoundtrip:
         result.annual_energy_attribution_by_subject_in_kwh = {"PVSystem": {"PV_GENERATION": 4200.0}}
         result.anyway_share_by_subject = {"HeatPump": 0.3}
         result.anyway_basis_by_subject = {"HeatPump": 9000.0}
+        result.anyway_basis_kind_by_subject = {"HeatPump": AnywayBasisKinds.NON_ENERGY_SHARE}
         result.modernization_levy = ModernizationLevySummary(
             annual_amount_in_euro=UncertainValue.exact(1800.0),
             general_leg_in_euro=UncertainValue.exact(1200.0),
@@ -639,6 +641,9 @@ class TestSerializationRoundtrip:
         }
         assert reloaded.anyway_share_by_subject == {"HeatPump": 0.3}
         assert reloaded.anyway_basis_by_subject == {"HeatPump": 9000.0}
+        assert reloaded.anyway_basis_kind_by_subject == {
+            "HeatPump": AnywayBasisKinds.NON_ENERGY_SHARE
+        }
         assert reloaded.modernization_levy is not None
         assert reloaded.modernization_levy.cap_binding_in_best_estimate
         assert reloaded.modernization_levy.binding_mechanism_by_slot[Slot.BEST_ESTIMATE].startswith(
@@ -671,6 +676,7 @@ class TestSerializationRoundtrip:
             "annual_energy_attribution_by_subject_in_kwh",
             "anyway_share_by_subject",
             "anyway_basis_by_subject",
+            "anyway_basis_kind_by_subject",
             "modernization_levy",
             "assumptions",
         ):
@@ -684,6 +690,7 @@ class TestSerializationRoundtrip:
         older = reloaded.results["gross"]
         assert older.annual_energy_attribution_by_subject_in_kwh == {}
         assert older.anyway_share_by_subject == {} and older.anyway_basis_by_subject == {}
+        assert older.anyway_basis_kind_by_subject == {}
         assert older.modernization_levy is None and older.assumptions is None
         assert older.lifecycle_co2_result.emission_factor_by_carrier_in_kg_per_kwh == {}
         assert older.lifecycle_co2_result.embodied_basis_by_subject == {}

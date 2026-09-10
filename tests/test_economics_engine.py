@@ -23,6 +23,7 @@ from hisim.economics.facts import (
 )
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
+from hisim.economics.results import AnywayBasisKinds, LifecycleCostResult
 from hisim.economics.timeline import CostCategory
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
@@ -466,8 +467,39 @@ class TestBrownfieldAndStatusQuo:
         assert result.anyway_share_by_subject == {"HeatPump": 0.3}
         credit = -result.npv_by_category[CostCategory.ANYWAY_COST_CREDIT].best_estimate
         assert result.anyway_basis_by_subject["HeatPump"] == pytest.approx(credit / 0.3)
+        # What the basis *is*, not only what it is worth: a like-for-like replacement here, and
+        # the non-energy share of the measure on the Q7 coupled-cost branch. The captions word
+        # the multiplication from this rather than calling both by the name of one.
+        assert result.anyway_basis_kind_by_subject == {"HeatPump": AnywayBasisKinds.LIKE_FOR_LIKE}
         details = [record.detail or "" for record in ledger.records]
         assert any("anyway credit = 30% x like-for-like cost" in detail for detail in details), details
+
+    def test_an_anyway_basis_without_its_share_is_refused_by_the_result(self, database):
+        """The three anyway maps are one fact split three ways, and a stored file can corrupt it.
+
+        A basis under a subject that booked no share would be rendered against a share that is
+        not there, and a kind without its basis names a quantity the report cannot show. Neither
+        is legitimate input, so the record refuses to exist rather than the caption discovering it.
+        """
+        params = zero_rate_parameters(horizon=20)
+        inputs = EvaluationInputs(
+            simulation_year=2024,
+            simulated_period_fraction=1.0,
+            cost_facts=[SubjectCostFacts("HeatPump", make_facts(16000.0, 18.0))],
+        )
+        perspective = Perspective(
+            id="brownfield", installation_context=InstallationContext.BROWNFIELD, subsidy_mode=SubsidyMode.none()
+        )
+        result = EconomicEvaluator(database, params).evaluate(inputs, perspective)
+        fields = {name: getattr(result, name) for name in vars(result)}
+        fields["anyway_basis_by_subject"] = {"HeatPump": 9000.0}
+        with pytest.raises(ValueError, match="no share"):
+            LifecycleCostResult(**fields)
+        fields["anyway_share_by_subject"] = {"HeatPump": 0.3}
+        fields["anyway_basis_by_subject"] = {}
+        fields["anyway_basis_kind_by_subject"] = {"HeatPump": AnywayBasisKinds.LIKE_FOR_LIKE}
+        with pytest.raises(ValueError, match="no basis"):
+            LifecycleCostResult(**fields)
 
     def test_an_anyway_share_outside_the_unit_interval_is_refused(self):
         """A share of 0, a negative one or one above 1 is a data error, named at the asset."""

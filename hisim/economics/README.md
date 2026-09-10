@@ -155,7 +155,8 @@ building quantity the run was priced under, each with its source or the honest
 `configuration`), **Investment build-up** (year-0 waterfalls + investment table + sunk-cost
 note), **Lifetimes** (the per-component purchase, replacement and write-down strip),
 **Cash-flow timeline** (annual flows, cumulative discounted cost with its min/max band,
-NPV-by-category and detail tables), **Energy bill**
+NPV-by-category and detail tables, each anyway credit multiplied out as `share x basis`, the
+basis named by the branch that produced it), **Energy bill**
 (year-1 per carrier with implied effective prices — the fastest unit-mix-up detector),
 **Energy balance** (the year-1 household electricity balance in kWh, money only as an
 annotation on the two grid nodes), **CO2** (§3.8: embodied vs. operational bars, cumulative
@@ -166,9 +167,12 @@ the country), **Uncertainty drivers** (which subjects make the band as wide as i
 **Component breakdown** (per-subject stacks + subject table), **Cost structure** (the
 composition as a treemap, gross and net of credits side by side), **Cost shapes** (which
 subject causes which kind of cost, credits kept apart), **Scenarios** (tornado +
-all-scenarios table + robustness summary), **Perspectives** (whiskers + result table:
-NPV/EAC/monthly/system cost per kWh heat/sunk cost) as the bridge into the story chapters, and
-**KPIs** (§7.3).
+all-scenarios table, every row naming the assumption it changed with both values and every
+row whose swing is exactly zero footnoting why its axis was inert here, + robustness
+summary), **Perspectives** (whiskers + result table: NPV/EAC/monthly/system cost per kWh
+heat/sunk cost) as the bridge into the story chapters, and **KPIs** (§7.3, with the heat-cost
+figure written out as its own division — one per perspective that publishes it — and its
+attribution set named).
 
 **Owner-occupied** — how a household pays for this and lives with it: **Owner statement** (the
 money that moved against the value that was merely booked), **Funding** (year-0 sources against

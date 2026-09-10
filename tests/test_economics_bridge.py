@@ -568,7 +568,7 @@ class TestContextMerge:
         """Catches a negative area or demand turning into a negative KPI that looks like a result.
 
         None of these fields is checked downstream: a negative living area produces a negative
-        EUR/m² and a negative heat demand a negative levelized cost of heat, both of which read as
+        EUR/m² and a negative heat demand a negative system cost per unit of heat, both of which read
         numbers rather than as the typo they are. The refusal names the field while the setup that
         wrote it is still on screen.
         """

@@ -26,7 +26,7 @@ from hisim.economics.presentation_style import (
     SequentialRamp,
     group_of,
 )
-from hisim.economics.results import EvaluationMatrix, LifecycleCostResult
+from hisim.economics.results import AnywayBasisKinds, EvaluationMatrix, LifecycleCostResult
 from hisim.economics.timeline import CostCategory
 from hisim.economics.uncertainty import UncertainValue
 
@@ -39,6 +39,7 @@ from hisim.economics.reporting.summary import (
     _fmt,
     _perspectives_note,
     _reference_result,
+    _value_by_kind,
 )
 from hisim.economics.reporting.charts import (
     _annual_flow_svg,
@@ -267,6 +268,12 @@ def _audit_section_html(audit: InputAuditReport, context: _ChapterContext) -> st
     while an override states an absolute amount for the whole subject, and printing the two under
     one label made a per-kW figure and a total look like the same quantity.
 
+    The anyway-credit column is here for the same reason the unit price is (Q22): the Sowieso
+    share decides how much of a measure the counterfactual pays for, which makes it an input of
+    the same standing as a price and therefore something to audit rather than to discover in the
+    timeline. It states the whole multiplication, `share x basis = credit` (Q26 F7), so the
+    credited amount can be reproduced from the row that produced it.
+
     Args:
         audit: The resolved-input audit to render.
         context: The chapter this section is being rendered into; it supplies the anchor and
@@ -275,17 +282,21 @@ def _audit_section_html(audit: InputAuditReport, context: _ChapterContext) -> st
     Returns:
         The section, always non-empty — a run with no priced fact still has a sources table.
     """
-    # A named template beats an f-string here: seven placeholders, three of them formatted,
+    # A named template beats an f-string here: eight placeholders, three of them formatted,
     # and the row's shape stays readable as HTML.
     rows = [
         "<tr><td>{subject}</td><td>{cls}</td><td>{size:,.1f} {unit}</td><td>{price}</td>"  # pylint: disable=consider-using-f-string
-        "<td>{life}</td><td>{origin}</td><td class=\"flag\">{flags}</td></tr>".format(
+        "<td>{life}</td><td>{share}</td><td>{origin}</td><td class=\"flag\">{flags}</td></tr>".format(
             subject=_esc(row.subject),
             cls=_esc(row.asset_class),
             size=row.size,
             unit=_esc(row.size_unit),
             price=_esc(_band_str(row.unit_price_in_euro, price_basis(row))),
             life=f"{row.lifetime_in_years:g} a" if row.lifetime_in_years else "-",
+            # Q22: the Sowieso share is an input of the same standing as the unit price — it
+            # decides how much of a measure the counterfactual pays for — so it is audited here.
+            # Q26 F7: the share and the cost it applies to, so the credit multiplies out here.
+            share=_anyway_credit_cell(row),
             origin=_esc(_origin_label(row)),
             flags=_esc("; ".join(row.flags)),
         )
@@ -295,10 +306,68 @@ def _audit_section_html(audit: InputAuditReport, context: _ChapterContext) -> st
         _section_open(ReportSections.INPUT_AUDIT, context)
         + _explanation_html(ReportSections.INPUT_AUDIT, context)
         + "<table><tr><th>Subject</th><th>Asset class</th><th>Size</th><th>Unit price</th>"
-        "<th>Lifetime</th><th>Origin</th><th>Flags</th></tr>" + "".join(rows) + "</table>"
+        "<th>Lifetime</th><th>Anyway credit (share x basis)</th><th>Origin</th><th>Flags</th></tr>"
+        + "".join(rows) + "</table>"
         + _sources_table_html(audit)
         + "</section>"
     )
+
+
+def anyway_credit_text(
+    share: float, basis: Optional[float], credit: Optional[float] = None
+) -> str:
+    """One anyway credit's multiplication, in the single spelling all three sites print it in.
+
+    `share x basis = credit` appears in the input audit's own column, in the category cell of the
+    credit's row in the cash-flow detail table and in the caption above the timeline. Three
+    renderings of one arithmetic statement is three chances to word it differently, which is what
+    this exists to prevent — so the spelling lives here and the three call sites differ in one
+    thing only.
+
+    That thing is `credit`. The audit column and the caption have no amount beside them, so they
+    pass the product and state the whole multiplication. The cash-flow detail table's own
+    *Nominal* column carries the amount two cells to the right of the category, so it passes None
+    and states the factor and its basis without repeating a figure the row already shows.
+
+    A basis of None or zero — a result stored before the basis existed — leaves the share as the
+    only honest statement, and it is made alone rather than against an invented base.
+
+    Args:
+        share: The Sowieso share the credit was computed at, as a fraction of one.
+        basis: The cost that share was applied to, or None when the result records none.
+        credit: The product, where the amount is not already on the row; None where it is.
+
+    Returns:
+        The text, already safe for HTML: it is built from numbers only.
+    """
+    if not basis:
+        return f"{share:.0%}"
+    if credit is None:
+        return f"{share:.0%} x {basis:,.0f} EUR"
+    return f"{share:.0%} x {basis:,.0f} EUR = {credit:,.0f} EUR"
+
+
+def _anyway_credit_cell(row: ResolvedInputRow) -> str:
+    """One audit row's anyway credit as `share x basis = credit`, or the empty-cell dash (Q26 F7).
+
+    A share on its own states a factor without its base, so the credit the timeline booked could
+    not be reproduced from the audited row; with both, the multiplication is on the page next to
+    the unit price that produced the basis. A row whose subject earned no such credit — most of
+    them — reads as the same dash the lifetime cell uses for an absent value, and a share
+    recorded without a basis (an archived audit from before the basis field) still states the
+    share alone rather than nothing.
+
+    Args:
+        row: The resolved input row to render the cell for.
+
+    Returns:
+        The cell's text, already safe for HTML: it is built from numbers only.
+    """
+    if row.anyway_share is None:
+        return "-"
+    basis = row.anyway_basis_in_euro
+    product = row.anyway_share * basis if basis else None
+    return anyway_credit_text(row.anyway_share, basis, product)
 
 
 def _sources_table_html(audit: InputAuditReport) -> str:
@@ -329,31 +398,13 @@ def _sources_table_html(audit: InputAuditReport) -> str:
     )
 
 
-#: How each kind of assumption value is spelled, in the conventional form for its quantity: a
-#: rate to two decimals with a percent sign, a working price to four, a euro figure and an energy
-#: quantity with thousands separators. The view returns the numbers and this decides their
-#: digits — the formatting half of the seam `views.AssumptionRow` sits on.
-_ASSUMPTION_VALUE_FORMATS = {
-    views.AssumptionKinds.PERCENT: "{value:.2%}",
-    views.AssumptionKinds.YEARS: "{value:g}",
-    views.AssumptionKinds.YEAR: "{value:g}",
-    views.AssumptionKinds.FACTOR: "{value:.6f}",
-    views.AssumptionKinds.EURO_PER_KWH: "{value:.4f}",
-    views.AssumptionKinds.EURO_PER_YEAR: "{value:,.2f}",
-    views.AssumptionKinds.EURO_PER_TON: "{value:,.2f}",
-    views.AssumptionKinds.KWH_PER_YEAR: "{value:,.0f}",
-    views.AssumptionKinds.SQUARE_METERS: "{value:,.1f}",
-    views.AssumptionKinds.PLAIN: "{value}",
-}
-
-
 def _assumption_value_text(row: views.AssumptionRow) -> str:
     """One assumption's value as the table prints it: the number, spelled by kind, then its unit.
 
-    The whole of the formatting the assumptions table needs, in one place, so a row's digits are
-    decided here rather than in the view that computes it. An unknown kind falls back to printing
-    the value as it stands, which is what a new kind would want before anyone has decided how it
-    reads — and is never silently empty.
+    The spelling itself is `summary._value_by_kind`, shared with the scenarios table, so a row's
+    digits are decided in one place on the *report* side of the seam rather than in the view that
+    computes it. All this adds is the physical unit, which travels on the row and is appended
+    after the number.
 
     Args:
         row: The row to render the value cell of.
@@ -361,8 +412,7 @@ def _assumption_value_text(row: views.AssumptionRow) -> str:
     Returns:
         The value text, unescaped — the caller escapes it like every other cell.
     """
-    template = _ASSUMPTION_VALUE_FORMATS.get(row.kind, "{value}")
-    text = template.format(value=row.value)
+    text = _value_by_kind(row.kind, row.value)
     return f"{text} {row.unit}" if row.unit else text
 
 
@@ -530,16 +580,30 @@ def _timeline_detail_table(result: LifecycleCostResult) -> str:
     §3.6 canonical timeline, laid out for checking.
 
     Rows, ordering, the float-noise cut-off and the subtotals all come from
-    `views.timeline_detail_rows`; this only lays them out.
+    `views.timeline_detail_rows`; this only lays them out. The one thing the layout adds is the
+    anyway credit's own multiplication in its category cell (Q22, Q26 F7): a credit row whose
+    share and like-for-like basis the reader cannot see is a figure to be trusted rather than
+    checked, and both are on the result.
     """
     rows: List[List[str]] = []
+    shares = result.anyway_share_by_subject
+    bases = result.anyway_basis_by_subject
     for detail_year in views.timeline_detail_rows(result):
         for row in detail_year.rows:
+            # Q22: an anyway credit is `share x like-for-like cost`, so the category cell of that
+            # one row carries the share it was computed at. Without it the table states a credit
+            # whose basis the reader cannot reconstruct from anything else on the page. Q26 F7
+            # adds the basis itself, so the row multiplies out to the amount beside it.
+            category = row.category.value
+            if row.category == CostCategory.ANYWAY_COST_CREDIT and row.subject in shares:
+                # No product: the amount is in this row's own Nominal cell, two columns right.
+                factor = anyway_credit_text(shares[row.subject], bases.get(row.subject))
+                category = f"{category} (anyway {factor})"
             rows.append(
                 [
                     str(row.year),
                     _esc(row.subject),
-                    _esc(row.category.value),
+                    _esc(category),
                     _esc(_band_str(row.nominal_in_euro)),
                     _fmt(row.discounted_best_estimate_in_euro),
                 ]
@@ -606,7 +670,95 @@ def _timeline_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -
     return (
         _section_open(ReportSections.CASH_FLOW_TIMELINE, context)
         + _explanation_html(ReportSections.CASH_FLOW_TIMELINE, context)
+        + _anyway_share_caption(matrix)
         + "".join(blocks) + "</section>"
+    )
+
+
+#: The half of the anyway caption that is the same in both of its forms: the credit's timing and
+#: what a share below 100 % means. Held as a constant so the collapsed and the per-perspective
+#: sentence cannot come to explain the same share differently.
+_ANYWAY_CAPTION_TAIL = (
+    " (nominal, in the credit's own year). A share below 100 % means the measure was a "
+    "first-time improvement, so only that fraction of it would have been spent without the "
+    "renovation."
+)
+
+
+def _anyway_basis_word(facts: Sequence[views.AnywayCreditFact]) -> str:
+    """What to call the basis in the caption's headline: its kind, or the generic word (F7).
+
+    The multiplication reads `share x like-for-like cost = credit` when every credit on the page
+    is a like-for-like one and `share x non-energy share of the measure's gross cost = credit`
+    when they are all the coupled-cost branch (Q7). Where a page carries both — or a stored result
+    that names neither — the headline says `basis` and each credit names its own kind instead, so
+    no credit is ever labelled with the other branch's quantity.
+    """
+    kinds = {fact.basis_kind for fact in facts if fact.basis_in_euro}
+    return kinds.pop() if len(kinds) == 1 else AnywayBasisKinds.UNRECORDED
+
+
+def _anyway_credit_list(facts: Sequence[views.AnywayCreditFact], name_kinds: bool) -> str:
+    """One perspective's anyway credits, each as `subject share x basis = credit` (Q22, F7)."""
+    parts = []
+    for fact in facts:
+        text = anyway_credit_text(fact.share, fact.basis_in_euro, fact.credit_in_euro)
+        if name_kinds and fact.basis_in_euro:
+            text = f"{text} ({_esc(fact.basis_kind)})"
+        parts.append(f"{_esc(fact.subject)} {text}")
+    return "; ".join(parts)
+
+
+def _anyway_share_caption(matrix: EvaluationMatrix) -> str:
+    """The run-specific line stating at which Sowieso share each anyway credit was computed (Q22).
+
+    The authored prose explains what an anyway share *is*; this says what it *was* here, which is
+    the half a reader cannot get anywhere else on the page. A share below 100 % is the interesting
+    case — it means the measure was a first-time improvement and only the repair share of it was a
+    cost the building would have caused regardless — so the sentence names it per subject rather
+    than averaging it away. Q26 F7 states the full multiplication, `share x basis = credit`,
+    because a share printed beside a credit lets a reader check neither of them, and the basis is
+    named by its kind (`results.AnywayBasisKinds`) rather than by the name of one of the two
+    branches that can produce it.
+
+    **"In this run" is true by construction.** The caption used to be written from the matrix's
+    first perspective and to speak for the whole run, which is a claim the first perspective
+    cannot make: a perspective that books no investment books no anyway credit either. It now
+    reads every perspective's credits and collapses to one sentence only when they are in fact the
+    same, and states them per perspective when they are not.
+
+    Args:
+        matrix: Every evaluated perspective; each contributes its own booked credits.
+
+    Returns:
+        The caption, or the empty string when no perspective credits anything — which is most
+        runs, and every result serialized before the fields existed.
+    """
+    by_perspective = views.anyway_credit_facts_by_perspective(matrix)
+    if not any(by_perspective.values()):
+        return ""
+    word = _anyway_basis_word([fact for facts in by_perspective.values() for fact in facts])
+    name_kinds = word == AnywayBasisKinds.UNRECORDED
+    if len(set(by_perspective.values())) == 1:
+        facts = next(iter(by_perspective.values()))
+        return (
+            "<p class='sub'>Anyway credits in this run are booked at "
+            f"<b>share x {word} = credit</b>: {_anyway_credit_list(facts, name_kinds)}"
+            f"{_ANYWAY_CAPTION_TAIL}</p>"
+        )
+    lines = "".join(
+        f"<br><b>{_esc(perspective_id)}</b> — "
+        + (
+            _anyway_credit_list(facts, name_kinds)
+            if facts
+            else "no anyway credit is booked"
+        )
+        for perspective_id, facts in by_perspective.items()
+    )
+    return (
+        f"<p class='sub'>Anyway credits are booked at <b>share x {word} = credit</b>"
+        f"{_ANYWAY_CAPTION_TAIL} The perspectives of this run do not book the same ones, so each "
+        f"states its own:{lines}</p>"
     )
 
 

@@ -677,6 +677,61 @@ class ReferenceAreas:
         }
 
 
+class AnywayBasisKinds:
+    """What the *basis* of an anyway credit is, on each of the two branches that produce one.
+
+    An anyway credit is `share x basis = credit` (§4.1), and the basis is one of two different
+    quantities depending on the measure. For a genuine like-for-like replacement it is the
+    escalated cost of replacing the old asset with its own kind — money the building would have
+    caused regardless. For a coupled measure (spec Q7, `energy_related_cost_share < 1`) it is
+    instead the non-energy share of the *new* measure's gross cost: the scaffolding, render and
+    standard glazing that a facade job would have cost even without the insulation. The two are
+    mutually exclusive by construction, and calling both by the name of the first — which every
+    caption did until this record existed — describes the wrong quantity in half the runs.
+
+    The kind travels with the basis on the result so the captions can word the multiplication
+    correctly from a stored file alone, and `UNRECORDED` is what a result written before the
+    field existed says: the basis is known, its name is not, and the caption then calls it what
+    it is without claiming which branch produced it.
+    """
+
+    #: The escalated like-for-like replacement cost of the asset being replaced.
+    LIKE_FOR_LIKE = "like-for-like cost"
+    #: The non-energy share of the new measure's own gross cost (the Q7 coupled-cost branch).
+    NON_ENERGY_SHARE = "non-energy share of the measure's gross cost"
+    #: A stored result that carries a basis but no name for it.
+    UNRECORDED = "basis"
+
+
+class HeatCostNaming:
+    """What the heat-cost figure is *called* wherever a reader sees it (owner decision Q27 R1).
+
+    The figure divides a perspective's whole NPV — every subject it books, the PV system and the
+    battery included — by the heat delivered, so it is not the levelized cost of heat the
+    literature publishes: an LCOH counts heating-attributable cost only, and this evaluation has
+    no heating-only attribution. Calling it one over-promised, so every user-visible occurrence
+    now reads "system cost per unit of heat": the KPI name in `lifecycle_kpis.json` and the report
+    KPI table, the perspectives-table column in both renderings, the plausibility-check row and
+    the derivation caption. The names live here, next to the field they name, so a future
+    re-wording is one edit rather than a grep across the four modules that print them —
+    `exports.py`, `plausibility.py`, `reporting/summary.py` and `reporting/assembly.py` — on
+    both sides of seam 4.
+
+    The **field** name `LifecycleCostResult.levelized_cost_of_heat_in_euro_per_kwh` deliberately
+    stays: it is the serialization key of every stored `lifecycle_costs.json`, and renaming it
+    would either break archived results or force an alias that buys nothing — the display name is
+    what a reader reads, and no reader reads the key. Docstrings keep saying LCOH where they
+    explain *why* this figure is not one.
+    """
+
+    #: The published KPI name and the caption's lead-in.
+    FULL = "System cost per unit of heat"
+    #: Column-header form, for the perspectives table where the full name would not fit.
+    COLUMN = "System cost/kWh heat"
+    #: Lower-case form for the plausibility panel, whose check names are sentences-in-lower-case.
+    CHECK_LABEL = "system cost per unit of heat"
+
+
 @dataclass
 class LifecycleCostResult:
     """The evaluation of one variant under one perspective (§3.7).
@@ -766,6 +821,12 @@ class LifecycleCostResult:
     #: Empty for a run without replaced assets and for results serialized before the field
     #: existed, in which case the caption states the share alone as it did before.
     anyway_basis_by_subject: Dict[str, float] = field(default_factory=dict)
+    #: What each of those bases *is*, per subject, from `AnywayBasisKinds`: the avoided
+    #: like-for-like replacement, or the non-energy share of the measure's own gross cost on the
+    #: Q7 coupled-cost branch. The captions word the multiplication from this rather than calling
+    #: both by the name of one. Empty for a result serialized before the field existed, where the
+    #: basis is stated without a name for it.
+    anyway_basis_kind_by_subject: Dict[str, str] = field(default_factory=dict)
     #: The §559/§559e rent increase and whether a statutory cap decided it. Present only for
     #: perspectives the rented-case ruleset allocated; None everywhere else.
     modernization_levy: Optional[ModernizationLevySummary] = None
@@ -773,6 +834,39 @@ class LifecycleCostResult:
     #: serialized before the field existed; the assumptions section then renders the parameter
     #: half only and says which half is missing rather than inventing it.
     assumptions: Optional[EconomicAssumptions] = None
+
+    def __post_init__(self) -> None:
+        """Checks that the three anyway-credit records describe the same set of credits.
+
+        `share`, `basis` and `basis_kind` are one fact split over three maps, and the captions
+        multiply them together: a basis or a kind under a subject that booked no credit would be
+        rendered against a share that is not there, and a kind without its basis names a quantity
+        the report cannot show. Both are corruption of a stored file rather than legitimate input,
+        so they are refused where the record is built instead of being discovered in a caption.
+
+        The check is deliberately one-directional for the third map: a result written before the
+        kind existed carries shares and bases and no kinds at all, which is the archived case
+        every reader of these fields already handles, and is not an error.
+
+        Raises:
+            ValueError: If a basis or a kind is recorded for a subject with no share, or a kind
+                for a subject with no basis.
+        """
+        orphans = (
+            set(self.anyway_basis_by_subject) | set(self.anyway_basis_kind_by_subject)
+        ) - set(self.anyway_share_by_subject)
+        if orphans:
+            raise ValueError(
+                f"Anyway credit records disagree for perspective {self.perspective_id!r}: "
+                f"{sorted(orphans)} carry a basis or a basis kind but no share. An anyway credit "
+                "is share x basis, so neither half stands alone."
+            )
+        nameless = set(self.anyway_basis_kind_by_subject) - set(self.anyway_basis_by_subject)
+        if nameless:
+            raise ValueError(
+                f"Anyway credit records disagree for perspective {self.perspective_id!r}: "
+                f"{sorted(nameless)} name a basis kind but record no basis to apply it to."
+            )
 
     def scoped_timeline(self) -> CashFlowTimeline:
         """The flows this perspective actually reports on (filtered by `scope_payer`).
@@ -956,6 +1050,7 @@ class LifecycleCostResult:
             # like-for-like cost that share was applied to.
             "anyway_share_by_subject": dict(self.anyway_share_by_subject),
             "anyway_basis_by_subject": dict(self.anyway_basis_by_subject),
+            "anyway_basis_kind_by_subject": dict(self.anyway_basis_kind_by_subject),
             # Additive: the levy the landlord statement reports on.
             "modernization_levy": self.modernization_levy.to_json() if self.modernization_levy else None,
             # Additive: the resolved assumptions the assumptions section publishes.

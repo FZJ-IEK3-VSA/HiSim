@@ -760,6 +760,12 @@ def result_from_json(
         anyway_basis_by_subject={
             subject: float(basis) for subject, basis in raw.get("anyway_basis_by_subject", {}).items()
         },
+        # Additive; without it the caption calls the basis what it is ("basis") rather than
+        # naming which of the two §4.1/Q7 branches produced it.
+        anyway_basis_kind_by_subject={
+            subject: str(kind)
+            for subject, kind in raw.get("anyway_basis_kind_by_subject", {}).items()
+        },
         # Additive; None for every perspective without a levy, which is most of them.
         modernization_levy=ModernizationLevySummary.from_json(raw.get("modernization_levy")),
         # Additive; None for a file written before the assumptions section existed.

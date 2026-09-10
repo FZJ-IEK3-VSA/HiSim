@@ -47,6 +47,7 @@ from hisim.economics.facts import ComponentCostFacts, ExistingAsset, ExistingAss
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import InstallationContext
 from hisim.economics.provenance import ParameterOrigin, ParameterProvenance, ProvenanceLedger
+from hisim.economics.results import AnywayBasisKinds
 from hisim.economics.timeline import CashFlowEntry, CostCategory
 from hisim.economics.uncertainty import UncertainValue
 
@@ -158,6 +159,10 @@ class ReplacedAssetOutcome:
     #: credit`, which is the multiplication the report has to show rather than assert. 0.0 when no
     #: credit is due.
     credit_basis_in_euro: float = 0.0
+    #: Which of the two quantities that basis is, from `results.AnywayBasisKinds`. The branch is
+    #: decided here and nowhere else, so the caption that words the multiplication reads the
+    #: answer rather than re-deriving it from a coupled-cost share it does not have.
+    credit_basis_kind: str = AnywayBasisKinds.LIKE_FOR_LIKE
 
 
 def resolve_device(
@@ -492,10 +497,15 @@ def resolve_replaced_asset(
     # coupled-cost branch it is the non-energy share of the measure being built now, on the other
     # it is the escalated like-for-like cost of the device being replaced. One wording for both
     # would describe the wrong quantity in one of them.
-    credit_basis_description = (
-        "non-energy share of the measure"
+    credit_basis_kind = (
+        AnywayBasisKinds.NON_ENERGY_SHARE
         if share.best_estimate < 1.0
-        else f"like-for-like cost of {replaced.asset_class.value}"
+        else AnywayBasisKinds.LIKE_FOR_LIKE
+    )
+    credit_basis_description = (
+        credit_basis_kind
+        if share.best_estimate < 1.0
+        else f"{credit_basis_kind} of {replaced.asset_class.value}"
     )
     credit = credit.scale(anyway_share)
     if credit.maximum <= 0:
@@ -529,4 +539,5 @@ def resolve_replaced_asset(
         credit_amount=credit,
         anyway_share=anyway_share,
         credit_basis_in_euro=credit_basis,
+        credit_basis_kind=credit_basis_kind,
     )

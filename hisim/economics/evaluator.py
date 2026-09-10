@@ -233,7 +233,7 @@ class EvaluationInputs:
     tariff_contracts: Dict[EnergyCarrier, TariffContract] = field(default_factory=dict)
     # Tariff ids whose price signal a controller consumed during the run (§4.6 boundary):
     consumed_tariff_ids: List[str] = field(default_factory=list)
-    annual_heat_demand_in_kwh: Optional[float] = None  # for the levelized cost of heat
+    annual_heat_demand_in_kwh: Optional[float] = None  # for the system cost per unit of heat
     # Building context for the actor model (§6.3, §6.4):
     building_specific_emissions_in_kg_per_m2_a: Optional[float] = None
     heated_floor_area_in_m2: Optional[float] = None
@@ -421,8 +421,10 @@ class TimelineBuildResult:
     #: The Sowieso share every booked anyway credit was computed at (subject -> share), for the
     #: result the report reads it from.
     anyway_share_by_subject: Dict[str, float] = field(default_factory=dict)
-    #: The like-for-like cost each of those credits was computed *on* (subject -> euro).
+    #: The cost each of those credits was computed *on* (subject -> euro).
     anyway_basis_by_subject: Dict[str, float] = field(default_factory=dict)
+    #: What that basis is on the branch that produced it (subject -> `AnywayBasisKinds`).
+    anyway_basis_kind_by_subject: Dict[str, str] = field(default_factory=dict)
     #: The tariff contracts the energy calculator actually billed under, for the assumptions
     #: record the report's assumptions section publishes.
     tariffs_applied: List[TariffContract] = field(default_factory=list)
@@ -737,6 +739,7 @@ class EconomicEvaluator:
         anyway_credit_total = UncertainValue.exact(0.0)
         anyway_share_by_subject: Dict[str, float] = {}
         anyway_basis_by_subject: Dict[str, float] = {}
+        anyway_basis_kind_by_subject: Dict[str, str] = {}
         # Per-measure levy basis for the §559/§559e split (§6.4, D27): asset class, modernization
         # cost and anyway credit per subject; the subsidy leg is read off the finished timeline.
         levy_asset_classes: Dict[str, str] = {}
@@ -807,9 +810,13 @@ class EconomicEvaluator:
                 if replaced_outcome.credit_entry is not None:
                     timeline.add(replaced_outcome.credit_entry)
                     anyway_share_by_subject[subject] = replaced_outcome.anyway_share
-                    # The like-for-like cost the share was applied to, so the credit is a visible
-                    # multiplication rather than a figure with a percentage beside it.
+                    # The cost the share was applied to, so the credit is a visible
+                    # multiplication rather than a figure with a percentage beside it — and what
+                    # that cost *is*, because the two branches (§4.1 like-for-like, Q7 coupled)
+                    # credit different quantities and a caption that names only the first
+                    # describes the wrong one in half the runs.
                     anyway_basis_by_subject[subject] = replaced_outcome.credit_basis_in_euro
+                    anyway_basis_kind_by_subject[subject] = replaced_outcome.credit_basis_kind
                     anyway_credit_total = anyway_credit_total + replaced_outcome.credit_amount
                     levy_credit_by_subject[subject] = (
                         levy_credit_by_subject[subject] + replaced_outcome.credit_amount
@@ -901,6 +908,7 @@ class EconomicEvaluator:
             raw_flexibility_value_by_carrier=energy_result.raw_flexibility_value_by_carrier,
             anyway_share_by_subject=anyway_share_by_subject,
             anyway_basis_by_subject=anyway_basis_by_subject,
+            anyway_basis_kind_by_subject=anyway_basis_kind_by_subject,
             tariffs_applied=list(energy_result.tariffs_applied),
         )
 
@@ -1028,6 +1036,7 @@ class EconomicEvaluator:
             # credit rather than leaving a reader to guess at the basis.
             anyway_share_by_subject=build.anyway_share_by_subject,
             anyway_basis_by_subject=build.anyway_basis_by_subject,
+            anyway_basis_kind_by_subject=build.anyway_basis_kind_by_subject,
             modernization_levy=levy_summary,
             # The assumption set the report's assumptions section publishes — escalation rates as
             # the fallback chains resolved them, the tariff terms actually billed, and the heat

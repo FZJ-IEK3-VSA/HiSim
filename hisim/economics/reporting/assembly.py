@@ -30,7 +30,12 @@ from hisim.economics import views
 from hisim.economics.input_audit import InputAuditReport
 from hisim.economics.plausibility import PlausibilityReport
 from hisim.economics.presentation_style import PresentationStyle, group_name, group_of
-from hisim.economics.results import EvaluationMatrix, LifecycleCostResult, VariantComparison
+from hisim.economics.results import (
+    EvaluationMatrix,
+    HeatCostNaming,
+    LifecycleCostResult,
+    VariantComparison,
+)
 from hisim.economics.timeline import Actor
 from hisim.economics.uncertainty import UncertainValue
 
@@ -41,6 +46,7 @@ from hisim.economics.reporting.summary import (
     _degenerate_note,
     _fmt,
     _reference_result,
+    _value_by_kind,
     all_bands_degenerate,
     render_plausibility_findings,
 )
@@ -115,7 +121,7 @@ def _perspective_section_html(matrix: EvaluationMatrix, context: _ChapterContext
     after the ones that validate inputs.
 
     The table beneath carries the four headline KPIs per perspective (NPV, equivalent annual
-    cost, monthly cost in year 1, levelized cost of heat), each as a band, so a reader can pick
+    cost, monthly cost in year 1, system cost per unit of heat), each as a band, so a reader can pick
     the unit they think in. The sunk-cost column is added only when some perspective wrote off
     residual book value, and is marked "(info)": §4.1 reports it but keeps it out of the
     decision KPIs.
@@ -132,7 +138,13 @@ def _perspective_section_html(matrix: EvaluationMatrix, context: _ChapterContext
         for perspective_id, result in matrix.results.items()
     ]
     any_sunk = any(result.sunk_cost_written_off_in_euro.maximum > 0 for result in matrix.results.values())
-    headers = ["Perspective", "NPV", "Equivalent annual cost", "Monthly (year 1)", "LCOH"]
+    headers = [
+        "Perspective",
+        "NPV",
+        "Equivalent annual cost",
+        "Monthly (year 1)",
+        HeatCostNaming.COLUMN,
+    ]
     if any_sunk:
         headers.append("Sunk cost (info)")
     table_rows = []
@@ -265,7 +277,102 @@ def _tornado_svg(rows: List[Tuple[str, float]], base_value: float) -> str:
     )
 
 
-def _scenario_section_html(scenario_cube, matrix: EvaluationMatrix, context: _ChapterContext) -> str:
+class SwingFormat:
+    """How a scenario's swing is printed, so a small one does not read as no swing at all (R2).
+
+    The swing column used to print whole euro, which turned a 0.42 EUR/a effect into `+0` — the
+    same cell an axis that genuinely moved nothing gets, and the one cell the footnote below the
+    table then explains as inert. A row cannot be allowed to round into a claim about itself.
+
+    Above `WHOLE_EURO_FROM` the cents are noise beside a four- or five-figure swing and whole euro
+    is what a reader wants; below it the magnitude *is* the finding, so three significant digits
+    are printed instead. Exactly zero still prints as `+0`, which is the only value the
+    zero-swing footnote is ever attached to.
+    """
+
+    #: At and above this magnitude a swing prints as whole euro, below it to three significant
+    #: digits. 100 EUR/a is where the third significant digit is the euro digit, so the two
+    #: spellings meet without a gap in precision.
+    WHOLE_EURO_FROM = 100.0
+
+
+def _swing_text(value: float) -> str:
+    """One swing cell: whole euro for a large swing, three significant digits for a small one."""
+    if abs(value) >= SwingFormat.WHOLE_EURO_FROM:
+        return f"{value:+,.0f}"
+    return f"{value:+,.3g}"
+
+
+def _assumption_cell(
+    assumptions: Dict[str, Tuple[views.ScenarioAssumption, ...]], scenario_id: str
+) -> str:
+    """What one scenario row changed, with both values, as the table prints it (Q26 F1).
+
+    The base cell changed nothing, and says so: an empty assumption cell beside a `+0` swing is
+    the same unreadable row the whole column exists to remove.
+    """
+    changed = assumptions.get(scenario_id)
+    if not changed:
+        return "central case — nothing changed"
+    return "; ".join(_one_assumption_text(item) for item in changed)
+
+
+class ScenarioAssumptionFormat:
+    """The wording of the "and what the central case had" half of a scenario row (Q26 F1).
+
+    Every central-case phrasing shares one shape, `(central case: ...)`, and the token that makes
+    it one shape is defined here rather than at each of the four branches that end in it. The
+    shape is not decoration: a swept field whose central value is itself named `central` — which
+    `co2_price_scenario` is, by default, in every run — read `(central central)`, where the first
+    word is the label and the second is the value and nothing on the page said which was which.
+    Naming the label makes the colon do that work.
+    """
+
+    #: Opens the central-case half of every label; one of the phrasings below follows it.
+    LABEL = "central case"
+    #: A data overlay replaced shipped data outright, so there is no central *parameter* at all.
+    AS_SHIPPED = "as shipped"
+    #: The field is not reachable on `EconomicParameters`, or is a dict key the run never
+    #: configured and never resolved a rate for. Nothing is claimed about it.
+    NOT_RECORDED = "not recorded"
+    #: Follows a value the engine resolved from another parameter rather than read from this one.
+    RESOLVED_FROM_GENERAL = "resolved from the general escalation rate"
+
+
+def _one_assumption_text(item: views.ScenarioAssumption) -> str:
+    """One changed field: `<field> <scenario value> (central case: <central value>)` (Q26 F1).
+
+    The view returns the numbers and their kind; the digits are decided here, by the same
+    `_value_by_kind` the assumptions table spells its own values with. A band overlay states the
+    band in the report's house shape — best_estimate first, min and max in brackets — and the
+    documented whole-dict override names its key beside the field rather than printing a dict.
+    """
+    name = f"{item.field_name} {item.key}" if item.key else item.field_name
+    value = _value_by_kind(item.kind, item.scenario_value)
+    if item.scenario_band is not None:
+        low, _, high = item.scenario_band
+        value = f"{value} [{_value_by_kind(item.kind, low)} | {_value_by_kind(item.kind, high)}]"
+    central = _central_value_text(item)
+    return f"{name} {value} ({ScenarioAssumptionFormat.LABEL}: {central})"
+
+
+def _central_value_text(item: views.ScenarioAssumption) -> str:
+    """What the central case had, or why it has nothing to state (Q26 F1)."""
+    if item.central_case is views.CentralCase.AS_SHIPPED:
+        return ScenarioAssumptionFormat.AS_SHIPPED
+    if item.central_case is views.CentralCase.NOT_RECORDED:
+        return ScenarioAssumptionFormat.NOT_RECORDED
+    text = _value_by_kind(item.kind, item.central_value)
+    if item.central_case is views.CentralCase.RESOLVED_FROM_GENERAL:
+        return f"{text}, {ScenarioAssumptionFormat.RESOLVED_FROM_GENERAL}"
+    return text
+
+
+def _scenario_section_html(
+    scenario_cube: Optional[views.ScenarioCubeView],
+    matrix: EvaluationMatrix,
+    context: _ChapterContext,
+) -> str:
     """The scenarios section: a tornado of the headline KPI plus the full table (§4.6).
 
     Answers "how much of the conclusion survives the assumptions?" The tornado ranks the
@@ -279,9 +386,18 @@ def _scenario_section_html(scenario_cube, matrix: EvaluationMatrix, context: _Ch
     datapoints deliberately; the min/best_estimate/max band varies the cost data within each
     scenario. They must not be read as one interval, and the report never combines them.
 
-    `scenario_cube` is taken untyped on purpose — presentation may render a cube but may not
-    import the module that builds one (the seam-4 import rule), so it is duck-typed for
-    `results`, `base_id`, `equivalent_annual_cost_swings` and `equivalent_annual_cost_spreads`.
+    Every row names the assumption it changed and both of its values (Q26 F1), because a row
+    labelled `interest=high` beside a swing is a number without a cause; and a row whose swing is
+    *exactly* zero carries a footnote saying why the axis was inert here (Q27 R2), because a `+0`
+    otherwise reads either as a broken cube or as the finding "this does not matter", and it is
+    neither. Both come from `views`, which derives them from the cube's own expanded definitions
+    and the base cell's timeline rather than from any table of known axis names.
+
+    `scenario_cube` arrives as a `views.ScenarioCubeView` — presentation may render a cube but may
+    not import the module that builds one (the seam-4 import rule), so the protocol names exactly
+    the attributes read here and in the two caption views. Typing it is what makes a rename on the
+    real cube a type error at that one description instead of an `AttributeError` inside a
+    rendered report.
 
     Args:
         scenario_cube: The evaluated cube, or None when the run computed none.
@@ -306,12 +422,26 @@ def _scenario_section_html(scenario_cube, matrix: EvaluationMatrix, context: _Ch
         for scenario_id, swing in swings.items()
         if scenario_id != scenario_cube.base_id
     ]
+    # Q26 F1: what each scenario actually changed, with both values — read from the cube's own
+    # expanded definitions, never from a table of names in this file.
+    assumptions = views.scenario_assumptions(scenario_cube, base)
+    # Q27 R2: a row that did not move at all states why, from the base cell's own timeline.
+    zero_swing = views.zero_swing_notes(scenario_cube, base, swings)
+    markers = {scenario_id: index for index, scenario_id in enumerate(zero_swing, start=1)}
     table_rows = "".join(
         f"<tr><td>{_esc(scenario_id)}</td>"
+        f"<td>{_esc(_assumption_cell(assumptions, scenario_id))}</td>"
         f"<td>{_esc(_band_str(result.total_npv_in_euro))}</td>"
         f"<td>{_esc(_band_str(result.equivalent_annual_cost_in_euro, 'EUR/a'))}</td>"
-        f"<td>{swings[scenario_id]:+,.0f}</td></tr>"
+        f"<td>{_swing_text(swings[scenario_id])}"
+        + (f"<sup>{markers[scenario_id]}</sup>" if scenario_id in markers else "")
+        + "</td></tr>"
         for scenario_id, result in per_scenario.items()
+    )
+    footnotes = "".join(
+        f"<p class='sub'><sup>{markers[scenario_id]}</sup> <b>{_esc(scenario_id)}</b> — "
+        f"swing is exactly zero: {_esc(note)}.</p>"
+        for scenario_id, note in zero_swing.items()
     )
     # Robustness summary (§4.6): min/max/spread of the headline KPI per perspective.
     robustness_rows = [
@@ -328,8 +458,9 @@ def _scenario_section_html(scenario_cube, matrix: EvaluationMatrix, context: _Ch
         + "<p class='sub'>Full cube: scenario_cube.csv / scenario_cube.json.</p>"
         + _tornado_svg(rows, base_value)
         + "<details open><summary>all scenarios</summary><table>"
-        "<tr><th>Scenario</th><th>NPV</th><th>Equivalent annual cost</th><th>Swing [EUR/a]</th></tr>"
-        + table_rows + "</table></details>" + robustness + "</section>"
+        "<tr><th>Scenario</th><th>Assumption (scenario value, central value)</th><th>NPV</th>"
+        "<th>Equivalent annual cost</th><th>Swing [EUR/a]</th></tr>"
+        + table_rows + "</table>" + footnotes + "</details>" + robustness + "</section>"
     )
 
 
@@ -373,8 +504,122 @@ def _kpi_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str
         + _explanation_html(ReportSections.KPIS, context)
         + "<p class='sub'>Published to lifecycle_kpis.json; <code>value</code> is the "
           "BEST_ESTIMATE slot, the band column is min | max.</p>"
+        + _levelized_heat_cost_caption(matrix)
         + _table(["KPI", "Value", "Band (min | max)", "Unit"], rows)
         + "</section>"
+    )
+
+
+def _levelized_heat_cost_caption(matrix: EvaluationMatrix) -> str:
+    """The heat-cost figure written out as its own division, attribution set included (Q26 F6).
+
+    The published system cost per unit of heat is a quotient of two figures the report shows
+    nowhere else in that form, and readers reliably assume a third thing about the numerator: that
+    it is the heating-attributable share of the cost. It is not. The engine divides the
+    perspective's *entire* NPV — every subject it books, the PV system and the battery included —
+    by the annual heat demand, so the figure answers "what does this whole installation cost per
+    kWh of heat delivered". Saying that plainly is the point of the caption; the KPI's name says
+    it too since Q27 R1, but a name cannot carry the attribution set.
+
+    The caption leads with the division as it is actually computed — equivalent annual cost over
+    annual heat demand (Q27 R4) — and gives the discounted-sum form, the one the LCOH literature
+    states, as the equivalent second reading. Both are exact; leading with the annual form means
+    the first two numbers a reader sees are two the report already published.
+
+    **One caption per published figure.** The KPI table publishes the figure once per perspective,
+    and each of them divides a different NPV over a different set of booked subjects, so a caption
+    written for the first perspective explained one row and mis-described the rest. It now states
+    the division of every perspective that publishes one, and collapses to a single sentence only
+    when they are genuinely the same division.
+
+    Args:
+        matrix: Every evaluated perspective; each that publishes the figure is explained.
+
+    Returns:
+        The caption, or the empty string when no perspective publishes such a figure (no heat
+        demand was declared).
+    """
+    derivations = views.levelized_heat_cost_derivations(matrix)
+    if not derivations:
+        return ""
+    lead = f"<p class='sub'><b>{HeatCostNaming.FULL}, in full.</b> "
+    if len({derivation.stated_figures() for derivation in derivations.values()}) == 1:
+        return lead + _derivation_sentence(next(iter(derivations.values()))) + "</p>"
+    lines = "".join(
+        f"<br><b>{_esc(derivation.perspective_id)}</b> — {_derivation_division(derivation)}"
+        f"{_subjects_counted_clause(derivation)}"
+        for derivation in derivations.values()
+    )
+    return (
+        lead
+        + "Each perspective divides its own <i>whole</i> NPV, annualized with the annuity factor, "
+        "by the heat it delivered; no heating-only attribution is applied, so every subject a "
+        f"perspective books counts:{lines}</p>"
+    )
+
+
+def _derivation_sentence(derivation: views.LevelizedHeatCostDerivation) -> str:
+    """One perspective's division, spelled out in full — the caption when there is only one.
+
+    Every perspective of the matrix states the same division here, so it is written as a sentence
+    rather than as a list item: the annual form first (the two numbers the report already
+    published), the discounted-sum form the LCOH literature states as the exact equivalent, and
+    then what the numerator does and does not cover.
+    """
+    inferred = _inferred_demand_note(derivation)
+    return (
+        f"{_fmt(derivation.equivalent_annual_cost_in_euro)} EUR/a &divide; "
+        f"{derivation.annual_heat_demand_in_kwh:,.0f} kWh/a = "
+        f"<b>{derivation.levelized_cost_in_euro_per_kwh:.4f} EUR/kWh</b> — equivalently NPV "
+        f"&divide; discounted heat sum ({_fmt(derivation.numerator_npv_in_euro)} EUR &divide; "
+        f"{derivation.discounted_heat_in_kwh:,.0f} kWh). The numerator is the <i>whole</i> NPV of "
+        f"perspective {_esc(derivation.perspective_id)}, {_fmt(derivation.numerator_npv_in_euro)} "
+        f"EUR, annualized with the annuity factor {derivation.annuity_factor:.6f} to "
+        f"{_fmt(derivation.equivalent_annual_cost_in_euro)} EUR/a. No heating-only attribution is "
+        f"applied: every subject the perspective books counts"
+        f"{_namely_clause(derivation)}{inferred}"
+    )
+
+
+def _derivation_division(derivation: views.LevelizedHeatCostDerivation) -> str:
+    """One perspective's division as a list line: both forms of it, and nothing said twice.
+
+    The prose the sentence above carries — what the numerator covers, why — is stated once above
+    the list when the perspectives are listed, so a line is the arithmetic alone.
+    """
+    return (
+        f"{_fmt(derivation.equivalent_annual_cost_in_euro)} EUR/a &divide; "
+        f"{derivation.annual_heat_demand_in_kwh:,.0f} kWh/a = "
+        f"<b>{derivation.levelized_cost_in_euro_per_kwh:.4f} EUR/kWh</b> (NPV "
+        f"{_fmt(derivation.numerator_npv_in_euro)} EUR &divide; discounted heat sum "
+        f"{derivation.discounted_heat_in_kwh:,.0f} kWh, annuity factor "
+        f"{derivation.annuity_factor:.6f}).{_inferred_demand_note(derivation)}"
+    )
+
+
+def _namely_clause(derivation: views.LevelizedHeatCostDerivation) -> str:
+    """The subjects the numerator covers, continuing the sentence that named the attribution set.
+
+    A perspective whose scoped timeline is empty books no subject, and "namely ." is not a
+    statement — the clause is dropped rather than printed with nothing after it, in both forms.
+    """
+    subjects = ", ".join(derivation.attributed_subjects)
+    return f", namely {_esc(subjects)}." if subjects else "."
+
+
+def _subjects_counted_clause(derivation: views.LevelizedHeatCostDerivation) -> str:
+    """The same subjects, ending a list line whose sentence about attribution is above the list."""
+    subjects = ", ".join(derivation.attributed_subjects)
+    return f" Subjects counted: {_esc(subjects)}." if subjects else ""
+
+
+def _inferred_demand_note(derivation: views.LevelizedHeatCostDerivation) -> str:
+    """Says where the denominator came from when it was not recorded but divided back out (F6)."""
+    if not derivation.demand_inferred_from_published:
+        return ""
+    return (
+        " This result stored no heat demand, so the denominator is divided back out of the "
+        "published figure: the division reproduces it by construction rather than checking it."
     )
 
 
@@ -549,7 +794,7 @@ def build_lifecycle_report_html(
     plausibility: PlausibilityReport,
     audit: Optional[InputAuditReport] = None,
     comparison: Optional[VariantComparison] = None,
-    scenario_cube=None,
+    scenario_cube: Optional[views.ScenarioCubeView] = None,
     reference_result: Optional[LifecycleCostResult] = None,
 ) -> str:
     """The self-contained HTML report, told as the chapters of `ReportChapters` (Q24).
@@ -590,7 +835,7 @@ def build_lifecycle_report_html(
         audit: Optional resolved-input audit; the input-audit section is omitted without it.
         comparison: Optional variant-vs-reference comparison; adds the comparison chapter, and is
             handed to the one story chapter that owns its perspective (see `_comparison_for`).
-        scenario_cube: Optional `ScenarioCube` (untyped by the seam-4 import rule); adds the
+        scenario_cube: Optional evaluated cube, seen through `views.ScenarioCubeView`; adds the
             scenarios section to the building chapter.
         reference_result: The comparison's baseline result. Needed by the two sections that
             decompose a comparison rather than restating it — the NPV bridge, which splits it by
@@ -648,7 +893,7 @@ def _building_chapter_html(
     plausibility: PlausibilityReport,
     audit: Optional[InputAuditReport],
     comparison: Optional[VariantComparison],
-    scenario_cube,
+    scenario_cube: Optional[views.ScenarioCubeView],
     context: _ChapterContext,
 ) -> str:
     """The common part: what the technology costs, before asking whose money it is (rule 2.8).
@@ -1083,7 +1328,7 @@ def write_lifecycle_report(
     result_directory: str,
     audit: Optional[InputAuditReport] = None,
     comparison: Optional[VariantComparison] = None,
-    scenario_cube=None,
+    scenario_cube: Optional[views.ScenarioCubeView] = None,
     reference_result: Optional[LifecycleCostResult] = None,
 ) -> str:
     """Writes the HTML report as `ReportFileNames.LIFECYCLE_REPORT_FILE_NAME`.

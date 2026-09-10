@@ -1334,7 +1334,7 @@ KPIs are namespaced per perspective, e.g.:
 - `Warm rent change [EUR/month] (tenant)` + `Warm-rent neutral (tenant)` (bool)
 - `Discounted payback vs reference [a] (brownfield_net)`
 - `Total subsidies received [EUR]` + one KPI per applied scheme id
-- `Levelized cost of heat [EUR/kWh] (operating)`
+- `System cost per unit of heat [EUR/kWh] (operating)`
 
 Every monetary KPI carries its uncertainty band: `KpiEntry` gains optional `value_min` / `value_max`
 fields (an additive change — the webtool JSON stays backward compatible), with `value` itself being

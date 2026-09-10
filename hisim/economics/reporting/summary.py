@@ -79,6 +79,51 @@ def _band_str(band: Optional[UncertainValue], unit: str = "EUR") -> str:
     return f"{_fmt(band.best_estimate)} [{_fmt(band.minimum)} | {_fmt(band.maximum)}] {unit}"
 
 
+#: How each kind of assumption value is spelled, in the conventional form for its quantity: a
+#: rate to two decimals with a percent sign, a working price to four, a euro figure and an energy
+#: quantity with thousands separators. The views return the numbers and this decides their digits
+#: — the formatting half of the seam `views.AssumptionRow` and `views.ScenarioAssumption` both sit
+#: on. It lives in this module rather than beside either table because the assumptions table
+#: (`sections`) and the scenarios table (`assembly`) print by the same vocabulary, and two copies
+#: of one rounding rule agree only by luck.
+_ASSUMPTION_VALUE_FORMATS = {
+    views.AssumptionKinds.PERCENT: "{value:.2%}",
+    views.AssumptionKinds.YEARS: "{value:g}",
+    views.AssumptionKinds.YEAR: "{value:g}",
+    views.AssumptionKinds.FACTOR: "{value:.6f}",
+    views.AssumptionKinds.EURO_PER_KWH: "{value:.4f}",
+    views.AssumptionKinds.EURO_PER_YEAR: "{value:,.2f}",
+    views.AssumptionKinds.EURO_PER_TON: "{value:,.2f}",
+    views.AssumptionKinds.KWH_PER_YEAR: "{value:,.0f}",
+    views.AssumptionKinds.SQUARE_METERS: "{value:,.1f}",
+    views.AssumptionKinds.NUMBER: "{value:,.4g}",
+    views.AssumptionKinds.PLAIN: "{value}",
+}
+
+
+def _value_by_kind(kind: "views.AssumptionKinds", value: object) -> str:
+    """One value spelled the way its kind is conventionally written.
+
+    An unknown kind falls back to printing the value as it stands, which is what a new kind would
+    want before anyone has decided how it reads — and is never silently empty. So does a value the
+    kind's format cannot take: a scenario axis may legitimately carry a name where a number is the
+    rule (`co2_price_scenario`), and a caption that raised there would take a whole report down
+    over a string it could simply have printed.
+
+    Args:
+        kind: The quantity kind, from `views.AssumptionKinds`.
+        value: The number (or text) to spell.
+
+    Returns:
+        The value text, unescaped — the caller escapes it like every other cell.
+    """
+    template = _ASSUMPTION_VALUE_FORMATS.get(kind, "{value}")
+    try:
+        return template.format(value=value)
+    except (TypeError, ValueError):
+        return str(value)
+
+
 def _award_amount_str(presentation: "views.AwardPresentation") -> str:
     """What one applied award is worth, in one phrase — band, terms, or both.
 

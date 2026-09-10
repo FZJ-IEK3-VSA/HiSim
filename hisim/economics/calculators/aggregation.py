@@ -263,8 +263,8 @@ def aggregate_timeline(
         co2_result: Finished CO2 accounting, passed through to :func:`build_breakdowns`.
         parameters: Economic parameters — supplies the interest rate, the horizon and the annuity
             factor.
-        annual_heat_demand_in_kwh: Annual useful heat demand for the LCOH figure. `None` or zero
-            suppresses it, since a system that delivers no heat has no levelized cost of heat.
+        annual_heat_demand_in_kwh: Annual useful heat demand for the per-kWh heat figure. `None`
+            or zero suppresses it, since a system that delivers no heat has no cost per unit of it.
 
     Returns:
         A `TimelineAggregation`; see its docstring for the units of each field.

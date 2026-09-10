@@ -145,7 +145,7 @@ class EconomicContext:
       `current_cold_rent_in_euro_per_m2_month`, `building_specific_emissions_in_kg_per_m2_a`), which
       the §6.3/§6.4 CO2 split and modernization levy need to allocate costs between landlord and
       tenant;
-    - `annual_heat_demand_in_kwh`, the denominator of the levelized-cost-of-heat KPI;
+    - `annual_heat_demand_in_kwh`, the denominator of the system-cost-per-unit-of-heat KPI;
     - `scenario_set`, which additionally triggers the §4.6 cube evaluation into
       scenario_cube.csv/json and the report's scenario section.
 
@@ -172,7 +172,7 @@ class EconomicContext:
     heated_floor_area_in_m2: Optional[float] = None
     current_cold_rent_in_euro_per_m2_month: Optional[float] = None
     building_specific_emissions_in_kg_per_m2_a: Optional[float] = None
-    # For the levelized cost of heat KPI:
+    # For the system-cost-per-unit-of-heat KPI:
     annual_heat_demand_in_kwh: Optional[float] = None
     # Scenario analysis (§4.6): evaluated into scenario_cube.csv/json and the report's
     # scenario section when set.
@@ -192,8 +192,8 @@ class EconomicContext:
 
         Every scalar here is an area, a rent, an emission intensity or a demand — none of them can
         be negative, and none of them is checked anywhere downstream: a negative living area
-        silently produces a negative EUR/m² KPI, a negative heat demand a negative levelized cost
-        of heat, and both look like results rather than like the typo they are. Checking here means
+        silently produces a negative EUR/m² KPI, a negative heat demand a negative system cost
+        per unit of heat, and both look like results rather than like the typo they are. Checking here means
         the refusal names the field while the system setup that declared it is on screen, rather
         than in a KPI table hours later.
 

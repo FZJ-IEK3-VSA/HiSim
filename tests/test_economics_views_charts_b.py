@@ -6,7 +6,7 @@ to check by hand. This module is that promise for the second half of the set —
 swimlane, the funding statement, the subject flows, the household energy balance, the fixed-interest
 benchmark, the monthly burden and the equity build-up — on **hand-built timelines** rather than on
 evaluated runs, so that the expected figures are arithmetic a reader can redo on paper. The V1-V7
-half lives in `tests/test_economics_views_charts.py`; the two files share no state.
+half lives in `tests/test_economics_views_charts_a.py`; the two files share no state.
 
 **Why hand-built.** `tests/test_economics_views.py` pins the older views against an evaluated
 result, which is the right shape for views that re-arrange a real evaluation. The chart views are
@@ -24,6 +24,8 @@ failure (`tests/test_economics_engine.py`); nothing here asserts on SVG or on ma
 """
 
 # clean
+
+from typing import Dict, cast
 
 import pytest
 
@@ -171,13 +173,65 @@ class TestCostStructureTiles:
         return make_result(entries)
 
     def test_gross_tiles_sum_to_the_gross_cost_npv(self):
-        """Including the fold: the treemap's area is the whole cost side, never a sample of it."""
+        """Including the fold: the treemap's area is the whole cost side, never a sample of it.
+
+        Against the arithmetic rather than against `gross_cost_npv_in_euro`: the field is the sum
+        the view itself computed, so comparing the tiles to it would pass for any pair of numbers
+        the view produced together. The figure is 20,000 + 8,000 of year-0 investment plus 900
+        EUR of year-1 electricity discounted one year at 3 %.
+        """
         tiles = views.cost_structure_tiles(
             self.make_pv_result(), PresentationStyle.CATEGORY_TO_GROUP, views.TileBasis.GROSS
         )
-        assert sum(tile.area_in_euro for tile in tiles.tiles) == pytest.approx(
-            tiles.gross_cost_npv_in_euro, abs=0.005
+        assert sum(tile.area_in_euro for tile in tiles.tiles) == pytest.approx(28873.786, abs=0.005)
+        assert tiles.gross_cost_npv_in_euro == pytest.approx(28873.786, abs=0.005)
+
+    def test_an_unknown_basis_is_refused_rather_than_drawn_as_the_net_panel(self):
+        """The third option that does not exist: anything but a `TileBasis` used to net silently."""
+        with pytest.raises(CostDataError, match="basis"):
+            views.cost_structure_tiles(
+                self.make_pv_result(),
+                PresentationStyle.CATEGORY_TO_GROUP,
+                cast(views.TileBasis, "net of credits"),
+            )
+
+    def make_small_tile_result(self) -> LifecycleCostResult:
+        """Two subjects far below 1 % of the treemap's area, in a group that also has large ones."""
+        entries = [
+            entry(0, 100000.0, CostCategory.INVESTMENT),
+            entry(0, 20000.0, CostCategory.INVESTMENT, subject="Wall"),
+            entry(0, 500.0, CostCategory.INVESTMENT, subject="Sensor"),
+            entry(0, 300.0, CostCategory.INVESTMENT, subject="Meter"),
+            entry(1, 2000.0, CostCategory.MAINTENANCE),
+        ]
+        return make_result(entries)
+
+    def test_tiles_below_the_share_threshold_fold_into_one_tile_per_group(self):
+        """The readability cut, with its disclosure and its group totals stated as arithmetic.
+
+        The treemap is 120,800 EUR of year-0 investment plus 2,000 EUR of year-1 maintenance
+        discounted one year at 3 % (1,941.75), so 1 % of the area is 1,227.42 EUR: the 500 EUR
+        sensor and the 300 EUR meter fall under it and the 20,000 EUR wall does not. The two
+        folded subjects come back as one "other" tile in the investment group carrying exactly
+        their 800 EUR, which is what keeps the group total — and hence the panel total — exact.
+        """
+        tiles = views.cost_structure_tiles(
+            self.make_small_tile_result(), PresentationStyle.CATEGORY_TO_GROUP, views.TileBasis.GROSS
         )
+        investment = PresentationStyle.CATEGORY_TO_GROUP[CostCategory.INVESTMENT]
+        maintenance = PresentationStyle.CATEGORY_TO_GROUP[CostCategory.MAINTENANCE]
+        assert tiles.folded_tile_count == 2
+        assert tiles.folded_amount_in_euro == pytest.approx(800.0, abs=0.005)
+        folded = [tile for tile in tiles.tiles if tile.is_fold]
+        assert [(tile.group, tile.area_in_euro) for tile in folded] == [
+            (investment, pytest.approx(800.0, abs=0.005))
+        ]
+        assert {tile.subject for tile in tiles.tiles if not tile.is_fold} == {"HeatPump", "Wall"}
+        per_group: Dict[int, float] = {}
+        for tile in tiles.tiles:
+            per_group[tile.group] = per_group.get(tile.group, 0.0) + tile.area_in_euro
+        assert per_group[investment] == pytest.approx(120800.0, abs=0.005)
+        assert per_group[maintenance] == pytest.approx(1941.748, abs=0.005)
 
     def test_gross_minus_credits_is_the_published_net_npv(self):
         """The caption's arithmetic, which is what stops the gross panel being read as the answer."""
@@ -222,10 +276,7 @@ class TestCostStructureTiles:
         )
         clamped = tiles.clamped_tiles()
         assert [tile.subject for tile in clamped] == ["PV"], "PV earns more than it cost"
-        assert tiles.clamped_total_in_euro == pytest.approx(
-            -sum(tile.clamped_from_in_euro or 0.0 for tile in clamped), abs=0.005
-        )
-        assert tiles.clamped_total_in_euro == pytest.approx(12000.0 - 8000.0, abs=0.005)
+        assert tiles.clamped_total_in_euro == pytest.approx(4000.0, abs=0.005)
 
     def test_net_areas_minus_erased_reproduce_the_published_net_npv(self):
         """The exact identity the net panel stands on, on both the clamping and the shrinking case."""
@@ -569,6 +620,72 @@ class TestEnergyBalanceFlows:
         with pytest.raises(CostDataError, match="device flows"):
             views.energy_balance_flows(result)
 
+    def test_an_attribution_with_no_source_is_refused(self):
+        """A bus fed by nothing is the meter-only stub arrived at from the other side."""
+        result = make_result(
+            [entry(1, 100.0, CostCategory.ENERGY_WORKING, subject="ELECTRICITY",
+                   subject_kind=SubjectKind.CARRIER)],
+            attribution={
+                "HeatPump": {"HEAT_PUMP_ELECTRICITY": 4000.0},
+                "UTSPConnector": {"HOUSEHOLD_ELECTRICITY": 3000.0},
+            },
+        )
+        assert not views.has_energy_balance(result)
+        with pytest.raises(CostDataError, match="source"):
+            views.energy_balance_flows(result)
+
+    def test_an_attribution_with_no_sink_is_refused(self):
+        """Generation with nowhere to go would draw a diagram that is all residual."""
+        result = make_result(
+            [entry(1, 100.0, CostCategory.ENERGY_WORKING, subject="ELECTRICITY",
+                   subject_kind=SubjectKind.CARRIER)],
+            attribution={
+                "PVSystem": {"PV_GENERATION": 9000.0},
+                "Battery": {"BATTERY_DISCHARGE": 500.0},
+            },
+        )
+        assert not views.has_energy_balance(result)
+        with pytest.raises(CostDataError, match="sink"):
+            views.energy_balance_flows(result)
+
+    def test_a_grid_node_without_a_meter_record_is_refused(self):
+        """D25: an annotation nothing can be reconciled against is not drawn at all."""
+        result = make_result(
+            [entry(1, 100.0, CostCategory.ENERGY_WORKING, subject="ELECTRICITY",
+                   subject_kind=SubjectKind.CARRIER)],
+            attribution={
+                "ElectricityMeter": {"GRID_IMPORT": 3000.0},
+                "PVSystem": {"PV_GENERATION": 9000.0},
+                "HeatPump": {"HEAT_PUMP_ELECTRICITY": 12000.0},
+            },
+        )
+        with pytest.raises(CostDataError, match="GRID_IMPORT"):
+            views.energy_balance_flows(result)
+
+    def test_an_off_grid_record_needs_no_meter_entry(self):
+        """The other side of the same rule: with no grid node there is nothing to reconcile."""
+        result = make_result(
+            [entry(1, 100.0, CostCategory.MAINTENANCE)],
+            attribution={
+                "PVSystem": {"PV_GENERATION": 9000.0},
+                "HeatPump": {"HEAT_PUMP_ELECTRICITY": 9000.0},
+            },
+        )
+        flows = views.energy_balance_flows(result)
+        assert flows.bus_total_in_kwh == pytest.approx(9000.0)
+
+    def test_a_battery_that_discharged_more_than_it_charged_reports_no_loss(self):
+        """Carried-over charge is not energy the battery made, so the loss clamps at zero."""
+        result = make_result(
+            [entry(1, 100.0, CostCategory.MAINTENANCE)],
+            attribution={
+                "PVSystem": {"PV_GENERATION": 9000.0},
+                "Battery": {"BATTERY_CHARGE": 800.0, "BATTERY_DISCHARGE": 1000.0},
+                "HeatPump": {"HEAT_PUMP_ELECTRICITY": 9200.0},
+            },
+        )
+        assert views.energy_balance_flows(result).battery_round_trip_loss_in_kwh == 0.0
+
     def test_missing_attribution_raises_a_located_error(self):
         """The skip predicate exists precisely so this error is never reached by a report."""
         result = make_result(simple_investment_timeline())
@@ -648,12 +765,24 @@ class TestWealthBenchmark:
         delta = variant.total_npv_in_euro.best_estimate - reference.total_npv_in_euro.best_estimate
         assert (benchmark.terminal_at_parameter_rate() > 0) == (delta < 0)
 
-    def test_break_even_rates_stay_inside_the_grid_window(self):
-        """Nothing is extrapolated outside the rates actually drawn."""
-        reference, variant = self.make_pair(investment=9000.0, saving=800.0)
-        benchmark = views.wealth_benchmark(reference, variant)
-        for crossing in benchmark.break_even_rates:
-            assert benchmark.rates[0] <= crossing <= benchmark.rates[-1]
+    def test_a_sign_change_is_interpolated_between_its_two_grid_points(self):
+        """The break-even rate is a computed position on the axis, not a grid point rounded to.
+
+        The old assertion — every crossing inside the drawn window — could not fail: crossings are
+        interpolated *between* adjacent grid points and are inside the window by construction.
+        This one pins the arithmetic instead. The terminal advantage runs +300 at 3 % and −100 at
+        4 %, so it reaches zero three quarters of the way along that step: 3 % + 0.75 x 1 % =
+        3.75 %. The second step keeps its sign and contributes no second crossing.
+        """
+        crossings = _terminal_zero_crossings({0.03: 300.0, 0.04: -100.0, 0.05: -500.0})
+        assert crossings == [pytest.approx(0.0375)]
+
+    def test_comparing_two_different_horizons_is_refused(self):
+        """A differential between series of different lengths is not a differential."""
+        reference, _ = self.make_pair(horizon=15)
+        variant = make_result([entry(0, 6000.0, CostCategory.INVESTMENT)], horizon=10)
+        with pytest.raises(CostDataError, match="observation periods"):
+            views.wealth_benchmark(reference, variant)
 
     def test_a_double_sign_change_reports_both_crossings(self):
         """A non-unique internal rate is reported as several, never collapsed into one."""
@@ -691,24 +820,34 @@ class TestMonthlyBurden:
         entries.append(entry(8, 5000.0, CostCategory.REPLACEMENT))
         return make_result(entries, horizon=10)
 
-    def test_year_zero_carries_no_burden(self):
-        """The financing event is not a monthly burden; the funding statement shows it instead."""
-        burden = views.monthly_burden_series(self.make_result_with_investment())
-        assert burden.series[0].best_estimate == 0.0
+    def test_the_year_one_bar_is_the_recurring_part_of_the_published_monthly_figure(self):
+        """The third relation the view's docstring claims, stated the way it is actually true.
 
-    def test_twelve_times_year_one_is_the_recurring_annual_figure(self):
-        """The unit conversion is exactly that — twelve months of the same year."""
-        result = self.make_result_with_investment()
+        `monthly_cost_year1_in_euro` is *already* a monthly figure, so the relation is not "twelve
+        times the bar" but "the bar is the recurring part of it". The fixture makes the difference
+        bite: year 1 carries 1,200 EUR of electricity and 300 EUR of maintenance, which the bars
+        draw, plus a 6,000 EUR replacement, which they deliberately do not.
+        """
+        entries = [
+            entry(1, 1200.0, CostCategory.ENERGY_WORKING, subject="ELECTRICITY",
+                  subject_kind=SubjectKind.CARRIER),
+            entry(1, 300.0, CostCategory.MAINTENANCE),
+            entry(1, 6000.0, CostCategory.REPLACEMENT),
+        ]
+        result = make_result(entries, horizon=10)
         burden = views.monthly_burden_series(result)
-        recurring = sum(
-            item.amount_in_euro.best_estimate
-            for item in result.timeline.entries
-            if item.year == 1 and item.category in views.BurdenCategories.RECURRING
-        )
-        assert burden.series[1].best_estimate * 12.0 == pytest.approx(recurring)
+        published = result.monthly_cost_year1_in_euro
+        assert published is not None
+        assert burden.series[1].best_estimate == pytest.approx(1500.0 / 12.0)
+        assert published.best_estimate == pytest.approx(7500.0 / 12.0)
 
     def test_series_re_sums_to_the_recurring_subset_of_the_annual_series(self):
-        """Nothing is lost or gained between the annual view and the monthly one."""
+        """Nothing is lost or gained between the annual view and the monthly one.
+
+        Year 0 and the replacement year are in the loop rather than in tests of their own: both
+        are years whose recurring subset is smaller than their flows, and the loop asserts the
+        equality for every year of the horizon, which is the same statement made once.
+        """
         result = self.make_result_with_investment()
         burden = views.monthly_burden_series(result)
         for year, monthly in enumerate(burden.series):
@@ -810,7 +949,7 @@ class TestAssetDebtSeries:
         series = views.asset_debt_series(make_result(entries))
         assert series.book_value_in_euro[10] > series.book_value_in_euro[9]
 
-    def test_underwater_interval_is_detected(self):
+    def test_underwater_years_are_reported_as_one_interval(self):
         """Debt above book value is exactly what a lender checks for, so it is reported."""
         entries = [
             entry(0, 10000.0, CostCategory.INVESTMENT),
@@ -820,7 +959,65 @@ class TestAssetDebtSeries:
             entries.append(entry(year, 200.0, CostCategory.LOAN_INTEREST, subject="financing"))
         entries.append(entry(20, 10000.0, CostCategory.LOAN_PRINCIPAL, subject="financing"))
         series = views.asset_debt_series(make_result(entries))
-        assert series.underwater_interval is not None
-        start, end = series.underwater_interval
+        assert len(series.underwater_intervals) == 1
+        start, end = series.underwater_intervals[0]
         assert start >= 1 and end <= 20
         assert all(series.equity_in_euro[year] < 0 for year in range(start, end + 1))
+
+    def test_a_dip_a_recovery_and_a_second_dip_are_two_intervals(self):
+        """One (first, last) pair would have claimed the recovery in between never happened.
+
+        The asset is written down 375 EUR a year (10,000 EUR over the 26.67-year life the 2,500
+        EUR residual implies), so book value runs 10,000 / 9,625 / 9,250 / 8,875 / 8,500. Debt
+        stays at 10,000 through year 1, drops to 9,000 in year 2, holds through year 3 and drops
+        to 6,500 in year 4. Equity is therefore 0 / −375 / +250 / −125 / +2,000: two separate
+        years under water with a year above in between.
+        """
+        entries = [
+            entry(0, 10000.0, CostCategory.INVESTMENT),
+            entry(0, -10000.0, CostCategory.LOAN_DISBURSEMENT, subject="financing"),
+            entry(2, 1000.0, CostCategory.LOAN_PRINCIPAL, subject="financing"),
+            entry(4, 2500.0, CostCategory.LOAN_PRINCIPAL, subject="financing"),
+            entry(5, 6500.0, CostCategory.LOAN_PRINCIPAL, subject="financing"),
+            entry(20, -2500.0, CostCategory.RESIDUAL_VALUE),
+        ]
+        series = views.asset_debt_series(make_result(entries))
+        assert series.underwater_intervals == [(1, 1), (3, 3)]
+
+    def test_an_overpaid_loan_publishes_zero_debt_rather_than_a_negative_balance(self):
+        """`equity == book − debt` has to hold on the published series, not on a clamped copy."""
+        entries = [
+            entry(0, 10000.0, CostCategory.INVESTMENT),
+            entry(0, -8000.0, CostCategory.LOAN_DISBURSEMENT, subject="financing"),
+            entry(1, 5000.0, CostCategory.LOAN_PRINCIPAL, subject="financing"),
+            entry(2, 5000.0, CostCategory.LOAN_PRINCIPAL, subject="financing"),
+            entry(20, -2500.0, CostCategory.RESIDUAL_VALUE),
+        ]
+        series = views.asset_debt_series(make_result(entries))
+        assert min(series.debt_in_euro) == 0.0, "an overpayment is not negative debt"
+        assert series.debt_in_euro[1] == pytest.approx(3000.0)
+        assert series.debt_in_euro[2] == 0.0
+        for book, debt, equity in zip(
+            series.book_value_in_euro, series.debt_in_euro, series.equity_in_euro
+        ):
+            assert equity == pytest.approx(book - debt)
+
+    def test_a_replacement_earlier_than_the_derived_life_still_lands_on_the_residual(self):
+        """The superseded unit leaves the books at its replacement, not at the horizon.
+
+        The review's probe. The 5,000 EUR residual on a 10,000 EUR replacement installed in year 5
+        implies a 30-year depreciation life, but the first unit was replaced after five — so
+        writing *it* down over thirty years too would have kept a third of it on the books at the
+        horizon, overshooting the residual by 3,333 EUR and raising. Each earlier installation is
+        written off by the year its successor is charged instead, which leaves the endpoint to the
+        last unit alone, exactly as the residual calculator books it.
+        """
+        entries = [
+            entry(0, 10000.0, CostCategory.INVESTMENT),
+            entry(5, 10000.0, CostCategory.REPLACEMENT),
+            entry(20, -5000.0, CostCategory.RESIDUAL_VALUE),
+        ]
+        series = views.asset_debt_series(make_result(entries))
+        assert series.depreciation_life_by_subject["HeatPump"] == pytest.approx(30.0)
+        assert series.book_value_in_euro[5] == pytest.approx(10000.0, abs=0.005)
+        assert series.book_value_in_euro[-1] == pytest.approx(5000.0, abs=0.005)

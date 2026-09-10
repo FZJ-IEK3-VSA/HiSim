@@ -46,7 +46,6 @@ from collections.abc import Hashable
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple, TypeVar
 
-from hisim import log
 from hisim.economics.calculators.financing_application import FinancingConstants
 from hisim.economics.calculators.subsidy_application import nominal_support_from_entries
 from hisim.economics.carriers import EnergyCarrier, EnergyFlowRole
@@ -55,6 +54,7 @@ from hisim.economics.numerics import bisect_root
 from hisim.economics.results import (
     LifecycleCostResult,
     ModernizationLevySummary,
+    VariantComparison,
     discounted_payback_year,
 )
 from hisim.economics.subsidies import PayoutKind, SubsidyAward, SubsidySchemeLabels
@@ -102,6 +102,39 @@ GroupKey = TypeVar("GroupKey", bound=Hashable)
 
 # ---------------------------------------------------------------------------- category folding
 
+def _display_group_of(category: CostCategory, mapping: Mapping[CostCategory, GroupKey]) -> GroupKey:
+    """The display group of one category, or a located error naming the incomplete mapping.
+
+    The single lookup every folding view in this module goes through, so that "the mapping does
+    not cover this category" is one sentence rather than three. It raises `CostDataError` rather
+    than the bare `KeyError` the fold used to let out: a `KeyError` surfacing from the middle of a
+    report reads as an ordinary dictionary accident and is caught by generic handling on the way
+    up, while the thing that actually happened is that a category -> group mapping is not total
+    over the categories it was handed — a defect in the *presentation's* declaration, which the
+    message names together with the groups on offer.
+
+    Args:
+        category: The category to place.
+        mapping: The caller's category -> group mapping; presentation passes
+            `PresentationStyle.CATEGORY_TO_GROUP`, which is deliberately total over the enum.
+
+    Returns:
+        The group key `mapping` declares for `category`.
+
+    Raises:
+        CostDataError: If `mapping` declares no group for `category`.
+    """
+    try:
+        return mapping[category]
+    except KeyError:
+        raise CostDataError(
+            f"No display group declared for cost category {category.value!r}; the mapping covers "
+            f"{sorted(declared.value for declared in mapping)}. A category -> group mapping must "
+            "be total over the categories it is asked to fold, so that no amount can land in a "
+            "silent default bucket."
+        ) from None
+
+
 def fold_categories(
     values: Mapping[CostCategory, Any], mapping: Mapping[CostCategory, GroupKey]
 ) -> Dict[GroupKey, Any]:
@@ -126,13 +159,12 @@ def fold_categories(
         received at least one category appear.
 
     Raises:
-        KeyError: if `values` contains a category `mapping` does not declare.
+        CostDataError: if `values` contains a category `mapping` does not declare — see
+            `_display_group_of`, which is where the message is written.
     """
     folded: Dict[GroupKey, Any] = {}
     for category, amount in values.items():
-        if category not in mapping:
-            raise KeyError(f"No display group declared for cost category {category.value!r}.")
-        group = mapping[category]
+        group = _display_group_of(category, mapping)
         folded[group] = folded[group] + amount if group in folded else amount
     return folded
 
@@ -1000,6 +1032,11 @@ class ViewTolerances:
     #: the next slice is its reader), where quantities are large enough that an absolute euro
     #: epsilon means nothing.
     QUANTITY_RELATIVE_EPSILON = 1e-6
+    #: Relative tolerance on "the replacement arrived exactly when the life ran out" (V15). The
+    #: engine spaces replacements at the rounded service life and the depreciation life is
+    #: recovered by inverting the residual formula, so the two agree to a few ulps and must be
+    #: treated as agreeing; only a genuinely *early* replacement shortens a write-down.
+    DEPRECIATION_SPACING_RELATIVE_EPSILON = 1e-9
 
 
 #: Whatever a fold is folding — a Sankey ribbon, a treemap tile. Generic so `_fold_small` hands
@@ -2623,7 +2660,7 @@ def component_event_strip(result: LifecycleCostResult) -> List[EventStripRow]:
 
 # ============================================================================ V8 treemap
 
-class TileBasis:
+class TileBasis(str, enum.Enum):
     """The two ways a treemap can answer "what does this cost" (V8, owner decision Q11).
 
     A treemap has no negative areas, so credits cannot be drawn — which leaves two honest options
@@ -2636,10 +2673,20 @@ class TileBasis:
     subsidy is booked in the support group while its investment is booked in the investment
     group, so a per-cell subtraction would find no credit in any cost cell and reproduce the
     gross panel exactly.
+
+    An enum rather than two string constants, because "there is no third option" is the whole
+    claim: `cost_structure_tiles` used to route anything that was not `GROSS` to the net branch,
+    so a typo drew a net panel under a gross heading and disclosed the wrong thing. The `str`
+    mixin keeps the members comparable with the plain strings the renderers were written against,
+    and `__str__` keeps a member printed into a label reading as the chart's own word.
     """
 
     GROSS = "gross"
     NET_OF_CREDITS = "net"
+
+    def __str__(self) -> str:
+        """The basis's own word, so a member interpolated into a caption is not "TileBasis.GROSS"."""
+        return self.value
 
 
 class TreemapThresholds:
@@ -2675,6 +2722,36 @@ class TreemapTile:
     clamped_from_in_euro: Optional[float] = None
     is_fold: bool = False
 
+    def __post_init__(self) -> None:
+        """Enforces the two properties the class docstring states, so a renderer can rely on them.
+
+        A treemap rectangle with a negative area is not a rectangle, and a clamped tile that
+        carried area or a non-negative `clamped_from_in_euro` would be a disclosure of something
+        that did not happen — the field records the *negative* net the subject would have had, and
+        the tile itself is not drawn. Both are checked here rather than in the one builder that
+        exists today, because the caption arithmetic (`areas − erased == net NPV`) is only sound
+        while they hold.
+
+        Raises:
+            CostDataError: On a negative area, or on a clamped tile that is drawable or whose
+                recorded net is not a credit balance.
+        """
+        if self.area_in_euro < 0.0:
+            raise CostDataError(
+                f"Treemap tile {self.subject!r} in group {self.group!r} has an area of "
+                f"{self.area_in_euro:,.2f} EUR; a rectangle cannot encode a negative number, "
+                "which is the whole reason `TileBasis` exists."
+            )
+        if self.clamped_from_in_euro is None:
+            return
+        if self.clamped_from_in_euro > 0.0 or self.area_in_euro != 0.0:
+            raise CostDataError(
+                f"Treemap tile {self.subject!r} discloses a clamp from "
+                f"{self.clamped_from_in_euro:,.2f} EUR with an area of {self.area_in_euro:,.2f} "
+                "EUR; a clamped subject is one whose credits reached its costs, so its recorded "
+                "net is zero or negative and it carries no area."
+            )
+
 
 @dataclass(frozen=True)
 class CostStructureTiles:
@@ -2688,7 +2765,7 @@ class CostStructureTiles:
     net panel a genuine second reading rather than a redrawn gross panel.
     """
 
-    basis: str
+    basis: TileBasis
     tiles: List[TreemapTile]
     gross_cost_npv_in_euro: float
     credit_total_in_euro: float
@@ -2710,7 +2787,7 @@ class CostStructureTiles:
 def cost_structure_tiles(
     result: LifecycleCostResult,
     mapping: Mapping[CostCategory, GroupKey],
-    basis: str = TileBasis.GROSS,
+    basis: TileBasis = TileBasis.GROSS,
 ) -> CostStructureTiles:
     """Lifetime cost composition as (display group -> subject) tiles, on either basis (V8).
 
@@ -2734,22 +2811,25 @@ def cost_structure_tiles(
     net NPV.
 
     Raises:
-        CostDataError: If the tiles do not sum to the stated gross, if the net areas net of the
-            disclosed erasure do not reproduce the net NPV, or if gross minus credits does not
-            reproduce the published net NPV.
+        CostDataError: If `basis` is not a `TileBasis`, if the tiles do not sum to the stated
+            gross, if the net areas net of the disclosed erasure do not reproduce the net NPV, or
+            if gross minus credits does not reproduce the published net NPV.
     """
-    interest = result.parameters.interest_rate
-    cost_cells: Dict[Tuple[Any, str], float] = {}
-    credit_cells: Dict[Tuple[Any, str], float] = {}
-    for entry in result.scoped_timeline().entries:
-        amount = entry.amount_in_euro.best_estimate * discount_factor(interest, entry.year)
-        if entry.category not in mapping:
-            raise CostDataError(f"No display group declared for cost category {entry.category.value!r}.")
-        key = (mapping[entry.category], entry.subject)
-        if amount >= 0:
-            cost_cells[key] = cost_cells.get(key, 0.0) + amount
-        else:
-            credit_cells[key] = credit_cells.get(key, 0.0) - amount
+    if not isinstance(basis, TileBasis):
+        raise CostDataError(
+            f"Unknown treemap basis {basis!r}: the cost structure is drawn either as "
+            f"{TileBasis.GROSS.value!r} or as {TileBasis.NET_OF_CREDITS.value!r}. An unrecognised "
+            "value used to fall through to the net branch, which drew a net panel under whatever "
+            "heading the caller had in mind and disclosed the wrong thing."
+        )
+
+    def cell_of(item: CashFlowEntry) -> Tuple[Any, str]:
+        """The (display group, subject) cell one entry belongs in."""
+        return (_display_group_of(item.category, mapping), item.subject)
+
+    cost_cells, credit_cells = result.scoped_timeline().npv_split_by(
+        result.parameters.interest_rate, cell_of
+    )
     gross_total = sum(cost_cells.values())
     credit_total = sum(credit_cells.values())
     net_total = result.total_npv_in_euro.best_estimate
@@ -2921,7 +3001,14 @@ class LaneSpan:
 
 @dataclass(frozen=True)
 class Lane:
-    """One labelled swimlane: its spans and its markers (V9)."""
+    """One labelled swimlane: its spans and its markers (V9).
+
+    Frozen, and meant as a finished object: `lifecycle_lanes` collects a lane's markers and spans
+    into plain lists first and constructs the lane once from them. Appending to `events` after
+    construction would have worked — a frozen dataclass freezes the *bindings*, not the lists they
+    point at — but it makes the freeze a decoration rather than a guarantee, and a lane that is
+    still being filled after it exists is exactly the state `is_empty` cannot answer for.
+    """
 
     name: str
     events: List[LaneEvent] = field(default_factory=list)
@@ -2949,7 +3036,9 @@ class LifecycleLanes:
     support: Lane
 
 
-def lifecycle_lanes(result: LifecycleCostResult, comparison: Optional[Any] = None) -> LifecycleLanes:
+def lifecycle_lanes(
+    result: LifecycleCostResult, comparison: Optional[VariantComparison] = None
+) -> LifecycleLanes:
     """Assets, financing, support and milestones on one year axis (V9).
 
     Delegates rather than re-derives: the component event strip supplies the asset rows,
@@ -2961,7 +3050,7 @@ def lifecycle_lanes(result: LifecycleCostResult, comparison: Optional[Any] = Non
 
     Args:
         result: The perspective to draw.
-        comparison: Optional `VariantComparison`. The payback milestone is a *range* between the
+        comparison: The variant comparison, if one exists. The payback milestone is a *range* between the
             LOW-world and HIGH-world crossings of its savings curve, so without a comparison
             there is no payback question to answer and the milestone is simply absent.
 
@@ -2972,7 +3061,8 @@ def lifecycle_lanes(result: LifecycleCostResult, comparison: Optional[Any] = Non
     horizon = result.parameters.observation_period_in_years
     assets = component_event_strip(result)
     amortization = loan_amortization_series(result)
-    financing = Lane(name="Financing")
+    financing_events: List[LaneEvent] = []
+    financing_spans: List[LaneSpan] = []
     if amortization.has_flows():
         service_years = [
             year
@@ -2981,11 +3071,11 @@ def lifecycle_lanes(result: LifecycleCostResult, comparison: Optional[Any] = Non
             )
             if interest or principal
         ]
-        financing.events.append(
+        financing_events.append(
             LaneEvent(year=0, label="loan disbursement", amount_in_euro=amortization.disbursement_in_euro)
         )
         if service_years:
-            financing.spans.append(
+            financing_spans.append(
                 LaneSpan(start_year=service_years[0], end_year=service_years[-1], label="debt service")
             )
             peak_year = max(
@@ -2995,18 +3085,20 @@ def lifecycle_lanes(result: LifecycleCostResult, comparison: Optional[Any] = Non
             peak_amount = (
                 amortization.interest_in_euro[peak_year] + amortization.principal_in_euro[peak_year]
             )
-            financing.events.append(
+            financing_events.append(
                 LaneEvent(year=peak_year, label="largest annual debt service", amount_in_euro=peak_amount)
             )
         loan_free = amortization.loan_free_year()
         if loan_free is not None:
-            financing.events.append(LaneEvent(year=loan_free, label="loan-free"))
-    support = Lane(name="Subsidies & levies")
+            financing_events.append(LaneEvent(year=loan_free, label="loan-free"))
+    financing = Lane(name="Financing", events=financing_events, spans=financing_spans)
+    support_events: List[LaneEvent] = []
+    support_spans: List[LaneSpan] = []
     for decision in result.subsidy_decisions:
         for award in decision.applied:
             amount = award_total_amount(award).best_estimate
             if amount:
-                support.events.append(
+                support_events.append(
                     LaneEvent(
                         year=0,
                         label=f"{award.scheme_id} ({decision.measure_subject})",
@@ -3027,16 +3119,18 @@ def lifecycle_lanes(result: LifecycleCostResult, comparison: Optional[Any] = Non
             if entry.category == CostCategory.MODERNIZATION_LEVY and entry.year == levy_years[0]
         )
         direction = "paid" if annual > 0 else "received"
-        support.spans.append(
+        support_spans.append(
             LaneSpan(
                 start_year=levy_years[0],
                 end_year=levy_years[-1],
                 label=f"modernization levy {direction} ({abs(annual):,.0f} EUR/a)",
             )
         )
-    milestones = Lane(name="Milestones")
+    support = Lane(name="Subsidies & levies", events=support_events, spans=support_spans)
+    milestone_events: List[LaneEvent] = []
+    milestone_spans: List[LaneSpan] = []
     worst_year, worst_amount = worst_liquidity_position(result)
-    milestones.events.append(
+    milestone_events.append(
         LaneEvent(year=worst_year, label="deepest out-of-pocket", amount_in_euro=worst_amount)
     )
     residual_total = sum(
@@ -3044,7 +3138,7 @@ def lifecycle_lanes(result: LifecycleCostResult, comparison: Optional[Any] = Non
         for entry in result.scoped_timeline().entries
         if entry.category == CostCategory.RESIDUAL_VALUE
     )
-    milestones.events.append(
+    milestone_events.append(
         LaneEvent(
             year=horizon,
             label="observation horizon",
@@ -3056,7 +3150,7 @@ def lifecycle_lanes(result: LifecycleCostResult, comparison: Optional[Any] = Non
         first = crossings.get("low")
         last = crossings.get("high")
         if first is not None:
-            milestones.spans.append(
+            milestone_spans.append(
                 LaneSpan(
                     start_year=first,
                     end_year=last,
@@ -3064,6 +3158,7 @@ def lifecycle_lanes(result: LifecycleCostResult, comparison: Optional[Any] = Non
                     else "payback range (no payback in the HIGH world)",
                 )
             )
+    milestones = Lane(name="Milestones", events=milestone_events, spans=milestone_spans)
     return LifecycleLanes(
         horizon=horizon, milestones=milestones, assets=assets, financing=financing, support=support
     )
@@ -3163,9 +3258,13 @@ def funding_sources_and_uses(result: LifecycleCostResult) -> SourcesAndUses:
 
     Sources are one node per subsidy scheme (labelled with the display name the scheme carries,
     which is where the `subsidy_scheme_id` dimension earns its keep — "state -> KfW 261 -> heat
-    pump" reads very differently from one grey "subsidies" node), one node per loan disbursement,
-    and own capital as the balancing item. Uses are the gross year-0 investment per subject plus
-    the planning and removal categories as their own nodes.
+    pump" reads very differently from one grey "subsidies" node), **one** node carrying every
+    year-0 loan disbursement together, and own capital as the balancing item. Debt is one node
+    rather than one per disbursement because a loan is not tied to a measure the way an award is:
+    the timeline records no subject for it that the Sankey could draw a ribbon to, so splitting it
+    would produce several identically untied nodes that the allocation would then spread the same
+    way. Uses are the gross year-0 investment per subject plus the planning and removal categories
+    as their own nodes.
 
     A *negative* balancing item — support plus debt exceeding the gross investment — is a data
     defect rather than a rendering case, and raises.
@@ -3275,19 +3374,25 @@ def subject_category_flows(
     folded `npv_by_category`.
 
     Reconciliation is by construction (the same discounted entries, partitioned two ways) rather
-    than by a check, because every ribbon here *is* one bucket of `npv_by`.
+    than by a check, because every ribbon here *is* one bucket of `npv_by` — literally so: the
+    pivot is `CashFlowTimeline.npv_split_by`, the same one the treemap builds its cells with, so
+    the two charts cannot disagree about what a subject cost.
+
+    Raises:
+        CostDataError: If `mapping` declares no display group for a category on the timeline.
     """
-    interest = result.parameters.interest_rate
-    cells: Dict[Tuple[str, Any, bool], float] = {}
-    for entry in result.scoped_timeline().entries:
-        if entry.category not in mapping:
-            raise CostDataError(f"No display group declared for cost category {entry.category.value!r}.")
-        amount = entry.amount_in_euro.best_estimate * discount_factor(interest, entry.year)
-        key = (entry.subject, mapping[entry.category], amount < 0)
-        cells[key] = cells.get(key, 0.0) + abs(amount)
+
+    def cell_of(item: CashFlowEntry) -> Tuple[str, Any]:
+        """The (subject, display group) cell one entry belongs in."""
+        return (item.subject, _display_group_of(item.category, mapping))
+
+    cost_cells, credit_cells = result.scoped_timeline().npv_split_by(
+        result.parameters.interest_rate, cell_of
+    )
     return [
         SubjectGroupFlow(subject=subject, group=group, amount_in_euro=amount, is_credit=is_credit)
-        for (subject, group, is_credit), amount in cells.items()
+        for cells, is_credit in ((cost_cells, False), (credit_cells, True))
+        for (subject, group), amount in cells.items()
         if amount > ViewTolerances.RECONCILIATION_EPSILON
     ]
 
@@ -3442,7 +3547,11 @@ class EnergyBalanceFlows:
     grid; both are None when their denominator is zero (no PV, or no attributed consumption)
     rather than being reported as a misleading zero. `battery_round_trip_loss_in_kwh` is the
     difference between what went into the battery and what came back out — the loss the caption
-    names, so that the battery reading as a lossy pass-through is stated rather than inferred.
+    names, so that the battery reading as a lossy pass-through is stated rather than inferred. It
+    is clamped at zero: a year in which the battery discharged more than it charged is a year that
+    began with carried-over charge, and the surplus is energy stored *before* the measured year
+    rather than energy the battery created. Reporting that as a negative loss would invite the
+    reading "the battery gained energy", which is the one thing it certainly did not do.
 
     `unattributed_roles_in_kwh` is the honest remainder: role names the record carried that this
     reader's `EnergyFlowRole` vocabulary does not contain. They have no side of the bus, so they
@@ -3460,6 +3569,43 @@ class EnergyBalanceFlows:
     unattributed_roles_in_kwh: Dict[str, float] = field(default_factory=dict)
 
 
+def _read_energy_attribution(
+    result: LifecycleCostResult,
+) -> Tuple[Dict[EnergyFlowRole, float], Dict[str, float]]:
+    """One walk of the attribution record, returning the placeable roles and the rest.
+
+    The record is read twice by the balance — once for what can be drawn, once for what cannot —
+    and the two readings are the same parse of the same dictionary with the two branches of one
+    `try` swapped. Walking it once and returning both halves is what keeps them exhaustive and
+    disjoint by construction: no role can be absent from both because a second loop was written
+    with a slightly different condition. The two public functions below are the two projections
+    of this one pass and keep their own names, because a caller asking "what can I draw" should
+    not have to unpack a pair.
+
+    Args:
+        result: The evaluated perspective.
+
+    Returns:
+        `(placeable, unplaceable)` — role -> annual kWh for the roles this reader's
+        `EnergyFlowRole` knows, and role *name* -> annual kWh for the rest. Zero-quantity roles
+        are dropped from both, since a terminal carrying nothing is not a flow.
+    """
+    totals: Dict[EnergyFlowRole, float] = {}
+    unknown: Dict[str, float] = {}
+    for by_role in result.annual_energy_attribution_by_subject_in_kwh.values():
+        for role_name, quantity in by_role.items():
+            try:
+                role = EnergyFlowRole(role_name)
+            except ValueError:
+                unknown[role_name] = unknown.get(role_name, 0.0) + quantity
+                continue
+            totals[role] = totals.get(role, 0.0) + quantity
+    return (
+        {role: value for role, value in totals.items() if value},
+        {name: value for name, value in unknown.items() if value},
+    )
+
+
 def energy_balance_quantities(result: LifecycleCostResult) -> Dict[EnergyFlowRole, float]:
     """The result's per-subject energy record collapsed onto the balance roles, in annual kWh.
 
@@ -3467,38 +3613,25 @@ def energy_balance_quantities(result: LifecycleCostResult) -> Dict[EnergyFlowRol
     two PV arrays are one PV generation node. Only role names this reader's `EnergyFlowRole`
     knows appear here — a record written by a newer extraction can carry others, and those are
     *not* silently absorbed by the residual node, which is computed from the drawn terminals
-    alone. `_unattributed_energy_roles_in_kwh` collects them instead, and
-    `energy_balance_flows` carries them out on `EnergyBalanceFlows.unattributed_roles_in_kwh` and
-    logs them, so an unreadable role shrinks the diagram visibly rather than invisibly.
+    alone. `_unattributed_energy_roles_in_kwh` is the other half of the same pass and collects
+    them instead, and `energy_balance_flows` carries them out on
+    `EnergyBalanceFlows.unattributed_roles_in_kwh`, so an unreadable role shrinks the diagram
+    visibly rather than invisibly.
     """
-    totals: Dict[EnergyFlowRole, float] = {}
-    for by_role in result.annual_energy_attribution_by_subject_in_kwh.values():
-        for role_name, quantity in by_role.items():
-            try:
-                role = EnergyFlowRole(role_name)
-            except ValueError:
-                continue
-            totals[role] = totals.get(role, 0.0) + quantity
-    return {role: value for role, value in totals.items() if value}
+    return _read_energy_attribution(result)[0]
 
 
 def _unattributed_energy_roles_in_kwh(result: LifecycleCostResult) -> Dict[str, float]:
     """Every attribution role name the balance vocabulary cannot place, with its annual kWh.
 
-    The complement of `energy_balance_quantities`. A role this reader does not know has no side
-    of the busbar — drawing it as a source or as a sink would be a guess about direction that the
-    stored record does not support — so it cannot become a terminal. What it must not do is
-    disappear: it is real energy, and a balance that quietly drops it looks exactly like a
-    balance that never had it.
+    The complement of `energy_balance_quantities`, and the other projection of
+    `_read_energy_attribution`. A role this reader does not know has no side of the busbar —
+    drawing it as a source or as a sink would be a guess about direction that the stored record
+    does not support — so it cannot become a terminal. What it must not do is disappear: it is
+    real energy, and a balance that quietly drops it looks exactly like a balance that never had
+    it.
     """
-    unknown: Dict[str, float] = {}
-    for by_role in result.annual_energy_attribution_by_subject_in_kwh.values():
-        for role_name, quantity in by_role.items():
-            try:
-                EnergyFlowRole(role_name)
-            except ValueError:
-                unknown[role_name] = unknown.get(role_name, 0.0) + quantity
-    return {name: value for name, value in unknown.items() if value}
+    return _read_energy_attribution(result)[1]
 
 
 def has_energy_balance(result: LifecycleCostResult) -> bool:
@@ -3507,13 +3640,26 @@ def has_energy_balance(result: LifecycleCostResult) -> bool:
     The skip predicate of decision Q16, and deliberately stricter than "is the field non-empty":
     a result whose only flows are the meter's own grid import and export carries no *device*
     information at all, and drawing a two-node diagram of the meter feeding itself was exactly the
-    content-free stub the redesign retired. Two device flows is the floor — one source and one
-    sink — below which the chart skips itself with a log line. Roles the vocabulary cannot place
-    do not count: they are never drawn, so they cannot make a diagram worth drawing.
+    content-free stub the redesign retired. `MINIMUM_DEVICE_FLOWS` device flows is the floor.
+    Roles the vocabulary cannot place do not count: they are never drawn, so they cannot make a
+    diagram worth drawing.
+
+    The count alone is not enough, and the docstring promised more than the code checked: a
+    busbar needs a side to come from and a side to go to, so the record must also place at least
+    one `EnergyBalanceLayout.SOURCE_ROLES` role and at least one `SINK_ROLES` role. Two device
+    flows that are both sinks (a heat pump and a household load with no generation and no import)
+    draw a bus fed by nothing, whose entire content is then the residual terminal — the same
+    content-free picture the device floor exists to refuse, arrived at from the other direction.
+    The meter's own roles count towards *this* half of the test, because an all-electric house
+    genuinely sourced from the grid is a balance worth drawing.
     """
     quantities = energy_balance_quantities(result)
     devices = [role for role in quantities if role not in EnergyBalanceLayout.METER_ROLES]
-    return len(devices) >= EnergyBalanceLayout.MINIMUM_DEVICE_FLOWS
+    if len(devices) < EnergyBalanceLayout.MINIMUM_DEVICE_FLOWS:
+        return False
+    return any(role in EnergyBalanceLayout.SOURCE_ROLES for role in quantities) and any(
+        role in EnergyBalanceLayout.SINK_ROLES for role in quantities
+    )
 
 
 def energy_balance_flows(result: LifecycleCostResult) -> EnergyBalanceFlows:
@@ -3530,8 +3676,9 @@ def energy_balance_flows(result: LifecycleCostResult) -> EnergyBalanceFlows:
     meter the bills are computed from — and the two sides of the bus balance exactly, because
     whatever they do not account for is booked as a `losses / unattributed` terminal on the
     shorter side. The battery is a pass-through whose round-trip loss is reported rather than
-    hidden. Roles the vocabulary cannot place travel out on `unattributed_roles_in_kwh` and are
-    logged by name, since they are outside the balance rather than inside its residual.
+    hidden. Roles the vocabulary cannot place travel out on `unattributed_roles_in_kwh`, since
+    they are outside the balance rather than inside its residual; the renderers print them, which
+    is the only place a reader can act on them, and this module logs nothing.
 
     Args:
         result: The evaluated perspective. Its `annual_energy_attribution_by_subject_in_kwh` is the
@@ -3550,22 +3697,14 @@ def energy_balance_flows(result: LifecycleCostResult) -> EnergyBalanceFlows:
         raise CostDataError(
             "The household energy balance needs at least "
             f"{EnergyBalanceLayout.MINIMUM_DEVICE_FLOWS} device flows in `LifecycleCostResult."
-            "annual_energy_attribution_by_subject_in_kwh`, which this result does not carry (a "
-            "run serialized before the field existed, or a component set whose classes the "
-            "adapter's `DeviceEnergySpecs` table does not know). Check "
+            "annual_energy_attribution_by_subject_in_kwh`, one of them a source and one a sink, "
+            "which this result does not carry (a run serialized before the field existed, a "
+            "component set whose classes the adapter's `DeviceEnergySpecs` table does not know, "
+            "or a record with nothing on one side of the electricity bus). Check "
             "`views.has_energy_balance` first."
         )
-    quantities = energy_balance_quantities(result)
+    quantities, unattributed = _read_energy_attribution(result)
     _check_grid_nodes_against_the_meter(result, quantities)
-    unattributed = _unattributed_energy_roles_in_kwh(result)
-    if unattributed:
-        log.warning(
-            "The household energy balance cannot place "
-            + ", ".join(f"{name} ({value:,.1f} kWh)" for name, value in sorted(unattributed.items()))
-            + ": no such `EnergyFlowRole`, so the role has no side of the electricity bus. The "
-            "quantities are reported on `EnergyBalanceFlows.unattributed_roles_in_kwh` and are "
-            "outside the drawn balance, not inside its residual node."
-        )
     bills = carrier_year_one_bills(result)
     electricity = bills.get(EnergyCarrier.ELECTRICITY.value)
     annotations: Dict[EnergyFlowRole, Optional[float]] = {
@@ -3619,7 +3758,7 @@ def energy_balance_flows(result: LifecycleCostResult) -> EnergyBalanceFlows:
         bus_total_in_kwh=max(source_total, sink_total),
         self_consumption_share=((generation - exported) / generation if generation > 0.0 else None),
         self_sufficiency_share=((consumption - imported) / consumption if consumption > 0.0 else None),
-        battery_round_trip_loss_in_kwh=charged - discharged if charged or discharged else None,
+        battery_round_trip_loss_in_kwh=max(charged - discharged, 0.0) if charged or discharged else None,
         unattributed_roles_in_kwh=unattributed,
     )
 
@@ -3634,9 +3773,38 @@ def _check_grid_nodes_against_the_meter(
     are computed from `annual_energy_quantities_by_carrier`. If the balance's own grid figures
     disagreed with those quantities the annotation would price a different number from the one it
     is written beside, which is the silent kind of wrong this module fails fast on (D25).
+
+    **Why the tolerance is float noise and not a margin.** Since slice 3 the attribution's two
+    grid roles and the billing determinants are summed from the same meter columns, converted by
+    the same unit converter and annualized identically; the two figures are therefore the same
+    arithmetic run twice, and the only difference they can legitimately show is the order the
+    additions happened in. Anything larger is a defect — a second extraction path, a unit slip, a
+    partial year — and widening this tolerance would hide exactly the class of bug it exists to
+    catch. `QUANTITY_RELATIVE_EPSILON` is a millionth, which is float residue on a five-figure
+    kWh total and nothing else.
+
+    A *missing* electricity record is the same failure seen from the other side, and is refused
+    rather than skipped: if the balance is about to draw grid nodes there is nothing to reconcile
+    them against, so their euro annotations would be unchecked figures beside unchecked
+    quantities. A record with no grid nodes at all (an off-grid house) has nothing to check and
+    returns.
+
+    Raises:
+        CostDataError: If a grid node disagrees with the meter, or if grid nodes would be drawn
+            for a result carrying no ELECTRICITY quantities at all.
     """
     metered = result.annual_energy_quantities_by_carrier.get(EnergyCarrier.ELECTRICITY.value)
     if metered is None:
+        drawn = [role for role in EnergyBalanceLayout.METER_ROLES if quantities.get(role)]
+        if drawn:
+            raise CostDataError(
+                "The energy balance would draw "
+                + ", ".join(f"{role.value} ({quantities[role]:,.1f} kWh)" for role in drawn)
+                + f", but the result carries no {EnergyCarrier.ELECTRICITY.value} entry in "
+                "`annual_energy_quantities_by_carrier` to reconcile those nodes against, so the "
+                "euro annotation beside each of them would price a quantity nothing checked "
+                "(D25)."
+            )
         return
     for role, expected, name in (
         (EnergyFlowRole.GRID_IMPORT, metered.bought_in_kwh, "bought"),
@@ -3682,8 +3850,18 @@ class WealthBenchmark:
     the module is applied beyond Germany, so no tax law is baked in and the caption says so.
 
     The identity `W_i(T) == (1+i)^T · NPV(i)` ties the chart to the engine — future value is
-    discounting run backwards — and is validated in the view for every grid rate, which is what
-    makes the verdict at the parameter rate provably the engine's own verdict.
+    discounting run backwards — and is validated here for every grid rate *and* for the parameter
+    rate, which is what makes the verdict at the parameter rate provably the engine's own
+    verdict. The LOW and HIGH bands satisfy the same identity against their own differential
+    flows; those flows are not fields of this object (only the BEST_ESTIMATE series is, since it
+    is what the grid trajectories are built from), so `wealth_benchmark` checks the two bands
+    where it still has them and this class checks everything its own fields can express.
+
+    The shape checks come with it, because a chart cannot draw a trajectory whose rate it does not
+    have an axis position for: the three rate-keyed collections carry exactly the same rates,
+    every trajectory spans years 0..T like the differential flow it is built from, and no reported
+    break-even rate falls outside the drawn window. Together they are what lets a renderer index
+    `series_by_rate[rate]` and place `break_even_rates` without a guard of its own.
     """
 
     rates: List[float]
@@ -3696,6 +3874,73 @@ class WealthBenchmark:
     #: Differential nominal flow per year (reference − variant), BEST_ESTIMATE slot, index = year.
     differential_flow_in_euro: List[float]
 
+    def __post_init__(self) -> None:
+        """Validates the shape and the future-value identity stated in the class docstring.
+
+        Raises:
+            CostDataError: On a rate the three collections do not agree on, a missing slot, a
+                trajectory of the wrong length, a terminal that is not its own series' last
+                point, a broken future-value identity, or a break-even rate outside the grid.
+        """
+        if not self.differential_flow_in_euro:
+            raise CostDataError(
+                "The fixed-interest benchmark carries no differential flow at all, so there is "
+                "no horizon to future-value over and nothing to draw."
+            )
+        horizon = len(self.differential_flow_in_euro) - 1
+        if not set(self.rates) == set(self.series_by_rate) == set(self.terminal_by_rate):
+            raise CostDataError(
+                f"The fixed-interest benchmark draws rates {sorted(self.rates)} but carries "
+                f"trajectories for {sorted(self.series_by_rate)} and terminals for "
+                f"{sorted(self.terminal_by_rate)}; a chart cannot place a trajectory whose rate "
+                "has no axis position, nor label an axis position that has no trajectory."
+            )
+        if set(self.parameter_series_by_slot) != set(Slot):
+            raise CostDataError(
+                f"The parameter-rate band carries slots {sorted(self.parameter_series_by_slot)} "
+                f"rather than all of {sorted(slot.value for slot in Slot)}; the banded line is "
+                "drawn from all three worlds or it is not a band."
+            )
+        trajectories: List[Tuple[str, List[float]]] = [
+            (f"the {rate:.0%} trajectory", series) for rate, series in self.series_by_rate.items()
+        ] + [
+            (f"the {slot.value} band", series)
+            for slot, series in self.parameter_series_by_slot.items()
+        ]
+        for label, series in trajectories:
+            if len(series) != horizon + 1:
+                raise CostDataError(
+                    f"{label} of the fixed-interest benchmark spans {len(series)} year(s) but the "
+                    f"differential flow spans {horizon + 1}; every line shares one year axis."
+                )
+        for rate, series in self.series_by_rate.items():
+            if abs(series[-1] - self.terminal_by_rate[rate]) > ViewTolerances.RECONCILIATION_EPSILON:
+                raise CostDataError(
+                    f"The {rate:.0%} trajectory ends at {series[-1]:,.2f} EUR but its terminal is "
+                    f"reported as {self.terminal_by_rate[rate]:,.2f} EUR; the end label and the "
+                    "line it sits on are the same number."
+                )
+            _check_future_value_identity(
+                rate, horizon, self.terminal_by_rate[rate], self.differential_flow_in_euro,
+                f"grid rate {rate:.0%}",
+            )
+        _check_future_value_identity(
+            self.parameter_rate,
+            horizon,
+            self.parameter_series_by_slot[Slot.BEST_ESTIMATE][-1],
+            self.differential_flow_in_euro,
+            f"the parameter rate {self.parameter_rate:.2%}",
+        )
+        outside = [
+            rate for rate in self.break_even_rates if not min(self.rates) <= rate <= max(self.rates)
+        ]
+        if outside:
+            raise CostDataError(
+                f"The fixed-interest benchmark reports break-even rate(s) {outside} outside its "
+                f"own grid {min(self.rates):.0%}..{max(self.rates):.0%}; an internal rate of "
+                "return found by extending a grid is a number nobody checked."
+            )
+
     def terminal_at_parameter_rate(self) -> float:
         """Terminal wealth advantage at the evaluation's own discount rate.
 
@@ -3703,6 +3948,37 @@ class WealthBenchmark:
         renovating has the lower present cost, the renovator ends up richer, and vice versa.
         """
         return self.parameter_series_by_slot[Slot.BEST_ESTIMATE][-1]
+
+
+def _check_future_value_identity(
+    rate: float, horizon: int, terminal: float, flows: Sequence[float], what: str
+) -> None:
+    """Raises unless one benchmark trajectory ends where discounting run backwards says it must.
+
+    `W_i(T) == (1+i)^T · NPV(i)` is the tie between the chart and the engine: the future value of
+    a flow series at rate *i* is its present value carried forward, so a trajectory that ends
+    anywhere else is drawn from arithmetic the engine does not do. The present value is recomputed
+    through this module's own `discount_factor` rather than through a local `1/(1+i)**year`, which
+    is the point — it is the engine's discounting the identity is checked against.
+
+    Args:
+        rate: The rate the trajectory was future-valued at.
+        horizon: T, the last year of the series.
+        terminal: `W_i(T)`, the trajectory's last point.
+        flows: The differential nominal flow the trajectory was built from, index = year.
+        what: How to name this trajectory in the error, e.g. "grid rate 4 %".
+
+    Raises:
+        CostDataError: If the two sides differ by more than float residue.
+    """
+    expected = ((1.0 + rate) ** horizon) * sum(
+        flow * discount_factor(rate, year) for year, flow in enumerate(flows)
+    )
+    if abs(terminal - expected) > max(ViewTolerances.RECONCILIATION_EPSILON, abs(expected) * 1e-9):
+        raise CostDataError(
+            f"Fixed-interest benchmark breaks the future-value identity at {what}: "
+            f"W(T) = {terminal:,.2f} EUR but (1+i)^T · NPV(i) = {expected:,.2f} EUR."
+        )
 
 
 def wealth_benchmark(reference: LifecycleCostResult, variant: LifecycleCostResult) -> WealthBenchmark:
@@ -3719,24 +3995,44 @@ def wealth_benchmark(reference: LifecycleCostResult, variant: LifecycleCostResul
     needs the undiscounted per-year differential — `annual_cost_series_nominal_in_euro` on both
     sides.
 
-    Reconciliation: `W_i(T) == (1+i)^T · NPV(i)` for every grid rate, with `NPV(i)` recomputed
-    from the same differential flows through the module's own `discount_factor` — validated here.
+    Reconciliation: `W_i(T) == (1+i)^T · NPV(i)` for every grid rate and for the parameter rate in
+    all three worlds, with `NPV(i)` recomputed from the same differential flows through the
+    module's own `discount_factor`. The grid rates and the BEST_ESTIMATE parameter line are
+    checked by `WealthBenchmark.__post_init__`, which can express them from the object's own
+    fields; the LOW and HIGH bands are checked here, where their differential flows still exist.
+
+    The two results must share an observation horizon. A differential between series of different
+    lengths is not a differential — the shorter side would contribute nothing for the years it
+    does not have, which reads as "the reference costs nothing after year 10" rather than as "the
+    reference was evaluated over ten years" — so a mismatch is refused instead of truncated.
 
     Raises:
-        CostDataError: If the future-value identity fails for any grid rate, which would mean the
-            chart and the engine's discounting disagree.
+        CostDataError: If the two results were evaluated over different horizons, if either
+            nominal series does not span its own horizon, or if the future-value identity fails,
+            which would mean the chart and the engine's discounting disagree.
     """
     horizon = variant.parameters.observation_period_in_years
+    if reference.parameters.observation_period_in_years != horizon:
+        raise CostDataError(
+            "The fixed-interest benchmark compares two evaluations over different observation "
+            f"periods: the reference runs {reference.parameters.observation_period_in_years} "
+            f"year(s) and the variant {horizon}. Their differential flow would silently be the "
+            "variant alone for the years only one of them covers."
+        )
     reference_series = reference.annual_cost_series_nominal_in_euro
     variant_series = variant.annual_cost_series_nominal_in_euro
+    for name, nominal in (("reference", reference_series), ("variant", variant_series)):
+        if len(nominal) != horizon + 1:
+            raise CostDataError(
+                f"The {name}'s nominal annual series spans {len(nominal)} year(s) but its horizon "
+                f"is {horizon}; the benchmark needs one flow per year of the shared axis."
+            )
 
     def differential(slot: Slot) -> List[float]:
-        flows: List[float] = []
-        for year in range(horizon + 1):
-            left = reference_series[year].slot(slot) if year < len(reference_series) else 0.0
-            right = variant_series[year].slot(slot) if year < len(variant_series) else 0.0
-            flows.append(left - right)
-        return flows
+        return [
+            reference_series[year].slot(slot) - variant_series[year].slot(slot)
+            for year in range(horizon + 1)
+        ]
 
     def future_value_series(flows: List[float], rate: float) -> List[float]:
         series: List[float] = []
@@ -3744,24 +4040,21 @@ def wealth_benchmark(reference: LifecycleCostResult, variant: LifecycleCostResul
             series.append(sum(flows[j] * (1.0 + rate) ** (year - j) for j in range(year + 1)))
         return series
 
-    best_estimate_flows = differential(Slot.BEST_ESTIMATE)
+    flows_by_slot = {slot: differential(slot) for slot in Slot}
+    best_estimate_flows = flows_by_slot[Slot.BEST_ESTIMATE]
     series_by_rate = {
         rate: future_value_series(best_estimate_flows, rate) for rate in WealthBenchmarkGrid.RATES
     }
     terminal_by_rate = {rate: series[-1] for rate, series in series_by_rate.items()}
-    for rate, terminal in terminal_by_rate.items():
-        expected = ((1.0 + rate) ** horizon) * sum(
-            flow * discount_factor(rate, year) for year, flow in enumerate(best_estimate_flows)
-        )
-        if abs(terminal - expected) > max(
-            ViewTolerances.RECONCILIATION_EPSILON, abs(expected) * 1e-9
-        ):
-            raise CostDataError(
-                f"Fixed-interest benchmark breaks the future-value identity at rate {rate:.0%}: "
-                f"W(T) = {terminal:,.2f} EUR but (1+i)^T · NPV(i) = {expected:,.2f} EUR."
-            )
     parameter_rate = variant.parameters.interest_rate
-    parameter_series = {slot: future_value_series(differential(slot), parameter_rate) for slot in Slot}
+    parameter_series = {
+        slot: future_value_series(flows_by_slot[slot], parameter_rate) for slot in Slot
+    }
+    for slot, series in parameter_series.items():
+        _check_future_value_identity(
+            parameter_rate, horizon, series[-1], flows_by_slot[slot],
+            f"the parameter rate in the {slot.value} world",
+        )
     return WealthBenchmark(
         rates=list(WealthBenchmarkGrid.RATES),
         series_by_rate=series_by_rate,
@@ -3873,17 +4166,19 @@ def monthly_burden_series(result: LifecycleCostResult) -> MonthlyBurden:
     over twelve months, computed with `parameters.annuity_factor()` so it is the same smoothing
     the headline EAC applies to everything else.
 
-    Reconciliation: twelve times the year-1 value is the recurring part of
-    `monthly_cost_year1_in_euro`, the series times twelve re-sums to the recurring subset of
-    `annual_cost_series_nominal_in_euro`, and twelve times the reserve divided by the annuity
-    factor gives the replacement categories' NPV back — all three checked in the tests, all three
-    true by construction because this is a filter and a rescaling of the same entries.
+    Reconciliation: `series[1]` is the recurring part of `monthly_cost_year1_in_euro` — the
+    published field is *already* a monthly figure, so the two are compared directly and the
+    difference between them is exactly year 1's non-recurring flows; the series times twelve
+    re-sums to the recurring subset of `annual_cost_series_nominal_in_euro`; and twelve times the
+    reserve divided by the annuity factor gives the replacement categories' NPV back. All three
+    are checked in the tests, and all three are true by construction because this is a filter and
+    a rescaling of the same entries.
     """
     horizon = result.parameters.observation_period_in_years
     per_year = [UncertainValue.exact(0.0) for _ in range(horizon + 1)]
-    for entry in result.scoped_timeline().entries:
-        if 0 <= entry.year <= horizon and entry.category in BurdenCategories.RECURRING:
-            per_year[entry.year] = per_year[entry.year] + entry.amount_in_euro
+    for year, entries in enumerate(_recurring_entries_by_year(result)):
+        for item in entries:
+            per_year[year] = per_year[year] + item.amount_in_euro
     replacement_npv = sum(
         value.best_estimate
         for category, value in result.npv_by_category.items()
@@ -3896,25 +4191,55 @@ def monthly_burden_series(result: LifecycleCostResult) -> MonthlyBurden:
     )
 
 
+def _recurring_entries_by_year(result: LifecycleCostResult) -> List[List[CashFlowEntry]]:
+    """The scoped timeline's recurring flows, bucketed by year and clamped to the horizon (V14).
+
+    The one place V14's *selection* lives — which categories are a monthly burden and which years
+    are on the axis. Both the total series and the per-group split are built from this, because
+    they are drawn on top of each other: the stacked bars are the whiskered totals split by
+    colour, and a split that filtered one category differently, or ran one year further, would
+    produce a stack that does not add up to the bar it fills. The two callers each divide by
+    `BurdenCategories.MONTHS_PER_YEAR` themselves, since one sums bands and the other sums
+    best-estimate floats per category, but they select the same entries by construction.
+
+    Args:
+        result: The perspective whose burden is drawn.
+
+    Returns:
+        One list per year 0..T, index = year; a year with no recurring flow is an empty list
+        rather than a missing row, so the two views stay index-aligned.
+    """
+    horizon = result.parameters.observation_period_in_years
+    rows: List[List[CashFlowEntry]] = [[] for _ in range(horizon + 1)]
+    for entry in result.scoped_timeline().entries:
+        if 0 <= entry.year <= horizon and entry.category in BurdenCategories.RECURRING:
+            rows[entry.year].append(entry)
+    return rows
+
+
 def monthly_burden_by_group(
     result: LifecycleCostResult, mapping: Mapping[CostCategory, GroupKey]
 ) -> List[Dict[GroupKey, float]]:
     """The monthly burden split by display group, BEST_ESTIMATE slot — the stack behind the bars.
 
-    The same filter as `monthly_burden_series` (V14), folded onto the caller's display groups so
-    the chart can stack the bars without adding anything itself. Row order is the year index, and
-    a year with no recurring flow folds to an empty dict rather than disappearing, so the two
-    views stay index-aligned.
+    The same filter as `monthly_burden_series` (V14) — literally the same, through
+    `_recurring_entries_by_year` — folded onto the caller's display groups so the chart can stack
+    the bars without adding anything itself. Row order is the year index, and a year with no
+    recurring flow folds to an empty dict rather than disappearing, so the two views stay
+    index-aligned.
+
+    Raises:
+        CostDataError: If `mapping` declares no display group for a recurring category.
     """
-    horizon = result.parameters.observation_period_in_years
-    rows: List[Dict[CostCategory, float]] = [{} for _ in range(horizon + 1)]
-    for entry in result.scoped_timeline().entries:
-        if 0 <= entry.year <= horizon and entry.category in BurdenCategories.RECURRING:
-            row = rows[entry.year]
-            row[entry.category] = (
-                row.get(entry.category, 0.0)
-                + entry.amount_in_euro.best_estimate / BurdenCategories.MONTHS_PER_YEAR
+    rows: List[Dict[CostCategory, float]] = []
+    for entries in _recurring_entries_by_year(result):
+        row: Dict[CostCategory, float] = {}
+        for item in entries:
+            row[item.category] = (
+                row.get(item.category, 0.0)
+                + item.amount_in_euro.best_estimate / BurdenCategories.MONTHS_PER_YEAR
             )
+        rows.append(row)
     return fold_category_matrix(rows, mapping)
 
 
@@ -3924,17 +4249,31 @@ def monthly_burden_by_group(
 class AssetDebtSeries:
     """Book value, outstanding debt and the equity between them, per year (V15).
 
-    Three year-indexed series in the BEST_ESTIMATE slot plus the interval, if any, in which equity
-    is negative — the "underwater" case a bank checks for. The book value is straight-line
+    Three year-indexed series in the BEST_ESTIMATE slot plus every interval in which equity is
+    negative — the "underwater" case a bank checks for. The book value is straight-line
     depreciation of every install and replacement the timeline *charged*, on the same basis the
     residual calculator uses, which is why `book_value_in_euro[-1]` equals the booked
     residual-value credit exactly; that endpoint identity is the chart's audit weight.
 
-    `depreciation_life_by_subject` records the life each subject was depreciated over. It is
-    *derived from the booked events* — the residual credit and the replacement spacing — never
-    read from the catalog, for the same reason the component event strip derives its spans that
-    way: the chart has to show what the timeline charged, so that a disagreement with the catalog
-    is visible instead of being drawn away.
+    `debt_in_euro` is the outstanding balance **clamped at zero**. A negative balance is an
+    overpayment artefact — a perspective whose booked principal repayments add up to more than its
+    disbursement — and it is not debt: the loan-free rule already reads any balance at or below
+    zero as repaid, so publishing the raw negative on the debt line while treating it as zero in
+    the equity calculation would have made `equity == book − debt` false on exactly those years.
+    With the clamp the identity holds everywhere, which is what lets the chart draw the gap
+    between two lines instead of a third series.
+
+    `underwater_intervals` is a list because negative equity can come and go: a loan drawn against
+    a fast-depreciating asset can dip under, recover after a repayment, and dip again at the next
+    replacement. One `(first, last)` pair spanning all of that would have claimed the recovery
+    never happened, so each maximal run of negative-equity years is reported separately and an
+    empty list means the equity never went negative.
+
+    `depreciation_life_by_subject` records the life each subject's *last* installation was
+    depreciated over. It is *derived from the booked events* — the residual credit and the
+    replacement spacing — never read from the catalog, for the same reason the component event
+    strip derives its spans that way: the chart has to show what the timeline charged, so that a
+    disagreement with the catalog is visible instead of being drawn away.
     """
 
     book_value_in_euro: List[float]
@@ -3942,7 +4281,7 @@ class AssetDebtSeries:
     equity_in_euro: List[float]
     residual_credit_in_euro: float
     depreciation_life_by_subject: Dict[str, float]
-    underwater_interval: Optional[Tuple[int, int]] = None
+    underwater_intervals: List[Tuple[int, int]] = field(default_factory=list)
 
 
 def asset_debt_series(result: LifecycleCostResult) -> AssetDebtSeries:
@@ -3950,11 +4289,21 @@ def asset_debt_series(result: LifecycleCostResult) -> AssetDebtSeries:
 
     Book value is built from the component event strip's events: every charged install or
     replacement steps the curve up by its own amount and then declines linearly to zero over the
-    subject's depreciation life. That life is derived from what the timeline booked — from the
-    residual credit where there is one (`residual = amount × (install + life − T) / life`, the
-    residual calculator's own formula solved for the life), otherwise from the horizon, so that a
-    subject with no residual is fully written down at T. Debt is `loan_amortization_series`'s
-    outstanding balance, reused rather than recomputed.
+    span that installation was actually in service. For the **last** event of a subject that span
+    is the depreciation life derived from what the timeline booked — from the residual credit
+    where there is one (`residual = amount × (install + life − T) / life`, the residual
+    calculator's own formula solved for the life), otherwise from the horizon, so that a subject
+    with no residual is fully written down at T. For every **earlier** event it is the shorter of
+    that life and the gap to its successor, because an installation that was replaced is off the
+    books from the replacement year on (`_write_off_span`). Debt is `loan_amortization_series`'s
+    outstanding balance, clamped at zero, reused rather than recomputed.
+
+    Applying the last event's life to every event was the defect this shape fixes: a subject with
+    an install and a replacement spaced closer together than that life kept book value from the
+    superseded unit all the way to the horizon, so the endpoint overshot the residual and the
+    check below refused to draw a chart that was correct in the engine. Engine timelines are
+    unaffected — the calculator re-invests at exactly the service life and books a residual for
+    the last unit only, so the gap *is* the derived life there and the curve is unchanged.
 
     Reconciliation: the book value at the horizon equals the booked residual credit (validated
     here), each install year steps the curve by exactly that event's charged amount, and equity
@@ -3971,18 +4320,20 @@ def asset_debt_series(result: LifecycleCostResult) -> AssetDebtSeries:
     for row in rows:
         if not row.events:
             continue
-        last_event = row.events[-1]
         residual_amount = -row.residual.amount_in_euro if row.residual is not None else 0.0
         residual_total += residual_amount
-        life = _depreciation_life(last_event, residual_amount, horizon)
+        life = _depreciation_life(row.events[-1], residual_amount, horizon)
         lives[row.subject] = life
-        for event in row.events:
+        for index, event in enumerate(row.events):
+            successor = row.events[index + 1] if index + 1 < len(row.events) else None
+            span = _write_off_span(life, event, successor)
             for year in range(event.year, horizon + 1):
-                remaining = max(0.0, 1.0 - (year - event.year) / life)
+                remaining = max(0.0, 1.0 - (year - event.year) / span)
                 book_value[year] += event.amount_in_euro * remaining
     amortization = loan_amortization_series(result)
-    debt = amortization.outstanding_balance_in_euro or [0.0] * (horizon + 1)
-    equity = [book - max(owed, 0.0) for book, owed in zip(book_value, debt)]
+    balance = amortization.outstanding_balance_in_euro or [0.0] * (horizon + 1)
+    debt = [max(owed, 0.0) for owed in balance]
+    equity = [book - owed for book, owed in zip(book_value, debt)]
     if abs(book_value[horizon] - residual_total) > max(
         ViewTolerances.RECONCILIATION_EPSILON, abs(residual_total) * 1e-9
     ):
@@ -3991,19 +4342,64 @@ def asset_debt_series(result: LifecycleCostResult) -> AssetDebtSeries:
             f"booked a residual credit of {residual_total:,.2f} EUR; the depreciation basis of "
             "the chart and of the residual calculator have diverged."
         )
-    underwater_years = [year for year, value in enumerate(equity) if value < 0]
+    underwater: List[Tuple[int, int]] = []
+    for year, value in enumerate(equity):
+        if value >= 0.0:
+            continue
+        if underwater and underwater[-1][1] == year - 1:
+            underwater[-1] = (underwater[-1][0], year)
+        else:
+            underwater.append((year, year))
     return AssetDebtSeries(
         book_value_in_euro=book_value,
-        debt_in_euro=list(debt),
+        debt_in_euro=debt,
         equity_in_euro=equity,
         residual_credit_in_euro=residual_total,
         depreciation_life_by_subject=lives,
-        underwater_interval=(underwater_years[0], underwater_years[-1]) if underwater_years else None,
+        underwater_intervals=underwater,
     )
+
+
+def _write_off_span(
+    life: float, event: LifecycleEvent, successor: Optional[LifecycleEvent]
+) -> float:
+    """How long one charged installation is written down over: its life, or until it is replaced.
+
+    The last installation of a subject writes down over `life`, the life `_depreciation_life`
+    recovered from the residual booking. An earlier one writes down over the shorter of that life
+    and the years until its successor, because the two things that can end a unit's book life are
+    running out of life and being replaced, and the timeline records the second exactly.
+
+    The comparison is relative rather than exact on purpose. The engine re-invests at the rounded
+    service life, so the gap and the recovered life are the same number arrived at two ways and
+    differ by float residue; treating that residue as an early replacement would shorten every
+    engine-produced write-down by a few ulps and move a curve that is correct. Only a gap shorter
+    than the life by more than `ViewTolerances.DEPRECIATION_SPACING_RELATIVE_EPSILON` counts.
+
+    Args:
+        life: The subject's depreciation life, from `_depreciation_life`.
+        event: The installation being written down.
+        successor: The next event on the same subject, or None for the last one.
+
+    Returns:
+        The number of years to write the event off over; never below one year, which guards a
+        replacement booked in the year after its predecessor.
+    """
+    if successor is None:
+        return life
+    gap = float(successor.year - event.year)
+    if gap < life * (1.0 - ViewTolerances.DEPRECIATION_SPACING_RELATIVE_EPSILON):
+        return max(gap, 1.0)
+    return life
 
 
 def _depreciation_life(last_event: LifecycleEvent, residual_in_euro: float, horizon: int) -> float:
     """The life the last charged installation is written down over, derived from the booking.
+
+    The *last* one, deliberately: this is the event the residual credit was computed for, so it is
+    the only one whose life the booking determines. Earlier events borrow it as an upper bound and
+    are cut short by their successor where the timeline replaced them sooner — see
+    `_write_off_span`, which is where that rule lives.
 
     Inverts the residual calculator's own straight-line rule: it books
     `residual = amount × (install + life − T) / life`, so a subject with a residual credit

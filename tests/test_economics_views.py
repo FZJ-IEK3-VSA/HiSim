@@ -37,6 +37,7 @@ import pytest
 
 from hisim.economics import views
 from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs, SubjectCostFacts
 from hisim.economics.facts import BillingDeterminants, ComponentCostFacts
@@ -251,7 +252,7 @@ class TestTimeSeriesViews:
             if "ENERGY" in category.value
         )
         assert folded["energy"].best_estimate == pytest.approx(expected_energy)
-        with pytest.raises(KeyError):
+        with pytest.raises(CostDataError, match="No display group declared"):
             views.fold_categories(result.npv_by_category, {})
 
     def test_fold_category_matrix_folds_every_year(self, result):

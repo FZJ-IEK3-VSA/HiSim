@@ -108,8 +108,7 @@ is documented via autodoc.
   :py:mod:`~hisim.components.controller_l2_xtp_fuel_cell_ems`),
   MPC (:py:mod:`~hisim.components.controller_mpc`),
   PID (:py:mod:`~hisim.components.controller_pid`),
-  night setback (:py:mod:`~hisim.components.night_setback_controller`),
-  advanced fuel cell (:py:mod:`~hisim.components.advanced_fuel_cell_controller`)
+  night setback (:py:mod:`~hisim.components.night_setback_controller`)
 
 * **Signal sources & utilities** —
   price signals (:py:mod:`~hisim.components.generic_price_signal`),

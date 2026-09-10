@@ -628,7 +628,6 @@ class DeviceEnergySpecs:
         # device, or the arithmetic of one. The energy they refer to is metered at the device
         # that follows the instruction, and counting both would count it twice.
         "L2GenericEnergyManagementSystem": (),
-        "ExtendedController": (),
         "FuelCellController": (),
         "L1Controller": (),
         "L1GenericElectrolyzerController": (),

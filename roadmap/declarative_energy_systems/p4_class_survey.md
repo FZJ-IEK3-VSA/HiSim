@@ -562,6 +562,7 @@ A `4 m²/apartment` law makes `household_gas_solar_thermal.py:191` (`area_m2=4`,
 **D‑8 — `advanced_fuel_cell_controller` and the `configuration.py` CHP/gas controller pair.**
 `GasControllerConfig` and `CHPControllerConfig` are proposed for deletion (conflict 10) but are live imports of `advanced_fuel_cell_controller`, whose control methods are provably broken (D13 above). (a) Obsolete `advanced_fuel_cell_controller` together with `ExtendedControllerConfig`, `GasControllerConfig`, `CHPControllerConfig` and `tests/test_advanced_fuel_cell_controller.py` in one commit. (b) Fix the class‑attribute reads (give the dataclasses defaults) and keep the component.
 *Consequence:* (a) unblocks the whole `configuration.py` deletion in one move and removes code that cannot run; (b) resurrects a component nothing uses and freezes `ExtendedControllerConfig` as wire format.
+**Answered 2026-09-10: (a)** — the component and its test move to `obsolete/`; the three configurations move with them into `obsolete/components/configuration_fuel_cell_controller.py`, not deleted.
 
 
 ---

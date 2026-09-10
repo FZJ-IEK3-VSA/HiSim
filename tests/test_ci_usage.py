@@ -20,12 +20,14 @@ Each test states the failure mode it catches.
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import sys
+import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterator, List, Optional
 
 import pytest
 
@@ -337,6 +339,138 @@ class TestIndexBookkeeping:
         assert collector.JobRecord.from_api(run, skipped) is None
 
 
+class TestGivingUpOnAMeasurement:
+    """A record whose artifact never arrives has to stop being asked for.
+
+    The sweep only reads artifacts newer than its watermark, so one that was missed -- a failed
+    sweep, a download cap, a deleted artifact -- is missed for good. Without a deadline its
+    record would sit in the wanted list of every sweep for the whole window, spending requests
+    that cannot succeed and standing in the report as a measurement still to come.
+    """
+
+    GIB = 1024 ** 3
+
+    @staticmethod
+    def _record(created: datetime, run_id: int, branch: str = "main", **extra: Any) -> Dict[str, Any]:
+        """Return a record of ``branch`` that carries no measurement."""
+        record = {
+            "run_id": run_id,
+            "job_id": run_id * 10,
+            "created_at": collector.Timestamps.format(created),
+            "workflow": "tests",
+            "job_name": "pytest (base)",
+            "conclusion": "success",
+            "wall_seconds": 100.0,
+            "branch": branch,
+        }
+        record.update(extra)
+        return record
+
+    def test_a_record_that_waited_a_day_is_given_up_on(self) -> None:
+        """Catches a wanted list that keeps asking for artifacts that will never be there.
+
+        Every sweep would re-list the same runs, spend its download budget on them, find
+        nothing, and have less of that budget left for the runs whose artifacts do still exist.
+        """
+        now = collector.Timestamps.now()
+        index = collector.UsageIndex()
+        index.add(self._record(now - timedelta(hours=25), run_id=1))
+        index.add(self._record(now - timedelta(hours=2), run_id=2))
+
+        marked = index.expire_stale_resource_records("main", now)
+
+        assert marked == 1
+        assert sorted(index.runs_missing_resources("main")) == [2], "the stale run is still wanted"
+        stale = next(record for record in index.values() if record["run_id"] == 1)
+        assert stale["peak_memory_method"] == collector.JobRecord.MEASUREMENT_EXPIRED
+        assert "peak_memory_bytes" not in stale, "a missing measurement was invented as a number"
+
+    def test_a_branch_nobody_collects_is_not_called_expired(self) -> None:
+        """Catches a deadline applied to records that were never waiting for anything.
+
+        Pull-request artifacts are deliberately not collected; the numbers are in the job's own
+        summary. Marking them expired would report a failure of collection where there was a
+        decision not to collect.
+        """
+        now = collector.Timestamps.now()
+        index = collector.UsageIndex()
+        index.add(self._record(now - timedelta(hours=48), run_id=3, branch="feature-x"))
+
+        assert index.expire_stale_resource_records("main", now) == 0
+        assert index.expired_count() == 0
+
+    def test_a_late_artifact_still_wins_over_the_marker(self) -> None:
+        """Catches a marker that outranks a real measurement.
+
+        The join is by name matching, so an artifact for a record already given up on should
+        not turn up -- but if one does, the number it carries is worth more than the note
+        saying no number was expected.
+        """
+        now = collector.Timestamps.now()
+        record = self._record(now - timedelta(hours=30), run_id=4)
+        collector.JobRecord.mark_expired(record)
+
+        collector.JobRecord.attach_resources(record, {
+            "peak_memory_bytes": 3 * self.GIB, "peak_memory_method": "cgroup.memory.peak",
+            "cpu_seconds": 12.0,
+        })
+
+        assert record["peak_memory_bytes"] == 3 * self.GIB
+        assert record["peak_memory_method"] == "cgroup.memory.peak"
+        assert not collector.JobRecord.is_expired(record)
+
+    def test_the_marker_survives_a_re_sweep(self) -> None:
+        """Catches an overlap that quietly puts a given-up record back into the wanted list.
+
+        The sweep re-reads the last few hours and replaces each record with its fresh API twin.
+        A twin that lost the marker would be wanted again, and would be given up on again the
+        next hour, forever.
+        """
+        now = collector.Timestamps.now()
+        existing = self._record(now - timedelta(hours=30), run_id=5)
+        collector.JobRecord.mark_expired(existing)
+        fresh = self._record(now - timedelta(hours=30), run_id=5)
+
+        collector.JobRecord.carry_resources(existing, fresh)
+
+        assert collector.JobRecord.is_expired(fresh)
+
+
+def _metrics_zip(metrics: Dict[str, Any]) -> bytes:
+    """Return the bytes of a resource-monitor artifact holding one ``metrics.json``."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("metrics.json", json.dumps(metrics))
+    return buffer.getvalue()
+
+
+class _FakeArtifactApi:
+    """A GitHubApi stand-in that serves a fixed artifact listing out of memory.
+
+    What the sweep does *not* download is what the Collection section reports, so the counting
+    is exercised through the real sweep with a listing the test controls, rather than by
+    setting the counters by hand.
+    """
+
+    def __init__(self, artifacts: List[Dict[str, Any]], payloads: Dict[int, bytes]) -> None:
+        self.artifacts = artifacts
+        self.payloads = payloads
+        self.calls: List[Any] = []
+        self.requests_made = 0
+
+    def paginate(self, path: str, item_key: str, params: Optional[Dict[str, Any]] = None,
+                 max_pages: int = 100) -> Iterator[Dict[str, Any]]:
+        """Yield the whole fixed listing as one page."""
+        self.calls.append((path, item_key, params, max_pages))
+        self.requests_made += 1
+        yield from self.artifacts
+
+    def download_artifact(self, artifact_id: int) -> Optional[bytes]:
+        """Return the zip prepared for ``artifact_id``, or None when there is none."""
+        self.requests_made += 1
+        return self.payloads.get(artifact_id)
+
+
 class TestReportRendering:
     """The report is the entire user interface, so it has to render whatever the sweep produced."""
 
@@ -376,8 +510,81 @@ class TestReportRendering:
         report = collector.UsageReport(self._index([]), now - timedelta(days=30),
                                        now - timedelta(days=3),
                                        {"partial": True, "stopped_because": "budget used up",
-                                        "requests_made": 800})
+                                        "requests_made": 500})
         assert "partial sweep" in report.render()
+
+    def test_a_job_given_up_on_is_not_rendered_as_never_measured(self) -> None:
+        """Catches a report that renders an abandoned measurement as an ordinary gap.
+
+        ``n/a`` says nobody measures this job; ``expired`` says somebody meant to and the
+        artifact never arrived. Reading the second as the first hides a collection that has
+        stopped working, and reading it as a number would be worse still.
+        """
+        now = collector.Timestamps.now()
+        record = {
+            "run_id": 4, "job_id": 40, "created_at": collector.Timestamps.format(now - timedelta(hours=30)),
+            "workflow": "tests", "job_name": "pytest (utsp)", "conclusion": "success",
+            "wall_seconds": 900.0, "branch": "main",
+        }
+        index = self._index([record])
+        index.expire_stale_resource_records("main", now)
+
+        rendered = collector.UsageReport(index, now - timedelta(days=30), now - timedelta(days=3),
+                                         {"requests_made": 4}).render()
+
+        assert "| expired |" in rendered, "an abandoned record was rendered as n/a or as a number"
+
+    def test_the_collection_section_says_how_far_behind_the_sweep_is(self) -> None:
+        """Catches a backlog that only shows up as a report that is quietly thinner.
+
+        Four golden workflows upload 88 records per push to main, and each sweep downloads at
+        most a few hundred artifacts. Whether the sweep is draining that or falling behind it
+        is invisible in the tables -- the jobs simply have no memory figures yet -- so the
+        counts are the only place it can be read.
+        """
+        now = collector.Timestamps.now()
+        stamp = collector.Timestamps.format(now)
+        index = self._index([
+            {"run_id": 1, "job_id": 10, "created_at": stamp, "workflow": "tests",
+             "job_name": "pytest (base)", "conclusion": "success", "wall_seconds": 300.0,
+             "branch": "main", "runner_name": "runner-a"},
+            {"run_id": 2, "job_id": 20, "created_at": stamp, "workflow": "quality",
+             "job_name": "mypy", "conclusion": "success", "wall_seconds": 120.0,
+             "branch": "main", "runner_name": "runner-b"},
+            {"run_id": 3, "job_id": 30,
+             "created_at": collector.Timestamps.format(now - timedelta(hours=25)),
+             "workflow": "tests", "job_name": "pytest (utsp)", "conclusion": "success",
+             "wall_seconds": 800.0, "branch": "main", "runner_name": "runner-c"},
+        ])
+        api = _FakeArtifactApi(
+            artifacts=[
+                {"id": 11, "name": "ci-usage-tests-pytest-base-attempt1", "created_at": stamp,
+                 "expired": False, "workflow_run": {"id": 1, "head_branch": "main"}},
+                {"id": 12, "name": "ci-usage-quality-mypy-attempt1", "created_at": stamp,
+                 "expired": False, "workflow_run": {"id": 2, "head_branch": "main"}},
+                {"id": 13, "name": "ci-usage-tests-pytest-base-attempt1", "created_at": stamp,
+                 "expired": False, "workflow_run": {"id": 9, "head_branch": "feature-x"}},
+                {"id": 14, "name": "coverage-html", "created_at": stamp,
+                 "expired": False, "workflow_run": {"id": 1, "head_branch": "main"}},
+            ],
+            payloads={11: _metrics_zip({"runner_name": "runner-a", "job": "pytest", "scope": "base",
+                                        "peak_memory_bytes": 5 * 1024 ** 3,
+                                        "peak_memory_method": "cgroup.memory.peak"})},
+        )
+        sweep = collector.UsageCollector(api, index)
+        sweep.diagnostics["records_expired"] = index.expire_stale_resource_records("main", now)
+        sweep.sweep_resources(now - timedelta(hours=8), [1, 2], 1, "main")
+        sweep.diagnostics["requests_made"] = api.requests_made
+
+        rendered = collector.UsageReport(index, now - timedelta(days=30),
+                                         now - timedelta(days=3), sweep.diagnostics).render()
+
+        assert "- resource artifacts downloaded: 1" in rendered
+        assert "- resource artifacts still waiting on the memory branch: 1" in rendered
+        assert "- artifacts skipped, their run is not on the memory branch: 1" in rendered
+        assert "- records given up on after 24 h: 1 this sweep, 1 in the index" in rendered
+        joined = next(record for record in index.values() if record["run_id"] == 1)
+        assert joined["peak_memory_bytes"] == 5 * 1024 ** 3, "the one downloaded artifact was not joined"
 
     def test_the_index_round_trips_through_json(self, tmp_path: Path) -> None:
         """Catches an index that cannot be written and read back, which breaks every later night."""

@@ -9,7 +9,7 @@ summary. That is the whole interface — nothing is committed to the repository.
 
 **To see one job's own numbers:** open the job and scroll to the bottom of its summary. Every
 job prints its own wall time, CPU time and peak memory the moment it ends, including jobs on
-pull-request branches, which the nightly trend does not sweep.
+pull-request branches, which the hourly trend does not sweep.
 
 ## What is measured where
 
@@ -76,22 +76,38 @@ GH_TOKEN=<a token with actions:read> python3 scripts/ci_usage_report.py \
 
 Without a token it runs unauthenticated at 60 requests/hour, which is enough to try but not
 to sweep. Useful flags: `--memory-branch ''` collects memory artifacts from every branch
-rather than `main` alone, `--max-requests` and `--max-artifact-downloads` cap the sweep.
+rather than `main` alone, `--max-requests` (500 by default) and `--max-artifact-downloads`
+(250) cap the sweep.
 
-## Why the sweep is incremental
+## Why the sweep is hourly and incremental
 
 At roughly 150 runs a day and ten jobs each, re-reading a month would want some 9,000 API
-requests; `GITHUB_TOKEN` allows 1,000 an hour. So each night downloads the previous night's
-index from its own artifact, reads only runs newer than its watermark (less an eight-hour
-overlap, for runs still in flight last night), prunes to the window and uploads it again. A
-typical night costs about 200 requests.
+requests; `GITHUB_TOKEN` allows 1,000 an hour, shared with every other workflow calling the
+API in that hour. So each sweep downloads the previous sweep's index from its own artifact,
+reads only runs newer than its watermark (less an eight-hour overlap, for runs still in flight
+during the last sweep), prunes to the window and uploads it again. An hour in which nothing
+was pushed costs a handful of requests, and the request cap is 500.
 
-Memory artifacts are the expensive half — one download each, about 1,500 a day — so they are
-collected for `main` and for flagged jobs rather than for everything. Pull-request jobs still
-produce and print their own numbers; they just don't feed the nightly trend.
+Hourly rather than nightly because of the artifacts. Memory artifacts are the expensive half —
+one download each, and the four golden workflows alone upload 88 per push to `main` — so a
+single sweep a day could never keep up with them, and they are collected for `main` and for
+flagged jobs rather than for everything. Pull-request jobs still produce and print their own
+numbers; they just don't feed the trend.
+
+A record whose artifact has not been collected within 24 hours
+(`RESOURCE_COLLECTION_DEADLINE`) is given up on: its `peak_memory_method` becomes `expired`,
+it leaves the list of runs worth downloading, and the report shows it as `expired` rather than
+as a missing number. Otherwise a run whose artifacts were deleted or missed would be asked for
+on every sweep for the whole thirty-day window. Should the artifact turn up after all, the
+join overwrites the marker with the real figures.
+
+The **Collection** section of the report says how far behind the sweep is: runs read, artifacts
+downloaded, artifacts still waiting on `main`, artifacts skipped because their run is on
+another branch, and records given up on this sweep and in total. A backlog that grows from hour
+to hour rather than draining is the signal that the caps are too tight.
 
 When the budget runs out mid-sweep the report says so under **Collection** and covers less
-than its window claims. That is deliberate: a partial report is worth having, and a nightly
+than its window claims. That is deliberate: a partial report is worth having, and a scheduled
 job that goes red because GitHub was busy trains everyone to ignore it.
 
 ## Known limits
@@ -105,5 +121,6 @@ job that goes red because GitHub was busy trains everyone to ignore it.
 - Where cgroup files are unreadable entirely, a 0.5 s sampler stands in. It measures the whole
   machine and misses shorter spikes, and every record says which method produced it —
   `peak_memory_method` — so sampled and exact numbers are never silently compared.
-- The index lives in an artifact with a 14-day retention. Losing it costs a cold start, not
-  the history: the API still holds the runs, and the following nights fill the window back in.
+- The index lives in an artifact with a 7-day retention — 24 of them are written a day, and a
+  week outlasts a weekend of failed runs. Losing it costs a cold start, not the history: the
+  API still holds the runs, and the following sweeps fill the window back in.

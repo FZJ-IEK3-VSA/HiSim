@@ -1,7 +1,7 @@
 name: CI resource monitor
 description: >
   Measures how much of a runner a job actually used -- wall time, real CPU time and peak memory --
-  and leaves the numbers in the job summary and in an artifact the nightly ci-usage report collects.
+  and leaves the numbers in the job summary and in an artifact the hourly ci-usage report collects.
   Called twice, exactly like the hisim-cache action next to it: 'start' right after checkout, 'report'
   at the end of the job under if: always().
 
@@ -41,8 +41,9 @@ inputs:
     default: 'true'
   retention-days:
     description: >
-      How long the record is kept. The nightly report collects it within a day and keeps what it
-      needs in its own index, so this only has to outlive a run of failed nightly jobs.
+      How long the record is kept. The hourly report collects it within an hour or two, keeps what
+      it needs in its own index, and gives up on a record it has not collected within a day, so this
+      only has to outlive a run of failed sweeps.
     required: false
     default: '30'
 

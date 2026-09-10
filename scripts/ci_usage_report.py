@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Collect what the repository's CI actually costs and report what changed.
 
-Run nightly by ``.github/workflows/ci-usage.yml``, and runnable by hand::
+Run hourly by ``.github/workflows/ci-usage.yml``, and runnable by hand::
 
     GH_TOKEN=... python3 scripts/ci_usage_report.py --window-days 30 --out report.md
 
@@ -21,11 +21,18 @@ and the concurrency other work has to wait behind.
 
 The sweep is incremental because it has to be. At roughly 150 runs a day, each with about ten
 jobs, a full re-read would want some 9000 requests where ``GITHUB_TOKEN`` allows 1000 an hour.
-So the previous night's index is downloaded from its own artifact, only runs newer than its
-watermark are fetched, and the result is pruned to the window and uploaded again. Memory
-records are swept for the default branch and for flagged jobs rather than for everything,
-which keeps a night's work near 200 requests instead of 1500; a pull request's own numbers are
-still in its own job summaries the moment the job ends.
+So the previous sweep's index is downloaded from its own artifact, only runs newer than its
+watermark are fetched, and the result is pruned to the window and uploaded again. That is also
+why it runs hourly rather than nightly: the four golden workflows alone upload 88 resource
+artifacts per push to main, which one sweep a day cannot collect, while an hour in which
+nothing was pushed costs a handful of requests. Memory records are swept for the default
+branch and for flagged jobs rather than for everything; a pull request's own numbers are in
+its own job summaries the moment the job ends.
+
+A record whose artifact has not been collected within a day is given up on: its memory method
+becomes ``expired``, it leaves the wanted list, and the report counts it instead of re-listing
+it on every sweep forever. What is still outstanding is counted too, under Collection, so a
+backlog that is growing rather than draining is visible from the report alone.
 """
 from __future__ import annotations
 
@@ -43,12 +50,24 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 
+RESOURCE_COLLECTION_DEADLINE = timedelta(hours=24)
+"""How long a record on the memory branch waits for its resource artifact before it is expired.
+
+The sweep only reads artifacts newer than its watermark, so an artifact that was never
+collected -- because a sweep failed, because the download cap cut it off, or because the
+artifact was deleted -- would otherwise leave its record in the wanted list of every later
+sweep for the whole thirty-day window, costing requests that can never succeed. A day is well
+past the point where a further attempt would find anything: every sweep in between has already
+had its chance.
+"""
+
+
 class RateLimitExhausted(RuntimeError):
     """Raised when the request budget or the API's own rate limit is used up.
 
     Caught by the collector, which stops sweeping and marks the report partial rather than
-    failing: a report covering four of the last five days is worth having, and a nightly job
-    that goes red because GitHub was busy trains everyone to ignore it.
+    failing: a report covering four of the last five days is worth having, and a sweep that
+    goes red because GitHub was busy trains everyone to ignore it.
     """
 
 
@@ -57,8 +76,8 @@ class GitHubApi:
 
     Counts every request it makes and refuses to exceed either the budget it was given or the
     rate limit the API reports back, so a sweep degrades into a partial one instead of
-    spending an hour blocked on a 403. Standard library only, to keep the nightly job free of
-    an install step.
+    spending an hour blocked on a 403. Standard library only, to keep the sweep free of an
+    install step.
 
     Attributes:
         requests_made: how many HTTP requests have been issued.
@@ -295,6 +314,12 @@ class JobRecord:
             "labels": job.get("labels", []),
         }
 
+    # The one value of ``peak_memory_method`` this script writes itself. Every other value comes
+    # from the probe's MeasurementMethod enum, which is the producer side and says how a real
+    # reading was obtained; this one says that no reading arrived within the deadline and that
+    # none is coming, which is a different thing from a job that was never measured at all.
+    MEASUREMENT_EXPIRED = "expired"
+
     # The fields a resource-monitor artifact contributes, listed once so attaching them from an
     # artifact and carrying them across a re-sweep can never drift apart.
     RESOURCE_FIELDS = (
@@ -304,9 +329,27 @@ class JobRecord:
     )
 
     @classmethod
+    def is_expired(cls, record: Dict[str, Any]) -> bool:
+        """Return whether this record has given up waiting for its resource artifact."""
+        return record.get("peak_memory_method") == cls.MEASUREMENT_EXPIRED
+
+    @classmethod
+    def mark_expired(cls, record: Dict[str, Any]) -> None:
+        """Record that no measurement is coming for this job, so nothing keeps asking for one.
+
+        Only the method is written. The memory fields stay absent, because inventing a zero
+        would put the job into every median as a job that used no memory.
+        """
+        record["peak_memory_method"] = cls.MEASUREMENT_EXPIRED
+
+    @classmethod
     def carry_resources(cls, source: Dict[str, Any], target: Dict[str, Any]) -> None:
         """Copy resource measurements from an indexed record onto its freshly fetched twin."""
         if source.get("peak_memory_bytes") is None:
+            # An expired marker is the one thing worth carrying without a measurement behind
+            # it: losing it in the overlap would put the record back in the wanted list.
+            if cls.is_expired(source):
+                cls.mark_expired(target)
             return
         for field in cls.RESOURCE_FIELDS:
             if field in source:
@@ -333,7 +376,7 @@ class JobRecord:
 
 
 class UsageIndex:
-    """The rolling store of job records, carried between nightly runs as an artifact.
+    """The rolling store of job records, carried between hourly sweeps as an artifact.
 
     Holds one entry per (run, job) inside the reporting window and the watermark that says how
     far the last sweep got, which together are what make the next sweep cheap. Pruned to the
@@ -355,7 +398,7 @@ class UsageIndex:
         """Return the index stored at ``path``, or an empty one if there is nothing usable.
 
         A missing, unreadable or wrong-schema file is not an error: it is what the very first
-        nightly run sees, and what every run sees after the index artifact expires.
+        sweep sees, and what every sweep sees after the index artifact expires.
         """
         if not path or not os.path.exists(path):
             return cls()
@@ -408,8 +451,9 @@ class UsageIndex:
     def sweep_start(self, window_start: datetime) -> datetime:
         """Return the time a sweep should start reading from.
 
-        The watermark less an overlap, so runs that were still in flight last night are picked
-        up tonight; or the start of the window when there is no index to build on.
+        The watermark less an overlap, so runs that were still in flight during the last sweep
+        are picked up by this one; or the start of the window when there is no index to build
+        on.
         """
         mark = self.watermark()
         if mark is None:
@@ -419,6 +463,9 @@ class UsageIndex:
     def runs_missing_resources(self, branch: Optional[str]) -> Dict[int, List[Dict[str, Any]]]:
         """Group records that still lack resource data by run, optionally filtered to a branch.
 
+        Records already given up on are left out: they are exactly the ones a further sweep
+        would spend requests on and find nothing for.
+
         Args:
             branch: only consider runs of this branch; None considers every branch.
 
@@ -427,7 +474,7 @@ class UsageIndex:
         """
         grouped: Dict[int, List[Dict[str, Any]]] = {}
         for record in self.records.values():
-            if record.get("peak_memory_bytes") is not None:
+            if record.get("peak_memory_bytes") is not None or JobRecord.is_expired(record):
                 continue
             if branch is not None and record.get("branch") != branch:
                 continue
@@ -435,6 +482,37 @@ class UsageIndex:
             if isinstance(run_id, int):
                 grouped.setdefault(run_id, []).append(record)
         return grouped
+
+    def expire_stale_resource_records(self, branch: Optional[str], now: datetime) -> int:
+        """Give up on records whose artifact never arrived, and return how many were marked.
+
+        Only records of the memory branch are considered. A pull-request job is not waiting for
+        anything -- its artifact is deliberately never collected, and its own job summary has
+        the numbers -- so calling it expired would say something untrue about it.
+
+        Args:
+            branch: the branch whose artifacts are collected; None considers every branch.
+            now: the moment the deadline is measured against.
+
+        Returns:
+            How many records were marked expired by this call.
+        """
+        marked = 0
+        for record in self.records.values():
+            if record.get("peak_memory_bytes") is not None or JobRecord.is_expired(record):
+                continue
+            if branch is not None and record.get("branch") != branch:
+                continue
+            created = Timestamps.parse(record.get("created_at"))
+            if created is None or now - created < RESOURCE_COLLECTION_DEADLINE:
+                continue
+            JobRecord.mark_expired(record)
+            marked += 1
+        return marked
+
+    def expired_count(self) -> int:
+        """Return how many records in the index have been given up on altogether."""
+        return sum(1 for record in self.records.values() if JobRecord.is_expired(record))
 
     def values(self) -> Iterable[Dict[str, Any]]:
         """Return every record in the index."""
@@ -493,8 +571,9 @@ class UsageCollector:
     the index keeps whatever was already collected.
 
     Attributes:
-        diagnostics: counters describing what the sweep managed, rendered into the report so a
-            partial night is visible rather than silently thinner.
+        diagnostics: counters describing what the sweep managed and what it left behind,
+            rendered into the report so a partial sweep is visible rather than silently
+            thinner, and so a backlog that grows instead of draining can be seen.
     """
 
     ARTIFACT_PREFIX = "ci-usage-"
@@ -511,6 +590,13 @@ class UsageCollector:
             "jobs_recorded": 0,
             "artifacts_downloaded": 0,
             "artifacts_unjoined": 0,
+            # Artifacts of runs that still want one and that this sweep did not get to: the
+            # backlog the next sweeps have to drain.
+            "artifacts_waiting": 0,
+            # Artifacts passed over because their run is not on the memory branch. Counted
+            # from the listing, never downloaded.
+            "artifacts_off_branch": 0,
+            "records_expired": 0,
             "partial": False,
             "stopped_because": None,
         }
@@ -553,13 +639,23 @@ class UsageCollector:
             self.index.add(record)
             self.diagnostics["jobs_recorded"] += 1
 
-    def sweep_resources(self, since: datetime, wanted_runs: Sequence[int], max_downloads: int) -> None:
-        """Download and join the resource artifacts of ``wanted_runs``.
+    def sweep_resources(self, since: datetime, wanted_runs: Sequence[int], max_downloads: int,
+                        memory_branch: Optional[str] = None) -> None:
+        """Download and join the resource artifacts of ``wanted_runs``, counting the rest.
+
+        The listing is read to the same depth whether or not the download cap is reached,
+        because what it says about the artifacts that were not downloaded -- how many are
+        waiting for a later sweep, how many belong to branches whose memory is deliberately
+        not collected -- is the only cheap measure of whether the sweep is keeping up. Counting
+        them costs the page requests the sweep was already prepared to spend; downloading them
+        is what costs.
 
         Args:
             since: ignore artifacts older than this.
             wanted_runs: the runs whose artifacts are worth spending requests on.
             max_downloads: hard cap on artifact downloads for this sweep.
+            memory_branch: the branch whose artifacts are collected, for counting the ones
+                skipped because they belong to another; None counts none as skipped.
         """
         if not wanted_runs or max_downloads <= 0:
             return
@@ -576,15 +672,20 @@ class UsageCollector:
                 created = Timestamps.parse(artifact.get("created_at"))
                 if created is not None and created < since:
                     break
-                if downloaded >= max_downloads:
-                    self._stop(f"artifact download cap of {max_downloads} reached")
-                    return
                 if not str(artifact.get("name", "")).startswith(self.ARTIFACT_PREFIX):
                     continue
                 if artifact.get("expired"):
                     continue
-                run_id = (artifact.get("workflow_run") or {}).get("id")
+                run = artifact.get("workflow_run") or {}
+                run_id = run.get("id")
+                branch = run.get("head_branch")
+                if memory_branch and branch is not None and branch != memory_branch:
+                    self.diagnostics["artifacts_off_branch"] += 1
+                    continue
                 if run_id not in by_run:
+                    continue
+                if downloaded >= max_downloads:
+                    self.diagnostics["artifacts_waiting"] += 1
                     continue
                 metrics = self._read_metrics(artifact)
                 downloaded += 1
@@ -598,6 +699,10 @@ class UsageCollector:
                 JobRecord.attach_resources(target, metrics)
         except RateLimitExhausted as error:
             self._stop(str(error))
+        if downloaded >= max_downloads and not self.diagnostics["partial"]:
+            # Said after the listing rather than instead of reading it, and never over a
+            # budget message: running out of requests is the more urgent of the two.
+            self._stop(f"artifact download cap of {max_downloads} reached")
 
     def _read_metrics(self, artifact: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Download one artifact and return the metrics record inside it, or None."""
@@ -692,6 +797,10 @@ class JobStatistics:
         ranked = sorted(counts.items(), key=lambda item: item[1], reverse=True)
         return [branch for branch, _ in ranked[:limit]]
 
+    def expired_count(self) -> int:
+        """Return how many of these records gave up waiting for their measurement."""
+        return sum(1 for record in self.recent + self.baseline if JobRecord.is_expired(record))
+
     def median_efficiency(self) -> Optional[float]:
         """Return the median CPU efficiency across every measured record."""
         values = [float(record["cpu_efficiency"]) for record in self.recent + self.baseline
@@ -765,7 +874,7 @@ class RegressionRules:
 
 
 class UsageReport:
-    """Turns the index into the markdown the nightly job writes to its summary.
+    """Turns the index into the markdown the hourly job writes to its summary.
 
     Ordered by what a reader needs first: what changed, then what is close to a limit, then
     where the time goes, and only then the totals and the diagnostics. The regression tables
@@ -812,6 +921,18 @@ class UsageReport:
     def _gib(cls, value: Optional[float]) -> str:
         """Format bytes as a GiB figure with its unit, or ``n/a`` when there is no reading."""
         return "n/a" if value is None else f"{value / cls.BYTES_PER_GIB:.2f} GiB"
+
+    @classmethod
+    def _memory_cell(cls, stats: JobStatistics, peak: Optional[float]) -> str:
+        """Format a job's memory column: a figure, ``expired``, or ``n/a``.
+
+        A job whose records were given up on is not a job that used no memory, and rendering it
+        as ``n/a`` beside the jobs nobody measures would hide the difference between a gap that
+        the next sweep closes and one that never closes.
+        """
+        if peak is not None:
+            return cls._gib(peak)
+        return "expired" if stats.expired_count() else "n/a"
 
     def _workflow_totals(self) -> List[Tuple[str, Dict[str, Any]]]:
         """Return per-workflow totals, most expensive first."""
@@ -971,7 +1092,7 @@ class UsageReport:
             lines.append(
                 f"| {stats.workflow} | {stats.job_name} | {len(stats.recent) + len(stats.baseline)} "
                 f"| {self._minutes(median)} min | {stats.total_runner_seconds() / 60:,.0f} "
-                f"| {self._gib(peak)} "
+                f"| {self._memory_cell(stats, peak)} "
                 f"| {'n/a' if efficiency is None else f'{efficiency * 100:.0f}%'} |"
             )
         lines.append("")
@@ -1001,9 +1122,18 @@ class UsageReport:
                        for record in stats.recent + stats.baseline
                        if record.get("peak_memory_bytes") is not None)
         total = sum(len(stats.recent) + len(stats.baseline) for stats in self.statistics.values())
+        deadline_hours = RESOURCE_COLLECTION_DEADLINE.total_seconds() / 3600
         lines = ["\n## Collection\n",
-                 f"- runs swept tonight: {self.diagnostics.get('runs_fetched', 0)}",
+                 f"- runs read this sweep: {self.diagnostics.get('runs_fetched', 0)}",
                  f"- jobs in window: {total}, of which {measured} carry memory data",
+                 f"- resource artifacts downloaded: {self.diagnostics.get('artifacts_downloaded', 0)}",
+                 f"- resource artifacts still waiting on the memory branch: "
+                 f"{self.diagnostics.get('artifacts_waiting', 0)} (the backlog the next sweeps drain)",
+                 f"- artifacts skipped, their run is not on the memory branch: "
+                 f"{self.diagnostics.get('artifacts_off_branch', 0)}",
+                 f"- records given up on after {deadline_hours:.0f} h: "
+                 f"{self.diagnostics.get('records_expired', 0)} this sweep, "
+                 f"{self.index.expired_count()} in the index",
                  f"- API requests used: {self.diagnostics.get('requests_made', 0)}"]
         if self.diagnostics.get("artifacts_unjoined"):
             lines.append(f"- resource artifacts that matched no job: {self.diagnostics['artifacts_unjoined']}")
@@ -1044,8 +1174,11 @@ class ReportCommand:
         print(f"sweeping runs of {self.args.repository} created since {Timestamps.format(sweep_start)}")
         collector.sweep_runs(sweep_start)
 
+        collector.diagnostics["records_expired"] = index.expire_stale_resource_records(
+            self.args.memory_branch, now)
         wanted = self._runs_wanting_resources(index, window_start)
-        collector.sweep_resources(sweep_start, wanted, self.args.max_artifact_downloads)
+        collector.sweep_resources(sweep_start, wanted, self.args.max_artifact_downloads,
+                                  self.args.memory_branch)
 
         collector.diagnostics["requests_made"] = api.requests_made
         report = UsageReport(index, window_start, recent_start, collector.diagnostics)
@@ -1079,7 +1212,8 @@ class ReportCommand:
         The default branch first, since that is the trend line everything is compared against
         and a pull request's own numbers are already in its own job summaries. Runs of flagged
         jobs are added on top, so a regression that shows up in the timings brings its memory
-        figures with it rather than needing a second night.
+        figures with it rather than needing a second sweep. Records already given up on are
+        left out by the index, so a run whose artifacts never arrived stops being asked for.
         """
         wanted: List[int] = []
         by_run = index.runs_missing_resources(self.args.memory_branch)
@@ -1117,8 +1251,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="the rolling index file, carried between runs as an artifact")
     parser.add_argument("--out", default="ci-usage-report.md",
                         help="where the markdown report is written")
-    parser.add_argument("--max-requests", type=int, default=800,
-                        help="hard cap on API requests, kept under the 1000/hour GITHUB_TOKEN allows")
+    parser.add_argument("--max-requests", type=int, default=500,
+                        help="hard cap on API requests, kept well under the 1000/hour GITHUB_TOKEN "
+                             "allows, which is shared with every other workflow calling the API in "
+                             "the same hour")
     parser.add_argument("--max-artifact-downloads", type=int, default=250,
                         help="hard cap on resource artifacts downloaded in one sweep")
     parser.add_argument("--memory-branch", default="main",

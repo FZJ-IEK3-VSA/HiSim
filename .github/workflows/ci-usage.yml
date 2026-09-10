@@ -1,25 +1,28 @@
-# Reports what the repository's CI cost overnight and, more usefully, what changed: which
-# jobs have got slower or hungrier than they were, which are close to the runner's memory
-# limit, and where the runner-minutes go. The numbers come from two places -- job durations
-# from the jobs API, which reports them for free, and peak memory and real CPU time from the
-# artifacts the resource-monitor action uploads from every job, because GitHub reports
-# neither anywhere.
+# Reports what the repository's CI has cost and, more usefully, what changed: which jobs have
+# got slower or hungrier than they were, which are close to the runner's memory limit, and
+# where the runner-minutes go. The numbers come from two places -- job durations from the jobs
+# API, which reports them for free, and peak memory and real CPU time from the artifacts the
+# resource-monitor action uploads from every job, because GitHub reports neither anywhere.
 #
 # The report lands in this workflow's own job summary, which is the whole user interface:
 # open the newest run and read it. Nothing is committed to the repository.
 #
-# The sweep is incremental, and has to be. At roughly 150 runs a day it would take some 9000
-# API requests to re-read the last month, against the 1000 an hour GITHUB_TOKEN allows, so
-# each night downloads the previous night's index, reads only what is newer, and uploads the
-# index again. The first run after the index expires or is deleted starts cold and covers
-# only as far back as its request budget reaches; the following nights fill in from there.
+# The sweep runs hourly and is incremental, which is what makes hourly affordable. At roughly
+# 150 runs a day it would take some 9000 API requests to re-read the last month, against the
+# 1000 an hour GITHUB_TOKEN allows, so each sweep downloads the previous sweep's index, reads
+# only what is newer, and uploads the index again: an hour in which nothing was pushed costs a
+# handful of requests. Hourly rather than nightly because of the artifacts -- the four golden
+# workflows upload 88 of them per push to main, far more than one sweep a day can collect, and
+# a record whose artifact is still uncollected a day later is given up on. The first run after
+# the index expires or is deleted starts cold and covers only as far back as its request
+# budget reaches; the following sweeps fill in from there.
 
 name: ci-usage
 
 on:
   schedule:
-    # Nightly, off the hour: scheduled runs queue behind everyone else's on the hour.
-    - cron: '17 4 * * *'
+    # Hourly, off the hour: scheduled runs queue behind everyone else's on the hour.
+    - cron: '17 * * * *'
   workflow_dispatch:
     inputs:
       window-days:
@@ -89,15 +92,17 @@ jobs:
             --index ci-usage-index.json \
             --out ci-usage-report.md
 
-      # A fixed name, so tomorrow night knows what to look for. Kept short: it is rewritten
-      # every night and only has to outlive a run of failed ones.
-      - name: Save the index for tomorrow
+      # A fixed name, so the next sweep knows what to look for. Kept short: it is rewritten
+      # every hour and only has to outlive a run of failed sweeps. Seven days rather than
+      # fourteen because there are now 24 of these a day, and a week still survives a weekend
+      # of failed runs -- and losing it costs a cold start, not the history.
+      - name: Save the index for the next sweep
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: ci-usage-index
           path: ci-usage-index.json
-          retention-days: 14
+          retention-days: 7
           if-no-files-found: warn
 
       - name: Upload the report

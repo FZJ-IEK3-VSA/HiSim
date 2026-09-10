@@ -234,6 +234,39 @@ next to each other.
   `AdvElectrolyzerConfig` belong to D-25/D-29 and stay. The two dead factories
   (`RandomNumbersConfig.get_default_config`, `PVSystem.get_default_config`) are **deleted**, not moved: a factory is
   code, not a class, and both have zero callers.
+- **D-9 (C11)** `[answered 2026-09-10]` **(b) fix the physics.** The buffer-storage law reads the generator's
+  `maximal_thermal_power_in_watt`, not the building's heating load, so the parameter finally means what its name
+  says and `sizing_sources` maps to the provider it names. Own commit with result diffs: the five golden sizers
+  (`gas`, `oil`, `hydrogen_boiler`, `pellets`, `wood_chips`) are re-blessed at **+10 % storage volume**, the
+  heat-pump golden setup is unchanged, and `basic_household_only_heating` (**+54 %**, 155.62 → 240.00 l) is added
+  to the week gate **in the same commit** — an ungated 54 % change is exactly the one that must not land unwitnessed.
+- **D-11** `[answered 2026-09-10]` **(a) convert, record the diff.** The heat-distribution controller's threshold
+  becomes the computed one, 16 → 18 °C for the three setups still on the legacy factory
+  (`basic_household_only_heating`, `household_gas_solar_thermal`, `automatic_default_connections`); no
+  `fixed_threshold_16c` preset is minted for a value nobody chose. `basic_household_only_heating` is blessed **in
+  the same commit**, so all 13 heat-distribution setups agree on one law and one of the three is gated.
+- **D-12** `[answered 2026-09-10]` **(a) fix.** The PV preset's law reads `Self("share_of_maximum_pv_potential")`
+  and the field records the share actually applied, so a realized record re-executes (EAC2/UC5). Golden-neutral —
+  the fleet's share is 1.0 — but every RenoVisor and building-sizer payload with a share below one, which came
+  through the *scaled* path and was recorded as 1.0, now changes to what it always meant. The executing commit and
+  the RenoVisor documentation say so explicitly; a silent correction of somebody else's stored payload is worse
+  than the bug.
+- **D-7** `[answered 2026-09-10]` **(a) adopt the law, record the diff.** Solar-thermal collector area becomes
+  `4 m² × number_of_apartments`, which is what `household_gas_solar_thermal.py` looks like it meant when it passed
+  `area_m2=4` unmultiplied and what its two sizer twins already do. That setup's week golden is re-blessed in the
+  same commit; every MFH archetype in it changes.
+- **D-4** `[answered 2026-09-10]` **(a) it is a bug.** The CHP controller's 42/50/50/42 `t_min_dhw_in_celsius`
+  cross and the 35-versus-31 `t_min_heating_in_celsius` split between the gas and hydrogen buffers are a
+  copy-paste asymmetry nobody chose, so they are normalised rather than frozen into the wire format: `gas` and
+  `hydrogen` presets with **one shared buffer override**, not one override per fuel. No setup builds this class;
+  `tests/test_generic_chp.py` changes and its comment says which numbers moved and why.
+- **D-21** `[answered 2026-09-10]` **(c) plumb the fact, keep the Building's field a plain default.**
+  `heating_reference_temperature_in_celsius` becomes a `WeatherConfig` contribution from a per-station DIN 12831
+  table (the `LocationEnum` entries already carry the TRY region in their directory names), so the fact exists for
+  group A's heat pumps. The Building's field stays a plain `-7.0` default rather than `AUTO`, so the norm heating
+  load — and therefore every generator size — does not move: **no result change**. This is the repository's first
+  fact with two possible providers, so a district drawing on two weather stations needs a `sizing_sources` line
+  (R4.3), and that is the cost the option is accepted with.
 
 The 32 questions below are owner decisions surfaced by the survey. **Each five-part entry (question, context with `file:line` evidence, options with consequences, recommendation) is in `p4_class_survey.md` under the same ID** — kept there because 32 full entries would triple this document; the table gives the question, the author's recommendation and what it blocks. Answers are recorded here as dated decisions and mirrored into R3.
 
@@ -249,12 +282,12 @@ The 32 questions below are owner decisions surfaced by the survey. **Each five-p
 | D-29 | Two electrolyzer + two H₂-storage classes for two devices | (a) keep `generic_*`, obsolete `generic_electrolyzer_and_h2_storage` + `AdvElectrolyzerConfig` | R3 H₂ |
 | D-30 | `generic_smart_device` defective: delete or fix? | (a) delete | R6 |
 | **Physics changes (R5)** | | | |
-| D-9 | **C11**: buffer volume from generator power (+10 % on 5 golden sizers, +54 % one ungated, ≤ +72 % MFH) or bless the load? | (b) fix — the only option under which `sizing_sources` means what it says | R3 buffer, R5 |
-| D-11 | HDS controller: 16 → 18 °C for 3 ungated setups, or a `fixed_threshold_16c` preset? | (a) convert, record the diff, add one of the three to the golden fleet | R3, R5 |
-| D-12 | PV `share_of_maximum_pv_potential` recorded as 1.0 by the scaled factory: fix, preserve, or delete the field? | (a) fix — records must re-execute | R3 PV, R5 |
-| D-7 | Solar-thermal `area_m2 = 4 × apartments` law (one setup passes 4 unmultiplied) | (a) adopt, diff | R3, R5 |
-| D-4 | CHP controller 42/50 °C flip across axes: bug or preserve? | (a) bug — normalise, `gas`/`hydrogen` + clean buffer overrides | R3, R5 |
-| D-21 | `heating_reference_temperature` from the Weather in B6 (physics), defer, or plumb the fact only? | (c) plumb the fact, keep the Building's field a default | R2.1, R5 |
+| D-9 | ~~**C11**: buffer volume from generator power (+10 % on 5 golden sizers, +54 % one ungated, ≤ +72 % MFH) or bless the load?~~ | `[answered 2026-09-10]` **(b) fix the physics** — the law reads the generator's maximal thermal power; own commit, five golden sizers re-blessed at +10 %, `basic_household_only_heating` (+54 %) added to the week gate in the same commit | R3 buffer, R5 |
+| D-11 | ~~HDS controller: 16 → 18 °C for 3 ungated setups, or a `fixed_threshold_16c` preset?~~ | `[answered 2026-09-10]` **(a) convert, record the diff** — no `fixed_threshold_16c`; `basic_household_only_heating` blessed in the same commit | R3, R5 |
+| D-12 | ~~PV `share_of_maximum_pv_potential` recorded as 1.0 by the scaled factory: fix, preserve, or delete the field?~~ | `[answered 2026-09-10]` **(a) fix** — the law reads `Self(...)` and the field records the real share; golden-neutral, but RenoVisor payloads with a share below one change to what they meant, stated in the commit and the RenoVisor docs | R3 PV, R5 |
+| D-7 | ~~Solar-thermal `area_m2 = 4 × apartments` law (one setup passes 4 unmultiplied)~~ | `[answered 2026-09-10]` **(a) adopt, record the diff** — `household_gas_solar_thermal`'s week golden re-blessed | R3, R5 |
+| D-4 | ~~CHP controller 42/50 °C flip across axes: bug or preserve?~~ | `[answered 2026-09-10]` **(a) bug** — normalise the 42/50 and 35/31 asymmetry, ship `gas` and `hydrogen` with one shared buffer override; `test_generic_chp` changes and says why | R3, R5 |
+| D-21 | ~~`heating_reference_temperature` from the Weather in B6 (physics), defer, or plumb the fact only?~~ | `[answered 2026-09-10]` **(c) plumb the fact** from a per-station DIN 12831 table, Building's field stays a plain -7.0 default — no result change; the first two-provider fact, so two-station districts need a `sizing_sources` line | R2.1, R5 |
 | **Naming / shape** | | | |
 | D-3 | Air conditioner's 12-field database selection: constructor, multi-field law, or freeze the device? | (a) constructor `for_building_load(...)`, no `AUTO` | R3 |
 | D-5 | `advanced_fuel_cell.CHPConfig`: `standard` or `hydrogen`? | (b) `hydrogen` | R3, R4 |

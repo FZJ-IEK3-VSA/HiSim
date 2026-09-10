@@ -5,9 +5,9 @@ with, how year 0 is funded, who pays whom (the actor Sankey and the landlord's i
 drawn as one), the cash curve, the loan and what credit costs, the household's energy balance,
 the uncertainty drivers, the cost structure and the cost shapes, the equity build-up, the monthly
 burden, the component lifetimes, the NPV bridge and the fixed-interest benchmark. They live
-beside `sections.py` rather than inside it because the two halves are already ~800 lines each and
-answer different questions — `sections.py` walks the calculation chain a reviewer checks, this
-module answers what a reader came for.
+beside `sections.py` rather than inside it because the split is by question rather than by size —
+`sections.py` walks the calculation chain a reviewer checks, this module answers what a reader
+came for.
 
 Like every other section they open with `scaffold._explanation_html`, i.e. with the four
 authored parts held in `report_prose.ReportProse` (rule 2.6): the report has to be understandable
@@ -20,8 +20,8 @@ reasons under its table of contents, because a reader who notices a missing sect
 person reading the log.
 
 The per-party statements (owner, tenant, society), the chapter split they make possible and the
-assumptions section are the one part of the set still to land; `scaffold.ReportSections.ORDER`
-already names them, so an entry there without a builder here is expected.
+assumptions section arrive with slice 9 of this stack; `scaffold.ReportSections.ORDER` already
+names them, so an entry there without a builder here is expected until then.
 """
 
 
@@ -34,7 +34,7 @@ from hisim.economics import views
 # seam 4 opens to presentation (`tests/test_economics_import_lint.py`): a report that cannot
 # tell which perspective it is drawing refuses with the same error a view would.
 from hisim.economics.views import CostDataError
-from hisim.economics.presentation_style import PresentationStyle, group_of
+from hisim.economics.presentation_style import PresentationStyle, SequentialRamp, group_of
 from hisim.economics.results import EvaluationMatrix, LifecycleCostResult, VariantComparison
 from hisim.economics.timeline import CostCategory
 from hisim.economics.uncertainty import Slot
@@ -44,6 +44,7 @@ from hisim.economics.reporting.summary import _band_str, _fmt
 from hisim.economics.reporting.charts import (
     _attribution_tornado_svg,
     _bridge_svg,
+    _ChartGeometry,
     _cost_of_credit_svg,
     _details,
     _esc,
@@ -166,7 +167,7 @@ def _lifecycle_overview_section_html(
             [(event.year, event.label, event.amount_in_euro) for event in lane.events],
             color,
         ))
-    rows.extend(_asset_lane_rows(lanes.assets))
+    rows.extend(_event_strip_rows(lanes.assets))
     # An empty lane is stated beside the chart rather than in the log, for the same reason a
     # skipped section is stated under the contents: the reader who notices the gap is looking at
     # the drawing, not at the process output. It is not a `context.skip` because the section
@@ -187,32 +188,35 @@ def _lifecycle_overview_section_html(
     )
 
 
-def _asset_lane_rows(assets: List[views.EventStripRow]) -> List[_GanttRow]:
-    """One Gantt lane per asset of the overview, residual marker included.
+def _event_strip_rows(strips: List[views.EventStripRow]) -> List[_GanttRow]:
+    """One Gantt lane per subject of an event strip, residual marker included.
 
-    The same rows the lifetimes section draws, which is the point of the overview: it restates
-    charts that exist in full elsewhere on a shared axis, so a lane that disagrees with the strip
-    further down would be a defect rather than a second opinion. The residual write-down is
-    appended as an event because the view carries it beside the events rather than among them —
-    it is not something that was *done* to the asset, it is what the horizon did to its book
-    value.
+    Both the lifetimes section and the asset lanes of the lifecycle overview are this loop over
+    a `views.EventStripRow` list, which is the point of the overview: it restates charts that
+    exist in full elsewhere on a shared axis, so a lane that disagrees with the strip further
+    down would be a defect rather than a second opinion. Written twice, the two were free to
+    disagree about exactly that — which is what a second copy of a loop *is*.
+
+    The residual write-down is appended as an event because the view carries it beside the events
+    rather than among them — it is not something that was *done* to the asset, it is what the
+    horizon did to its book value.
 
     Args:
-        assets: The asset rows `views.lifecycle_lanes` collected.
+        strips: The rows `views.lifecycle_lanes` collected, or `views.component_event_strip`'s.
 
     Returns:
-        One `(label, spans, events, colour)` lane per asset, in the view's order.
+        One `(label, spans, events, colour)` lane per subject, in the view's order.
     """
     rows: List[_GanttRow] = []
-    for asset in assets:
+    for strip in strips:
         events: List[Tuple[int, str, Optional[float]]] = [
-            (event.year, event.kind.value, event.amount_in_euro) for event in asset.events
+            (event.year, event.kind.value, event.amount_in_euro) for event in strip.events
         ]
-        if asset.residual is not None:
-            events.append((asset.residual.year, "residual", asset.residual.amount_in_euro))
+        if strip.residual is not None:
+            events.append((strip.residual.year, "residual", strip.residual.amount_in_euro))
         rows.append((
-            asset.subject,
-            [(span.start_year, span.end_year, "in service") for span in asset.spans],
+            strip.subject,
+            [(span.start_year, span.end_year, "in service") for span in strip.spans],
             events,
             "var(--g4)",
         ))
@@ -902,23 +906,10 @@ def _component_events_section_html(result: LifecycleCostResult, context: _Chapte
             "(a carriers-only evaluation).",
         )
     horizon = result.parameters.observation_period_in_years
-    gantt_rows: List[_GanttRow] = []
-    for row in rows:
-        events: List[Tuple[int, str, Optional[float]]] = [
-            (event.year, event.kind.value, event.amount_in_euro) for event in row.events
-        ]
-        if row.residual is not None:
-            events.append((row.residual.year, "residual", row.residual.amount_in_euro))
-        gantt_rows.append((
-            row.subject,
-            [(span.start_year, span.end_year, "in service") for span in row.spans],
-            events,
-            "var(--g4)",
-        ))
     return (
         _section_open(ReportSections.LIFETIMES, context, result.perspective_id)
         + _explanation_html(ReportSections.LIFETIMES, context)
-        + _gantt_svg(gantt_rows, horizon) + "</section>"
+        + _gantt_svg(_event_strip_rows(rows), horizon) + "</section>"
     )
 
 
@@ -998,9 +989,20 @@ def _wealth_benchmark_section_html(
     """
     benchmark = views.wealth_benchmark(reference, variant)
     years = list(range(len(benchmark.differential_flow_in_euro)))
-    ramp = PresentationStyle.GROUP_COLORS_LIGHT
+    if len(benchmark.rates) > len(SequentialRamp.LIGHT):
+        raise CostDataError(
+            f"The benchmark carries {len(benchmark.rates)} rates but the sequential ramp declares "
+            f"{len(SequentialRamp.LIGHT)} steps, so the last lines of the fan would be drawn in a "
+            "CSS variable the stylesheet does not define and would come out black. Extend "
+            "`presentation_style.SequentialRamp` alongside `views.WealthBenchmarkGrid.RATES`."
+        )
+    # The ten rates are one ordered quantity, so they are drawn in the sequential ramp the
+    # stylesheet declares from `SequentialRamp`: 1 % lightest, 10 % darkest. The categorical
+    # group palette has eight entries and was being cycled, which coloured 9 % and 10 % exactly
+    # like 1 % and 2 % — two lines of the fan indistinguishable from the two furthest from them.
+    # The variables also re-resolve in dark mode, which a baked light hex cannot.
     series: List[Tuple[str, List[Tuple[float, float]], str, float, str]] = [
-        (f"{rate:.0%}", _points(years, benchmark.series_by_rate[rate]), ramp[index % len(ramp)],
+        (f"{rate:.0%}", _points(years, benchmark.series_by_rate[rate]), f"var(--ramp{index})",
          1.0, "3 3")
         for index, rate in enumerate(benchmark.rates)
     ]
@@ -1045,13 +1047,29 @@ def _points(years: List[int], values: List[float]) -> List[Tuple[float, float]]:
     zip out at each of them is how one of them ends up plotted against a different axis than its
     neighbours.
 
+    A length mismatch is refused rather than zipped away. `zip` stops at the shorter list, so a
+    series one year short of its axis used to be drawn as a curve that simply ended early — a
+    complete-looking line whose last point is at the wrong year, which is the reading a chart
+    cannot recover from. Both lists come from the same horizon, so a disagreement is a defect
+    upstream and says so here.
+
     Args:
         years: The x values, in plotting order.
         values: The y values, index-aligned with `years`.
 
     Returns:
-        The points, truncated to the shorter of the two lists.
+        The points, one per year.
+
+    Raises:
+        CostDataError: If the two lists are not the same length.
     """
+    if len(years) != len(values):
+        raise CostDataError(
+            f"A chart series carries {len(values)} value(s) for {len(years)} year(s); plotting "
+            "the overlap would draw a curve that ends at the wrong year without looking like it "
+            "does. Both come from the perspective's observation period, so they cannot "
+            "legitimately differ."
+        )
     return [(float(year), value) for year, value in zip(years, values)]
 
 
@@ -1063,12 +1081,18 @@ def _treemap_section_html(result: LifecycleCostResult, context: _ChapterContext)
     (owner decision Q11): the gross panel states the credits it leaves out, the net panel states
     the subjects whose credits exceeded their costs and were clamped to nothing.
 
+    A basis on which every subject's credits reach its costs has no positive area at all, and
+    that panel is replaced by the sentence saying so rather than drawn: a "0 EUR" heading over an
+    empty box is a chart that failed, not a composition that came to nothing. When both bases are
+    empty there is no composition to show under either heading and the section skips itself.
+
     Args:
         result: The perspective whose composition is drawn.
         context: The chapter this section is being rendered into.
 
     Returns:
-        The section, with both panels and the disclosure each of them owes.
+        The section, with the panels that have an area and the disclosure each basis owes, or the
+        empty string when neither basis has one.
     """
     panels: List[str] = []
     captions: List[str] = []
@@ -1080,18 +1104,35 @@ def _treemap_section_html(result: LifecycleCostResult, context: _ChapterContext)
             [tile for tile in tiles.tiles if tile.area_in_euro > 0],
             key=lambda tile: (tile.group, -tile.area_in_euro),
         )
+        if not drawable:
+            captions.append(
+                f"There is no {headline} panel: on this basis every subject's credits reach its "
+                "costs, so no tile has an area to draw."
+            )
+            continue
         total = sum(tile.area_in_euro for tile in drawable)
         panels.append(
             f"<div><p class='sub'><b>{headline}: {_fmt(total)} EUR</b> "
             f"(net NPV {_fmt(tiles.net_npv_in_euro)} EUR)</p>"
-            + _treemap_svg([
-                (f"{PresentationStyle.DISPLAY_GROUPS[tile.group][0]} - {tile.subject}",
-                 tile.area_in_euro, f"var(--g{tile.group})")
-                for tile in drawable
-            ])
+            + _treemap_svg(
+                [
+                    (f"{PresentationStyle.DISPLAY_GROUPS[tile.group][0]} - {tile.subject}",
+                     tile.area_in_euro, f"var(--g{tile.group})")
+                    for tile in drawable
+                ],
+                # Two panels across the chart column, with the flex gap between them.
+                width=_ChartGeometry.WIDTH // 2 - 20,
+            )
             + "</div>"
         )
         captions.append(_treemap_caption(tiles, basis))
+    if not panels:
+        return context.skip(
+            ReportSections.COST_STRUCTURE,
+            f"Neither basis has a positive area for perspective {result.perspective_id!r}: every "
+            "subject's credits reach its costs, and a treemap has no negative tile to draw them "
+            "with.",
+        )
     return (
         _section_open(ReportSections.COST_STRUCTURE, context, result.perspective_id)
         + _explanation_html(ReportSections.COST_STRUCTURE, context)
@@ -1239,16 +1280,12 @@ def _subject_flow_node_labels(
             f"{subject}: costs {cost:,.2f} EUR, credits -{credit:,.2f} EUR, "
             f"block {margins.extent_of(subject):,.2f} EUR, net {margins.net_of(subject):,.2f} EUR"
         )
-    for group in groups_cost:
-        node = f"grp:{group}:0"
-        total = margins.signed_total_by_group.get((group, False), 0.0)
-        sublabels[node] = (_fmt(total), _fmt(total))
-        tooltips[node] = f"{labels[node]}: {total:,.2f} EUR"
-    for group in groups_credit:
-        node = f"grp:{group}:1"
-        total = margins.signed_total_by_group.get((group, True), 0.0)
-        sublabels[node] = (_fmt(total), _fmt(total))
-        tooltips[node] = f"{labels[node]}: {total:,.2f} EUR"
+    for groups, suffix, is_credit in ((groups_cost, "0", False), (groups_credit, "1", True)):
+        for group in groups:
+            node = f"grp:{group}:{suffix}"
+            total = margins.signed_total_by_group.get((group, is_credit), 0.0)
+            sublabels[node] = (_fmt(total), _fmt(total))
+            tooltips[node] = f"{labels[node]}: {total:,.2f} EUR"
     return sublabels, tooltips
 
 
@@ -1352,7 +1389,9 @@ def _energy_balance_caption(flows: views.EnergyBalanceFlows) -> str:
         flows: The balance `views.energy_balance_flows` returned.
 
     Returns:
-        The caption paragraph.
+        The caption paragraph, or the empty string when there is nothing to state — a balance
+        with no PV and no attributed consumption has no share to report, and a caption of a bare
+        full stop is worse than no caption.
     """
     shares = []
     if flows.self_consumption_share is not None:
@@ -1380,10 +1419,9 @@ def _energy_balance_caption(flows: views.EnergyBalanceFlows) -> str:
         "inside the node above."
         if unplaced else ""
     )
-    return (
-        f"<p class='sub'>{_esc('; '.join(shares))}.{_esc(battery)}{_esc(residual_prose)}"
-        f"{_esc(unplaced_prose)}</p>"
-    )
+    stated = "; ".join(shares)
+    text = (f"{stated}." if stated else "") + battery + residual_prose + unplaced_prose
+    return f"<p class='sub'>{_esc(text.lstrip())}</p>" if text.strip() else ""
 
 
 def _monthly_burden_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
@@ -1394,16 +1432,32 @@ def _monthly_burden_section_html(result: LifecycleCostResult, context: _ChapterC
     authored prose, because a monthly figure whose scope is unstated is the easiest number in the
     report to misread.
 
+    A perspective with no recurring cost in any month of any world is skipped. That is a real
+    case — a scope that books only the year-0 investment and its residual credit — and it is the
+    one the emptiness test has to be written against: the series is always one entry per year of
+    the horizon, so `if not burden.series` could only ever fire on a horizon of zero years and
+    the all-capital perspective it was meant to catch went through it into a chart of a bare
+    axis. The reserve is deliberately not part of the test: a reserve without a single recurring
+    month is a dashed line over nothing, which is the picture this skip exists to prevent.
+
     Args:
         result: The perspective whose recurring burden is drawn.
         context: The chapter this section is being rendered into.
 
     Returns:
-        The section, or the empty string when the perspective books no month at all.
+        The section, or the empty string when the perspective books no recurring month at all.
     """
     burden = views.monthly_burden_series(result)
-    if not burden.series:
-        return ""
+    recurring = any(
+        value.best_estimate or value.minimum or value.maximum for value in burden.series
+    )
+    if not recurring:
+        return context.skip(
+            ReportSections.MONTHLY_BURDEN,
+            f"Perspective {result.perspective_id!r} books no recurring cost in any month of any "
+            "of the three worlds, so there is no monthly burden to draw — everything it carries "
+            "is capital, which the investment and cash-flow sections show.",
+        )
     year_one = burden.series[1] if len(burden.series) > 1 else burden.series[0]
     reserve = burden.replacement_reserve_per_month
     reserve_prose = (
@@ -1415,7 +1469,7 @@ def _monthly_burden_section_html(result: LifecycleCostResult, context: _ChapterC
         _section_open(ReportSections.MONTHLY_BURDEN, context, result.perspective_id)
         + _explanation_html(ReportSections.MONTHLY_BURDEN, context)
         + f"<p class='sub'>Year 1 is {_esc(_band_str(year_one, 'EUR/month'))}. {reserve_prose}</p>"
-        + _monthly_burden_svg(result) + "</section>"
+        + _monthly_burden_svg(result, burden) + "</section>"
     )
 
 
@@ -1449,6 +1503,11 @@ def _equity_section_html(result: LifecycleCostResult, context: _ChapterContext) 
     is visible along the whole curve rather than only at the horizon, where the two are checked
     against each other.
 
+    The amortization read to decide whether the perspective is financed is handed on to
+    `views.asset_debt_series`, which needs exactly that series for its debt line — the section
+    used to build it, test it and throw it away, and the view then walked the same timeline again
+    for the same numbers.
+
     Args:
         result: The perspective whose book value and debt are drawn.
         context: The chapter this section is being rendered into.
@@ -1464,7 +1523,7 @@ def _equity_section_html(result: LifecycleCostResult, context: _ChapterContext) 
             f"Perspective {result.perspective_id!r} is unfinanced, so there is no debt line and "
             "no gap story to draw.",
         )
-    series = views.asset_debt_series(result)
+    series = views.asset_debt_series(result, amortization)
     years = list(range(len(series.book_value_in_euro)))
     underwater = (
         f"Equity is negative in {_year_spans(series.underwater_intervals)}: the debt exceeds the "

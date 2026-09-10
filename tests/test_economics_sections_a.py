@@ -71,6 +71,8 @@ from hisim.economics.results import EvaluationMatrix, compare
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
 
+from tests.economics_report_test_helpers import rects, rendered_sections
+
 pytestmark = pytest.mark.base
 
 
@@ -125,16 +127,6 @@ def _horizontal_rules(svg: str):
             r'<line x1="(-?[\d.]+)" y1="(-?[\d.]+)" x2="(-?[\d.]+)" y2="(-?[\d.]+)"', svg
         )
         if y1 == y2
-    ]
-
-
-def _node_rects(svg: str):
-    """The node rectangles of an inline-SVG Sankey as `(x, y, width, height)`."""
-    return [
-        (float(x), float(y), float(w), float(h))
-        for x, y, w, h in re.findall(
-            r'<rect x="(-?[\d.]+)" y="(-?[\d.]+)" width="([\d.]+)" height="([\d.]+)"', svg
-        )
     ]
 
 
@@ -207,7 +199,7 @@ class TestSankeySvg:
         """The ribbons on a node's fuller face fill its rectangle exactly, with no overflow."""
         svg = _sankey_svg(TANGLED_COLUMNS, _coloured(TANGLED_RIBBONS), {})
         faces = _ribbon_faces(svg)
-        for x, y, width, height in _node_rects(svg):
+        for x, y, width, height in rects(svg):
             outgoing = sum(
                 band for left_x, left_y, _rx, _ry, band in faces
                 if abs(left_x - (x + width)) < 0.5 and y - 0.5 <= left_y + band / 2 <= y + height + 0.5
@@ -221,7 +213,7 @@ class TestSankeySvg:
     def test_no_ribbon_path_intersects_a_node_rectangle(self):
         """The Q29 corridor invariant, sampled off the actual Bezier the report emits."""
         svg = _sankey_svg(SKIPPING_COLUMNS, _coloured(SKIPPING_RIBBONS), {})
-        nodes = _node_rects(svg)
+        nodes = rects(svg)
         assert nodes
         hits = []
         for numbers in _ribbon_paths(svg):
@@ -243,7 +235,7 @@ class TestSankeySvg:
         faces = _ribbon_faces(svg)
         stubs = _stub_rects(svg)
         assert stubs, "the landlord receives 1,400 and pays out 700; that gap must be drawn"
-        for x, y, width, height in _node_rects(svg):
+        for x, y, width, height in rects(svg):
             outgoing = sum(
                 band for left_x, left_y, _rx, _ry, band in faces
                 if abs(left_x - (x + width)) < 0.5 and y - 0.5 <= left_y + band / 2 <= y + height + 0.5
@@ -326,7 +318,7 @@ class TestSankeySvg:
         change a reader of the report would notice first.
         """
         svg = _sankey_svg(TANGLED_COLUMNS, _coloured(TANGLED_RIBBONS), {})
-        widths = {round(width, 1) for _x, _y, width, _h in _node_rects(svg)}
+        widths = {round(width, 1) for _x, _y, width, _h in rects(svg)}
         assert len(widths) == 1
         assert widths.pop() == pytest.approx(20.3, abs=0.1)  # 3.5 % of the 580-unit plot area
 
@@ -569,14 +561,6 @@ def fixture_report(database) -> str:
     )
 
 
-def _rendered_sections(text: str):
-    """Every anchored section of a rendered report as `(anchor, html)`, in page order."""
-    return [
-        (match.group(1), match.group(0))
-        for match in re.finditer(r"<section id=\"([^\"]+)\">.*?</section>", text, flags=re.S)
-    ]
-
-
 class TestSectionExplanations:
     """Every section explains itself the same way, in the same four parts (rule 2.6).
 
@@ -609,7 +593,7 @@ class TestSectionExplanations:
 
     def test_every_rendered_section_opens_with_the_four_parts(self, report):
         """No section may render its chart without the block that explains it — or a link to it."""
-        sections = _rendered_sections(report)
+        sections = rendered_sections(report)
         assert len(sections) > 15, "the fixture stopped reaching most sections"
         explained = set()
         for anchor, html in sections:
@@ -621,14 +605,14 @@ class TestSectionExplanations:
 
     def test_the_primer_renders_once_at_the_top(self, report):
         """The conventions every other section leans on are stated first, and only once."""
-        anchors = [anchor for anchor, _html in _rendered_sections(report)]
+        anchors = [anchor for anchor, _html in rendered_sections(report)]
         assert anchors[0] == "building-how-to-read"
         assert anchors.count("building-how-to-read") == 1
         assert report.index(">How to read this report") > report.index("<nav")
 
     def test_the_rendered_prose_is_the_authored_prose(self, report):
         """The renderer marks the text up; it never edits it."""
-        by_anchor = dict(_rendered_sections(report))
+        by_anchor = dict(rendered_sections(report))
         for anchor, name in ReportSections.ORDER:
             html = by_anchor.get(f"building-{anchor}")
             if html is None or "see the explanation under" in html:
@@ -655,7 +639,7 @@ class TestSectionExplanations:
 
     def test_anchors_are_unique_and_chapter_prefixed(self, report):
         """Two sections sharing an anchor would send every contents link to the same place."""
-        anchors = [anchor for anchor, _html in _rendered_sections(report)]
+        anchors = [anchor for anchor, _html in rendered_sections(report)]
         assert len(anchors) == len(set(anchors))
         for anchor in anchors:
             assert anchor.startswith(f"{ReportChapters.THE_BUILDING[0]}-"), anchor
@@ -671,7 +655,7 @@ class TestVisualizationSectionsRender:
         job — it lists all twenty-two — so what is left here is the half that list cannot check:
         *which* perspective a section that had to choose one ended up drawing.
         """
-        sections = dict(_rendered_sections(report))
+        sections = dict(rendered_sections(report))
         assert "<h3>Cash curve (gross)" in sections["building-cash-curve"]
         credit = sections["building-cost-of-credit"]
         # One block per financed perspective, each naming itself; not the matrix's first row.
@@ -680,7 +664,7 @@ class TestVisualizationSectionsRender:
 
     def test_the_cash_curve_states_its_payback_in_words(self, report):
         """An absent annotation reads as "did not pay back" to one reader and "not computed" to another."""
-        curve = dict(_rendered_sections(report))["building-cash-curve"]
+        curve = dict(rendered_sections(report))["building-cash-curve"]
         # Both markers are this run's own annotations. "deepest out-of-pocket" and "world" also
         # occur in the authored prose above the chart, so neither would fail if the chart lost
         # them; the amount and the year of each can only come from the renderer.
@@ -689,22 +673,22 @@ class TestVisualizationSectionsRender:
 
     def test_the_who_pays_whom_section_publishes_what_it_folded(self, report):
         """A folded ribbon is hidden from the picture, so its count and total are stated."""
-        flows = dict(_rendered_sections(report))["building-who-pays-whom"]
+        flows = dict(rendered_sections(report))["building-who-pays-whom"]
         assert "ribbon(s) below 0.5 % of the flow volume" in flows
         assert "<svg" in flows
 
     def test_the_loan_and_credit_sections_arrive_together(self, report):
         """Two halves of one question: what the debt service looks like, and what it costs."""
-        anchors = [anchor for anchor, _html in _rendered_sections(report)]
+        anchors = [anchor for anchor, _html in rendered_sections(report)]
         assert "building-loan" in anchors
         assert "building-cost-of-credit" in anchors
-        credit = dict(_rendered_sections(report))["building-cost-of-credit"]
+        credit = dict(rendered_sections(report))["building-cost-of-credit"]
         assert "Effective annual rate" in credit
         assert "Repayment grant" in credit  # the disclosure table
 
     def test_the_landlord_statement_states_both_sides_and_draws_them(self, report):
         """The table partitions the NPV and the income Sankey draws the same partition."""
-        statement = dict(_rendered_sections(report))["building-landlord-statement"]
+        statement = dict(rendered_sections(report))["building-landlord-statement"]
         assert "cash flows, subtotal" in statement
         assert "accounting credits, subtotal" in statement
         assert "net position" in statement
@@ -717,7 +701,7 @@ class TestVisualizationSectionsRender:
 
     def test_the_uncertainty_table_lists_every_attributed_subject(self, report):
         """The tornado folds small rows; the table beside it must not."""
-        drivers = dict(_rendered_sections(report))["building-uncertainty-drivers"]
+        drivers = dict(rendered_sections(report))["building-uncertainty-drivers"]
         assert "attribution table" in drivers
         assert "Optimistic delta" in drivers and "Pessimistic delta" in drivers
 
@@ -874,7 +858,7 @@ class TestTheCashCurveTellsOnePerspectivesStory:
         rendered = build_lifecycle_report_html(
             matrix, run_plausibility_checks(matrix), None, comparison, reference_result=reference
         )
-        curve = dict(_rendered_sections(rendered))["building-cash-curve"]
+        curve = dict(rendered_sections(rendered))["building-cash-curve"]
         # The matrix's first perspective is "gross"; the comparison's is "financed".
         assert "<h3>Cash curve (financed)" in curve
         assert "cumulative discounted savings" in curve
@@ -952,7 +936,7 @@ class TestTheSectionOrderIsTheAssemblys:
     def test_every_anchor_the_document_emits_is_a_member_of_the_order(self, report):
         """A section with an anchor outside `ORDER` is one the contents cannot list."""
         known = {anchor for anchor, _name in ReportSections.ORDER}
-        for anchor, _html in _rendered_sections(report):
+        for anchor, _html in rendered_sections(report):
             chapter, _, section = anchor.partition("-")
             assert chapter == ReportChapters.THE_BUILDING[0], anchor
             assert section in known, anchor
@@ -991,11 +975,11 @@ class TestCostOfCreditCoversEveryFinancedPerspective:
             )
             matrix.results[perspective.id] = evaluator.evaluate(make_inputs(), perspective)
         rendered = build_lifecycle_report_html(matrix, run_plausibility_checks(matrix))
-        credit = dict(_rendered_sections(rendered))["building-cost-of-credit"]
+        credit = dict(rendered_sections(rendered))["building-cost-of-credit"]
         assert "<b>financed_60</b>" in credit and "<b>financed_90</b>" in credit
         assert credit.count("Effective annual rate: <b>") == 2  # the authored prose says it once more
         assert "<b>gross</b>" not in credit  # the cash purchase has no credit to price
-        loan = dict(_rendered_sections(rendered))["building-loan"]
+        loan = dict(rendered_sections(rendered))["building-loan"]
         assert "<b>financed_60</b>" in loan and "<b>financed_90</b>" in loan  # the same set
 
 
@@ -1016,6 +1000,6 @@ class TestTheBridgePrintsThePublishedDelta:
         rendered = build_lifecycle_report_html(
             matrix, run_plausibility_checks(matrix), None, comparison, reference_result=reference
         )
-        bridge = dict(_rendered_sections(rendered))["building-npv-bridge"]
+        bridge = dict(rendered_sections(rendered))["building-npv-bridge"]
         expected = f"{comparison.npv_delta_in_euro.best_estimate:,.0f}"
         assert f"Net NPV difference: <b>{expected} EUR</b>" in bridge

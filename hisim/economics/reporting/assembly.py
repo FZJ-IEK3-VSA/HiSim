@@ -649,7 +649,10 @@ def _document_sections(
         audit: Optional input audit.
         comparison: Optional variant comparison.
         scenario_cube: Optional scenario cube.
-        reference_result: Optional baseline result for the NPV bridge.
+        reference_result: Optional baseline result, needed by both sections that compare the run
+            against something outside it: the NPV bridge decomposes the difference to it by cost
+            group, and the bank benchmark takes the per-year differential flows against it. Its
+            absence skips both, each with its own reason.
         context: The chapter every section is rendered into; **mutated** as the explanations are
             recorded.
 

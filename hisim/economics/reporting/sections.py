@@ -13,11 +13,16 @@ authored explanation come from one place. Assembly order and the document shell 
 
 from __future__ import annotations
 
-from typing import List, Mapping, Optional, Tuple
+from typing import List, Mapping, Optional, Sequence, Tuple
 
 from hisim.economics import views
 from hisim.economics.input_audit import InputAuditReport, OriginKind, ResolvedInputRow, price_basis
-from hisim.economics.presentation_style import ChromeColors, PresentationStyle, group_of
+from hisim.economics.presentation_style import (
+    ChromeColors,
+    PresentationStyle,
+    SequentialRamp,
+    group_of,
+)
 from hisim.economics.results import EvaluationMatrix, LifecycleCostResult
 from hisim.economics.timeline import CostCategory
 from hisim.economics.uncertainty import UncertainValue
@@ -82,22 +87,25 @@ def _how_to_read_section_html(context: _ChapterContext) -> str:
     ) + "</section>"
 
 
-def _group_color_declarations(colors: List[str]) -> str:
-    """The `--g0..--gN` custom-property declarations of one theme, from the palette itself.
+def _color_declarations(prefix: str, colors: Sequence[str]) -> str:
+    """The `--<prefix>0..--<prefix>N` custom-property declarations of one theme, from a palette.
 
-    The eight display-group hues have to appear in the stylesheet as well as in the palette the
-    charts and the matplotlib companions read, and writing them out twice is how a group ends up
-    one hue in the HTML and another in its PNG. Generating them means the palette is edited in one
-    place; the output is byte-for-byte the hand-written line it replaces.
+    Two palettes are declared this way: the eight display-group hues (`--g0..--g7`) and the ten
+    steps of the sequential ramp the rate fan is drawn in (`--ramp0..--ramp9`). Both have to
+    appear in the stylesheet as well as in the palette the charts and the matplotlib companions
+    read, and writing them out twice is how a group ends up one hue in the HTML and another in its
+    PNG. Generating them means each palette is edited in one place; the output is byte-for-byte
+    the hand-written line it replaces.
 
     Args:
-        colors: A theme's group colours in group order.
+        prefix: The custom-property prefix, without dashes — `"g"` or `"ramp"`.
+        colors: That palette's colours for one theme, in index order.
 
     Returns:
         The declarations as one line, e.g. ``--g0:#2a78d6; --g1:#1baf7a;`` — each terminated, so
         the caller only adds the closing brace.
     """
-    return " ".join(f"--g{index}:{color};" for index, color in enumerate(colors))
+    return " ".join(f"--{prefix}{index}:{color};" for index, color in enumerate(colors))
 
 
 def _neutral_color_declarations(
@@ -113,8 +121,11 @@ def _neutral_color_declarations(
     stay arguments, because no chart draws them: the page behind the section cards, the secondary
     ink of the captions, the baseline rule and the card border.
 
-    The output is byte-for-byte the two hand-written lines it replaces, line break and indent
-    included, so the stylesheet inside the golden report does not move.
+    The output is byte-for-byte the two hand-written lines it replaces — the line break between
+    them and the second line's two-space indent included — so the stylesheet inside the golden
+    report does not move. The *first* line carries no indent of its own: it continues the
+    literal's `:root { color-scheme: light dark;` line, and the two spaces in front of it are the
+    literal's, not this function's.
 
     Args:
         chrome: One theme of `ChromeColors` — `LIGHT` or `DARK`.
@@ -148,7 +159,9 @@ class _ReportCss:
     from `PresentationStyle.GROUP_COLORS_LIGHT` / `GROUP_COLORS_DARK` rather than transcribed, so a
     group keeps its colour across the HTML, its SVGs and the matplotlib PNGs by construction; the
     two lists were previously copied here by hand and could drift apart silently, and a hue that
-    disagrees between an SVG and its PNG companion is a bug nobody reads as one. `--ink-*`,
+    disagrees between an SVG and its PNG companion is a bug nobody reads as one. `--ramp0`..
+    `--ramp9` are generated the same way from `SequentialRamp`: ten ordered steps for the one
+    chart whose series are an ordered quantity rather than eight things to tell apart. `--ink-*`,
     `--muted`, `--surface`, `--grid` and `--baseline`
     are the chrome roles, and `--good`/`--warning`/`--critical` back the `.status.PASS` /
     `.status.WARN` / `.status.FAIL` classes the plausibility panel emits from the finding status
@@ -176,12 +189,14 @@ class _ReportCss:
         ChromeColors.LIGHT, "#f9f9f7", "#52514e", "#c3c2b7", "rgba(11,11,11,0.10)"
     ) + """
   --good:#0ca30c; --warning:#fab219; --critical:#d03b3b;
-  """ + _group_color_declarations(PresentationStyle.GROUP_COLORS_LIGHT) + """ }
+  """ + _color_declarations("g", PresentationStyle.GROUP_COLORS_LIGHT) + """
+  """ + _color_declarations("ramp", SequentialRamp.LIGHT) + """ }
 @media (prefers-color-scheme: dark) { :root {
   """ + _neutral_color_declarations(
         ChromeColors.DARK, "#0d0d0d", "#c3c2b7", "#383835", "rgba(255,255,255,0.10)"
     ) + """
-  """ + _group_color_declarations(PresentationStyle.GROUP_COLORS_DARK) + """ } }
+  """ + _color_declarations("g", PresentationStyle.GROUP_COLORS_DARK) + """
+  """ + _color_declarations("ramp", SequentialRamp.DARK) + """ } }
 body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--page);
   color: var(--ink-1); margin: 0; padding: 24px; }
 main { max-width: 960px; margin: 0 auto; }

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import html
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim.economics import views
 from hisim.economics.presentation_style import (
@@ -323,15 +323,9 @@ def _annual_flow_svg(result: LifecycleCostResult) -> str:
     to carry the investment. Nominal (undiscounted) on purpose — this is the liquidity view, and
     the discounted counterpart is the curve drawn immediately below it.
 
-    Geometry: costs and credits have *separate* baselines (`y_pos` growing upward from the zero
-    line, `y_neg` downward) and are never netted, so a year with both shows both. The zero line
-    sits `max_pos * scale` below the top, which places it wherever the positive/negative split
-    requires instead of at a fixed height; one shared `scale` covers `max_pos + max_neg` so the
-    two halves stay comparable. Each segment is shortened by up to 1px
-    (`bar_h - min(1.0, bar_h * 0.3)`) to leave a hairline between stacked groups without
-    swallowing a thin one, and x-ticks are thinned by `horizon // 10`, which gives about ten
-    labels at a 100-year horizon and fewer below it — a 20-year run is labelled every other year,
-    a 5-year run every year — because integer division floors the step at 1.
+    The geometry and the stacking loop are `_StackedYearsFrame` and `_stacked_year_bars`, shared
+    with the monthly-burden chart; this function is the series it stacks, its canvas and the
+    three axis labels that make it an annual chart in euro.
     """
     horizon = result.parameters.observation_period_in_years
     per_year: List[Dict[int, float]] = views.fold_category_matrix(
@@ -339,35 +333,18 @@ def _annual_flow_svg(result: LifecycleCostResult) -> str:
     )
     max_pos = max((sum(v for v in year.values() if v > 0) for year in per_year), default=1.0)
     max_neg = max((-sum(v for v in year.values() if v < 0) for year in per_year), default=0.0)
-    width, height, left, top, bottom = 860, 300, 70, 16, 34
-    plot_h = height - top - bottom
-    scale = (plot_h) / max(max_pos + max_neg, 1e-9)
-    zero_y = top + max_pos * scale
-    bar_w = (width - left - 20) / (horizon + 1)
-    parts = _svg_open(width, height)
-    parts.append(_hline(left, width - 10, zero_y))
-    for year, groups in enumerate(per_year):
-        x = left + year * bar_w
-        y_pos, y_neg = zero_y, zero_y
-        for index in range(len(PresentationStyle.DISPLAY_GROUPS)):
-            value = groups.get(index, 0.0)
-            if not value:
-                continue
-            bar_h = abs(value) * scale
-            tooltip = f"year {year} - {group_name(index)}: {_fmt(value)} EUR"
-            if value > 0:
-                y_pos -= bar_h
-                parts.append(_rect(x + 1, y_pos, bar_w - 2, bar_h - min(1.0, bar_h * 0.3), f"var(--g{index})", tooltip))
-            else:
-                parts.append(_rect(x + 1, y_neg, bar_w - 2, bar_h - min(1.0, bar_h * 0.3), f"var(--g{index})", tooltip))
-                y_neg += bar_h
-        if year % max(1, horizon // 10) == 0:
-            parts.append(_text(x + bar_w / 2, height - 14, str(year), 10, "middle", "var(--muted)"))
-    parts.append(_text(left - 6, zero_y + 4, "0", 10, "end", "var(--muted)"))
-    parts.append(_text(left - 6, top + 10, _fmt(max_pos), 10, "end", "var(--muted)"))
+    frame = _StackedYearsFrame.fitted(max_pos, max_neg, horizon, height=300, bottom=34)
+    parts = _stacked_year_bars(
+        per_year, frame, horizon, "EUR", hairline=True, tick_size=10, tick_y=frame.height - 14
+    )
+    parts.append(_text(frame.left - 6, frame.zero_y + 4, "0", 10, "end", "var(--muted)"))
+    parts.append(_text(frame.left - 6, frame.top + 10, _fmt(max_pos), 10, "end", "var(--muted)"))
     if max_neg:
-        parts.append(_text(left - 6, height - bottom, f"-{_fmt(max_neg)}", 10, "end", "var(--muted)"))
-    parts.append(_text(width - 10, height - 14, "year", 10, "end", "var(--muted)"))
+        parts.append(
+            _text(frame.left - 6, frame.height - frame.bottom, f"-{_fmt(max_neg)}", 10, "end",
+                  "var(--muted)")
+        )
+    parts.append(_text(frame.width - 10, frame.height - 14, "year", 10, "end", "var(--muted)"))
     parts.append("</svg>")
     return "".join(parts)
 
@@ -699,6 +676,125 @@ class _ChartGeometry:
     ROW_HEIGHT = 26
     #: Events closer than this many years share a label stack instead of overprinting.
     CLUSTER_YEARS = 3
+
+
+@dataclass(frozen=True)
+class _StackedYearsFrame:
+    """The plot area of a stacked-by-year bar chart, fitted to the extent it has to hold.
+
+    The annual cash-flow chart and the monthly-burden chart are the same picture in two units,
+    and this is the half of it that is pure arithmetic: where the zero line lands given how much
+    of the extent is above it and how much below, how many user units a euro is worth, and how
+    wide one year's bar is. Fitting it once is what keeps the two charts comparable — a reader
+    who has learned to read one of them has learned to read the other.
+
+    The zero line sits `max_pos * scale` below the top, which places it wherever the
+    positive/negative split requires instead of at a fixed height, and one shared `scale` covers
+    `max_pos + max_neg` so the two halves stay comparable inside one chart as well.
+    """
+
+    width: int
+    height: int
+    left: float
+    top: float
+    bottom: float
+    scale: float
+    zero_y: float
+    bar_w: float
+
+    @classmethod
+    def fitted(
+        cls, max_pos: float, max_neg: float, horizon: int, height: int, bottom: float,
+        width: int = _ChartGeometry.WIDTH, left: float = 70.0, top: float = 16.0,
+    ) -> "_StackedYearsFrame":
+        """The frame a chart of this extent, horizon and canvas needs.
+
+        Args:
+            max_pos: The tallest positive stack, in the chart's own unit.
+            max_neg: The deepest negative stack, as a positive number.
+            horizon: The last year drawn; the axis carries `horizon + 1` bars.
+            height: Canvas height in user units.
+            bottom: Bottom margin, which carries the year ticks.
+            width: Canvas width in user units.
+            left: Left margin, which carries the axis labels.
+            top: Top margin.
+
+        Returns:
+            The frame, with `scale`, `zero_y` and `bar_w` derived.
+        """
+        scale = (height - top - bottom) / max(max_pos + max_neg, 1e-9)
+        return cls(
+            width=width, height=height, left=left, top=top, bottom=bottom, scale=scale,
+            zero_y=top + max_pos * scale, bar_w=(width - left - 20) / (horizon + 1),
+        )
+
+
+def _stacked_year_bars(
+    per_year: Sequence[Mapping[int, float]],
+    frame: _StackedYearsFrame,
+    horizon: int,
+    unit: str,
+    hairline: bool,
+    tick_size: int,
+    tick_y: float,
+    year_marks: Optional[Callable[[int, float], List[str]]] = None,
+) -> List[str]:
+    """The open `<svg>`, the zero line and one stacked bar per year — for both such charts.
+
+    Costs and credits have *separate* baselines (`y_pos` growing upward from the zero line,
+    `y_neg` downward) and are never netted, so a year with both shows both, and the groups are
+    stacked in `PresentationStyle.DISPLAY_GROUPS` order so a colour keeps its position in the
+    stack from one chart to the next. X-ticks are thinned by `horizon // 10`, which gives about
+    ten labels at a 100-year horizon and fewer below it — a 20-year run is labelled every other
+    year, a 5-year run every year — because integer division floors the step at 1.
+
+    The two callers had a copy each, and they had already drifted: the annual chart leaves a
+    hairline between stacked segments and the monthly one did not, so the same stack read as
+    seven bands in one chart and as one block in the other. Which of the two is right is a
+    question about the chart, not about the loop, so the hairline is a parameter and the loop is
+    written once.
+
+    Args:
+        per_year: Group index -> amount, one mapping per year, index-aligned with the year axis.
+        frame: The fitted plot area.
+        horizon: The last year drawn, which sets the tick thinning.
+        unit: The unit the tooltips name, e.g. `"EUR"` or `"EUR/month"`.
+        hairline: Whether to shorten each segment by up to 1px so stacked groups stay
+            distinguishable — `bar_h - min(1.0, bar_h * 0.3)`, which never swallows a thin one.
+        tick_size: Font size of the year ticks.
+        tick_y: Baseline the year ticks are printed on.
+        year_marks: Optional extra marks per year, drawn after that year's stack and before its
+            tick; it is handed the year and the left edge of its bar. The monthly chart's
+            whisker on the banded total is the one user.
+
+    Returns:
+        The parts so far, for the caller to append its axis labels and `</svg>` to.
+    """
+    parts = _svg_open(frame.width, frame.height)
+    parts.append(_hline(frame.left, frame.width - 10, frame.zero_y))
+    for year, groups in enumerate(per_year):
+        x = frame.left + year * frame.bar_w
+        y_pos, y_neg = frame.zero_y, frame.zero_y
+        for index in range(len(PresentationStyle.DISPLAY_GROUPS)):
+            value = groups.get(index, 0.0)
+            if not value:
+                continue
+            bar_h = abs(value) * frame.scale
+            drawn_h = bar_h - min(1.0, bar_h * 0.3) if hairline else bar_h
+            tooltip = f"year {year} - {group_name(index)}: {_fmt(value)} {unit}"
+            if value > 0:
+                y_pos -= bar_h
+                parts.append(_rect(x + 1, y_pos, frame.bar_w - 2, drawn_h, f"var(--g{index})", tooltip))
+            else:
+                parts.append(_rect(x + 1, y_neg, frame.bar_w - 2, drawn_h, f"var(--g{index})", tooltip))
+                y_neg += bar_h
+        if year_marks is not None:
+            parts.extend(year_marks(year, x))
+        if year % max(1, horizon // 10) == 0:
+            parts.append(
+                _text(x + frame.bar_w / 2, tick_y, str(year), tick_size, "middle", "var(--muted)")
+            )
+    return parts
 
 
 def _net_stub_svg(
@@ -1206,23 +1302,33 @@ def _gantt_event_marks(
     return parts
 
 
-def _treemap_svg(tiles: List[Tuple[str, float, str]], height: int = 240) -> str:
+def _treemap_svg(
+    tiles: List[Tuple[str, float, str]], height: int = 240, width: int = _ChartGeometry.WIDTH
+) -> str:
     """A squarified treemap — the cost-structure panels, one call per basis.
 
     Areas rather than lengths, because the question the cost-structure section answers ("what is
     this made of") is a composition and reads at a glance in an area encoding. The layout itself
-    is `presentation_style.squarified_layout`, the same function the matplotlib companion calls,
-    so the two panels are one picture drawn twice rather than two pictures of the same numbers.
+    is `presentation_style.squarified_layout`, which the matplotlib companion of slice 8 will
+    call as well, so the two panels become one picture drawn twice rather than two pictures of
+    the same numbers.
 
     A label is printed only where the tile can hold two baselines; every tile carries its full
     label and its amount as a native tooltip, which is what the inline-SVG variant has over the
     PNG and why a small tile losing its text loses nothing a reader cannot recover by hovering.
 
+    The box is the caller's, both dimensions of it: this module draws, and how wide a panel is
+    depends on how many of them the section puts side by side, which is a layout decision and
+    therefore the section's. Hardcoding half a column here made that decision twice — once in the
+    flex row of `sections_charts._treemap_section_html` and once in a `// 2 - 20` no reader of
+    this file could account for.
+
     Args:
         tiles: `(label, area in euro, colour)` per rectangle, in the order they are laid out;
             non-positive areas are dropped here, since a treemap cannot draw one.
-        height: Canvas height in user units; the width is half the chart column, because the
-            section draws the gross and the net basis side by side.
+        height: Canvas height in user units.
+        width: Canvas width in user units; the full chart column unless the caller is placing
+            more than one panel across it.
 
     Returns:
         The complete `<svg>` element, or the empty string when no tile carries a positive area.
@@ -1230,7 +1336,6 @@ def _treemap_svg(tiles: List[Tuple[str, float, str]], height: int = 240) -> str:
     drawable = [tile for tile in tiles if tile[1] > 0]
     if not drawable:
         return ""
-    width = _ChartGeometry.WIDTH // 2 - 20
     parts = _svg_open(width, height)
     layout = squarified_layout([tile[1] for tile in drawable], 0.0, 0.0, float(width), float(height))
     for (label, area, color), (x, y, tile_w, tile_h) in zip(drawable, layout):
@@ -1446,27 +1551,33 @@ def _attribution_tornado_svg(rows: List[views.AttributionRow], total: UncertainV
     )
 
 
-def _monthly_burden_svg(result: LifecycleCostResult) -> str:
+def _monthly_burden_svg(result: LifecycleCostResult, burden: views.MonthlyBurden) -> str:
     """Stacked monthly bars with a whisker on the total — the household's own unit.
 
-    The same geometry as the annual cash-flow chart, with separate baselines above and below zero
-    so a credit is never netted against a cost inside a bar, drawn on the monthly recurring
-    figures of `views.monthly_burden_series` and `views.monthly_burden_by_group`. The whiskers are
-    the min/max band of the monthly *total*, which is this chart's one banded mark: banding every
+    The annual cash-flow chart's geometry in a second unit, through the same
+    `_StackedYearsFrame` and `_stacked_year_bars`: separate baselines above and below zero so a
+    credit is never netted against a cost inside a bar, drawn on the monthly recurring figures of
+    `views.monthly_burden_series` and `views.monthly_burden_by_group`. The whiskers are the
+    min/max band of the monthly *total*, which is this chart's one banded mark: banding every
     segment of a stack would produce a picture nobody can read.
 
     The capital events the bars deliberately exclude come back as a dashed overlay segment per
     year, drawn at that year's recurring total plus the replacement reserve — what the month costs
     once the sinking fund for the replacements is paid into, which is the figure a bank quotes.
 
+    The burden is the caller's rather than this function's own, because the section prints year 1
+    and the reserve in its caption and decides on the same series whether the chart is worth
+    drawing at all. Deriving it twice was two calls to a validating view for one picture, with
+    nothing but their shared inputs keeping the caption and the bars on the same numbers.
+
     Args:
         result: The perspective whose recurring burden is drawn.
+        burden: Its monthly burden, as the section derived it.
 
     Returns:
         The complete `<svg>` element, or the empty string when the perspective books no month at
         all (a horizon of zero years).
     """
-    burden = views.monthly_burden_series(result)
     totals = burden.series
     per_group = views.monthly_burden_by_group(result, PresentationStyle.CATEGORY_TO_GROUP)
     if not totals:
@@ -1478,57 +1589,38 @@ def _monthly_burden_svg(result: LifecycleCostResult) -> str:
                   [value.best_estimate + reserve for value in totals] + [1.0])
     max_neg = max([-sum(v for v in row.values() if v < 0) for row in per_group] +
                   [-min(value.minimum, 0.0) for value in totals] + [0.0])
-    width, height, left, top, bottom = _ChartGeometry.WIDTH, 260, 70, 16, 30
-    plot_h = height - top - bottom
-    scale = plot_h / max(max_pos + max_neg, 1e-9)
-    zero_y = top + max_pos * scale
-    bar_w = (width - left - 20) / (horizon + 1)
-    parts = _svg_open(width, height)
-    parts.append(_hline(left, width - 10, zero_y))
-    for year, groups in enumerate(per_group):
-        x = left + year * bar_w
-        y_pos, y_neg = zero_y, zero_y
-        for index, _display_group in enumerate(PresentationStyle.DISPLAY_GROUPS):
-            value = groups.get(index, 0.0)
-            if not value:
-                continue
-            bar_h = abs(value) * scale
-            tooltip = (
-                f"year {year} - {PresentationStyle.DISPLAY_GROUPS[index][0]}: {_fmt(value)} EUR/month"
-            )
-            if value > 0:
-                y_pos -= bar_h
-                parts.append(_rect(x + 1, y_pos, bar_w - 2, bar_h, f"var(--g{index})", tooltip))
-            else:
-                parts.append(_rect(x + 1, y_neg, bar_w - 2, bar_h, f"var(--g{index})", tooltip))
-                y_neg += bar_h
+    frame = _StackedYearsFrame.fitted(max_pos, max_neg, horizon, height=260, bottom=30)
+
+    def whisker(year: int, x: float) -> List[str]:
+        """The min/max band of that year's monthly total, or nothing when it is degenerate."""
         band = totals[year]
-        if not band.is_exact():
-            centre = x + bar_w / 2
-            parts.append(
-                f'<line x1="{centre:.1f}" y1="{zero_y - band.maximum * scale:.1f}" '
-                f'x2="{centre:.1f}" y2="{zero_y - band.minimum * scale:.1f}" stroke="var(--ink-1)" '
-                f'stroke-width="1"><title>year {year} total: {_esc(_band_str(band, "EUR/month"))}'
-                f"</title></line>"
-            )
-        if year % max(1, horizon // 10) == 0:
-            parts.append(_text(x + bar_w / 2, height - 12, str(year), 9, "middle", "var(--muted)"))
-    parts.extend(_replacement_reserve_marks(totals, reserve, left, top, zero_y, bar_w, scale))
-    parts.append(_text(left - 6, top + 10, _fmt(max_pos), 9, "end", "var(--muted)"))
-    parts.append(_text(left - 6, zero_y + 4, "0", 9, "end", "var(--muted)"))
-    parts.append(_text(width - 10, height - 12, "year", 9, "end", "var(--muted)"))
+        if band.is_exact():
+            return []
+        centre = x + frame.bar_w / 2
+        return [
+            f'<line x1="{centre:.1f}" y1="{frame.zero_y - band.maximum * frame.scale:.1f}" '
+            f'x2="{centre:.1f}" y2="{frame.zero_y - band.minimum * frame.scale:.1f}" '
+            f'stroke="var(--ink-1)" stroke-width="1"><title>year {year} total: '
+            f'{_esc(_band_str(band, "EUR/month"))}</title></line>'
+        ]
+
+    parts = _stacked_year_bars(
+        per_group, frame, horizon, "EUR/month", hairline=False, tick_size=9,
+        tick_y=frame.height - 12, year_marks=whisker,
+    )
+    parts.extend(_replacement_reserve_marks(totals, per_group, reserve, frame))
+    parts.append(_text(frame.left - 6, frame.top + 10, _fmt(max_pos), 9, "end", "var(--muted)"))
+    parts.append(_text(frame.left - 6, frame.zero_y + 4, "0", 9, "end", "var(--muted)"))
+    parts.append(_text(frame.width - 10, frame.height - 12, "year", 9, "end", "var(--muted)"))
     parts.append("</svg>")
     return "".join(parts)
 
 
 def _replacement_reserve_marks(
     totals: Sequence[UncertainValue],
+    per_year: Sequence[Mapping[int, float]],
     reserve: float,
-    left: float,
-    top: float,
-    zero_y: float,
-    bar_w: float,
-    scale: float,
+    frame: _StackedYearsFrame,
 ) -> List[str]:
     """The dashed reserve overlay of the monthly-burden chart, plus the legend that names it.
 
@@ -1540,33 +1632,41 @@ def _replacement_reserve_marks(
     Nothing is drawn for an evaluation that books no replacement — a flat line at the bar tops
     would read as a second, redundant series rather than as "there is no reserve here".
 
+    The overlay starts at the first year that actually draws a bar. It is an overlay *on* the
+    bars — "this month, plus the reserve" — and a segment hanging over the leading years that
+    book no recurring cost at all (year 0 in every run that pays for its hardware once) sits in
+    the margin above nothing, where it reads as a series of its own rather than as a supplement.
+
     Args:
         totals: The monthly total per year, index = year.
+        per_year: The stacked amounts per year, index-aligned with `totals`; a year whose values
+            are all zero draws no bar and therefore carries no overlay segment.
         reserve: The constant monthly replacement reserve; zero means no overlay.
-        left: Left edge of the plot area in user units.
-        top: Top of the plot area, where the legend line is printed.
-        zero_y: User-unit y of the zero baseline.
-        bar_w: Width of one year's bar, which each segment spans.
-        scale: Euros-per-month to user units.
+        frame: The chart's fitted plot area.
 
     Returns:
-        The segments and the legend, or an empty list when there is no reserve.
+        The segments and the legend, or an empty list when there is no reserve or no bar.
     """
-    if not reserve:
+    first_drawn = next(
+        (year for year, groups in enumerate(per_year) if any(groups.values())), None
+    )
+    if not reserve or first_drawn is None:
         return []
     parts: List[str] = []
-    for year, band in enumerate(totals):
-        x = left + year * bar_w
-        line_y = zero_y - (band.best_estimate + reserve) * scale
+    for year in range(first_drawn, len(totals)):
+        band = totals[year]
+        x = frame.left + year * frame.bar_w
+        line_y = frame.zero_y - (band.best_estimate + reserve) * frame.scale
         parts.append(
-            f'<line x1="{x + 1:.1f}" y1="{line_y:.1f}" x2="{x + bar_w - 1:.1f}" '
+            f'<line x1="{x + 1:.1f}" y1="{line_y:.1f}" x2="{x + frame.bar_w - 1:.1f}" '
             f'y2="{line_y:.1f}" stroke="var(--ink-1)" stroke-width="1.4" '
             f'stroke-dasharray="5 3"><title>year {year} with replacement reserve: '
             f"{_fmt(band.best_estimate + reserve)} EUR/month (of which {_fmt(reserve)} reserve)"
             f"</title></line>"
         )
     parts.append(
-        _text(left + 4, top + 10, f"— — with replacement reserve (+{_fmt(reserve)} EUR/month)",
+        _text(frame.left + 4, frame.top + 10,
+              f"— — with replacement reserve (+{_fmt(reserve)} EUR/month)",
               9, "start", "var(--muted)")
     )
     return parts

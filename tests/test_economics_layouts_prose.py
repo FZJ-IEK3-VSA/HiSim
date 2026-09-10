@@ -25,6 +25,7 @@ definition fails in CI rather than being printed to a reader as punctuation.
 # clean
 
 import dataclasses
+import re
 from typing import Any, Dict, List, Tuple
 
 import pytest
@@ -33,6 +34,7 @@ from hisim.economics.presentation_style import (
     ChromeColors,
     SankeyGeometry,
     SankeyLayout,
+    SequentialRamp,
     _place_nodes,
     sankey_node_boxes,
     squarified_layout,
@@ -479,6 +481,42 @@ class TestChromeColors:
         with pytest.raises(TypeError):
             palette["surface"] = "#000000"
         assert ChromeColors.LIGHT["surface"] == "#fcfcfb"
+
+
+class TestSequentialRamp:
+    """The ten ordered steps of the rate fan: as many as there are rates, in both themes."""
+
+    def test_both_themes_carry_one_step_per_grid_rate(self):
+        """A fan with more lines than the ramp has steps draws its last lines in an unset variable."""
+        assert len(SequentialRamp.LIGHT) == 10
+        assert len(SequentialRamp.DARK) == len(SequentialRamp.LIGHT)
+
+    def test_every_step_is_a_hex_colour(self):
+        """These land in a stylesheet verbatim; a malformed one fails silently as "no colour"."""
+        for ramp in (SequentialRamp.LIGHT, SequentialRamp.DARK):
+            assert all(re.fullmatch(r"#[0-9a-f]{6}", step) for step in ramp), ramp
+
+    def test_each_theme_runs_monotonically_from_its_surface_towards_its_ink(self):
+        """Ordered position *is* the encoding: a ramp that doubles back reads as two variables."""
+        for ramp, ascending in ((SequentialRamp.LIGHT, False), (SequentialRamp.DARK, True)):
+            levels = [_relative_luminance(step) for step in ramp]
+            pairs = list(zip(levels, levels[1:]))
+            assert all((first < second) == ascending for first, second in pairs), ramp
+
+    def test_no_two_steps_are_the_same_colour(self):
+        """Two rates in one hue is exactly the defect the categorical palette had here."""
+        for ramp in (SequentialRamp.LIGHT, SequentialRamp.DARK):
+            assert len(set(ramp)) == len(ramp)
+
+
+def _relative_luminance(color: str) -> float:
+    """The WCAG relative luminance of a `#rrggbb` string — how light the step reads."""
+    channels = [int(color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
+    linear = [
+        value / 12.92 if value <= 0.03928 else ((value + 0.055) / 1.055) ** 2.4
+        for value in channels
+    ]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
 
 
 class TestReportProse:

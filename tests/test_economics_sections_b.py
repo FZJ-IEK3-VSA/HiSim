@@ -9,11 +9,19 @@ above the bars rather than a bar of its own.
 
 The second half renders the sections built on those builders — the lifecycle overview, funding,
 the energy balance, the cost structure and the cost shapes, the equity build-up, the monthly
-burden and the bank benchmark — and checks that each opens the way every section of this report
-opens, states the disclosure it owes (what a treemap panel could not draw, what the balance could
-not place) and is reachable from the table of contents. Wording is not asserted here: it is
-owner-authored prose held in `report_prose.py` and byte-compared by
-`tests/test_economics_report_goldens.py`.
+burden and the bank benchmark — and checks what only a rendering of *these* fixtures can show:
+that a section states the figures its own view computed, that the balance names the roles it
+could not place, and that a perspective without the data skips its section instead of drawing an
+empty one.
+
+**Wording is not asserted here** — neither the authored prose of `report_prose.py` nor the
+run-specific captions built beside the charts: `tests/test_economics_report_goldens.py`
+byte-compares the whole document, and since the energy balance joined that fixture it covers all
+eight of these sections, their presence, their four-part opening, their contents links and every
+word of their captions included. The two loops that used to assert presence and contents here are
+gone for that reason; what stays is the half a golden cannot express, which is what a *different*
+fixture does. The single exception is marked where it stands: a note that *replaces* a chart has
+no trace in the output other than the sentence it is made of.
 
 **What a failure means.** A *presentation* failure: something a reader sees changed. It says
 nothing about whether the numbers are right — `tests/test_economics_views_charts_b.py` owns that —
@@ -22,6 +30,8 @@ and a bug caught here can mislead a reader but can never corrupt a stored result
 
 # clean
 
+import copy
+import dataclasses
 import re
 
 import pytest
@@ -35,15 +45,23 @@ from hisim.economics.financing import FinancingPlan
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
 from hisim.economics.plausibility import run_plausibility_checks
-from hisim.economics.presentation_style import PresentationStyle
-from hisim.economics.report_prose import ReportProse
+from hisim.economics.presentation_style import PresentationStyle, SequentialRamp
 from hisim.economics.reporting import ReportSections, build_lifecycle_report_html
-from hisim.economics.reporting.charts import _monthly_burden_svg, _treemap_svg
+from hisim.economics.reporting.charts import _ChartGeometry, _monthly_burden_svg, _treemap_svg
 from hisim.economics.reporting.scaffold import ReportChapters, _ChapterContext
-from hisim.economics.reporting.sections_charts import _energy_balance_section_html
+from hisim.economics.reporting.summary import _band_str, _fmt
+from hisim.economics.reporting.sections_charts import (
+    _energy_balance_section_html,
+    _monthly_burden_section_html,
+    _points,
+    _treemap_section_html,
+)
 from hisim.economics.results import EvaluationMatrix, LifecycleCostResult, compare
 from hisim.economics.uncertainty import UncertainValue
+from hisim.economics.views import CostDataError
 from hisim.loadtypes import ComponentType, Units
+
+from tests.economics_report_test_helpers import rects, rendered_sections
 
 pytestmark = pytest.mark.base
 
@@ -51,30 +69,24 @@ pytestmark = pytest.mark.base
 # ------------------------------------------------------------------ parsing what was emitted
 
 
-def _rects(svg: str):
-    """Every rectangle of an inline-SVG chart as `(x, y, width, height)`."""
+def _viewbox(svg: str):
+    """The `(width, height)` an inline SVG declares — the box its marks were laid out in."""
+    match = re.search(r'<svg viewBox="0 0 (\d+) (\d+)"', svg)
+    assert match is not None, "the chart declared no viewBox at all"
+    return float(match.group(1)), float(match.group(2))
+
+
+def _dashed_segments(svg: str):
+    """The monthly chart's reserve overlay as `(x1, y)` per segment, in emission order.
+
+    Keyed by the left edge rather than collected as bare y values, because the claim the overlay
+    has to satisfy is per *year* — each segment sits above the bar it supplements — and a list of
+    heights with no x cannot say which bar that is.
+    """
     return [
-        (float(x), float(y), float(w), float(h))
-        for x, y, w, h in re.findall(
-            r'<rect x="(-?[\d.]+)" y="(-?[\d.]+)" width="([\d.]+)" height="([\d.]+)"', svg
-        )
-    ]
-
-
-def _dashed_lines(svg: str):
-    """The `y` of every dashed horizontal rule — the monthly chart's reserve overlay."""
-    return [
-        float(y)
-        for y in re.findall(r'<line x1="[\d.]+" y1="([\d.]+)" x2="[\d.]+" y2="\1"[^>]*'
-                            r'stroke-dasharray="5 3"', svg)
-    ]
-
-
-def _rendered_sections(text: str):
-    """Every anchored section of a rendered report as `(anchor, html)`, in page order."""
-    return [
-        (match.group(1), match.group(0))
-        for match in re.finditer(r"<section id=\"([^\"]+)\">.*?</section>", text, flags=re.S)
+        (float(x1), float(y))
+        for x1, y in re.findall(r'<line x1="([\d.]+)" y1="([\d.]+)" x2="[\d.]+" y2="\2"[^>]*'
+                                r'stroke-dasharray="5 3"', svg)
     ]
 
 
@@ -88,28 +100,45 @@ class TestTreemapSvg:
         ("Maintenance - HeatPump", 10000.0, "var(--g2)"),
         ("Replacements - HeatPump", 10000.0, "var(--g3)"),
     ]
+    #: Any box that is not the default, so "the box it was given" means something.
+    PANEL = (380, 240)
 
     def test_the_tiles_fill_the_box_they_were_given(self):
         """A treemap that does not tile its box is not an area encoding of anything."""
-        svg = _treemap_svg(self.TILES, height=240)
-        rectangles = _rects(svg)
+        width, height = self.PANEL
+        svg = _treemap_svg(self.TILES, height=height, width=width)
+        assert _viewbox(svg) == (width, height)
+        rectangles = rects(svg)
         assert len(rectangles) == len(self.TILES)
         # Every tile is inset by one unit on each side, so the drawn area is short by the insets.
-        drawn = sum(width * height for _x, _y, width, height in rectangles)
-        box = (860 // 2 - 20) * 240
+        drawn = sum(tile_w * tile_h for _x, _y, tile_w, tile_h in rectangles)
+        box = width * height
         assert 0.85 * box < drawn < box
+
+    def test_the_default_box_is_the_shared_chart_column(self):
+        """A chart that sets its own width does not line up with the one above it."""
+        assert _viewbox(_treemap_svg(self.TILES))[0] == _ChartGeometry.WIDTH
+
+    def test_the_section_draws_both_panels_side_by_side(self, gross_result):
+        """Two bases across one column, which is the section's layout call rather than the chart's."""
+        context = _ChapterContext(chapter=ReportChapters.THE_BUILDING)
+        panels = re.findall(r"<svg viewBox=\"0 0 (\d+) \d+\"",
+                            _treemap_section_html(gross_result, context))
+        assert len(panels) == 2
+        assert all(0 < float(width) <= _ChartGeometry.WIDTH / 2 for width in panels)
 
     def test_tile_areas_are_proportional_to_the_amounts(self):
         """The whole claim of the chart: twice the money is twice the area."""
         svg = _treemap_svg(self.TILES, height=240)
-        areas = [width * height for _x, _y, width, height in _rects(svg)]
+        areas = [tile_w * tile_h for _x, _y, tile_w, tile_h in rects(svg)]
         assert areas[0] == pytest.approx(2 * areas[1], rel=0.05)
         assert areas[1] == pytest.approx(2 * areas[2], rel=0.05)
 
     def test_a_tile_too_small_for_a_label_keeps_its_tooltip(self):
         """The inline-SVG panel's advantage over the PNG: a sliver still names itself on hover."""
         svg = _treemap_svg(
-            [("Investment - HeatPump", 100000.0, "var(--g0)"), ("Energy - sliver", 1.0, "var(--g1)")]
+            [("Investment - HeatPump", 1000000.0, "var(--g0)"), ("Energy - sliver", 1.0, "var(--g1)")],
+            width=self.PANEL[0],
         )
         assert "<title>Energy - sliver: 1.00 EUR</title>" in svg
         assert ">Energy - sliver<" not in svg  # no room for the printed label
@@ -124,39 +153,121 @@ class TestTreemapSvg:
 class TestMonthlyBurdenSvg:
     """The stacked monthly bars, on a hand-priced perspective rather than on the layout."""
 
-    def test_costs_and_credits_stack_on_separate_baselines(self, financed_result):
-        """A feed-in credit must not shorten the energy bar it is drawn beside."""
-        svg = _monthly_burden_svg(financed_result)
-        rectangles = _rects(svg)
-        assert rectangles, "the fixture books no recurring flow at all"
+    @staticmethod
+    def _zero_line(svg: str) -> float:
+        """The y of the chart's zero baseline, which both stacks are drawn from."""
         baseline = re.search(
             r'<line x1="[\d.]+" y1="([\d.]+)" x2="[\d.]+" y2="\1" stroke="var\(--baseline\)"', svg
         )
         assert baseline is not None, "the chart drew no zero baseline to stack against"
-        zero_y = float(baseline.group(1))
+        return float(baseline.group(1))
+
+    def test_costs_and_credits_stack_on_separate_baselines(self, financed_result, financed_burden):
+        """A feed-in credit must not shorten the energy bar it is drawn beside."""
+        svg = _monthly_burden_svg(financed_result, financed_burden)
+        rectangles = rects(svg)
+        assert rectangles, "the fixture books no recurring flow at all"
+        zero_y = self._zero_line(svg)
         above = [rect for rect in rectangles if rect[1] + rect[3] <= zero_y + 0.001]
         below = [rect for rect in rectangles if rect[1] >= zero_y - 0.001]
         assert above and below, "the fixture books no credit, so nothing tests the second baseline"
         assert len(above) + len(below) == len(rectangles), "a bar crossed the zero line"
 
-    def test_the_reserve_line_sits_above_the_bars_it_supplements(self, financed_result):
-        """The reserve is what the month costs *once the sinking fund is paid*, so it is on top."""
-        burden = views.monthly_burden_series(financed_result)
-        svg = _monthly_burden_svg(financed_result)
-        if not burden.replacement_reserve_per_month:
-            assert 'stroke-dasharray="5 3"' not in svg
-            return
-        assert "with replacement reserve" in svg
-        reserve_tops = _dashed_lines(svg)
-        bar_tops = [y for _x, y, _w, _h in _rects(svg)]
-        assert reserve_tops and min(reserve_tops) <= min(bar_tops) + 0.5
+    def test_every_reserve_segment_is_priced_at_its_own_year_plus_the_reserve(
+        self, financed_result, financed_burden
+    ):
+        """The dashed line is a number, not a decoration: it is that month plus the sinking fund.
 
-    def test_the_banded_total_gets_a_whisker_and_the_segments_do_not(self, financed_result):
+        Priced from the emitted file alone. The zero line and the bars give the chart's scale —
+        the monthly stack draws each segment at its full height, so one year's positive stack is
+        exactly its amount in user units — and every dashed segment then has to land at
+        `zero - (that year's total + the reserve) x scale`. A reserve drawn flat, drawn at the
+        wrong year's total, or drawn on the bars' own baseline instead of above them all fail
+        this, and none of them would fail a test that only looked at the highest dashed line.
+        """
+        svg = _monthly_burden_svg(financed_result, financed_burden)
+        reserve = financed_burden.replacement_reserve_per_month
+        assert reserve, "the fixture books no replacement, so there is no overlay to price"
+        per_group = views.monthly_burden_by_group(financed_result, PresentationStyle.CATEGORY_TO_GROUP)
+        zero_y = self._zero_line(svg)
+        bar_w = (_ChartGeometry.WIDTH - 70 - 20) / len(financed_burden.series)
+        scale = None
+        for year, groups in enumerate(per_group):
+            positive = sum(value for value in groups.values() if value > 0)
+            if positive:
+                x = 70 + year * bar_w
+                stack = [
+                    height for left, top, _w, height in rects(svg)
+                    if abs(left - (x + 1)) < 0.05 and top + height <= zero_y + 0.001
+                ]
+                scale = sum(stack) / positive
+                break
+        assert scale is not None, "no year draws a bar, so the chart's scale cannot be recovered"
+        segments = dict(_dashed_segments(svg))
+        assert segments, "the reserve is non-zero but no segment was drawn"
+        for year, band in enumerate(financed_burden.series):
+            x1 = round(70 + year * bar_w + 1, 1)
+            if x1 not in segments:
+                continue
+            expected = zero_y - (band.best_estimate + reserve) * scale
+            assert segments[x1] == pytest.approx(expected, abs=0.15), year
+
+    def test_the_reserve_line_sits_above_the_bars_it_supplements(
+        self, financed_result, financed_burden
+    ):
+        """The reserve is what the month costs *once the sinking fund is paid*, so it is on top.
+
+        Per year, not "somewhere above the tallest bar": the overlay follows the recurring total,
+        which moves with the years, so a segment that has slipped under its own year's stack is
+        the defect and the highest segment of the chart says nothing about it.
+        """
+        svg = _monthly_burden_svg(financed_result, financed_burden)
+        assert financed_burden.replacement_reserve_per_month, "nothing to draw"
+        assert "with replacement reserve" in svg
+        tops: dict = {}
+        for left, top, _width, _height in rects(svg):
+            tops[round(left, 1)] = min(tops.get(round(left, 1), top), top)
+        drawn = 0
+        for x1, line_y in _dashed_segments(svg):
+            if x1 not in tops:
+                continue
+            drawn += 1
+            assert line_y <= tops[x1] + 0.001, x1
+        assert drawn, "no dashed segment sits over a bar at all"
+
+    def test_no_reserve_segment_hangs_over_a_year_that_draws_no_bar(
+        self, financed_result, financed_burden
+    ):
+        """Year 0 books no recurring month, so an overlay there floats in the empty margin."""
+        svg = _monthly_burden_svg(financed_result, financed_burden)
+        per_group = views.monthly_burden_by_group(financed_result, PresentationStyle.CATEGORY_TO_GROUP)
+        first_drawn = next(year for year, groups in enumerate(per_group) if any(groups.values()))
+        assert first_drawn > 0, "the fixture draws a bar in year 0, so nothing tests the trim"
+        bar_w = (_ChartGeometry.WIDTH - 70 - 20) / len(financed_burden.series)
+        left_edges = [x1 for x1, _y in _dashed_segments(svg)]
+        assert min(left_edges) == pytest.approx(70 + first_drawn * bar_w + 1, abs=0.05)
+        assert len(left_edges) == len(financed_burden.series) - first_drawn
+
+    def test_the_banded_total_gets_a_whisker_and_the_segments_do_not(
+        self, financed_result, financed_burden
+    ):
         """Banding every segment of a stack produces a picture nobody can read."""
-        svg = _monthly_burden_svg(financed_result)
+        svg = _monthly_burden_svg(financed_result, financed_burden)
         whiskers = re.findall(r'<line x1="([\d.]+)" y1="[\d.]+" x2="\1"', svg)
         assert whiskers, "the fixture's monthly totals are degenerate, so nothing is banded"
         assert svg.count("total:") == len(whiskers)
+
+    def test_a_perspective_with_no_recurring_month_skips_the_section(self, financed_result):
+        """The unreachable `if not burden.series` used to let an all-capital view draw a bare axis."""
+        context = _ChapterContext(chapter=ReportChapters.THE_BUILDING)
+        capital_only = copy.deepcopy(financed_result)
+        capital_only.timeline.entries = [
+            entry for entry in capital_only.timeline.entries
+            if entry.category not in views.BurdenCategories.RECURRING
+        ]
+        assert views.monthly_burden_series(capital_only).series, "the series is still one per year"
+        assert _monthly_burden_section_html(capital_only, context) == ""
+        assert [entry.name for entry in context.skipped] == [ReportSections.MONTHLY_BURDEN[1]]
 
 
 # ---------------------------------------------------------------- the sections built on them
@@ -252,6 +363,18 @@ def fixture_financed_result(database) -> LifecycleCostResult:
     return _evaluate(database, REPORT_PERSPECTIVES[1])
 
 
+@pytest.fixture(name="financed_burden", scope="module")
+def fixture_financed_burden(financed_result) -> views.MonthlyBurden:
+    """Its monthly burden, derived once — the section derives it and hands it to the chart."""
+    return views.monthly_burden_series(financed_result)
+
+
+@pytest.fixture(name="gross_result", scope="module")
+def fixture_gross_result(database) -> LifecycleCostResult:
+    """The unfinanced perspective, for the sections drawn on the matrix's first row."""
+    return _evaluate(database, REPORT_PERSPECTIVES[0])
+
+
 @pytest.fixture(name="report", scope="module")
 def fixture_report(database) -> str:
     """The richest document these fixtures reach: both perspectives, a comparison and a reference."""
@@ -279,34 +402,24 @@ NEW_ANCHORS = (
 
 
 class TestTheNewSectionsRender:
-    """Each of them is present, names its perspective and opens the way the others open."""
+    """Each of them is present on *this* fixture, in the declared order, named by perspective.
+
+    The four-part opening and the contents links are not here: they are the same for every
+    section of the report and are byte-compared, for all eight of these, by
+    `tests/test_economics_report_goldens.py`. What this fixture adds is that a *different* set of
+    perspectives — a gross and a financed one, with a device energy record — still reaches all
+    eight, so the disclosure tests below are not quietly asserting on sections that never
+    rendered.
+    """
 
     def test_every_new_section_is_in_the_document(self, report):
         """A section that skipped itself would leave the fixture verifying nothing."""
         for anchor in NEW_ANCHORS:
             assert f'id="{anchor}"' in report, anchor
 
-    def test_every_new_section_opens_with_the_four_authored_parts(self, report):
-        """No chart without the block that explains it — the rule 2.6 opening, verbatim."""
-        by_anchor = dict(_rendered_sections(report))
-        names = dict((f"building-{anchor}", name) for anchor, name in ReportSections.ORDER)
-        for anchor in NEW_ANCHORS:
-            html = by_anchor[anchor]
-            prose = ReportProse.for_section(names[anchor])
-            assert f"<p class='sub'>{ReportProse.to_html(prose.shows)}</p>" in html, anchor
-            assert f"<p class='sub'>{ReportProse.to_html(prose.adds)}</p>" in html, anchor
-            assert "<summary>Terms used here</summary>" in html, anchor
-            assert "<summary>How this is calculated</summary>" in html, anchor
-
-    def test_the_contents_reach_every_new_section(self, report):
-        """Navigation replaced the numbering, so a new section that is not in it is unreachable."""
-        contents = report.split("</nav>")[0]
-        for anchor in NEW_ANCHORS:
-            assert f'href="#{anchor}"' in contents, anchor
-
     def test_the_new_sections_sit_where_the_order_declares(self, report):
         """`ReportSections.ORDER` is the document's own claim about its shape; the page follows it."""
-        anchors = [anchor for anchor, _html in _rendered_sections(report)]
+        anchors = [anchor for anchor, _html in rendered_sections(report)]
         declared = [
             f"building-{anchor}" for anchor, _name in ReportSections.ORDER
             if f"building-{anchor}" in anchors
@@ -315,56 +428,61 @@ class TestTheNewSectionsRender:
 
     def test_a_perspective_scoped_section_names_its_perspective(self, report):
         """The equity build-up is drawn for the financed view, not for the matrix's first row."""
-        by_anchor = dict(_rendered_sections(report))
+        by_anchor = dict(rendered_sections(report))
         assert "<h3>Equity build-up (financed)" in by_anchor["building-equity-build-up"]
         assert "<h3>Cost structure (gross)" in by_anchor["building-cost-structure"]
         assert "<h3>Funding (financed)" in by_anchor["building-funding"]
 
 
 class TestTheDisclosuresEachSectionOwes:
-    """The run-specific half of a section: what its chart could not draw, in its own caption."""
+    """The run-specific half of a section: this run's own figures, in its own caption.
 
-    def test_both_treemap_bases_are_drawn_and_both_state_what_they_hide(self, report):
-        """Neither basis alone is the whole truth (Q11), so each panel says what it left out."""
-        structure = dict(_rendered_sections(report))["building-cost-structure"]
-        assert structure.count("<svg") == 2
-        assert "gross cost:" in structure and "net of credits:" in structure
-        assert "The gross panel leaves out" in structure
-        assert "The net panel applies each subject&#x27;s credits" in structure
+    Asserted as *numbers read back from the view*, never as the sentence around them. The
+    sentences are golden-tested word for word; what a golden cannot check is that the figure the
+    section printed is the one its view computed, because both sides of that comparison move
+    together when the fixture changes.
+    """
 
     def test_the_funding_section_states_the_double_entry_it_was_given(self, report):
         """Sources equal uses equal the gross year-0 investment, or the Sankey is a picture."""
-        funding = dict(_rendered_sections(report))["building-funding"]
-        assert "Checked here: sources" in funding
-        amounts = re.findall(r"([\d,]+) EUR", funding.split("Checked here:")[1])
+        funding = dict(rendered_sections(report))["building-funding"]
+        # The section's own caption is the last paragraph before its diagram; the paragraphs
+        # above it are the authored opening, which states no amount.
+        caption = funding[:funding.index("<svg")].rsplit("<p class='sub'>", 1)[1]
+        amounts = re.findall(r"([\d,]+) EUR", caption)
         assert len(amounts) >= 3
         assert amounts[0] == amounts[1] == amounts[2]
 
-    def test_the_cost_shapes_caption_reconciles_the_widest_block(self, report):
-        """The complaint it answers ("the chart does not add up") is only answered by numbers."""
-        shapes = dict(_rendered_sections(report))["building-cost-shapes"]
-        assert "How a block reconciles." in shapes
-        assert "EUR of cost" in shapes and "EUR of credit" in shapes
-        assert "stacked into a block of" in shapes
-
-    def test_the_equity_section_ties_the_horizon_to_the_residual_credit(self, report):
+    def test_the_equity_section_prints_the_residual_credit_its_view_computed(
+        self, report, financed_result
+    ):
         """The book-value line is the residual calculator's own basis; that is its audit weight."""
-        equity = dict(_rendered_sections(report))["building-equity-build-up"]
-        assert "At the horizon the book value equals the residual value credited" in equity
-        assert "Equity stays positive" in equity or "Equity is negative in year" in equity
+        equity = dict(rendered_sections(report))["building-equity-build-up"]
+        series = views.asset_debt_series(financed_result)
+        assert f"{_fmt(series.residual_credit_in_euro)} EUR" in equity
 
-    def test_the_monthly_burden_names_year_one_and_its_reserve_line(self, report):
+    def test_the_monthly_burden_prints_year_one_and_the_reserve_its_view_computed(
+        self, report, gross_result
+    ):
         """A monthly figure whose scope is unstated is the easiest number in the report to misread."""
-        burden = dict(_rendered_sections(report))["building-monthly-burden"]
-        assert "Year 1 is" in burden and "EUR/month" in burden
-        assert "reserve line" in burden
+        section = dict(rendered_sections(report))["building-monthly-burden"]
+        burden = views.monthly_burden_series(gross_result)
+        assert _band_str(burden.series[1], "EUR/month") in section
+        assert f"{_fmt(burden.replacement_reserve_per_month)} EUR/month" in section
 
-    def test_the_benchmark_states_its_break_even_rate_or_says_there_is_none(self, report):
+    def test_the_benchmark_draws_both_panels_and_states_the_crossings_it_found(self, report):
         """An absent break-even reads as "did not compute" unless the window is named."""
-        benchmark = dict(_rendered_sections(report))["building-bank-benchmark"]
-        assert "Break-even rate in this run:" in benchmark
+        benchmark = dict(rendered_sections(report))["building-bank-benchmark"]
         assert benchmark.count("<svg") == 2  # the rate fan and the terminal advantage
         assert "interest rate [%] (nominal, pre-tax)" in benchmark
+
+    def test_the_rate_fan_draws_ten_distinct_ramp_steps(self, report):
+        """Ten ordered rates in a cycled eight-colour palette gave 9 % and 10 % away to 1 % and 2 %."""
+        benchmark = dict(rendered_sections(report))["building-bank-benchmark"]
+        fan = re.findall(r'stroke="var\(--ramp(\d+)\)"', benchmark)
+        assert len(fan) == len(views.WealthBenchmarkGrid.RATES) == len(SequentialRamp.LIGHT)
+        assert len(set(fan)) == len(fan)
+        assert [int(step) for step in fan] == sorted(int(step) for step in fan)
 
     def test_the_overview_says_why_it_has_no_payback_milestone_without_a_reference(
         self, financed_result
@@ -378,22 +496,87 @@ class TestTheDisclosuresEachSectionOwes:
         assert "<svg" in section
 
 
+class TestTheCostStructurePanels:
+    """Both bases are drawn, and a basis with nothing to draw is a sentence instead of a box."""
+
+    def test_both_bases_are_drawn_for_a_perspective_that_has_both(self, report):
+        """Neither basis alone is the whole truth (Q11), so both panels are there.
+
+        The two disclosures the panels owe — what the gross basis leaves out, which subjects the
+        net basis clamped — are the goldens'; here it is only that there are two panels and one
+        caption paragraph under them.
+        """
+        structure = dict(rendered_sections(report))["building-cost-structure"]
+        assert structure.count("<svg") == 2
+        assert re.search(r"</div><p class='sub'>\S", structure), "the panels carry no caption"
+
+    def test_a_basis_with_nothing_to_draw_is_a_note_rather_than_an_empty_box(
+        self, gross_result, monkeypatch
+    ):
+        """A "0 EUR" heading over an empty box is a chart that failed, not a composition.
+
+        The one place this module reads a sentence: here the sentence *is* the behaviour, since a
+        note that replaces a panel has no other trace in the output than the words it is made of.
+        """
+        _empty_the_tiles(monkeypatch, views.TileBasis.NET_OF_CREDITS)
+        context = _ChapterContext(chapter=ReportChapters.THE_BUILDING)
+        section = _treemap_section_html(gross_result, context)
+        assert section.count("<svg") == 1
+        assert len(re.findall(r"<div><p class='sub'><b>", section)) == 1
+        assert "every subject&#x27;s credits reach its costs" in section
+
+    def test_a_perspective_with_no_area_on_either_basis_skips_the_section(
+        self, gross_result, monkeypatch
+    ):
+        """Both bases empty is no composition at all, and the reader is told so under the contents."""
+        _empty_the_tiles(monkeypatch, views.TileBasis.GROSS, views.TileBasis.NET_OF_CREDITS)
+        context = _ChapterContext(chapter=ReportChapters.THE_BUILDING)
+        assert _treemap_section_html(gross_result, context) == ""
+        assert [entry.name for entry in context.skipped] == [ReportSections.COST_STRUCTURE[1]]
+
+
+def _empty_the_tiles(monkeypatch, *bases: views.TileBasis) -> None:
+    """Makes `views.cost_structure_tiles` come back with no drawable tile for those bases.
+
+    A perspective whose credits reach its costs on a basis is a real evaluation and a rare one,
+    and building one out of the shipped cost database would pin the test to that database's
+    numbers. The clamping itself happens in the view and is tested there; what is under test here
+    is what the *section* does when the view comes back with nothing positive, so the view is
+    asked normally and its tiles are emptied on the way out.
+    """
+    original = views.cost_structure_tiles
+
+    def emptied(result, mapping, basis):
+        """The real disclosures, with the tile list emptied for the named bases."""
+        tiles = original(result, mapping, basis)
+        return dataclasses.replace(tiles, tiles=[]) if basis in bases else tiles
+
+    monkeypatch.setattr(views, "cost_structure_tiles", emptied)
+
+
 class TestEnergyBalanceSection:
     """V12's caption is where the diagram states what it could not draw."""
 
-    def test_the_caption_carries_the_shares_and_the_residual_terminal(self, report):
+    def test_the_caption_carries_the_shares_and_the_residual_terminal(self, report, gross_result):
         """Self-consumption, autarky and the unattributed remainder, from the view's own figures."""
-        balance = dict(_rendered_sections(report))["building-energy-balance"]
-        assert "self-consumption" in balance and "self-sufficiency" in balance
-        assert "shown as their own node rather than quietly balanced away" in balance
-        assert "losses / unattributed" in balance
+        balance = dict(rendered_sections(report))["building-energy-balance"]
+        flows = views.energy_balance_flows(gross_result)
+        assert f"{flows.self_consumption_share:.0%}" in balance
+        assert f"{flows.self_sufficiency_share:.0%}" in balance
+        residual = next(
+            node for node in flows.sources + flows.sinks
+            if node.label == views.EnergyBalanceLayout.RESIDUAL_LABEL
+        )
+        assert f"{residual.quantity_in_kwh:,.0f} kWh/a" in balance
 
-    def test_a_role_the_balance_cannot_place_is_named_in_the_caption(self, database):
+    def test_a_role_the_balance_cannot_place_is_named_beside_the_diagram_not_in_it(self, database):
         """It has no side of the bus, so the only honest place for it is the words beside it.
 
         A diagram quietly missing 2,500 kWh/a looks exactly like a diagram that never had them,
         which is why `EnergyBalanceFlows.unattributed_roles_in_kwh` exists at all — and a view
         that carries the remainder out to a renderer that drops it again would be no better.
+        Asserted structurally: the role's name is in a caption paragraph and in no node label or
+        tooltip of the drawing, which is the difference between naming it and drawing it.
         """
         result = _evaluate(database, REPORT_PERSPECTIVES[0])
         result.annual_energy_attribution_by_subject_in_kwh = dict(
@@ -401,9 +584,9 @@ class TestEnergyBalanceSection:
         )
         context = _ChapterContext(chapter=ReportChapters.THE_BUILDING)
         section = _energy_balance_section_html(result, context)
-        assert "WIND_GENERATION" in section
-        assert "2,500 kWh/a carry role name(s) this balance has no side for" in section
-        assert "outside the diagram altogether" in section
+        captions = re.findall(r"<p class='sub'>([^<]*)</p>", section)
+        assert any("WIND_GENERATION" in caption for caption in captions)
+        assert "WIND_GENERATION" not in section[section.index("<svg"):]
 
     def test_a_result_without_device_flows_skips_the_section(self, database):
         """A meter talking to itself is not a balance (Q16); the section vanishes instead."""
@@ -413,6 +596,22 @@ class TestEnergyBalanceSection:
         }
         context = _ChapterContext(chapter=ReportChapters.THE_BUILDING)
         assert _energy_balance_section_html(result, context) == ""
+        assert [entry.name for entry in context.skipped] == [ReportSections.ENERGY_BALANCE[1]]
+
+
+class TestTheSeriesTheChartsAreHandedAreWholeSeries:
+    """A curve one year short of its axis is a complete-looking line that ends in the wrong year."""
+
+    def test_a_length_mismatch_is_refused_rather_than_zipped_away(self):
+        """`zip` stops at the shorter list, which is a silent redraw of the same chart."""
+        with pytest.raises(CostDataError, match="value"):
+            _points([0, 1, 2], [10.0, 20.0])
+        with pytest.raises(CostDataError):
+            _points([0, 1], [10.0, 20.0, 30.0])
+
+    def test_matched_lengths_are_paired_in_order(self):
+        """The ordinary path, so the guard cannot be satisfied by refusing everything."""
+        assert _points([0, 1], [10.0, 20.0]) == [(0.0, 10.0), (1.0, 20.0)]
 
 
 class TestTheDocumentStaysSelfContained:
@@ -425,7 +624,7 @@ class TestTheDocumentStaysSelfContained:
 
     def test_the_new_charts_use_the_shared_group_palette(self, report):
         """A hue that disagrees with the legend three sections up is a bug nobody reads as one."""
-        structure = dict(_rendered_sections(report))["building-cost-structure"]
+        structure = dict(rendered_sections(report))["building-cost-structure"]
         used = set(re.findall(r"var\(--g(\d)\)", structure))
         assert used
         assert all(int(index) < len(PresentationStyle.GROUP_COLORS_LIGHT) for index in used)

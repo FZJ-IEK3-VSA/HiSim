@@ -1,12 +1,14 @@
 """Tariff provider component (cost_spec.md §8.3).
 
-Evolves `generic_price_signal.py` (which stays untouched during the parallel phase) into a
-provider driven by a :class:`hisim.economics.tariffs.TariffContract` — the same contract the
-postprocessing billing engine reads, so control and billing can never diverge.
+Evolved out of `generic_price_signal.py` — which ran beside it during the parallel phase and
+has since been retired to `obsolete/components/` (component sweep decision D-16, 2026-09-10) —
+into a provider driven by a :class:`hisim.economics.tariffs.TariffContract`, the same contract
+the postprocessing billing engine reads, so control and billing can never diverge.
 
 Per timestep it outputs the total marginal purchase/injection price and the capacity-charge
 state a peak-shaving strategy needs, and publishes a 24 h price forecast to the
-`SingletonSimRepository` for MPC controllers (same mechanism as `generic_price_signal.py`).
+`SingletonSimRepository` — the mechanism `generic_price_signal.py` used, and the one an MPC
+controller would read.
 
 **Two consumers, one contract.** `hisim/economics/tariffs.py` owns the contract schema, its
 loaders and the pure billing engine; this module is its *simulation-side* consumer. During the
@@ -115,18 +117,22 @@ class TariffProvider(cp.Component):
     that the postprocessing billing engine later bills the resulting load profile with, so control
     decisions and their bill cannot be based on different prices.
 
-    **Who consumes what, as of today.** The 24 h forecast published to the `SingletonSimRepository`
-    is consumed by `controller_mpc.py`, which reads exactly those two keys — that is the live
-    consumer. The four per-timestep outputs are available for ordinary input wiring and are
+    **Who consumes what, as of today: nobody.** The 24 h forecast published to the
+    `SingletonSimRepository` was read by `controller_mpc.py`, which took exactly those two keys;
+    that controller was retired to `obsolete/components/` under component sweep decision D-16
+    (2026-09-10), so the forecast is published for a consumer that will be written rather than one
+    that exists. The four per-timestep outputs are available for ordinary input wiring and are
     recorded in the results frame, but no component in the shipped library takes a price input yet;
     `system_setups/economic_example/economic_example_heatpump.py` wires the provider in and its
     README states which output is read by whom. A rule-based EMS reacting to
     `CapacityChargeMarginal` is the intended next consumer, not a claim about the present.
 
-    **It supersedes `generic_price_signal.PriceSignal`** (which stays untouched during the parallel
-    phase), and the two must not appear in one setup: both publish the same two
-    `SingletonSimRepository` forecast keys, the repository holds one value per key, and two
-    publishers means whichever ran last silently decides what an MPC controller optimizes against.
+    **It replaced `generic_price_signal.PriceSignal`**, which ran beside it during the parallel
+    phase and was retired to `obsolete/components/` under component sweep decision D-16
+    (2026-09-10). The two must never have appeared in one setup, and now cannot: both published
+    the same two `SingletonSimRepository` forecast keys, the repository holds one value per key,
+    and two publishers meant whichever ran last silently decided what an MPC controller optimized
+    against.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST  # the contract prices energy, not hardware
@@ -401,7 +407,8 @@ class TariffProvider(cp.Component):
             stsv.set_output_value(self.peak_so_far_output, 0.0)
             stsv.set_output_value(self.capacity_charge_output, 0.0)
 
-        # 24 h price forecast for MPC (same mechanism as generic_price_signal.py, §8.3).
+        # 24 h price forecast for MPC (§8.3), under the keys the retired generic_price_signal.py
+        # published and the retired controller_mpc.py read; both left for obsolete/ under D-16.
         if timestep == 0 and self._price_series is not None:
             steps_per_day = int(24 * 3600 / self.my_simulation_parameters.seconds_per_timestep)
             # Both series are exactly one day long. The purchase forecast used to be truncated to

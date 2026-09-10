@@ -222,6 +222,18 @@ next to each other.
   `GasControllerConfig`, `CHPControllerConfig`) move with it, out of the shared
   `hisim/components/configuration.py` into `obsolete/components/configuration_fuel_cell_controller.py`.
   `configuration.py` keeps everything else.
+- **D-16** `[answered 2026-09-10]` **beyond the options offered: everything to `obsolete/`, nothing deleted; a class
+  sharing a file is moved out into its own file rather than removed with it.** The four components the survey's
+  option (a) would have deferred — `controller_mpc`, `controller_pid`, `generic_windturbine`,
+  `generic_price_signal` — move now with their four tests, so the group leaves nothing in limbo.
+  `SimpleHotWaterStorageController` and its config move out of `simple_water_storage.py` into
+  `obsolete/components/simple_hot_water_storage_controller.py`; `WarmWaterStorageConfig`, `LoadConfig`,
+  `ElectricityDemandConfig` and `PVConfig` move out of `configuration.py` into
+  `obsolete/components/configuration_legacy.py`. `HouseholdWarmWaterDemandConfig` is **live** — the UTSP connector
+  and `simple_water_storage.py` read its class constants — and stays; `HydrogenStorageConfig` and
+  `AdvElectrolyzerConfig` belong to D-25/D-29 and stay. The two dead factories
+  (`RandomNumbersConfig.get_default_config`, `PVSystem.get_default_config`) are **deleted**, not moved: a factory is
+  code, not a class, and both have zero callers.
 
 The 32 questions below are owner decisions surfaced by the survey. **Each five-part entry (question, context with `file:line` evidence, options with consequences, recommendation) is in `p4_class_survey.md` under the same ID** — kept there because 32 full entries would triple this document; the table gives the question, the author's recommendation and what it blocks. Answers are recorded here as dated decisions and mirrored into R3.
 
@@ -231,7 +243,7 @@ The 32 questions below are owner decisions surfaced by the survey. **Each five-p
 | D-1 | `advanced_heat_pump_hplib` (Quantity-typed, 0 setups): convert, lower to floats, or retire as duplicate? | (b) lower to floats, then convert like its sibling | R3 hplib rows |
 | D-2 | ~~`controller_l1_heatpump` (0 call sites): delete or convert?~~ | `[answered 2026-09-10]` **(a)** moved to `obsolete/components/`, not deleted | R3, R6 |
 | D-8 | ~~`advanced_fuel_cell_controller` + 3 legacy `configuration.py` configs (unrunnable): obsolete together?~~ | `[answered 2026-09-10]` **(a)** one commit; the three configs move out into their own file under `obsolete/components/` rather than being deleted | R6 |
-| D-16 | Storage controller, MPC, PID, wind, price signal, dead factories, 5 `configuration.py` classes | (a) delete storage controller, `configuration.py` five and dead factories now; defer MPC/PID/wind/price to the runtime-SimRepository redesign | R3, R6 |
+| D-16 | ~~Storage controller, MPC, PID, wind, price signal, dead factories, 5 `configuration.py` classes~~ | `[answered 2026-09-10]` **beyond the three options: everything to `obsolete/`, nothing deleted** — MPC/PID/wind/price move now rather than being deferred, and a class sharing a file is moved out into its own file. Only the two dead factories are deleted; only `HouseholdWarmWaterDemandConfig` (live) and the D-25/D-29 pair stay in `configuration.py` | R3, R6 |
 | D-23 | ~~Car chain not expressible in a file~~ | `[answered 2026-08-31]` **(d), none of the three offered:** convert now by *routing around* `SizingContext` rather than through it. The occupancy publishes its per-car profiles into the per-simulation `SimRepository` in `i_prepare_simulation`; `Car` reads its own there in the same phase and loses its third constructor argument; `CarConfig` gains `household_name`, `car_name` and a `for_household` constructor. The survey's objection stands unamended — a time series can never be a fact — but a config can name one. The N-car loop stays Python. The shared-config aliasing bug is fixed on the way, since each car now builds its own config. | R3 mobility |
 | D-25 | Two manufacturer JSONs absent; six H₂/RSOC classes unbuildable | (b) obsolete the RSOC trio and the fuel-cell table path; keep `pem` presets | R3 H₂, R6 |
 | D-29 | Two electrolyzer + two H₂-storage classes for two devices | (a) keep `generic_*`, obsolete `generic_electrolyzer_and_h2_storage` + `AdvElectrolyzerConfig` | R3 H₂ |

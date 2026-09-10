@@ -631,7 +631,6 @@ class DeviceEnergySpecs:
         "FuelCellController": (),
         "L1Controller": (),
         "L1GenericElectrolyzerController": (),
-        "MpcController": (),
         "PTXController": (),
         "RsocBatteryController": (),
         "XTPController": (),
@@ -652,9 +651,6 @@ class DeviceEnergySpecs:
         # energy), so it cannot be drawn under the battery's charge/discharge pair.
         "CarBattery": (),
         "Car": (),
-        # Wind generation would need a generation terminal of its own; PV_GENERATION is the PV
-        # array's, and a wind turbine drawn there would be labelled as solar.
-        "Windturbine": (),
         # Electric heat and cooling: resistive space/DHW heat and air conditioning are neither the
         # household base load nor a heat pump's electricity.
         "ElectricHeating": (),

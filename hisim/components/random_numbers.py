@@ -62,16 +62,6 @@ class RandomNumbersConfig(ConfigBase):
                 "round."
             )
 
-    @classmethod
-    def get_default_config(cls) -> "RandomNumbersConfig":
-        """Gets a default config."""
-        return RandomNumbersConfig(
-            component_id=ComponentID(name="RandomNumbers"),
-            minimum=1,
-            maximum=20,
-            seed=1,
-        )
-
 
 class RandomNumbers(Component):
     """Component that generates random numbers for simulation.

@@ -457,42 +457,6 @@ class PVSystem(cp.Component):
         self.add_default_connections(self.get_default_connections_from_weather())
 
     @staticmethod
-    def get_default_config(
-        power_in_watt: float = 10e3,
-        source_weight: int = 1,
-        share_of_maximum_pv_potential: float = 1.0,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Get default config."""
-        if component_id is None:
-            component_id = ComponentID(name="PVSystem")
-        config = PVSystemConfig(
-            component_id=component_id,
-            time=2019,
-            location="Aachen",
-            module_name="Hanwha HSL60P6-PA-4-250T [2013]",
-            integrate_inverter=True,
-            inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-            module_database=PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
-            inverter_database=PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
-            power_in_watt=power_in_watt,
-            azimuth=180,
-            tilt=30,
-            share_of_maximum_pv_potential=share_of_maximum_pv_potential,
-            load_module_data=False,
-            source_weight=source_weight,
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-            lifetime_in_years=None,
-            prediction_horizon=None,
-            predictive=False,
-            predictive_control=False,
-        )
-        return config
-
-    @staticmethod
     def get_cost_capex(config: PVSystemConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
         component_type = lt.ComponentType.PV

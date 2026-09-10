@@ -51,7 +51,6 @@ is documented via autodoc.
 
 * **Energy generation** —
   PV (:py:mod:`~hisim.components.generic_pv_system`),
-  wind (:py:mod:`~hisim.components.generic_windturbine`),
   CHP (:py:mod:`~hisim.components.generic_chp`),
   solar thermal (:py:mod:`~hisim.components.solar_thermal_system`)
 
@@ -106,12 +105,10 @@ is documented via autodoc.
   :py:mod:`~hisim.components.controller_l2_ptx_energy_management_system`,
   :py:mod:`~hisim.components.controller_l2_rsoc_battery_system`,
   :py:mod:`~hisim.components.controller_l2_xtp_fuel_cell_ems`),
-  MPC (:py:mod:`~hisim.components.controller_mpc`),
-  PID (:py:mod:`~hisim.components.controller_pid`),
   night setback (:py:mod:`~hisim.components.night_setback_controller`)
 
 * **Signal sources & utilities** —
-  price signals (:py:mod:`~hisim.components.generic_price_signal`),
+  tariffs (:py:mod:`~hisim.components.tariff_provider`),
   RSoC (:py:mod:`~hisim.components.generic_rsoc`),
   smart device (:py:mod:`~hisim.components.generic_smart_device`),
   CSV loader (:py:mod:`~hisim.components.csvloader`),

@@ -348,7 +348,7 @@ class TestDetailTable:
         timeline_total = sum(
             entry.amount_in_euro.best_estimate for entry in result.scoped_timeline().entries
         )
-        assert table_total == pytest.approx(timeline_total, abs=views.ViewThresholds.DETAIL_ROW_EPSILON * 50)
+        assert table_total == pytest.approx(timeline_total, abs=views.ViewTolerances.DETAIL_ROW_EPSILON * 50)
 
     def test_years_are_ordered_and_rows_sorted_by_amount(self, result):
         """Presentation relies on the order; it is part of the view's contract."""

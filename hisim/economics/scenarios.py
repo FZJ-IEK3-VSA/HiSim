@@ -54,6 +54,7 @@ from hisim import log
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs
+from hisim.economics.numerics import bisect_root
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import Perspective
 from hisim.economics.results import LifecycleCostResult
@@ -730,21 +731,16 @@ def find_break_even(
         Bisection rather than a faster root finder because the KPI is only piecewise smooth in most
         axes — subsidy caps, replacement years and tier tables all introduce kinks — and bisection
         is the method that cannot be thrown by them as long as the interval brackets a sign change.
+        The halving itself is `numerics.bisect_root`, shared with the loan view's effective-rate
+        solver; the None it returns for a window that brackets no crossing is this function's "no
+        crossing in range".
         """
-        low, high = search_range
-        delta_low, delta_high = delta_at(low, slot), delta_at(high, slot)
-        if delta_low * delta_high > 0:
-            return None  # no crossing in range
-        for _ in range(max_iterations):
-            mid = (low + high) / 2.0
-            delta_mid = delta_at(mid, slot)
-            if abs(high - low) < tolerance:
-                return mid
-            if delta_low * delta_mid <= 0:
-                high, delta_high = mid, delta_mid
-            else:
-                low, delta_low = mid, delta_mid
-        return (low + high) / 2.0
+        return bisect_root(
+            lambda value: delta_at(value, slot),
+            window=search_range,
+            max_iterations=max_iterations,
+            tolerance=tolerance,
+        )
 
     crossing = bisect("best_estimate")
     return {

@@ -1,8 +1,8 @@
 """Section builders of the HTML lifecycle report (cost_spec.md §7.2, §9.5).
 
-One function per report section along the calculation chain — input audit, sources,
-investment, timeline, energy bill, CO2 and the subsidy tables/cards (with the D28
-content-key de-duplication) — plus the report CSS. The sections of the visualization set
+One function per report section along the calculation chain — the primer that opens the
+document, input audit, sources, investment, timeline, energy bill, CO2 and the subsidy
+tables/cards (with the D28 content-key de-duplication) — plus the report CSS. The sections of the visualization set
 live beside them in `sections_charts`; every one of them, here and there, opens through
 `scaffold._section_open` and `scaffold._explanation_html`, so its name, its anchor and its
 authored explanation come from one place. Assembly order and the document shell live in
@@ -56,6 +56,30 @@ from hisim.economics.reporting.scaffold import (
 )
 
 # ---------------------------------------------------------------------------- HTML report (A)
+
+
+def _how_to_read_section_html(context: _ChapterContext) -> str:
+    """The primer: the three conventions every other section assumes the reader knows.
+
+    Discounting, the three complete worlds behind every `best_estimate [min | max]` band, and the
+    sign rule that keeps costs and credits apart are stated once, at the top of the page, so no
+    section has to re-derive them next to its own chart. It carries no number and no chart, which
+    is why it is the one section built from nothing but its heading and its explanation block —
+    and why it always renders: there is no input that could make it empty.
+
+    It lives here, with the other prose sections, rather than in `scaffold.py` where the
+    vocabulary it is built from lives: scaffold keeps the primitives, a section that opens a
+    `<section>` and renders authored text is a section like any other.
+
+    Args:
+        context: The chapter this section is being rendered into.
+
+    Returns:
+        The section, always.
+    """
+    return _section_open(ReportSections.HOW_TO_READ, context) + _explanation_html(
+        ReportSections.HOW_TO_READ, context
+    ) + "</section>"
 
 
 def _group_color_declarations(colors: List[str]) -> str:

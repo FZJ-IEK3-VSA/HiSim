@@ -571,3 +571,8 @@ class TestPngsAndCli:
             assert (variant_dir / file_name).is_file(), file_name
         summary = (variant_dir / "cost_summary.md").read_text(encoding="utf-8")
         assert "## Variant comparison" in summary
+        # The CLI is the only caller that passes the comparison's *reference result*, which is
+        # what the NPV bridge decomposes; without it the section is skipped, and nothing else
+        # here would notice.
+        report = (variant_dir / "lifecycle_report.html").read_text(encoding="utf-8")
+        assert 'id="building-npv-bridge"' in report

@@ -220,8 +220,8 @@ class TestHtmlReport:
             ">KPIs",  # §7.3
         ):
             assert marker in text, marker
-        assert text.count("<svg") >= 5
-        assert "https://" not in text.split("sources used", maxsplit=1)[0]  # charts stay self-contained
+        # Self-containment (inline SVG, no external request) is asserted on the richer document
+        # of `tests/test_economics_sections_a.py`, which reaches twice as many charts.
         assert "prefers-color-scheme: dark" in text  # theme-aware
 
     def test_report_with_comparison_section(self, database, matrix):

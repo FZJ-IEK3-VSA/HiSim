@@ -2,9 +2,10 @@
 
 Produced for the LIFECYCLE_COST_REPORT postprocessing option, which arrives with stack part 8/8
 (the bridge). The report follows the money along the calculation chain so results can be checked
-for plausibility. `scaffold.ReportSections.ORDER` is the authoritative list of its sections and
-of the order they appear in; it is deliberately not restated here, because a second list is a
-second thing to keep in step and the first one to go stale.
+for plausibility. `scaffold.ReportSections.ORDER` is the authoritative list of *which* sections
+exist and what they are called; the order they appear in is `assembly`'s, and from slice 9 of
+this stack the chapters'. Neither is restated here, because a second list is a second thing to
+keep in step and the first one to go stale.
 
 Outputs: `cost_summary.md` (diffable text), `lifecycle_report.html` (self-contained, inline
 SVG, light/dark aware) and matplotlib PNGs (see `report_plots.py`).

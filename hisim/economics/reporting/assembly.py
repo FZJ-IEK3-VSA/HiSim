@@ -14,7 +14,6 @@ import datetime
 import os
 from typing import Dict, List, Optional, Tuple
 
-from hisim import log
 from hisim.economics import views
 from hisim.economics.input_audit import InputAuditReport
 from hisim.economics.plausibility import PlausibilityReport
@@ -34,15 +33,16 @@ from hisim.economics.reporting.summary import (
     render_plausibility_findings,
 )
 from hisim.economics.reporting.charts import (
-    _bar_row,
+    _CentredAxisFrame,
+    _CentredRow,
+    _ChartGeometry,
+    _centred_axis_svg,
     _details,
     _esc,
     _legend_html,
     _payback_svg,
     _stacked_subject_svg,
-    _svg_open,
     _table,
-    _text,
     _waterfall_svg,
     _whisker_svg,
 )
@@ -52,7 +52,7 @@ from hisim.economics.reporting.scaffold import (
     _ChapterContext,
     _chapter_open,
     _explanation_html,
-    _how_to_read_section_html,
+    _not_drawn_html,
     _section_open,
     _table_of_contents_html,
 )
@@ -61,6 +61,7 @@ from hisim.economics.reporting.sections import (
     _audit_section_html,
     _co2_section_html,
     _energy_section_html,
+    _how_to_read_section_html,
     _investment_section_html,
     _subsidy_section_html,
     _timeline_section_html,
@@ -195,48 +196,44 @@ def _actor_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> s
 def _tornado_svg(rows: List[Tuple[str, float]], base_value: float) -> str:
     """Diverging bars: per-scenario swing of the headline KPI vs. the base scenario.
 
-    The standard sensitivity picture, drawn for section 9: each scenario's equivalent annual
-    cost minus the base scenario's, sorted by absolute magnitude so the assumptions the result
-    is most sensitive to come first. Colour carries the direction (red for more expensive, aqua
-    for cheaper) rather than the identity of the scenario, because the reader's question here is
-    "which way and how far", not "which series is which".
+    The standard sensitivity picture: each scenario's equivalent annual cost minus the base
+    scenario's, sorted by absolute magnitude so the assumptions the result is most sensitive to
+    come first. Colour carries the direction (red for more expensive, aqua for cheaper) rather
+    than the identity of the scenario, because the reader's question here is "which way and how
+    far", not "which series is which".
 
     Geometry: a centred zero axis with the plot half-width scaled to the largest absolute swing,
     so the widest bar always fills its side; the base value is printed under the axis so the
-    swings can be read as absolutes. Sorting happens here and only affects display — the swings
+    swings can be read as absolutes. The axis, the row walk and the footnote are
+    `charts._centred_axis_svg`'s, shared with the uncertainty tornado, which is the same drawing
+    with different numbers in it. Sorting happens here and only affects display — the swings
     themselves come from `ScenarioCube.equivalent_annual_cost_swings`.
     """
     if not rows:
         return ""
-    width, row_h, left = 860, 28, 250
+    row_h, left = 28, 250
     height = len(rows) * row_h + 26
     span = max(max(abs(swing) for _label, swing in rows), 1e-9)
-    center = left + (width - left - 120) / 2.0
-    scale = (width - left - 120) / 2.0 / span
-    parts = _svg_open(width, height)
-    parts.append(f'<line x1="{center}" y1="4" x2="{center}" y2="{height - 20}" stroke="var(--baseline)"/>')
-    y = 4.0
+    half_width = (_ChartGeometry.WIDTH - left - 120) / 2.0
+    center = left + half_width
+    scale = half_width / span
+    drawn: List[_CentredRow] = []
     for label, swing in sorted(rows, key=lambda item: -abs(item[1])):
         color = "var(--g5)" if swing > 0 else "var(--g1)"
         x_from = center if swing >= 0 else center + swing * scale
         anchor_x = center + swing * scale + (6 if swing >= 0 else -6)
-        parts.extend(
-            _bar_row(
-                label=label,
-                y=y,
-                row_h=row_h,
-                left=left,
-                bars=[(x_from, abs(swing) * scale, color,
-                       f"{label}: {'+' if swing >= 0 else ''}{_fmt(swing)} EUR/a vs base", 3)],
-                value=(anchor_x, f"{'+' if swing >= 0 else ''}{_fmt(swing)}",
-                       "start" if swing >= 0 else "end"),
-                inset=5,
-            )
-        )
-        y += row_h
-    parts.append(_text(center, height - 6, f"base: {_fmt(base_value)} EUR/a", 10, "middle", "var(--muted)"))
-    parts.append("</svg>")
-    return "".join(parts)
+        drawn.append((
+            label,
+            [(x_from, abs(swing) * scale, color,
+              f"{label}: {'+' if swing >= 0 else ''}{_fmt(swing)} EUR/a vs base", 3)],
+            (anchor_x, f"{'+' if swing >= 0 else ''}{_fmt(swing)}", "start" if swing >= 0 else "end"),
+        ))
+    return _centred_axis_svg(
+        drawn,
+        _CentredAxisFrame(left=left, center=center, row_h=row_h, first_y=4.0, inset=5, text_size=10),
+        height,
+        f"base: {_fmt(base_value)} EUR/a",
+    )
 
 
 def _scenario_section_html(scenario_cube, matrix: EvaluationMatrix, context: _ChapterContext) -> str:
@@ -545,7 +542,8 @@ def build_lifecycle_report_html(
     from `_ReportCss`, charts as inline SVG, tooltips native, no script and no font, image or
     CDN request — so it survives being mailed, archived beside the results or opened offline.
     Sections that have nothing to show return the empty string and vanish rather than rendering
-    an empty box, which is why the list is concatenated blindly. When every band is degenerate
+    an empty box, which is why the list is concatenated blindly; each of them says so under the
+    table of contents, so a gap in the page is never left to the reader to interpret. When every band is degenerate
     the header carries the `_degenerate_note` explanation, so missing whiskers read as a
     property of the price data rather than as a broken feature.
 
@@ -563,7 +561,7 @@ def build_lifecycle_report_html(
         reference_result: The comparison's baseline result. Needed by the NPV bridge, which
             decomposes a comparison by cost group rather than restating it, because a
             `VariantComparison` publishes no such split. Without it that section is omitted and
-            the omission is logged.
+            the omission is named under the contents like every other.
 
     Returns:
         The complete HTML document as one string.
@@ -599,7 +597,8 @@ def build_lifecycle_report_html(
         "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
         f"<title>Lifecycle cost report</title><style>{_ReportCss.CSS}</style></head>"
-        f"<body><main>{header}{_table_of_contents_html(document)}{document}{footer}</main></body></html>"
+        f"<body><main>{header}{_table_of_contents_html(document)}"
+        f"{_not_drawn_html(context.skipped)}{document}{footer}</main></body></html>"
     )
 
 
@@ -620,10 +619,17 @@ def _document_sections(
     than one expression.
 
     Most sections take the matrix's first perspective, which is the reference view of the run.
-    Three cannot and use `_first_result_where` instead: the cost-of-credit panel needs a financed
-    perspective, the who-pays-whom Sankey needs one with more than one payer, and the landlord
-    statement needs a landlord-scoped one. Each of them names the perspective it is showing in
-    its own heading, and skips itself with a log line when the run has none.
+    Two cannot and use `_first_result_where` instead: the who-pays-whom Sankey needs a
+    perspective with more than one payer, and the landlord statement a landlord-scoped one. Both
+    name the perspective they are showing in their own heading, and record a reason on the
+    context when the run has none. The loan and cost-of-credit sections take the whole matrix,
+    because they draw a block per financed perspective rather than picking one.
+
+    The cash curve is the fourth: with a comparison it draws the perspective the comparison was
+    computed *for*, not the matrix's first, because the payback sentence under it comes from that
+    comparison and a payback drawn under somebody else's cash position is simply a wrong chart.
+    The section refuses the mix rather than trusting this call site (§seam 4 is about numbers;
+    this is the same argument about which result a number belongs to).
 
     Args:
         matrix: Evaluated perspectives.
@@ -639,13 +645,13 @@ def _document_sections(
         The sections in page order; the empty ones are kept and concatenate to nothing.
     """
     reference = _reference_result(matrix)
-    financed = _first_result_where(
-        matrix, lambda result: views.loan_amortization_series(result).has_flows()
-    ) or reference
     multi_actor = _first_result_where(
         matrix, lambda result: len({entry.payer for entry in result.timeline.entries}) > 1
     ) or reference
     landlord = _first_result_where(matrix, lambda result: result.scope_payer == Actor.LANDLORD)
+    # The comparison names its own perspective; drawing the cash curve on any other one would
+    # put its payback sentence under a stranger's curve.
+    liquidity = matrix.results.get(comparison.perspective_id, reference) if comparison else reference
     sections = [
         _how_to_read_section_html(context),
         _checks_section_html(plausibility, context),
@@ -653,14 +659,19 @@ def _document_sections(
         _investment_section_html(reference, context),
         _component_events_section_html(reference, context),
         _timeline_section_html(matrix, context),
-        _liquidity_section_html(reference, comparison, context),
+        _liquidity_section_html(liquidity, comparison, context),
         _loan_section_html(matrix, context),
-        _cost_of_credit_section_html(financed, context),
+        _cost_of_credit_section_html(matrix, context),
         _energy_section_html(reference, context),
         _co2_section_html(matrix, context),
         _subsidy_section_html(matrix, context),
         _perspective_section_html(matrix, context),
-        _landlord_statement_section_html(landlord, context) if landlord is not None else "",
+        _landlord_statement_section_html(landlord, context) if landlord is not None
+        else context.skip(
+            ReportSections.LANDLORD_STATEMENT,
+            "No perspective of this run is scoped to the landlord, so there is no landlord "
+            "business case to state.",
+        ),
         _actor_section_html(matrix, context),
         _actor_flow_section_html(multi_actor, context),
         _uncertainty_section_html(reference, context),
@@ -672,12 +683,15 @@ def _document_sections(
         sections.append(_comparison_section_html(comparison, context))
         variant = matrix.results.get(comparison.perspective_id, reference)
         if reference_result is not None:
-            sections.append(_comparison_bridge_section_html(reference_result, variant, context))
-        else:
-            log.information(
-                "NPV bridge skipped: the report was built with a comparison but without the "
-                "reference result it decomposes."
+            sections.append(
+                _comparison_bridge_section_html(reference_result, variant, comparison, context)
             )
+        else:
+            sections.append(context.skip(
+                ReportSections.NPV_BRIDGE,
+                "The report was built with a comparison but without the reference result the "
+                "bridge decomposes, so there is nothing to split by cost group.",
+            ))
     return sections
 
 

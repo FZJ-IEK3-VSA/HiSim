@@ -2,11 +2,12 @@
 
 The scaffolding every section builder opens with: the mnemonic `(anchor, name)` pairs of
 `ReportSections`, the `ReportChapters` a section is rendered into, the `_ChapterContext` that
-makes an anchor unique and remembers what has already been explained, and the three renderers
-built on them — `_section_open`, `_chapter_open` and `_explanation_html`, the last of which is
-the only place `report_prose.ReportProse` reaches the page. `_how_to_read_section_html` and
-`_table_of_contents_html` sit here for the same reason: both are made of nothing but this
-vocabulary.
+makes an anchor unique, remembers what has already been explained and collects what the run
+could not draw, and the renderers built on them — `_section_open`, `_chapter_open` and
+`_explanation_html`, the last of which is the only place `report_prose.ReportProse` reaches the
+page. `_table_of_contents_html` and `_not_drawn_html` sit here for the same reason: both are
+made of nothing but this vocabulary. The prose sections themselves, the primer included, live in
+`sections.py` with the rest of the authored text.
 
 Its own module rather than a block of `assembly.py` because both `sections.py` and
 `sections_charts.py` open their sections through it while `assembly.py` imports *them* — putting
@@ -18,7 +19,7 @@ it in `assembly` would close that loop into a circular import. It sits one layer
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 from hisim.economics.report_prose import ReportProse
 
@@ -34,12 +35,19 @@ class ReportSections:
     reader could not use either to navigate. Names replace both; the V-numbers survive only as
     spec-internal identifiers, the way the decision log's D-numbers do.
 
-    `ORDER` is what the table of contents iterates. It is a superset: a section that has nothing
-    to show returns an empty string and then appears in neither the page nor the contents, which
-    is why the contents are built from the rendered sections rather than from this list alone. It
-    is also ahead of the renderers — the charts of the second half of the visualization set land
-    in a later slice — so a name here without a builder yet is expected, and `ReportProse` already
-    carries the authored text for all of them.
+    `ORDER` is the canonical *membership* and the canonical names of the sections, not the page
+    order: the page order is the assembly's, and from slice 9 of this stack the chapters' — the
+    same section name legitimately appears in more than one chapter, in a position each chapter
+    chooses for its own story, so no single list here could be the order. What this list is for
+    is the set: `tests/test_economics_sections_a.py` checks that every anchor the document emits
+    is a member of it, and the table of contents iterates it to find the sections a chapter
+    rendered before sorting them by where they actually are on the page.
+
+    It is a superset: a section that has nothing to show returns an empty string and then appears
+    in neither the page nor the contents (the document says so under "Not drawn for this run"
+    instead). It is also ahead of the renderers — the charts of the second half of the
+    visualization set land in a later slice — so a name here without a builder yet is expected,
+    and `ReportProse` already carries the authored text for all of them.
 
     `HOW_TO_READ` is the one section that carries no chart and no number: the primer that states
     the three conventions — discounting, the three worlds of the min/max band, and the sign rule —
@@ -114,11 +122,12 @@ class ReportChapters:
     when a reference variant exists, and it carries no authored intro because it answers a
     question about two runs rather than about one party.
 
-    `assembly.py` currently renders the whole document as `THE_BUILDING`: splitting the story
-    chapters apart needs the per-party statement sections, which land with the second half of the
-    chart set. The machinery is here now because the anchors, the contents and the
-    explain-once-then-link rule are what the section builders are written against, and retrofitting
-    them later would touch every one of them a second time.
+    `assembly.py` currently renders the whole document as `THE_BUILDING`: the chapter split
+    itself arrives with **slice 9 of this stack**, because it needs the per-party statement
+    sections that land with the second half of the chart set. The machinery is here now because
+    the anchors, the contents and the explain-once-then-link rule are what the section builders
+    are written against, and retrofitting them later would touch every one of them a second
+    time.
     """
 
     THE_BUILDING = ("building", "The building")
@@ -134,6 +143,27 @@ class ReportChapters:
     WITHOUT_INTRO = (COMPARISON,)
 
 
+@dataclass(frozen=True)
+class SkippedSection:
+    """One section — or, from slice 9 of this stack, one chapter — the run did not draw, and why.
+
+    The report is read by people who did not build it, and a section that is simply absent is
+    indistinguishable from one that was never written: "no loan chart" reads as "this run has no
+    loan" to one reader and as "the loan chart is broken" to another. The reason travels with the
+    omission so the document can answer that itself, which is what `_not_drawn_html` prints.
+
+    Attributes:
+        name: The section's (or chapter's) own name, as its heading would have carried it.
+        reason: The full sentence stating why it could not be drawn.
+        chapter: The chapter it would have been drawn in; empty for a chapter-level skip, which
+            *is* a chapter.
+    """
+
+    name: str
+    reason: str
+    chapter: str = ""
+
+
 @dataclass
 class _ChapterContext:
     """Which chapter a section is being rendered into, and what has already been explained.
@@ -146,18 +176,65 @@ class _ChapterContext:
     longest part of most sections, and a reader who has just read it does not want it again three
     screens further down.
 
-    `first_explained` is shared between the contexts of all chapters — it is the document's
-    memory, not the chapter's — which is why this is a mutable object handed around rather than a
-    value each chapter builds for itself.
+    `first_explained` and `skipped` are shared between the contexts of all chapters — they are
+    the document's memory, not the chapter's — which is why this is a mutable object handed
+    around rather than a value each chapter builds for itself.
     """
 
     chapter: Tuple[str, str]
     #: section name -> (anchor, chapter name) of the occurrence that carries the full explanation.
     first_explained: Dict[str, Tuple[str, str]] = field(default_factory=dict)
+    #: Everything this run could not draw, in the order the assembly reached it.
+    skipped: List[SkippedSection] = field(default_factory=list)
 
     def for_chapter(self, chapter: Tuple[str, str]) -> "_ChapterContext":
-        """A context for another chapter, sharing this one's explanation memory."""
-        return _ChapterContext(chapter=chapter, first_explained=self.first_explained)
+        """A context for another chapter, sharing this one's explanation and skip memory.
+
+        Unused until **slice 9 of this stack** splits the document into chapters — today the
+        whole report is `THE_BUILDING` and there is no second chapter to derive. It exists now
+        because it is what makes the two memories the *document's* rather than a chapter's, which
+        is the property every section builder is already written against.
+        """
+        return _ChapterContext(
+            chapter=chapter, first_explained=self.first_explained, skipped=self.skipped
+        )
+
+    def skip(self, section: Tuple[str, str], reason: str) -> str:
+        """Records a section this run cannot draw, and returns the empty string it renders as.
+
+        A skipped section used to be a log line, which is the one place a reader of the report
+        will never look: the document simply had one section fewer than the last one they read,
+        with nothing to say whether it was dropped, empty or broken. The reason is now collected
+        here and printed under the table of contents by `_not_drawn_html`, so the answer arrives
+        with the question.
+
+        Args:
+            section: The `(anchor, name)` pair of the section that is not being drawn.
+            reason: Why — a full sentence, because it is read as prose in the document.
+
+        Returns:
+            The empty string, so a builder can `return context.skip(...)` in one line.
+        """
+        self.skipped.append(SkippedSection(name=section[1], reason=reason, chapter=self.chapter[1]))
+        return ""
+
+    def skip_chapter(self, chapter: Tuple[str, str], reason: str) -> List[str]:
+        """The same for a whole chapter, whose builder returns a list of blocks rather than one.
+
+        Nothing calls it until **slice 9 of this stack** builds the chapters, which are the first
+        thing large enough to be skipped as a unit ("this run tells no owner's story"). It is
+        here so that the chapter builders have the mechanism the section builders already use,
+        rather than reaching for the log the way they do today.
+
+        Args:
+            chapter: The `(anchor, name)` pair of the chapter that is not being drawn.
+            reason: Why, as a full sentence.
+
+        Returns:
+            The empty list of blocks.
+        """
+        self.skipped.append(SkippedSection(name=chapter[1], reason=reason))
+        return []
 
     def anchor_of(self, section: Tuple[str, str]) -> str:
         """The chapter-prefixed anchor of a section in this chapter (`owner-cash-curve`)."""
@@ -256,20 +333,6 @@ def _explanation_html(section: Tuple[str, str], context: _ChapterContext) -> str
     )
 
 
-def _how_to_read_section_html(context: _ChapterContext) -> str:
-    """The primer: the three conventions every other section assumes the reader knows.
-
-    Discounting, the three complete worlds behind every `best_estimate [min | max]` band, and the
-    sign rule that keeps costs and credits apart are stated once, at the top of the page, so no
-    section has to re-derive them next to its own chart. It carries no number and no chart, which
-    is why it is the one section built from nothing but its heading and its explanation block —
-    and why it always renders: there is no input that could make it empty.
-    """
-    return _section_open(ReportSections.HOW_TO_READ, context) + _explanation_html(
-        ReportSections.HOW_TO_READ, context
-    ) + "</section>"
-
-
 def _table_of_contents_html(document: str) -> str:
     """Two-level contents: every chapter that rendered, with the sections inside it (Q24).
 
@@ -305,3 +368,33 @@ def _table_of_contents_html(document: str) -> str:
         )
     parts.append("</nav>")
     return "".join(parts)
+
+
+def _not_drawn_html(skipped: List[SkippedSection]) -> str:
+    """What this run could not draw, named and explained, straight under the contents.
+
+    The counterpart of the contents: the contents list what is there, this lists what is not and
+    says why, so the two together account for every section the report could have had. It is
+    deliberately part of the *document* rather than a log line — the reader who notices the gap
+    is never the person tailing the process output, and by the time anyone reads the HTML the log
+    is somewhere else entirely.
+
+    Args:
+        skipped: What the section and chapter builders recorded while the document was rendered,
+            in the order they reached it.
+
+    Returns:
+        The block, or the empty string when this run drew everything it had a builder for.
+    """
+    if not skipped:
+        return ""
+    items = "".join(
+        f"<li><b>{_esc(entry.name)}</b>"
+        + (f" <span class='chapter-tag'>{_esc(entry.chapter)}</span>" if entry.chapter else "")
+        + f" &mdash; {_esc(entry.reason)}</li>"
+        for entry in skipped
+    )
+    return (
+        "<div class='sub' style='margin:0 0 18px 0'><b>Not drawn for this run</b>"
+        f"<ul style='margin:4px 0 0 0'>{items}</ul></div>"
+    )

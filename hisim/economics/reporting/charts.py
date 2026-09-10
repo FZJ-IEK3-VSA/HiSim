@@ -16,6 +16,7 @@ is what keeps this the bottom module of the package: `scaffold.py` borrows `_esc
 from __future__ import annotations
 
 import html
+from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from hisim.economics import views
@@ -372,62 +373,35 @@ def _annual_flow_svg(result: LifecycleCostResult) -> str:
 def _cumulative_npv_svg(result: LifecycleCostResult) -> str:
     """Cumulative discounted cost over the horizon, with its min/max uncertainty band.
 
-    Own axis (never dual-axis); the shaded band is the slot-wise LOW/HIGH envelope, so the
-    final point matches the reported NPV band exactly.
-
     This is where the report ties the year-by-year story to the headline number: the curve's end
     point is labelled with the NPV band and is, by construction, the same figure the perspective
     table prints, because both come from the same discounted series in
     `views.cumulative_discounted_cost_series`. A reviewer's check here is the shape — a steep
     year-0 step for the investment, a steady operating slope, visible replacement steps — and
-    that the label agrees with section 6.
+    that the label agrees with the perspectives section.
 
-    Geometry: `to_y` inverts value to pixel (larger value, smaller y) against a scale spanning
-    `low_value..top_value`, where `low_value` is clamped to at most 0 so the zero line is always
-    on the canvas even for an all-positive series. The band polygon is the LOW series drawn
-    left-to-right followed by the HIGH series drawn right-to-left, which closes it into a filled
-    ribbon; it is skipped entirely when the run has no bands.
+    It draws nothing itself. The cash curve's lower panel plots this very series through
+    `_xy_lines_svg`, and two renderers of one series are two chances for the same curve to be
+    drawn with two different axes; this one therefore assembles the series and hands them over.
+    The NPV band is passed as the *series label* rather than as a separate annotation, because
+    the generic renderer prints a series' label at its end point — which is exactly where this
+    chart has always carried it.
+
+    Args:
+        result: The perspective whose discounted cumulative cost is drawn.
+
+    Returns:
+        The complete `<svg>` element.
     """
-    horizon = result.parameters.observation_period_in_years
     cumulative = views.cumulative_discounted_cost_series(result)
-    top_value = max(max(series) for series in cumulative.values())
-    low_value = min(0.0, min(min(series) for series in cumulative.values()))
-    width, height, left, top, bottom = 860, 150, 70, 12, 26
-    scale = (height - top - bottom) / max(top_value - low_value, 1e-9)
-    step = (width - left - 20) / max(horizon, 1)
-
-    def to_y(value: float) -> float:
-        return top + (top_value - value) * scale
-
-    def points_of(series: List[float]) -> str:
-        return " ".join(f"{left + year * step:.1f},{to_y(value):.1f}" for year, value in enumerate(series))
-
-    parts = _svg_open(width, height)
-    parts.append(_hline(left, width - 10, to_y(0.0)))
-    band = result.total_npv_in_euro
-    if not band.is_exact():
-        # min series forward, max series backward -> closed band polygon.
-        forward = points_of(cumulative[Slot.LOW])
-        backward = " ".join(
-            f"{left + year * step:.1f},{to_y(value):.1f}"
-            for year, value in reversed(list(enumerate(cumulative[Slot.HIGH])))
-        )
-        parts.append(
-            f'<polygon points="{forward} {backward}" fill="var(--g0)" opacity="0.15">'
-            f"<title>cumulative discounted cost, min/max envelope</title></polygon>"
-        )
-    parts.append(
-        f'<polyline points="{points_of(cumulative[Slot.BEST_ESTIMATE])}" fill="none" stroke="var(--g0)" stroke-width="2">'
-        f"<title>cumulative discounted cost (best-estimate slot)</title></polyline>"
+    years = list(range(len(cumulative[Slot.BEST_ESTIMATE])))
+    return _xy_lines_svg(
+        series=[(f"NPV {_band_str(result.total_npv_in_euro)}",
+                 list(zip(years, cumulative[Slot.BEST_ESTIMATE])), "var(--g0)", 2.2, "")],
+        bands=[(list(zip(years, cumulative[Slot.LOW])),
+                list(zip(years, cumulative[Slot.HIGH])), "var(--g0)")],
+        y_label="cumulative discounted cost [EUR] - ends at the NPV",
     )
-    parts.append(_text(left - 6, to_y(top_value) + 8, _fmt(top_value), 10, "end", "var(--muted)"))
-    parts.append(_text(left - 6, to_y(0.0) + 4, "0", 10, "end", "var(--muted)"))
-    parts.append(
-        _text(left + horizon * step, to_y(cumulative[Slot.BEST_ESTIMATE][-1]) - 6,
-              f"NPV {_band_str(band)}", 11, "end", "var(--ink-1)", bold=True)
-    )
-    parts.append("</svg>")
-    return "".join(parts)
 
 
 def _waterfall_svg(steps: List[Tuple[str, float, str]], total_label: str, net: float) -> str:
@@ -1314,6 +1288,71 @@ def _bridge_svg(
     return "".join(parts)
 
 
+#: One row of a centred-axis chart: `(label, bars, value label)` as `_bar_row` takes them. The
+#: bars are already positioned against the axis, because only the caller knows what its own
+#: quantity means either side of zero.
+_CentredRow = Tuple[str, List[_Bar], Tuple[float, str, str]]
+
+
+@dataclass(frozen=True)
+class _CentredAxisFrame:
+    """Where a centred-zero-axis chart puts its axis, its rows and its footnote.
+
+    The two tornadoes of this report — the scenario swings and the uncertainty attribution — are
+    the same drawing with different numbers in it, and they were the same drawing written twice:
+    an axis at the centre of the plot, `_bar_row` rows walking down from a first y, and a
+    footnote under the axis stating what zero *is*. The frame is what the two disagree about,
+    and it is all they disagree about.
+
+    Attributes:
+        left: Left edge of the plot area; row labels end 8 units before it.
+        center: The zero axis, in user units — the caller computes it because it also has to
+            scale its bars against it.
+        row_h: Row height, added to `first_y` once per row.
+        first_y: Top of the first row.
+        inset: Vertical gap between a row and its bars.
+        text_size: Font size of both the per-row value label and the footnote.
+    """
+
+    left: float
+    center: float
+    row_h: float
+    first_y: float
+    inset: float
+    text_size: int
+
+
+def _centred_axis_svg(rows: List[_CentredRow], frame: _CentredAxisFrame, height: int, footer: str) -> str:
+    """A diverging bar chart: a zero axis down the middle, one `_bar_row` per row, a footnote.
+
+    Args:
+        rows: The rows in drawing order, each with its bars already placed against `frame.center`.
+        frame: The geometry the calling chart draws its rows in.
+        height: Canvas height; the axis stops 20 units above it and the footnote sits 6 above.
+        footer: What the axis means — "base: ... EUR/a", "total band ..." — centred under it.
+
+    Returns:
+        The complete `<svg>` element.
+    """
+    parts = _svg_open(_ChartGeometry.WIDTH, height)
+    parts.append(
+        f'<line x1="{frame.center:.1f}" y1="4" x2="{frame.center:.1f}" y2="{height - 20}" '
+        'stroke="var(--baseline)"/>'
+    )
+    y = frame.first_y
+    for label, bars, value in rows:
+        parts.extend(
+            _bar_row(
+                label, y, frame.row_h, frame.left, bars, value=value,
+                inset=frame.inset, value_size=frame.text_size,
+            )
+        )
+        y += frame.row_h
+    parts.append(_text(frame.center, height - 6, footer, frame.text_size, "middle", "var(--muted)"))
+    parts.append("</svg>")
+    return "".join(parts)
+
+
 def _attribution_tornado_svg(rows: List[views.AttributionRow], total: UncertainValue) -> str:
     """The uncertainty tornado: each subject's LOW and HIGH deltas around the best-estimate NPV.
 
@@ -1321,6 +1360,10 @@ def _attribution_tornado_svg(rows: List[views.AttributionRow], total: UncertainV
     the total best-estimate NPV. A mirrored revenue subject can have a positive LOW delta, which
     puts its whole bar on one side — correct, and the section's prose says so, because it looks
     like a bug the first time.
+
+    The axis, the row walk and the footnote are `_centred_axis_svg`'s, shared with the scenario
+    tornado; what is left here is the only thing the two charts genuinely disagree about, which
+    is what a row's bars mean.
 
     Args:
         rows: The attribution `views.uncertainty_attribution` returned, in its own order.
@@ -1338,11 +1381,7 @@ def _attribution_tornado_svg(rows: List[views.AttributionRow], total: UncertainV
     plot_w = _ChartGeometry.WIDTH - _ChartGeometry.LEFT - _ChartGeometry.RIGHT
     zero_x = _ChartGeometry.LEFT + plot_w / 2
     scale = (plot_w / 2) / span
-    parts = _svg_open(_ChartGeometry.WIDTH, height)
-    parts.append(
-        f'<line x1="{zero_x:.1f}" y1="4" x2="{zero_x:.1f}" y2="{height - 20}" stroke="var(--baseline)"/>'
-    )
-    y = 6.0
+    drawn: List[_CentredRow] = []
     for row in rows:
         bars: List[_Bar] = [
             (zero_x + min(delta, 0.0) * scale, abs(delta) * scale, color,
@@ -1351,20 +1390,21 @@ def _attribution_tornado_svg(rows: List[views.AttributionRow], total: UncertainV
                                  (row.high_delta_in_euro, "var(--g5)"))
             if delta
         ]
-        parts.extend(
-            _bar_row(
-                row.subject, y, _ChartGeometry.ROW_HEIGHT, _ChartGeometry.LEFT, bars,
-                value=(zero_x + max(row.high_delta_in_euro, 0.0) * scale + 6,
-                       f"{_fmt(row.low_delta_in_euro)} | {_fmt(row.high_delta_in_euro)}", "start"),
-                inset=6.0, value_size=9,
-            )
-        )
-        y += _ChartGeometry.ROW_HEIGHT
-    parts.append(
-        _text(zero_x, height - 6, f"total band {_band_str(total)}", 9, "middle", "var(--muted)")
+        drawn.append((
+            row.subject,
+            bars,
+            (zero_x + max(row.high_delta_in_euro, 0.0) * scale + 6,
+             f"{_fmt(row.low_delta_in_euro)} | {_fmt(row.high_delta_in_euro)}", "start"),
+        ))
+    return _centred_axis_svg(
+        drawn,
+        _CentredAxisFrame(
+            left=_ChartGeometry.LEFT, center=zero_x, row_h=_ChartGeometry.ROW_HEIGHT,
+            first_y=6.0, inset=6.0, text_size=9,
+        ),
+        height,
+        f"total band {_band_str(total)}",
     )
-    parts.append("</svg>")
-    return "".join(parts)
 
 
 def _cost_of_credit_svg(credit: views.TotalCostOfCredit) -> str:

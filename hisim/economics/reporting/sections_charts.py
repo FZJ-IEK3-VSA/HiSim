@@ -1,18 +1,22 @@
 """Report sections of the visualization set — the charts that answer a reader's own questions.
 
-One function per chart of the visualization extension that this slice carries: who pays whom
-(the actor Sankey and the landlord's income statement drawn as one), the cash curve, the
-uncertainty drivers, the NPV bridge, the loan and what credit costs, and the component
-lifetimes. They live beside `sections.py` rather than inside it because the two halves are
-already ~800 lines each and answer different questions — `sections.py` walks the calculation
-chain a reviewer checks, this module answers what a reader came for.
+One function per chart of the visualization extension that this slice carries: the cash curve
+with its payback sentence, the uncertainty drivers, who pays whom (the actor Sankey), the
+landlord statement (its two-sided table and the income Sankey of the same numbers), the loan,
+what that credit costs, the component lifetimes and the NPV bridge. They live beside
+`sections.py` rather than inside it because the two halves answer different questions —
+`sections.py` walks the calculation chain a reviewer checks, this module answers what a reader
+came for — and because one file of both would be some 1,500 lines.
 
 Like every other section they open with `scaffold._explanation_html`, i.e. with the four
 authored parts held in `report_prose.ReportProse` (rule 2.6): the report has to be understandable
 by a reader who has never seen a Sankey or a bridge waterfall, and because the explanations are
 part of the golden-tested HTML they are reviewed and frozen like any number. What stays in the
 functions below is the run-specific half a golden-stable text cannot carry: the captions and
-annotations that state this run's amounts, perspectives and skip reasons.
+annotations that state this run's amounts and perspectives. A section that cannot be drawn at
+all records its reason on the `_ChapterContext` and returns nothing; the document prints those
+reasons under its table of contents, because a reader who notices a missing section is never the
+person reading the log.
 
 The sections of the second half of the set — the cost structure treemap, the funding and
 energy-balance Sankeys, the monthly burden, the equity build-up, the wealth benchmark and the
@@ -24,8 +28,11 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from hisim import log
 from hisim.economics import views
+# The refusal type of the view layer, reached through `views` because that is the surface
+# seam 4 opens to presentation (`tests/test_economics_import_lint.py`): a report that cannot
+# tell which perspective it is drawing refuses with the same error a view would.
+from hisim.economics.views import CostDataError
 from hisim.economics.presentation_style import PresentationStyle, group_of
 from hisim.economics.results import EvaluationMatrix, LifecycleCostResult, VariantComparison
 from hisim.economics.timeline import CostCategory
@@ -87,10 +94,10 @@ def _has_year_zero_funding(result: LifecycleCostResult) -> bool:
     picture: such a view validates and raises, and choosing which perspective to draw must not
     depend on a validation that is only meaningful once the perspective has been chosen.
 
-    The funding section that selects its perspective with this arrives with the second half of
-    the chart set; the predicate is here already because it belongs with `_first_result_where`,
-    the other half of the same "pick a perspective that has the data" pattern, and
-    `tests/test_economics_sections_a.py` pins it.
+    Its caller is the funding section — the sources-and-uses picture of year 0 — which arrives
+    with **slice 7 of this stack**. The predicate is here already because it belongs with
+    `_first_result_where`, the other half of the same "pick a perspective that has the data"
+    pattern, and `tests/test_economics_sections_a.py` pins it.
 
     Args:
         result: The perspective to test.
@@ -120,14 +127,32 @@ def _liquidity_section_html(
     the cumulative discounted cost instead — whose end point is the reported NPV, which is what
     makes the panel worth keeping in a single-variant run.
 
+    **One perspective, one story.** With a comparison the whole section — the heading, both
+    panels and the payback sentence — is one perspective's, and it is the comparison's own: a
+    `VariantComparison` is computed for exactly one perspective, so a payback sentence drawn from
+    it under some other perspective's cash curve is two runs' figures presented as one. The
+    section refuses that combination rather than rendering it, because it is invisible in the
+    output: both halves are plausible, they just belong to different parties.
+
     Args:
-        result: The perspective whose liquidity is drawn.
+        result: The perspective whose liquidity is drawn; with a comparison it must be the one
+            the comparison was computed for.
         comparison: The variant comparison whose savings curve carries the payback, or None.
         context: The chapter this section is being rendered into.
 
     Returns:
         The section, with both panels.
+
+    Raises:
+        CostDataError: If the comparison was computed for a different perspective than `result`.
     """
+    if comparison is not None and comparison.perspective_id != result.perspective_id:
+        raise CostDataError(
+            f"The cash curve was asked to draw perspective {result.perspective_id!r} with the "
+            f"comparison of perspective {comparison.perspective_id!r}: the payback sentence and "
+            "the curve above it would then belong to two different parties. Pass the result the "
+            "comparison was computed for, or no comparison at all."
+        )
     nominal = views.cumulative_nominal_cost_series(result)
     years = list(range(len(nominal[Slot.BEST_ESTIMATE])))
     worst_year, worst_amount = views.worst_liquidity_position(result)
@@ -141,10 +166,16 @@ def _liquidity_section_html(
     )
     if comparison is not None:
         curves = comparison.cumulative_discounted_savings_in_euro
-        crossings = views.band_zero_crossings(curves)
-        low, best_estimate, high = curves["low"], curves["best_estimate"], curves["high"]
+        low = _savings_curve(curves, "low", comparison)
+        best_estimate = _savings_curve(curves, "best_estimate", comparison)
+        high = _savings_curve(curves, "high", comparison)
+        crossings = views.band_zero_crossings(
+            {"low": low, "best_estimate": best_estimate, "high": high}
+        )
         lower_label = "cumulative discounted savings [EUR] (reference - variant)"
-        payback_note = _payback_interval_prose(crossings)
+        payback_note = _payback_interval_prose(
+            crossings["low"], crossings["best_estimate"], crossings["high"]
+        )
     else:
         discounted = views.cumulative_discounted_cost_series(result)
         low, best_estimate, high = (
@@ -170,29 +201,76 @@ def _liquidity_section_html(
     )
 
 
-def _payback_interval_prose(crossings: Dict[Any, Optional[int]]) -> str:
-    """The payback sentence of the cash curve's lower panel, with the open end spelled out.
+def _savings_curve(
+    curves: Dict[str, List[float]], slot: str, comparison: VariantComparison
+) -> List[float]:
+    """One slot's cumulative savings curve, named in the refusal when it is not there.
 
-    Says "no payback in the pessimistic world within the horizon" in words rather than omitting
-    the statement, which is the failure mode this wording exists to prevent: an absent annotation
-    reads as "did not pay back" to one reader and as "not computed" to another.
+    The three curves are the whole lower panel: the band is drawn from two of them and the
+    payback sentence reads a crossing off each. A missing slot used to be a `KeyError` from a
+    subscript deep inside the section, or — worse, had anyone reached for `.get` — a silently
+    flat curve that reads as "no savings in that world". Naming the slot and the comparison turns
+    it into a sentence a reader of the traceback can act on.
 
     Args:
-        crossings: The zero-crossing year per slot as `views.band_zero_crossings` returns it,
-            None meaning "never within the horizon".
+        curves: The comparison's `cumulative_discounted_savings_in_euro`.
+        slot: The slot key to read: `"low"`, `"best_estimate"` or `"high"`.
+        comparison: The comparison the curves came from, named in the error.
+
+    Returns:
+        That slot's curve.
+
+    Raises:
+        CostDataError: If the comparison carries no curve for the slot.
+    """
+    if slot not in curves:
+        raise CostDataError(
+            f"The comparison of perspective {comparison.perspective_id!r} carries no "
+            f"{slot!r} cumulative savings curve (it has {sorted(curves)}), so the cash curve "
+            "cannot draw its band or state its payback."
+        )
+    return curves[slot]
+
+
+def _payback_interval_prose(
+    low: Optional[int], best_estimate: Optional[int], high: Optional[int]
+) -> str:
+    """The payback sentence of the cash curve's lower panel, with the open end spelled out.
+
+    Says "never within the horizon" in words rather than omitting the statement, which is the
+    failure mode this wording exists to prevent: an absent annotation reads as "did not pay back"
+    to one reader and as "not computed" to another. All three worlds are consulted, because a
+    sentence built from two of them cannot say where the answer actually lands.
+
+    **Which world is which.** Savings are reference minus variant, so the slot with the *larger*
+    savings pays back *earlier*: the HIGH savings slot is the optimistic world and the LOW one
+    the pessimistic. The sentence used to have those two the other way round, which inverted the
+    conclusion — a reader was told the pessimistic case paid back first.
+
+    Args:
+        low: The zero-crossing year of the LOW savings curve — the pessimistic world — or None.
+        best_estimate: The crossing of the central world, or None.
+        high: The crossing of the HIGH savings curve — the optimistic world — or None.
 
     Returns:
         One sentence naming the interval, or saying that there is none.
     """
-    low, high = crossings.get("low"), crossings.get("high")
-    if low is None:
+    if low is None and best_estimate is None and high is None:
         return "The investment does not pay back within the horizon in any of the three worlds."
-    if high is None:
+    if low is None and best_estimate is None:
         return (
-            f"Payback starts in year {low} in the optimistic world; in the pessimistic world the "
-            "curve never reaches zero within the horizon."
+            f"Payback lands in year {high} in the optimistic world only; in the central and the "
+            "pessimistic world the curve never reaches zero within the horizon."
         )
-    return f"Payback lands between year {low} (optimistic world) and year {high} (pessimistic world)."
+    return (
+        f"Payback lands in {_payback_year_prose(best_estimate)} in the central world, between "
+        f"{_payback_year_prose(high)} (optimistic) and {_payback_year_prose(low)} (pessimistic)."
+    )
+
+
+def _payback_year_prose(year: Optional[int]) -> str:
+    """One world's crossing as it is read aloud: "year 12", or that it never crossed."""
+    return f"year {year}" if year is not None else "never within the horizon"
 
 
 def _uncertainty_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
@@ -212,11 +290,11 @@ def _uncertainty_section_html(result: LifecycleCostResult, context: _ChapterCont
     """
     total = result.total_npv_in_euro
     if total.is_exact():
-        log.information(
-            f"Uncertainty attribution skipped for perspective {result.perspective_id!r}: the "
-            "total NPV band is degenerate, so there is no width to attribute."
+        return context.skip(
+            ReportSections.UNCERTAINTY_DRIVERS,
+            f"The total NPV band of perspective {result.perspective_id!r} is degenerate, so "
+            "there is no width to attribute to anything.",
         )
-        return ""
     rows = views.uncertainty_attribution(result)
     return (
         _section_open(ReportSections.UNCERTAINTY_DRIVERS, context, result.perspective_id)
@@ -258,11 +336,11 @@ def _actor_flow_section_html(result: LifecycleCostResult, context: _ChapterConte
     """
     matrix = views.actor_flow_matrix(result)
     if len(matrix.actors) < 2:
-        log.information(
-            f"Actor-flow Sankey skipped for perspective {result.perspective_id!r}: it has "
-            f"{len(matrix.actors)} actor node(s), so there is no who-pays-whom story to draw."
+        return context.skip(
+            ReportSections.WHO_PAYS_WHOM,
+            f"Perspective {result.perspective_id!r} has {len(matrix.actors)} actor node(s), so "
+            "one party pays everything and there is no who-pays-whom story to draw.",
         )
-        return ""
     nets = matrix.net_by_actor()
 
     def key(node: str, is_target: bool) -> str:
@@ -326,11 +404,11 @@ def _landlord_statement_section_html(result: LifecycleCostResult, context: _Chap
     """
     statement = views.landlord_statement(result)
     if not statement.cash_lines and not statement.accounting_lines:
-        log.information(
-            f"Landlord statement skipped for perspective {result.perspective_id!r}: it books no "
-            "flows at all, so there is no business case to state."
+        return context.skip(
+            ReportSections.LANDLORD_STATEMENT,
+            f"Perspective {result.perspective_id!r} books no flows at all, so there is no "
+            "landlord business case to state.",
         )
-        return ""
     rows = [
         [_esc(line.label), _fmt(line.npv_in_euro),
          "accounting" if line.is_accounting_credit else "cash"]
@@ -511,11 +589,11 @@ def _loan_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> st
             continue
         blocks.append(f"<p class='sub'><b>{_esc(perspective_id)}</b></p>" + chart)
     if not blocks:
-        log.information(
-            "Loan section skipped: no evaluated perspective carries loan flows (every purchase "
-            "in this bundle is a cash purchase)."
+        return context.skip(
+            ReportSections.LOAN,
+            "No evaluated perspective carries loan flows: every purchase in this bundle is a "
+            "cash purchase.",
         )
-        return ""
     return (
         _section_open(ReportSections.LOAN, context)
         + _explanation_html(ReportSections.LOAN, context)
@@ -546,27 +624,63 @@ def _effective_rate_text(credit: views.TotalCostOfCredit) -> str:
     return "n/a"
 
 
-def _cost_of_credit_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
+def _cost_of_credit_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
     """The loan's companion: the total cost of credit and the effective annual rate.
 
     Answers the question every loan document answers on its first page — "what does borrowing
     this money actually cost me" — from the same amortization series the debt-service chart in
     the loan section stacks.
 
+    One block per financed perspective, over exactly the set the loan section draws, and each
+    block names the perspective it belongs to. It used to disclose the *first* financed
+    perspective only, which is a silent half-answer in the common bundle where a gross and a net
+    view are both financed: the reader saw one effective rate, with nothing to say that a second
+    one existed and differed.
+
     Args:
-        result: The financed perspective to disclose.
+        matrix: The perspectives to disclose; the financed ones get a block, in matrix order.
         context: The chapter this section is being rendered into.
 
     Returns:
-        The section, or the empty string for a cash purchase with no loan flows.
+        The section, or the empty string when nobody in this bundle borrows.
     """
-    amortization = views.loan_amortization_series(result)
-    if not amortization.has_flows():
-        log.information(
-            f"Total cost of credit skipped for perspective {result.perspective_id!r}: it is a "
-            "cash purchase with no loan flows."
+    blocks = []
+    for perspective_id, result in matrix.results.items():
+        amortization = views.loan_amortization_series(result)
+        if not amortization.has_flows():
+            continue
+        blocks.append(
+            f"<p class='sub'><b>{_esc(perspective_id)}</b></p>"
+            + _cost_of_credit_block_html(result, amortization)
         )
-        return ""
+    if not blocks:
+        return context.skip(
+            ReportSections.COST_OF_CREDIT,
+            "No evaluated perspective carries loan flows, so there is no credit to price.",
+        )
+    return (
+        _section_open(ReportSections.COST_OF_CREDIT, context)
+        + _explanation_html(ReportSections.COST_OF_CREDIT, context)
+        + "".join(blocks) + "</section>"
+    )
+
+
+def _cost_of_credit_block_html(
+    result: LifecycleCostResult, amortization: views.LoanAmortization
+) -> str:
+    """One financed perspective's disclosure: the rate, the stacked bar, the table, the balance.
+
+    Split from the section itself because the section is now a loop over the financed
+    perspectives and the block is what one iteration of it renders — a per-perspective block that
+    is half section and half chart is exactly the shape that grows a second, divergent copy.
+
+    Args:
+        result: The financed perspective to disclose.
+        amortization: Its amortization series, already read by the caller to select it.
+
+    Returns:
+        The block's HTML.
+    """
     credit = views.total_cost_of_credit(result)
     years = list(range(len(amortization.outstanding_balance_in_euro)))
     balance_svg = _xy_lines_svg(
@@ -588,9 +702,7 @@ def _cost_of_credit_section_html(result: LifecycleCostResult, context: _ChapterC
         if abs(credit.unrepaid_principal_in_euro) > 0.005 else ""
     )
     return (
-        _section_open(ReportSections.COST_OF_CREDIT, context, result.perspective_id)
-        + _explanation_html(ReportSections.COST_OF_CREDIT, context)
-        + f"<p class='sub'>Effective annual rate: <b>{_esc(rate)}</b>.</p>" + unrepaid
+        f"<p class='sub'>Effective annual rate: <b>{_esc(rate)}</b>.</p>" + unrepaid
         + _cost_of_credit_svg(credit)
         + _table(
             ["Principal", "Interest", "Fees", "Repayment grant", "Total repaid", "Effective rate"],
@@ -599,7 +711,7 @@ def _cost_of_credit_section_html(result: LifecycleCostResult, context: _ChapterC
                 _fmt(credit.grants_in_euro), _fmt(credit.total_repaid_in_euro), _esc(rate),
             ]],
         )
-        + balance_svg + "</section>"
+        + balance_svg
     )
 
 
@@ -619,11 +731,11 @@ def _component_events_section_html(result: LifecycleCostResult, context: _Chapte
     """
     rows = views.component_event_strip(result)
     if not rows:
-        log.information(
-            f"Component event strip skipped for perspective {result.perspective_id!r}: it has no "
-            "component subjects (a carriers-only evaluation)."
+        return context.skip(
+            ReportSections.LIFETIMES,
+            f"Perspective {result.perspective_id!r} has no component subjects to put on a row "
+            "(a carriers-only evaluation).",
         )
-        return ""
     horizon = result.parameters.observation_period_in_years
     gantt_rows: List[
         Tuple[str, List[Tuple[int, Optional[int], str]], List[Tuple[int, str, Optional[float]]], str]
@@ -650,6 +762,7 @@ def _component_events_section_html(result: LifecycleCostResult, context: _Chapte
 def _comparison_bridge_section_html(
     reference: LifecycleCostResult,
     variant: LifecycleCostResult,
+    comparison: VariantComparison,
     context: _ChapterContext,
 ) -> str:
     """The NPV bridge: why the variant's NPV differs from the reference's, by cost group.
@@ -658,9 +771,17 @@ def _comparison_bridge_section_html(
     "what makes it cheaper", which is what a reader needs to judge whether the answer rests on
     one assumption or on many.
 
+    The net figure under the chart is the comparison's own `npv_delta_in_euro`, printed rather
+    than recomputed: the report used to subtract the two totals here, which is the engine's
+    arithmetic done a second time in the renderer (seam 4) and free to disagree with the delta
+    every other section of the report quotes. The steps still have to *sum* to it — that is the
+    reconciliation the bridge exists for, and reading two published numbers to check they agree
+    is not computing either of them.
+
     Args:
         reference: The baseline result the comparison was computed against.
         variant: The result being compared to it.
+        comparison: The comparison itself, which publishes the net difference.
         context: The chapter this section is being rendered into.
 
     Returns:
@@ -672,7 +793,7 @@ def _comparison_bridge_section_html(
         for step in steps
         if abs(step.delta_in_euro) >= 0.005
     ]
-    delta = variant.total_npv_in_euro.best_estimate - reference.total_npv_in_euro.best_estimate
+    delta = comparison.npv_delta_in_euro.best_estimate
     return (
         _section_open(ReportSections.NPV_BRIDGE, context, variant.perspective_id)
         + _explanation_html(ReportSections.NPV_BRIDGE, context)

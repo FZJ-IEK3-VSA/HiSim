@@ -22,6 +22,7 @@ and a bug caught here can mislead a reader but can never corrupt a stored result
 
 # clean
 
+import inspect
 import re
 
 import pytest
@@ -40,7 +41,7 @@ from hisim.economics.perspectives import (
     SubsidyMode,
 )
 from hisim.economics.plausibility import run_plausibility_checks
-from hisim.economics.presentation_style import SankeyLayout, sankey_node_boxes
+from hisim.economics.presentation_style import sankey_node_boxes
 from hisim.economics.report_prose import ReportProse
 from hisim.economics.reporting import ReportSections, build_lifecycle_report_html
 from hisim.economics.reporting.charts import (
@@ -52,11 +53,19 @@ from hisim.economics.reporting.charts import (
     _sankey_svg,
     _xy_lines_svg,
 )
-from hisim.economics.reporting.scaffold import ReportChapters
+from hisim.economics.reporting import assembly, sections_charts
+from hisim.economics.reporting.scaffold import (
+    ReportChapters,
+    SkippedSection,
+    _ChapterContext,
+    _not_drawn_html,
+)
 from hisim.economics.reporting.sections_charts import (
     _effective_rate_text,
     _first_result_where,
     _has_year_zero_funding,
+    _liquidity_section_html,
+    _payback_interval_prose,
 )
 from hisim.economics.results import EvaluationMatrix, compare
 from hisim.economics.uncertainty import UncertainValue
@@ -100,6 +109,22 @@ def _ribbon_faces(svg: str):
     return [
         (numbers[0], numbers[1], numbers[6], numbers[7], numbers[15] - numbers[1])
         for numbers in _ribbon_paths(svg)
+    ]
+
+
+def _horizontal_rules(svg: str):
+    """Every horizontal `<line>` of an inline SVG as `(x1, x2)`, in emission order.
+
+    A whisker is the only horizontal rule the bridge draws — its zero axis and its step cursors
+    are vertical — so "which lines are horizontal" is a geometric way of saying "which lines are
+    whiskers", without asserting on the colour and stroke width they happen to be drawn with.
+    """
+    return [
+        (float(x1), float(x2))
+        for x1, y1, x2, y2 in re.findall(
+            r'<line x1="(-?[\d.]+)" y1="(-?[\d.]+)" x2="(-?[\d.]+)" y2="(-?[\d.]+)"', svg
+        )
+        if y1 == y2
     ]
 
 
@@ -293,11 +318,17 @@ class TestSankeySvg:
             _sankey_svg([["a"], ["b"]], _coloured([("a", "b", 100.0), ("a", "ghost", 50.0)]), {})
 
     def test_the_node_width_is_the_layouts_own_fraction_of_the_plot(self):
-        """Both renderers scale the node by `SankeyLayout.NODE_WIDTH`, so neither may re-guess it."""
+        """Both renderers scale the node by `SankeyLayout.NODE_WIDTH`, so neither may re-guess it.
+
+        The expectation is the literal 20.3 user units rather than the same product the renderer
+        computes: a test that multiplies `NODE_WIDTH` by the plot width agrees with the renderer
+        by construction and would keep agreeing if both moved together, which is exactly the
+        change a reader of the report would notice first.
+        """
         svg = _sankey_svg(TANGLED_COLUMNS, _coloured(TANGLED_RIBBONS), {})
         widths = {round(width, 1) for _x, _y, width, _h in _node_rects(svg)}
         assert len(widths) == 1
-        assert widths.pop() == pytest.approx(SankeyLayout.NODE_WIDTH * (860 - 150 - 130), abs=0.1)
+        assert widths.pop() == pytest.approx(20.3, abs=0.1)  # 3.5 % of the 580-unit plot area
 
 
 class TestXyLinesAndLabels:
@@ -367,16 +398,31 @@ class TestGanttBridgeAndTornado:
         assert _gantt_svg([], 20) == ""
 
     def test_the_bridge_anchors_carry_bands_and_the_steps_do_not(self):
-        """The band of a difference is not the difference of the bands, so deltas get no whisker."""
-        svg = _bridge_svg(
-            (
-                ("reference: base", UncertainValue(1000.0, 800.0, 1200.0)),
-                ("variant: measures", UncertainValue(600.0, 500.0, 800.0)),
-            ),
-            [("Investment", 400.0, "var(--g0)"), ("Energy", -800.0, "var(--g1)")],
+        """The band of a difference is not the difference of the bands, so deltas get no whisker.
+
+        Asserted as geometry: exactly two horizontal rules — the anchors' whiskers, the step
+        cursors being vertical — and each one has to *straddle* its own anchor, running from that
+        anchor's minimum to its maximum with the best estimate strictly inside. A count of a
+        stroke string would go green for a whisker drawn in the right colour at the wrong place,
+        which is the failure this chart is actually prone to.
+        """
+        anchors = (
+            ("reference: base", UncertainValue(1000.0, 800.0, 1200.0)),
+            ("variant: measures", UncertainValue(600.0, 500.0, 800.0)),
         )
-        # Two anchor whiskers, drawn as horizontal rules in the muted chrome colour.
-        assert svg.count('stroke="var(--muted)" stroke-width="1.4"') == 2
+        svg = _bridge_svg(anchors, [("Investment", 400.0, "var(--g0)"),
+                                    ("Energy", -800.0, "var(--g1)")])
+        whiskers = _horizontal_rules(svg)
+        assert len(whiskers) == 2  # the two anchors; the delta steps carry none
+
+        def to_x(value: float) -> float:
+            """Euro to user units: the axis spans 0..1,400 over the 580-unit plot area."""
+            return 150 + value * (580 / 1400)
+
+        for (_label, band), (x1, x2) in zip(anchors, whiskers):
+            assert x1 == pytest.approx(to_x(band.minimum), abs=0.1)
+            assert x2 == pytest.approx(to_x(band.maximum), abs=0.1)
+            assert x1 < to_x(band.best_estimate) < x2
         assert "+400" in svg and "-800" in svg
         assert "1,000 [800 | 1,200]" in svg
 
@@ -619,20 +665,27 @@ class TestVisualizationSectionsRender:
     """The sections of the first half of the chart set, on an ordinary evaluated run."""
 
     def test_the_chart_sections_are_present_and_name_their_perspective(self, report):
-        """Each perspective-scoped section says which perspective it is showing."""
-        for anchor in ("building-cash-curve", "building-uncertainty-drivers",
-                       "building-lifetimes", "building-who-pays-whom", "building-npv-bridge"):
-            assert f'id="{anchor}"' in report, anchor
-        curve = dict(_rendered_sections(report))["building-cash-curve"]
-        assert "<h3>Cash curve (gross)" in curve
-        credit = dict(_rendered_sections(report))["building-cost-of-credit"]
-        assert "<h3>Cost of credit (financed)" in credit  # not the matrix's first perspective
+        """Each perspective-scoped section says which perspective it is showing.
+
+        The presence of the anchors themselves is `tests/test_economics_report_goldens.py`'s
+        job — it lists all twenty-two — so what is left here is the half that list cannot check:
+        *which* perspective a section that had to choose one ended up drawing.
+        """
+        sections = dict(_rendered_sections(report))
+        assert "<h3>Cash curve (gross)" in sections["building-cash-curve"]
+        credit = sections["building-cost-of-credit"]
+        # One block per financed perspective, each naming itself; not the matrix's first row.
+        assert "<b>financed</b>" in credit
+        assert "<b>gross</b>" not in credit
 
     def test_the_cash_curve_states_its_payback_in_words(self, report):
         """An absent annotation reads as "did not pay back" to one reader and "not computed" to another."""
         curve = dict(_rendered_sections(report))["building-cash-curve"]
-        assert "deepest out-of-pocket" in curve
-        assert "world" in curve  # the payback interval sentence names the optimistic/pessimistic worlds
+        # Both markers are this run's own annotations. "deepest out-of-pocket" and "world" also
+        # occur in the authored prose above the chart, so neither would fail if the chart lost
+        # them; the amount and the year of each can only come from the renderer.
+        assert re.search(r"deepest out-of-pocket [\d,-]+ EUR in year \d+", curve)
+        assert re.search(r"Payback lands in year \d+ in the central world", curve)
 
     def test_the_who_pays_whom_section_publishes_what_it_folded(self, report):
         """A folded ribbon is hidden from the picture, so its count and total are stated."""
@@ -655,7 +708,9 @@ class TestVisualizationSectionsRender:
         assert "cash flows, subtotal" in statement
         assert "accounting credits, subtotal" in statement
         assert "net position" in statement
-        assert "modernization levy" in statement or "Levy income" in statement
+        # The caption's own figure. "Levy income" and "§559" both occur in the authored prose
+        # above it, so only the amount tells you the caption itself rendered.
+        assert re.search(r"Levy income [\d,-]+ EUR per year", statement)
         assert "Dashed, translucent ribbons are the accounting credits" in statement
         for left, right in _ribbon_widths(statement):
             assert left == pytest.approx(right, abs=0.2)
@@ -691,3 +746,262 @@ class TestVisualizationSectionsRender:
         assert "<script" not in report
         assert "https://" not in report
         assert report.count("<svg") >= 10
+
+
+class TestTheDocumentSaysWhatItDidNotDraw:
+    """A skipped section is reported to the reader, not to the log (owner decision).
+
+    The report is read by people who did not run it, often long after the process that wrote it
+    has gone. A section that is simply absent is indistinguishable from one that was never
+    written — "no loan chart" reads as "this run has no loan" to one reader and as "the loan
+    chart is broken" to another — and a log line answers neither of them, because the person
+    holding the HTML is not the person tailing the output. The reason therefore travels into the
+    document, under the table of contents.
+    """
+
+    @pytest.fixture(name="thin_report", scope="class")
+    def fixture_thin_report(self, database) -> str:
+        """One unfinanced, un-tenanted perspective: several sections have nothing to draw."""
+        evaluator = EconomicEvaluator(
+            database, EconomicParameters(country="DE", price_basis_year=2026)
+        )
+        matrix = EvaluationMatrix()
+        matrix.results["gross"] = evaluator.evaluate(make_inputs(), REPORT_PERSPECTIVES[0])
+        return build_lifecycle_report_html(matrix, run_plausibility_checks(matrix))
+
+    def test_a_section_that_could_not_be_drawn_is_named_with_its_reason(self, thin_report):
+        """The loan and the credit disclosure are absent *and* accounted for."""
+        assert "Not drawn for this run" in thin_report
+        block = thin_report.split("Not drawn for this run", maxsplit=1)[1].split("</div>")[0]
+        assert "<b>Loan</b>" in block
+        assert "every purchase in this bundle is a cash purchase" in block
+        assert "<b>Cost of credit</b>" in block
+        assert 'id="building-loan"' not in thin_report  # named there instead of drawn here
+
+    def test_the_landlord_statement_is_no_longer_dropped_in_silence(self, thin_report):
+        """It used to vanish with no signal at all when nothing was landlord-scoped."""
+        block = thin_report.split("Not drawn for this run", maxsplit=1)[1].split("</div>")[0]
+        assert "<b>Landlord statement</b>" in block
+        assert "No perspective of this run is scoped to the landlord" in block
+
+    def test_a_skip_entry_names_the_chapter_it_would_have_been_drawn_in(self, thin_report):
+        """One chapter today; from slice 9 the same list carries three, and has to say which."""
+        block = thin_report.split("Not drawn for this run", maxsplit=1)[1].split("</div>")[0]
+        assert block.count("<span class='chapter-tag'>The building</span>") >= 2
+
+    def test_a_run_that_drew_everything_says_nothing(self, report):
+        """An empty "nothing was skipped" box would be noise on every complete report."""
+        assert "Not drawn for this run" not in report
+
+    def test_the_bridge_says_why_it_could_not_decompose_a_comparison(self, database):
+        """A comparison without its reference result: the section is named, not logged away."""
+        evaluator = EconomicEvaluator(
+            database, EconomicParameters(country="DE", price_basis_year=2026)
+        )
+        matrix = EvaluationMatrix()
+        matrix.results["gross"] = evaluator.evaluate(make_inputs(), REPORT_PERSPECTIVES[0])
+        reference = evaluator.evaluate(
+            make_inputs(energy_kwh=15000.0, investment=2000.0), REPORT_PERSPECTIVES[0]
+        )
+        comparison = compare(reference, matrix.results["gross"], "base", "measures")
+        rendered = build_lifecycle_report_html(
+            matrix, run_plausibility_checks(matrix), None, comparison
+        )
+        assert 'id="building-npv-bridge"' not in rendered
+        assert "<b>NPV bridge</b>" in rendered
+        assert "without the reference result the bridge decomposes" in rendered
+
+    def test_a_chapter_can_be_skipped_the_same_way(self):
+        """Nothing calls it before slice 9, so the mechanism is pinned rather than exercised."""
+        context = _ChapterContext(chapter=ReportChapters.THE_BUILDING)
+        blocks = context.skip_chapter(ReportChapters.RENTED_OUT, "Nothing was rented out.")
+        assert isinstance(blocks, list) and not blocks
+        assert context.skipped == [
+            SkippedSection(name="Rented out", reason="Nothing was rented out.")
+        ]
+        # A chapter *is* a chapter, so it carries no chapter tag of its own.
+        assert "chapter-tag" not in _not_drawn_html(context.skipped)
+
+    def test_nothing_in_the_render_path_logs(self):
+        """The whole point: the reason is in the document, so no builder reaches for the log."""
+        for module in (assembly, sections_charts):
+            source = inspect.getsource(module)
+            assert "log.information" not in source, module.__name__
+
+
+class TestTheCashCurveTellsOnePerspectivesStory:
+    """The comparison names one perspective; the whole section has to be that one's.
+
+    A `VariantComparison` is computed for exactly one perspective, so a payback sentence read off
+    it under some other perspective's cash position is two runs' figures presented as one — and
+    invisible in the output, because both halves are individually plausible.
+    """
+
+    def _matrix(self, database) -> EvaluationMatrix:
+        """The report perspective set, evaluated."""
+        evaluator = EconomicEvaluator(
+            database, EconomicParameters(country="DE", price_basis_year=2026)
+        )
+        matrix = EvaluationMatrix()
+        for perspective in REPORT_PERSPECTIVES:
+            matrix.results[perspective.id] = evaluator.evaluate(make_inputs(), perspective)
+        return matrix
+
+    def test_the_section_draws_the_perspective_the_comparison_was_computed_for(self, database):
+        """The heading, both panels and the payback sentence come from one result."""
+        matrix = self._matrix(database)
+        evaluator = EconomicEvaluator(
+            database, EconomicParameters(country="DE", price_basis_year=2026)
+        )
+        reference = evaluator.evaluate(
+            make_inputs(energy_kwh=15000.0, investment=2000.0), REPORT_PERSPECTIVES[1]
+        )
+        comparison = compare(reference, matrix.results["financed"], "base", "measures")
+        rendered = build_lifecycle_report_html(
+            matrix, run_plausibility_checks(matrix), None, comparison, reference_result=reference
+        )
+        curve = dict(_rendered_sections(rendered))["building-cash-curve"]
+        # The matrix's first perspective is "gross"; the comparison's is "financed".
+        assert "<h3>Cash curve (financed)" in curve
+        assert "cumulative discounted savings" in curve
+
+    def test_a_mismatched_pair_is_refused_rather_than_drawn(self, database):
+        """A caller cannot reintroduce the mix by handing the section the wrong result."""
+        matrix = self._matrix(database)
+        comparison = compare(
+            matrix.results["financed"], matrix.results["financed"], "base", "measures"
+        )
+        with pytest.raises(views.CostDataError, match="two different parties"):
+            _liquidity_section_html(
+                matrix.results["gross"], comparison,
+                _ChapterContext(chapter=ReportChapters.THE_BUILDING),
+            )
+
+    def test_a_missing_savings_curve_is_named_rather_than_defaulted(self, database):
+        """A silently flat curve reads as "no savings in that world", which is a different claim."""
+        matrix = self._matrix(database)
+        comparison = compare(matrix.results["gross"], matrix.results["gross"], "base", "measures")
+        del comparison.cumulative_discounted_savings_in_euro["high"]
+        with pytest.raises(views.CostDataError, match="'high' cumulative savings curve"):
+            _liquidity_section_html(
+                matrix.results["gross"], comparison,
+                _ChapterContext(chapter=ReportChapters.THE_BUILDING),
+            )
+
+
+class TestThePaybackSentence:
+    """Savings are reference minus variant, so the larger savings pay back earlier.
+
+    The slot that carries the *smaller* savings — `"low"` — is therefore the pessimistic world
+    and `"high"` the optimistic one. The sentence used to name them the other way round, which
+    inverted the conclusion a reader drew from it, and it consulted two of the three slots, so
+    the central world it is actually about was never stated.
+    """
+
+    def test_all_three_worlds_pay_back(self):
+        """The central world leads; the other two are the interval around it."""
+        assert _payback_interval_prose(9, 7, 5) == (
+            "Payback lands in year 7 in the central world, between year 5 (optimistic) and "
+            "year 9 (pessimistic)."
+        )
+
+    def test_no_world_pays_back(self):
+        """Said in words, because an omitted sentence is read as "not computed"."""
+        assert _payback_interval_prose(None, None, None) == (
+            "The investment does not pay back within the horizon in any of the three worlds."
+        )
+
+    def test_only_the_optimistic_world_pays_back(self):
+        """The weakest case a reader can still act on, and it has to be marked as weak."""
+        assert _payback_interval_prose(None, None, 6) == (
+            "Payback lands in year 6 in the optimistic world only; in the central and the "
+            "pessimistic world the curve never reaches zero within the horizon."
+        )
+
+    def test_an_open_pessimistic_end_is_spelled_out(self):
+        """Two worlds cross and one does not: the interval says so instead of printing a None."""
+        assert _payback_interval_prose(None, 8, 6) == (
+            "Payback lands in year 8 in the central world, between year 6 (optimistic) and "
+            "never within the horizon (pessimistic)."
+        )
+
+
+class TestTheSectionOrderIsTheAssemblys:
+    """`ReportSections.ORDER` is the membership, the assembly is the order (owner decision).
+
+    The docstring used to call `ORDER` the authoritative page order while `_document_sections`
+    restated that order and the contents sorted by page position — three claims about one thing,
+    two of which could go stale without anything failing. What `ORDER` really owns is the *set*:
+    which sections exist and what they are called. This is what pins that.
+    """
+
+    def test_every_anchor_the_document_emits_is_a_member_of_the_order(self, report):
+        """A section with an anchor outside `ORDER` is one the contents cannot list."""
+        known = {anchor for anchor, _name in ReportSections.ORDER}
+        for anchor, _html in _rendered_sections(report):
+            chapter, _, section = anchor.partition("-")
+            assert chapter == ReportChapters.THE_BUILDING[0], anchor
+            assert section in known, anchor
+
+    def test_every_heading_the_document_emits_is_a_name_of_the_order(self, report):
+        """The names are `ORDER`'s too, so a contents entry and a heading cannot drift apart."""
+        known = {name for _anchor, name in ReportSections.ORDER}
+        headings = {
+            re.sub(r"\s*\(.*", "", re.split(r"<span", heading)[0]).strip()
+            for heading in re.findall(r"<section id=\"[^\"]+\"><h3>(.*?)</h3>", report)
+        }
+        assert headings <= known, headings - known
+
+    def test_the_order_is_a_set_not_a_sequence_of_duplicates(self):
+        """A name listed twice would make "explained at its first occurrence" ambiguous."""
+        assert len(ReportSections.ORDER) == len({name for _anchor, name in ReportSections.ORDER})
+
+
+class TestCostOfCreditCoversEveryFinancedPerspective:
+    """One block per financed perspective, over the same set the loan section draws."""
+
+    def test_two_financed_perspectives_get_two_blocks(self, database):
+        """Disclosing only the first is a silent half-answer when two views are both financed."""
+        evaluator = EconomicEvaluator(
+            database, EconomicParameters(country="DE", price_basis_year=2026)
+        )
+        matrix = EvaluationMatrix()
+        matrix.results["gross"] = evaluator.evaluate(make_inputs(), REPORT_PERSPECTIVES[0])
+        for share, rate in ((0.6, 0.035), (0.9, 0.05)):
+            perspective = Perspective(
+                id=f"financed_{int(share * 100)}",
+                installation_context=InstallationContext.GREENFIELD,
+                subsidy_mode=SubsidyMode.none(),
+                financing=FinancingPlan(financed_share=share, nominal_interest_rate=rate,
+                                        term_in_years=12),
+            )
+            matrix.results[perspective.id] = evaluator.evaluate(make_inputs(), perspective)
+        rendered = build_lifecycle_report_html(matrix, run_plausibility_checks(matrix))
+        credit = dict(_rendered_sections(rendered))["building-cost-of-credit"]
+        assert "<b>financed_60</b>" in credit and "<b>financed_90</b>" in credit
+        assert credit.count("Effective annual rate: <b>") == 2  # the authored prose says it once more
+        assert "<b>gross</b>" not in credit  # the cash purchase has no credit to price
+        loan = dict(_rendered_sections(rendered))["building-loan"]
+        assert "<b>financed_60</b>" in loan and "<b>financed_90</b>" in loan  # the same set
+
+
+class TestTheBridgePrintsThePublishedDelta:
+    """The net figure is the comparison's own, not a subtraction the renderer performs (seam 4)."""
+
+    def test_the_net_difference_is_the_comparisons_npv_delta(self, database):
+        """One published number, quoted once, so no section can contradict another."""
+        evaluator = EconomicEvaluator(
+            database, EconomicParameters(country="DE", price_basis_year=2026)
+        )
+        matrix = EvaluationMatrix()
+        matrix.results["gross"] = evaluator.evaluate(make_inputs(), REPORT_PERSPECTIVES[0])
+        reference = evaluator.evaluate(
+            make_inputs(energy_kwh=15000.0, investment=2000.0), REPORT_PERSPECTIVES[0]
+        )
+        comparison = compare(reference, matrix.results["gross"], "base", "measures")
+        rendered = build_lifecycle_report_html(
+            matrix, run_plausibility_checks(matrix), None, comparison, reference_result=reference
+        )
+        bridge = dict(_rendered_sections(rendered))["building-npv-bridge"]
+        expected = f"{comparison.npv_delta_in_euro.best_estimate:,.0f}"
+        assert f"Net NPV difference: <b>{expected} EUR</b>" in bridge

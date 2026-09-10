@@ -43,15 +43,19 @@ nothing" answer still costs nothing.
 
 # clean
 
+import ast
 import datetime
+import importlib
 import json
+import os
+import re
 from typing import Any
 
 import pandas as pd
 import pytest
 
 from hisim import loadtypes as lt
-from hisim.economics import adapter
+from hisim.economics import adapter, bridge
 from hisim.economics.bridge import (
     _peaks_from_power_series,
     _sum_output_column,
@@ -73,15 +77,28 @@ class _Output:
     nothing more than those two strings. Using a stub instead of the real class keeps the tests
     independent of whatever else `ComponentOutput` grows.
 
-    `unit` is optional because only the meters' own `get_energy_flow_facts` hooks read it — they
-    filter on `WATT_HOUR` so a same-named power output in watts can never be summed as energy —
-    while the bridge's positional lookup does not care.
+    `unit` defaults to `WATT_HOUR`, the unit every billable meter column is declared in, because
+    both summing paths now convert by the declared unit rather than assuming one: the meters' own
+    `get_energy_flow_facts` hooks filter on it so a same-named power output in watts can never be
+    summed as energy, and `bridge._sum_output_column` and `bridge._device_energy_flows` read it
+    through the same conversion table. A power column has to say so explicitly.
+
+    `load_type` is None unless a test declares one. Only the check that refuses a component class
+    missing from the energy-balance table reads it, and a stub with no declared load type is
+    exactly the "moves nothing the balance cares about" case that check has to let through.
     """
 
-    def __init__(self, component_name: str, field_name: str, unit: Any = None) -> None:
+    def __init__(
+        self,
+        component_name: str,
+        field_name: str,
+        unit: Any = lt.Units.WATT_HOUR,
+        load_type: Any = None,
+    ) -> None:
         self.component_name = component_name
         self.field_name = field_name
         self.unit = unit
+        self.load_type = load_type
 
 
 class _Wrapper:
@@ -537,8 +554,31 @@ class TestMeterExtraction:
         """The bridge sums the Wh column and scales by 1e-3; unknown outputs give None."""
         all_outputs = [_Output("Meter", "Other"), _Output("Meter", "ElectricityFromGrid")]
         results = _results_frame([("a", [1000.0, 2000.0, 0.0]), ("b", [500.0, 250.0, 250.0])])
-        assert _sum_output_column("Meter", "ElectricityFromGrid", all_outputs, results) == pytest.approx(1.0)
-        assert _sum_output_column("Meter", "Missing", all_outputs, results) is None
+        assert _sum_output_column(
+            "Meter", "ElectricityFromGrid", all_outputs, results, 900
+        ) == pytest.approx(1.0)
+        assert _sum_output_column("Meter", "Missing", all_outputs, results, 900) is None
+
+    def test_the_billing_sum_converts_by_the_declared_unit_like_the_balance_does(self):
+        """One conversion table for both paths, so a bill and a chart cannot disagree (review).
+
+        The billing sum used to hardcode `* 1e-3`, which is right for the Wh every shipped meter
+        column is declared in and wrong for anything else. Here the same column is declared in kWh
+        and in W, and the result follows the declaration rather than the old assumption.
+        """
+        results = _results_frame([("a", [1.5, 2.5])])
+        in_kwh = [_Output("Meter", "Column", unit=lt.Units.KWH)]
+        assert _sum_output_column("Meter", "Column", in_kwh, results, 900) == pytest.approx(4.0)
+        in_watt = [_Output("Meter", "Column", unit=lt.Units.WATT)]
+        # 4 W-steps of 900 s = 4 x 0.25 Wh = 1 Wh = 1e-3 kWh.
+        assert _sum_output_column("Meter", "Column", in_watt, results, 900) == pytest.approx(1e-3)
+
+    def test_a_meter_column_in_an_unconvertible_unit_is_refused(self):
+        """A degree Celsius is not energy, and billing it would be a number out of nowhere."""
+        results = _results_frame([("a", [1.0, 2.0])])
+        outputs = [_Output("Meter", "Column", unit=lt.Units.CELSIUS)]
+        with pytest.raises(CostDataError, match="neither an energy nor a power unit"):
+            _sum_output_column("Meter", "Column", outputs, results, 900)
 
     def test_electricity_meter_yields_bought_sold_and_peaks(self):
         """Bought/sold energy in kWh and the 15-minute peaks land on the determinants."""
@@ -546,7 +586,7 @@ class TestMeterExtraction:
         all_outputs = [
             _Output("ElectricityMeter", "ElectricityFromGrid"),
             _Output("ElectricityMeter", "ElectricityToGrid"),
-            _Output("ElectricityMeter", "ElectricityFromGridInWatt"),
+            _Output("ElectricityMeter", "ElectricityFromGridInWatt", unit=lt.Units.WATT),
         ]
         bought = [1000.0] * 24  # Wh per 15-min step -> 24 kWh
         sold = [500.0] * 24  # -> 12 kWh
@@ -766,7 +806,7 @@ class TestEnergyFlowHookAdoption:
     _ALL_OUTPUTS = [
         _Output("ElectricityMeter", "ElectricityFromGrid"),
         _Output("ElectricityMeter", "ElectricityToGrid"),
-        _Output("ElectricityMeter", "ElectricityFromGridInWatt"),
+        _Output("ElectricityMeter", "ElectricityFromGridInWatt", unit=lt.Units.WATT),
     ]
 
     @classmethod
@@ -979,3 +1019,436 @@ class _PvConfigStub:
         self.investment_costs_in_euro = investment_costs_in_euro
         self.lifetime_in_years = lifetime_in_years
         self.device_co2_footprint_in_kg = device_co2_footprint_in_kg
+
+
+def _device(class_name: str, **constants: str):
+    """A component stub carrying the class name and the output constants the table refers to.
+
+    `adapter.DeviceEnergySpecs` is keyed by class name, exactly like the cost-facts table, and its
+    rows name *constants* on that class rather than column names, so a stub needs both halves of
+    the contract — and building it with `type()` states that instead of hiding it behind a
+    hand-written class whose name happens to match. `component_name` is the only attribute the
+    collector reads off the instance.
+
+    Args:
+        class_name: The component class name the table is expected to know.
+        **constants: The output-name constants the row names, mapped to the column names the real
+            class declares. `TestTheEnergyBalanceTableMatchesTheRealClasses` is what pins these
+            against the real classes; here they only have to exist.
+
+    Returns:
+        An instance of a freshly made class of that name.
+    """
+    return type(class_name, (), {"component_name": class_name, **constants})()
+
+
+class TestDeviceEnergyFlows:
+    """The household energy balance's collector: role -> kWh, unit-aware and sign-aware.
+
+    Three things can go wrong here and each of them produces a chart that is silently wrong rather
+    than a run that fails: a power column summed as if it were energy (a factor of 3,600 over the
+    timestep), a kWh column divided by a thousand a second time, and a battery's signed channel
+    summed net so the round trip disappears. Every expected value below is hand-computed from the
+    stub series, and the timestep is 900 s so the watt conversion is a visible 0.25 h per step.
+
+    The collector is deliberately exercised directly rather than through
+    `build_evaluation_inputs`, because the question is the conversion table and the sign split —
+    everything the surrounding walk adds (cost relevance, meter contracts, the D7 check) belongs
+    to the cost path and would only obscure a unit bug.
+    """
+
+    SECONDS_PER_TIMESTEP = 900
+
+    def _flows(self, component, columns, load_type=None):
+        """Runs the collector over one component and the columns it declares.
+
+        Args:
+            component: The stub component; its class name selects the declared specs.
+            columns: `(field_name, unit, values)` triples, in the frame's column order.
+            load_type: The load type every declared column carries. Only the completeness check
+                reads it, so it stays None unless a test is about a class outside the table.
+
+        Returns:
+            The role -> kWh map the collector produced.
+        """
+        outputs = [
+            _Output(component.component_name, field_name, unit=unit, load_type=load_type)
+            for field_name, unit, _ in columns
+        ]
+        frame = _results_frame([(field_name, values) for field_name, _, values in columns])
+        return bridge._device_energy_flows(  # pylint: disable=protected-access
+            component, outputs, frame, self.SECONDS_PER_TIMESTEP
+        )
+
+    def test_watt_hours_are_divided_by_a_thousand(self):
+        """A Wh channel is energy already: 1,000 + 2,000 + 3,000 Wh = 6 kWh."""
+        flows = self._flows(
+            _device("PVSystem", ElectricityEnergyOutput="ElectricityEnergyOutput"),
+            [("ElectricityEnergyOutput", lt.Units.WATT_HOUR, [1000.0, 2000.0, 3000.0])],
+        )
+        assert flows == {"PV_GENERATION": pytest.approx(6.0)}
+
+    def test_kilowatt_hours_are_taken_as_they_are(self):
+        """A kWh channel needs no conversion; a second division would be a factor of 1,000."""
+        flows = self._flows(
+            _device(
+                "ElectricityMeter",
+                ElectricityFromGrid="ElectricityFromGrid",
+                ElectricityToGrid="ElectricityToGrid",
+            ),
+            [
+                ("ElectricityFromGrid", lt.Units.KWH, [1.5, 2.5]),
+                ("ElectricityToGrid", lt.Units.KWH, [0.25, 0.75]),
+            ],
+        )
+        assert flows == {"GRID_IMPORT": pytest.approx(4.0), "GRID_EXPORT": pytest.approx(1.0)}
+
+    def test_watts_are_integrated_over_the_timestep(self):
+        """A power channel is integrated: 2 x 4,000 W over 900 s each = 2 kWh, not 8 kWh.
+
+        The column name also differs from the constant that names it, which is the case the
+        constant lookup exists for: the class calls the constant `ElectricalInputPowerTotal` and
+        writes the column `ElectricalInputPowerTotalHeatpump`.
+        """
+        flows = self._flows(
+            _device(
+                "MoreAdvancedHeatPumpHPLib",
+                ElectricalInputPowerTotal="ElectricalInputPowerTotalHeatpump",
+            ),
+            [("ElectricalInputPowerTotalHeatpump", lt.Units.WATT, [4000.0, 4000.0])],
+        )
+        assert flows == {"HEAT_PUMP_ELECTRICITY": pytest.approx(2.0)}
+
+    def test_a_signed_battery_series_becomes_two_positive_roles(self):
+        """Charging and discharging are two roles of one column, both positive magnitudes.
+
+        4,000 + 1,000 W of charging over 0.25 h each = 1.25 kWh in; 2,000 W of discharging over
+        0.25 h = 0.5 kWh out. Summing the column net would report 0.75 kWh of "something" and lose
+        the round-trip loss the balance exists to show.
+        """
+        flows = self._flows(
+            _device("Battery", AcBatteryPowerUsed="AcBatteryPowerUsed"),
+            [("AcBatteryPowerUsed", lt.Units.WATT, [4000.0, -2000.0, 1000.0])],
+        )
+        assert flows == {
+            "BATTERY_CHARGE": pytest.approx(1.25),
+            "BATTERY_DISCHARGE": pytest.approx(0.5),
+        }
+
+    def test_an_unconvertible_unit_is_refused_rather_than_guessed_or_dropped(self):
+        """A column that is neither energy nor power stops the run instead of vanishing.
+
+        It used to be logged and skipped, which is the failure this whole section is about: the
+        chart then draws a house with no PV and nothing on it says a column was dropped.
+        """
+        with pytest.raises(CostDataError, match="neither an energy nor a power unit"):
+            self._flows(
+                _device("PVSystem", ElectricityEnergyOutput="ElectricityEnergyOutput"),
+                [("ElectricityEnergyOutput", lt.Units.CELSIUS, [1000.0, 2000.0])],
+            )
+
+    def test_a_listed_column_this_run_did_not_produce_is_refused(self):
+        """A row naming a column the run does not contain is a renamed output, not an absence."""
+        with pytest.raises(CostDataError, match="which this run did not produce"):
+            self._flows(
+                _device("PVSystem", ElectricityEnergyOutput="ElectricityEnergyOutput"),
+                [("SomethingElse", lt.Units.WATT_HOUR, [1000.0])],
+            )
+
+    def test_a_row_naming_a_constant_the_class_does_not_declare_is_refused(self):
+        """The constant is the contract; a class that lost it cannot say which column to read."""
+        with pytest.raises(CostDataError, match="declares no output-name constant"):
+            self._flows(_device("PVSystem"), [("ElectricityEnergyOutput", lt.Units.WATT_HOUR, [1.0])])
+
+    def test_an_explicitly_empty_row_contributes_nothing_and_complains_about_nothing(self):
+        """A controller's watts are an instruction, and the empty row is that decision written down.
+
+        The EMS publishes electricity in watts, so the completeness check would refuse it; its
+        empty row is what says a person looked and decided it is not a flow across a balance node.
+        """
+        flows = self._flows(
+            _device("L2GenericEnergyManagementSystem"),
+            [("TotalElectricityToOrFromGrid", lt.Units.WATT, [4000.0, 4000.0])],
+        )
+        assert not flows
+
+    def test_a_class_outside_the_table_that_publishes_electricity_is_refused(self):
+        """The table is the one statement of who is in the balance, so silence is not an answer.
+
+        A class nobody has classified might be a device whose kilowatt hours belong on the chart
+        or a controller whose watts are a signal; the collector cannot tell, and used to assume
+        the second.
+        """
+        with pytest.raises(CostDataError, match="no row in adapter.DeviceEnergySpecs"):
+            self._flows(
+                _device("SomeBrandNewInverter"),
+                [("ElectricityOutput", lt.Units.WATT, [4000.0])],
+                load_type=lt.LoadTypes.ELECTRICITY,
+            )
+
+    def test_a_class_outside_the_table_that_publishes_no_electricity_is_fine(self):
+        """Most components move no electricity across a balance node; that is not a defect."""
+        assert not self._flows(
+            _device("SomeThermalThing"), [("ThermalPower", lt.Units.WATT, [4000.0])]
+        )
+
+    def test_a_component_the_table_does_not_know_contributes_nothing(self):
+        """A component that declares no outputs at all cannot be in the balance either way."""
+        assert not self._flows(FakeHeatPump(), [])
+
+    def test_a_role_that_comes_out_negative_is_refused(self):
+        """Direction is the role, so a negative magnitude means the row named the wrong column."""
+        with pytest.raises(CostDataError, match="carries negative energy"):
+            self._flows(
+                _device("PVSystem", ElectricityEnergyOutput="ElectricityEnergyOutput"),
+                [("ElectricityEnergyOutput", lt.Units.WATT_HOUR, [-1000.0, -2000.0])],
+            )
+
+    def test_the_collector_reaches_the_extract_for_every_component(self):
+        """A meter contributes its two grid roles alongside its billing determinants.
+
+        The energy question is asked before and independently of the cost-relevance branch, so
+        this also pins that a component's flows are not conditional on it being priced.
+        """
+        meter = ElectricityMeter()
+        outputs = [
+            _Output("ElectricityMeter", "ElectricityFromGrid", unit=lt.Units.WATT_HOUR),
+            _Output("ElectricityMeter", "ElectricityToGrid", unit=lt.Units.WATT_HOUR),
+            _Output("ElectricityMeter", "ElectricityFromGridInWatt", unit=lt.Units.WATT),
+        ]
+        frame = _results_frame(
+            [
+                ("from_grid", [1000.0] * 96),
+                ("to_grid", [500.0] * 96),
+                ("power", [4000.0] * 96),
+            ]
+        )
+        inputs = bridge.build_evaluation_inputs(
+            [_Wrapper(meter)], outputs, frame, _SimulationParameters(days=1)
+        )
+        attribution = inputs.energy_attribution_by_subject_in_kwh["ElectricityMeter"]
+        assert attribution["GRID_IMPORT"] == pytest.approx(96.0)
+        assert attribution["GRID_EXPORT"] == pytest.approx(48.0)
+
+    def test_a_free_of_cost_device_still_contributes_its_flows(self):
+        """The balance is physics: a PV array nobody prices still generates the kilowatt hours.
+
+        The class above claims the energy question is asked independently of cost relevance, but
+        only ever ran a priced meter, so the branch that would have made the flows conditional on
+        pricing was never exercised. This runs a `FREE_OF_COST` device through the same walk.
+        """
+        pv_system = _device("PVSystem", ElectricityEnergyOutput="ElectricityEnergyOutput")
+        type(pv_system).cost_relevance = CostRelevance.FREE_OF_COST
+        outputs = [_Output("PVSystem", "ElectricityEnergyOutput", unit=lt.Units.WATT_HOUR)]
+        inputs = bridge.build_evaluation_inputs(
+            [_Wrapper(pv_system)],
+            outputs,
+            _results_frame([("generation", [1000.0] * 96)]),
+            _SimulationParameters(days=1),
+        )
+        assert inputs.cost_facts == [] and inputs.unresolved_subjects == []
+        assert inputs.energy_attribution_by_subject_in_kwh == {
+            "PVSystem": {"PV_GENERATION": pytest.approx(96.0)}
+        }
+
+    def test_a_missing_device_column_becomes_an_unresolved_subject(self):
+        """The extract records the failure and the D7 check refuses to price around it."""
+        pv_system = _device("PVSystem", ElectricityEnergyOutput="ElectricityEnergyOutput")
+        type(pv_system).cost_relevance = CostRelevance.FREE_OF_COST
+        inputs = bridge.build_evaluation_inputs(
+            [_Wrapper(pv_system)],
+            [_Output("PVSystem", "SomethingElse", unit=lt.Units.WATT_HOUR)],
+            _results_frame([("other", [1000.0])]),
+            _SimulationParameters(days=1),
+        )
+        assert [item.subject for item in inputs.unresolved_subjects] == ["PVSystem"]
+        assert "ElectricityEnergyOutput" in _fail_evaluation(inputs)
+
+    def test_an_unlisted_electricity_carrying_class_becomes_an_unresolved_subject(self):
+        """A device nobody classified stops the run rather than shrinking the chart in silence."""
+        inverter = _device("SomeBrandNewInverter")
+        type(inverter).cost_relevance = CostRelevance.FREE_OF_COST
+        inputs = bridge.build_evaluation_inputs(
+            [_Wrapper(inverter)],
+            [
+                _Output(
+                    "SomeBrandNewInverter",
+                    "ElectricityOutput",
+                    unit=lt.Units.WATT,
+                    load_type=lt.LoadTypes.ELECTRICITY,
+                )
+            ],
+            _results_frame([("power", [4000.0])]),
+            _SimulationParameters(days=1),
+        )
+        assert [item.subject for item in inputs.unresolved_subjects] == ["SomeBrandNewInverter"]
+        assert "DeviceEnergySpecs" in _fail_evaluation(inputs)
+
+
+#: Every class named by `adapter.DeviceEnergySpecs`, mapped to the module it lives in. Written out
+#: rather than derived, because the whole point of the binding test below is that a table keyed by
+#: class *name* — which is what keeps `hisim.economics` free of component imports — is checked
+#: against the classes those names refer to.
+_ENERGY_BALANCE_MODULES = {
+    "PVSystem": "generic_pv_system",
+    "Battery": "advanced_battery_bslib",
+    "MoreAdvancedHeatPumpHPLib": "more_advanced_heat_pump_hplib",
+    "GenericHeatPump": "generic_heat_pump",
+    "UtspLpgConnector": "loadprofilegenerator_utsp_connector",
+    "ElectricityMeter": "electricity_meter",
+    "L2GenericEnergyManagementSystem": "controller_l2_energy_management_system",
+    "ExtendedController": "advanced_fuel_cell_controller",
+    "FuelCellController": "controller_l1_fuel_cell",
+    "L1Controller": "controller_l1_generic_ev_charge",
+    "L1GenericElectrolyzerController": "controller_l1_electrolyzer",
+    "MpcController": "controller_mpc",
+    "PTXController": "controller_l2_ptx_energy_management_system",
+    "RsocBatteryController": "controller_l2_rsoc_battery_system",
+    "XTPController": "controller_l2_xtp_fuel_cell_ems",
+    "ExampleComponent": "example_component",
+    "ComponentName": "example_template",
+    "CarBattery": "advanced_ev_battery_bslib",
+    "Car": "generic_car",
+    "Windturbine": "generic_windturbine",
+    "ElectricHeating": "generic_electric_heating",
+    "AirConditioner": "air_conditioner",
+    "SimpleAirConditioner": "simple_air_conditioner",
+    "SmartDevice": "generic_smart_device",
+    "SolarThermalSystem": "solar_thermal_system",
+    "AdvancedElectrolyzer": "generic_electrolyzer_and_h2_storage",
+    "Electrolyzer": "generic_electrolyzer_h2",
+    "GenericElectrolyzer": "generic_electrolyzer",
+    "HydrogenStorage": "generic_electrolyzer_and_h2_storage",
+    "FuelCell": "generic_fuel_cell",
+    "Rsoc": "generic_rsoc",
+    "CHP": "advanced_fuel_cell",
+    "SimpleCHP": "generic_chp",
+}
+
+#: Unit values the energy collector can convert, i.e. the ones that make an electricity output
+#: count as a flow the balance would have to place.
+_CONVERTIBLE_UNITS = frozenset(bridge.EnergyUnitConversion.BY_UNIT)
+
+
+def _declared_electricity_outputs(module_name: str, class_name: str):
+    """Every `LoadTypes.ELECTRICITY` output one component class declares, read from its source.
+
+    Parsed rather than instantiated: building a real `MoreAdvancedHeatPumpHPLib` needs a weather
+    file, a config and a simulation, none of which say anything about the question here, which is
+    purely "does this class declare this output". The declaration is a literal `add_output(...)`
+    call in the class body's `__init__`, so the syntax tree is the faithful source.
+
+    Args:
+        module_name: The `hisim.components` submodule holding the class.
+        class_name: The class whose declarations to collect.
+
+    Returns:
+        `{constant_name: unit_value}` for every electricity output the class declares through a
+        `self.X` / `ClassName.X` constant, where `unit_value` is the `Units` member's value.
+    """
+    path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "hisim",
+        "components",
+        f"{module_name}.py",
+    )
+    with open(path, encoding="utf-8") as file:
+        source = file.read()
+    tree = ast.parse(source, filename=path)
+    declared = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef) or node.name != class_name:
+            continue
+        for call in ast.walk(node):
+            if not isinstance(call, ast.Call):
+                continue
+            function = call.func
+            if not isinstance(function, ast.Attribute) or function.attr != "add_output":
+                continue
+            text = " ".join((ast.get_source_segment(source, call) or "").split())
+            if "LoadTypes.ELECTRICITY" not in text:
+                continue
+            unit = re.search(r"Units\.([A-Z_]+)", text)
+            arguments = [argument for keyword, argument in
+                         [(kw.arg, kw.value) for kw in call.keywords] if keyword == "field_name"]
+            if not arguments:
+                arguments = call.args[1:2]
+            for argument in arguments:
+                if isinstance(argument, ast.Attribute):
+                    declared[argument.attr] = unit.group(1) if unit else ""
+    return declared
+
+
+class TestTheEnergyBalanceTableMatchesTheRealClasses:
+    """`adapter.DeviceEnergySpecs` against the components it names (review, decision 2).
+
+    The table is keyed by class name and names output *constants* by name, which is what keeps
+    `hisim.economics` free of component imports — and what makes it a set of strings nothing
+    checks. These tests are the check: every key is a real class, every constant a real constant
+    naming a real electricity output, and — the half that matters most — every component class in
+    the tree that publishes convertible electricity has a row, so "not in the table" can only ever
+    mean "nobody has looked at it yet", which is what the collector refuses runs over.
+    """
+
+    @pytest.mark.parametrize("class_name", sorted(adapter.DeviceEnergySpecs.BY_CLASS_NAME))
+    def test_every_key_names_a_real_component_class(self, class_name):
+        """A key that no longer matches a class is a row that can never fire again."""
+        module = importlib.import_module(f"hisim.components.{_ENERGY_BALANCE_MODULES[class_name]}")
+        assert hasattr(module, class_name)
+
+    @pytest.mark.parametrize(
+        "class_name",
+        sorted(name for name, specs in adapter.DeviceEnergySpecs.BY_CLASS_NAME.items() if specs),
+    )
+    def test_every_spec_names_a_declared_electricity_output(self, class_name):
+        """The constant exists on the class, holds a string, and names an electricity output.
+
+        This is the check the hardcoded column names could not have: `MoreAdvancedHeatPumpHPLib`
+        calls the constant `ElectricalInputPowerTotal` and writes the column
+        `ElectricalInputPowerTotalHeatpump`, and a table spelling the column would keep pointing at
+        a renamed constant and stop pointing at a renamed column.
+        """
+        module_name = _ENERGY_BALANCE_MODULES[class_name]
+        component_class = getattr(importlib.import_module(f"hisim.components.{module_name}"), class_name)
+        declared = _declared_electricity_outputs(module_name, class_name)
+        for spec in adapter.DeviceEnergySpecs.BY_CLASS_NAME[class_name]:
+            column = getattr(component_class, spec.output_constant, None)
+            assert isinstance(column, str), f"{class_name}.{spec.output_constant} is not a constant"
+            assert spec.output_constant in declared, (
+                f"{class_name}.{spec.output_constant} names no declared electricity output"
+            )
+            assert declared[spec.output_constant] in _CONVERTIBLE_UNITS or declared[
+                spec.output_constant
+            ] in {"WATT", "WATT_HOUR", "KWH"}
+
+    def test_every_electricity_carrying_class_in_the_tree_has_a_row(self):
+        """The table is total, so an absent class is an omission rather than a decision.
+
+        Scans `hisim/components` the way the collector's refusal does at runtime and asserts the
+        two agree: a class that would be refused mid-run is a class this test names now, with the
+        file it lives in, which is the difference between a maintainer adding a row and a user
+        seeing an aborted simulation.
+        """
+        directory = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "hisim", "components"
+        )
+        missing = []
+        for file_name in sorted(os.listdir(directory)):
+            if not file_name.endswith(".py"):
+                continue
+            module_name = file_name[:-3]
+            with open(os.path.join(directory, file_name), encoding="utf-8") as file:
+                tree = ast.parse(file.read(), filename=file_name)
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                if node.name in adapter.DeviceEnergySpecs.BY_CLASS_NAME:
+                    continue
+                units = set(_declared_electricity_outputs(module_name, node.name).values())
+                if units & {"WATT", "WATT_HOUR", "KWH"}:
+                    missing.append(f"{node.name} ({file_name})")
+        assert not missing, (
+            "These component classes publish electricity the energy collector can convert and "
+            "have no row in adapter.DeviceEnergySpecs, so a run containing one of them aborts: "
+            + ", ".join(missing)
+        )

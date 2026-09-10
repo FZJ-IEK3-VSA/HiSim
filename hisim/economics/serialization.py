@@ -39,7 +39,7 @@ import json
 import os
 from typing import Any, Dict, Optional
 
-from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.carriers import EnergyCarrier, validate_energy_attribution
 from hisim.economics.evaluator import EvaluationInputs, SubjectCostFacts, UnresolvedSubject
 from hisim.economics.exports import ExportFileNames
 from hisim.economics.facts import (
@@ -53,9 +53,12 @@ from hisim.economics.provenance import ProvenanceLedger
 from hisim.economics.results import (
     AnnualEnergyQuantities,
     ComponentCostBreakdown,
+    EconomicAssumptions,
+    EmbodiedCo2Basis,
     EvaluationMatrix,
     LifecycleCo2Result,
     LifecycleCostResult,
+    ModernizationLevySummary,
     ReferenceAreas,
 )
 from hisim.economics.subsidies import (
@@ -197,7 +200,8 @@ def asset_to_json(asset: ExistingAsset) -> dict:
     An `ExistingAsset` is a piece of the building as it was *before* the measure, and the fields
     below are exactly what the brownfield arithmetic of §4.1 needs: installation year (drives
     remaining life, first replacement and the anyway-cost credit), functionality, carrier, an
-    optional like-for-like replacement price, and `replaced_by_asset_classes` — the declaration that
+    optional like-for-like replacement price, `anyway_share` (the Sowieso share the credit is
+    computed at) and `replaced_by_asset_classes` — the declaration that
     turns "kept" into "replaced by this measure". Used both for register entries and for the
     subsidy context's `existing_heating`, which the BEG speed bonus conditions on.
     """
@@ -210,6 +214,7 @@ def asset_to_json(asset: ExistingAsset) -> dict:
         "is_functional": asset.is_functional,
         "energy_carrier": asset.energy_carrier.value if asset.energy_carrier else None,
         "replaced_by_asset_classes": [asset_class.name for asset_class in asset.replaced_by_asset_classes],
+        "anyway_share": asset.anyway_share,
     }
 
 
@@ -230,6 +235,9 @@ def asset_from_json(item: dict) -> ExistingAsset:
         is_functional=item.get("is_functional", True),
         energy_carrier=EnergyCarrier(item["energy_carrier"]) if item.get("energy_carrier") else None,
         replaced_by_asset_classes=[ComponentType[name] for name in item.get("replaced_by_asset_classes", [])],
+        # Absent in a register written before the Sowieso share existed, which means the
+        # implicit full like-for-like credit the field now makes explicit.
+        anyway_share=item.get("anyway_share", 1.0),
     )
 
 
@@ -324,6 +332,34 @@ def subsidy_context_from_json(raw: dict) -> SubsidyContext:
     )
 
 
+def _attribution_from_json(raw: dict, key: str, context: str) -> Dict[str, Dict[str, float]]:
+    """Reads one per-subject energy-attribution map back, refusing a negative quantity.
+
+    Both sides of the round trip carry a map of this shape — the extract's simulated-period one
+    and the result's annualized one — and both are read back here so a hand-edited or
+    foreign-written file cannot put a negative magnitude into the household balance. Absent is not
+    an error: it is what every file written before the field existed looks like, and the chart
+    skips itself on the empty map.
+
+    Args:
+        raw: The decoded JSON object holding the map.
+        key: Its key in that object.
+        context: The dotted field path, for the error message.
+
+    Returns:
+        Subject -> role -> kWh, empty when the key is absent.
+
+    Raises:
+        ValueError: If any quantity is negative.
+    """
+    attribution = {
+        subject: {role: float(value) for role, value in by_role.items()}
+        for subject, by_role in raw.get(key, {}).items()
+    }
+    validate_energy_attribution(attribution, context)
+    return attribution
+
+
 def inputs_to_json(inputs: EvaluationInputs) -> dict:
     """Serializes EvaluationInputs to the economic_inputs.json structure.
 
@@ -345,6 +381,13 @@ def inputs_to_json(inputs: EvaluationInputs) -> dict:
             for subject_facts in inputs.cost_facts
         ],
         "billing": [billing_to_json(determinants) for determinants in inputs.billing],
+        # Per-subject energy-balance flows (simulated-period kWh per role). Additive: nothing
+        # prices it, but it has to survive the round trip or a re-priced archive would silently
+        # lose the household energy balance it was extracted for.
+        "energy_attribution_by_subject_in_kwh": {
+            subject: dict(by_role)
+            for subject, by_role in inputs.energy_attribution_by_subject_in_kwh.items()
+        },
         # Extraction failures travel with the extract (issue #2): re-pricing an archived run must
         # hit the same D7 wall as the original one, not quietly price a smaller system.
         "unresolved_subjects": [
@@ -432,6 +475,11 @@ def inputs_from_json(raw: dict, tariffs_base_path: Optional[str] = None) -> Eval
             for item in raw.get("cost_facts", [])
         ],
         billing=[billing_from_json(item) for item in raw.get("billing", [])],
+        energy_attribution_by_subject_in_kwh=_attribution_from_json(
+            raw,
+            "energy_attribution_by_subject_in_kwh",
+            "EvaluationInputs.energy_attribution_by_subject_in_kwh",
+        ),
         unresolved_subjects=[
             UnresolvedSubject(subject=item["subject"], reason=item["reason"])
             for item in raw.get("unresolved_subjects", [])
@@ -669,6 +717,15 @@ def result_from_json(
             operational_co2_by_carrier_in_kg=dict(co2.get("operational_co2_by_carrier_in_kg", {})),
             total_co2_in_kg=co2.get("total_co2_in_kg", 0.0),
             embodied_by_subject_in_kg=dict(co2.get("embodied_by_subject_in_kg", {})),
+            # Additive; absent in files written before the factors table existed, where the
+            # CO2 section states the masses without their multiplication.
+            emission_factor_by_carrier_in_kg_per_kwh=dict(
+                co2.get("emission_factor_by_carrier_in_kg_per_kwh", {})
+            ),
+            embodied_basis_by_subject={
+                subject: EmbodiedCo2Basis.from_json(value)
+                for subject, value in co2.get("embodied_basis_by_subject", {}).items()
+            },
         ),
         subsidy_decisions=[_decision_from_json(item) for item in raw.get("subsidy_decisions", [])],
         sunk_cost_written_off_in_euro=UncertainValue.from_json(raw["sunk_cost_written_off_in_euro"]),
@@ -686,7 +743,27 @@ def result_from_json(
         ),
         simulated_period_fraction=raw.get("simulated_period_fraction", 1.0),
         simulation_year=raw.get("simulation_year"),
+        # Additive with the visualization extension; absent in files written before it, which is
+        # exactly the case the household energy balance skips itself on.
+        annual_energy_attribution_by_subject_in_kwh=_attribution_from_json(
+            raw,
+            "annual_energy_attribution_by_subject_in_kwh",
+            "LifecycleCostResult.annual_energy_attribution_by_subject_in_kwh",
+        ),
         raw_flexibility_value_by_carrier=dict(raw.get("raw_flexibility_value_by_carrier", {})),
+        # Additive; absent in a result written before the Sowieso share existed, where every
+        # credit was implicitly a full one.
+        anyway_share_by_subject={
+            subject: float(share) for subject, share in raw.get("anyway_share_by_subject", {}).items()
+        },
+        # Additive; without it the anyway caption states the share alone.
+        anyway_basis_by_subject={
+            subject: float(basis) for subject, basis in raw.get("anyway_basis_by_subject", {}).items()
+        },
+        # Additive; None for every perspective without a levy, which is most of them.
+        modernization_levy=ModernizationLevySummary.from_json(raw.get("modernization_levy")),
+        # Additive; None for a file written before the assumptions section existed.
+        assumptions=EconomicAssumptions.from_json(raw.get("assumptions")),
     )
 
 

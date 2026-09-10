@@ -200,6 +200,16 @@ def build_input_audit(
                 subsidies_nominal_in_euro=breakdown.subsidies_nominal_in_euro if breakdown else None,
                 subsidy_scheme_ids=[award.scheme_id for award in decision.applied] if decision else [],
                 caps_binding_by_scheme=caps,
+                # The Sowieso share behind this subject's anyway credit, so the audit table
+                # states the credit's basis instead of only its euro amount, and the cost the
+                # share was applied to, so the audited credit is a multiplication the reader can
+                # carry out rather than a percentage in isolation.
+                anyway_share=(
+                    result.anyway_share_by_subject.get(subject_facts.subject) if result else None
+                ),
+                anyway_basis_in_euro=(
+                    result.anyway_basis_by_subject.get(subject_facts.subject) if result else None
+                ),
                 flags=flags,
             )
         )
@@ -296,6 +306,10 @@ def write_cost_audit(audit: InputAuditReport, result_directory: str) -> str:
         "Subsidy best_estimate [EUR]",
         "Subsidy max [EUR]",
         "Caps binding (slots)",
+        "Anyway share",
+        # The share alone cannot be checked: the credit is share x basis, and without the basis a
+        # reader auditing "30 %" has no second number to multiply it by.
+        "Anyway basis [EUR]",
     ]
     for row in audit.rows:
         unit_price, gross, subsidy = (
@@ -322,6 +336,8 @@ def write_cost_audit(audit: InputAuditReport, result_directory: str) -> str:
                 subsidy.best_estimate if subsidy else "",
                 subsidy.maximum if subsidy else "",
                 "; ".join(f"{scheme}:{','.join(slots)}" for scheme, slots in row.caps_binding_by_scheme.items()),
+                row.anyway_share if row.anyway_share is not None else "",
+                row.anyway_basis_in_euro if row.anyway_basis_in_euro is not None else "",
             ]
         )
     with open(path, "w", newline="", encoding="utf-8") as file:

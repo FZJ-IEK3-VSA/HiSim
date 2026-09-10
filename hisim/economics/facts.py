@@ -460,6 +460,11 @@ class ExistingAsset:
     declaration of which measure supersedes this asset: without it a same-class register entry means
     "kept", and only with it does a like-for-like replacement (old windows → new windows) get
     recognized as a replacement with its avoided future cost credited (§3.2b).
+
+    `anyway_share` is how honest that credit is. See its own comment below: crediting 100 % of an
+    insulation measure against a facade that was never insulated was methodologically wrong, and
+    the share is the field that says how much of the new measure the counterfactual would really
+    have bought.
     """
 
     asset_class: ComponentType
@@ -474,16 +479,35 @@ class ExistingAsset:
     # a component with one of these classes is charged full investment + this asset's removal
     # cost, and triggers the sunk-cost / anyway-cost logic of §4.1):
     replaced_by_asset_classes: List[ComponentType] = field(default_factory=list)
+    #: Sowieso-Kosten share: the fraction of the *new* measure's cost that the counterfactual —
+    #: the world in which the renovation does not happen — would truly have spent on this asset.
+    #: `1.0` is a genuine like-for-like replacement: dead windows are replaced by windows, so the
+    #: whole price of the new windows was going to be paid anyway. A **first-time improvement** is
+    #: not like-for-like and must be well below 1: a facade that was never insulated would have
+    #: been *repaired*, not insulated, so only the repair share — scaffolding, render, paint — is a
+    #: cost the building would have caused regardless, and crediting the full insulation price
+    #: against it credits money nobody would ever have spent. The default keeps the historical
+    #: behaviour, so every register written before this field existed is unchanged.
+    anyway_share: float = 1.0
 
     def __post_init__(self) -> None:
-        """Validation: normalizes the replacement-cost override and rejects a non-positive size.
+        """Validation: normalizes the replacement-cost override and rejects impossible inputs.
 
         Raises:
-            ValueError: If the size is not finite and greater than zero.
+            ValueError: If the size is not finite and greater than zero, or if `anyway_share` is
+                outside `(0, 1]` — a share of zero is spelled by not declaring the asset as
+                replaced at all, and a share above one would credit the renovation with more than
+                the measure costs.
         """
         self.replacement_cost_override_in_euro = _coerce_uncertain(self.replacement_cost_override_in_euro)
         if self.size <= 0 or not math.isfinite(self.size):
             raise ValueError("ExistingAsset.size must be finite and > 0.")
+        if not math.isfinite(self.anyway_share) or not 0.0 < self.anyway_share <= 1.0:
+            raise ValueError(
+                f"ExistingAsset.anyway_share must be in (0, 1], got {self.anyway_share!r} for "
+                f"{self.asset_class.value}: it is the share of the new measure's cost the "
+                "counterfactual would truly have spent (§4.1)."
+            )
 
     def age_in_years(self, reference_year: int) -> int:
         """Age at the reference (simulation) year, floored at 0.

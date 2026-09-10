@@ -122,6 +122,34 @@ class TestInputAudit:
         assert f"sources used ({len(audit.sources)} registry entries" in html_text
         assert build_input_audit(inputs, database, EconomicParameters(country="DE", price_basis_year=2026)).rows
 
+    def test_the_anyway_columns_state_the_share_and_the_cost_it_applied_to(self, database, matrix, tmp_path):
+        """A share with no basis cannot be audited: 30 % of what? (review, agreed small fix).
+
+        The CSV published "Anyway share" alone, so a reader could see that a credit had been
+        reduced and had no second number to multiply it by. The basis is the escalated
+        like-for-like cost the share scaled, which is exactly what the row now carries beside it.
+        """
+        import copy
+
+        from hisim.economics.audit import build_input_audit, write_cost_audit
+
+        inputs = make_inputs()
+        # A copy, because the matrix fixture is module-scoped and every other test in this file
+        # reads the same results.
+        result = copy.copy(next(iter(matrix.results.values())))
+        result.anyway_share_by_subject = {"HeatPump": 0.3}
+        result.anyway_basis_by_subject = {"HeatPump": 9000.0}
+        audit = build_input_audit(
+            inputs, database, EconomicParameters(country="DE", price_basis_year=2026), result
+        )
+        with open(write_cost_audit(audit, str(tmp_path)), encoding="utf-8") as audit_file:
+            lines = audit_file.read().splitlines()
+        header = lines[0].split(";")
+        assert header.index("Anyway basis [EUR]") == header.index("Anyway share") + 1
+        cells = lines[1].split(";")
+        assert cells[header.index("Anyway share")] == "0.3"
+        assert cells[header.index("Anyway basis [EUR]")] == "9000.0"
+
     def test_override_survives_a_missing_database_entry(self, database, matrix):
         """Precedence is decided once: an override prices the row even with no entry (W4.6).
 

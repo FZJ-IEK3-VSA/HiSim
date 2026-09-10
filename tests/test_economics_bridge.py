@@ -178,10 +178,14 @@ def test_lifecycle_cost_engine_runs_in_shadow_mode() -> None:
         "cost_provenance.json",
         "cost_audit.csv",
         "cost_parity_report.csv",
-        # LIFECYCLE_COST_REPORT outputs:
+        # The audit's own figure, written on every cost run rather than with the report (Q9),
+        # which is why matplotlib is a dependency of this path and not only of the report path.
+        "cost_audit_timeline_heatmap.png",
+        # LIFECYCLE_COST_REPORT outputs. The per-perspective charts carry the perspective they
+        # are about; only the comparison of perspectives is matrix-wide and therefore unsuffixed.
         "cost_summary.md",
         "lifecycle_report.html",
-        "lifecycle_annual_cash_flows.png",
+        "lifecycle_annual_cash_flows_greenfield_gross.png",
         "lifecycle_perspective_costs.png",
     ):
         assert (result_directory / file_name).is_file(), f"missing {file_name}"
@@ -411,6 +415,77 @@ class TestFailuresAbortInsteadOfDegrading:
 
         written = set(os.listdir(tmp_path))
         assert {"economic_inputs.json", "lifecycle_costs.json", "lifecycle_kpis.json"} <= written
+
+    def test_a_missing_plot_layer_refuses_before_the_first_export(self, tmp_path, monkeypatch):
+        """Catches an environment without matplotlib losing a complete export set to a picture.
+
+        The audit's ledger heatmap is drawn on every cost run, from a lazy import four export
+        files in. An installation without the renderer therefore used to fail *after* those files
+        existed, and the cleanup then removed a set that was correct — for want of a PNG. The
+        probe runs before the first write, so the answer is a refusal naming the module, and the
+        directory is untouched.
+        """
+        import importlib.util
+
+        real_find_spec = importlib.util.find_spec
+        monkeypatch.setattr(
+            importlib.util, "find_spec",
+            lambda name, *rest: None if name == "matplotlib" else real_find_spec(name, *rest),
+        )
+
+        with pytest.raises(CostDataError) as raised:
+            bridge.compute_lifecycle_costs([], [], pd.DataFrame(), _Parameters(str(tmp_path)))
+
+        assert "matplotlib" in str(raised.value) and "Nothing was written" in str(raised.value)
+        assert not os.listdir(tmp_path)
+
+
+class TestChartsThatWereNotDrawn:
+    """A figure the run could not draw is reported, and never takes an export down with it.
+
+    The renderers hand their skips back instead of logging them (the CLI prints them, this path
+    logs them), and the bridge leaves the same lines in a file beside the images: a reader who
+    finds twelve PNGs where the report names thirteen is rarely the person reading the log.
+    """
+
+    def test_a_run_that_skipped_a_chart_writes_the_sidecar(self, tmp_path):
+        """The empty-fleet run draws almost nothing, so it has plenty to account for.
+
+        The file exists only when there is something in it — an empty
+        `lifecycle_plots_not_drawn.txt` in every result directory would be one more artifact to
+        explain — and every line names the chart, its perspective and the reason.
+        """
+        bridge.compute_lifecycle_costs([], [], pd.DataFrame(), _Parameters(str(tmp_path)))
+
+        note = tmp_path / "lifecycle_plots_not_drawn.txt"
+        assert note.is_file()
+        lines = [line for line in note.read_text(encoding="utf-8").splitlines() if line]
+        assert lines, "the sidecar exists because there was something to say"
+        assert all(": " in line for line in lines), lines
+        assert any("ledger heatmap" in line for line in lines)
+
+    def test_a_failing_heatmap_renderer_leaves_the_audit_tables_in_place(self, tmp_path, monkeypatch):
+        """The rollback may not be triggered by a picture that would not render.
+
+        `cost_audit.csv` and everything before it are written by then, and the engine deletes its
+        exports when a run fails afterwards. A matplotlib failure — a font cache, a backend, a
+        malformed colour — would therefore have removed a correct audit table. It is recorded as a
+        skipped chart instead, and the reason carries the exception.
+        """
+        from hisim.economics import report_plots
+
+        def explode(*_arguments, **_keywords):
+            raise RuntimeError("no fonts in this environment")
+
+        monkeypatch.setattr(report_plots, "plot_timeline_heatmap", explode)
+
+        bridge.compute_lifecycle_costs([], [], pd.DataFrame(), _Parameters(str(tmp_path)))
+
+        written = set(os.listdir(tmp_path))
+        assert {"lifecycle_costs.json", "cost_audit.csv", "lifecycle_plots_not_drawn.txt"} <= written
+        assert "cost_audit_timeline_heatmap.png" not in written
+        note = (tmp_path / "lifecycle_plots_not_drawn.txt").read_text(encoding="utf-8")
+        assert "no fonts in this environment" in note
 
 
 class TestCapacityChargeBillingInterval:

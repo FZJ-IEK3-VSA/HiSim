@@ -60,12 +60,12 @@ from hisim.economics.reporting.scaffold import (
     _ChapterContext,
     _not_drawn_html,
 )
+from hisim.economics.report_prose import payback_interval_sentence
 from hisim.economics.reporting.sections_charts import (
     _effective_rate_text,
     _first_result_where,
     _has_year_zero_funding,
     _liquidity_section_html,
-    _payback_interval_prose,
 )
 from hisim.economics.results import EvaluationMatrix, compare
 from hisim.economics.uncertainty import UncertainValue
@@ -894,31 +894,36 @@ class TestThePaybackSentence:
     and `"high"` the optimistic one. The sentence used to name them the other way round, which
     inverted the conclusion a reader drew from it, and it consulted two of the three slots, so
     the central world it is actually about was never stated.
+
+    The sentence now lives in `report_prose` because the PNG companion prints it too, and its
+    own copy of it had a fourth wording again. It is asserted from this side, where the section
+    that shows it is tested, and the two renderings are held together in
+    `tests/test_economics_report_plots.py`.
     """
 
     def test_all_three_worlds_pay_back(self):
         """The central world leads; the other two are the interval around it."""
-        assert _payback_interval_prose(9, 7, 5) == (
+        assert payback_interval_sentence(9, 7, 5) == (
             "Payback lands in year 7 in the central world, between year 5 (optimistic) and "
             "year 9 (pessimistic)."
         )
 
     def test_no_world_pays_back(self):
         """Said in words, because an omitted sentence is read as "not computed"."""
-        assert _payback_interval_prose(None, None, None) == (
+        assert payback_interval_sentence(None, None, None) == (
             "The investment does not pay back within the horizon in any of the three worlds."
         )
 
     def test_only_the_optimistic_world_pays_back(self):
         """The weakest case a reader can still act on, and it has to be marked as weak."""
-        assert _payback_interval_prose(None, None, 6) == (
+        assert payback_interval_sentence(None, None, 6) == (
             "Payback lands in year 6 in the optimistic world only; in the central and the "
             "pessimistic world the curve never reaches zero within the horizon."
         )
 
     def test_an_open_pessimistic_end_is_spelled_out(self):
         """Two worlds cross and one does not: the interval says so instead of printing a None."""
-        assert _payback_interval_prose(None, 8, 6) == (
+        assert payback_interval_sentence(None, 8, 6) == (
             "Payback lands in year 8 in the central world, between year 6 (optimistic) and "
             "never within the horizon (pessimistic)."
         )

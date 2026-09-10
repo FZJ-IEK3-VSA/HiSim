@@ -747,6 +747,11 @@ def write_lifecycle_report(
     a parameter — a comparison is a *section* of this report, not a second document, so there was
     never a second name for a caller to pass.
 
+    The PNG companions are not written here: `report_plots.write_report_plots` writes them in the
+    same breath at both call sites, one set per perspective under
+    `lifecycle_<chart>_<perspective_id>.png`. This page carries every perspective in one document,
+    which is why the raster set has to carry the perspective in its file names instead.
+
     Args:
         matrix: Evaluated perspectives.
         plausibility: The panel for the plausibility section.

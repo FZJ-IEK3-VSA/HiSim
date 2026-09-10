@@ -1,41 +1,64 @@
 """Matplotlib PNG companions of the lifecycle cost report.
 
-Produced for the LIFECYCLE_COST_REPORT postprocessing option, which arrives with stack part 8/8
-(the bridge), and written into the result directory next to the HTML report. Same display groups
-and colors as the HTML report — both take them from `presentation_style.py`, so a group keeps its
-hue across every output and this module no longer imports the `reporting` package (W4.7).
+Two entry points, with two audiences. `write_report_plots` draws the report set for the
+LIFECYCLE_COST_REPORT postprocessing option, next to `lifecycle_report.html`; `write_audit_plots`
+draws the year × category ledger heatmap (V6) on **every** cost run, next to `cost_audit.csv`,
+because it answers the audit's question rather than the report's. Both take their display groups
+and colours from `presentation_style.py`, as the HTML report does, so a group keeps its hue across
+every output and this module no longer imports the `reporting` package (W4.7).
 
 Like `reporting`, this module never computes: the numbers plotted come from `views.py` and
-`results.py`; the arithmetic here is bar geometry, ribbon geometry and axis scaling.
+`results.py`; the arithmetic here is bar geometry, ribbon geometry and axis scaling. The two
+captions that state a run's own figures in *both* renderings — the payback sentence and the
+treemap disclosure — are authored once in `report_prose.py` and printed from there, so the PNG
+and the HTML page cannot word the same figure differently.
 
 **Why raster images exist at all**, given that `lifecycle_report.html` already draws the same
 figures as inline SVG: a PNG can be dropped into the PDF report, a slide deck or an issue
-comment, which an HTML page cannot. They are companions, never the primary output — the set is
-a deliberate subset (thirteen charts out of the report's two dozen sections), always for the
-*first* perspective of the matrix, and it carries no tables, no plausibility panel and no audit
-trail. A reviewer checking numbers should read the HTML; the PNGs are for pasting. Widen the
-subset when a consumer actually needs a non-first perspective in a hand-out — until then, one
-perspective per file name is what keeps the set nameable without a naming scheme nobody asked
-for.
+comment, which an HTML page cannot. They are companions, never the primary output — the set is a
+deliberate subset (thirteen charts out of the report's two dozen sections) and it carries no
+tables, no plausibility panel and no audit trail. A reviewer checking numbers should read the
+HTML; the PNGs are for pasting.
+
+**One set per perspective.** The per-perspective charts are drawn for *every* perspective of the
+matrix and carry its id in the file name (`lifecycle_<chart>_<perspective_id>.png`); the
+matrix-wide comparison of perspectives is drawn once, as `lifecycle_perspective_costs.png`. The
+charts that only exist as a difference — the payback curve, the NPV bridge, the fixed-interest
+benchmark, and the comparison forms of the swimlane's milestone and the fan's lower panel — need
+a reference variant and are drawn only for the perspective that comparison was computed for.
+Nothing is ever substituted: when the reference's perspective is absent from the matrix, those
+charts are skipped with a reason rather than drawn for a perspective the reader did not ask for,
+which is how a bridge, a fan and a benchmark used to end up describing three different parties
+on one page.
 
 **What the set is.** The five original charts — annual cash flows, the year-0 investment build-up,
 the perspective comparison, the per-component costs and the payback curve — plus the pasteable
 half of the visualization extension: the actor Sankey (V1), the liquidity fan (V2), the comparison
 bridge (V4), the cost treemap (V8), the lifecycle swimlane (V9), the sources-and-uses Sankey
 (V10), the fixed-interest benchmark (V13) and the monthly burden (V14). Everything else in that
-set is HTML-only. The year × category ledger heatmap (V6) is written by `write_audit_plots`
-instead, next to `cost_audit.csv`: it has the audit's audience, and it lives here rather than in
-`audit.py` because the seam-4 import lint keeps the verification modules free of renderers. A
-chart whose driving view has nothing to draw writes no file and **logs the skip** — a silently
-absent figure is only acceptable because the log names it.
+set is HTML-only. The ledger heatmap (V6) is `write_audit_plots`' single chart: it has the
+audit's audience, and it lives here rather than in `audit.py` because the seam-4 import lint keeps
+the verification modules free of renderers.
+
+**A chart that has nothing to draw writes no file and says why — to its caller.** Nothing here
+logs: every `plot_*` returns `None` instead of a path and records a `SkippedPlot` in the list its
+caller passed, and both writers return a `PlotsWritten` carrying the paths and those records. The
+engine-side callers decide what happens to them (`bridge.py` logs a line per skip and writes
+`lifecycle_plots_not_drawn.txt`; the CLI prints them), which is what keeps a renderer from being
+the module that decides how a run reports itself.
+
+**matplotlib is a hard dependency of the plain cost path**, not only of the report path, since
+the audit heatmap is drawn on every run. `bridge.compute_lifecycle_costs` and the `evaluate` CLI
+both check that this module imports *before* they write their first export, so a missing
+dependency is a refusal rather than a half-written directory.
 
 What the module does not own: which colour a display group has and which categories fall into
-it (`presentation_style.py`), any figure being plotted (`views.py`, `results.py`), and the file
-naming/orchestration of the report as a whole (`__main__.py` and `bridge.py`, which call
-`write_report_plots` and `write_audit_plots`). Unlike the HTML and markdown reports these outputs
-are deliberately *not* golden-tested — matplotlib rendering is not byte-stable across versions —
-so the guarantee that they agree with the report is structural, not pinned: both read the same
-view functions, and `tests/test_economics_report_plots.py` checks the files and that structural
+it (`presentation_style.py`), any figure being plotted (`views.py`, `results.py`), the wording of
+the shared captions (`report_prose.py`), and the file naming/orchestration of the report as a
+whole (`__main__.py` and `bridge.py`). Unlike the HTML and markdown reports these outputs are
+deliberately *not* golden-tested — matplotlib rendering is not byte-stable across versions — so
+the guarantee that they agree with the report is structural, not pinned: both read the same view
+functions, and `tests/test_economics_report_plots.py` checks the files and that structural
 agreement.
 """
 
@@ -44,7 +67,8 @@ from __future__ import annotations
 import contextlib
 import os
 import textwrap
-from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 import matplotlib
 
@@ -54,11 +78,12 @@ matplotlib.use("Agg")  # postprocessing runs headless
 # read as a misplaced import; every import below this line is in that position on purpose.
 # pylint: disable=wrong-import-position
 import matplotlib.pyplot as plt  # noqa: E402  — backend must be set before pyplot
+from matplotlib.axes import Axes  # noqa: E402
 from matplotlib.colors import SymLogNorm  # noqa: E402
+from matplotlib.figure import Figure  # noqa: E402
 from matplotlib.patches import PathPatch, Rectangle  # noqa: E402
 from matplotlib.path import Path as MplPath  # noqa: E402
 
-from hisim import log  # noqa: E402
 from hisim.economics import views  # noqa: E402
 from hisim.economics.presentation_style import (  # noqa: E402
     ChromeColors,
@@ -70,7 +95,11 @@ from hisim.economics.presentation_style import (  # noqa: E402
     sankey_node_boxes,
     squarified_layout,
 )
-from hisim.economics.report_prose import ReportProse  # noqa: E402
+from hisim.economics.report_prose import (  # noqa: E402
+    ReportProse,
+    payback_interval_sentence,
+    treemap_disclosure,
+)
 from hisim.economics.results import (  # noqa: E402
     EvaluationMatrix,
     LifecycleCostResult,
@@ -82,6 +111,86 @@ from hisim.economics.timeline import CostCategory  # noqa: E402
 from hisim.economics.uncertainty import Slot  # noqa: E402
 
 # pylint: enable=wrong-import-position
+
+
+@dataclass(frozen=True)
+class SkippedPlot:
+    """One chart that was not drawn, and why — the return value that replaced a log line.
+
+    A hand-out short one figure is fine when the reason is "there was nothing to draw"; it is not
+    fine when nobody can tell that from the run. This module used to say so in the run log,
+    which put the decision of *how a run reports itself* inside a renderer: the CLI could not print
+    the skips it caused, the bridge could not put them in a file beside the PNGs, and a test could
+    only assert on captured stdout. The reason is data now, and the engine-side callers decide what
+    to do with it.
+
+    Attributes:
+        chart: The chart, named as a reader of the output directory would name it.
+        perspective_id: The perspective it would have been drawn for; empty for a skip that
+            belongs to no single perspective, such as the comparison charts of a run that has no
+            reference variant at all.
+        reason: One sentence, in the form "what was missing, and why that means no picture".
+    """
+
+    chart: str
+    perspective_id: str
+    reason: str
+
+    def as_line(self) -> str:
+        """`chart (perspective): reason`, the one-line form the log and the sidecar both print."""
+        subject = f"{self.chart} ({self.perspective_id})" if self.perspective_id else self.chart
+        return f"{subject}: {self.reason}"
+
+
+@dataclass
+class PlotsWritten:
+    """What a writer produced: the files on disk and the charts that drew nothing.
+
+    Both halves are needed by every caller. `paths` is what a run reports as written and, in the
+    bridge's case, removes again if the run fails later on; `skipped` is what it has to say out
+    loud, because an absent figure with no stated reason is indistinguishable from a renderer that
+    crashed and was swallowed.
+    """
+
+    paths: List[str] = field(default_factory=list)
+    skipped: List[SkippedPlot] = field(default_factory=list)
+
+    def lines(self) -> List[str]:
+        """One `chart (perspective): reason` line per skip, in the order the charts were drawn."""
+        return [skip.as_line() for skip in self.skipped]
+
+
+def _skip(
+    collector: Optional[List[SkippedPlot]], chart: str, perspective_id: str, reason: str
+) -> None:
+    """Records one skip in the caller's collector, if the caller is collecting.
+
+    The collector is optional so a plot function stays callable on its own — from a test, from a
+    notebook, from a future caller that wants one chart and not the set — without having to build
+    a list it will not read. A skip nobody collects is simply not reported, which is the caller's
+    decision to make rather than this module's.
+    """
+    if collector is not None:
+        collector.append(SkippedPlot(chart=chart, perspective_id=perspective_id, reason=reason))
+
+
+class _Typography:
+    """Text metrics the two label-fitting rules share.
+
+    Both the treemap's "does this label fit its tile" and the swimlane's "how much room does this
+    event label claim" estimate the width of a string without asking matplotlib to lay it out —
+    a real measurement needs a draw, and both rules run while deciding what to draw. The two
+    numbers behind that estimate are properties of the font and of the unit system, not of either
+    chart, and they were declared twice with the same values, which is one place too many for a
+    constant that has to stay the same in both.
+    """
+
+    #: Width of an average character as a fraction of the font size — a standard DejaVu Sans
+    #: approximation, deliberately generous so the estimate errs towards suppressing a label
+    #: rather than towards printing one across its neighbour.
+    CHAR_WIDTH_RATIO = 0.62
+    #: Points per inch, so a font size in points and a figure size in inches meet in one unit.
+    POINTS_PER_INCH = 72.0
 
 
 class _Palette:
@@ -129,7 +238,7 @@ def _figure(
     height: float = 4.2,
     panels: Tuple[int, int] = (1, 1),
     share_x: bool = False,
-) -> Iterator[Tuple[Any, Any]]:
+) -> Iterator[Tuple[Figure, List[Axes]]]:
     """A styled figure and its axes at the report's fixed resolution, always closed.
 
     The single constructor for every chart here, so all PNGs of a run share a DPI and the chrome
@@ -144,7 +253,13 @@ def _figure(
     between creating the figure and that line — a malformed series, a missing key — leaked the
     figure for the lifetime of the process, and a postprocessing run that writes plots per
     building leaks one per failure. Closing in `finally` makes the cleanup a property of the
-    figure rather than of each function remembering to reach its last line.
+    figure rather than of each function remembering to reach its last line, and `plt.subplots`
+    itself is inside the `try` so a failure *in the construction* is covered by the same rule.
+
+    The yielded axes are **always a flat list**, single-panel charts included, so a caller's
+    `axes[0]` means the same thing at every grid size. Yielding a bare axis for a 1×1 grid and a
+    list for anything else made the shape depend on an argument, which is a type a caller cannot
+    write down and a mistake mypy cannot catch.
 
     Args:
         width: Figure width in inches.
@@ -154,21 +269,22 @@ def _figure(
             read as one year axis rather than as two charts.
 
     Yields:
-        The figure and, for the default single-panel grid, its one styled axis; for any other
-        grid, the flat list of styled axes in row-major order.
+        The figure and its styled axes in row-major order, as a list of length `rows * columns`.
     """
     rows, columns = panels
-    figure, grid = plt.subplots(
-        rows, columns, figsize=(width, height), dpi=130, sharex=share_x, squeeze=False
-    )
+    figure: Optional[Figure] = None
     try:
+        figure, grid = plt.subplots(
+            rows, columns, figsize=(width, height), dpi=130, sharex=share_x, squeeze=False
+        )
         figure.patch.set_facecolor(_Palette.SURFACE)
         axes = [axis for row in grid for axis in row]
         for axis in axes:
             _style_axis(axis)
-        yield figure, (axes[0] if len(axes) == 1 else axes)
+        yield figure, axes
     finally:
-        plt.close(figure)
+        if figure is not None:
+            plt.close(figure)
 
 
 def _stack_positive_negative(
@@ -234,7 +350,9 @@ def _stack_positive_negative(
     return bottom_positive, bottom_negative
 
 
-def plot_annual_cash_flows(result: LifecycleCostResult, path: str) -> str:
+def plot_annual_cash_flows(
+    result: LifecycleCostResult, path: str, skips: Optional[List[SkippedPlot]] = None
+) -> Optional[str]:
     """Stacked bars per year by display group (nominal), the timeline plausibility view.
 
     The PNG counterpart of the report's `ReportSections.CASH_FLOW_TIMELINE` section. It answers
@@ -244,12 +362,18 @@ def plot_annual_cash_flows(result: LifecycleCostResult, path: str) -> str:
     credits below it — the two stacks have separate baselines and are never netted against each
     other, so a year with both shows both.
 
+    A perspective whose scoped timeline carries no money at all — an operating-only view of a
+    run with no operating flows, a party that pays nothing — is skipped rather than drawn: an
+    axis of empty years reads as "this was computed and came out flat", which is a different
+    statement from "there was nothing here to compute".
+
     Args:
         result: The evaluated perspective to draw; the title carries its id and NPV.
         path: Destination PNG path.
+        skips: Collector for the skip record, if the caller is collecting.
 
     Returns:
-        `path`, unchanged, so callers can collect the written files.
+        `path` when the chart was written, None when it had nothing to draw.
     """
     horizon = result.parameters.observation_period_in_years
     years = list(range(horizon + 1))
@@ -262,7 +386,15 @@ def plot_annual_cash_flows(result: LifecycleCostResult, path: str) -> str:
     for year, row in enumerate(folded):
         for index, value in row.items():
             per_group[index][year] = value
-    with _figure() as (figure, axis):
+    if not any(any(values) for values in per_group.values()):
+        _skip(
+            skips, "annual cash flows", result.perspective_id,
+            "no year of the scoped timeline carries a non-zero amount in any display group, so "
+            "every bar of the chart would have height zero.",
+        )
+        return None
+    with _figure() as (figure, axes):
+        axis = axes[0]
         _stack_positive_negative(axis, years, per_group)
         axis.axhline(0, color=_Palette.MUTED, linewidth=0.8)
         axis.set_xlabel("year", color=_Palette.MUTED, fontsize=9)
@@ -278,7 +410,9 @@ def plot_annual_cash_flows(result: LifecycleCostResult, path: str) -> str:
     return path
 
 
-def plot_investment_waterfall(result: LifecycleCostResult, path: str) -> str:
+def plot_investment_waterfall(
+    result: LifecycleCostResult, path: str, skips: Optional[List[SkippedPlot]] = None
+) -> Optional[str]:
     """Year-0 build-up per subject: gross bars split into a net and a subsidy-covered segment.
 
     One horizontal bar per component, split into what the owner pays and what the support
@@ -286,9 +420,8 @@ def plot_investment_waterfall(result: LifecycleCostResult, path: str) -> str:
     in total. Both figures come from `views.subsidy_share_of_gross`, including the
     `min(subsidy, gross)` clamp that keeps the funded share inside [0, 1]; the same view feeds
     the HTML report's subsidy composition bars, which is why the two cannot disagree. Subjects
-    without a positive gross investment are absent, and with no subjects at all the function logs
-    the skip and returns without writing a file — `write_report_plots` filters the missing path
-    out.
+    without a positive gross investment are absent, and with no subjects at all the function
+    records the skip and writes no file.
 
     The split is drawn as two stacked segments distinguished by colour — net investment in the
     group-0 hue, the subsidy-covered part in the group-3 hue — with the net/gross figures printed
@@ -297,9 +430,10 @@ def plot_investment_waterfall(result: LifecycleCostResult, path: str) -> str:
     Args:
         result: The evaluated perspective whose year-0 investment is drawn.
         path: Destination PNG path.
+        skips: Collector for the skip record, if the caller is collecting.
 
     Returns:
-        `path`, whether or not a file was written.
+        `path` when the chart was written, None when it had nothing to draw.
     """
     subjects, gross_values, net_values, subsidy_values = [], [], [], []
     for share in views.subsidy_share_of_gross(result).values():
@@ -308,12 +442,13 @@ def plot_investment_waterfall(result: LifecycleCostResult, path: str) -> str:
         subsidy_values.append(share.subsidy_in_euro)
         net_values.append(share.net_in_euro)
     if not subjects:
-        log.information(
-            f"Investment build-up skipped for perspective {result.perspective_id!r}: no subject "
-            "carries a positive year-0 investment, so there is no gross to split."
+        _skip(
+            skips, "investment build-up", result.perspective_id,
+            "no subject carries a positive year-0 investment, so there is no gross to split.",
         )
-        return path
-    with _figure(height=max(2.2, 0.55 * len(subjects) + 1.2)) as (figure, axis):
+        return None
+    with _figure(height=max(2.2, 0.55 * len(subjects) + 1.2)) as (figure, axes):
+        axis = axes[0]
         positions = range(len(subjects))
         axis.barh(positions, net_values, color=PresentationStyle.GROUP_COLORS_LIGHT[0], label="net investment",
                   edgecolor=_Palette.SURFACE, linewidth=0.6)
@@ -361,7 +496,8 @@ def plot_perspective_costs(matrix: EvaluationMatrix, path: str) -> str:
         best_estimates.append(band.best_estimate)
         lows.append(band.best_estimate - band.minimum)
         highs.append(band.maximum - band.best_estimate)
-    with _figure(height=max(2.2, 0.5 * len(labels) + 1.2)) as (figure, axis):
+    with _figure(height=max(2.2, 0.5 * len(labels) + 1.2)) as (figure, axes):
+        axis = axes[0]
         positions = range(len(labels))
         axis.errorbar(best_estimates, positions, xerr=[lows, highs], fmt="o",
                       color=PresentationStyle.GROUP_COLORS_LIGHT[0],
@@ -449,12 +585,14 @@ def _legend_below_axes_anchor(figure_height_in_inches: float) -> float:
     return -_LEGEND_DROP_IN_INCHES / axes_height_in_inches
 
 
-def plot_component_costs(result: LifecycleCostResult, path: str) -> str:
+def plot_component_costs(
+    result: LifecycleCostResult, path: str, skips: Optional[List[SkippedPlot]] = None
+) -> Optional[str]:
     """Per-subject NPV as diverging stacks (§7.4): costs right of 0, credits left, net marker.
 
     Credits (residual value, subsidies, feed-in, anyway credit) are never added onto the cost
     side — the black marker with whiskers is the net NPV band, `net = costs - credits`. A result
-    that carries no component breakdowns logs the skip and writes no file.
+    that carries no component breakdowns records the skip and writes no file.
 
     Two placement rules exist because the chart draws three things per row and they collided in
     every run of the evaluation set. The net-NPV text starts past *everything* in its row — the end
@@ -464,15 +602,24 @@ def plot_component_costs(result: LifecycleCostResult, path: str) -> str:
     (`_legend_below_axes_anchor`), because a diverging horizontal stack has no reliably empty
     corner. Both put text outside the data range, so the figure is saved with `bbox_inches="tight"`
     to keep it in the PNG.
+
+    Args:
+        result: The evaluated perspective whose subjects are drawn.
+        path: Destination PNG path.
+        skips: Collector for the skip record, if the caller is collecting.
+
+    Returns:
+        `path` when the chart was written, None when it had nothing to draw.
     """
     breakdowns = list(result.component_breakdowns.items())
     if not breakdowns:
-        log.information(
-            f"Per-component costs skipped for perspective {result.perspective_id!r}: the result "
-            "carries no component breakdowns, so the chart would have no rows."
+        _skip(
+            skips, "per-component costs", result.perspective_id,
+            "the result carries no component breakdowns, so the chart would have no rows.",
         )
-        return path
-    with _figure(height=max(2.4, 0.55 * len(breakdowns) + 1.4)) as (figure, axis):
+        return None
+    with _figure(height=max(2.4, 0.55 * len(breakdowns) + 1.4)) as (figure, axes):
+        axis = axes[0]
         positions = list(range(len(breakdowns)))
         per_subject = [
             views.fold_categories(breakdown.npv_by_category, PresentationStyle.CATEGORY_TO_GROUP)
@@ -514,7 +661,11 @@ def plot_component_costs(result: LifecycleCostResult, path: str) -> str:
         axis.yaxis.grid(False)
         # The labels are drawn in data coordinates, so the axis has to make room for them or the
         # longest one is clipped at the frame; the reserve is proportional to the label width.
-        axis.set_xlim(min(list(lefts_neg) + [0.0]) - gap,
+        # The left limit clears the *furthest left thing in the row*, which is the net band's
+        # lower cap whenever the band reaches past the credit stack — as it does on every row
+        # whose residual value exceeds its credits. Sizing it from the stack alone cut the
+        # whisker off at the frame, the mirror image of the label bug above.
+        axis.set_xlim(min(list(lefts_neg) + [band.minimum for band in nets] + [0.0]) - gap,
                       max(label_starts) + gap + span * _LABEL_RESERVE_SHARE)
         axis.set_xlabel("NPV [EUR] — credits left of 0, costs right; marker = net NPV band",
                         color=_Palette.MUTED, fontsize=9)
@@ -529,13 +680,14 @@ def plot_component_costs(result: LifecycleCostResult, path: str) -> str:
 def _comparison_basis(reference: LifecycleCostResult, variant: LifecycleCostResult) -> str:
     """The perspective a comparison chart is drawn on, worded for a title and an axis label.
 
-    The report shows payback on more than one basis: the swimlane's milestone (V9) is drawn for the
-    matrix's first perspective, typically the *gross* one, while the payback curve is drawn for the
-    perspective the two compared directories share, typically `brownfield_net`. Both are correct
-    and they legitimately differ — a net basis pays back earlier — so a chart that does not say
-    which basis it uses invites the reader to call the disagreement a bug. When the two sides are
-    not the same perspective, because the reference directory lacks the variant's, both are named
-    rather than one silently standing in for the other.
+    The report shows payback on more than one basis: every perspective gets its own swimlane, and
+    only one of them — the compared one, typically `brownfield_net` — carries the milestone that
+    the payback curve is about, while a reader holding two of those images has two answers in
+    front of them. Both are correct and they legitimately differ — a net basis pays back earlier —
+    so a chart that does not say which basis it uses invites the reader to call the disagreement a
+    bug. The three charts that carry a basis (this one's callers: the payback curve, the NPV
+    bridge and the fixed-interest benchmark) therefore name it, and when the two sides are not the
+    same perspective, both are named rather than one silently standing in for the other.
 
     Args:
         reference: The baseline result.
@@ -561,7 +713,8 @@ def plot_payback_curve(
     """
     curves = cumulative_discounted_savings(reference, variant)
     years = list(range(len(curves["best_estimate"])))
-    with _figure(height=3.6) as (figure, axis):
+    with _figure(height=3.6) as (figure, axes):
+        axis = axes[0]
         styles = {"low": (":", 1.2, "optimistic"), "best_estimate": ("-", 2.2, "expected"),
                   "high": ("--", 1.2, "pessimistic")}
         for slot, (linestyle, linewidth, label) in styles.items():
@@ -608,8 +761,7 @@ class _SankeyStyle:
 
 
 def _draw_ribbon(
-    axis, left: Tuple[float, float], right: Tuple[float, float], band_height: float,
-    color: str, hatched: bool,
+    axis, left: Tuple[float, float], right: Tuple[float, float], band_height: float, color: str,
 ) -> None:
     """One Bézier ribbon between two vertical faces, as a single closed patch.
 
@@ -617,9 +769,13 @@ def _draw_ribbon(
     width — **one width for both ends**, because a ribbon is one flow and the diagram has one
     global unit scale (rule 2.7). The patch is a cubic curve along the top, a straight drop down
     the right face, the mirrored curve back along the bottom and a close — eight vertices, which
-    is why this is a `PathPatch` rather than a polygon approximation. Credit ribbons are hatched
-    instead of solid, so that "money coming back" is distinguishable from "money going out"
-    without relying on colour (V11's rule).
+    is why this is a `PathPatch` rather than a polygon approximation.
+
+    There is no credit variant. The parameter that used to select a hatched ribbon for "money
+    coming back" (V11's rule) was passed `False` by both Sankeys in the set — neither draws a
+    credit flow, because both are built from flows that are already signed by direction — so the
+    branch was a rendering mode nothing could reach, and a flag every caller sets to the same
+    value is a fact about the module, not an argument.
     """
     x_left, y_left = left
     x_right, y_right = right
@@ -642,9 +798,8 @@ def _draw_ribbon(
     axis.add_patch(
         PathPatch(
             MplPath(vertices, codes),
-            facecolor="none" if hatched else color,
+            facecolor=color,
             edgecolor=color,
-            hatch="///" if hatched else None,
             alpha=_SankeyStyle.RIBBON_ALPHA,
             linewidth=0.6,
         )
@@ -688,7 +843,7 @@ def _draw_net_stubs(axis, geometry, stub_labels: Optional[Dict[str, str]] = None
 def _draw_sankey(
     axis,
     columns: Sequence[Sequence[str]],
-    ribbons: Sequence[Tuple[str, str, float, str, bool]],
+    ribbons: Sequence[Tuple[str, str, float, str]],
     node_labels: Optional[Dict[str, str]] = None,
     stub_labels: Optional[Dict[str, str]] = None,
 ) -> None:
@@ -703,13 +858,13 @@ def _draw_sankey(
     """
     geometry = sankey_node_boxes(
         [list(column) for column in columns],
-        [(source, target, amount) for source, target, amount, _color, _credit in ribbons],
+        [(source, target, amount) for source, target, amount, _color in ribbons],
     )
     boxes = geometry.boxes
     axis.set_xlim(-0.02, 1.02)
     axis.set_ylim(-0.06, 1.06)
     axis.axis("off")
-    for index, (source, target, amount, color, credit) in enumerate(ribbons):
+    for index, (source, target, amount, color) in enumerate(ribbons):
         if source not in boxes or target not in boxes:
             continue
         band_height = amount * geometry.unit_scale
@@ -722,7 +877,7 @@ def _draw_sankey(
             target_x, target_y, _target_h = boxes[leg.target]
             left = (source_x + _SankeyStyle.NODE_WIDTH, source_y + leg.out_anchor)
             right = (target_x, target_y + leg.in_anchor)
-            _draw_ribbon(axis, left, right, band_height, color, credit)
+            _draw_ribbon(axis, left, right, band_height, color)
     _draw_net_stubs(axis, geometry, stub_labels)
     last_column = len(columns) - 1
     for index, nodes in enumerate(columns):
@@ -765,7 +920,9 @@ def _category_color(category: Optional[CostCategory]) -> str:
 
 # ---------------------------------------------------------------------------- V1 actor flows
 
-def plot_actor_flows(result: LifecycleCostResult, path: str) -> str:
+def plot_actor_flows(
+    result: LifecycleCostResult, path: str, skips: Optional[List[SkippedPlot]] = None
+) -> Optional[str]:
     """V1: who pays whom over the horizon, as a three-column Sankey (nominal, best estimate).
 
     Sources on the left, actors in the middle, sinks on the right, with the inter-actor transfer
@@ -774,23 +931,25 @@ def plot_actor_flows(result: LifecycleCostResult, path: str) -> str:
     lifetime nominal euros of the BEST_ESTIMATE slot; the band of the grand total is stated in
     the title, because a banded Sankey is unreadable (Q2).
 
-    Skipped, with a log line, for a perspective with fewer than two actors: a single-payer
-    Sankey adds nothing the waterfall does not already show.
+    Skipped, with a reason, for a perspective with fewer than two actors: a single-payer Sankey
+    adds nothing the waterfall does not already show.
 
     Args:
         result: The evaluated perspective; its FULL timeline is read, so every payer appears.
         path: Destination PNG path.
+        skips: Collector for the skip record, if the caller is collecting.
 
     Returns:
-        `path`, whether or not a file was written (the caller filters missing files out).
+        `path` when the chart was written, None when it had nothing to draw.
     """
     matrix = views.actor_flow_matrix(result)
     if len(matrix.actors) < 2:
-        log.information(
-            f"Actor-flow Sankey skipped for perspective {result.perspective_id!r}: it has "
-            f"{len(matrix.actors)} actor node(s), so there is no who-pays-whom story to draw."
+        _skip(
+            skips, "actor-flow Sankey", result.perspective_id,
+            f"the perspective has {len(matrix.actors)} actor node(s), so there is no "
+            "who-pays-whom story to draw.",
         )
-        return path
+        return None
 
     def node_key(node: str, is_target: bool) -> str:
         """Column-qualified node id: a counterparty can be both a source and a sink."""
@@ -804,7 +963,6 @@ def plot_actor_flows(result: LifecycleCostResult, path: str) -> str:
             node_key(flow.target, True),
             flow.amount_in_euro,
             _category_color(flow.category),
-            False,
         )
         for flow in sorted(matrix.flows, key=lambda item: -item.amount_in_euro)
     ]
@@ -814,7 +972,8 @@ def plot_actor_flows(result: LifecycleCostResult, path: str) -> str:
     labels.update({f"snk:{node}": node for node in matrix.sinks})
     with _figure(
         height=max(3.6, 0.5 * (len(matrix.actors) + len(matrix.sinks)) + 2.4)
-    ) as (figure, axis):
+    ) as (figure, axes):
+        axis = axes[0]
         _draw_sankey(
             axis,
             # Q23: one column per party, in the order the view's topological sort puts them, so a
@@ -848,8 +1007,11 @@ def plot_actor_flows(result: LifecycleCostResult, path: str) -> str:
 # ---------------------------------------------------------------------------- V2 liquidity fan
 
 def plot_liquidity_fan(
-    result: LifecycleCostResult, path: str, comparison: Optional[VariantComparison] = None
-) -> str:
+    result: LifecycleCostResult,
+    path: str,
+    comparison: Optional[VariantComparison] = None,
+    skips: Optional[List[SkippedPlot]] = None,
+) -> Optional[str]:
     """V2: cumulative cash position over time, nominal and discounted, with the band as a fan.
 
     Two panels on one year axis. The upper one is the cumulative *nominal* cost, cost-positive-up
@@ -862,16 +1024,33 @@ def plot_liquidity_fan(
     Both panels draw the BEST_ESTIMATE slot as a line and the LOW/HIGH envelope as a fill; the
     fill is an envelope of two coherent worlds, not an error bar.
 
+    Both panels are drawn over **one** explicit year range, the nominal series'. A comparison
+    whose savings curve has a different length is a comparison of two horizons, and the fan would
+    silently plot the shorter one against the wrong years; it raises instead.
+
     Args:
         result: The perspective whose position is drawn.
         path: Destination PNG path.
-        comparison: Optional comparison; turns the lower panel into the payback fan.
+        comparison: Optional comparison; turns the lower panel into the payback fan. It has to be
+            the comparison computed *for this perspective* — the caller picks it.
+        skips: Collector for the skip record, if the caller is collecting.
 
     Returns:
-        `path`, unchanged.
+        `path` when the chart was written, None when it had nothing to draw.
+
+    Raises:
+        views.CostDataError: If the comparison's savings curves do not span the same years as
+            this result's own cumulative series.
     """
     nominal = views.cumulative_nominal_cost_series(result)
     years = list(range(len(nominal[Slot.BEST_ESTIMATE])))
+    if not any(any(nominal[slot]) for slot in (Slot.LOW, Slot.BEST_ESTIMATE, Slot.HIGH)):
+        _skip(
+            skips, "liquidity fan", result.perspective_id,
+            "the cumulative cash position is zero in every year of every world, so both panels "
+            "would be a flat line on the axis.",
+        )
+        return None
     hue = PresentationStyle.GROUP_COLORS_LIGHT[0]
     with _figure(height=6.0, panels=(2, 1), share_x=True) as (figure, axes):
         axes[0].fill_between(years, nominal[Slot.LOW], nominal[Slot.HIGH], color=hue, alpha=0.18,
@@ -894,8 +1073,19 @@ def plot_liquidity_fan(
         if comparison is not None:
             curves = comparison.cumulative_discounted_savings_in_euro
             low, best_estimate, high = curves["low"], curves["best_estimate"], curves["high"]
+            if len(best_estimate) != len(years):
+                raise views.CostDataError(
+                    f"The cash curve of perspective {result.perspective_id!r} spans "
+                    f"{len(years)} years but the comparison it was handed carries "
+                    f"{len(best_estimate)}: the two panels share one year axis, so the savings "
+                    "would be drawn against years they were not computed for. Compare two "
+                    "evaluations of the same observation period."
+                )
             lower_label = "cumulative discounted savings [EUR]"
-            note = _payback_interval_note(views.band_zero_crossings(curves))
+            crossings = views.band_zero_crossings(curves)
+            note = payback_interval_sentence(
+                crossings.get("low"), crossings.get("best_estimate"), crossings.get("high")
+            )
         else:
             discounted = views.cumulative_discounted_cost_series(result)
             low = discounted[Slot.LOW]
@@ -903,31 +1093,18 @@ def plot_liquidity_fan(
             high = discounted[Slot.HIGH]
             lower_label = "cumulative discounted cost [EUR]"
             note = f"end point = NPV {result.total_npv_in_euro.best_estimate:,.0f} EUR"
-        axes[1].fill_between(range(len(best_estimate)), low, high, color=hue, alpha=0.18, linewidth=0)
-        axes[1].plot(range(len(best_estimate)), best_estimate, color=hue, linewidth=2.2)
+        axes[1].fill_between(years, low, high, color=hue, alpha=0.18, linewidth=0)
+        axes[1].plot(years, best_estimate, color=hue, linewidth=2.2)
         axes[1].axhline(0, color=_Palette.MUTED, linewidth=0.8)
         axes[1].set_ylabel(lower_label, color=_Palette.MUTED, fontsize=9)
         axes[1].set_xlabel("year", color=_Palette.MUTED, fontsize=9)
         axes[1].set_xticks(list(range(0, len(years), max(1, len(years) // 10))))
-        axes[1].set_title(note, fontsize=9, color=_Palette.INK, loc="left")
+        axes[1].set_title(
+            textwrap.fill(note, width=110), fontsize=8, color=_Palette.INK, loc="left"
+        )
         figure.tight_layout()
         figure.savefig(path, facecolor=_Palette.SURFACE)
     return path
-
-
-def _payback_interval_note(crossings: Mapping[Any, Optional[int]]) -> str:
-    """The payback annotation of V2's discounted panel, open end included.
-
-    Formats the band's zero crossings as an interval, and — this is the point — says so in words
-    when the HIGH world never crosses inside the horizon instead of dropping the statement. An
-    omitted "no payback" is the failure mode this wording exists to prevent.
-    """
-    low, high = crossings.get("low"), crossings.get("high")
-    if low is None:
-        return "no payback within the horizon in any scenario"
-    if high is None:
-        return f"payback from year {low} (no payback in the HIGH world within the horizon)"
-    return f"payback between year {low} and year {high}"
 
 
 # ---------------------------------------------------------------------------- V4 bridge
@@ -943,9 +1120,13 @@ def plot_comparison_bridge(
     would be arithmetic that means nothing. Delta bars are coloured by display group rather than
     red/green (owner decision Q6): whether a cost increase is bad depends on the payer.
 
+    The title names the basis through `_comparison_basis`, as the payback curve does: when the
+    two sides are not the same perspective, both are named rather than one standing in silently
+    for the other.
+
     Args:
         reference: The base result.
-        variant: The variant result, same perspective.
+        variant: The variant result, normally the same perspective.
         path: Destination PNG path.
 
     Returns:
@@ -954,7 +1135,8 @@ def plot_comparison_bridge(
     steps = views.comparison_bridge(reference, variant, PresentationStyle.CATEGORY_TO_GROUP)
     labels = ["reference"] + [group_name(step.group) for step in steps] + ["variant"]
     base = reference.total_npv_in_euro.best_estimate
-    with _figure(height=max(3.2, 0.45 * len(labels) + 2.0)) as (figure, axis):
+    with _figure(height=max(3.2, 0.45 * len(labels) + 2.0)) as (figure, axes):
+        axis = axes[0]
         positions = list(range(len(labels)))
         axis.bar([0], [base], color=_Palette.INK, width=0.7)
         cursor = base
@@ -962,10 +1144,17 @@ def plot_comparison_bridge(
             bottom = min(cursor, cursor + step.delta_in_euro)
             axis.bar([index], [abs(step.delta_in_euro)], bottom=bottom, width=0.7,
                      color=PresentationStyle.GROUP_COLORS_LIGHT[step.group])
-            axis.plot([index - 0.35, index - 0.35], [cursor, cursor], color=_Palette.GRID, linewidth=0.8)
+            # The connector a waterfall is read along: a horizontal step at the running total,
+            # from the right edge of the previous bar to the left edge of this one. It used to be
+            # drawn from a point to itself — zero length, invisible, and the bars therefore
+            # floated with nothing tying each to the total it starts from.
+            axis.plot([index - 1 + 0.35, index - 0.35], [cursor, cursor],
+                      color=_Palette.GRID, linewidth=0.8)
             axis.text(index, bottom + abs(step.delta_in_euro) + abs(base) * 0.01,
                       f"{step.delta_in_euro:+,.0f}", ha="center", fontsize=7, color=_Palette.MUTED)
             cursor += step.delta_in_euro
+        axis.plot([len(labels) - 2 + 0.35, len(labels) - 1 - 0.35], [cursor, cursor],
+                  color=_Palette.GRID, linewidth=0.8)
         axis.bar([len(labels) - 1], [cursor], color=_Palette.INK, width=0.7)
         for position, band in ((0, reference.total_npv_in_euro), (len(labels) - 1, variant.total_npv_in_euro)):
             axis.errorbar([position], [band.best_estimate],
@@ -975,7 +1164,7 @@ def plot_comparison_bridge(
         axis.set_xticks(positions, labels, fontsize=7.5, rotation=35, ha="right", color=_Palette.INK)
         axis.set_ylabel("NPV [EUR], discounted", color=_Palette.MUTED, fontsize=9)
         axis.set_title(
-            f"NPV bridge — {variant.perspective_id} (best estimate; delta "
+            f"NPV bridge — {_comparison_basis(reference, variant)} basis (best estimate; delta "
             f"{variant.total_npv_in_euro.best_estimate - base:+,.0f} EUR)",
             fontsize=10, color=_Palette.INK, loc="left",
         )
@@ -1010,18 +1199,32 @@ class _HeatmapStyle:
     CAPTION_LINE_HEIGHT_IN_INCHES = 0.135
     CAPTION_PADDING_IN_INCHES = 0.14
 
+    @classmethod
+    def annotates(cls, cell_count: int) -> bool:
+        """Whether a matrix of this size still gets its per-cell euros printed.
 
-def _heatmap_caption_lines(dropped: int) -> List[str]:
+        One predicate rather than two comparisons, because the drawing and the caption have to
+        agree: a chart that dropped its annotations while the caption still implied they were
+        there is a chart a reader silently mis-reads as "these cells are zero".
+        """
+        return cell_count <= cls.MAX_ANNOTATED_CELLS
+
+
+def _heatmap_caption_lines(dropped: int, cell_count: int) -> List[str]:
     """The heatmap's caption, wrapped to the figure width: authored prose, then this run's facts.
 
     The authored *shows* paragraph of the ledger heatmap comes first and unchanged — it is the
     same text a reader of the HTML report meets at the top of every section, and it is what makes
-    this PNG readable on its own when it is mailed around without the report. The two sentences
-    after it are run-specific and stay run-specific: which reconciliations hold and how many cost
-    categories carried no flow at all in this evaluation.
+    this PNG readable on its own when it is mailed around without the report. The sentences after
+    it are run-specific and stay run-specific: which reconciliations hold, how many cost
+    categories carried no flow at all in this evaluation, and — the part a reader cannot see for
+    themselves — whether the per-cell euros were printed. A large matrix drops them, and an
+    unannotated cell looks exactly like a cell whose number was too small to matter.
 
     Args:
         dropped: How many `CostCategory` members are absent from the matrix.
+        cell_count: Rows times columns of the drawn matrix, which is what decides the
+            annotations.
 
     Returns:
         One string per rendered line, in order; the caller sizes the figure from their count.
@@ -1032,6 +1235,10 @@ def _heatmap_caption_lines(dropped: int) -> List[str]:
         "Column sums equal the nominal annual series, row sums the per-category totals of "
         f"cost_audit.csv. {dropped} categor(ies) carried no flows and are not shown.",
     ]
+    if not _HeatmapStyle.annotates(cell_count):
+        paragraphs.append(
+            f"Per-cell euros omitted ({cell_count} cells); read the amounts off the colour bar."
+        )
     return [
         line
         for paragraph in paragraphs
@@ -1061,7 +1268,9 @@ def _symlog_norm(extent: float) -> SymLogNorm:
     )
 
 
-def plot_timeline_heatmap(result: LifecycleCostResult, path: str) -> str:
+def plot_timeline_heatmap(
+    result: LifecycleCostResult, path: str, skips: Optional[List[SkippedPlot]] = None
+) -> Optional[str]:
     """V6: the whole ledger as a year × category matrix — the audit trail's visual twin.
 
     Every cost category that carries a flow, unfolded (not grouped), against every year, in
@@ -1090,9 +1299,10 @@ def plot_timeline_heatmap(result: LifecycleCostResult, path: str) -> str:
     Args:
         result: The perspective to audit.
         path: Destination PNG path.
+        skips: Collector for the skip record, if the caller is collecting.
 
     Returns:
-        `path`, whether or not a file was written.
+        `path` when the chart was written, None when it had nothing to draw.
     """
     matrix = views.nominal_annual_matrix_by_category(result)
     ordered = [
@@ -1104,20 +1314,22 @@ def plot_timeline_heatmap(result: LifecycleCostResult, path: str) -> str:
     present = [category for category in ordered if any(row.get(category) for row in matrix)]
     dropped = sum(1 for category in CostCategory if category not in present)
     if not present:
-        log.information(
-            f"Timeline heatmap skipped for perspective {result.perspective_id!r}: the scoped "
-            "timeline carries no flows at all."
+        _skip(
+            skips, "ledger heatmap", result.perspective_id,
+            "the scoped timeline carries no flows at all, so the matrix has no row to draw.",
         )
-        return path
+        return None
     values = [[row.get(category, 0.0) for row in matrix] for category in present]
     extent = max(abs(value) for row in values for value in row) or 1.0
-    caption_lines = _heatmap_caption_lines(dropped)
+    cell_count = len(present) * len(matrix)
+    caption_lines = _heatmap_caption_lines(dropped, cell_count)
     caption_height = (
         len(caption_lines) * _HeatmapStyle.CAPTION_LINE_HEIGHT_IN_INCHES
         + _HeatmapStyle.CAPTION_PADDING_IN_INCHES
     )
     chart_height = max(2.6, 0.28 * len(present) + 2.0)
-    with _figure(height=chart_height + caption_height) as (figure, axis):
+    with _figure(height=chart_height + caption_height) as (figure, axes):
+        axis = axes[0]
         axis.yaxis.grid(False)
         image = axis.imshow(
             values, aspect="auto", cmap=_HeatmapStyle.COLORMAP, norm=_symlog_norm(extent)
@@ -1126,7 +1338,7 @@ def plot_timeline_heatmap(result: LifecycleCostResult, path: str) -> str:
         axis.set_xticks(ticks, [str(year) for year in ticks], fontsize=7, color=_Palette.INK)
         axis.set_yticks(range(len(present)), [category.value for category in present], fontsize=7,
                         color=_Palette.INK)
-        if len(present) * len(matrix) <= _HeatmapStyle.MAX_ANNOTATED_CELLS:
+        if _HeatmapStyle.annotates(cell_count):
             for row_index, row in enumerate(values):
                 for column_index, value in enumerate(row):
                     if value:
@@ -1148,14 +1360,29 @@ def plot_timeline_heatmap(result: LifecycleCostResult, path: str) -> str:
     return path
 
 
-def write_audit_plots(result: LifecycleCostResult, result_directory: str) -> List[str]:
+#: The audit heatmap's file name, which is the audit's own output rather than the report's and is
+#: therefore not suffixed with a perspective: it is written for the result the audit was built for.
+AUDIT_HEATMAP_FILE_NAME = "cost_audit_timeline_heatmap.png"
+
+
+def write_audit_plots(result: LifecycleCostResult, result_directory: str) -> PlotsWritten:
     """Writes the audit-side figures next to `cost_audit.csv` (V6, owner decision Q9).
 
     The audit's charts have the audit's audience, so they are written from the audit's own call
     sites — `bridge.compute_lifecycle_costs` and the `evaluate` CLI command, the two places that
-    write `cost_audit.csv` — rather than from `write_report_plots`. It lives here and not in
-    `audit.py` because the seam-4 import lint keeps the verification module free of renderers: the
-    dependency runs from presentation to the engine's outputs, never back.
+    write `cost_audit.csv` — rather than from `write_report_plots`. That makes this the one part
+    of the module a **plain cost run** reaches, i.e. the reason matplotlib is a dependency of the
+    cost path and not only of the report path. It lives here and not in `audit.py` because the
+    seam-4 import lint keeps the verification module free of renderers: the dependency runs from
+    presentation to the engine's outputs, never back.
+
+    **A rendering failure is a skip, not a run failure.** Both call sites write their tabular
+    exports first and remove them again when the run fails afterwards; letting a matplotlib
+    exception out of here would therefore take a complete, correct `cost_audit.csv` off disk
+    because a picture beside it could not be drawn. The chart is a companion, so a failure to draw
+    it is recorded exactly like a chart that had nothing to draw — with the exception's type and
+    message as the reason — and the caller reports it. A half-written PNG is removed, because a
+    truncated image file is worse than no image file.
 
     Args:
         result: The perspective the audit was built for (the first one of the run).
@@ -1163,12 +1390,44 @@ def write_audit_plots(result: LifecycleCostResult, result_directory: str) -> Lis
 
     Returns:
         The paths that exist on disk afterwards, so the caller can log exactly what was written
-        and, in the bridge's case, remove them again if the run fails later on.
+        and, in the bridge's case, remove them again if the run fails later on, together with the
+        record of anything that was not drawn.
     """
-    written = [
-        plot_timeline_heatmap(result, os.path.join(result_directory, "cost_audit_timeline_heatmap.png"))
-    ]
-    return [path for path in written if os.path.isfile(path)]
+    written = PlotsWritten()
+    path = os.path.join(result_directory, AUDIT_HEATMAP_FILE_NAME)
+    try:
+        drawn = plot_timeline_heatmap(result, path, written.skipped)
+    except Exception as error:  # pylint: disable=broad-except
+        _remove_if_present(path)
+        written.skipped.append(
+            SkippedPlot(
+                chart="ledger heatmap",
+                perspective_id=result.perspective_id,
+                reason=(
+                    f"the renderer failed with {type(error).__name__}: {error}. The audit tables "
+                    "beside it are unaffected."
+                ),
+            )
+        )
+        return written
+    if drawn is not None and os.path.isfile(drawn):
+        written.paths.append(drawn)
+    return written
+
+
+def _remove_if_present(path: str) -> None:
+    """Deletes a half-written figure, and says nothing if there is nothing to delete.
+
+    A `savefig` that raises part-way through has already opened the file, so the directory can be
+    left with a truncated PNG that every reader treats as a real one. Removal failures are
+    swallowed: this runs while a failure is already being reported, and a cleanup problem must not
+    become the reported one.
+    """
+    try:
+        if os.path.isfile(path):
+            os.remove(path)
+    except OSError:
+        pass
 
 
 # ---------------------------------------------------------------------------- V8 treemap
@@ -1187,9 +1446,6 @@ class _TreemapLabels:
     FONT_SIZE = 6.5
     #: Below this the text is unreadable anyway, so the tile is left blank instead.
     MIN_FONT_SIZE = 4.5
-    #: Width of an average character as a fraction of the font size — a standard DejaVu Sans
-    #: approximation, deliberately generous so the estimate errs towards suppressing a label.
-    CHAR_WIDTH_RATIO = 0.62
     #: Height of one text line as a multiple of the font size, leading included.
     LINE_HEIGHT_RATIO = 1.35
     #: Fraction of the tile the text may occupy before it is considered not to fit.
@@ -1199,8 +1455,6 @@ class _TreemapLabels:
     PANEL_WIDTH_SHARE = 0.92
     #: Share of the figure height left for the axes after the suptitle and the caption band.
     PANEL_HEIGHT_SHARE = 0.72
-    #: Points per inch, so the tile geometry and the font size are compared in the same unit.
-    POINTS_PER_INCH = 72.0
 
 
 def _fitting_font_size(
@@ -1218,43 +1472,15 @@ def _fitting_font_size(
     longest = max(len(line) for line in lines) if lines else 0
     if not longest:
         return None
-    by_width = available_width / (longest * _TreemapLabels.CHAR_WIDTH_RATIO)
+    by_width = available_width / (longest * _Typography.CHAR_WIDTH_RATIO)
     by_height = available_height / (len(lines) * _TreemapLabels.LINE_HEIGHT_RATIO)
     size = min(_TreemapLabels.FONT_SIZE, by_width, by_height)
     return size if size >= _TreemapLabels.MIN_FONT_SIZE else None
 
 
-def _treemap_caption(tiles, basis: views.TileBasis) -> str:
-    """What one treemap panel has to disclose about the answer it is not giving.
-
-    The gross panel names the credits it left out and the small tiles it folded; the net panel
-    names every subject it clamped at zero and the euros the clamping erased. Both sentences are
-    built from the view's own disclosure fields rather than from a second pass over the tiles, so
-    a caption cannot drift from the picture above it.
-
-    Args:
-        tiles: The `views.CostStructureTiles` the panel was drawn from.
-        basis: Which `views.TileBasis` the panel used.
-
-    Returns:
-        One sentence, ready to be placed in the figure's caption band.
-    """
-    if basis == views.TileBasis.GROSS:
-        return (
-            f"Gross panel excludes {tiles.credit_total_in_euro:,.0f} EUR of credits "
-            f"(subsidies, feed-in, residual value); {tiles.folded_tile_count} small tile(s) "
-            f"folded into 'other'."
-        )
-    clamped = tiles.clamped_tiles()
-    names = ", ".join(f"{tile.subject} ({tile.clamped_from_in_euro:,.0f} EUR)" for tile in clamped)
-    return (
-        f"Net panel applies each subject's credits to that subject's cost tiles and clamped "
-        f"{len(clamped)} subject(s) at zero, erasing {tiles.clamped_total_in_euro:,.0f} EUR: "
-        f"{names or 'none'}."
-    )
-
-
-def plot_cost_treemap(result: LifecycleCostResult, path: str) -> str:
+def plot_cost_treemap(
+    result: LifecycleCostResult, path: str, skips: Optional[List[SkippedPlot]] = None
+) -> Optional[str]:
     """V8: lifetime cost composition as a treemap, gross and net-of-credits side by side.
 
     Both variants are rendered because a treemap cannot show credits and neither answer is the
@@ -1268,31 +1494,46 @@ def plot_cost_treemap(result: LifecycleCostResult, path: str) -> str:
 
     Labels are drawn only where they fit their own rectangle, shrinking down to
     `_TreemapLabels.MIN_FONT_SIZE` and disappearing below it, so a thin tile never writes across
-    its neighbour.
+    its neighbour. The two captions are `report_prose.treemap_disclosure`, the same function the
+    HTML report's cost-structure section prints, so the PNG and the page disclose the fold and the
+    clamp in identical words.
+
+    A perspective in which neither basis has a positive tile — every subject's credits reach its
+    costs — is skipped: a treemap has no negative area, so both panels would be empty frames.
 
     Args:
         result: The perspective whose cost structure is drawn.
         path: Destination PNG path.
+        skips: Collector for the skip record, if the caller is collecting.
 
     Returns:
-        `path`, unchanged.
+        `path` when the chart was written, None when it had nothing to draw.
     """
+    bases = [
+        (basis, views.cost_structure_tiles(result, PresentationStyle.CATEGORY_TO_GROUP, basis))
+        for basis in (views.TileBasis.GROSS, views.TileBasis.NET_OF_CREDITS)
+    ]
+    if not any(tile.area_in_euro > 0 for _basis, tiles in bases for tile in tiles.tiles):
+        _skip(
+            skips, "cost treemap", result.perspective_id,
+            "neither the gross nor the net basis has a tile with a positive area, and a treemap "
+            "has no negative tile to draw the credits with.",
+        )
+        return None
     figure_width_in_inches, figure_height_in_inches = 10.0, 4.6
     panel_width_in_points = (
-        figure_width_in_inches / 2 * _TreemapLabels.PANEL_WIDTH_SHARE * _TreemapLabels.POINTS_PER_INCH
+        figure_width_in_inches / 2 * _TreemapLabels.PANEL_WIDTH_SHARE * _Typography.POINTS_PER_INCH
     )
     panel_height_in_points = (
-        figure_height_in_inches * _TreemapLabels.PANEL_HEIGHT_SHARE * _TreemapLabels.POINTS_PER_INCH
+        figure_height_in_inches * _TreemapLabels.PANEL_HEIGHT_SHARE * _Typography.POINTS_PER_INCH
     )
     captions: List[str] = []
     with _figure(
         width=figure_width_in_inches, height=figure_height_in_inches, panels=(1, 2)
     ) as (figure, axes):
-        for axis, basis, headline in (
-            (axes[0], views.TileBasis.GROSS, "gross cost"),
-            (axes[1], views.TileBasis.NET_OF_CREDITS, "net of credits"),
+        for axis, (basis, tiles), headline in zip(
+            axes, bases, ("gross cost", "net of credits")
         ):
-            tiles = views.cost_structure_tiles(result, PresentationStyle.CATEGORY_TO_GROUP, basis)
             drawable = [tile for tile in tiles.tiles if tile.area_in_euro > 0]
             drawable.sort(key=lambda tile: (tile.group, -tile.area_in_euro))
             axis.set_xlim(0, 1)
@@ -1321,7 +1562,7 @@ def plot_cost_treemap(result: LifecycleCostResult, path: str) -> str:
                 f"{headline}: {total:,.0f} EUR (net NPV {tiles.net_npv_in_euro:,.0f} EUR)",
                 fontsize=9, color=_Palette.INK, loc="left",
             )
-            captions.append(_treemap_caption(tiles, basis))
+            captions.append(treemap_disclosure(tiles, basis))
         figure.suptitle(
             f"Cost structure — {result.perspective_id} (NPV, best estimate)",
             fontsize=10, color=_Palette.INK, x=0.01, ha="left",
@@ -1361,13 +1602,8 @@ class _SwimlaneStyle:
     FIRST_LABEL_OFFSET = 0.28
     #: Vertical distance between two stacked label rows, in data units.
     LABEL_ROW_PITCH = 0.19
-    #: Width of an average character as a fraction of the font size (DejaVu Sans, generous), used
-    #: to claim horizontal space for a label so a wide one pushes the next label down a row.
-    CHAR_WIDTH_RATIO = 0.62
     #: Share of the figure width the axes occupy once the y tick labels and margins are taken.
     AXES_WIDTH_SHARE = 0.78
-    #: Points per inch, so a label width in points converts into year units.
-    POINTS_PER_INCH = 72.0
 
 
 def _draw_lane_events(
@@ -1411,6 +1647,10 @@ def _draw_lane_events(
         if start + width > horizon + _SwimlaneStyle.RIGHT_MARGIN_IN_YEARS:
             alignment = "right"
             start = year - _SwimlaneStyle.LABEL_GAP_IN_YEARS - width
+            # A wide label on an early event runs off the *left* edge once it is flipped — the
+            # year-0 investment is exactly that case — so it is clamped to the frame the way the
+            # right edge is, rather than being drawn into the margin and cropped away.
+            start = max(start, -_SwimlaneStyle.RIGHT_MARGIN_IN_YEARS)
         level = 0
         while level < _SwimlaneStyle.MAX_LABELS_PER_CLUSTER and occupied.get(level, start) > start:
             level += 1
@@ -1420,7 +1660,7 @@ def _draw_lane_events(
             continue
         occupied[level] = start + width
         axis.text(
-            year + (1 if alignment == "left" else -1) * _SwimlaneStyle.LABEL_GAP_IN_YEARS,
+            start if alignment == "left" else start + width,
             position - _SwimlaneStyle.FIRST_LABEL_OFFSET - _SwimlaneStyle.LABEL_ROW_PITCH * level,
             text, fontsize=_SwimlaneStyle.EVENT_LABEL_SIZE, color=_Palette.INK, ha=alignment,
         )
@@ -1436,7 +1676,10 @@ def _draw_lane_events(
 
 
 def plot_lifecycle_swimlane(
-    result: LifecycleCostResult, path: str, comparison: Optional[VariantComparison] = None
+    result: LifecycleCostResult,
+    path: str,
+    comparison: Optional[VariantComparison] = None,
+    skips: Optional[List[SkippedPlot]] = None,
 ) -> str:
     """V9: the life of the renovation on one page — assets, financing, support, milestones.
 
@@ -1445,16 +1688,18 @@ def plot_lifecycle_swimlane(
     overview cannot disagree with the detail charts. The payback milestone is drawn as a **range
     bar** spanning the band's zero crossings rather than as a single year — a one-year payback
     label would be exactly the false precision the whole set avoids — and appears only when a
-    comparison exists to define it. A lane with nothing on it is dropped with a log line instead
-    of drawn as an empty row.
+    comparison exists to define it. A lane with nothing on it is dropped, and recorded as a skip
+    of its own, instead of drawn as an empty row.
 
     Args:
         result: The perspective to summarize.
         path: Destination PNG path.
-        comparison: Optional comparison, which is what gives the payback range a meaning.
+        comparison: Optional comparison, which is what gives the payback range a meaning. It has
+            to be the comparison computed for *this* perspective; the caller picks it.
+        skips: Collector for the dropped lanes, if the caller is collecting.
 
     Returns:
-        `path`, unchanged.
+        `path`, unchanged — the milestone lane always exists, so the chart is never skipped whole.
     """
     lanes = views.lifecycle_lanes(result, comparison)
     rows: List[Tuple[str, List[Tuple[int, Optional[int], str]], List[Tuple[int, str, Optional[float]]], str]] = []
@@ -1469,9 +1714,9 @@ def plot_lifecycle_swimlane(
         (lanes.support, PresentationStyle.GROUP_COLORS_LIGHT[3]),
     ):
         if lane.is_empty():
-            log.information(
-                f"Lifecycle swimlane: lane {lane.name!r} is empty for perspective "
-                f"{result.perspective_id!r} and is not drawn."
+            _skip(
+                skips, f"lifecycle swimlane, {lane.name} lane", result.perspective_id,
+                "the lane carries no spans and no events, so it would be drawn as an empty row.",
             )
             continue
         rows.append((
@@ -1496,18 +1741,19 @@ def plot_lifecycle_swimlane(
     # One label character, in year units: the drawn year range divided by the axes' width in
     # points. Labels claim that much space so a wide one pushes the next one down a row.
     axes_width_in_points = (
-        figure_width_in_inches * _SwimlaneStyle.AXES_WIDTH_SHARE * _SwimlaneStyle.POINTS_PER_INCH
+        figure_width_in_inches * _SwimlaneStyle.AXES_WIDTH_SHARE * _Typography.POINTS_PER_INCH
     )
     years_per_character = (
         (lanes.horizon + 2 * _SwimlaneStyle.RIGHT_MARGIN_IN_YEARS)
         * _SwimlaneStyle.EVENT_LABEL_SIZE
-        * _SwimlaneStyle.CHAR_WIDTH_RATIO
+        * _Typography.CHAR_WIDTH_RATIO
         / axes_width_in_points
     )
     with _figure(
         width=figure_width_in_inches,
         height=max(3.0, _SwimlaneStyle.ROW_HEIGHT_IN_INCHES * len(rows) + 2.0),
-    ) as (figure, axis):
+    ) as (figure, axes):
+        axis = axes[0]
         axis.yaxis.grid(False)
         axis.xaxis.grid(True, color=_Palette.GRID, linewidth=0.6)
         for index, (_name, spans, events, color) in enumerate(rows):
@@ -1527,6 +1773,15 @@ def plot_lifecycle_swimlane(
         axis.set_xlim(
             -_SwimlaneStyle.RIGHT_MARGIN_IN_YEARS, lanes.horizon + _SwimlaneStyle.RIGHT_MARGIN_IN_YEARS
         )
+        # The lanes are markers and bars on a small number of y positions, so a one-lane chart —
+        # an operating-only perspective has exactly that — leaves matplotlib autoscaling a
+        # degenerate y range and giving up on the layout with a warning on every run. The extent
+        # is known here: one row pitch of air around the outermost lanes, which is also what the
+        # stacked event labels below a lane need.
+        axis.set_ylim(
+            -_SwimlaneStyle.ROW_PITCH * 0.7,
+            (len(rows) - 1) * _SwimlaneStyle.ROW_PITCH + _SwimlaneStyle.ROW_PITCH * 0.7,
+        )
         axis.set_xticks(range(0, lanes.horizon + 1, 5))
         axis.set_xlabel("year", color=_Palette.MUTED, fontsize=9)
         axis.set_title(
@@ -1540,7 +1795,9 @@ def plot_lifecycle_swimlane(
 
 # ---------------------------------------------------------------------------- V10 sources & uses
 
-def plot_sources_and_uses(result: LifecycleCostResult, path: str) -> str:
+def plot_sources_and_uses(
+    result: LifecycleCostResult, path: str, skips: Optional[List[SkippedPlot]] = None
+) -> Optional[str]:
     """V10: how year 0 is funded and what it buys, as a two-column Sankey.
 
     The project-finance statement ("Mittelherkunft und Mittelverwendung"): every subsidy scheme
@@ -1549,26 +1806,28 @@ def plot_sources_and_uses(result: LifecycleCostResult, path: str) -> str:
     gross year-0 uses. The two columns balance to the euro by construction, and the caption says
     so, which is what makes this a statement rather than a picture.
 
-    Skipped, with a log line, for a pure own-capital purchase: a single ribbon says less than the
+    Skipped, with a reason, for a pure own-capital purchase: a single ribbon says less than the
     investment waterfall already does.
 
     Args:
         result: The perspective whose year 0 is drawn.
         path: Destination PNG path.
+        skips: Collector for the skip record, if the caller is collecting.
 
     Returns:
-        `path`, whether or not a file was written.
+        `path` when the chart was written, None when it had nothing to draw.
     """
     statement = views.funding_sources_and_uses(result)
     if not statement.has_external_funding():
-        log.information(
-            f"Sources-and-uses Sankey skipped for perspective {result.perspective_id!r}: year 0 "
-            "is funded entirely from own capital, which the investment waterfall shows better."
+        _skip(
+            skips, "sources-and-uses Sankey", result.perspective_id,
+            "year 0 is funded entirely from own capital, which the investment waterfall shows "
+            "better.",
         )
-        return path
+        return None
     color_by_source = {node.label: _category_color(node.category) for node in statement.sources}
     ribbons = [
-        (f"src:{source}", f"use:{use}", amount, color_by_source[source], False)
+        (f"src:{source}", f"use:{use}", amount, color_by_source[source])
         for source, use, amount in statement.ribbons()
         if amount > 0
     ]
@@ -1578,7 +1837,8 @@ def plot_sources_and_uses(result: LifecycleCostResult, path: str) -> str:
                    for node in statement.uses})
     with _figure(
         height=max(3.2, 0.42 * (len(statement.sources) + len(statement.uses)) + 2.0)
-    ) as (figure, axis):
+    ) as (figure, axes):
+        axis = axes[0]
         _draw_sankey(
             axis,
             [[f"src:{node.label}" for node in statement.sources],
@@ -1616,7 +1876,9 @@ def plot_wealth_benchmark(
     renovating loses".
 
     Interest is nominal and pre-tax and the caption says so (owner decision Q14): capital-income
-    taxation is country-specific and this module is applied beyond Germany.
+    taxation is country-specific and this module is applied beyond Germany. The title names the
+    basis through `_comparison_basis`, as the bridge and the payback curve do, so a benchmark
+    drawn across two perspectives says which two.
 
     Args:
         reference: The do-nothing baseline.
@@ -1668,7 +1930,8 @@ def plot_wealth_benchmark(
         axes[1].set_ylabel("terminal advantage [EUR]", color=_Palette.MUTED, fontsize=9)
         axes[1].set_title("B — terminal advantage vs rate", fontsize=9, color=_Palette.INK, loc="left")
         figure.suptitle(
-            f"Bank benchmark — {variant.perspective_id} (renovate, or bank the money? best estimate)",
+            f"Bank benchmark — {_comparison_basis(reference, variant)} basis "
+            "(renovate, or bank the money? best estimate)",
             fontsize=10, color=_Palette.INK, x=0.01, ha="left",
         )
         figure.text(
@@ -1685,7 +1948,9 @@ def plot_wealth_benchmark(
 
 # ---------------------------------------------------------------------------- V14 monthly burden
 
-def plot_monthly_burden(result: LifecycleCostResult, path: str) -> str:
+def plot_monthly_burden(
+    result: LifecycleCostResult, path: str, skips: Optional[List[SkippedPlot]] = None
+) -> Optional[str]:
     """V14: what this costs per month, year by year, stacked by display group.
 
     The lay-reader counterpart of V2: the same flows, translated into the unit households budget
@@ -1698,19 +1963,32 @@ def plot_monthly_burden(result: LifecycleCostResult, path: str) -> str:
 
     The whiskers on the monthly *total* are this chart's one banded mark.
 
+    A perspective with no recurring cost at all — a pure investment view, an operating-only view
+    of a run without operating flows — is skipped: bars of height zero and a reserve line of zero
+    say "we looked and found nothing", which is not what an empty view means.
+
     Args:
         result: The perspective whose burden is drawn.
         path: Destination PNG path.
+        skips: Collector for the skip record, if the caller is collecting.
 
     Returns:
-        `path`, unchanged.
+        `path` when the chart was written, None when it had nothing to draw.
     """
     burden = views.monthly_burden_series(result)
     totals = burden.series
     per_group = views.monthly_burden_by_group(result, PresentationStyle.CATEGORY_TO_GROUP)
     years = list(range(len(totals)))
     reserve = burden.replacement_reserve_per_month
-    with _figure(height=4.0) as (figure, axis):
+    if not any(value.best_estimate for value in totals) and not reserve:
+        _skip(
+            skips, "monthly burden", result.perspective_id,
+            "every month of every year carries a zero recurring burden and there is no "
+            "replacement reserve, so the chart would be an empty axis.",
+        )
+        return None
+    with _figure(height=4.0) as (figure, axes):
+        axis = axes[0]
         _stack_positive_negative(
             axis,
             years,
@@ -1733,7 +2011,9 @@ def plot_monthly_burden(result: LifecycleCostResult, path: str) -> str:
                 axis.hlines(
                     band.best_estimate + reserve, year - 0.41, year + 0.41, colors=_Palette.INK,
                     linestyles="dashed", linewidth=1.2,
-                    label="with replacement reserve" if year == 0 else None,
+                    # One legend entry for the whole dashed line: matplotlib's own convention for
+                    # "drawn but not listed" is a label starting with an underscore.
+                    label="with replacement reserve" if year == 0 else "_reserve segment",
                 )
         axis.axhline(0, color=_Palette.MUTED, linewidth=0.8)
         axis.set_xlabel("year", color=_Palette.MUTED, fontsize=9)
@@ -1744,105 +2024,233 @@ def plot_monthly_burden(result: LifecycleCostResult, path: str) -> str:
             fontsize=10, color=_Palette.INK, loc="left",
         )
         axis.legend(fontsize=7, frameon=False, ncol=3, labelcolor=_Palette.INK)
-        figure.text(
-            0.01, 0.045,
+        # The reserve sentence is printed only when the dashed line is drawn. An evaluation that
+        # books no replacement has no line and had the caption anyway, promising a mark the
+        # reader then hunted for — and "0 EUR/month" is a sentence about a decision nobody made.
+        notes = [
             "Excludes every capital event — the year-0 investment and its financing, and the "
-            "replacement years; the funding statement and the cash-flow timeline show those.",
-            fontsize=7, color=_Palette.MUTED,
-        )
-        figure.text(
-            0.01, 0.015,
-            f"The dashed line adds the replacement reserve of {reserve:,.0f} EUR/month, the "
-            "equivalent annual cost of the replacement flows spread over twelve months.",
-            fontsize=7, color=_Palette.MUTED,
-        )
+            "replacement years; the funding statement and the cash-flow timeline show those."
+        ]
+        if reserve:
+            notes.append(
+                f"The dashed line adds the replacement reserve of {reserve:,.0f} EUR/month, the "
+                "equivalent annual cost of the replacement flows spread over twelve months."
+            )
+        for index, note in enumerate(reversed(notes)):
+            figure.text(0.01, 0.015 + 0.03 * index, note, fontsize=7, color=_Palette.MUTED)
         figure.tight_layout(rect=(0, 0.08, 1, 1))
         figure.savefig(path, facecolor=_Palette.SURFACE)
     return path
+
+
+#: File-name stem of every chart in the report set, keyed by nothing but read in this order. The
+#: names are what a reader finds in the result directory, so they are declared here rather than
+#: spelled at each call — a chart renamed in one place and not the other is a file nobody finds.
+_REPORT_FILE_PREFIX = "lifecycle_"
+
+#: The one chart of the set that is drawn from the whole matrix and therefore carries no
+#: perspective in its name.
+PERSPECTIVE_COSTS_FILE_NAME = f"{_REPORT_FILE_PREFIX}perspective_costs.png"
+
+#: The sidecar the engine-side callers write when a run skipped at least one chart. Named here
+#: because the file belongs to this set even though this module never writes it: the decision of
+#: what a run says out loud is the caller's (see `bridge.compute_lifecycle_costs`).
+SKIPPED_PLOTS_FILE_NAME = "lifecycle_plots_not_drawn.txt"
+
+
+def report_plot_file_name(chart: str, perspective_id: str) -> str:
+    """`lifecycle_<chart>_<perspective_id>.png` — one file name, in one place.
+
+    Every per-perspective chart of the report set is drawn for every perspective of the matrix,
+    so the perspective id is part of the name rather than an implied "the first one". Building the
+    name here rather than at each call site is what keeps the twelve names one convention: the
+    former set spelled each literal at its call, and the payback curve had at one point been
+    written under a name only the CLI knew.
+
+    Args:
+        chart: The chart's stem, e.g. `"cash_flow"`, as it appears between the prefix and the id.
+        perspective_id: The perspective the chart was drawn for.
+
+    Returns:
+        The file name, without a directory.
+    """
+    return f"{_REPORT_FILE_PREFIX}{chart}_{perspective_id}.png"
+
+
+#: The charts drawn once per perspective, as (file-name stem, renderer). A table rather than a
+#: sequence of calls: every one of them takes the same three arguments and differs only in its
+#: name, and the two that do not — the swimlane and the fan, which also take the comparison — are
+#: called below where that difference is visible.
+_PER_PERSPECTIVE_CHARTS: Sequence[Tuple[str, Callable[..., Optional[str]]]] = (
+    ("annual_cash_flows", plot_annual_cash_flows),
+    ("investment_waterfall", plot_investment_waterfall),
+    ("component_costs", plot_component_costs),
+    # The visualization set's pasteable subset (owner decision Q1): V1, V2, V8, V10 and V14 per
+    # perspective; V4 and V13 need the reference and are in the table below.
+    ("actor_flows", plot_actor_flows),
+    ("sources_and_uses", plot_sources_and_uses),
+    ("cost_treemap", plot_cost_treemap),
+    ("monthly_burden", plot_monthly_burden),
+)
+
+#: The charts that decompose a difference, drawn for the compared perspective only. They take the
+#: reference and the variant rather than one result, which is exactly why they are a second table.
+_COMPARISON_RENDERERS: Sequence[Tuple[str, Callable[..., Optional[str]]]] = (
+    ("payback_curve", plot_payback_curve),
+    ("comparison_bridge", plot_comparison_bridge),
+    ("wealth_benchmark", plot_wealth_benchmark),
+)
 
 
 def write_report_plots(
     matrix: EvaluationMatrix,
     result_directory: str,
     reference_result: Optional[LifecycleCostResult] = None,
-) -> List[str]:
-    """Writes the PNG set for the first perspective (+ the comparison charts when comparing).
+    comparison: Optional[VariantComparison] = None,
+) -> PlotsWritten:
+    """Writes the report's PNG set: every perspective's charts, plus the comparison's.
 
     The module's main public orchestration point: called by the `report` CLI and by `bridge.py`
     right after the HTML and markdown reports are written, so the PNG set always accompanies a
     report rather than being generated on its own. It owns the whole set, the payback curve
     included: a caller that wrote one more PNG beside these had to know a file name only this
-    function otherwise uses. Only the matrix's first perspective is plotted — the PNGs are a
-    hand-out, and the full per-perspective treatment is the HTML report's job — and an empty
-    matrix produces no files instead of an error. The audit-side heatmap has its own entry point,
-    `write_audit_plots`, because it travels with `cost_audit.csv` rather than with the report.
+    function otherwise uses.
 
-    Charts that need a reference (the comparison bridge, the fixed-interest benchmark) are
-    written only when one is given, and their absence is logged rather than silent; the same
-    holds for the charts that skip themselves on a degenerate input (a single-actor Sankey, an
-    all-own-capital funding statement).
+    **Every perspective gets its charts**, under `lifecycle_<chart>_<perspective_id>.png`. Drawing
+    only the matrix's first perspective made the set unreadable as soon as a run had more than
+    one: the file names claimed to be *the* cash flow, *the* treemap, while the report beside them
+    showed six perspectives, and the reader had no way to tell which one the picture was of. The
+    matrix-wide comparison of perspectives is the exception and is drawn once, as
+    `lifecycle_perspective_costs.png`, because it already contains every perspective.
+
+    **The comparison charts belong to one perspective and are drawn for that one only.** With a
+    reference, the variant side is this matrix's result for the reference's *own* perspective id;
+    when the matrix does not carry it, the payback curve, the NPV bridge and the fixed-interest
+    benchmark are skipped with a reason. They are never redrawn against a substitute: the fan, the
+    swimlane's milestone, the bridge and the benchmark used to fall back to the first perspective
+    independently, so one page could carry a bridge about the landlord, a fan about the household
+    and a benchmark about neither, all labelled as one comparison.
+
+    An empty matrix produces no files instead of an error, and the audit-side heatmap has its own
+    entry point, `write_audit_plots`, because it travels with `cost_audit.csv` rather than with
+    the report.
 
     Args:
-        matrix: Evaluated perspectives; the first one is the subject of the per-result charts.
+        matrix: The evaluated perspectives; each one gets the per-perspective charts.
         result_directory: Directory the `lifecycle_*.png` files are written into (next to the
             HTML report).
         reference_result: When given, the baseline of a variant comparison; adds the payback
-            curve, the NPV bridge and the fixed-interest benchmark, and turns the liquidity fan's
-            lower panel and the swimlane's payback milestone into their comparison forms. The
-            variant side is this matrix's result for the *same* perspective id, so the comparison
-            is like-for-like, falling back to the first perspective if the matrix does not carry
-            that id.
+            curve, the NPV bridge and the fixed-interest benchmark for the perspective it names,
+            and turns that perspective's liquidity fan and swimlane into their comparison forms.
+        comparison: The already-computed comparison, when the caller has one — the `report` CLI
+            builds it with the two directories as reference and variant ids, and recomputing it
+            here would relabel it with the defaults. Without it, and with a reference, it is
+            computed from the two results.
 
     Returns:
-        The paths that actually exist on disk, so a caller can log or attach exactly what was
-        written (charts that had nothing to draw are filtered out here).
+        The paths that actually exist on disk and one record per chart that drew nothing, so a
+        caller can report exactly what was written and exactly what was not.
+
+    Raises:
+        views.CostDataError: If a prebuilt `comparison` was computed for a different perspective
+            than the one the reference names — the charts would then plot two different parties
+            against each other under one title.
     """
-    written: List[str] = []
-    first = next(iter(matrix.results.values()), None)
-    if first is None:
+    written = PlotsWritten()
+    if not matrix.results:
         return written
-    written.append(
-        plot_annual_cash_flows(first, os.path.join(result_directory, "lifecycle_annual_cash_flows.png"))
-    )
-    written.append(
-        plot_investment_waterfall(first, os.path.join(result_directory, "lifecycle_investment_waterfall.png"))
-    )
-    written.append(plot_perspective_costs(matrix, os.path.join(result_directory, "lifecycle_perspective_costs.png")))
-    written.append(plot_component_costs(first, os.path.join(result_directory, "lifecycle_component_costs.png")))
-    comparison: Optional[VariantComparison] = None
-    variant = first
-    if reference_result is not None:
-        variant = matrix.results.get(reference_result.perspective_id, first)
-        comparison = compare(reference_result, variant)
-        written.append(
-            plot_payback_curve(reference_result, variant, os.path.join(result_directory, "lifecycle_payback_curve.png"))
+    _draw(written, plot_perspective_costs, matrix,
+          os.path.join(result_directory, PERSPECTIVE_COSTS_FILE_NAME))
+    comparison_perspective, comparison = _comparison_side(matrix, reference_result, comparison, written)
+    for perspective_id, result in matrix.results.items():
+        # The comparison forms of the fan and the swimlane belong to the compared perspective
+        # alone; every other perspective gets the single-evaluation form of the same chart.
+        pair = comparison if perspective_id == comparison_perspective else None
+        for chart, renderer in _PER_PERSPECTIVE_CHARTS:
+            _draw(written, renderer, result,
+                  os.path.join(result_directory, report_plot_file_name(chart, perspective_id)),
+                  skips=written.skipped)
+        _draw(written, plot_lifecycle_swimlane, result,
+              os.path.join(result_directory, report_plot_file_name("swimlane", perspective_id)),
+              pair, skips=written.skipped)
+        _draw(written, plot_liquidity_fan, result,
+              os.path.join(result_directory, report_plot_file_name("liquidity_fan", perspective_id)),
+              pair, skips=written.skipped)
+    if reference_result is not None and comparison_perspective is not None:
+        variant = matrix.results[comparison_perspective]
+        for chart, renderer in _COMPARISON_RENDERERS:
+            _draw(written, renderer, reference_result, variant,
+                  os.path.join(result_directory,
+                               report_plot_file_name(chart, comparison_perspective)))
+    written.paths = [path for path in written.paths if os.path.isfile(path)]
+    return written
+
+
+def _draw(
+    written: PlotsWritten, renderer: Callable[..., Optional[str]], *arguments: Any, **keywords: Any
+) -> None:
+    """Calls one renderer and files its result under the paths this run wrote.
+
+    The one-line body of every entry in the tables above. It exists so the orchestration reads as
+    a list of charts rather than as thirteen `if path is not None: written.append(path)` pairs,
+    which is where a chart quietly stopped being collected the last time this set grew.
+    """
+    path = renderer(*arguments, **keywords)
+    if path is not None:
+        written.paths.append(path)
+
+
+#: The charts that exist only as a difference between two evaluations, named as the skip records
+#: name them. Listed once, because a run without a usable reference has to account for all of them.
+_COMPARISON_CHART_NAMES = ("payback curve", "NPV bridge", "fixed-interest benchmark")
+
+
+def _comparison_side(
+    matrix: EvaluationMatrix,
+    reference_result: Optional[LifecycleCostResult],
+    comparison: Optional[VariantComparison],
+    written: PlotsWritten,
+) -> Tuple[Optional[str], Optional[VariantComparison]]:
+    """Which perspective the comparison charts are drawn for, and the comparison itself.
+
+    The rule is like-for-like or nothing: the variant side is this matrix's result for the
+    reference's own perspective id, and if the matrix does not carry that id there is no
+    comparison to draw — the alternative, substituting the first perspective, produces charts
+    that compare two different parties under a title naming one.
+
+    Args:
+        matrix: The evaluated perspectives.
+        reference_result: The comparison's baseline, or None for a run without one.
+        comparison: A comparison the caller already computed, or None to compute it here.
+        written: The record the skips are added to.
+
+    Returns:
+        `(perspective_id, comparison)`, both None when no comparison chart can be drawn.
+
+    Raises:
+        views.CostDataError: If a prebuilt comparison names a different perspective.
+    """
+    if reference_result is None:
+        for chart in _COMPARISON_CHART_NAMES:
+            _skip(written.skipped, chart, "",
+                  "this run has no reference variant, and these charts are differences between "
+                  "two evaluations.")
+        return None, None
+    perspective_id = reference_result.perspective_id
+    variant = matrix.results.get(perspective_id)
+    if variant is None:
+        for chart in _COMPARISON_CHART_NAMES:
+            _skip(written.skipped, chart, perspective_id,
+                  f"the reference carries perspective {perspective_id!r}, which this matrix does "
+                  f"not evaluate (it has {sorted(matrix.results)}); comparing it against a "
+                  "different perspective would compare two different parties.")
+        return None, None
+    if comparison is not None and comparison.perspective_id != perspective_id:
+        raise views.CostDataError(
+            f"The PNG set was handed a comparison of perspective "
+            f"{comparison.perspective_id!r} for a reference on {perspective_id!r}: the bridge, "
+            "the benchmark and the fan's lower panel would then be three statements about "
+            "different parties under one title. Pass the comparison computed for the reference's "
+            "own perspective."
         )
-    # The visualization set's pasteable subset (owner decision Q1): V1, V2, V4, V8, V9, V10, V13
-    # and V14. Everything else in that set is HTML-only, and V6 goes with the audit outputs.
-    written.append(
-        plot_lifecycle_swimlane(first, os.path.join(result_directory, "lifecycle_swimlane.png"), comparison)
-    )
-    written.append(plot_actor_flows(first, os.path.join(result_directory, "lifecycle_actor_flows.png")))
-    written.append(
-        plot_liquidity_fan(first, os.path.join(result_directory, "lifecycle_liquidity_fan.png"), comparison)
-    )
-    written.append(plot_sources_and_uses(first, os.path.join(result_directory, "lifecycle_sources_and_uses.png")))
-    written.append(plot_cost_treemap(first, os.path.join(result_directory, "lifecycle_cost_treemap.png")))
-    written.append(plot_monthly_burden(first, os.path.join(result_directory, "lifecycle_monthly_burden.png")))
-    if reference_result is not None:
-        written.append(
-            plot_comparison_bridge(
-                reference_result, variant, os.path.join(result_directory, "lifecycle_comparison_bridge.png")
-            )
-        )
-        written.append(
-            plot_wealth_benchmark(
-                reference_result, variant, os.path.join(result_directory, "lifecycle_wealth_benchmark.png")
-            )
-        )
-    else:
-        log.information(
-            "Comparison charts (bridge, fixed-interest benchmark) skipped: this run has no "
-            "reference variant to compare against."
-        )
-    return [path for path in written if os.path.isfile(path)]
+    return perspective_id, comparison or compare(reference_result, variant)

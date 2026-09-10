@@ -64,7 +64,12 @@ class TestCliAndExports:
         parameters_path = write_parameters_file(tmp_path, price_basis_year=2024)
         assert main(["evaluate", str(tmp_path), "--parameters", parameters_path]) == 0
         for file_name in ("lifecycle_costs.json", "component_costs.json", "cash_flow_timeline.csv",
-                          "cost_provenance.json"):
+                          "cost_provenance.json",
+                          # The ledger heatmap travels with the audit tables and is therefore part
+                          # of a plain `evaluate` (owner decision Q9), not of `report`: the same
+                          # reason `AuditLayerProbe` checks matplotlib before any of this is
+                          # written.
+                          "cost_audit.csv", "cost_audit_timeline_heatmap.png"):
             assert os.path.isfile(tmp_path / file_name), file_name
         # No `--parameters` this time: `evaluate` stored them, so `explain` re-prices the run's
         # own assumptions rather than the engine defaults.

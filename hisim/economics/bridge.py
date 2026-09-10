@@ -56,7 +56,7 @@ independent of cost-database state (cost-spec-v2 W1.1).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, ClassVar, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, List, Optional, Tuple
 
 import pandas as pd
 
@@ -93,6 +93,9 @@ from hisim.economics.scenarios import ScenarioSet
 from hisim.economics.serialization import write_inputs
 from hisim.economics.subsidies import SubsidyCatalog, SubsidyContext
 from hisim.loadtypes import LoadTypes, Units
+
+if TYPE_CHECKING:  # The renderer is imported lazily; only its record type is needed for typing.
+    from hisim.economics.report_plots import SkippedPlot
 
 
 #: The length of a reference year, used to turn a simulation's start/end dates into
@@ -935,6 +938,40 @@ def _merge_context(inputs: EvaluationInputs, context: EconomicContext) -> None:
             setattr(inputs, name, declared)
 
 
+#: Modules the cost path needs before it writes anything, because it draws the audit heatmap on
+#: every run: the renderer and, through it, matplotlib. `__main__.AuditLayerProbe` makes the same
+#: check for the CLI; both exist because the alternative is an ImportError four export files in.
+_PLOT_LAYER_MODULES = ("matplotlib", "hisim.economics.report_plots")
+
+
+def _require_plot_layer() -> None:
+    """Raises unless the PNG layer is importable, before the first export is written.
+
+    The ledger heatmap travels with `cost_audit.csv`, so a cost run draws a figure whether or not
+    a report was asked for, and the renderer is imported lazily at that point — four export files
+    into the run. An installation without matplotlib therefore failed *after* those files existed,
+    and the cleanup below removed a set that was otherwise complete and correct. Asking first
+    turns that into a refusal with a name in it: nothing is written, and the message says which
+    module is missing.
+
+    It uses `importlib.util.find_spec`, so it costs a path lookup and imports nothing; the lazy
+    imports at the use sites stay where they are.
+
+    Raises:
+        CostDataError: If either module is absent.
+    """
+    import importlib.util
+
+    missing = [name for name in _PLOT_LAYER_MODULES if importlib.util.find_spec(name) is None]
+    if missing:
+        raise CostDataError(
+            f"Lifecycle cost engine: {', '.join(missing)} is not importable, so the audit's "
+            "ledger heatmap — which every cost run writes beside cost_audit.csv — cannot be "
+            "drawn. matplotlib is a dependency of the cost path, not only of the report path. "
+            "Nothing was written."
+        )
+
+
 def _remove_partial_exports(written: List[str]) -> None:
     """Deletes the export files this run wrote before it failed.
 
@@ -1005,7 +1042,14 @@ def compute_lifecycle_costs(
     """The COMPUTE_LIFECYCLE_COSTS entry point, called from postprocessing (additive).
 
     ``generate_report`` (option LIFECYCLE_COST_REPORT) additionally writes the
-    human-readable outputs: cost_summary.md, lifecycle_report.html and the PNG set.
+    human-readable outputs: cost_summary.md, lifecycle_report.html and the PNG set — one set of
+    charts per evaluated perspective.
+
+    **matplotlib is required on the plain cost path**, not only with a report: the audit's ledger
+    heatmap is drawn beside `cost_audit.csv` on every run. `_require_plot_layer` checks for it
+    before the first export file is written, so a missing dependency refuses the run instead of
+    aborting it half-written. A heatmap that fails to *render* is the opposite case and is
+    tolerated: it is recorded as a skipped chart, and the tabular exports stay.
 
     This is the whole run, in order: resolve the economic parameters (falling back to defaults for
     the simulation's country when the setup attached none), load the cost database, extract
@@ -1023,8 +1067,11 @@ def compute_lifecycle_costs(
     `cash_flow_timeline.csv`, `cost_provenance.json`, `lifecycle_kpis.json`, `cost_audit.csv`,
     `cost_audit.json` and the audit's own `cost_audit_timeline_heatmap.png`. With a declared
     scenario set additionally `scenario_cube.csv`/`.json`, and with ``generate_report``
-    additionally `cost_summary.md`, `lifecycle_report.html` and the report's PNG set. No
-    legacy file is read, written or otherwise touched.
+    additionally `cost_summary.md`, `lifecycle_report.html` and the report's PNG set — the
+    per-perspective charts as `lifecycle_<chart>_<perspective_id>.png` plus the one matrix-wide
+    `lifecycle_perspective_costs.png`. A run in which any chart drew nothing also writes
+    `lifecycle_plots_not_drawn.txt`, one line per chart with the reason. No legacy file is read,
+    written or otherwise touched.
 
     Failure behaviour (see the module docstring): everything propagates. A cost database or a
     subsidy catalog that will not load, a declared scenario cube that will not evaluate and the D7
@@ -1048,6 +1095,10 @@ def compute_lifecycle_costs(
             and `economic_context`.
         generate_report: Whether option LIFECYCLE_COST_REPORT was set as well.
     """
+    # First of all, and before a single file: this run will draw the audit's ledger heatmap, so a
+    # missing renderer has to be a refusal rather than a rollback of files that were written
+    # correctly — the failure used to arrive from a lazy import four exports in.
+    _require_plot_layer()
     result_directory = simulation_parameters.result_directory
     parameters = _resolve_economic_parameters(simulation_parameters)
     # A database that will not load is a CostDataError and propagates: a run that asked for
@@ -1070,6 +1121,7 @@ def compute_lifecycle_costs(
     require_resolvable_subjects(inputs, evaluator)
     perspectives = select_applicable(load_default_bundle(), has_register=inputs.existing_assets is not None)
     written: List[str] = []
+    plot_skips: List["SkippedPlot"] = []
     try:
         matrix = evaluator.evaluate_matrix(inputs, perspectives)
         written.append(write_lifecycle_costs_json(matrix, result_directory))
@@ -1093,7 +1145,9 @@ def compute_lifecycle_costs(
             # removes the PNG together with the CSVs it belongs to.
             from hisim.economics.report_plots import write_audit_plots
 
-            written.extend(write_audit_plots(first_result, result_directory))
+            audit_plots = write_audit_plots(first_result, result_directory)
+            written.extend(audit_plots.paths)
+            plot_skips.extend(audit_plots.skipped)
         # The parity report is written later, after the legacy COMPUTE_OPEX/COMPUTE_CAPEX blocks
         # produced their CSVs (see write_parity_from_stored_inputs and postprocessing_main).
         # Scenario analysis (§4.6) when the setup declared a scenario set.
@@ -1148,7 +1202,9 @@ def compute_lifecycle_costs(
                     matrix, plausibility, result_directory, input_audit, scenario_cube=scenario_cube
                 )
             )
-            written.extend(write_report_plots(matrix, result_directory))
+            report_plots_written = write_report_plots(matrix, result_directory)
+            written.extend(report_plots_written.paths)
+            plot_skips.extend(report_plots_written.skipped)
             bad = [check for check in render_plausibility_findings(plausibility) if check.status != "PASS"]
             if bad:
                 for check in bad:
@@ -1157,10 +1213,45 @@ def compute_lifecycle_costs(
             log.information(
                 "Lifecycle cost report: wrote cost_summary.md, lifecycle_report.html and PNG charts."
             )
+        # The renderers hand back what they could not draw instead of logging it themselves, so
+        # this is where a skipped figure becomes visible: once in the run log, and once in a file
+        # beside the PNGs — a reader who finds twelve images where the report names thirteen is
+        # rarely the person reading the log.
+        sidecar = _write_skipped_plots_note(plot_skips, result_directory)
+        if sidecar is not None:
+            written.append(sidecar)
     except BaseException:
         _remove_partial_exports(written)
         raise
     log.information("Lifecycle cost engine: wrote lifecycle_costs.json and companion exports.")
+
+
+def _write_skipped_plots_note(skips: List["SkippedPlot"], result_directory: str) -> Optional[str]:
+    """Logs every chart this run did not draw and leaves the same lines in a file beside the PNGs.
+
+    Written only when there is something to say: an empty `lifecycle_plots_not_drawn.txt` in every
+    result directory would be one more file to explain, and its absence is the ordinary case. The
+    file is part of the export set, so a failure later in the run removes it with the rest.
+
+    Args:
+        skips: The `report_plots.SkippedPlot` records both writers returned.
+        result_directory: Where the PNGs went.
+
+    Returns:
+        The path written, or None when nothing was skipped.
+    """
+    if not skips:
+        return None
+    import os
+
+    from hisim.economics.report_plots import SKIPPED_PLOTS_FILE_NAME
+
+    for skip in skips:
+        log.information(f"Lifecycle cost chart not drawn: {skip.as_line()}")
+    path = os.path.join(result_directory, SKIPPED_PLOTS_FILE_NAME)
+    with open(path, "w", encoding="utf-8") as file:
+        file.write("\n".join(skip.as_line() for skip in skips) + "\n")
+    return path
 
 
 def write_parity_from_stored_inputs(simulation_parameters: Any) -> None:

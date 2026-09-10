@@ -23,6 +23,14 @@ is identical in every report and the golden file only moves when the wording is 
 Recurring terms are re-defined in every section that leans on them, because the report is read
 non-linearly and a reader landing mid-page must not have to find the primer first.
 
+**The one exception** is at the foot of this module: `payback_interval_sentence` and
+`treemap_disclosure` (with `format_euro`, the report's single rounding rule, under them) are
+run-specific captions that *both* renderers print, and a sentence printed by two renderers is a
+sentence that drifts — the payback wording had already come to disagree about which world pays
+back first, and the two treemap disclosures named the same fold differently. They are plain
+functions over plain values, so the HTML report and the PNG caption are the same string by
+construction rather than by review.
+
 **Markup.** The strings carry markdown emphasis (`*term*`, `**emphasis**`, `` `code` ``) rather
 than HTML, because both renderers need them: the `reporting` package turns them into `<em>` /
 `<strong>` / `<code>` with `to_html`, and `report_plots.py` strips them for the caption of the
@@ -41,7 +49,13 @@ of them in one report.
 import html
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
+
+# The view layer, for the two shared captions at the foot of this module: they state a run's own
+# figures, so they read the view objects the renderers hand them. `views` is on the presentation
+# layer's allowed surface (`tests/test_economics_import_lint.py`), and the dependency runs one
+# way — nothing in the engine may reach back for authored wording.
+from hisim.economics import views
 
 
 @dataclass(frozen=True)
@@ -2044,3 +2058,122 @@ class ReportProse:
             ValueError: If the markup is unbalanced or nested, exactly as in `to_html`.
         """
         return cls._rendered(text, code=("", ""), strong=("", ""), emphasis=("", ""))
+
+
+# ------------------------------------------------------------------ captions both renderers share
+#
+# The authored text above is number-free by design; the three functions below are the exception the
+# module docstring names. They are the sentences that carry a run's own figures and are printed by
+# *both* renderers — the HTML report and the matplotlib PNGs — and they live here rather than in
+# either of them because a caption that exists twice is a caption that drifts: the two copies of the
+# payback sentence had already disagreed about which world pays back first, and the two treemap
+# disclosures named different things (one said "subsidies", the other "support") for the same fold.
+
+
+def format_euro(value: float) -> str:
+    """Compact euro formatting, the one place the report chooses precision.
+
+    Chosen by magnitude rather than fixed: cents below 100 EUR (a maintenance fee must be
+    readable), whole euros up to 100k, thousands above that (a 340k NPV printed to the cent is
+    noise). It rounds a number for display, it never derives one.
+
+    Because it is a pure function of the value with no locale, width or context dependence, the
+    same number always renders as the same string — which is what makes the golden markdown
+    diffable at all. The flip side a reviewer should know: it discards precision, so two figures
+    that differ below the printed digit are indistinguishable in the report, and the exports
+    (`lifecycle_costs.json`, `cash_flow_timeline.csv`) carry the full values.
+
+    It lives in the prose module rather than in the `reporting` package because the captions
+    below are rendered by both renderers and have to come out byte-identical; `reporting`'s own
+    `_fmt` is this function under its old name.
+
+    Args:
+        value: The amount in euros.
+
+    Returns:
+        The amount as it appears in a report.
+    """
+    if abs(value) >= 100000:
+        return f"{value / 1000:,.0f}k"
+    if abs(value) >= 1000:
+        return f"{value:,.0f}"
+    return f"{value:,.2f}" if abs(value) < 100 else f"{value:,.0f}"
+
+
+def payback_year_phrase(year: Optional[int]) -> str:
+    """One world's zero-crossing as it is read aloud: "year 12", or that it never crossed."""
+    return f"year {year}" if year is not None else "never within the horizon"
+
+
+def payback_interval_sentence(
+    low: Optional[int], best_estimate: Optional[int], high: Optional[int]
+) -> str:
+    """The payback sentence under a discounted-savings panel, with the open end spelled out.
+
+    Says "never within the horizon" in words rather than omitting the statement, which is the
+    failure mode this wording exists to prevent: an absent annotation reads as "did not pay back"
+    to one reader and as "not computed" to another. All three worlds are consulted, because a
+    sentence built from two of them cannot say where the answer actually lands.
+
+    **Which world is which.** Savings are reference minus variant, so the slot with the *larger*
+    savings pays back *earlier*: the HIGH savings slot is the optimistic world and the LOW one
+    the pessimistic. The sentence used to have those two the other way round in the HTML report,
+    and the PNG caption — a second implementation of the same sentence — never had the third
+    world at all, so the two renderings of one figure could disagree in front of the same reader.
+
+    Args:
+        low: The zero-crossing year of the LOW savings curve — the pessimistic world — or None.
+        best_estimate: The crossing of the central world, or None.
+        high: The crossing of the HIGH savings curve — the optimistic world — or None.
+
+    Returns:
+        One sentence naming the interval, or saying that there is none.
+    """
+    if low is None and best_estimate is None and high is None:
+        return "The investment does not pay back within the horizon in any of the three worlds."
+    if low is None and best_estimate is None:
+        return (
+            f"Payback lands in year {high} in the optimistic world only; in the central and the "
+            "pessimistic world the curve never reaches zero within the horizon."
+        )
+    return (
+        f"Payback lands in {payback_year_phrase(best_estimate)} in the central world, between "
+        f"{payback_year_phrase(high)} (optimistic) and {payback_year_phrase(low)} (pessimistic)."
+    )
+
+
+def treemap_disclosure(tiles: views.CostStructureTiles, basis: views.TileBasis) -> str:
+    """What one treemap panel has to disclose about the areas it could not draw.
+
+    A treemap has no negative area, so each basis hides something different and has to say what:
+    the gross panel hides the credits, the net panel hides the subjects whose credits exceeded
+    their costs and were clamped to zero. Naming the clamped subjects is the point — they are
+    exactly the entries a reviewer should ask about, and a panel that merely came out smaller
+    would not tell anyone which ones they are.
+
+    Both figures come from the view's own disclosure fields rather than from a second pass over
+    the tiles, so a caption cannot drift from the picture above it.
+
+    Args:
+        tiles: The tiles and disclosures `views.cost_structure_tiles` returned for this basis.
+        basis: The `views.TileBasis` the panel was drawn on.
+
+    Returns:
+        The disclosure as plain text; an HTML caller escapes it.
+    """
+    if basis == views.TileBasis.GROSS:
+        return (
+            f"The gross panel leaves out {format_euro(tiles.credit_total_in_euro)} EUR of credits "
+            f"(support, feed-in revenue, residual value); {tiles.folded_tile_count} tile(s) "
+            "below 1 % of the area were folded into an 'other' tile per group."
+        )
+    clamped = tiles.clamped_tiles()
+    names = ", ".join(
+        f"{tile.subject} ({format_euro(tile.clamped_from_in_euro or 0.0)} EUR)" for tile in clamped
+    ) or "none"
+    return (
+        "The net panel applies each subject's credits to that subject's own cost tiles across all "
+        "groups — a wall's subsidy shrinks the wall — and clamps at zero the subjects whose "
+        f"credits exceed their costs, erasing {format_euro(tiles.clamped_total_in_euro)} EUR in "
+        f"{len(clamped)} subject(s): {names}. Those are exactly the entries worth asking about."
+    )

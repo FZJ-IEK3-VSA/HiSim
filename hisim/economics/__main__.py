@@ -73,7 +73,7 @@ import json
 import os
 import sys
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
 from hisim.economics.database import CostDatabase, CostDataError
 from hisim.economics.evaluator import (
@@ -103,6 +103,9 @@ from hisim.economics.serialization import read_inputs, read_results, read_stored
 from hisim.economics.subsidies import SubsidyCatalog
 from hisim.economics.validation import validate_all
 
+if TYPE_CHECKING:  # The renderers are imported lazily, per subcommand; this is their return type.
+    from hisim.economics.report_plots import PlotsWritten
+
 
 class CliFileNames:
     """Names of the files the CLI itself writes, as opposed to the export modules.
@@ -117,7 +120,7 @@ class CliFileNames:
 
 
 class AuditLayerProbe:
-    """Whether the module `evaluate` writes its audit files with is importable.
+    """Whether everything `evaluate` writes its audit files with is importable.
 
     `evaluate` writes `cost_audit.csv`/`.json` alongside the numeric exports, using
     `hisim.economics.audit`, and it used to reach that lazy import *after* four export files had
@@ -125,28 +128,36 @@ class AuditLayerProbe:
     not been merged yet, which is how this was found — therefore left a half-written directory
     behind that a later `report` would happily render as complete. The probe answers the same
     question before anything is written, so the subcommand refuses instead of half-succeeding.
+
+    The audit's ledger heatmap is part of that set (owner decision Q9), so the renderer and
+    matplotlib under it are probed too: matplotlib is a dependency of the plain cost path and not
+    only of the report path, and an environment without it must fail the same way — by name,
+    before the first file — rather than four exports in. `bridge._require_plot_layer` makes the
+    same check for the postprocessing path.
     """
 
-    #: Module that must be importable for `evaluate` to write a complete export set.
-    MODULE_NAME = "hisim.economics.audit"
+    #: Modules that must be importable for `evaluate` to write a complete export set: the audit
+    #: layer, the renderer of the audit's own figure, and the library that figure is drawn with.
+    MODULE_NAMES = ("hisim.economics.audit", "matplotlib", "hisim.economics.report_plots")
 
     @classmethod
     def require(cls) -> None:
-        """Raises unless the audit layer is importable.
+        """Raises unless every module the audit outputs need is importable.
 
         Uses `importlib.util.find_spec`, so the check costs a path lookup and does not import
         anything — the lazy imports at the use sites stay where they are.
 
         Raises:
-            CostDataError: If the module is absent. `main` turns it into exit code 2 with the
+            CostDataError: If any of them is absent. `main` turns it into exit code 2 with the
                 message on stderr, before any output file exists.
         """
-        if importlib.util.find_spec(cls.MODULE_NAME) is not None:
+        missing = [name for name in cls.MODULE_NAMES if importlib.util.find_spec(name) is None]
+        if not missing:
             return
         raise CostDataError(
-            f"{cls.MODULE_NAME} is not importable, so `evaluate` cannot write the input audit that "
-            "belongs to a stored evaluation (W4.5) and would leave a half-written export set "
-            "behind. Nothing was written."
+            f"{', '.join(missing)} is not importable, so `evaluate` cannot write the audit that "
+            "belongs to a stored evaluation (W4.5) — its tables or its ledger heatmap — and would "
+            "leave a half-written export set behind. Nothing was written."
         )
 
 
@@ -372,7 +383,9 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         write_input_audit(audit, args.results_dir)
         # V6 travels with the audit tables, not with the report (owner decision Q9): the ledger
         # heatmap answers the audit's question, so it is refreshed exactly when the audit is.
-        write_audit_plots(first, args.results_dir)
+        # The renderer hands back what it did not draw rather than logging it; the CLI's way of
+        # reporting is to print, so it prints.
+        _print_plot_skips(write_audit_plots(first, args.results_dir))
     print(f"Re-evaluated {len(matrix.results)} perspectives into {args.results_dir}.")
     return 0
 
@@ -580,14 +593,31 @@ def _cmd_report(args: argparse.Namespace) -> int:
     )
     # One function owns the PNG set: handing it the comparison's reference makes it write the
     # payback curve as part of that set, rather than the CLI writing a fifth file beside it under
-    # a name only it knew. `write_report_plots` picks the variant side by perspective id, which is
-    # the same result this call site used to look up.
-    write_report_plots(matrix, args.results_dir, reference_result)
+    # a name only it knew. The comparison goes with it — this one carries the two directories as
+    # its reference and variant ids, and recomputing it inside the renderer would relabel it with
+    # the defaults.
+    _print_plot_skips(write_report_plots(matrix, args.results_dir, reference_result, comparison))
     print(
         f"Wrote cost_summary.md, lifecycle_report.html and PNG charts to {args.results_dir} "
         f"({len(plausibility)} plausibility checks, {len(plausibility.flagged())} flagged)."
     )
     return 0
+
+
+def _print_plot_skips(plots: "PlotsWritten") -> None:
+    """Prints one line per chart the renderers did not draw, and nothing when they drew them all.
+
+    The PNG writers return their skips instead of logging them, precisely so each caller can
+    report in its own way: the postprocessing bridge logs them and leaves a file beside the
+    images, and the CLI — whose whole output is stdout — prints them under the command that
+    caused them. A figure missing without a stated reason is indistinguishable from a renderer
+    that crashed and was swallowed, which is the failure this exists to prevent.
+
+    Args:
+        plots: The `report_plots.PlotsWritten` a writer returned.
+    """
+    for line in plots.lines():
+        print(f"Chart not drawn: {line}")
 
 
 def _cmd_validate(_args: argparse.Namespace) -> int:

@@ -21,5 +21,6 @@ file may sit here for a while before disappearing from this one.
 | Moved | Decision | Reason |
 |---|---|---|
 | `components/advanced_heat_pump_hplib.py` | D-1 | Zero setup instantiations. Its sibling `MoreAdvancedHeatPumpHPLibConfig` does the same job in plain floats and is what the setups use, while this one is the only class whose sizable fields are `Quantity`-typed — which the sizing kernel cannot express. Converting it would have meant either lowering its types or teaching the kernel `Quantity`, for a class with no consumer. |
+| `components/controller_l1_heatpump.py` | D-2 | Zero call sites anywhere — the last of the plan's three D13 "zombies" still in the tree, and the only one that still imported cleanly. Converting it would have minted three preset names (`space_heating`/`buffer`/`dhw`) into the wire vocabulary for a controller no setup, test or component builds. It has no test file, so nothing moves beside it. |
 
 `tests/` holds the tests that came with them, so their history stays next to the code they tested.

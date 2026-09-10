@@ -94,8 +94,7 @@ is documented via autodoc.
 
 * **Controllers** —
   L1 device controllers
-  (:py:mod:`~hisim.components.controller_l1_heatpump`,
-  :py:mod:`~hisim.components.controller_l1_chp`,
+  (:py:mod:`~hisim.components.controller_l1_chp`,
   :py:mod:`~hisim.components.controller_l1_fuel_cell`,
   :py:mod:`~hisim.components.controller_l1_electrolyzer`,
   :py:mod:`~hisim.components.controller_l1_electrolyzer_h2`,

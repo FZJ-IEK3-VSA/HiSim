@@ -211,7 +211,12 @@ Each batch PR contains: the R3 rows it implements (unchanged or with the amendme
 
 ## 11. Open Questions and Decisions
 
-**Answered** — none yet. Q-P1.8 (HDS `heating_system` law) is decided in P1 and executed here.
+**Answered.** Q-P1.8 (HDS `heating_system` law) is decided in P1 and executed here. The decisions below are
+taken and executed; their rows are struck from the table, which keeps the question and the option chosen
+next to each other.
+
+- **D-2** `[answered 2026-09-10]` **(a)** — `controller_l1_heatpump` moves to `obsolete/components/`. No test
+  file, no call site anywhere, no energy-manager default connection.
 
 The 32 questions below are owner decisions surfaced by the survey. **Each five-part entry (question, context with `file:line` evidence, options with consequences, recommendation) is in `p4_class_survey.md` under the same ID** — kept there because 32 full entries would triple this document; the table gives the question, the author's recommendation and what it blocks. Answers are recorded here as dated decisions and mirrored into R3.
 
@@ -219,7 +224,7 @@ The 32 questions below are owner decisions surfaced by the survey. **Each five-p
 |---|---|---|---|
 | **Delete vs convert** | | | |
 | D-1 | `advanced_heat_pump_hplib` (Quantity-typed, 0 setups): convert, lower to floats, or retire as duplicate? | (b) lower to floats, then convert like its sibling | R3 hplib rows |
-| D-2 | `controller_l1_heatpump` (0 call sites): delete or convert? | (a) delete | R3, R6 |
+| D-2 | ~~`controller_l1_heatpump` (0 call sites): delete or convert?~~ | `[answered 2026-09-10]` **(a)** moved to `obsolete/components/`, not deleted | R3, R6 |
 | D-8 | `advanced_fuel_cell_controller` + 3 legacy `configuration.py` configs (unrunnable): obsolete together? | (a) yes, one commit | R6 |
 | D-16 | Storage controller, MPC, PID, wind, price signal, dead factories, 5 `configuration.py` classes | (a) delete storage controller, `configuration.py` five and dead factories now; defer MPC/PID/wind/price to the runtime-SimRepository redesign | R3, R6 |
 | D-23 | ~~Car chain not expressible in a file~~ | `[answered 2026-08-31]` **(d), none of the three offered:** convert now by *routing around* `SizingContext` rather than through it. The occupancy publishes its per-car profiles into the per-simulation `SimRepository` in `i_prepare_simulation`; `Car` reads its own there in the same phase and loses its third constructor argument; `CarConfig` gains `household_name`, `car_name` and a `for_household` constructor. The survey's objection stands unamended — a time series can never be a fact — but a config can name one. The N-car loop stays Python. The shared-config aliasing bug is fixed on the way, since each car now builds its own config. | R3 mobility |

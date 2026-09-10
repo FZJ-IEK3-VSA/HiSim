@@ -537,6 +537,7 @@ The chain is acyclic and at most 3 deep (Building → HDS controller → generat
 **D‑2 — `controller_l1_heatpump`: delete or convert?**
 (a) Move to `obsolete/` with the other two zombies. (b) Convert with presets `space_heating`/`buffer`/`dhw`.
 *Consequence:* (a) removes 438 lines and three preset names from the wire vocabulary before they are ever released; (b) mints three names nothing uses, which E8 then freezes at P5.
+**Answered 2026-09-10: (a)** — moved to `obsolete/components/controller_l1_heatpump.py`, not deleted.
 
 **D‑3 — `AirConditionerConfig`: how does a twelve‑field database selection become a "law"?**
 (a) A build‑time **constructor** `for_building_load(heating_load, heating_reference_temperature)` that runs the existing search and returns a complete config, with no `AUTO` fields at all. (b) Extend the kernel with a multi‑field law (one callable filling several fields), which nothing else in the repo needs today. (c) Freeze the Samsung device as `standard` and drop the search entirely.

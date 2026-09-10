@@ -191,6 +191,25 @@ PERSPECTIVES = [
     ),
 ]
 
+#: The year-1 device energy record the household energy balance is drawn from, hand-written
+#: because it is the one input of the report that no in-memory fixture produces: `bridge.py`
+#: collects it from the simulation's own output columns. A PV roof over the meter, a battery that
+#: gives back less than it took, a heat pump and the household under it.
+#:
+#: The two grid roles are **not** free: `views.energy_balance_flows` reconciles them against the
+#: metered `annual_energy_quantities_by_carrier` of `make_inputs` and refuses the diagram if they
+#: disagree, so they are that fixture's bought and sold quantities exactly. The rest are chosen so
+#: that the two sides of the bus do *not* close by construction — 15,200 kWh/a in against 14,700
+#: out — because the residual terminal the balance books for the difference is part of what the
+#: golden is there to pin.
+DEVICE_ENERGY_FLOWS = {
+    "PVSystem": {"PV_GENERATION": 9000.0},
+    "Battery": {"BATTERY_CHARGE": 1400.0, "BATTERY_DISCHARGE": 1200.0},
+    "ElectricityMeter": {"GRID_IMPORT": 5200.0, "GRID_EXPORT": 2500.0},
+    "HeatPump": {"HEAT_PUMP_ELECTRICITY": 6000.0},
+    "UTSPConnector": {"HOUSEHOLD_ELECTRICITY": 4800.0},
+}
+
 #: The smallest scenario set that still renders section 9 (tornado + robustness): one axis, two
 #: levels, ONE_AT_A_TIME — three evaluations. Interest rate is chosen because it moves every
 #: perspective, so no scenario row can come out empty.
@@ -238,7 +257,15 @@ def fixture_rendered() -> RenderedReports:
 
     matrix = EvaluationMatrix()
     for perspective in PERSPECTIVES:
-        matrix.results[perspective.id] = evaluator.evaluate(inputs, perspective)
+        result = evaluator.evaluate(inputs, perspective)
+        # The one field the evaluator cannot fill from `EvaluationInputs` here: it is collected
+        # from the simulation's output columns, which this fixture does not run. Attaching it to
+        # a freshly evaluated (and therefore unshared) result is the whole of what the bridge
+        # would have done, and it is what puts the energy balance in the golden at all.
+        result.annual_energy_attribution_by_subject_in_kwh = {
+            subject: dict(by_role) for subject, by_role in DEVICE_ENERGY_FLOWS.items()
+        }
+        matrix.results[perspective.id] = result
 
     reference_inputs = make_inputs(energy_kwh=15000.0, investment=2000.0)
     reference = evaluator.evaluate(reference_inputs, PERSPECTIVES[1])
@@ -318,18 +345,28 @@ class TestFixtureIsRich:
         whose anchor moved is a broken document, and only the anchor catches that. The sections
         are named rather than numbered since the mnemonic switch-over, so this list is also the
         readable inventory of what the fixture reaches.
+
+        The energy balance used to be the one section of the set deliberately absent from it —
+        its quantities come from the simulation's own output columns, which `bridge.py` collects
+        and no in-memory fixture produces, so the section skipped itself here and the oracle
+        pinned nothing about a diagram the report draws for every real run. `DEVICE_ENERGY_FLOWS`
+        supplies that record by hand instead, reconciled against the fixture's own meter, and the
+        balance is now asserted like every other section.
         """
         for anchor in (
             "building-how-to-read",
+            "building-at-a-glance",
             "building-plausibility",
             "building-input-audit",
             "building-investment-build-up",
+            "building-funding",
             "building-lifetimes",
             "building-cash-flow-timeline",
             "building-cash-curve",
             "building-loan",
             "building-cost-of-credit",
             "building-energy-bill",
+            "building-energy-balance",
             "building-co2",
             "building-subsidies",
             "building-perspectives",
@@ -338,10 +375,15 @@ class TestFixtureIsRich:
             "building-who-pays-whom",
             "building-uncertainty-drivers",
             "building-component-breakdown",
+            "building-cost-structure",
+            "building-cost-shapes",
+            "building-equity-build-up",
             "building-scenarios",
+            "building-monthly-burden",
             "building-kpis",
             "building-comparison",
             "building-npv-bridge",
+            "building-bank-benchmark",
         ):
             assert f'id="{anchor}"' in rendered.report, anchor
         assert "sources used" in rendered.report  # §3.10 registry table, inside the input audit

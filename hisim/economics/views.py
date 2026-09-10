@@ -4284,7 +4284,9 @@ class AssetDebtSeries:
     underwater_intervals: List[Tuple[int, int]] = field(default_factory=list)
 
 
-def asset_debt_series(result: LifecycleCostResult) -> AssetDebtSeries:
+def asset_debt_series(
+    result: LifecycleCostResult, amortization: Optional[LoanAmortization] = None
+) -> AssetDebtSeries:
     """Asset book value against outstanding debt, and the equity gap between them (V15).
 
     Book value is built from the component event strip's events: every charged install or
@@ -4309,6 +4311,16 @@ def asset_debt_series(result: LifecycleCostResult) -> AssetDebtSeries:
     here), each install year steps the curve by exactly that event's charged amount, and equity
     is the plain difference of the two published series.
 
+    Args:
+        result: The perspective whose book value and debt are built.
+        amortization: Its `loan_amortization_series`, when the caller already has it — the
+            equity section reads it to decide whether the perspective is financed at all, and
+            deriving the identical series a second line later is a second walk of the same
+            timeline for numbers already in hand. Omitted, it is derived here as before.
+
+    Returns:
+        The two series, the equity between them and the runs where that equity is negative.
+
     Raises:
         CostDataError: If the horizon book value does not reproduce the booked residual credit.
     """
@@ -4330,8 +4342,8 @@ def asset_debt_series(result: LifecycleCostResult) -> AssetDebtSeries:
             for year in range(event.year, horizon + 1):
                 remaining = max(0.0, 1.0 - (year - event.year) / span)
                 book_value[year] += event.amount_in_euro * remaining
-    amortization = loan_amortization_series(result)
-    balance = amortization.outstanding_balance_in_euro or [0.0] * (horizon + 1)
+    schedule = amortization if amortization is not None else loan_amortization_series(result)
+    balance = schedule.outstanding_balance_in_euro or [0.0] * (horizon + 1)
     debt = [max(owed, 0.0) for owed in balance]
     equity = [book - owed for book, owed in zip(book_value, debt)]
     if abs(book_value[horizon] - residual_total) > max(

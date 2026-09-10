@@ -132,10 +132,9 @@ class ChromeColors:
     a role name to its hex value, so a caller reads `ChromeColors.LIGHT["surface"]` rather than
     remembering a position in a list.
 
-    Note for the renderer slices: `report_plots._Palette` and the `:root` block of
-    `reporting/sections.py` carry their own copies of these four values until the slices that own
-    those modules rewire them to this namespace — that rewiring lives higher in this stack, not
-    here; this slice only establishes the single source they read.
+    The `:root` block of `reporting/sections.py` reads these values rather than transcribing
+    them. `report_plots._Palette` still carries its own copy; rewiring it belongs with that
+    module and its own slice.
 
     Both maps are read-only proxies rather than plain dicts. A palette is a constant of the
     document, and a renderer that reached in and assigned one role would change every chart drawn
@@ -156,6 +155,42 @@ class ChromeColors:
         "muted": "#898781",
         "grid": "#2c2c2a",
     })
+
+
+class SequentialRamp:
+    """A ten-step sequential ramp, for the one chart whose series are an ordered quantity.
+
+    The group palette is *categorical*: eight hues that have to be told apart, in no order, and
+    it is the right palette for everything that stacks or legends a display group. The bank
+    benchmark's rate fan is the other kind of series — ten interest rates from 1 % to 10 %, which
+    a reader follows as a direction rather than as ten unrelated things. Drawing it in the
+    categorical palette cycled after eight lines, so 9 % and 10 % came out in exactly the hues of
+    1 % and 2 %, and the two ends of the fan were indistinguishable from each other.
+
+    Ten entries, light to dark, in the report's own ink: the first is a muted tint that still
+    reads on the surface, the last is close to `ChromeColors` ink. Ordered position *is* the
+    encoding here, so the steps are monotone in lightness and nothing else — no hue shift, which
+    would read as a second variable.
+
+    `LIGHT` and `DARK` exist for the same reason `ChromeColors` has two maps: the HTML report
+    declares both and re-resolves them under `prefers-color-scheme: dark`, where a ramp that ran
+    from pale to black would run from invisible to invisible. A baked PNG takes `LIGHT`. Both are
+    tuples rather than lists, because a palette is a constant of the document and a renderer that
+    appended a step would change every chart drawn after it in the same process.
+    """
+
+    #: Step 0 (1 %) to step 9 (10 %) on a light surface: muted to ink, monotone in luminance.
+    LIGHT: Tuple[str, ...] = (
+        "#c6d2e9", "#b0c0e0", "#9bafd6", "#8599cb", "#6f84c0",
+        "#5a6faa", "#46588a", "#33436b", "#22304e", "#141d31",
+    )
+    #: The same ten steps against a dark surface, and in the same direction: step 0 is the tone
+    #: nearest the surface and step 9 the one nearest that theme's ink, which there is near-white.
+    #: "Further along the ramp" therefore still means "louder" rather than "harder to see".
+    DARK: Tuple[str, ...] = (
+        "#33445f", "#425573", "#526687", "#63789b", "#7589af",
+        "#8b9dc2", "#a2b1d3", "#bac6e2", "#d0d9ee", "#e4eafa",
+    )
 
 
 def squarified_layout(

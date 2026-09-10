@@ -133,26 +133,35 @@ authoritative list of them and of their page order is
 `reporting.ReportSections.ORDER`; a table of contents at the top of the document provides
 the navigation the old 0-to-10 numbering was supposed to. In chain order:
 **How to read this report** (the primer: discounting, the three worlds of a band, the sign
-rule), **Plausibility** (automated panel, thresholds in
+rule), **At a glance** (assets, financing, support and milestones on one year axis),
+**Plausibility** (automated panel, thresholds in
 `cost_database/plausibility_checks.json` — range checks WARN, structural invariants FAIL),
 **Input audit** + the §3.10 sources-used table, **Investment build-up** (year-0 waterfalls +
-investment table + sunk-cost note), **Lifetimes** (the per-component purchase, replacement
+investment table + sunk-cost note), **Funding** (year-0 sources against year-0 uses, balanced
+to the euro), **Lifetimes** (the per-component purchase, replacement
 and write-down strip), **Cash-flow timeline** (annual flows, cumulative discounted cost with its
 min/max band, NPV-by-category and detail tables), **Cash curve** (the cumulative cash
 position nominal and discounted, with the payback interval), **Loan** and **Cost of credit**
 (§4.4 debt service, then what borrowing costs and at what effective rate), **Energy bill**
 (year-1 per carrier with implied effective prices — the fastest unit-mix-up detector),
-**CO2** (§3.8: embodied vs. operational bars, cumulative curve, table), **Subsidies**
+**Energy balance** (the year-1 household electricity balance in kWh, money only as an
+annotation on the two grid nodes), **CO2** (§3.8: embodied vs. operational bars, cumulative
+curve, table), **Subsidies**
 (composition bars + decision cards + awards table, flat-shim note when no catalog ships for
 the country), **Perspectives** (whiskers + result table: NPV/EAC/monthly/LCOH/sunk
 cost), **Landlord statement** (the cash side and the accounting side, and the income Sankey
 of the same partition), **Who pays what** (payer whiskers + payer-by-cost-group table,
 zero-sum checked) and **Who pays whom** (the same money as a flow diagram, one column per
 party), **Uncertainty drivers** (which subjects make the band as wide as it is),
-**Component breakdown** (per-subject stacks + subject table), **Scenarios** (tornado +
-all-scenarios table + robustness summary), **KPIs** (§7.3), and with a reference variant
-**Comparison** (delta waterfall + delta table + payback band) and **NPV bridge** (the same
-difference decomposed by cost group). Every one of them opens with the same four authored
+**Component breakdown** (per-subject stacks + subject table), **Cost structure** (the
+composition as a treemap, gross and net of credits side by side), **Cost shapes** (which
+subject causes which kind of cost, credits kept apart), **Equity build-up** (asset book
+value against outstanding debt), **Scenarios** (tornado +
+all-scenarios table + robustness summary), **Monthly burden** (the recurring cost per month
+with its replacement reserve), **KPIs** (§7.3), and with a reference variant
+**Comparison** (delta waterfall + delta table + payback band), **NPV bridge** (the same
+difference decomposed by cost group) and **Bank benchmark** (renovate, or bank the money at
+1-10 %). Every one of them opens with the same four authored
 parts — what it shows, what it adds, its terms of art and how its numbers are calculated —
 held in `report_prose.py`. The HTML is fully self-contained (inline SVG, light/dark aware,
 native tooltips); the markdown summary is deliberately git-diffable so price-data PRs show

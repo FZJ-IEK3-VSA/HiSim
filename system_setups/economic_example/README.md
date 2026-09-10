@@ -58,15 +58,16 @@ saying out loud:
 | `ElectricityFromGridInWatt` (input) | the provider itself, from the setup's `ElectricityMeter`; it is what makes the two capacity-charge outputs real instead of constant zero |
 | `PricePurchase`, `PriceInjection` | **nothing in this setup.** They are written to the results frame for the reader and are available for wiring; no component in the shipped library takes a price input yet |
 | `BillingPeriodPeakSoFar`, `CapacityChargeMarginal` | **nothing in this setup.** They are the peak-shaving signal a rule-based EMS would react to |
-| `PRICEPURCHASEFORECAST24H`, `PRICEINJECTIONFORECAST24H` (SingletonSimRepository) | `controller_mpc.py`, the one live price consumer in the library — not part of this setup |
+| `PRICEPURCHASEFORECAST24H`, `PRICEINJECTIONFORECAST24H` (SingletonSimRepository) | **nothing.** `controller_mpc.py` read exactly these two keys until the component sweep retired it to `obsolete/` (decision D-16, 2026-09-10); the keys are published for the controller that will read them |
 
 The example uses the `SYNTHETIC_TEST` contract, whose spot profile is a closed formula: real
 day-ahead series cannot be shipped for licensing reasons. Swap `tariff_contract_id` for a
 contract in `hisim/cost_database/tariffs/` to price against a shipped one.
 
-Note that a setup may contain a `TariffProvider` **or** the older
-`generic_price_signal.PriceSignal`, never both: they publish the same two repository forecast
-keys, and the repository holds one value per key.
+The `TariffProvider` is now the only price source in the library. The older
+`generic_price_signal.PriceSignal`, which published the same two repository forecast keys and
+so could never have shared a setup with it — the repository holds one value per key — moved to
+`obsolete/` with the MPC controller that read them (decision D-16, 2026-09-10).
 
 ## The two clocks
 

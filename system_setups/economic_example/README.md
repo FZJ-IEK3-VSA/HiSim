@@ -18,7 +18,7 @@ python system_setups/economic_example/economic_example_ireland_gas_to_heatpump.p
 ~1 minute per simulation with cached inputs (the Ireland example runs two). Results land in
 `system_setups/results/<setup>/default_config/<run>/` — open **`lifecycle_report.html`**
 first, then `cost_summary.md`. For the Ireland example the comparison lives in the
-*variant's* (heat pump) result directory, section 8.
+*variant's* (heat pump) result directory, in the report's **Comparison** section.
 
 ## What the example models
 
@@ -36,10 +36,11 @@ first, then `cost_summary.md`. For the Ireland example the comparison lives in t
   full solver audit trail.
 - **All perspectives** (cost_spec.md §7.1): brownfield gross/net, operating (with replacement
   reserve), owner_monthly (financed), landlord, tenant (DE_2024 allocation with modernization
-  levy), macroeconomic. Section 6b of the report shows who pays what.
+  levy), macroeconomic. The report's **Who pays what** and **Who pays whom** sections show
+  where each euro lands.
 - **Scenario analysis** (§4.6): interest 1 %/5 %, flat vs. high electricity escalation, a 30 %
   cheaper heat pump via data overlay, and the high CO2-price path — rendered as a tornado in
-  section 9 and exported to `scenario_cube.csv`/`.json`.
+  the report's **Scenarios** section and exported to `scenario_cube.csv`/`.json`.
 
 ## The tariff provider (§8.3)
 

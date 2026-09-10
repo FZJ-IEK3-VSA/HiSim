@@ -128,22 +128,35 @@ be resolved is an error too, in the CLI and in the postprocessing bridge alike �
 is never silently replaced by the §10.1 legacy flat shim.
 
 The report layer follows the money along the calculation chain — every spec feature has at
-least one visualization plus a result table: **0** automated plausibility panel (thresholds:
+least one visualization plus a result table. Sections carry **names**, not numbers, and the
+authoritative list of them and of their page order is
+`reporting.ReportSections.ORDER`; a table of contents at the top of the document provides
+the navigation the old 0-to-10 numbering was supposed to. In chain order:
+**How to read this report** (the primer: discounting, the three worlds of a band, the sign
+rule), **Plausibility** (automated panel, thresholds in
 `cost_database/plausibility_checks.json` — range checks WARN, structural invariants FAIL),
-**1** input audit + the §3.10 sources-used table, **2** year-0 investment waterfalls +
-investment table + sunk-cost note, **3** annual cash-flow timeline, cumulative discounted
-cost with its min/max uncertainty band, loan amortization chart when financed (§4.4), and
-the NPV-by-category table, **4** year-1 energy bill with implied effective prices (the
-fastest unit-mix-up detector) + decomposition table, **4b** lifecycle CO2 (§3.8: embodied
-vs. operational bars, cumulative curve, table), **5** subsidy composition bars + decision
-cards + awards table (flat-shim note when no catalog ships for the country), **6**
-perspective whiskers + result table (NPV/EAC/monthly/LCOH/sunk cost), **6b** actor split
-(payer whiskers + payer-by-cost-group table, zero-sum checked), **7** per-component stacks +
-subject table, **8** variant comparison (delta waterfall + delta table + payback band),
-**9** scenario tornado + all-scenarios table + robustness summary, **10** the lifecycle KPI
-table (§7.3). The HTML is fully self-contained (inline SVG, light/dark aware, native
-tooltips); the markdown summary is deliberately git-diffable so price-data PRs show up as
-clean textual deltas on golden scenarios (§9.5).
+**Input audit** + the §3.10 sources-used table, **Investment build-up** (year-0 waterfalls +
+investment table + sunk-cost note), **Lifetimes** (the per-component purchase, replacement
+and write-down strip), **Cash-flow timeline** (annual flows, cumulative discounted cost with its
+min/max band, NPV-by-category and detail tables), **Cash curve** (the cumulative cash
+position nominal and discounted, with the payback interval), **Loan** and **Cost of credit**
+(§4.4 debt service, then what borrowing costs and at what effective rate), **Energy bill**
+(year-1 per carrier with implied effective prices — the fastest unit-mix-up detector),
+**CO2** (§3.8: embodied vs. operational bars, cumulative curve, table), **Subsidies**
+(composition bars + decision cards + awards table, flat-shim note when no catalog ships for
+the country), **Perspectives** (whiskers + result table: NPV/EAC/monthly/LCOH/sunk
+cost), **Landlord statement** (the cash side and the accounting side, and the income Sankey
+of the same partition), **Who pays what** (payer whiskers + payer-by-cost-group table,
+zero-sum checked) and **Who pays whom** (the same money as a flow diagram, one column per
+party), **Uncertainty drivers** (which subjects make the band as wide as it is),
+**Component breakdown** (per-subject stacks + subject table), **Scenarios** (tornado +
+all-scenarios table + robustness summary), **KPIs** (§7.3), and with a reference variant
+**Comparison** (delta waterfall + delta table + payback band) and **NPV bridge** (the same
+difference decomposed by cost group). Every one of them opens with the same four authored
+parts — what it shows, what it adds, its terms of art and how its numbers are calculated —
+held in `report_prose.py`. The HTML is fully self-contained (inline SVG, light/dark aware,
+native tooltips); the markdown summary is deliberately git-diffable so price-data PRs show
+up as clean textual deltas on golden scenarios (§9.5).
 
 To feed the engine what the simulation cannot know — the existing system, the applicant, the
 tenancy, envelope measures, scenario sets — attach a

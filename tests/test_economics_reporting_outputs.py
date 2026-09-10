@@ -480,7 +480,7 @@ class TestAwardsOfEveryPayoutKindAreReported:
             '<span title="TAX_CREDIT_SCHEME">TAX_CREDIT_SCHEME</span>: '
             "2,060 EUR, tax credit paid over 3 years"
         ) in html
-        section = html.split("<h2>5 - Subsidy decisions</h2>")[1].split("</section>")[0]
+        section = html.split('<section id="building-subsidies">')[1].split("</section>")[0]
         assert "0.00 EUR" not in section
         assert "0.90% interest, 20 years term, 25% repayment grant" in html
         assert "0.0800 EUR/kWh on ELECTRICITY for 10 years" in html
@@ -571,3 +571,8 @@ class TestPngsAndCli:
             assert (variant_dir / file_name).is_file(), file_name
         summary = (variant_dir / "cost_summary.md").read_text(encoding="utf-8")
         assert "## Variant comparison" in summary
+        # The CLI is the only caller that passes the comparison's *reference result*, which is
+        # what the NPV bridge decomposes; without it the section is skipped, and nothing else
+        # here would notice.
+        report = (variant_dir / "lifecycle_report.html").read_text(encoding="utf-8")
+        assert 'id="building-npv-bridge"' in report

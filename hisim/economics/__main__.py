@@ -572,6 +572,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
     write_cost_summary(matrix, plausibility, args.results_dir, comparison)
     write_lifecycle_report(
         matrix, plausibility, args.results_dir, audit, comparison, scenario_cube=scenario_cube,
+        reference_result=reference_result,
     )
     # One function owns the PNG set: handing it the comparison's reference makes it write the
     # payback curve as part of that set, rather than the CLI writing a fifth file beside it under

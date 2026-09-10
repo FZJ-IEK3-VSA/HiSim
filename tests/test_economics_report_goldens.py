@@ -249,7 +249,9 @@ def fixture_rendered() -> RenderedReports:
 
     audit = build_input_audit(inputs, database, PARAMETERS, matrix.results["brownfield_gross"])
     summary = build_cost_summary_markdown(matrix, plausibility, comparison)
-    report = build_lifecycle_report_html(matrix, plausibility, audit, comparison, scenario_cube=cube)
+    report = build_lifecycle_report_html(
+        matrix, plausibility, audit, comparison, scenario_cube=cube, reference_result=reference
+    )
     return RenderedReports(summary, report, matrix, comparison, reference)
 
 
@@ -309,24 +311,51 @@ class TestFixtureIsRich:
     """The oracle is only worth its runtime if the fixture reaches every rendering path."""
 
     def test_every_report_section_is_present(self, rendered):
-        """All sections the switch-over touches actually render on this fixture."""
-        for marker in (
-            "0 - Plausibility panel",
-            "1 - Input audit",
-            "sources used",
-            "2 - Investment build-up",
-            "3 - Cash-flow timeline",
-            "4 - Year-1 energy bill",
-            "4b - Lifecycle CO2",
-            "5 - Subsidy decisions",
-            "6 - Perspectives at a glance",
-            "6b - Who pays what",
-            "7 - Per-component breakdown",
-            "8 - Variant comparison",
-            "9 - Scenario analysis",
-            "10 - Lifecycle KPIs",
+        """All sections the switch-over touches actually render on this fixture.
+
+        Asserted on the anchors rather than on the headings, because an anchor is what a table-of
+        -contents link and a cross-reference resolve against: a section whose heading is right but
+        whose anchor moved is a broken document, and only the anchor catches that. The sections
+        are named rather than numbered since the mnemonic switch-over, so this list is also the
+        readable inventory of what the fixture reaches.
+        """
+        for anchor in (
+            "building-how-to-read",
+            "building-plausibility",
+            "building-input-audit",
+            "building-investment-build-up",
+            "building-lifetimes",
+            "building-cash-flow-timeline",
+            "building-cash-curve",
+            "building-loan",
+            "building-cost-of-credit",
+            "building-energy-bill",
+            "building-co2",
+            "building-subsidies",
+            "building-perspectives",
+            "building-landlord-statement",
+            "building-who-pays-what",
+            "building-who-pays-whom",
+            "building-uncertainty-drivers",
+            "building-component-breakdown",
+            "building-scenarios",
+            "building-kpis",
+            "building-comparison",
+            "building-npv-bridge",
         ):
-            assert marker in rendered.report, marker
+            assert f'id="{anchor}"' in rendered.report, anchor
+        assert "sources used" in rendered.report  # §3.10 registry table, inside the input audit
+
+    def test_the_contents_link_every_rendered_section(self, rendered):
+        """Navigation replaced the numbering, so it has to reach every section that rendered."""
+        import re
+
+        contents = rendered.report.split("</nav>")[0]
+        anchors = re.findall(r'<section id="([^"]+)"', rendered.report)
+        assert anchors, "the report rendered no anchored section at all"
+        for anchor in anchors:
+            assert f'href="#{anchor}"' in contents, anchor
+        assert contents.count("<a href=\"#building\">") == 1  # one chapter, linked once
 
     def test_every_computation_path_is_exercised(self, rendered):
         """Bands, a loan, subsidies, feed-in, anyway credits and an allocation are all present."""

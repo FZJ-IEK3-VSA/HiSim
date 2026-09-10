@@ -7,7 +7,8 @@ recompute an engine figure, whatever it wanted to. This module parses the import
 the presentation modules with `ast` (so a local import inside a function counts exactly like a
 top-of-file one) and checks them against the surface below.
 
-**The allowed surface for presentation** — `reporting`, `report_plots`, `presentation_style`:
+**The allowed surface for presentation** — `reporting`, `report_plots`, `presentation_style`,
+`report_prose`:
 
 | Module              | Why presentation may import it                                        |
 |---------------------|-----------------------------------------------------------------------|
@@ -16,6 +17,7 @@ top-of-file one) and checks them against the surface below.
 | `plausibility`      | the typed findings and their check ids — **types only**, see below    |
 | `input_audit`       | the typed resolved-input rows `audit.py` produces (W4.6)              |
 | `presentation_style`| the display groups and palette shared by HTML and matplotlib (W4.7)   |
+| `report_prose`      | the authored four-part explanation every section opens with           |
 | `exports`           | `build_lifecycle_kpi_entries`, so the KPI table and lifecycle_kpis.json cannot disagree |
 | `timeline`          | `CostCategory` / `Actor` — the vocabulary of the result object        |
 | `uncertainty`       | `UncertainValue` / `Slot` — the type every money figure has           |
@@ -64,11 +66,12 @@ PACKAGE_DIRECTORY = os.path.join(
 )
 PACKAGE_PREFIX = "hisim.economics"
 
-#: The presentation layer: what renders, and nothing else.
-PRESENTATION_MODULES = ("reporting", "report_plots", "presentation_style")
+#: The presentation layer: what renders, and the prose it renders — nothing else.
+PRESENTATION_MODULES = ("reporting", "report_plots", "presentation_style", "report_prose")
 
 #: Modules the presentation layer may import from `hisim.economics` (see the table above).
 ALLOWED_FOR_PRESENTATION: Set[str] = {
+    "report_prose",
     "results",
     "views",
     "plausibility",
@@ -193,9 +196,16 @@ class TestEngineDoesNotImportPresentation:
 
     @pytest.mark.parametrize("module_name", NON_PRESENTATION_MODULES)
     def test_no_engine_side_module_imports_a_renderer(self, module_name):
-        """A result serializer or a parity harness that renders is a seam violation."""
+        """A result serializer or a parity harness that renders is a seam violation.
+
+        The forbidden set is the presentation side of `PRESENTATION_MODULES` minus the one module
+        that is shared on purpose. `presentation_style` is deliberately importable from either
+        side — it is geometry and colour, and the whole point of W4.7 — but `report_prose` is not:
+        it is authored wording, and an engine-side module that reached for a section's explanation
+        would be formatting, which is exactly what this direction of the seam forbids.
+        """
         imported = {item.module for item in _economics_imports(module_name)}
-        assert not imported & {"reporting", "report_plots"}, (
+        assert not imported & {"reporting", "report_plots", "report_prose"}, (
             f"{module_name}.py imports a renderer; exports serialize and audit verifies — "
             "neither formats (cost-spec-v2 §2.4, W4.6)."
         )

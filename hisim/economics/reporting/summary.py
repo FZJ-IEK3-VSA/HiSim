@@ -19,6 +19,7 @@ from typing import Dict, List, Optional, Tuple
 from hisim.economics import views
 from hisim.economics.plausibility import CheckIds, CheckStatus, PlausibilityFinding, PlausibilityReport
 from hisim.economics.presentation_style import PresentationStyle, group_name
+from hisim.economics.report_prose import format_euro
 from hisim.economics.results import EvaluationMatrix, LifecycleCostResult, VariantComparison
 from hisim.economics.uncertainty import UncertainValue
 
@@ -38,25 +39,18 @@ class ReportFileNames:
 
 
 def _fmt(value: float) -> str:
-    """Compact euro formatting.
+    """Compact euro formatting — the report's house rounding, under its house name.
 
-    The one place in the report where precision is chosen, and it is chosen by magnitude rather
-    than fixed: cents below 100 EUR (a maintenance fee must be readable), whole euros up to
-    100k, thousands above that (a 340k NPV printed to the cent is noise). This is the only
-    arithmetic the seam-4 invariant leaves in this module besides SVG geometry — it rounds a
-    number for display, it never derives one.
+    The rule itself is `report_prose.format_euro`: precision by magnitude, cents below 100 EUR,
+    thousands above 100k, and never a derived number. It moved there when the treemap disclosure
+    and the payback sentence became captions both renderers print: those sentences have to come
+    out byte-identical in the HTML report and in the matplotlib PNG, which a second rounding rule
+    in a second module cannot guarantee.
 
-    Because it is a pure function of the value with no locale, width or context dependence, the
-    same number always renders as the same string — which is what makes the golden markdown
-    diffable at all. The flip side a reviewer should know: it discards precision, so two figures
-    that differ below the printed digit are indistinguishable in the report, and the exports
-    (`lifecycle_costs.json`, `cash_flow_timeline.csv`) carry the full values.
+    This name stays because every table and caption in the package reads it, and because the
+    seam-4 statement belongs here: rounding for display is the only arithmetic this module does.
     """
-    if abs(value) >= 100000:
-        return f"{value / 1000:,.0f}k"
-    if abs(value) >= 1000:
-        return f"{value:,.0f}"
-    return f"{value:,.2f}" if abs(value) < 100 else f"{value:,.0f}"
+    return format_euro(value)
 
 
 def _band_str(band: Optional[UncertainValue], unit: str = "EUR") -> str:

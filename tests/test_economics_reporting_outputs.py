@@ -533,11 +533,39 @@ class TestPngsAndCli:
     """Matplotlib companions and the `report` CLI."""
 
     def test_pngs_are_written(self, matrix, tmp_path):
-        """The PNG set exists and is non-empty."""
+        """Every perspective gets its own charts, and the matrix-wide one is written once.
+
+        The names are listed rather than counted: the set grew with the visualization extension,
+        and a bare count would be satisfied by any handful of files. What the list pins is which
+        charts this run can draw at all — every perspective here is single-actor and
+        own-capital, so the actor Sankey and the funding statement skip themselves throughout,
+        and with no reference variant the three comparison charts do too — and that the
+        per-perspective files carry the perspective they are about. Drawing only the first
+        perspective was the defect: the file called `lifecycle_cost_treemap.png` was the
+        treemap of *one* of the six perspectives the report beside it prints, and nothing in the
+        name said which.
+        """
         written = write_report_plots(matrix, str(tmp_path))
-        assert len(written) == 4
-        for path in written:
+
+        per_perspective = {
+            f"lifecycle_{chart}_{perspective_id}.png"
+            for perspective_id in matrix.results
+            for chart in ("annual_cash_flows", "investment_waterfall", "component_costs",
+                          "cost_treemap", "monthly_burden", "swimlane", "liquidity_fan")
+        }
+        # Two charts of the set are drawn only where they have something to say: the operating
+        # perspective books no year-0 investment, so it has no build-up to split, and only the
+        # subsidised perspective has a funding statement worth a Sankey.
+        per_perspective -= {"lifecycle_investment_waterfall_operating.png"}
+        assert {os.path.basename(path) for path in written.paths} == (
+            per_perspective
+            | {"lifecycle_perspective_costs.png", "lifecycle_sources_and_uses_greenfield_net.png"}
+        )
+        for path in written.paths:
             assert os.path.getsize(path) > 5000
+        assert {skip.chart for skip in written.skipped} >= {
+            "actor-flow Sankey", "sources-and-uses Sankey", "payback curve"
+        }
 
     def test_report_cli_with_compare(self, tmp_path):
         """`python -m hisim.economics report <dir> --compare <ref>` writes everything."""
@@ -564,9 +592,9 @@ class TestPngsAndCli:
         for file_name in (
             "cost_summary.md",
             "lifecycle_report.html",
-            "lifecycle_annual_cash_flows.png",
+            "lifecycle_annual_cash_flows_greenfield_net.png",
             "lifecycle_perspective_costs.png",
-            "lifecycle_payback_curve.png",
+            "lifecycle_payback_curve_greenfield_net.png",
         ):
             assert (variant_dir / file_name).is_file(), file_name
         summary = (variant_dir / "cost_summary.md").read_text(encoding="utf-8")

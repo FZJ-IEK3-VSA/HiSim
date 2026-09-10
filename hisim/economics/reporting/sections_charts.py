@@ -35,6 +35,10 @@ from hisim.economics import views
 # tell which perspective it is drawing refuses with the same error a view would.
 from hisim.economics.views import CostDataError
 from hisim.economics.presentation_style import PresentationStyle, SequentialRamp, group_of
+# The two captions this module shares with `report_plots.py`: the payback sentence under the
+# cash curve's lower panel and the treemap's disclosure. They are printed by both renderers,
+# so they are authored once, in the module that holds the report's wording.
+from hisim.economics.report_prose import payback_interval_sentence, treemap_disclosure
 from hisim.economics.results import EvaluationMatrix, LifecycleCostResult, VariantComparison
 from hisim.economics.timeline import CostCategory
 from hisim.economics.uncertainty import Slot
@@ -342,7 +346,7 @@ def _liquidity_section_html(
             {"low": low, "best_estimate": best_estimate, "high": high}
         )
         lower_label = "cumulative discounted savings [EUR] (reference - variant)"
-        payback_note = _payback_interval_prose(
+        payback_note = payback_interval_sentence(
             crossings["low"], crossings["best_estimate"], crossings["high"]
         )
     else:
@@ -399,47 +403,6 @@ def _savings_curve(
             "cannot draw its band or state its payback."
         )
     return curves[slot]
-
-
-def _payback_interval_prose(
-    low: Optional[int], best_estimate: Optional[int], high: Optional[int]
-) -> str:
-    """The payback sentence of the cash curve's lower panel, with the open end spelled out.
-
-    Says "never within the horizon" in words rather than omitting the statement, which is the
-    failure mode this wording exists to prevent: an absent annotation reads as "did not pay back"
-    to one reader and as "not computed" to another. All three worlds are consulted, because a
-    sentence built from two of them cannot say where the answer actually lands.
-
-    **Which world is which.** Savings are reference minus variant, so the slot with the *larger*
-    savings pays back *earlier*: the HIGH savings slot is the optimistic world and the LOW one
-    the pessimistic. The sentence used to have those two the other way round, which inverted the
-    conclusion — a reader was told the pessimistic case paid back first.
-
-    Args:
-        low: The zero-crossing year of the LOW savings curve — the pessimistic world — or None.
-        best_estimate: The crossing of the central world, or None.
-        high: The crossing of the HIGH savings curve — the optimistic world — or None.
-
-    Returns:
-        One sentence naming the interval, or saying that there is none.
-    """
-    if low is None and best_estimate is None and high is None:
-        return "The investment does not pay back within the horizon in any of the three worlds."
-    if low is None and best_estimate is None:
-        return (
-            f"Payback lands in year {high} in the optimistic world only; in the central and the "
-            "pessimistic world the curve never reaches zero within the horizon."
-        )
-    return (
-        f"Payback lands in {_payback_year_prose(best_estimate)} in the central world, between "
-        f"{_payback_year_prose(high)} (optimistic) and {_payback_year_prose(low)} (pessimistic)."
-    )
-
-
-def _payback_year_prose(year: Optional[int]) -> str:
-    """One world's crossing as it is read aloud: "year 12", or that it never crossed."""
-    return f"year {year}" if year is not None else "never within the horizon"
 
 
 def _uncertainty_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
@@ -1125,7 +1088,7 @@ def _treemap_section_html(result: LifecycleCostResult, context: _ChapterContext)
             )
             + "</div>"
         )
-        captions.append(_treemap_caption(tiles, basis))
+        captions.append(treemap_disclosure(tiles, basis))
     if not panels:
         return context.skip(
             ReportSections.COST_STRUCTURE,
@@ -1138,40 +1101,6 @@ def _treemap_section_html(result: LifecycleCostResult, context: _ChapterContext)
         + _explanation_html(ReportSections.COST_STRUCTURE, context)
         + f"<div style='display:flex;gap:14px;flex-wrap:wrap'>{''.join(panels)}</div>"
         + f"<p class='sub'>{' '.join(_esc(caption) for caption in captions)}</p></section>"
-    )
-
-
-def _treemap_caption(tiles: views.CostStructureTiles, basis: views.TileBasis) -> str:
-    """What one treemap panel has to disclose about the areas it could not draw.
-
-    A treemap has no negative area, so each basis hides something different and has to say what:
-    the gross panel hides the credits, the net panel hides the subjects whose credits exceeded
-    their costs and were clamped to zero. Naming the clamped subjects is the point — they are
-    exactly the entries a reviewer should ask about, and a panel that merely came out smaller
-    would not tell anyone which ones they are.
-
-    Args:
-        tiles: The tiles and disclosures `views.cost_structure_tiles` returned for this basis.
-        basis: The `views.TileBasis` the panel was drawn on.
-
-    Returns:
-        The disclosure as plain text; the caller escapes it.
-    """
-    if basis == views.TileBasis.GROSS:
-        return (
-            f"The gross panel leaves out {_fmt(tiles.credit_total_in_euro)} EUR of credits "
-            f"(support, feed-in revenue, residual value); {tiles.folded_tile_count} tile(s) "
-            "below 1 % of the area were folded into an 'other' tile per group."
-        )
-    clamped = tiles.clamped_tiles()
-    names = ", ".join(
-        f"{tile.subject} ({_fmt(tile.clamped_from_in_euro or 0.0)} EUR)" for tile in clamped
-    ) or "none"
-    return (
-        "The net panel applies each subject's credits to that subject's own cost tiles across all "
-        "groups — a wall's subsidy shrinks the wall — and clamps at zero the subjects whose "
-        f"credits exceed their costs, erasing {_fmt(tiles.clamped_total_in_euro)} EUR in "
-        f"{len(clamped)} subject(s): {names}. Those are exactly the entries worth asking about."
     )
 
 

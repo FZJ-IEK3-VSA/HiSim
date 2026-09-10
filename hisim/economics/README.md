@@ -90,7 +90,7 @@ my_simulation_parameters.post_processing_options.append(PostProcessingOptions.CO
 
 # Additionally write the human-readable reports (implies the computation):
 # cost_summary.md, lifecycle_report.html (plausibility panel + charts along the
-# calculation chain) and matplotlib PNGs:
+# calculation chain) and the matplotlib PNG set listed in section 2:
 my_simulation_parameters.post_processing_options.append(PostProcessingOptions.LIFECYCLE_COST_REPORT)
 
 # Optionally attach parameters (otherwise defaults with the simulation's country apply):
@@ -163,7 +163,9 @@ with its replacement reserve), **KPIs** (§7.3), and with a reference variant
 difference decomposed by cost group) and **Bank benchmark** (renovate, or bank the money at
 1-10 %). Every one of them opens with the same four authored
 parts — what it shows, what it adds, its terms of art and how its numbers are calculated —
-held in `report_prose.py`. The HTML is fully self-contained (inline SVG, light/dark aware,
+held in `report_prose.py`, which also holds the two run-specific captions both renderers print
+(the payback sentence and the treemap disclosure), so the page and its PNG companion word the
+same figure identically. The HTML is fully self-contained (inline SVG, light/dark aware,
 native tooltips); the markdown summary is deliberately git-diffable so price-data PRs show
 up as clean textual deltas on golden scenarios (§9.5).
 
@@ -207,7 +209,7 @@ simulation in shadow mode).
 | `bridge.py` | The postprocessing entry point behind `COMPUTE_LIFECYCLE_COSTS`: collects facts/flows from a finished run, picks a covered price basis year, evaluates the default bundle, writes everything. Opt-in, and loud: a fleet the cost model cannot describe — an undeclared component (§9.2), a recognized one whose facts don't build, a meter missing a column it declares, a declared fact the database can't price — fails the run rather than producing a cost report with a hole in it (D7). |
 | `validation.py` | Data-file CI: source completeness, coverage matrix, question coverage, staleness (§9.6). |
 | `reporting.py` | Human-readable reports (option `LIFECYCLE_COST_REPORT`): plausibility panel, `cost_summary.md`, self-contained `lifecycle_report.html` with inline-SVG charts, variant-comparison section. |
-| `report_plots.py` | Matplotlib PNG companions (annual cash flows, investment build-up, perspective whiskers, component stacks, payback curve) — same display groups and colors as the HTML. |
+| `report_plots.py` | Matplotlib PNG companions, same display groups and colors as the HTML. `write_report_plots` writes the report-side set **once per perspective**, as `lifecycle_<chart>_<perspective_id>.png` — `annual_cash_flows`, `investment_waterfall`, `component_costs`, `swimlane` (V9), `liquidity_fan` (V2), `sources_and_uses` (V10), `cost_treemap` (V8), `actor_flows` (V1), `monthly_burden` (V14) — plus the matrix-wide `lifecycle_perspective_costs.png`, which is drawn once. Only with a comparison reference, and only for the perspective that reference names: `lifecycle_payback_curve_<id>.png`, `lifecycle_comparison_bridge_<id>.png` (V4) and `lifecycle_wealth_benchmark_<id>.png` (V13); a reference whose perspective the matrix does not carry skips them rather than substituting another. `write_audit_plots` writes `cost_audit_timeline_heatmap.png` (V6) next to `cost_audit.csv` on **every** cost run, which is why matplotlib is a dependency of the cost path and not only of the report path. A chart whose view has nothing to draw writes no file and returns a `SkippedPlot` (chart, perspective, reason); nothing here logs. The callers report: the bridge logs each skip and writes `lifecycle_plots_not_drawn.txt` beside the images, the CLI prints the same lines. |
 | `__main__.py` | The `evaluate` / `explain` / `report` / `validate` CLI. |
 
 Related but outside this package: `hisim/components/tariff_provider.py` (the in-simulation

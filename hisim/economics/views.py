@@ -41,6 +41,7 @@ category→group mapping into `fold_categories` / `fold_category_matrix`.
 
 from __future__ import annotations
 
+import enum
 from collections.abc import Hashable
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple, TypeVar
@@ -49,6 +50,7 @@ from hisim.economics.calculators.financing_application import FinancingConstants
 from hisim.economics.calculators.subsidy_application import nominal_support_from_entries
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.catalog_entries import CostDataError
+from hisim.economics.numerics import bisect_root
 from hisim.economics.results import (
     LifecycleCostResult,
     ModernizationLevySummary,
@@ -90,19 +92,6 @@ class ViewCategories:
         CostCategory.SUBSIDY,
         CostCategory.LOAN_DISBURSEMENT,
     )
-
-
-class ViewThresholds:
-    """Numeric cut-offs the view models apply.
-
-    The one place where a view is allowed to drop data, and only ever to suppress float noise —
-    values that are arithmetically zero but land at 1e-13 after a chain of discounting and slot
-    arithmetic. Named rather than inlined so a reviewer can see the magnitude of what is being
-    hidden (half a cent) and confirm it cannot swallow a real flow.
-    """
-
-    #: Amounts below this (in every slot) are dropped from the detail table as float noise.
-    DETAIL_ROW_EPSILON = 0.005
 
 
 #: Whatever presentation groups categories by — an index, a label, anything hashable. Generic so
@@ -359,7 +348,7 @@ class TimelineDetailYear:
 
     Groups the rows of a single year so the renderer can print a bold subtotal line without
     re-adding anything. The totals cover exactly the rows in `rows` — including the noise cells
-    dropped by `ViewThresholds.DETAIL_ROW_EPSILON` being absent from both — so the table always
+    dropped by `ViewTolerances.DETAIL_ROW_EPSILON` being absent from both — so the table always
     adds up on screen.
     """
 
@@ -373,7 +362,7 @@ def timeline_detail_rows(result: LifecycleCostResult) -> List[TimelineDetailYear
     """The §3.6 timeline as a verification table: (year, subject, category) with subtotals.
 
     Same scoping as the chart it sits under; duplicate cells are aggregated, and cells that are
-    zero in every slot up to `ViewThresholds.DETAIL_ROW_EPSILON` are dropped as float noise. Rows within a year
+    zero in every slot up to `ViewTolerances.DETAIL_ROW_EPSILON` are dropped as float noise. Rows within a year
     are ordered by nominal BEST_ESTIMATE amount, so the biggest credit and the biggest cost of a year
     frame its block. The subtotals cover exactly the rows shown.
 
@@ -404,7 +393,7 @@ def timeline_detail_rows(result: LifecycleCostResult) -> List[TimelineDetailYear
         aggregated.items(), key=lambda item: (item[0][0], item[1].best_estimate)
     ):
         if all(
-            abs(value) < ViewThresholds.DETAIL_ROW_EPSILON
+            abs(value) < ViewTolerances.DETAIL_ROW_EPSILON
             for value in (amount.best_estimate, amount.minimum, amount.maximum)
         ):
             continue
@@ -981,23 +970,34 @@ def total_subsidies_received(result: LifecycleCostResult) -> Optional[UncertainV
 # ----- 9/9 views, V1-V7 -----
 
 class ViewTolerances:
-    """Tolerances the self-validating chart views reconcile against (visualization spec §5).
+    """The one namespace of numeric tolerances the views apply (visualization spec §5).
 
-    The views added for the V1-V15 chart set do not merely re-shape the result, they *check*
-    themselves: a Sankey whose transfer ribbons do not net to zero, a tornado whose bars do not
-    sum to the band or a sources-and-uses statement that does not balance is a lie about the
-    engine, so those views raise `CostDataError` instead of drawing. Every such comparison needs
-    a tolerance, and they are collected here so a reviewer can see in one place how much
-    disagreement counts as float noise (half a cent on a euro figure) rather than as a defect.
+    Two kinds of number live here, and there is exactly one place for both. Most of the views
+    added for the V1-V15 chart set do not merely re-shape the result, they *check* themselves: a
+    Sankey whose transfer ribbons do not net to zero, a tornado whose bars do not sum to the band
+    or a sources-and-uses statement that does not balance is a lie about the engine, so those
+    views raise `CostDataError` instead of drawing, and every such comparison needs a tolerance.
+    The other kind is `DETAIL_ROW_EPSILON`, the one point at which a view is allowed to *drop*
+    data — and only ever to suppress float noise, values that are arithmetically zero but land at
+    1e-13 after a chain of discounting and slot arithmetic.
+
+    Collecting both here is the point: a reviewer sees in one place how much disagreement counts
+    as float noise (half a cent on a euro figure) rather than as a defect, and how much may be
+    hidden from a table. There used to be a second namespace, `ViewThresholds`, holding the
+    dropping tolerance and claiming the same "one place" for itself; folding it in leaves one.
     """
 
-    #: Absolute euro tolerance for the reconciliation checks (half a cent, as in the detail table).
+    #: Absolute euro tolerance for the reconciliation checks (half a cent).
     RECONCILIATION_EPSILON = 0.005
+    #: Amounts below this (in every slot) are dropped from the detail table as float noise; the
+    #: same half a cent, named separately because dropping a row is not reconciling a total.
+    DETAIL_ROW_EPSILON = 0.005
     #: Balance below this counts as repaid; guards `LoanAmortization.loan_free_year` against
     #: float residue.
     BALANCE_EPSILON = 0.01
-    #: Relative tolerance for the kWh attribution check of the energy balance, where quantities
-    #: are large enough that an absolute euro epsilon means nothing.
+    #: Relative tolerance for the kWh attribution check of the energy balance (the V11 view of
+    #: the next slice is its reader), where quantities are large enough that an absolute euro
+    #: epsilon means nothing.
     QUANTITY_RELATIVE_EPSILON = 1e-6
 
 
@@ -1114,7 +1114,9 @@ class FlowCounterparties:
 
     #: Categories booked as *matched pairs* between two payers by the allocation rulesets. They
     #: are drawn payer-to-payer instead of as two external stubs, and the view validates that
-    #: they net to zero across payers (fail-fast, D25).
+    #: they net to zero across payers (fail-fast, D25). This is the narrow, Sankey sense of
+    #: "transfer" — both legs are on the timeline — and is deliberately *not*
+    #: `StatementPartitions.SOCIETY_TRANSFER_CATEGORIES`, which is the wider macroeconomic sense.
     TRANSFER_CATEGORIES = frozenset({CostCategory.MODERNIZATION_LEVY})
 
     #: Ribbons smaller than this share of the gross flow volume are folded per node pair.
@@ -1170,8 +1172,10 @@ class ActorFlowMatrix:
     the grand total as a band so the title can state the uncertainty the ribbons themselves
     cannot.
 
-    Reconciliation: `net_by_actor()` of an actor equals the nominal sum of that actor's scoped
-    timeline, and the transfer ribbons net to zero across payers (validated in the view).
+    Reconciliation: `net_by_actor()` of an actor equals the nominal sum of the entries booked on
+    that payer inside the horizon — its scoped timeline, for an actor-scoped perspective — and
+    the transfer ribbons net to zero across payers. Both are validated in `actor_flow_matrix`
+    before the matrix is returned, so an instance that exists reconciles.
     """
 
     flows: List[ActorFlow]
@@ -1228,9 +1232,9 @@ class ActorFlowMatrix:
     def net_by_actor(self) -> Dict[str, float]:
         """Outflows minus inflows per actor — the actor's nominal lifetime cost.
 
-        The reconciliation handle: this must equal the nominal sum of the actor's scoped
-        timeline, which is what makes the picture an accounting statement rather than an
-        illustration.
+        The reconciliation handle: this equals the nominal sum of the entries the timeline books
+        on that payer, which is what makes the picture an accounting statement rather than an
+        illustration. `actor_flow_matrix` checks it here rather than leaving it to a caption.
         """
         nets: Dict[str, float] = {actor: 0.0 for actor in self.actors}
         for flow in self.flows:
@@ -1288,7 +1292,13 @@ def story_perspectives(results: Iterable[LifecycleCostResult]) -> StoryPerspecti
 
     A run with no support at all would leave the owner story empty by that rule, which would be
     wrong rather than honest — a cash purchase without subsidies is still an owner's story — so
-    the remaining perspectives are used in that case.
+    the leftovers are promoted in that one case, and the case is tested for rather than inferred
+    from the owner list being empty. The difference matters for a bundle that pairs a gross
+    system perspective with a rented-out pair: support *is* on the page, the owner rule correctly
+    finds no owner perspective among the leftovers, and the chapter has to stay empty instead of
+    being filled with the perspective-free gross view, whose whole purpose is the common chapter.
+    When the fallback does fire it still prefers the owner-like leftovers — the ones scoped to an
+    owner-occupier or to the system as a whole — over anything scoped to some other party.
 
     Args:
         results: The evaluated perspectives, in bundle order (the order they are rendered in).
@@ -1296,10 +1306,11 @@ def story_perspectives(results: Iterable[LifecycleCostResult]) -> StoryPerspecti
     Returns:
         The three lists, each in the input's order.
     """
+    evaluated = list(results)
     society: List[LifecycleCostResult] = []
     rented: List[LifecycleCostResult] = []
     rest: List[LifecycleCostResult] = []
-    for result in results:
+    for result in evaluated:
         if has_macroeconomic_accounting(result):
             society.append(result)
         elif result.scope_payer in (Actor.LANDLORD, Actor.TENANT):
@@ -1311,7 +1322,28 @@ def story_perspectives(results: Iterable[LifecycleCostResult]) -> StoryPerspecti
         if result.scope_payer == Actor.OWNER_OCCUPIER
         or any(entry.category == CostCategory.SUBSIDY for entry in result.scoped_timeline().entries)
     )
-    return StoryPerspectives(owner=owner or tuple(rest), rented=tuple(rented), society=tuple(society))
+    if not owner and not _run_books_support(evaluated):
+        owner = tuple(
+            result for result in rest
+            if result.scope_payer in (Actor.OWNER_OCCUPIER, Actor.SYSTEM)
+        ) or tuple(rest)
+    return StoryPerspectives(owner=owner, rented=tuple(rented), society=tuple(society))
+
+
+def _run_books_support(results: Sequence[LifecycleCostResult]) -> bool:
+    """Whether any perspective of the run books a subsidy anywhere on its full timeline.
+
+    The guard on the owner chapter's fallback. It reads the **full** timeline of every
+    perspective rather than the scoped one, because the question is about the run — "was this
+    renovation supported at all" — and not about what one perspective reports on: a landlord
+    perspective's grant is support on the page even when the leftover gross perspective knows
+    nothing of it.
+    """
+    return any(
+        entry.category == CostCategory.SUBSIDY
+        for result in results
+        for entry in result.timeline.entries
+    )
 
 
 # ------------------------------------------- party statements (Q21 landlord, Q26 F4 the rest)
@@ -1427,8 +1459,12 @@ class StatementPartitions:
 
     #: Categories that move money between parties without consuming resources (§4.5). Society's
     #: second side; the macroeconomic accounting removes every one of them at source, which is
-    #: why they reach the statement summing to zero.
-    TRANSFER_CATEGORIES = (
+    #: why they reach the statement summing to zero. The wider, macroeconomic sense of
+    #: "transfer": `FlowCounterparties.TRANSFER_CATEGORIES` is the Sankey's narrow one, the
+    #: single category whose *both* legs are booked on the timeline and can be drawn payer to
+    #: payer — a subsidy or a feed-in tariff is a transfer to society without the state's leg
+    #: ever appearing as an entry.
+    SOCIETY_TRANSFER_CATEGORIES = (
         CostCategory.SUBSIDY,
         CostCategory.MODERNIZATION_LEVY,
         CostCategory.FEED_IN_REVENUE,
@@ -1477,7 +1513,7 @@ class StatementPartitions:
         party_label="society",
         primary_label="real resource costs",
         secondary_label="transfers",
-        secondary_categories=TRANSFER_CATEGORIES,
+        secondary_categories=SOCIETY_TRANSFER_CATEGORIES,
         secondary_is_transfer=True,
         labels={
             CostCategory.INVESTMENT: "hardware and installation",
@@ -1519,6 +1555,27 @@ class StatementLine:
 
 
 @dataclass(frozen=True)
+class IncomeRibbon:
+    """One ribbon of the landlord income Sankey: money arriving at or leaving the landlord node.
+
+    The named form of what used to be a five-tuple. Direction is already resolved — `source` pays
+    `target` — and `amount_in_euro` is the positive magnitude, because a Sankey ribbon has no
+    sign. It is deliberately *not* an `ActorFlow`: an actor-flow ribbon runs between a payer and
+    an external counterparty and carries the transfer flag, while these ribbons run between the
+    landlord and one of his own statement rows and carry the cash / accounting-credit split the
+    renderer styles them by.
+    """
+
+    source: str
+    target: str
+    amount_in_euro: float
+    is_accounting_credit: bool
+    #: The category the ribbon's money belongs to, which the renderer turns into a display-group
+    #: hue; None on the net-position ribbon, which is a result rather than a category.
+    category: Optional[CostCategory] = None
+
+
+@dataclass(frozen=True)
 class PerspectiveStatement:
     """One party's NPV as a two-sided statement (Q21 for the landlord, Q26 F4 for the rest).
 
@@ -1554,8 +1611,8 @@ class PerspectiveStatement:
     #: Which partition produced the two sides; supplies the side labels and the transfer flag.
     partition: StatementPartition = StatementPartitions.LANDLORD
 
-    def income_flows(self) -> Tuple[Tuple[Tuple[str, str, float, bool, Optional[CostCategory]], ...], bool]:
-        """The income-statement Sankey: `(source, target, amount, is_accounting_credit)` + a flag.
+    def income_flows(self) -> Tuple[Tuple[IncomeRibbon, ...], bool]:
+        """The landlord income Sankey as `IncomeRibbon`s, plus the net-position direction flag.
 
         The earnings-Sankey convention (Q25): everything that arrives flows into the landlord node
         from the left, everything that is spent leaves to the right, and **the ribbon left over is
@@ -1569,27 +1626,54 @@ class PerspectiveStatement:
         it is a net cost (positive NPV) the picture is a loss: the missing money has to come from
         somewhere, so the net position enters from the *left* as a source and the flag says so.
 
+        **Landlord only.** The node labels are the landlord's own (`LANDLORD_NODE`), so the
+        picture claims a party the statement may not be about. A statement is callable under any
+        of the four partitions, and drawing a tenant's or society's rows around a node labelled
+        "landlord" would be a mislabelled picture rather than a missing feature — so this refuses
+        instead. The tenant and society chapters state their sides as tables.
+
         Returns:
-            The ribbons as `(source, target, amount, is_accounting_credit, category)` — the
-            category so the renderer can hue a ribbon like the same money everywhere else, and
-            `None` on the net-position ribbon, which is a result rather than a category — and
-            `True` when the net-position ribbon is an inflow (a net cost) rather than the usual
-            leftover outflow. Ribbon amounts are magnitudes; a Sankey ribbon has no sign.
+            The ribbons, and `True` when the net-position ribbon is an inflow (a net cost) rather
+            than the usual leftover outflow. Ribbon amounts are magnitudes; a Sankey ribbon has
+            no sign.
+
+        Raises:
+            CostDataError: If the statement was built under a partition other than the landlord's.
         """
+        if self.partition.id != StatementPartitions.LANDLORD.id:
+            raise CostDataError(
+                f"The income Sankey is the landlord's picture, but this statement was built under "
+                f"the {self.partition.id!r} partition: its ribbons would run into a node labelled "
+                f"{LandlordStatementCategories.LANDLORD_NODE!r} while stating "
+                f"{self.partition.party_label}'s rows. Render that party's statement as a table."
+            )
         node = LandlordStatementCategories.LANDLORD_NODE
         net_node = LandlordStatementCategories.NET_POSITION_NODE
-        flows: List[Tuple[str, str, float, bool, Optional[CostCategory]]] = []
+        flows: List[IncomeRibbon] = []
         for line in list(self.cash_lines) + list(self.accounting_lines):
             if line.npv_in_euro < 0:
-                flows.append((line.label, node, -line.npv_in_euro, line.is_accounting_credit, line.category))
+                flows.append(IncomeRibbon(
+                    source=line.label, target=node, amount_in_euro=-line.npv_in_euro,
+                    is_accounting_credit=line.is_accounting_credit, category=line.category,
+                ))
             elif line.npv_in_euro > 0:
-                flows.append((node, line.label, line.npv_in_euro, line.is_accounting_credit, line.category))
+                flows.append(IncomeRibbon(
+                    source=node, target=line.label, amount_in_euro=line.npv_in_euro,
+                    is_accounting_credit=line.is_accounting_credit, category=line.category,
+                ))
         net_is_inflow = self.net_position_in_euro > 0
         if abs(self.net_position_in_euro) > ViewTolerances.RECONCILIATION_EPSILON:
-            if net_is_inflow:
-                flows.append((net_node, node, self.net_position_in_euro, False, None))
-            else:
-                flows.append((node, net_node, -self.net_position_in_euro, False, None))
+            flows.append(
+                IncomeRibbon(
+                    source=net_node, target=node, amount_in_euro=self.net_position_in_euro,
+                    is_accounting_credit=False,
+                )
+                if net_is_inflow
+                else IncomeRibbon(
+                    source=node, target=net_node, amount_in_euro=-self.net_position_in_euro,
+                    is_accounting_credit=False,
+                )
+            )
         return tuple(flows), net_is_inflow
 
 
@@ -1631,6 +1715,13 @@ def perspective_statement(
     reconciliation identity is unaffected — which is exactly the claim the society chapter makes
     and this is where it is checked rather than asserted.
 
+    That mixed reading is also why a transfer partition has a precondition: the primary side is
+    the perspective's *scoped* pivot while the transfer side is the *full* timeline, and the two
+    are reconciled against the scoped total. The sum only closes when the two readings coincide,
+    i.e. when the perspective is scoped to `Actor.SYSTEM` — which every macroeconomic perspective
+    is. Applied to an actor-scoped result the statement would raise a reconciliation error that
+    blamed a lost category for what is really a misuse, so the misuse is named up front instead.
+
     Args:
         result: The perspective to state; its `npv_by_category` and, for a transfer partition,
             its full `timeline`.
@@ -1640,10 +1731,19 @@ def perspective_statement(
         The two-sided statement with both subtotals and the net position.
 
     Raises:
-        CostDataError: If the two sides do not sum to the perspective's total NPV. That can only
-            happen if a category was dropped between the pivot and this split, which would make
-            the statement a picture of a business case that is not the one being reported.
+        CostDataError: If a transfer partition is asked for on a perspective that is not
+            SYSTEM-scoped, or if the two sides do not sum to the perspective's total NPV. The
+            latter can only happen if a category was dropped between the pivot and this split,
+            which would make the statement a picture of a business case that is not the one
+            being reported.
     """
+    if partition.secondary_is_transfer and result.scope_payer != Actor.SYSTEM:
+        raise CostDataError(
+            f"The {partition.id!r} statement reads the transfer side off the full timeline and the "
+            f"resource side off the scoped one, so it is defined only for a SYSTEM-scoped "
+            f"perspective; {result.perspective_id!r} is scoped to {result.scope_payer.value!r}. "
+            "State that party with its own partition instead."
+        )
     primary: List[StatementLine] = []
     secondary: List[StatementLine] = []
     for category, band in result.npv_by_category.items():
@@ -1744,21 +1844,28 @@ def actor_flow_matrix(result: LifecycleCostResult) -> ActorFlowMatrix:
     Three rules decide a ribbon. The counterparty comes from `FlowCounterparties`, declared per
     category and raising for anything unmapped. The direction comes from the entry's sign, so
     costs leave the payer and credits arrive. And a category declared in `TRANSFER_CATEGORIES` —
-    the §559e modernization levy today — is drawn payer to payer instead of as two external
-    stubs; the view checks that those legs net to zero across all payers and raises if they do
-    not, since a transfer that creates money is a defect in the allocation ruleset, not something
-    to render.
+    the §559e modernization levy today — is drawn as one payer-to-receiver ribbon instead of as
+    two external stubs; the view checks that those legs net to zero across all payers and raises
+    if they do not, since a transfer that creates money is a defect in the allocation ruleset,
+    not something to render, and it refuses a transfer running between more than two parties
+    rather than inventing a split (see `_transfer_ribbons`).
 
-    Reconciliation: per-actor net (outflows − inflows) equals the nominal sum of that actor's
-    scoped timeline; the transfer ribbons net to zero.
+    Reconciliation, both halves validated here: the transfer ribbons net to zero across payers,
+    and each actor's net (outflows − inflows) equals the nominal sum of the entries the timeline
+    books on that payer — which for an actor-scoped perspective is that actor's scoped timeline.
+    The second check is what makes the picture an accounting statement rather than an
+    illustration, and it catches what the first cannot: a ribbon drawn to the wrong end, a
+    counterparty label that collides with a payer node, a fold that lost euros.
 
     Raises:
-        CostDataError: On a category with no declared counterparty, or on declared transfers that
-            do not net to zero across payers.
+        CostDataError: On a category with no declared counterparty, on declared transfers that do
+            not net to zero across payers, or on an actor whose ribbons do not net to what the
+            timeline books on it.
     """
     horizon = result.parameters.observation_period_in_years
     ribbons: Dict[Tuple[str, str, Optional[CostCategory]], float] = {}
     transfer_net: Dict[str, float] = {}
+    nominal_by_actor: Dict[str, float] = {}
     actors: List[str] = []
     for entry in result.timeline.entries:
         if not 0 <= entry.year <= horizon:
@@ -1767,6 +1874,7 @@ def actor_flow_matrix(result: LifecycleCostResult) -> ActorFlowMatrix:
         if actor not in actors:
             actors.append(actor)
         amount = entry.amount_in_euro.best_estimate
+        nominal_by_actor[actor] = nominal_by_actor.get(actor, 0.0) + amount
         if entry.category in FlowCounterparties.TRANSFER_CATEGORIES:
             transfer_net[actor] = transfer_net.get(actor, 0.0) + amount
             continue
@@ -1785,7 +1893,7 @@ def actor_flow_matrix(result: LifecycleCostResult) -> ActorFlowMatrix:
     matrix_flows.extend(transfer_flows)
     sources = [flow.source for flow in matrix_flows if flow.source not in actors]
     sinks = [flow.target for flow in matrix_flows if flow.target not in actors]
-    return ActorFlowMatrix(
+    matrix = ActorFlowMatrix(
         flows=matrix_flows,
         actors=actors,
         sources=list(dict.fromkeys(sources)),
@@ -1796,20 +1904,70 @@ def actor_flow_matrix(result: LifecycleCostResult) -> ActorFlowMatrix:
         folded_ribbon_count=folded_count,
         folded_amount_in_euro=folded_amount,
     )
+    _validate_actor_nets(matrix, nominal_by_actor)
+    return matrix
+
+
+def _validate_actor_nets(matrix: ActorFlowMatrix, nominal_by_actor: Mapping[str, float]) -> None:
+    """Checks every actor's ribbon net against the nominal sum the timeline books on that payer.
+
+    The per-actor half of the V1 reconciliation, mirroring `_transfer_ribbons`' zero-sum check:
+    the ribbons are a re-shaping of the timeline, so re-summing them per node has to give the
+    timeline's own per-payer total back. A difference is never a rounding story — the ribbons are
+    the same nominal amounts — it means money changed ends on the way into the picture.
+
+    Args:
+        matrix: The assembled matrix, ribbons and node columns.
+        nominal_by_actor: Payer node -> nominal sum of that payer's entries inside the horizon.
+
+    Raises:
+        CostDataError: If any actor's net differs by more than
+            `ViewTolerances.RECONCILIATION_EPSILON`.
+    """
+    nets = matrix.net_by_actor()
+    mismatches = [
+        f"{actor}: ribbons net to {nets.get(actor, 0.0):,.2f} EUR, the timeline books "
+        f"{expected:,.2f} EUR"
+        for actor, expected in nominal_by_actor.items()
+        if abs(nets.get(actor, 0.0) - expected) > ViewTolerances.RECONCILIATION_EPSILON
+    ]
+    if mismatches:
+        raise CostDataError(
+            "The actor-flow ribbons do not reconcile with the timeline's per-payer nominal sums, "
+            "so the Sankey would misattribute money: " + "; ".join(mismatches) + ". Every ribbon "
+            "is one end of a timeline entry, so a difference means a ribbon was drawn to the "
+            "wrong node — check `FlowCounterparties` for a counterparty label that collides with "
+            "a payer's."
+        )
 
 
 def _transfer_ribbons(transfer_net: Dict[str, float]) -> List[ActorFlow]:
-    """Payer-to-payer ribbons for the declared transfer categories, validated to net to zero.
+    """The single payer-to-payer ribbon of the declared transfers, validated to net to zero.
 
-    Splits the payers into the ones a transfer category leaves (positive net, the paying leg) and
-    the ones it reaches (negative net, the receiving leg) and connects them, distributing
-    proportionally when there is more than one of either — today there is exactly one of each
-    (tenant pays, landlord receives), and the general form exists so a second transfer pair does
-    not need new code.
+    `FlowCounterparties.TRANSFER_CATEGORIES` declares one category today, the §559e modernization
+    levy, and it is booked as one matched pair: the tenant pays, the landlord receives. So the
+    ribbon is that pair — one payer, one receiver, the whole net — and a run with a second payer
+    or a second receiver is *refused* rather than drawn.
+
+    The refusal replaces a proportional payer × receiver split that used to run here. With one
+    payer and one receiver the split is the identity, so it was never exercised; with two of
+    either it would have invented an allocation the engine never made — a tenant's levy spread
+    over two landlords in proportion to what they received is an assumption, not a reading of the
+    timeline. Restoring a split is the right upgrade when a second transfer category arrives, and
+    it will then need the pair *the entries themselves* carry (per category and per subject)
+    rather than a proportion derived from the nets.
+
+    Args:
+        transfer_net: Payer node -> nominal net of that payer's transfer entries; positive is a
+            payer of the transfer, negative a receiver.
+
+    Returns:
+        The one ribbon, or an empty list when the run books no transfer at all.
 
     Raises:
         CostDataError: If the declared transfers do not net to zero across payers, i.e. if the
-            allocation created or destroyed money.
+            allocation created or destroyed money; or if more than one payer or more than one
+            receiver appears.
     """
     total = sum(transfer_net.values())
     if abs(total) > ViewTolerances.RECONCILIATION_EPSILON:
@@ -1818,25 +1976,35 @@ def _transfer_ribbons(transfer_net: Dict[str, float]) -> List[ActorFlow]:
             f"(residual {total:,.2f} EUR): {transfer_net}. A transfer pair that does not cancel "
             "means the allocation ruleset created or destroyed money (§6.5)."
         )
-    payers = {actor: value for actor, value in transfer_net.items() if value > 0}
-    receivers = {actor: -value for actor, value in transfer_net.items() if value < 0}
-    receiver_total = sum(receivers.values())
-    flows: List[ActorFlow] = []
-    for payer, paid in payers.items():
-        for receiver, received in receivers.items():
-            share = received / receiver_total if receiver_total else 0.0
-            amount = paid * share
-            if amount > ViewTolerances.RECONCILIATION_EPSILON:
-                flows.append(
-                    ActorFlow(
-                        source=payer,
-                        target=receiver,
-                        amount_in_euro=amount,
-                        category=CostCategory.MODERNIZATION_LEVY,
-                        is_transfer=True,
-                    )
-                )
-    return flows
+    payers = {
+        actor: value for actor, value in transfer_net.items()
+        if value > ViewTolerances.RECONCILIATION_EPSILON
+    }
+    receivers = {
+        actor: -value for actor, value in transfer_net.items()
+        if value < -ViewTolerances.RECONCILIATION_EPSILON
+    }
+    if len(payers) > 1 or len(receivers) > 1:
+        raise CostDataError(
+            f"The declared inter-actor transfers run between more than two parties — payers "
+            f"{sorted(payers)}, receivers {sorted(receivers)} — and the actor Sankey draws one "
+            "payer-to-receiver ribbon. Splitting the transfer across the parties would invent an "
+            "allocation the timeline does not carry; give the ribbon builder the per-entry pairs "
+            "before booking a second transfer category."
+        )
+    if not payers or not receivers:
+        return []
+    payer, paid = next(iter(payers.items()))
+    receiver = next(iter(receivers))
+    return [
+        ActorFlow(
+            source=payer,
+            target=receiver,
+            amount_in_euro=paid,
+            category=CostCategory.MODERNIZATION_LEVY,
+            is_transfer=True,
+        )
+    ]
 
 
 def _fold_small_flows(flows: List[ActorFlow]) -> Tuple[List[ActorFlow], int, float]:
@@ -1938,9 +2106,15 @@ class AttributionRow:
     """One subject's contribution to the width of the total NPV band (V3).
 
     `low_delta_in_euro` and `high_delta_in_euro` are the subject's own NPV in the LOW resp. HIGH
-    world minus its NPV in the BEST_ESTIMATE world — signed, and *not* absolute widths. For a
-    mirrored revenue subject (feed-in, support) the LOW delta can be positive, which puts the
-    whole bar on one side of the axis; that is correct and is what the caption explains.
+    world minus its NPV in the BEST_ESTIMATE world — signed, and *not* absolute widths.
+
+    The sign of a revenue subject's LOW delta follows the band's orientation, and the orientation
+    is already fixed by the time a flow reaches the timeline: a revenue-type amount enters through
+    `UncertainValue.as_revenue`, which mirrors the band so that `minimum` always means "this
+    entry in the LOW world" — for a revenue, the world where the *most* money arrives. A feed-in
+    or support subject therefore has a negative LOW delta and a positive HIGH delta exactly like a
+    cost subject, and its bar straddles the axis the same way. A positive LOW delta would mean an
+    unmirrored band reached the timeline, which the entry's own min <= best <= max check forbids.
     """
 
     subject: str
@@ -2053,18 +2227,27 @@ def comparison_bridge(
     BEST_ESTIMATE slot, validated here.
 
     Raises:
-        CostDataError: If the steps do not sum to the published NPV delta.
+        CostDataError: If the steps do not sum to the published NPV delta, or if the caller's
+            group keys cannot be ordered — see below.
     """
     variant_groups = fold_categories(variant.npv_by_category, mapping)
     reference_groups = fold_categories(reference.npv_by_category, mapping)
     present: Set[Any] = set(variant_groups) | set(reference_groups)
     try:
-        # Display-group indices sort into the fixed order every chart stacks them in; a mapping
-        # whose keys are not orderable keeps first-appearance order instead, which is still fixed.
+        # Display-group indices sort into the fixed order every chart stacks them in.
         keys: List[Any] = sorted(present)
-    except TypeError:
-        keys = [key for key in list(variant_groups) + list(reference_groups) if key in present]
-        keys = list(dict.fromkeys(keys))
+    except TypeError as error:
+        # A mapping whose keys cannot be compared has no bar order, and the bar order is the
+        # bridge's whole readability claim (IBCS): two reports drawn from mappings that happened
+        # to iterate differently would put the same group in different places, which is exactly
+        # the silent divergence this view exists to prevent. Falling back to first-appearance
+        # order used to hide that; naming the keys hands the caller the fix.
+        raise CostDataError(
+            "The comparison bridge's group keys cannot be ordered, so its bars have no fixed "
+            f"order: {sorted((type(key).__name__, repr(key)) for key in present)}. Give the "
+            "category mapping keys of one orderable type (the display-group index every caller "
+            "in this package passes)."
+        ) from error
     zero = UncertainValue.exact(0.0)
     steps = [
         BridgeStep(
@@ -2098,6 +2281,12 @@ class TotalCostOfCredit:
     sequence (disbursement and grant in, debt service out), i.e. the Effektivzins a reader can
     compare with a bank's offer.
 
+    The rate is `None` whenever the flows on the timeline do not define one, and
+    `effective_annual_rate_note` then says why in a phrase the panel can print beside the "n/a" —
+    "no rate" and "no rate *because the schedule reaches past the horizon*" are very different
+    statements about a loan, and the second one is not a defect the reader should have to guess
+    at. The note is empty exactly when a rate is given.
+
     `fees_in_euro` is structurally zero today: the engine books no loan fee category, and the
     field exists so that the disclosure is complete and a future fee flows straight in rather
     than being bolted onto the interest. `unrepaid_principal_in_euro` is the part of the
@@ -2111,6 +2300,8 @@ class TotalCostOfCredit:
     grants_in_euro: float
     unrepaid_principal_in_euro: float
     effective_annual_rate: Optional[float]
+    #: Why there is no rate, for the panel to print; empty when `effective_annual_rate` is set.
+    effective_annual_rate_note: str = ""
 
     @property
     def total_repaid_in_euro(self) -> float:
@@ -2136,19 +2327,21 @@ def total_cost_of_credit(result: LifecycleCostResult) -> TotalCostOfCredit:
     `net_cost_of_credit_in_euro` minus the unrepaid principal — validated here.
 
     Returns:
-        The disclosure. `effective_annual_rate` is None when there is no loan at all or when the
-        flow sequence has no sign change to solve for (a grant larger than the debt service).
+        The disclosure. `effective_annual_rate` is None when there is no loan at all, when the
+        schedule reaches past the observation horizon, or when the repayment grant exceeds the
+        whole debt service; `effective_annual_rate_note` names which of the last two it was.
 
     Raises:
         CostDataError: If the loan entries do not reconcile with the disclosure's parts.
     """
     amortization = loan_amortization_series(result)
     horizon = result.parameters.observation_period_in_years
+    scoped = result.scoped_timeline().entries
     interest_total = sum(amortization.interest_in_euro)
     principal_repaid = sum(amortization.principal_in_euro)
     grants = -sum(
         entry.amount_in_euro.best_estimate
-        for entry in result.scoped_timeline().entries
+        for entry in scoped
         if entry.category == CostCategory.SUBSIDY
         and entry.subject == FinancingConstants.FINANCING_SUBJECT
         and 0 <= entry.year <= horizon
@@ -2156,7 +2349,7 @@ def total_cost_of_credit(result: LifecycleCostResult) -> TotalCostOfCredit:
     disbursement = amortization.disbursement_in_euro
     nominal_loan_flows = sum(
         entry.amount_in_euro.best_estimate
-        for entry in result.scoped_timeline().entries
+        for entry in scoped
         if 0 <= entry.year <= horizon
         and (
             entry.category in (
@@ -2168,13 +2361,15 @@ def total_cost_of_credit(result: LifecycleCostResult) -> TotalCostOfCredit:
             )
         )
     )
+    rate, rate_note = _effective_annual_rate(amortization, grants)
     disclosure = TotalCostOfCredit(
         principal_in_euro=disbursement,
         interest_in_euro=interest_total,
         fees_in_euro=0.0,
         grants_in_euro=grants,
         unrepaid_principal_in_euro=disbursement - principal_repaid,
-        effective_annual_rate=_effective_annual_rate(amortization, grants),
+        effective_annual_rate=rate,
+        effective_annual_rate_note=rate_note,
     )
     expected = disclosure.net_cost_of_credit_in_euro - disclosure.unrepaid_principal_in_euro
     if abs(nominal_loan_flows - expected) > ViewTolerances.RECONCILIATION_EPSILON:
@@ -2188,21 +2383,38 @@ def total_cost_of_credit(result: LifecycleCostResult) -> TotalCostOfCredit:
 
 def _effective_annual_rate(
     amortization: LoanAmortization, grants_in_euro: float
-) -> Optional[float]:
+) -> Tuple[Optional[float], str]:
     """Internal rate of the loan's own flows: disbursement and grant in, debt service out.
 
-    The Effektivzins, found by bisection on the same `discount_factor` every other present value
-    in the package uses — one flow sequence instead of a grid. For a fee-free, grant-free annuity
-    with annual periods it returns the nominal rate exactly, which is the null test the spec asks
-    for; a repayment grant strictly lowers it because the borrower received money without owing
-    more.
+    The Effektivzins, found by bisection (`numerics.bisect_root`, shared with the scenario
+    break-even) on the same `discount_factor` every other present value in the package uses — one
+    flow sequence instead of a grid. For a fee-free, grant-free annuity with annual periods it
+    returns the nominal rate exactly, which is the null test the spec asks for; a repayment grant
+    strictly lowers it because the borrower received money without owing more.
+
+    **Two cases have no rate, and both used to produce a wrong one.** A schedule whose term
+    reaches past the observation horizon is only *partly* on the timeline: solving the truncated
+    sequence prices a loan the borrower never took — a ten-year 4 % annuity seen at a four-year
+    horizon looks like −23 %, because most of the repayment is missing. That is refused on the
+    same test `LoanAmortization.loan_free_year` uses, unrepaid principal above the reconciliation
+    epsilon. And the search window is non-negative, `[0, 5.0]`: a repayment grant larger than the
+    whole debt service means the borrower paid back less than was received, for which no
+    non-negative rate solves the sequence, and the old window's −0.99 end always produced a root
+    because the present value there is hugely negative. Both cases return a note instead.
+
+    Args:
+        amortization: The loan's booked interest, principal and disbursement.
+        grants_in_euro: The repayment grant, positive, received at year 0.
 
     Returns:
-        The rate as a fraction, or None when there is no loan or the sequence has no zero
-        crossing inside the searched window (a grant exceeding the whole debt service).
+        `(rate, note)`. The rate is a fraction and the note is empty; or the rate is None and the
+        note says why in a phrase a panel can print.
     """
     if not amortization.has_flows() or amortization.disbursement_in_euro <= 0:
-        return None
+        return None, ""
+    unrepaid = amortization.disbursement_in_euro - sum(amortization.principal_in_euro)
+    if unrepaid > ViewTolerances.RECONCILIATION_EPSILON:
+        return None, "the loan term reaches past the observation horizon"
     inflow = amortization.disbursement_in_euro + grants_in_euro
     service = [
         interest + principal
@@ -2214,32 +2426,36 @@ def _effective_annual_rate(
             amount * discount_factor(rate, year) for year, amount in enumerate(service) if amount
         )
 
-    low, high = -0.99, 5.0
-    if present_value(low) * present_value(high) > 0:
-        return None
-    for _iteration in range(200):
-        middle = (low + high) / 2.0
-        if present_value(low) * present_value(middle) <= 0:
-            high = middle
-        else:
-            low = middle
-    return (low + high) / 2.0
+    rate = bisect_root(present_value, window=(0.0, 5.0), max_iterations=200)
+    if rate is None:
+        return None, "the repayment grant exceeds the debt service"
+    return rate, ""
 
 
 # ============================================================================ V7 event strip
 
-class EventKinds:
+class EventKinds(str, enum.Enum):
     """The three things that can happen to a component on its lifetime strip (V7).
 
-    Named constants rather than an enum because they are compared and printed and nothing else;
-    keeping them together states the vocabulary of the strip in one place — a component is
-    bought, is replaced, or is worth something at the horizon, and nothing on the chart means
-    anything else.
+    The vocabulary of the strip in one place: a component is bought, is replaced, or is worth
+    something at the horizon, and nothing on the chart means anything else. It is an enum rather
+    than a bag of string constants because `LifecycleEvent.kind` is typed with it, which is what
+    makes "nothing else" a property the type checker holds rather than a sentence in a docstring;
+    the `str` mixin keeps the members printable and comparable with the plain strings the
+    renderers were written against, so `event.kind == "residual"` still means what it says.
     """
 
     INVESTMENT = "investment"
     REPLACEMENT = "replacement"
     RESIDUAL = "residual"
+
+    def __str__(self) -> str:
+        """The kind's own word, so a member printed into a label reads as the chart's vocabulary.
+
+        Without this, `f"{kind}"` would render "EventKinds.INVESTMENT" — the enum's default —
+        into a lane label, which is the one place the enum must not be visible.
+        """
+        return self.value
 
 
 @dataclass(frozen=True)
@@ -2253,7 +2469,7 @@ class LifecycleEvent:
 
     year: int
     amount_in_euro: float
-    kind: str
+    kind: EventKinds
 
 
 @dataclass(frozen=True)
@@ -2274,16 +2490,61 @@ class ServiceSpan:
 class EventStripRow:
     """One component's lifetime lane: its purchases, its replacements and its residual (V7).
 
-    The row makes the tightened residual rule visible: `residual` may only be set when the row
-    also has at least one investment or replacement event, because only an installation the
-    timeline actually charged may be written down. `component_event_strip` validates that and
-    raises, which turns a calculator-internal gate into a checked property of the output.
+    The row checks its own shape, because every property the renderer relies on to draw a lane is
+    a property of *this object* rather than of the loop that happened to build it:
+
+    * a `residual` requires at least one investment or replacement event — only an installation
+      the timeline actually charged may be written down (§4.1, review package A);
+    * the events are sorted by year, which is the order the lane is drawn in;
+    * the spans align to the events — one span per event, starting at its year, each running to
+      the start of the next and the last to the horizon — so a lane's bars tile its lane without
+      overlapping or leaving a hole between two events.
+
+    `component_event_strip` builds rows that satisfy all three; the checks are here so that a
+    second builder (a comparison strip, a webtool payload) cannot quietly produce a lane that
+    draws wrongly, and so that the gate is a checked property of the output rather than a
+    calculator-internal rule.
+
+    Raises:
+        CostDataError: If any of the three invariants is violated.
     """
 
     subject: str
     events: List[LifecycleEvent]
     spans: List[ServiceSpan]
     residual: Optional[LifecycleEvent] = None
+
+    def __post_init__(self) -> None:
+        """Enforces the three invariants stated in the class docstring."""
+        if self.residual is not None and not self.events:
+            raise CostDataError(
+                f"Subject {self.subject!r} carries a residual-value credit of "
+                f"{self.residual.amount_in_euro:,.2f} EUR without any investment or replacement "
+                "the timeline charged; only an installation charged inside the horizon may be "
+                "written down (§4.1, review package A)."
+            )
+        years = [event.year for event in self.events]
+        if years != sorted(years):
+            raise CostDataError(
+                f"The events of subject {self.subject!r} are not in year order ({years}); the "
+                "lane is drawn in this order and its spans are derived from it."
+            )
+        if len(self.spans) != len(self.events):
+            raise CostDataError(
+                f"Subject {self.subject!r} has {len(self.spans)} service span(s) for "
+                f"{len(self.events)} event(s); a span starts at every event and only there."
+            )
+        for index, (event, span) in enumerate(zip(self.events, self.spans)):
+            following = self.spans[index + 1].start_year if index + 1 < len(self.spans) else None
+            if span.start_year != event.year or span.end_year < span.start_year or (
+                following is not None and span.end_year != following
+            ):
+                raise CostDataError(
+                    f"The service spans of subject {self.subject!r} do not align to its events: "
+                    f"span {index} runs {span.start_year}..{span.end_year} for an event in year "
+                    f"{event.year}. Spans run from an event to the next one, and the last to the "
+                    "horizon."
+                )
 
     @property
     def year_zero_investment_in_euro(self) -> float:
@@ -2306,8 +2567,9 @@ def component_event_strip(result: LifecycleCostResult) -> List[EventStripRow]:
     sums equal the per-subject `npv_by_component` figures before discounting.
 
     Raises:
-        CostDataError: If a subject carries a residual-value credit without any investment or
-            replacement the timeline charged (the package-A residual gate, as an output property).
+        CostDataError: From `EventStripRow`, whose invariants every row built here has to
+            satisfy — most visibly the package-A residual gate: a subject carrying a
+            residual-value credit without any investment or replacement the timeline charged.
     """
     horizon = result.parameters.observation_period_in_years
     by_subject: Dict[str, List[CashFlowEntry]] = {}
@@ -2342,13 +2604,6 @@ def component_event_strip(result: LifecycleCostResult) -> List[EventStripRow]:
         if residual_amount:
             residual = LifecycleEvent(
                 year=horizon, amount_in_euro=residual_amount, kind=EventKinds.RESIDUAL
-            )
-        if residual is not None and not events:
-            raise CostDataError(
-                f"Subject {subject!r} carries a residual-value credit of "
-                f"{residual.amount_in_euro:,.2f} EUR without any investment or replacement the "
-                "timeline charged; only an installation charged inside the horizon may be "
-                "written down (§4.1, review package A)."
             )
         events.sort(key=lambda event: event.year)
         spans = [

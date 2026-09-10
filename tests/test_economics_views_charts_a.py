@@ -3,11 +3,12 @@
 Every chart of the V1-V15 set gets its numbers from a view function, and every one of those views
 either carries an invariant it validates at runtime or has a reconciliation a reviewer is expected
 to check by hand. This module is the first half of that promise — the actor Sankey, the liquidity
-fan, the uncertainty tornado, the comparison bridge, the cost of credit, the ledger heatmap's
-numbers and the component event strip — with one test per row of the visualization spec's §5
-invariant table, on **hand-built timelines** rather than on evaluated runs, so that the expected
-figures are arithmetic a reader can redo on paper. The V8-V15 views are tested in
-`tests/test_economics_views_charts_b.py`, and the rendering of all of them in the renderer tests.
+fan, the uncertainty tornado, the comparison bridge, the cost of credit and the component event
+strip — with one test per row of the visualization spec's §5 invariant table, on **hand-built
+timelines** rather than on evaluated runs, so that the expected figures are arithmetic a reader
+can redo on paper. The V8-V15 views arrive with the next slice of the cost stack and are tested in
+`tests/test_economics_views_charts_b.py`, which does not exist yet; the rendering of all of them
+lives in the renderer tests, which arrive with the renderers.
 
 **Why hand-built.** `tests/test_economics_views.py` pins the older views against an evaluated
 result, which is the right shape for views that re-arrange a real evaluation. The chart views are
@@ -22,6 +23,12 @@ numbers are unaffected, but a chart would draw something that does not reconcile
 is exactly the class of defect the self-validating views exist to make impossible. It is distinct
 from a rendering failure (`tests/test_economics_reporting.py`, the goldens) and from an engine
 failure (`tests/test_economics_engine.py`).
+
+The ledger heatmap (V6) has no class of its own here: its matrix view predates this chart set and
+is pinned against an evaluated result in `tests/test_economics_views.py`
+(`test_annual_category_matrix_matches_manual_accumulation` and
+`test_annual_matrix_row_sums_are_the_liquidity_view`), which is the stronger fixture; a hand-built
+copy of those two assertions lived here until the review removed it as a duplicate.
 
 The one deliberate exception to "hand-built" is `TestWorkedExampleActorFlows`, which re-states the
 §559e worked example's expected actor-flow matrix as a direct assertion (owner decision Q7); see
@@ -151,6 +158,30 @@ def simple_investment_timeline(horizon: int = 20):
     return entries
 
 
+def assert_sides_follow_the_partition(statement: views.PerspectiveStatement) -> None:
+    """Every line sits on the side its partition's own rule puts it on, and the net is published.
+
+    What a statement test must not do is re-state the constructor: `perspective_statement` builds
+    `net_position_in_euro` *as* `cash_subtotal + accounting_subtotal`, so asserting that identity
+    asserts an assignment. The property worth checking is the partition itself — each line's side
+    follows `StatementPartition.is_secondary` for that line's own category, independently of any
+    subtotal — plus the one number the split has to agree with something else about: the net
+    position is the band the perspectives table publishes for the same perspective.
+
+    Args:
+        statement: The statement to check, under any of the four partitions.
+    """
+    for line in statement.cash_lines:
+        assert not statement.partition.is_secondary(line.category), line.label
+        assert not line.is_accounting_credit, line.label
+    for line in statement.accounting_lines:
+        assert statement.partition.is_secondary(line.category), line.label
+        assert line.is_accounting_credit, line.label
+    assert statement.net_position_in_euro == pytest.approx(
+        statement.net_position_band.best_estimate, abs=0.005
+    )
+
+
 class TestActorFlowMatrix:
     """V1: transfers net to zero, per-actor nets reconcile, an unmapped category raises."""
 
@@ -221,6 +252,71 @@ class TestActorFlowMatrix:
         flat = [actor for column in columns for actor in column]
         assert flat.index(Actor.TENANT.value) < flat.index(Actor.LANDLORD.value)
 
+    def test_a_transfer_between_more_than_two_parties_is_refused(self):
+        """One payer, one receiver: a wider transfer would need a split the timeline does not carry."""
+        entries = [
+            entry(0, 20000.0, CostCategory.INVESTMENT, payer=Actor.LANDLORD),
+            entry(1, 600.0, CostCategory.MODERNIZATION_LEVY, payer=Actor.TENANT),
+            entry(1, 400.0, CostCategory.MODERNIZATION_LEVY, payer=Actor.OWNER_OCCUPIER),
+            entry(1, -1000.0, CostCategory.MODERNIZATION_LEVY, payer=Actor.LANDLORD),
+        ]
+        with pytest.raises(CostDataError, match="more than two parties"):
+            views.actor_flow_matrix(make_result(entries))
+
+    def test_a_counterparty_that_collides_with_an_actor_breaks_the_net_and_is_caught(self, monkeypatch):
+        """The per-actor reconciliation, on the defect it exists for: money drawn to the wrong node.
+
+        A counterparty label that happens to equal a payer's node name turns an external ribbon
+        into an inter-actor one, which the zero-sum transfer check cannot see — the entries are not
+        declared transfers at all. What catches it is the per-actor net: the tenant's ribbons then
+        credit him 6,000 EUR of the landlord's maintenance that the timeline never booked on him.
+        """
+        monkeypatch.setitem(
+            views.FlowCounterparties.BY_CATEGORY, CostCategory.MAINTENANCE, Actor.TENANT.value
+        )
+        entries = [entry(0, 20000.0, CostCategory.INVESTMENT, payer=Actor.LANDLORD)]
+        entries += [
+            entry(year, 300.0, CostCategory.MAINTENANCE, payer=Actor.LANDLORD) for year in range(1, 21)
+        ]
+        entries += [
+            entry(year, 900.0, CostCategory.ENERGY_WORKING, subject="ELECTRICITY",
+                  subject_kind=SubjectKind.CARRIER, payer=Actor.TENANT)
+            for year in range(1, 21)
+        ]
+        with pytest.raises(CostDataError, match="per-payer nominal sums"):
+            views.actor_flow_matrix(make_result(entries))
+
+    def test_small_ribbons_are_folded_per_node_pair_without_losing_euros(self):
+        """Hairlines are merged per (source, target) pair, and the pair's total is preserved.
+
+        The fold is a readability choice and never a cap, which is exactly why the per-actor net
+        survives it: three supplier ribbons and one feed-in ribbon fall below
+        `SMALL_FLOW_SHARE` of the 100,780 EUR gross volume and come back as one categoryless
+        ribbon per node pair, carrying the same euros the four carried.
+        """
+        entries = [
+            entry(0, 100000.0, CostCategory.INVESTMENT),
+            entry(1, 200.0, CostCategory.MAINTENANCE),
+            entry(1, 100.0, CostCategory.FIXED_OPERATION),
+            entry(1, 50.0, CostCategory.ENERGY_WORKING, subject="ELECTRICITY",
+                  subject_kind=SubjectKind.CARRIER),
+            entry(1, -80.0, CostCategory.FEED_IN_REVENUE, subject="ELECTRICITY",
+                  subject_kind=SubjectKind.CARRIER),
+        ]
+        matrix = views.actor_flow_matrix(make_result(entries, horizon=5))
+        system = Actor.SYSTEM.value
+        assert matrix.folded_ribbon_count == 4
+        assert matrix.folded_amount_in_euro == pytest.approx(430.0)
+        by_pair = {(flow.source, flow.target): flow for flow in matrix.flows}
+        assert len(by_pair) == len(matrix.flows)  # one ribbon per pair once the small ones merged
+        suppliers = by_pair[(system, views.FlowCounterparties.SUPPLIERS)]
+        assert suppliers.amount_in_euro == pytest.approx(350.0) and suppliers.category is None
+        grid = by_pair[(views.FlowCounterparties.GRID_OPERATOR, system)]
+        assert grid.amount_in_euro == pytest.approx(80.0) and grid.category is None
+        investment = by_pair[(system, views.FlowCounterparties.MARKET)]
+        assert investment.category == CostCategory.INVESTMENT
+        assert matrix.net_by_actor()[system] == pytest.approx(100270.0)
+
 
 class TestStoryPerspectives:
     """Q24: the three chapters are decided by what a result books, never by its id."""
@@ -260,6 +356,25 @@ class TestStoryPerspectives:
         stories = views.story_perspectives([gross, net])
         assert stories.owner == (net,)
 
+    def test_a_gross_perspective_beside_a_supported_rented_pair_is_not_promoted(self):
+        """The fallback is for a run without support, not for every run without an owner view.
+
+        The bundle the review names: a gross system perspective plus a rented-out pair, where the
+        support sits on the landlord. The owner rule correctly finds no owner perspective among
+        the leftovers, and the chapter has to stay empty — promoting the perspective-free gross
+        view would tell the owner story with the one perspective whose purpose is the common
+        chapter, and would tell it as if the run had no support.
+        """
+        gross = make_result([entry(0, 30000.0, CostCategory.INVESTMENT)], horizon=5)
+        rented_entries = [
+            entry(0, 30000.0, CostCategory.INVESTMENT, payer=Actor.LANDLORD),
+            entry(0, -9000.0, CostCategory.SUBSIDY, payer=Actor.LANDLORD, scheme_id="GRANT"),
+        ]
+        landlord = make_result(rented_entries, horizon=5, scope=ActorScope.LANDLORD)
+        stories = views.story_perspectives([gross, landlord])
+        assert stories.rented == (landlord,)
+        assert not stories.owner
+
 
 class TestLiquidityFanSeries:
     """V2: the cumulative series re-sums the annual one; the crossing helper agrees with payback."""
@@ -289,6 +404,38 @@ class TestLiquidityFanSeries:
         # The crossing rule itself (year 0 excluded, first crossing only) is pinned once, on the
         # function both the fan and the printed payback year read.
         assert discounted_payback_year(curves["low"]) == 2
+
+    def test_zero_crossings_of_a_cost_curve_are_not_a_payback_year(self):
+        """A cost-shaped curve has no payback crossing, and the helper says year 1 anyway.
+
+        `band_zero_crossings` is `discounted_payback_year` per slot, and that rule is written for
+        a *savings* curve: negative until the variant has paid for itself, so the first
+        non-negative year is the payback year. A cumulative **cost** curve has the opposite
+        orientation — it starts at the year-0 investment and falls as revenue arrives — so its
+        first non-negative year is simply year 1, whatever the curve does later. The fixture here
+        turns favourable in year 4 and the helper answers 1 for every slot.
+
+        This is why the liquidity fan feeds the helper the comparison's
+        `cumulative_discounted_savings_in_euro` and never the cost series it draws in the upper
+        panel. The behaviour is pinned rather than fixed: the crossing rule belongs to
+        `results.discounted_payback_year`, which the printed payback year reads as well, and
+        changing it here would let the two disagree. A view that ever wants "the year the cost
+        curve turns favourable" needs its own helper with its own name.
+        """
+        result = make_result(
+            [entry(0, 10000.0, CostCategory.INVESTMENT)]
+            + [entry(year, -3000.0, CostCategory.FEED_IN_REVENUE, subject="ELECTRICITY",
+                     subject_kind=SubjectKind.CARRIER) for year in range(1, 6)],
+            horizon=5,
+        )
+        curve = views.cumulative_nominal_cost_series(result)
+        assert curve[Slot.BEST_ESTIMATE] == [10000.0, 7000.0, 4000.0, 1000.0, -2000.0, -5000.0]
+        assert views.band_zero_crossings(curve) == {slot: 1 for slot in Slot}
+        # What a reader would mean by "when does it turn favourable" on this curve:
+        favourable = [
+            year for year, value in enumerate(curve[Slot.BEST_ESTIMATE]) if value < 0
+        ]
+        assert favourable[0] == 4
 
     def test_worst_liquidity_position_is_the_curve_maximum(self):
         """Cost is plotted upward, so the deepest out-of-pocket point is the maximum (Q4)."""
@@ -341,7 +488,13 @@ class TestUncertaintyAttribution:
         assert rows[-1].is_fold and rows[-1].subject == views.AttributionThresholds.FOLD_LABEL
 
     def test_mirrored_revenue_subject_lands_on_the_correct_side(self):
-        """A credit's optimistic world is the one where it earns more, so its LOW delta is negative."""
+        """A revenue subject's LOW delta follows its mirrored band, so it is negative like a cost's.
+
+        The band of a revenue-type amount is mirrored by `UncertainValue.as_revenue` before it
+        ever reaches the timeline, so its `minimum` is the world where the *most* money arrives.
+        Read against the subject's own best estimate that is a negative delta — the same side as a
+        cost subject's — which is what `AttributionRow` says and what the bar's geometry rests on.
+        """
         result = make_result(
             [
                 entry(0, 10000.0, CostCategory.INVESTMENT, band=1000.0),
@@ -413,6 +566,26 @@ class TestComparisonBridge:
         )]
         assert groups == sorted(groups)
 
+    def test_group_keys_that_cannot_be_ordered_are_refused(self):
+        """No orderable keys, no fixed bar order — and a bridge without one is not readable (IBCS).
+
+        A mapping mixing key types used to fall back to first-appearance order, which is stable
+        within one call and arbitrary between two: the same group could sit in a different place
+        in two reports of the same run. The refusal names the keys, which is the whole fix.
+        """
+        reference = make_result([entry(0, 10000.0, CostCategory.INVESTMENT)], horizon=5)
+        variant = make_result(
+            [entry(0, 12000.0, CostCategory.INVESTMENT),
+             entry(1, 500.0, CostCategory.MAINTENANCE)],
+            horizon=5,
+        )
+        mixed = {
+            category: (0 if category == CostCategory.INVESTMENT else "operation")
+            for category in CostCategory
+        }
+        with pytest.raises(CostDataError, match="cannot be ordered"):
+            views.comparison_bridge(reference, variant, mixed)
+
 
 class TestLoanViews:
     """V5: the balance runs to zero for both plan shapes, and the grant shows up as a credit."""
@@ -479,6 +652,7 @@ class TestLoanViews:
         """The null test: no fees, no grant, annual periods — Effektivzins == nominal rate."""
         credit = views.total_cost_of_credit(make_result(self.annuity_entries(rate=0.04)))
         assert credit.effective_annual_rate == pytest.approx(0.04, abs=1e-6)
+        assert credit.effective_annual_rate_note == ""
 
     def test_a_repayment_grant_strictly_lowers_the_effective_rate(self):
         """A grant is money received without more debt, so the borrower's rate falls."""
@@ -488,37 +662,54 @@ class TestLoanViews:
         assert credit.grants_in_euro == pytest.approx(1500.0)
         assert credit.effective_annual_rate is not None
         assert credit.effective_annual_rate < 0.04
+        assert credit.effective_annual_rate_note == ""
+
+    def test_a_grant_larger_than_the_debt_service_has_no_rate_and_says_why(self):
+        """Paying back less than was received has no non-negative rate; the panel is told so.
+
+        The search window is `[0, 5.0]`, and both ends of it price this sequence positively, so
+        there is no non-negative root. That is the honest answer: the borrower received 10,000
+        plus a grant bigger than the whole debt service, which is not a loan at an interest rate
+        at all. The window used to start at −0.99, where the present value is hugely negative, so
+        a root always existed and the disclosure printed a deeply negative "rate" instead.
+        """
+        entries = self.annuity_entries(rate=0.04, term=10)
+        interest_total = sum(
+            item.amount_in_euro.best_estimate
+            for item in entries
+            if item.category == CostCategory.LOAN_INTEREST
+        )
+        entries.append(
+            entry(0, -(10000.0 + interest_total + 500.0), CostCategory.SUBSIDY,
+                  subject="financing", scheme_id="VERY_SOFT")
+        )
+        credit = views.total_cost_of_credit(make_result(entries))
+        assert credit.effective_annual_rate is None
+        assert credit.effective_annual_rate_note == "the repayment grant exceeds the debt service"
+
+    def test_a_term_past_the_horizon_has_no_rate_and_leaves_no_loan_free_year(self):
+        """A schedule the horizon cuts off prices a loan nobody took, so no rate is published.
+
+        Four years of a ten-year 4 % annuity are on the timeline and six are not, which leaves
+        6,463 EUR of principal unrepaid at the horizon. Solving the truncated sequence used to
+        report about −23 %: the borrower appears to have received 10,000 and repaid barely half
+        of it. The disclosure now states the unrepaid principal, no rate, and the reason —
+        matching `loan_free_year`, which reports no milestone on the same test.
+        """
+        result = make_result(self.annuity_entries(rate=0.04, term=10), horizon=4)
+        amortization = views.loan_amortization_series(result)
+        assert amortization.has_flows()
+        assert amortization.loan_free_year() is None
+        credit = views.total_cost_of_credit(result)
+        assert credit.unrepaid_principal_in_euro == pytest.approx(6463.08, abs=0.01)
+        assert credit.effective_annual_rate is None
+        assert credit.effective_annual_rate_note == "the loan term reaches past the observation horizon"
 
     def test_unfinanced_result_has_no_flows(self):
         """The skip condition every loan chart shares."""
         amortization = views.loan_amortization_series(make_result(simple_investment_timeline()))
         assert not amortization.has_flows()
         assert amortization.loan_free_year() is None
-
-
-class TestTimelineHeatmapNumbers:
-    """V6: the matrix the ledger heatmap draws reconciles by rows and by columns."""
-
-    def test_column_sums_equal_the_nominal_annual_series(self):
-        """Each year's column adds up to that year's published nominal figure."""
-        result = make_result(simple_investment_timeline(horizon=6), horizon=6)
-        matrix = views.nominal_annual_matrix_by_category(result)
-        for year, row in enumerate(matrix):
-            assert sum(row.values()) == pytest.approx(
-                result.annual_cost_series_nominal_in_euro[year].best_estimate
-            )
-
-    def test_row_sums_equal_the_per_category_nominal_totals(self):
-        """Each category's row adds up to what that category booked over the horizon."""
-        result = make_result(simple_investment_timeline(horizon=6), horizon=6)
-        matrix = views.nominal_annual_matrix_by_category(result)
-        for category in {item.category for item in result.timeline.entries}:
-            expected = sum(
-                item.amount_in_euro.best_estimate
-                for item in result.timeline.entries
-                if item.category == category
-            )
-            assert sum(row.get(category, 0.0) for row in matrix) == pytest.approx(expected)
 
 
 class TestComponentEventStrip:
@@ -560,6 +751,35 @@ class TestComponentEventStrip:
         rows = views.component_event_strip(make_result(simple_investment_timeline()))
         assert [row.subject for row in rows] == ["HeatPump"]
 
+    def test_events_carry_the_declared_kinds(self):
+        """The strip's vocabulary is the enum, so a lane cannot be labelled with anything else."""
+        entries = [
+            entry(0, 20000.0, CostCategory.INVESTMENT),
+            entry(15, 22000.0, CostCategory.REPLACEMENT),
+            entry(20, -5000.0, CostCategory.RESIDUAL_VALUE),
+        ]
+        row = views.component_event_strip(make_result(entries))[0]
+        assert [event.kind for event in row.events] == [
+            views.EventKinds.INVESTMENT, views.EventKinds.REPLACEMENT
+        ]
+        assert row.residual is not None and row.residual.kind is views.EventKinds.RESIDUAL
+        # The str mixin keeps the members printable as the words the chart uses.
+        assert f"{row.residual.kind}" == "residual"
+
+    def test_a_row_whose_spans_do_not_align_to_its_events_is_refused(self):
+        """The lane's own invariant, checked by the row rather than trusted from its builder."""
+        events = [
+            views.LifecycleEvent(year=0, amount_in_euro=20000.0, kind=views.EventKinds.INVESTMENT),
+            views.LifecycleEvent(year=15, amount_in_euro=22000.0, kind=views.EventKinds.REPLACEMENT),
+        ]
+        with pytest.raises(CostDataError, match="do not align"):
+            views.EventStripRow(
+                subject="HeatPump",
+                events=events,
+                # The first span stops short of the replacement, leaving a hole in the lane.
+                spans=[views.ServiceSpan(0, 12), views.ServiceSpan(15, 20)],
+            )
+
 
 class TestLandlordStatement:
     """Q21/Q25: the landlord's cash and his book value are separated, and both pictures agree.
@@ -596,14 +816,9 @@ class TestLandlordStatement:
         return make_result(entries, scope=ActorScope.LANDLORD)
 
     def test_the_two_sides_partition_the_perspective_npv(self):
-        """The invariant: cash + accounting == the landlord's NPV, exactly."""
+        """Every row is on the side the landlord partition puts it on, and the net is published."""
         statement = views.landlord_statement(self.landlord_result())
-        assert statement.cash_subtotal_in_euro + statement.accounting_subtotal_in_euro == pytest.approx(
-            statement.net_position_in_euro
-        )
-        assert statement.net_position_in_euro == pytest.approx(
-            statement.net_position_band.best_estimate, abs=0.005
-        )
+        assert_sides_follow_the_partition(statement)
 
     def test_the_accounting_side_is_exactly_the_two_non_cash_categories(self):
         """Residual value and the anyway credit, and nothing else, are book entries."""
@@ -633,12 +848,12 @@ class TestLandlordStatement:
         flows, net_is_inflow = statement.income_flows()
         node = views.LandlordStatementCategories.LANDLORD_NODE
         net_node = views.LandlordStatementCategories.NET_POSITION_NODE
-        income = sum(amount for _s, target, amount, _c, _cat in flows if target == node)
-        expense = sum(amount for source, _t, amount, _c, _cat in flows if source == node)
+        income = sum(ribbon.amount_in_euro for ribbon in flows if ribbon.target == node)
+        expense = sum(ribbon.amount_in_euro for ribbon in flows if ribbon.source == node)
         # The leftover ribbon *is* the bottom line, so it is one of the two sums above.
         assert not net_is_inflow  # this fixture is advantageous for the landlord
         assert income - expense == pytest.approx(0.0, abs=0.01)
-        leftover = [amount for _s, target, amount, _c, _cat in flows if target == net_node]
+        leftover = [ribbon.amount_in_euro for ribbon in flows if ribbon.target == net_node]
         assert leftover and leftover[0] == pytest.approx(-statement.net_position_in_euro)
 
     def test_a_net_cost_draws_the_bottom_line_as_an_inflow(self):
@@ -649,23 +864,34 @@ class TestLandlordStatement:
         node = views.LandlordStatementCategories.LANDLORD_NODE
         net_node = views.LandlordStatementCategories.NET_POSITION_NODE
         assert net_is_inflow
-        assert any(source == net_node and target == node for source, target, _a, _c, _cat in flows)
+        assert any(
+            ribbon.source == net_node and ribbon.target == node and ribbon.category is None
+            for ribbon in flows
+        )
 
     def test_the_accounting_ribbons_are_drawn_in_the_credit_style(self):
         """Hatched/translucent, so the cash-versus-book split is visible in the picture (Q25)."""
         statement = views.landlord_statement(self.landlord_result())
         flows, _net = statement.income_flows()
         credit_categories = {
-            category for _s, _t, _a, is_credit, category in flows if is_credit
+            ribbon.category for ribbon in flows if ribbon.is_accounting_credit
         }
         assert credit_categories == {CostCategory.RESIDUAL_VALUE, CostCategory.ANYWAY_COST_CREDIT}
+
+    def test_the_income_sankey_refuses_a_statement_of_another_party(self):
+        """The node labels are the landlord's, so another partition's rows may not be drawn in them."""
+        statement = views.perspective_statement(
+            self.landlord_result(), views.StatementPartitions.OWNER
+        )
+        with pytest.raises(CostDataError, match="income Sankey"):
+            statement.income_flows()
 
 
 class TestWorkedExampleActorFlows:
     """The §559e worked example's expected actor-flow matrix (owner decision Q7).
 
     The spec asks for this attestation to live in the workbook
-    (`tests/worked_examples/end_to_end/heating_levy_559e_mixed_package.xlsx`) so that the Sankey's
+    (`tests/worked_examples/modernization_levy/heating_levy_559e_mixed_package.xlsx`) so that the Sankey's
     numbers are attested like every other figure of that example. That workbook carries a content
     fingerprint and a human review attestation (§3.8), which an automated edit cannot renew, so
     the expected matrix is hand-computed **here** instead and the workbook extension is deferred.
@@ -792,12 +1018,7 @@ class TestPartyStatements:
         statement = views.perspective_statement(
             self.owner_result(), views.StatementPartitions.OWNER
         )
-        assert statement.cash_subtotal_in_euro + statement.accounting_subtotal_in_euro == (
-            pytest.approx(statement.net_position_in_euro)
-        )
-        assert statement.net_position_in_euro == pytest.approx(
-            statement.net_position_band.best_estimate, abs=0.005
-        )
+        assert_sides_follow_the_partition(statement)
         assert {line.category for line in statement.accounting_lines} == {
             CostCategory.RESIDUAL_VALUE,
             CostCategory.ANYWAY_COST_CREDIT,
@@ -809,10 +1030,7 @@ class TestPartyStatements:
         statement = views.perspective_statement(result, views.StatementPartitions.TENANT)
         assert not statement.accounting_lines
         assert statement.accounting_subtotal_in_euro == 0.0
-        assert statement.cash_subtotal_in_euro == pytest.approx(statement.net_position_in_euro)
-        assert statement.net_position_in_euro == pytest.approx(
-            statement.net_position_band.best_estimate, abs=0.005
-        )
+        assert_sides_follow_the_partition(statement)
 
     def test_the_tenant_levy_mirrors_the_landlord_levy_income(self):
         """The two halves of one transfer pair: same magnitude, opposite sign, both stated."""
@@ -837,12 +1055,7 @@ class TestPartyStatements:
         statement = views.perspective_statement(
             self.society_result(), views.StatementPartitions.SOCIETY
         )
-        assert statement.cash_subtotal_in_euro + statement.accounting_subtotal_in_euro == (
-            pytest.approx(statement.net_position_in_euro)
-        )
-        assert statement.net_position_in_euro == pytest.approx(
-            statement.net_position_band.best_estimate, abs=0.005
-        )
+        assert_sides_follow_the_partition(statement)
         assert CostCategory.CO2_DAMAGE in {line.category for line in statement.cash_lines}
         assert not statement.accounting_lines
 
@@ -856,9 +1069,20 @@ class TestPartyStatements:
         ]
         assert {line.payer for line in levy_lines} == {Actor.TENANT, Actor.LANDLORD}
         assert sum(line.npv_in_euro for line in levy_lines) == pytest.approx(0.0, abs=0.005)
-        assert statement.cash_subtotal_in_euro + statement.accounting_subtotal_in_euro == (
-            pytest.approx(statement.net_position_in_euro)
-        )
+        assert_sides_follow_the_partition(statement)
+
+    def test_the_society_statement_refuses_an_actor_scoped_perspective(self):
+        """Its two sides read two different timelines, which only agree on a SYSTEM scope.
+
+        The resource side is the perspective's scoped pivot and the transfer side is the full
+        allocated timeline, because a transfer is only visibly zero with both halves on the page.
+        On a landlord-scoped result the two readings differ and the sum cannot close: the
+        statement used to raise a reconciliation error blaming a lost category for what is really
+        a misuse, so the misuse is named instead.
+        """
+        landlord = make_result(self.rented_entries(), scope=ActorScope.LANDLORD)
+        with pytest.raises(CostDataError, match="SYSTEM-scoped"):
+            views.perspective_statement(landlord, views.StatementPartitions.SOCIETY)
 
     def test_a_broken_partition_raises_rather_than_drawing(self):
         """A statement that does not reconcile is a defect, not a picture to render."""

@@ -118,6 +118,11 @@ tests/
 ### 6.4 `golden_update.py`
 - Run all (or `--setup`/`--param`-filtered) pairs; write each pair's KPIs to
   `golden_references/<setup>__<param>.json` (sorted keys, indented).
+- **Sticky bless**: where a golden already exists, keep the stored value of every
+  KPI whose fresh value `compare` accepts at the gate's own tolerances (§7), and
+  write the file only when its content changes — so a bless diff shows what moved,
+  not the container's last-digit float noise. `--force-rewrite` dumps the fresh
+  values verbatim for the rare deliberate noise clear-out.
 - Write `manifest.json` (commit, python, platform, config hash, timestamp) as
   informational sidecar.
 - Print a summary; this is the deliberate "bless" button, **invoked only by the

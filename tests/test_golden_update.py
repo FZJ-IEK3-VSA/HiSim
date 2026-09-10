@@ -1,8 +1,8 @@
 """Unit tests for ``scripts/golden_update.py``.
 
 ``main`` runs the (filtered) pairs via an injected ``run_fn`` and writes one golden
-file per pair plus an informational manifest. No HiSim simulation runs and no I/O
-happens outside ``tmp_path``.
+file per pair plus an informational manifest, keeping every stored value the gate
+would still accept. No HiSim simulation runs and no I/O happens outside ``tmp_path``.
 """
 from __future__ import annotations
 
@@ -132,3 +132,97 @@ def test_main_missing_config_raises(tmp_path: Path) -> None:
             repo_root=tmp_path,
             run_fn=_run_fn_returning([]),
         )
+
+
+# --------------------------------------------------------------------------- #
+# Sticky bless: values the gate would accept stay exactly as committed
+# --------------------------------------------------------------------------- #
+def _write_existing_golden(golden_dir: Path, kpis: dict[str, Any]) -> Path:
+    """Write a golden for the ``setup_a``/``one_week_60s`` pair the way the script does."""
+    golden_dir.mkdir(parents=True, exist_ok=True)
+    path = golden_dir / golden_filename("setup_a", "one_week_60s")
+    path.write_text(json.dumps(kpis, indent=2, sort_keys=True))
+    return path
+
+
+def _bless(tmp_path: Path, golden_dir: Path, kpis: dict[str, Any], force_rewrite: bool = False) -> int:
+    """Run one fake pair through ``main`` and return its exit code."""
+    return main(
+        config_path=_write_config(tmp_path),
+        golden_dir=golden_dir,
+        results_root=tmp_path,
+        repo_root=tmp_path,
+        force_rewrite=force_rewrite,
+        run_fn=_run_fn_returning([RunResult("setup_a", "one_week_60s", "rd", kpis=kpis)]),
+    )
+
+
+def test_value_within_tolerance_keeps_the_stored_one_and_the_file_is_not_rewritten(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Container float noise (1e-13 relative) never reaches the golden or its mtime."""
+    golden_dir = tmp_path / "golden_references"
+    stored = {"BUI1.Battery.Energy": 2589.664650339977}
+    path = _write_existing_golden(golden_dir, stored)
+    before_text, before_mtime = path.read_text(), path.stat().st_mtime_ns
+
+    assert _bless(tmp_path, golden_dir, {"BUI1.Battery.Energy": 2589.664650339977 * (1 + 1e-13)}) == 0
+
+    assert path.read_text() == before_text
+    assert path.stat().st_mtime_ns == before_mtime
+    assert json.loads(path.read_text()) == stored
+    assert "setup_a/one_week_60s: unchanged" in capsys.readouterr().out
+
+
+def test_value_beyond_tolerance_is_replaced_and_the_file_is_rewritten(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A KPI that genuinely moved takes the fresh value and is named in the log."""
+    golden_dir = tmp_path / "golden_references"
+    path = _write_existing_golden(golden_dir, {"BUI1.Battery.Energy": 1000.0, "BUI1.General.x": 1.0})
+
+    assert _bless(tmp_path, golden_dir, {"BUI1.Battery.Energy": 1001.0, "BUI1.General.x": 1.0}) == 0
+
+    assert json.loads(path.read_text()) == {"BUI1.Battery.Energy": 1001.0, "BUI1.General.x": 1.0}
+    out = capsys.readouterr().out
+    assert "1 key(s) moved, 1 within tolerance kept" in out
+    assert "BUI1.Battery.Energy" in out
+
+
+def test_new_key_is_added_and_removed_key_is_dropped_both_logged(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A KPI the run gained is stored, one it no longer produces disappears, and the log says so."""
+    golden_dir = tmp_path / "golden_references"
+    path = _write_existing_golden(golden_dir, {"BUI1.General.x": 1.0, "BUI1.Retired.y": 2.0})
+
+    assert _bless(tmp_path, golden_dir, {"BUI1.General.x": 1.0, "BUI1.Fresh.z": 3.0}) == 0
+
+    assert json.loads(path.read_text()) == {"BUI1.General.x": 1.0, "BUI1.Fresh.z": 3.0}
+    out = capsys.readouterr().out
+    assert "2 key(s) moved, 1 within tolerance kept" in out
+    assert "BUI1.Fresh.z (new)" in out
+    assert "BUI1.Retired.y (dropped)" in out
+
+
+def test_force_rewrite_writes_the_fresh_values_verbatim(tmp_path: Path) -> None:
+    """``--force-rewrite`` clears the stored noise instead of keeping it."""
+    golden_dir = tmp_path / "golden_references"
+    path = _write_existing_golden(golden_dir, {"BUI1.Battery.Energy": 2589.664650339977})
+    fresh = {"BUI1.Battery.Energy": 2589.664650339977 * (1 + 1e-13)}
+
+    assert _bless(tmp_path, golden_dir, fresh, force_rewrite=True) == 0
+
+    assert json.loads(path.read_text()) == fresh
+
+
+def test_unparsable_existing_golden_is_written_verbatim(tmp_path: Path) -> None:
+    """A golden that cannot be read offers no values to keep, so the fresh run wins."""
+    golden_dir = tmp_path / "golden_references"
+    golden_dir.mkdir()
+    path = golden_dir / golden_filename("setup_a", "one_week_60s")
+    path.write_text("not json at all")
+
+    assert _bless(tmp_path, golden_dir, {"BUI1.General.x": 1.0}) == 0
+
+    assert json.loads(path.read_text()) == {"BUI1.General.x": 1.0}

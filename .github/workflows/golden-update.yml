@@ -1,7 +1,13 @@
-# Manual "bless" of the golden KPI references. Regenerates EVERY pair (both the
-# week and full-year horizons) in the CI container — so the reference environment
+# Manual "bless" of the golden KPI references. Re-runs EVERY pair (both the week
+# and full-year horizons) in the CI container — so the reference environment
 # matches the check environment — and opens a pull request with the updated
 # golden_references/ for review. This is the only sanctioned way to update goldens.
+#
+# The bless is sticky: a KPI whose fresh value the gate itself would still accept
+# keeps the value already committed, and a golden that comes out identical is not
+# rewritten, so the PR diff carries only what actually moved. When nothing moved at
+# all, the diff is the manifest alone. Someone who deliberately wants the stored
+# last-digit noise replaced by fresh values runs the script with --force-rewrite.
 
 name: golden-update
 
@@ -146,9 +152,11 @@ jobs:
           import json, os, urllib.request
           repo = os.environ["PR_REPO"]
           body = (
-              "Regenerated golden KPI references in the CI container.\n\n"
+              "Re-ran the golden KPI references in the CI container.\n\n"
               f"Reason: {os.environ['PR_REASON']}\n\n"
-              "Review the per-KPI diff before merging."
+              "Only KPIs that moved beyond the gate's tolerance were rewritten, so a\n"
+              "manifest-only diff means every value reproduced. Review the per-KPI\n"
+              "diff before merging."
           )
           payload = json.dumps({
               "title": "Bless golden references",

@@ -30,11 +30,39 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
+#: Lower set temperature of the buffer storage, given in °C.
+BUFFER_T_MIN_HEATING_IN_CELSIUS = 35.0
+#: Upper set temperature of the buffer storage, given in °C.
+BUFFER_T_MAX_HEATING_IN_CELSIUS = 40.0
+#: Julian day the heating season begins on when a buffer storage is present.
+BUFFER_DAY_OF_HEATING_SEASON_BEGIN = 270 - 1
+
+
+def _with_buffer_storage(config: "L1CHPControllerConfig") -> "L1CHPControllerConfig":
+    """Applies the buffer storage overrides, which are the same ones for either fuel.
+
+    A buffer storage sits on the space heating side alone: it moves the regulated band from the
+    building's room temperature up to the buffer's water temperature, and it begins the heating
+    season one day early, so that the buffer heats up one day ahead and modelling to the building
+    works. It says nothing about the drain hot water storage, whose thresholds therefore stay put.
+    """
+    config.t_min_heating_in_celsius = BUFFER_T_MIN_HEATING_IN_CELSIUS
+    config.t_max_heating_in_celsius = BUFFER_T_MAX_HEATING_IN_CELSIUS
+    config.day_of_heating_season_begin = BUFFER_DAY_OF_HEATING_SEASON_BEGIN
+    return config
+
 
 @dataclass_json
 @dataclass
 class L1CHPControllerConfig(ConfigBase):
-    """CHP Controller Config."""
+    """CHP Controller Config.
+
+    The four default configurations are two fuels - gas and green hydrogen, which differ in ``use``
+    and in the hydrogen storage threshold that only the fuel cell reads - crossed with the one
+    buffer storage override in :func:`_with_buffer_storage`. Everything else, the drain hot water
+    band included, is the same for both fuels, because nothing the controller does with those
+    thresholds depends on what is burnt.
+    """
 
     component_id: ComponentID
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -101,7 +129,7 @@ class L1CHPControllerConfig(ConfigBase):
             h2_soc_threshold=8.0,
             t_min_heating_in_celsius=20.0,
             t_max_heating_in_celsius=20.5,
-            t_min_dhw_in_celsius=50,
+            t_min_dhw_in_celsius=42,
             t_max_dhw_in_celsius=60,
             day_of_heating_season_begin=270,
             day_of_heating_season_end=150,
@@ -115,50 +143,14 @@ class L1CHPControllerConfig(ConfigBase):
         component_id: Optional[ComponentID] = None,
     ) -> "L1CHPControllerConfig":
         """Returns default configuration for the CHP controller, when buffer storage for heating is available."""
-        # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
-        if component_id is None:
-            component_id = ComponentID(name="CHPController")
-        config = L1CHPControllerConfig(
-            component_id=component_id,
-            source_weight=1,
-            use=LoadTypes.GAS,
-            electricity_threshold=300,
-            h2_soc_threshold=0,
-            t_min_heating_in_celsius=35.0,
-            t_max_heating_in_celsius=40.0,
-            t_min_dhw_in_celsius=50,
-            t_max_dhw_in_celsius=60,
-            day_of_heating_season_begin=270 - 1,
-            day_of_heating_season_end=150,
-            min_operation_time_in_seconds=3600 * 4,
-            min_idle_time_in_seconds=3600 * 2,
-        )
-        return config
+        return _with_buffer_storage(L1CHPControllerConfig.get_default_config_chp(component_id=component_id))
 
     @staticmethod
     def get_default_config_fuel_cell_with_buffer(
         component_id: Optional[ComponentID] = None,
     ) -> "L1CHPControllerConfig":
         """Returns default configuration for the fuel cell controller, when buffer storage for heating is available."""
-        # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
-        if component_id is None:
-            component_id = ComponentID(name="CHPController")
-        config = L1CHPControllerConfig(
-            component_id=component_id,
-            source_weight=1,
-            use=LoadTypes.GREEN_HYDROGEN,
-            electricity_threshold=300,
-            h2_soc_threshold=8.0,
-            t_min_heating_in_celsius=31.0,
-            t_max_heating_in_celsius=40.0,
-            t_min_dhw_in_celsius=42,
-            t_max_dhw_in_celsius=60,
-            day_of_heating_season_begin=270 - 1,
-            day_of_heating_season_end=150,
-            min_operation_time_in_seconds=3600 * 4,
-            min_idle_time_in_seconds=3600 * 2,
-        )
-        return config
+        return _with_buffer_storage(L1CHPControllerConfig.get_default_config_fuel_cell(component_id=component_id))
 
 
 class L1CHPControllerState:

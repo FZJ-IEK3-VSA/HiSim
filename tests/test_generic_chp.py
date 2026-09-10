@@ -3,6 +3,14 @@
 Covers integration of ``generic_chp.SimpleCHP`` with ``controller_l1_chp.L1CHPController``
 under various demand/hydrogen scenarios, plus unit checks of ``CHPConfig``
 default-config builders and ``GenericCHPState.clone``.
+
+The ``L1CHPControllerConfig`` defaults used here changed with P4 decision D-4: the four
+factories used to cross fuel with buffer inconsistently - ``t_min_dhw_in_celsius`` ran
+42/50/50/42 over chp, fuel cell, chp-with-buffer and fuel-cell-with-buffer, and the buffer
+raised ``t_min_heating_in_celsius`` to 35.0 for gas but to 31.0 for hydrogen. No comment, test
+or commit ever gave a reason for either flip, so they were read as copy errors and normalised
+onto the first-written values. The last two tests here pin the normalised vocabulary, so that
+the declarative conversion can mint a ``gas`` and a ``hydrogen`` preset plus one buffer override.
 """
 
 # -*- coding: utf-8 -*-
@@ -31,6 +39,19 @@ def test_chp_system() -> None:
       - CHP shuts down when hydrogen SOC is zero.
       - CHP shuts down when heat is not needed (temperatures above thresholds).
       - CHP shuts down when electricity is not needed (electricity target positive).
+
+    The fuel cell with buffer now regulates the buffer between 35.0 °C and 40.0 °C rather than
+    between 31.0 °C and 40.0 °C (D-4), and two things this test used to lean on had to be put
+    right for the second scenario to keep meaning what it says:
+
+    * The CHP's on/off input was wired to the controller's *heating mode* channel, so ``state.state``
+      was the mode and every "shuts down" assertion below was really an assertion about which vessel
+      was being heated. With the old 31.0 °C the second scenario's two states of charge came out
+      exactly equal - ``(30 - 31) / (40 - 31)`` and ``(40 - 42) / (60 - 42)`` are both -1/9, to the
+      last bit - so the mode fell to 0 and the outputs read as zero. At 35.0 °C the tie is gone.
+      The input is now wired to the on/off channel, which is what the assertions talk about.
+    * The second scenario then has to run long enough for the machine to be allowed to stop: the
+      minimum *operation* time, not the minimum idle time, is what holds a running CHP on.
     """
     seconds_per_timestep = 60
     thermal_power = 500  # thermal power in Watt
@@ -94,7 +115,7 @@ def test_chp_system() -> None:
     my_chp_controller.building_temperature_channel.source_output = buffer_temperature
     my_chp_controller.dhw_temperature_channel.source_output = boiler_temperature
 
-    my_chp.chp_onoff_signal_channel.source_output = my_chp_controller.chp_heatingmode_signal_channel
+    my_chp.chp_onoff_signal_channel.source_output = my_chp_controller.chp_onoff_signal_channel
     my_chp.chp_heatingmode_signal_channel.source_output = my_chp_controller.chp_heatingmode_signal_channel
 
     # Add Global Index and set values for fake Inputs
@@ -132,7 +153,7 @@ def test_chp_system() -> None:
 
     for timestep_t in range(
         timestep,
-        timestep + int((chp_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2),
+        timestep + int((chp_controller_config.min_operation_time_in_seconds / seconds_per_timestep) + 2),
     ):
         my_chp_controller.i_simulate(timestep_t, single_timestep_values, False)
         my_chp.i_simulate(timestep_t, single_timestep_values, False)
@@ -283,3 +304,58 @@ def test_generic_chp_state_clone_independence() -> None:
     cloned.state = 5
     assert original.state == 1
     assert cloned.state == 5
+
+
+@pytest.mark.base
+def test_chp_controller_fuels_differ_only_in_the_fuel() -> None:
+    """The gas and hydrogen defaults agree on every threshold that is not about the fuel (D-4).
+
+    Before D-4 the fuel cell asked for 50 °C of drain hot water where the CHP asked for 42 °C.
+    Nothing the controller computes from that threshold - the storage's state of charge and the
+    decision to heat water rather than the building - knows what is burnt, so the two now agree.
+    """
+    gas = controller_l1_chp.L1CHPControllerConfig.get_default_config_chp()
+    hydrogen = controller_l1_chp.L1CHPControllerConfig.get_default_config_fuel_cell()
+
+    assert gas.use == lt.LoadTypes.GAS
+    assert hydrogen.use == lt.LoadTypes.GREEN_HYDROGEN
+    assert gas.h2_soc_threshold == 0
+    assert hydrogen.h2_soc_threshold == 8.0
+    assert gas.t_min_dhw_in_celsius == hydrogen.t_min_dhw_in_celsius == 42
+
+    differing_fields = {"component_id", "use", "h2_soc_threshold"}
+    for field in gas.to_dict():
+        if field in differing_fields:
+            continue
+        assert gas.to_dict()[field] == hydrogen.to_dict()[field], field
+
+
+@pytest.mark.base
+def test_chp_controller_buffer_override_is_one_thing() -> None:
+    """The buffer changes the same three fields by the same values for either fuel (D-4).
+
+    Before D-4 the buffer meant 35.0 °C for gas and 31.0 °C for hydrogen, and it also moved the
+    drain hot water threshold, in opposite directions per fuel. A buffer storage sits on the space
+    heating side only, so it may move the heating band and the start of the heating season, and
+    nothing else.
+    """
+    config_class = controller_l1_chp.L1CHPControllerConfig
+    pairs = [
+        (config_class.get_default_config_chp(), config_class.get_default_config_chp_with_buffer()),
+        (config_class.get_default_config_fuel_cell(), config_class.get_default_config_fuel_cell_with_buffer()),
+    ]
+    overrides = []
+    for without_buffer, with_buffer in pairs:
+        assert with_buffer.t_min_heating_in_celsius == 35.0
+        assert with_buffer.t_max_heating_in_celsius == 40.0
+        assert with_buffer.day_of_heating_season_begin == 269
+        assert with_buffer.t_min_dhw_in_celsius == without_buffer.t_min_dhw_in_celsius
+        plain, buffered = without_buffer.to_dict(), with_buffer.to_dict()
+        overrides.append({field: buffered[field] for field in plain if plain[field] != buffered[field]})
+
+    assert overrides[0] == overrides[1]
+    assert set(overrides[0]) == {
+        "t_min_heating_in_celsius",
+        "t_max_heating_in_celsius",
+        "day_of_heating_season_begin",
+    }

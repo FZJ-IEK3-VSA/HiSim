@@ -117,7 +117,7 @@ Provides a typed `Quantity` system (`Watt`, `KiloWattHour`, etc.) for stronger u
 ### CI resource monitoring (`.github/actions/resource-monitor/`, `scripts/ci_*.py`)
 Every CI job measures its own wall time, CPU time and peak memory (cgroup v2) via the
 `resource-monitor` composite action, called `mode: start` after checkout and `mode: report`
-under `if: always()`. The nightly `ci-usage` workflow sweeps the jobs API plus those
+under `if: always()`. The hourly `ci-usage` workflow sweeps the jobs API plus those
 artifacts and writes an overview — per-workflow runner-minutes, jobs that got slower or
 hungrier, jobs near the 16 GB runner limit — into its own job summary. Nothing is committed.
 See `.github/ci-monitoring.md`; the probe never fails the job it measures.

@@ -132,14 +132,18 @@ least one visualization plus a result table. Sections carry **names**, not numbe
 (`reporting.ReportSections` holds every name with its anchor), and the document is told as the
 **chapters** of `reporting.ReportChapters`: a perspective-free part, then one chapter per
 question a reader actually has. Which perspectives belong to which chapter is decided by
-`views.story_perspectives` from what each result *books* — a view that books CO2 damage is the
-society story, one scoped to a landlord or tenant the rented story, an owner-scoped or
-support-carrying one the owner story — never by matching ids, and a chapter this run has no
-perspectives for is skipped with a log line rather than drawn empty. A perspective-scoped
-section therefore renders once per chapter, on that chapter's own perspectives, so anchors are
-chapter-prefixed (`owner-cash-curve`), section headings name their chapter, and the
-two-level table of contents at the top provides the navigation the old 0-to-10 numbering was
-supposed to.
+`views.story_perspectives` from what each result *books* — a view that books CO2 damage **and
+reports on the system as a whole** is the society story, one scoped to a landlord or tenant the
+rented story (a party-scoped macroeconomic view included, since the macroeconomic statement is
+defined only on the system's basis), an owner-scoped or support-carrying one the owner story —
+never by matching ids. A chapter this run has no perspectives for is skipped, and so is a section
+whose subject matter this chapter's perspectives do not have; both are named with their reason in
+the document's own "Not drawn for this run" list under the contents, never in a log line the
+reader of an HTML file will never see. A perspective-scoped section therefore renders once per
+chapter, on that chapter's own perspectives, so **anchors are chapter-prefixed**
+(`owner-cash-curve`, `rented-cash-curve`) rather than bare section anchors, section headings name
+their chapter, and the two-level table of contents at the top provides the navigation the old
+0-to-10 numbering was supposed to.
 
 **The building** — what the technology costs, before asking whose money it is:
 **How to read this report** (the primer: discounting, the three worlds of a band, the sign
@@ -177,12 +181,26 @@ debt) and **Who pays whom**.
 **Rented out** — the landlord's business case and the tenant's monthly reality: **Landlord
 statement** (the cash side and the accounting side, and the income Sankey of the same
 partition), **Tenant statement** (the levy set by law against the energy and operating costs set
-by physics, with an empty credit side stated as the zero it is), **Who pays what** (payer
+by physics, with an empty credit side stated as the zero it is; the two halves of the levy are
+checked against each other before either is drawn), **Who pays what** (payer
 whiskers + payer-by-cost-group table, zero-sum checked), **Who pays whom** (the same money as a
-flow diagram, one column per party), **Monthly burden** and **Cash curve**.
+flow diagram, one column per party), **Monthly burden**, **Cash curve** and the three financing
+sections. Either party may be absent — a bundle can evaluate a tenant without a landlord — and
+what the missing one would have carried is named under the contents rather than drawn on the
+other party's numbers.
 
 **Society** — the macroeconomic view in which transfers cancel and CO2 enters at its damage
-cost: **Society statement**, **Cash curve** and **Who pays whom**.
+cost: **Society statement**, **Cash curve** and **Who pays whom**. No financing sections: who
+borrowed and at what rate is an owner's, a landlord's or a tenant's question, and a macroeconomic
+view books no debt service at all, so the chapter does not offer them and has nothing to report as
+undrawn either.
+
+**Loan**, **Cost of credit** and **Equity build-up** are therefore offered by the two chapters
+whose story can borrow — the owner-occupied one and the rented one — and drawn by whichever of
+them has a financed perspective, on that story's own perspectives: the owner's debt service is not
+the landlord's, and a chapter that showed the other party's loan would be answering a question
+about somebody else's money. A chapter that offers them and has no financed perspective says so
+under the contents.
 
 **Comparison with the reference**, present only when a reference variant was evaluated and
 carrying no authored lead-in because it answers a question about two runs rather than about one

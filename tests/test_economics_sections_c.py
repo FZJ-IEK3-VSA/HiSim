@@ -3,16 +3,23 @@
 The third of the section-renderer files, and the one about the *shape* of the document rather
 than about any one chart. `tests/test_economics_sections_a.py` and `_b.py` cover the charts of
 the visualization set; this covers what the report is made of once those charts have to be told
-as four stories: the chapters, the anchors that keep the same section name in two of them apart,
-the explain-once-then-link rule that stops the prose tripling, and the four sections the split
-exists for — the owner's, the tenant's and society's statements (the landlord's lands with the
-Sankey it is drawn as, in `_a`) and the assumptions table the whole report leans on.
+as four stories: the chapters, the explain-once-then-link rule that stops the prose tripling, the
+four sections the split exists for — the owner's, the tenant's and society's statements (the
+landlord's lands with the Sankey it is drawn as, in `_a`) and the assumptions table the whole
+report leans on — and the ways a story can be half-present: one party of a tenancy, a
+macroeconomic view scoped to a party, a perspective that buys nothing in year 0.
 
-Two fixtures rather than one, because the chapters are a function of what a run *books*: a
-brownfield tenancy with a macroeconomic view reaches all four chapters, and a plain owner-occupied
+The anchors themselves are pinned once, in `_a`; the contents links once, by the goldens oracle.
+This file asserts what those cannot: that the same section name in two chapters is two charts of
+two parties, and that the second occurrence carries a link *instead of* the prose.
+
+Several fixtures rather than one, because the chapters are a function of what a run *books*: a
+brownfield tenancy with a macroeconomic view reaches all four chapters, a plain owner-occupied
 greenfield run reaches two — and it is the second that pins the skip, which is the behaviour a
 chapter restructure most easily gets wrong (an empty chapter heading with nothing under it reads
-as a broken report, not as an honest absence).
+as a broken report, not as an honest absence) — while the half-tenancy and the party-scoped
+macroeconomic bundles pin the two ways a chapter used to tell the wrong party's story or refuse
+to render at all.
 
 **What a failure means.** A *presentation* failure: something a reader sees changed. It says
 nothing about whether the numbers are right — `tests/test_economics_views_charts_a.py` owns the
@@ -23,6 +30,7 @@ never corrupt a stored result.
 # clean
 
 import re
+from dataclasses import replace
 
 import pytest
 
@@ -51,13 +59,21 @@ from hisim.economics.reporting import (
     ReportSections,
     build_lifecycle_report_html,
 )
+from hisim.economics.reporting.assembly import _actor_section_html
+from hisim.economics.reporting.scaffold import _ChapterContext
 from hisim.economics.reporting.summary import _fmt
 from hisim.economics.results import EvaluationMatrix
-from hisim.economics.timeline import CostCategory
+from hisim.economics.timeline import Actor, CostCategory
 from hisim.economics.uncertainty import UncertainValue
-from hisim.economics.views import StatementPartitions, landlord_statement, perspective_statement
+from hisim.economics.views import (
+    CostDataError,
+    StatementPartitions,
+    landlord_statement,
+    levy_transfer_reconciles,
+    perspective_statement,
+)
 from hisim.loadtypes import ComponentType, Units
-from tests.economics_report_test_helpers import rendered_sections
+from tests.economics_report_test_helpers import back_link_target, rendered_sections
 
 pytestmark = pytest.mark.base
 
@@ -139,11 +155,45 @@ OWNER_ONLY_PERSPECTIVES = [
                 subsidy_mode=SubsidyMode.none()),
 ]
 
+#: Half a tenancy: the bundle a request can legitimately ask for when only the tenant's side is
+#: wanted. The rented chapter has to tell that half rather than draw the tenant twice.
+TENANT_ONLY_PERSPECTIVES = [
+    Perspective(id="gross", installation_context=InstallationContext.BROWNFIELD,
+                subsidy_mode=SubsidyMode.none()),
+    Perspective(id="tenant", installation_context=InstallationContext.BROWNFIELD,
+                actor_scope=ActorScope.TENANT, subsidy_mode=SubsidyMode.full()),
+]
+
+#: A macroeconomic view scoped to a party — a legal combination of the five orthogonal dimensions
+#: (`perspectives.Perspective`), and the one that used to take the whole report down: it books CO2
+#: damage, so it was classified into the society chapter, whose statement is defined only for a
+#: SYSTEM-scoped result and refused it.
+LANDLORD_MACRO_PERSPECTIVES = [
+    Perspective(id="gross", installation_context=InstallationContext.BROWNFIELD,
+                subsidy_mode=SubsidyMode.none()),
+    Perspective(id="landlord_macro", installation_context=InstallationContext.BROWNFIELD,
+                actor_scope=ActorScope.LANDLORD, accounting=Accounting.MACROECONOMIC,
+                subsidy_mode=SubsidyMode.none()),
+]
+
 
 @pytest.fixture(name="database", scope="module")
 def fixture_database() -> CostDatabase:
     """The shipped cost database; module-scoped because validating it dominates the runtime."""
     return CostDatabase()
+
+
+def _section_name_of(anchor: str) -> str:
+    """The section name behind a chapter-prefixed anchor (`owner-cash-curve` -> "Cash curve").
+
+    The document's anchors are the only handle a rendered section offers on its identity, and the
+    prose is keyed by name, so a test that wants to compare the two has to cross that bridge once
+    rather than in every assertion.
+    """
+    for section_anchor, name in ReportSections.ORDER:
+        if anchor.endswith(f"-{section_anchor}"):
+            return name
+    raise AssertionError(f"{anchor!r} is not a chapter-prefixed anchor of ReportSections.ORDER")
 
 
 def _matrix(database, perspectives) -> EvaluationMatrix:
@@ -184,14 +234,6 @@ class TestTheChaptersTheDocumentIsToldAs:
         assert positions == sorted(positions)
         assert len(positions) == 4  # the three stories plus the building; no comparison here
 
-    def test_every_section_lands_in_a_chapter_and_no_two_share_an_anchor(self, report):
-        """The same section name in two chapters must not produce the same anchor twice."""
-        anchors = [anchor for anchor, _html in rendered_sections(report)]
-        assert len(anchors) == len(set(anchors))
-        prefixes = tuple(f"{chapter}-" for chapter, _name in ReportChapters.ORDER)
-        for anchor in anchors:
-            assert anchor.startswith(prefixes), anchor
-
     def test_a_perspective_scoped_section_is_told_once_per_story(self, report):
         """The cash curve is a different chart under each party; all of them have to be there."""
         anchors = [anchor for anchor, _html in rendered_sections(report)]
@@ -203,24 +245,58 @@ class TestTheChaptersTheDocumentIsToldAs:
         """The explanation is the bulk of a section, so the later occurrences point at the first.
 
         The failure mode the back-link exists to prevent is a report three times as long as it
-        needs to be, so what is pinned is that a repeat carries a link to an anchor that really
-        is in the document and really is a different one.
+        needs to be, so both halves are pinned: the repeat carries a link to an anchor that really
+        is in the document and really is a different one, **and** the prose it points at is not
+        also printed under it. A back-link above a full copy of the explanation would satisfy
+        every other test in this file while tripling the weight of the report, which is the exact
+        regression the rule exists to prevent.
         """
-        cross_reference = re.compile(
-            r"<section id=\"[^\"]+\"><h3>[^<]*(?:<span class='chapter-tag'>[^<]*</span>)?</h3>"
-            r"<p class='sub'>The same chart, read the same way: see the explanation under "
-            r"<a href=\"#([^\"]+)\">",
-            flags=re.S,
-        )
+        by_anchor = dict(rendered_sections(report))
         repeats = 0
         for anchor, html in rendered_sections(report):
-            match = cross_reference.match(html)
-            if match is None:
+            target = back_link_target(html)
+            if target is None:
                 continue
             repeats += 1
-            assert f'id="{match.group(1)}"' in report, (anchor, match.group(1))
-            assert match.group(1) != anchor
+            assert target in by_anchor, (anchor, target)
+            assert target != anchor
+            shows = ReportProse.to_html(ReportProse.for_section(_section_name_of(anchor)).shows)
+            assert shows not in html, anchor  # the prose lives once, where the link points
+            assert shows in by_anchor[target], target
+            assert "<summary>Terms used here</summary>" not in html, anchor
         assert repeats >= 2, "no section repeated, so the back-link rule was never exercised"
+
+    def test_the_society_chapter_draws_its_own_cash_curve(self, report):
+        """The macroeconomic story is three sections, and the middle one is easy to lose.
+
+        The society chapter renders on one perspective and its cash curve is the only section of
+        it that carries a chart; a builder that dropped it would leave a chapter of two tables
+        that still passes every "the chapter is there" assertion in this file.
+        """
+        curve = dict(rendered_sections(report))[f"society-{ReportSections.CASH_CURVE[0]}"]
+        assert "<h3>Cash curve (macroeconomic)" in curve
+        assert "<polyline" in curve  # the cumulative cost really is drawn, not just headed
+
+    def test_the_society_chapter_neither_draws_nor_reports_the_financing_sections(self, report):
+        """Who borrowed is not a macroeconomic question, so the chapter does not ask it.
+
+        The loan, the cost of credit and the equity build-up are offered by the two chapters whose
+        story can borrow. Offering them here as well would put the same three "Not drawn" lines
+        under Society in every report that has this chapter — structure rather than information —
+        and a reader would learn from them only that a macroeconomic view books no debt service,
+        which is true by construction.
+        """
+        anchors = [anchor for anchor, _html in rendered_sections(report)]
+        block = report.split("Not drawn for this run", maxsplit=1)[1].split("</div>")[0]
+        society_entries = re.findall(
+            r"<b>([^<]+)</b> <span class='chapter-tag'>Society</span>", block
+        )
+        for section in (ReportSections.LOAN, ReportSections.COST_OF_CREDIT,
+                        ReportSections.EQUITY_BUILD_UP):
+            assert f"society-{section[0]}" not in anchors, section[1]
+            assert section[1] not in society_entries, section[1]
+        # The rented chapter, whose story could have borrowed and did not, does say so.
+        assert "<b>Loan</b> <span class='chapter-tag'>Rented out</span>" in block
 
     def test_each_section_names_the_chapter_it_is_being_read_in(self, report):
         """A bare "Cash curve" does not say whose liquidity a contents link just landed on."""
@@ -228,17 +304,6 @@ class TestTheChaptersTheDocumentIsToldAs:
         for chapter, name in (ReportChapters.OWNER_OCCUPIED, ReportChapters.RENTED_OUT):
             html = by_anchor[f"{chapter}-{ReportSections.CASH_CURVE[0]}"]
             assert f"<span class='chapter-tag'>{name}</span>" in html
-
-    def test_the_contents_list_the_chapters_and_their_sections(self, report):
-        """Two levels, because a flat list would show three "Cash curve" entries as one word."""
-        contents = report.split("</nav>")[0]
-        for chapter, name in ReportChapters.ORDER:
-            if f"<h2 class='chapter' id=\"{chapter}\">" not in report:
-                assert f"<a href=\"#{chapter}\">" not in contents, chapter
-                continue
-            assert contents.count(f"<a href=\"#{chapter}\"><b>{name}</b></a>") == 1, chapter
-        for anchor, _html in rendered_sections(report):
-            assert f'href="#{anchor}"' in contents, anchor
 
     def test_a_story_this_run_does_not_tell_is_skipped_rather_than_drawn_empty(self, database):
         """An owner-occupied cash purchase has no landlord and no macroeconomic view.
@@ -286,23 +351,70 @@ class TestThePartyStatements:
         assert "<td><b>0.00</b></td><td><b>credits (none in this ledger)</b></td>" in statement
 
     def test_the_tenant_levy_mirrors_the_landlord_levy_income(self, all_stories, report):
-        """The two halves of the booked transfer pair reach the page as one figure (F4)."""
+        """The two halves of the booked transfer pair reach the page as one figure (F4).
+
+        Pinned against a hand-derived amount rather than against each other. Both figures come
+        from the same booked pair, so comparing them to one another passes for any levy the
+        ruleset produces, including none at all: what the assertion is worth is the number itself.
+        Here the §559e heating cap binds in the best-estimate world at 0.50 EUR/m²·month, so on
+        this fixture's 150 m² the rent rises by 0.50 x 150 x 12 = 900 EUR a year, and its present
+        value over the 20-year horizon at 3 % is 900 x (1 - 1.03^-20) / 0.03 = 13,389.73 EUR.
+        """
         landlord = landlord_statement(all_stories.results["landlord"])
         tenant = perspective_statement(all_stories.results["tenant"], StatementPartitions.TENANT)
-        landlord_levy = next(
-            line.npv_in_euro for line in landlord.cash_lines
-            if line.category == CostCategory.MODERNIZATION_LEVY
-        )
-        tenant_levy = next(
-            line.npv_in_euro for line in tenant.cash_lines
-            if line.category == CostCategory.MODERNIZATION_LEVY
-        )
-        assert tenant_levy == pytest.approx(-landlord_levy, abs=0.005)
+        levy = all_stories.results["landlord"].modernization_levy
+        assert levy is not None
+        assert levy.annual_amount_in_euro.best_estimate == pytest.approx(0.50 * 150.0 * 12.0)
+        discounted_years = sum(1.03 ** -year for year in range(1, 21))
+        expected = 900.0 * discounted_years
+        assert expected == pytest.approx(13_389.73, abs=0.01)  # the arithmetic, written out
+        tenant_levy = levy_transfer_reconciles(landlord, tenant)
+        assert tenant_levy is not None  # both parties book it, so the check has a figure to return
+        assert tenant_levy == pytest.approx(expected, abs=0.01)
         statement = dict(rendered_sections(report))["rented-tenant-statement"]
         assert "the levy is the exact counterpart of the landlord statement" in statement
         assert f"<b>{_fmt(tenant_levy)} EUR</b>" in statement
         # The per-world verdicts of the levy (Q26 F5) are stated beside the landlord's amount.
         assert re.search(r"Binding mechanism (in all three worlds|per world)", report)
+
+    def test_a_leaked_levy_is_refused_rather_than_printed_under_the_claim(self, all_stories):
+        """The caption says the two halves are one transfer, so a pair that is not is refused."""
+        landlord = landlord_statement(all_stories.results["landlord"])
+        tenant = perspective_statement(all_stories.results["tenant"], StatementPartitions.TENANT)
+        assert levy_transfer_reconciles(landlord, tenant) is not None  # the honest pair passes
+        leaked = replace(
+            tenant,
+            cash_lines=tuple(
+                replace(line, npv_in_euro=line.npv_in_euro + 100.0)
+                if line.category == CostCategory.MODERNIZATION_LEVY else line
+                for line in tenant.cash_lines
+            ),
+        )
+        with pytest.raises(CostDataError) as refusal:
+            levy_transfer_reconciles(landlord, leaked)
+        assert "modernization levy does not reconcile" in str(refusal.value)
+        assert "13,489.73" in str(refusal.value)  # names the tenant's figure
+        assert "13,389.73" in str(refusal.value)  # and the landlord's
+
+    def test_a_rented_chapter_with_one_party_states_the_side_it_has(self, database):
+        """A tenant with no landlord used to be drawn as the landlord, statement and all.
+
+        Both party statements fell back to the chapter's first perspective, so a bundle with only
+        one of the two parties printed that party's flows twice — once under its own heading and
+        once under the other's. The missing side is now named under the contents instead, and the
+        levy cross-check simply has nothing to compare.
+        """
+        matrix = _matrix(database, TENANT_ONLY_PERSPECTIVES)
+        report = build_lifecycle_report_html(matrix, run_plausibility_checks(matrix))
+        anchors = [anchor for anchor, _html in rendered_sections(report)]
+        assert "rented-tenant-statement" in anchors
+        assert "rented-landlord-statement" not in anchors
+        block = report.split("Not drawn for this run", maxsplit=1)[1].split("</div>")[0]
+        assert "<b>Landlord statement</b>" in block
+        # The apostrophe reaches the page escaped, so the assertion sits on the plain half.
+        assert "side of the tenancy alone" in block
+        tenant_statement = dict(rendered_sections(report))["rented-tenant-statement"]
+        assert "<h3>Tenant statement (tenant)" in tenant_statement
 
     def test_every_statement_is_the_same_three_column_shape(self, report):
         """Four partitions, one shape: item, present value, and which side it sits on.
@@ -346,11 +458,38 @@ class TestTheAssumptionsSection:
         assert len(positions) == len(views.AssumptionGroups.ORDER)
         assert positions == sorted(positions)
 
-    def test_the_damage_cost_is_stated_because_some_perspective_priced_one(self, report):
-        """It belongs in the table when the *run* books it, not when the reference view does."""
+    def test_the_damage_cost_is_stated_because_some_perspective_priced_one(self, report, all_stories):
+        """It belongs in the table when the *run* books it, not when the reference view does.
+
+        No flag says so: the section hands the view the whole matrix and the view applies the one
+        predicate the story chapters classify by. The reference perspective the table is stated on
+        books no damage of its own, which is what makes the row a statement about the run.
+        """
+        from hisim.economics import views
+
+        reference = next(iter(all_stories.results.values()))
+        assert not views.has_macroeconomic_accounting(reference)
         assumptions = dict(rendered_sections(report))["building-assumptions"]
+        assert "<h3>Assumptions (gross)" in assumptions  # stated on the reference perspective
         assert "CO2 damage cost (flat over the horizon)" in assumptions
         assert "CO2 price scenario (path on the energy bill)" in assumptions
+
+    def test_the_values_are_spelled_the_way_each_quantity_is_read(self, report):
+        """The view hands over numbers; these are the digits the section decides to print them at.
+
+        One row per kind that the fixture reaches, because the conventions differ and a single
+        formatter would get at least one of them wrong: a rate to two decimals, a working price to
+        four, a factor to six, an energy quantity with separators and no decimal at all.
+        """
+        assumptions = dict(rendered_sections(report))["building-assumptions"]
+        assert "<td>3.00%</td>" in assumptions  # the interest rate, per cent
+        assert "<td>20 a</td>" in assumptions  # the horizon, with its unit
+        assert "<td>2026</td>" in assumptions  # a year, with no thousands separator
+        assert re.search(r"<td>\d+\.\d{6}</td>", assumptions)  # the annuity factor
+        assert re.search(r"<td>\d+\.\d{4} EUR/kWh</td>", assumptions)  # a working price
+        assert re.search(r"<td>[\d,]+ kWh/a</td>", assumptions)  # an energy quantity
+        assert re.search(r"<td>-?[\d,]+\.\d{2}% per year</td>|<td>-?\d+\.\d{2}% per year</td>",
+                         assumptions)  # an escalation rate keeps its "per year"
 
     def test_a_run_without_a_macroeconomic_view_omits_the_damage_cost(self, database):
         """The shadow price is not an assumption of a run that never applies it."""
@@ -370,30 +509,145 @@ class TestTheAssumptionsSection:
         assert re.search(r"x \d+ installation\(s\) = [\d,]+ kg", co2)
 
 
-class TestTheChapteredDocumentStaysSelfContained:
-    """The restructure must not have introduced a request, a script or an unexplained section."""
+class TestTheCo2FactorsAreOneQuantityWithTheMasses:
+    """F3: a stated multiplication that does not come out is worse than no disclosure at all.
 
-    def test_no_chapter_reaches_outside_the_file(self, report):
-        """Inline SVG, no script, no external request — unchanged by the split."""
-        assert "<script" not in report
-        assert "https://" not in report
+    The table's whole claim is that each mass in the chart above it is `factor x quantity`, over
+    the horizon or over the installations. The two halves of that claim come from two places — the
+    CO2 accumulator's mass and the aggregation's annualized quantity — and they used to be allowed
+    to disagree: the accumulator summed a carrier's meters while the aggregation kept the last one.
+    """
 
-    def test_every_rendered_section_opens_with_the_four_parts_or_the_back_link(self, report):
-        """No chart without the block that explains it, or a link to where it is explained."""
-        four_parts = re.compile(
-            r"<section id=\"[^\"]+\"><h3>[^<]*(?:<span class='chapter-tag'>[^<]*</span>)?</h3>"
-            r"<p class='sub'>.+?</p>"
-            r"<p class='sub'>.+?</p>"
-            r"<details><summary>Terms used here</summary><dl><dt>.+?</dl></details>"
-            r"<details><summary>How this is calculated</summary><p class='sub'>.+?</details>",
-            flags=re.S,
+    def test_a_row_whose_multiplication_does_not_come_out_is_refused(self):
+        """The row is the disclosure, so it validates itself rather than trusting its builder."""
+        from hisim.economics import views
+
+        with pytest.raises(CostDataError) as refusal:
+            views.Co2FactorRow(
+                subject="ELECTRICITY",
+                kind=views.Co2FactorKinds.OPERATIONAL,
+                factor_in_kg_per_unit=0.4,
+                quantity=5000.0,
+                quantity_unit="kWh/a",
+                annual_mass_in_kg=2000.0,
+                total_in_kg=1500.0,  # the accumulator says something else entirely
+                installations=20,
+            )
+        assert "does not multiply out" in str(refusal.value)
+
+    def test_a_row_carrying_the_other_kinds_product_is_refused(self):
+        """An operational row states an annual mass; a per-installation figure on it is a mix-up."""
+        from hisim.economics import views
+
+        with pytest.raises(CostDataError) as refusal:
+            views.Co2FactorRow(
+                subject="ELECTRICITY",
+                kind=views.Co2FactorKinds.OPERATIONAL,
+                factor_in_kg_per_unit=0.4,
+                quantity=5000.0,
+                quantity_unit="kWh/a",
+                annual_mass_in_kg=2000.0,
+                per_installation_in_kg=2000.0,
+                total_in_kg=40000.0,
+                installations=20,
+            )
+        assert "Exactly one of the two" in str(refusal.value)
+
+    def test_a_carrier_billed_by_two_meters_states_the_summed_kwh(self, database):
+        """Two meters, one carrier: the quantity has to be the sum the mass was computed from."""
+        from hisim.economics import views
+
+        inputs = make_inputs()
+        inputs.billing = [
+            BillingDeterminants(
+                carrier=EnergyCarrier.ELECTRICITY, energy_bought_in_kwh=3000.0,
+                energy_sold_in_kwh=1000.0,
+            ),
+            BillingDeterminants(
+                carrier=EnergyCarrier.ELECTRICITY, energy_bought_in_kwh=2000.0,
+                energy_sold_in_kwh=1000.0,
+            ),
+        ]
+        evaluator = EconomicEvaluator(database, PARAMETERS)
+        result = evaluator.evaluate(inputs, OWNER_ONLY_PERSPECTIVES[0])
+        quantities = result.annual_energy_quantities_by_carrier[EnergyCarrier.ELECTRICITY.value]
+        assert quantities.bought_in_kwh == pytest.approx(5000.0)
+        assert quantities.sold_in_kwh == pytest.approx(2000.0)
+        # The row builds at all only because the two sources now describe one quantity.
+        row = next(
+            row for row in views.co2_factor_rows(result)
+            if row.kind == views.Co2FactorKinds.OPERATIONAL
         )
-        back_link = re.compile(
-            r"<section id=\"[^\"]+\"><h3>[^<]*(?:<span class='chapter-tag'>[^<]*</span>)?</h3>"
-            r"<p class='sub'>The same chart, read the same way: ",
-            flags=re.S,
+        assert row.quantity == pytest.approx(5000.0)
+        assert row.annual_mass_in_kg == pytest.approx(row.factor_in_kg_per_unit * 5000.0)
+
+
+class TestTheSectionsThatPromiseToAlwaysRender:
+    """A section whose docstring says "always" has to say something when it has no chart."""
+
+    def test_a_perspective_that_buys_nothing_in_year_zero_says_so(self, database):
+        """An operating-only view books no investment at all, and used to drop the section.
+
+        A missing section reads as a broken renderer; "nothing was bought in year 0" is a finding
+        about the perspective, and the one a reader of an operating-only view came for.
+        """
+        operating = Perspective(
+            id="operating",
+            installation_context=InstallationContext.OPERATING_ONLY,
+            subsidy_mode=SubsidyMode.none(),
         )
-        sections = rendered_sections(report)
-        assert len(sections) > 20, "the fixture stopped reaching most sections"
-        for anchor, html in sections:
-            assert four_parts.match(html) or back_link.match(html), anchor
+        matrix = _matrix(database, [operating])
+        report = build_lifecycle_report_html(matrix, run_plausibility_checks(matrix))
+        investment = dict(rendered_sections(report))["building-investment-build-up"]
+        assert "Nothing was bought in year 0" in investment
+        assert "<svg" not in investment  # the waterfalls are what is absent, not the section
+
+
+class TestAScopedMacroeconomicViewIsToldAsThatPartysStory:
+    """A perspective that books CO2 damage without reporting on the system is not society's story.
+
+    The five perspective dimensions are orthogonal, so a landlord-scoped macroeconomic view is a
+    legal object. Classified by its accounting alone it landed in the society chapter, whose
+    statement reads its transfer side off the full timeline and its resource side off the scoped
+    one and is therefore defined only for a SYSTEM-scoped result — so the chapter refused it and
+    took the whole report down with it.
+    """
+
+    def test_the_report_renders_and_the_view_lands_in_the_rented_chapter(self, database):
+        """No crash, no society chapter, and the landlord's own story tells it."""
+        from hisim.economics import views
+
+        matrix = _matrix(database, LANDLORD_MACRO_PERSPECTIVES)
+        macro = matrix.results["landlord_macro"]
+        assert views.has_macroeconomic_accounting(macro)  # it really does book the damage
+        stories = views.story_perspectives(list(matrix.results.values()))
+        assert stories.rented == (macro,)
+        assert not stories.society
+        report = build_lifecycle_report_html(matrix, run_plausibility_checks(matrix))
+        assert f"<h2 class='chapter' id=\"{ReportChapters.SOCIETY[0]}\">" not in report
+        assert 'id="rented-landlord-statement"' in report
+
+
+class TestWhoPaysWhatNeedsTwoPayers:
+    """§6.5 is a statement about a split, and one payer is not one.
+
+    The section draws payer whiskers under a header saying that they sum to the system NPV. With
+    a single payer that header is arithmetic about one number and the chart is one bar — a
+    perspective that was never allocated, presented as an allocation. The guard used to require a
+    SYSTEM residue beside the single payer before skipping, so a result with exactly one real
+    payer and no residue was drawn.
+    """
+
+    def test_a_single_payer_is_skipped_whether_or_not_a_system_residue_sits_beside_it(
+        self, database
+    ):
+        """One payer, no residue: the case the old guard let through."""
+        matrix = _matrix(database, [ALL_STORIES_PERSPECTIVES[3]])  # the landlord view, freshly evaluated
+        result = next(iter(matrix.results.values()))
+        assert len({payer for payer in result.npv_by_payer if payer != Actor.SYSTEM}) > 1
+        context = _ChapterContext(chapter=ReportChapters.RENTED_OUT)
+        assert _actor_section_html(matrix, context) != ""  # two parties: a real split
+        result.npv_by_payer = {
+            Actor.LANDLORD: result.npv_by_payer[Actor.LANDLORD]
+        }  # the tenant leg gone, and no SYSTEM entry either
+        assert _actor_section_html(matrix, _ChapterContext(chapter=ReportChapters.RENTED_OUT)) == ""

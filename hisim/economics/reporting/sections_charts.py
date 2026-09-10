@@ -19,13 +19,14 @@ all records its reason on the `_ChapterContext` and returns nothing; the documen
 reasons under its table of contents, because a reader who notices a missing section is never the
 person reading the log.
 
-The owner, tenant and society statements are one table builder and one caption builder rather
-than three, because `views.StatementPartitions` already carries the words each party's two sides
-are called by — the society statement reads "real resource costs" / "transfers" where the
-household ones read "cash flows" / "accounting credits", and the renderer never learns which
-party it is drawing. The landlord's (Q21) predates the generalization and keeps its own pair: its
-caption carries the §559 levy verdict, its rows say "cash" and "accounting" where the shared
-table spells the labels out, and it is the one statement drawn as a Sankey as well as tabulated.
+All four party statements — the owner's, the tenant's, society's and the landlord's (Q21) — are
+one section builder rather than four, because `views.StatementPartitions` already carries the
+words each party's two sides are called by: the society statement reads "real resource costs" /
+"transfers" where the household ones read "cash flows" / "accounting credits", and the renderer
+never learns which party it is drawing. What differs per party is passed in — the sentence its
+absence is recorded with, the paragraph stating this run's own figures, and, for the landlord,
+the §559 levy verdict opening that paragraph, the short side words "cash" / "accounting" its
+table has used since before the partitions existed, and the income Sankey below it.
 """
 
 
@@ -517,45 +518,132 @@ def _actor_flow_section_html(result: LifecycleCostResult, context: _ChapterConte
     )
 
 
-def _statement_table_html(statement: views.PerspectiveStatement) -> str:
+def _statement_table_html(
+    statement: views.PerspectiveStatement, side_labels: Optional[Tuple[str, str]] = None
+) -> str:
     """The two-sided table every party statement shares (Q21, Q26 F4).
 
     One row per category with its present value and the side it sits on, then the two subtotals
     and the net position. The side column is labelled from the statement's own partition, so the
     society statement reads "real resource costs" / "transfers" where the household ones read
     "cash flows" / "accounting credits", without this function knowing which party it is drawing.
-    The landlord statement is the one that does not come through here — it predates the
-    generalization and carries its own table with the levy verdict in its caption.
 
     The subtotals are printed even when a side is empty — the tenant's credit side always is —
     because a stated zero is the answer to "where is my credit side?" and a missing row is not.
 
     Args:
         statement: The partition `views.perspective_statement` returned.
+        side_labels: What the *side* column calls the two sides, when that is not the partition's
+            own pair of labels. The landlord statement (Q21) is the one caller that differs: its
+            rows have said "cash" and "accounting" since before the partitions existed, while its
+            subtotal rows spell the labels out like everyone else's, and this parameter is what
+            keeps that table identical to the byte while it is drawn by the shared builder.
 
     Returns:
         The table, rows in the statement's own order.
     """
     partition = statement.partition
+    primary_side, secondary_side = side_labels or (partition.primary_label, partition.secondary_label)
     rows = [
         [_esc(line.label), _fmt(line.npv_in_euro),
-         partition.secondary_label if line.is_accounting_credit else partition.primary_label]
+         secondary_side if line.is_accounting_credit else primary_side]
         for line in list(statement.cash_lines) + list(statement.accounting_lines)
     ]
     rows.append([
         f"<b>{_esc(partition.primary_label)}, subtotal</b>",
         f"<b>{_fmt(statement.cash_subtotal_in_euro)}</b>",
-        f"<b>{_esc(partition.primary_label)}</b>",
+        f"<b>{_esc(primary_side)}</b>",
     ])
     rows.append([
         f"<b>{_esc(partition.secondary_label)}, subtotal</b>",
         f"<b>{_fmt(statement.accounting_subtotal_in_euro)}</b>",
-        f"<b>{_esc(partition.secondary_label)}</b>",
+        f"<b>{_esc(secondary_side)}</b>",
     ])
     rows.append([
         "<b>net position</b>", f"<b>{_fmt(statement.net_position_in_euro)}</b>", "<b>both sides</b>",
     ])
     return _table(["Item", "NPV [EUR]", "Side"], rows)
+
+
+def _statement_caption(statement: views.PerspectiveStatement, lead: str = "", trail: str = "") -> str:
+    """The run's own two subtotals under a party statement, in the partition's own words.
+
+    The prose says what the two sides *are*; this says what they came to here, which is the half a
+    reader cannot get from anywhere else on the page.
+
+    Args:
+        statement: The partition `views.perspective_statement` returned.
+        lead: Text opening the same paragraph, for a party that states something before its
+            subtotals — the landlord's §559 levy verdict. Inserted verbatim, like `charts._table`'s
+            cells: it carries its own `<b>` emphasis and escapes whatever it interpolates.
+        trail: Text closing it, for a party that qualifies them afterwards — the landlord's
+            reminder that only the cash half of an advantage ever reaches an account. Verbatim too.
+
+    Returns:
+        The caption paragraph.
+    """
+    partition = statement.partition
+    return (
+        f"<p class='sub'>{lead}{_esc(partition.primary_label.capitalize())} come to "
+        f"<b>{_fmt(statement.cash_subtotal_in_euro)} EUR</b> and "
+        f"{_esc(partition.secondary_label)} to "
+        f"<b>{_fmt(statement.accounting_subtotal_in_euro)} EUR</b> in present value; together they "
+        f"are the net position of {_esc(_band_str(statement.net_position_band))}.{trail}</p>"
+    )
+
+
+def _statement_section_html(
+    section: Tuple[str, str],
+    result: LifecycleCostResult,
+    partition: views.StatementPartition,
+    context: _ChapterContext,
+    no_flows_reason: str,
+    note: Callable[[views.PerspectiveStatement], str],
+    after_table: Callable[[views.PerspectiveStatement], str] = lambda _statement: "",
+    side_labels: Optional[Tuple[str, str]] = None,
+) -> str:
+    """The skeleton all four party statements are drawn on (Q21, Q26 F4).
+
+    Every one of them is the same document: the section's heading and its authored explanation,
+    then this run's own figures in prose, then the two-sided table, and — for the landlord — the
+    same statement drawn again as an income Sankey. Only the words differ, and the words are
+    already data: `views.StatementPartitions` carries what each party's two sides are called, so
+    the four builders left here are their arguments, not four renderings.
+
+    They were four copies until this existed, and the landlord's had already drifted: it carried
+    its own table builder and its own caption, so a change to the shared pair reached three
+    statements out of four. That is the failure a fourth copy is for.
+
+    Args:
+        section: The `(anchor, name)` pair of `ReportSections` this party's statement is.
+        result: The perspective to state.
+        partition: Which two sides to split it into, and what to call them.
+        context: The chapter this section is being rendered into.
+        no_flows_reason: The sentence recorded under "Not drawn for this run" when the
+            perspective books nothing at all — each party phrases its own absence.
+        note: This run's own figures, as the paragraph(s) between the explanation and the table.
+        after_table: Anything drawn below the table; only the landlord uses it, for the Sankey.
+        side_labels: Passed through to `_statement_table_html` — the landlord's short side words.
+
+    Returns:
+        The section, or the empty string when the perspective books no flow at all, its reason
+        recorded on the context.
+
+    Raises:
+        CostDataError: From `views.perspective_statement`, if the two sides do not sum to the
+            perspective's NPV, or if a transfer partition is asked for on a scoped perspective.
+    """
+    statement = views.perspective_statement(result, partition)
+    if not statement.cash_lines and not statement.accounting_lines:
+        return context.skip(section, no_flows_reason)
+    return (
+        _section_open(section, context, result.perspective_id)
+        + _explanation_html(section, context)
+        + note(statement)
+        + _statement_table_html(statement, side_labels)
+        + after_table(statement)
+        + "</section>"
+    )
 
 
 def _owner_statement_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
@@ -578,19 +666,14 @@ def _owner_statement_section_html(result: LifecycleCostResult, context: _Chapter
     Returns:
         The section, or the empty string for a perspective that books no flows at all.
     """
-    statement = views.perspective_statement(result, views.StatementPartitions.OWNER)
-    if not statement.cash_lines and not statement.accounting_lines:
-        return context.skip(
-            ReportSections.OWNER_STATEMENT,
-            f"Perspective {result.perspective_id!r} books no flows at all, so there is no owner "
-            "position to state.",
-        )
-    return (
-        _section_open(ReportSections.OWNER_STATEMENT, context, result.perspective_id)
-        + _explanation_html(ReportSections.OWNER_STATEMENT, context)
-        + _statement_caption(statement)
-        + _statement_table_html(statement)
-        + "</section>"
+    return _statement_section_html(
+        ReportSections.OWNER_STATEMENT,
+        result,
+        views.StatementPartitions.OWNER,
+        context,
+        f"Perspective {result.perspective_id!r} books no flows at all, so there is no owner "
+        "position to state.",
+        note=_statement_caption,
     )
 
 
@@ -603,9 +686,12 @@ def _tenant_statement_section_html(result: LifecycleCostResult, context: _Chapte
     a tenant receives nothing back in this ledger, and a lower energy bill shows up as a smaller
     cost line rather than as income.
 
-    The caption additionally checks the levy against the landlord statement's levy income, since
-    the pair is booked as equal halves and a difference between the two sections would mean the
-    transfer had leaked.
+    The caption states that the levy is the exact counterpart of the landlord statement's levy
+    income, and that identity is *checked* rather than asserted: `assembly._rented_chapter_html`
+    runs `views.levy_transfer_reconciles` over the two statements before either is drawn, and
+    refuses the chapter when the two halves of the transfer differ. The check lives there because
+    it needs both parties, and this section only ever sees one of them — which is precisely how
+    the sentence came to be printed under a comparison nobody was making.
 
     Args:
         result: The tenant perspective to state.
@@ -614,13 +700,30 @@ def _tenant_statement_section_html(result: LifecycleCostResult, context: _Chapte
     Returns:
         The section, or the empty string for a tenant the allocation gave no flows.
     """
-    statement = views.perspective_statement(result, views.StatementPartitions.TENANT)
-    if not statement.cash_lines and not statement.accounting_lines:
-        return context.skip(
-            ReportSections.TENANT_STATEMENT,
-            f"The allocation assigned perspective {result.perspective_id!r} no flows at all, so "
-            "there is no tenant position to state.",
-        )
+    return _statement_section_html(
+        ReportSections.TENANT_STATEMENT,
+        result,
+        views.StatementPartitions.TENANT,
+        context,
+        f"The allocation assigned perspective {result.perspective_id!r} no flows at all, so "
+        "there is no tenant position to state.",
+        note=lambda statement: _statement_caption(statement) + _tenant_levy_note(statement),
+    )
+
+
+def _tenant_levy_note(statement: views.PerspectiveStatement) -> str:
+    """How much of the tenant's position is the levy, and the counterpart it is the half of.
+
+    The one figure of this statement a reader is looking for, stated before the table so the rest
+    of it reads as "and the rest is energy". The identity the sentence claims is verified by
+    `views.levy_transfer_reconciles` in the chapter builder (see the section's docstring).
+
+    Args:
+        statement: The tenant's statement.
+
+    Returns:
+        The paragraph.
+    """
     levy_line = next(
         (line for line in statement.cash_lines
          if line.category == CostCategory.MODERNIZATION_LEVY),
@@ -634,14 +737,7 @@ def _tenant_statement_section_html(result: LifecycleCostResult, context: _Chapte
         "This tenant pays no modernization levy, so the whole position is energy and apportioned "
         "operating cost."
     )
-    return (
-        _section_open(ReportSections.TENANT_STATEMENT, context, result.perspective_id)
-        + _explanation_html(ReportSections.TENANT_STATEMENT, context)
-        + _statement_caption(statement)
-        + f"<p class='sub'>{levy_note}</p>"
-        + _statement_table_html(statement)
-        + "</section>"
-    )
+    return f"<p class='sub'>{levy_note}</p>"
 
 
 def _society_statement_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
@@ -654,6 +750,12 @@ def _society_statement_section_html(result: LifecycleCostResult, context: _Chapt
     transfer rows are the zeros that statement makes checkable — which is stated in the caption
     rather than left as an empty side.
 
+    Only ever rendered for a SYSTEM-scoped perspective: the society partition reads its transfer
+    side off the full timeline and its resource side off the scoped one, so any other scope is
+    refused by the view. `views.story_perspectives` classifies on exactly that condition, which is
+    what keeps a landlord-scoped macroeconomic view — a legal perspective — out of this chapter
+    instead of taking the report down with a reconciliation error here.
+
     Args:
         result: The macroeconomic perspective to state.
         context: The chapter this section is being rendered into.
@@ -661,13 +763,34 @@ def _society_statement_section_html(result: LifecycleCostResult, context: _Chapt
     Returns:
         The section, or the empty string for a perspective that books no flows at all.
     """
-    statement = views.perspective_statement(result, views.StatementPartitions.SOCIETY)
-    if not statement.cash_lines and not statement.accounting_lines:
-        return context.skip(
-            ReportSections.SOCIETY_STATEMENT,
-            f"Perspective {result.perspective_id!r} books no flows at all, so there is no "
-            "macroeconomic position to state.",
-        )
+    return _statement_section_html(
+        ReportSections.SOCIETY_STATEMENT,
+        result,
+        views.StatementPartitions.SOCIETY,
+        context,
+        f"Perspective {result.perspective_id!r} books no flows at all, so there is no "
+        "macroeconomic position to state.",
+        note=lambda statement: _society_transfer_note(statement, result),
+    )
+
+
+def _society_transfer_note(
+    statement: views.PerspectiveStatement, result: LifecycleCostResult
+) -> str:
+    """What the transfer side came to, and at what price CO2 entered this view.
+
+    The society statement's two claims, in the run's own figures: that the transfers cancel, and
+    that the CO2 in the resource column is priced at a damage cost rather than at anything a
+    household pays. The second is read off the result rather than the statement because the
+    damage cost is a parameter of the run, and the row it produced is one of the resource lines.
+
+    Args:
+        statement: The society statement being drawn.
+        result: The perspective it was built from, for the damage cost and its parameter.
+
+    Returns:
+        The paragraph.
+    """
     transfers = (
         "The macroeconomic accounting removes every transfer at source — no subsidy, no feed-in "
         "remuneration, no CO2 price and no levy is booked in this view — so the transfer side "
@@ -684,35 +807,7 @@ def _society_statement_section_html(result: LifecycleCostResult, context: _Chapt
         if damage is not None else
         " This view books no CO2 damage cost."
     )
-    return (
-        _section_open(ReportSections.SOCIETY_STATEMENT, context, result.perspective_id)
-        + _explanation_html(ReportSections.SOCIETY_STATEMENT, context)
-        + f"<p class='sub'>{transfers}{damage_note}</p>"
-        + _statement_table_html(statement)
-        + "</section>"
-    )
-
-
-def _statement_caption(statement: views.PerspectiveStatement) -> str:
-    """The run's own two subtotals under a party statement, in the partition's own words.
-
-    The prose says what the two sides *are*; this says what they came to here, which is the half a
-    reader cannot get from anywhere else on the page.
-
-    Args:
-        statement: The partition `views.perspective_statement` returned.
-
-    Returns:
-        The caption paragraph.
-    """
-    partition = statement.partition
-    return (
-        f"<p class='sub'>{_esc(partition.primary_label.capitalize())} come to "
-        f"<b>{_fmt(statement.cash_subtotal_in_euro)} EUR</b> and "
-        f"{_esc(partition.secondary_label)} to "
-        f"<b>{_fmt(statement.accounting_subtotal_in_euro)} EUR</b> in present value; together they "
-        f"are the net position of {_esc(_band_str(statement.net_position_band))}.</p>"
-    )
+    return f"<p class='sub'>{transfers}{damage_note}</p>"
 
 
 def _landlord_statement_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
@@ -729,6 +824,10 @@ def _landlord_statement_section_html(result: LifecycleCostResult, context: _Chap
     the perspective's NPV before this ever runs, so the table, the picture and the headline figure
     cannot disagree.
 
+    The one statement with something to say both above and below its table, which is why the
+    shared skeleton has an `after_table` at all: the levy verdict opens the caption and the Sankey
+    closes the section.
+
     Args:
         result: The landlord perspective to state.
         context: The chapter this section is being rendered into.
@@ -736,36 +835,16 @@ def _landlord_statement_section_html(result: LifecycleCostResult, context: _Chap
     Returns:
         The section, or the empty string for a perspective that books no flows at all.
     """
-    statement = views.landlord_statement(result)
-    if not statement.cash_lines and not statement.accounting_lines:
-        return context.skip(
-            ReportSections.LANDLORD_STATEMENT,
-            f"Perspective {result.perspective_id!r} books no flows at all, so there is no "
-            "landlord business case to state.",
-        )
-    rows = [
-        [_esc(line.label), _fmt(line.npv_in_euro),
-         "accounting" if line.is_accounting_credit else "cash"]
-        for line in list(statement.cash_lines) + list(statement.accounting_lines)
-    ]
-    rows.append([
-        "<b>cash flows, subtotal</b>", f"<b>{_fmt(statement.cash_subtotal_in_euro)}</b>", "<b>cash</b>",
-    ])
-    rows.append([
-        "<b>accounting credits, subtotal</b>",
-        f"<b>{_fmt(statement.accounting_subtotal_in_euro)}</b>",
-        "<b>accounting</b>",
-    ])
-    rows.append([
-        "<b>net position</b>", f"<b>{_fmt(statement.net_position_in_euro)}</b>", "<b>both sides</b>",
-    ])
-    return (
-        _section_open(ReportSections.LANDLORD_STATEMENT, context, result.perspective_id)
-        + _explanation_html(ReportSections.LANDLORD_STATEMENT, context)
-        + _landlord_statement_caption(statement)
-        + _table(["Item", "NPV [EUR]", "Side"], rows)
-        + _landlord_statement_sankey(statement)
-        + "</section>"
+    return _statement_section_html(
+        ReportSections.LANDLORD_STATEMENT,
+        result,
+        views.StatementPartitions.LANDLORD,
+        context,
+        f"Perspective {result.perspective_id!r} books no flows at all, so there is no "
+        "landlord business case to state.",
+        note=_landlord_statement_caption,
+        after_table=_landlord_statement_sankey,
+        side_labels=("cash", "accounting"),
     )
 
 
@@ -800,13 +879,11 @@ def _landlord_statement_caption(statement: views.PerspectiveStatement) -> str:
         )
     if levy is not None:
         levy_note += _levy_world_verdicts(levy)
-    return (
-        f"<p class='sub'>{levy_note} Cash flows come to "
-        f"<b>{_fmt(statement.cash_subtotal_in_euro)} EUR</b> and accounting credits to "
-        f"<b>{_fmt(statement.accounting_subtotal_in_euro)} EUR</b> in present value; together they "
-        f"are the net position of {_esc(_band_str(statement.net_position_band))}. A negative net "
-        "position is an advantage on the stated basis, but only the cash half of it ever reaches "
-        "an account.</p>"
+    return _statement_caption(
+        statement,
+        lead=f"{levy_note} ",
+        trail=" A negative net position is an advantage on the stated basis, but only the cash "
+              "half of it ever reaches an account.",
     )
 
 
@@ -908,13 +985,17 @@ def _loan_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> st
     timeline it replaces, and because the cost-of-credit section beside it is the second half of
     the same question.
 
+    Rendered per story chapter, over that chapter's own perspectives: the owner's loan is not the
+    landlord's, and a chapter that showed the other party's debt service would be answering a
+    question about somebody else's money.
+
     Args:
-        matrix: The perspectives to draw; one block each, in matrix order.
+        matrix: The chapter's perspectives; one block each, in matrix order.
         context: The chapter this section is being rendered into.
 
     Returns:
-        The section, or the empty string when nobody in this bundle borrows — a run of cash
-        purchases produces no section at all rather than an empty box.
+        The section, or the empty string when nobody in this chapter's story borrows — a chapter
+        of cash purchases produces no section at all rather than an empty box.
     """
     blocks = []
     for perspective_id, result in matrix.results.items():
@@ -925,8 +1006,8 @@ def _loan_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> st
     if not blocks:
         return context.skip(
             ReportSections.LOAN,
-            "No evaluated perspective carries loan flows: every purchase in this bundle is a "
-            "cash purchase.",
+            "No perspective of this chapter's story carries loan flows: every purchase in it is "
+            "a cash purchase.",
         )
     return (
         _section_open(ReportSections.LOAN, context)
@@ -969,14 +1050,15 @@ def _cost_of_credit_section_html(matrix: EvaluationMatrix, context: _ChapterCont
     block names the perspective it belongs to. It used to disclose the *first* financed
     perspective only, which is a silent half-answer in the common bundle where a gross and a net
     view are both financed: the reader saw one effective rate, with nothing to say that a second
-    one existed and differed.
+    one existed and differed. Like the loan section it draws, it is rendered per story chapter,
+    over that chapter's own perspectives.
 
     Args:
-        matrix: The perspectives to disclose; the financed ones get a block, in matrix order.
+        matrix: The chapter's perspectives; the financed ones get a block, in matrix order.
         context: The chapter this section is being rendered into.
 
     Returns:
-        The section, or the empty string when nobody in this bundle borrows.
+        The section, or the empty string when nobody in this chapter's story borrows.
     """
     blocks = []
     for perspective_id, result in matrix.results.items():
@@ -990,7 +1072,8 @@ def _cost_of_credit_section_html(matrix: EvaluationMatrix, context: _ChapterCont
     if not blocks:
         return context.skip(
             ReportSections.COST_OF_CREDIT,
-            "No evaluated perspective carries loan flows, so there is no credit to price.",
+            "No perspective of this chapter's story carries loan flows, so there is no credit "
+            "to price here.",
         )
     return (
         _section_open(ReportSections.COST_OF_CREDIT, context)
@@ -1626,7 +1709,7 @@ def _year_spans(intervals: List[Tuple[int, int]]) -> str:
     return ", ".join(spans[:-1]) + " and " + spans[-1]
 
 
-def _equity_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
+def _equity_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
     """Equity build-up: asset book value against outstanding debt — the lender's solvency picture.
 
     Answers "how much of the installation do I own", and carries audit weight beyond that: the
@@ -1639,21 +1722,29 @@ def _equity_section_html(result: LifecycleCostResult, context: _ChapterContext) 
     used to build it, test it and throw it away, and the view then walked the same timeline again
     for the same numbers.
 
+    It takes the chapter's whole matrix and picks the financed perspective out of it, like the
+    loan and cost-of-credit sections it belongs beside: the three are one question — what does the
+    borrowing look like — and a chapter either has a financed perspective for all three or for
+    none of them.
+
     Args:
-        result: The perspective whose book value and debt are drawn.
+        matrix: The chapter's perspectives; the first financed one is drawn.
         context: The chapter this section is being rendered into.
 
     Returns:
-        The section, or the empty string for an unfinanced perspective — with no debt line there
-        is no gap to draw and no solvency story to tell.
+        The section, or the empty string when this chapter's story is unfinanced — with no debt
+        line there is no gap to draw and no solvency story to tell.
     """
-    amortization = views.loan_amortization_series(result)
-    if not amortization.has_flows():
+    result = _first_result_where(
+        matrix, lambda candidate: views.loan_amortization_series(candidate).has_flows()
+    )
+    if result is None:
         return context.skip(
             ReportSections.EQUITY_BUILD_UP,
-            f"Perspective {result.perspective_id!r} is unfinanced, so there is no debt line and "
+            "No perspective of this chapter's story is financed, so there is no debt line and "
             "no gap story to draw.",
         )
+    amortization = views.loan_amortization_series(result)
     series = views.asset_debt_series(result, amortization)
     years = list(range(len(series.book_value_in_euro)))
     underwater = (

@@ -79,6 +79,12 @@ def annual_energy_quantities(
     Keyed by `EnergyCarrier.value`, i.e. by the timeline subject name of the carrier, so a
     consumer can join a bill against the carrier's cash flows without a second mapping.
 
+    Volumes of the same carrier **add up**: a carrier can be billed by more than one meter, and
+    every other reading of those records sums them — the energy calculator's emissions, the CO2
+    accumulator's per-carrier mass, the cash flows themselves. This used to assign per determinant
+    instead, so with two meters the published quantity was the last one while the published mass
+    was both, and the report's CO2 factors table stated a multiplication that did not come out.
+
     Annualization uses the `guard_zero` divisor of `calculators/annualization.py`: the two
     presentation sites this replaces (`reporting.py:231` and `:1189`, both
     ``max(fraction, 1e-9)``) are guarded, and the engine's own energy calculator has already
@@ -100,11 +106,14 @@ def annual_energy_quantities(
     """
     quantities: Dict[str, AnnualEnergyQuantities] = {}
     for determinants in billing:
+        carried = quantities.get(determinants.carrier.value)
         quantities[determinants.carrier.value] = AnnualEnergyQuantities(
-            bought_in_kwh=annualize(
+            bought_in_kwh=(carried.bought_in_kwh if carried is not None else 0.0)
+            + annualize(
                 determinants.energy_bought_in_kwh, simulated_period_fraction, guard_zero=True
             ),
-            sold_in_kwh=annualize(
+            sold_in_kwh=(carried.sold_in_kwh if carried is not None else 0.0)
+            + annualize(
                 determinants.energy_sold_in_kwh, simulated_period_fraction, guard_zero=True
             ),
         )

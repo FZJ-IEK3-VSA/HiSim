@@ -12,8 +12,11 @@ tenant's, the macroeconomic one — with each section picking a perspective of i
 `_building_chapter_html` plus one builder per story, each rendering its sections on the
 perspectives `views.story_perspectives` classified into it and opening them through a
 chapter-scoped `scaffold._ChapterContext`, so anchors are chapter-prefixed and a section name
-appearing in two chapters is explained once. A chapter whose perspectives this run has none of
-is skipped with a log line, never rendered empty.
+appearing in two chapters is explained once. A chapter whose perspectives this run has none of is
+skipped — named with its reason under the document's table of contents, never logged and never
+rendered empty — and so is a section a chapter has no perspective for: the three financing
+sections are offered by the two chapters whose story can borrow, the owner's and the rented one,
+and drawn by whichever of them does.
 """
 
 
@@ -21,7 +24,7 @@ from __future__ import annotations
 
 import datetime
 import os
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from hisim.economics import views
 from hisim.economics.input_audit import InputAuditReport
@@ -166,8 +169,11 @@ def _actor_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> s
 
     The unallocated SYSTEM payer is filtered out of the rows (it is the residue, not an actor),
     and perspectives that were never allocated are skipped entirely — recognized by having fewer
-    than two real payers while carrying a SYSTEM entry. The section disappears when no
-    perspective in the matrix is allocated, which is the case for a plain owner-occupier run.
+    than two real payers. The SYSTEM entry used to be part of that test, so a perspective with
+    exactly one real payer and no residue was drawn as a split: one whisker under a header
+    stating that the payer NPVs sum to the system NPV, which they trivially do when there is one
+    of them. The section disappears when no perspective in the matrix is allocated, which is the
+    case for a plain owner-occupier run.
 
     Args:
         matrix: Every evaluated perspective; the unallocated ones are skipped.
@@ -179,11 +185,12 @@ def _actor_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> s
     blocks = []
     for perspective_id, result in matrix.results.items():
         payers = {payer: band for payer, band in result.npv_by_payer.items() if payer != Actor.SYSTEM}
-        if len(payers) < 2 and Actor.SYSTEM in result.npv_by_payer:
-            continue  # unallocated (system-scope) perspective
-        rows = [(payer.value, band) for payer, band in payers.items()]
-        if not rows:
+        # One payer is not a split, whether or not a SYSTEM residue happens to sit beside it: the
+        # section's whole subject is who carries which share, and a single whisker over a
+        # "payer NPVs sum to the system NPV" header states a zero-sum invariant about one number.
+        if len(payers) < 2:
             continue
+        rows = [(payer.value, band) for payer, band in payers.items()]
         system_total = views.payer_npv_total(result)
         # Payer x display-group table: which cost blocks land with whom.
         payer_categories: Dict[str, Dict[int, UncertainValue]] = {
@@ -682,11 +689,7 @@ def _building_chapter_html(
         _audit_section_html(audit, context) if audit is not None else "",
         # Q26 F2: the causes, directly after the audit of what was priced and before the first
         # figure that is computed from them.
-        _assumptions_section_html(
-            reference,
-            context,
-            co2_damage_priced=_first_result_where(matrix, views.prices_co2_damage) is not None,
-        ),
+        _assumptions_section_html(matrix, context),
         _investment_section_html(reference, context),
         _component_events_section_html(reference, context),
         _timeline_section_html(matrix, context),
@@ -718,6 +721,42 @@ def _sub_matrix(results: List[LifecycleCostResult]) -> EvaluationMatrix:
         A matrix carrying exactly those results, keyed by perspective id.
     """
     return EvaluationMatrix(results={result.perspective_id: result for result in results})
+
+
+def _is_financed(result: LifecycleCostResult) -> bool:
+    """Whether this perspective borrows — the predicate the three financing sections share.
+
+    The loan panel, the cost of credit and the equity build-up are one question asked three ways,
+    and each chapter now asks it of its own perspectives, so the test for "is there a loan here at
+    all" is written once. It is `loan_amortization_series(...).has_flows()`, the same reading the
+    sections themselves do, rather than a cheaper scan of the timeline: a perspective whose loan
+    the amortization view cannot lay out is not one the sections could draw either.
+
+    Args:
+        result: The perspective to test.
+
+    Returns:
+        True when the perspective carries loan flows.
+    """
+    return views.loan_amortization_series(result).has_flows()
+
+
+def _scoped_to(actor: Actor) -> Callable[[LifecycleCostResult], bool]:
+    """A `_first_result_where` predicate for "this perspective reports on that party".
+
+    The rented chapter has to find its landlord and its tenant *by scope*, and to notice when one
+    of them is missing. It used to take `next((... scoped ...), stories.rented[0])` for each,
+    which silently drew a tenant-only bundle's tenant flows as the landlord statement — one
+    party's money under the other party's heading, in the two sections whose whole subject is who
+    holds which half.
+
+    Args:
+        actor: The scope the perspective must report on.
+
+    Returns:
+        The predicate.
+    """
+    return lambda result: result.scope_payer == actor
 
 
 def _comparison_for(
@@ -804,9 +843,7 @@ def _owner_chapter_html(
     chapter = context.for_chapter(ReportChapters.OWNER_OCCUPIED)
     owner_matrix = _sub_matrix(list(stories.owner))
     lead = stories.owner[0]
-    financed = _first_result_where(
-        owner_matrix, lambda result: views.loan_amortization_series(result).has_flows()
-    ) or lead
+    financed = _first_result_where(owner_matrix, _is_financed) or lead
     funded = _first_result_where(owner_matrix, _has_year_zero_funding) or lead
     multi_actor = _first_result_where(
         owner_matrix, lambda result: len({entry.payer for entry in result.timeline.entries}) > 1
@@ -827,7 +864,7 @@ def _owner_chapter_html(
             _loan_section_html(owner_matrix, chapter),
             _cost_of_credit_section_html(owner_matrix, chapter),
             _monthly_burden_section_html(lead, chapter),
-            _equity_section_html(financed, chapter),
+            _equity_section_html(owner_matrix, chapter),
             _actor_flow_section_html(multi_actor, chapter),
         ]),
     ]
@@ -846,6 +883,19 @@ def _rented_chapter_html(
     it is the section that separates the landlord's cash from the landlord's book value, which is
     what makes every figure after it readable.
 
+    **Either party may be missing.** A bundle can evaluate a tenant view without a landlord one,
+    and each party's sections are guarded on *its own* perspective rather than on the chapter
+    having any: the two statements used to fall back to the chapter's first result, so a
+    tenant-only bundle drew the tenant's flows under the heading "Landlord statement" — one
+    party's money presented as the other's, in the two sections whose entire subject is which half
+    is whose. What the absent party would have carried is skipped with its reason instead, and the
+    chapter keeps whichever side the run does have.
+
+    The levy is the one figure the two statements share, and it is checked here rather than in
+    either of them: `views.levy_transfer_reconciles` compares the tenant's levy line against the
+    landlord's levy income before either section is drawn, so the tenant caption's claim that the
+    two are the same booked transfer is verified when both parties are on the page.
+
     Args:
         stories: The three story lists; this chapter renders `stories.rented`.
         comparison: The run's comparison, passed on only when this chapter owns its perspective.
@@ -853,6 +903,10 @@ def _rented_chapter_html(
 
     Returns:
         The chapter heading and its sections, or the empty list when nothing was rented out.
+
+    Raises:
+        CostDataError: If both parties are present and their two halves of the modernization levy
+            do not cancel (see `views.levy_transfer_reconciles`).
     """
     if not stories.rented:
         return context.skip_chapter(
@@ -862,28 +916,50 @@ def _rented_chapter_html(
         )
     chapter = context.for_chapter(ReportChapters.RENTED_OUT)
     rented_matrix = _sub_matrix(list(stories.rented))
-    landlord = next(
-        (result for result in stories.rented if result.scope_payer == Actor.LANDLORD),
-        stories.rented[0],
-    )
-    tenant = next(
-        (result for result in stories.rented if result.scope_payer == Actor.TENANT),
-        stories.rented[0],
-    )
+    landlord = _first_result_where(rented_matrix, _scoped_to(Actor.LANDLORD))
+    tenant = _first_result_where(rented_matrix, _scoped_to(Actor.TENANT))
+    if landlord is not None and tenant is not None:
+        views.levy_transfer_reconciles(
+            views.landlord_statement(landlord),
+            views.perspective_statement(tenant, views.StatementPartitions.TENANT),
+        )
     rented_comparison = _comparison_for(stories.rented, comparison)
+    lead = landlord or tenant or stories.rented[0]
+    absent_landlord = (
+        "No perspective of this run reports on the landlord, so this chapter tells the tenant's "
+        "side of the tenancy alone."
+    )
+    absent_tenant = (
+        "No perspective of this run reports on the tenant, so this chapter tells the landlord's "
+        "side of the tenancy alone."
+    )
     return [
         _chapter_open(ReportChapters.RENTED_OUT),
         "".join([
-            _landlord_statement_section_html(landlord, chapter),
-            _tenant_statement_section_html(tenant, chapter),
+            _landlord_statement_section_html(landlord, chapter) if landlord is not None
+            else chapter.skip(ReportSections.LANDLORD_STATEMENT, absent_landlord),
+            _tenant_statement_section_html(tenant, chapter) if tenant is not None
+            else chapter.skip(ReportSections.TENANT_STATEMENT, absent_tenant),
             _actor_section_html(rented_matrix, chapter),
-            _actor_flow_section_html(landlord, chapter),
-            _monthly_burden_section_html(tenant, chapter),
+            _actor_flow_section_html(landlord, chapter) if landlord is not None
+            else chapter.skip(
+                ReportSections.WHO_PAYS_WHOM,
+                f"{absent_landlord} The flow diagram is drawn on the landlord, the party whose "
+                "ribbons run to and from every other one.",
+            ),
+            _monthly_burden_section_html(tenant, chapter) if tenant is not None
+            else chapter.skip(
+                ReportSections.MONTHLY_BURDEN,
+                f"{absent_tenant} The monthly burden is the tenant's rent and bill.",
+            ),
             _liquidity_section_html(
-                _result_for(stories.rented, rented_comparison, landlord),
+                _result_for(stories.rented, rented_comparison, lead),
                 rented_comparison,
                 chapter,
             ),
+            _loan_section_html(rented_matrix, chapter),
+            _cost_of_credit_section_html(rented_matrix, chapter),
+            _equity_section_html(rented_matrix, chapter),
         ]),
     ]
 
@@ -895,10 +971,24 @@ def _society_chapter_html(
 ) -> List[str]:
     """The macroeconomic story: transfers cancel, CO2 enters at its damage cost (rule 2.8).
 
-    Two sections only, because that is all the perspective supports: the cash curve of the
-    resource cost over time and who pays whom once the transfers between the parties have netted
-    themselves out. Skipped — and named under the contents — when the bundle evaluated no
-    macroeconomic perspective.
+    Three sections only, because that is all the perspective supports: the statement, the cash
+    curve of the resource cost over time and who pays whom once the transfers between the parties
+    have netted themselves out. Skipped entirely — and named under the contents — when the bundle
+    evaluated no system-scoped perspective that books CO2 damage.
+
+    **No financing here, and no "Not drawn" entry for it either.** The loan, the cost of credit
+    and the equity build-up are the owner's, the landlord's and the tenant's question — who
+    borrowed, at what rate, and how much of the hardware they own by the horizon — and this
+    chapter is about resources, not about whose account they came out of. A macroeconomic view
+    books no debt service by construction, so offering the three and recording that they could not
+    be drawn would print the same three lines under Society in every report that has this chapter:
+    structure, not information. They are rendered in the owner and rented chapters, on those
+    stories' own financed perspectives.
+
+    `views.story_perspectives` classifies a perspective into this chapter only when it books CO2
+    damage **and** reports on the system as a whole, which is the condition the macroeconomic
+    partition of the statement below is defined under; a landlord-scoped macroeconomic view is
+    told as the landlord's story instead of taking this chapter down with it.
 
     Args:
         stories: The three story lists; this chapter renders `stories.society`.
@@ -907,13 +997,16 @@ def _society_chapter_html(
 
     Returns:
         The chapter heading and its sections, or the empty list when no perspective books CO2 at
-        its damage cost.
+        its damage cost on the system's own basis.
     """
     if not stories.society:
         return context.skip_chapter(
             ReportChapters.SOCIETY,
-            "This run evaluated no macroeconomic perspective, so there is no view in which "
-            "transfers cancel and CO2 is priced at its damage cost.",
+            # Both halves of the classification, because both can be the reason: a run may have
+            # no macroeconomic view at all, or one that is scoped to a party and is therefore
+            # told as that party's story (see `views.story_perspectives`).
+            "This run evaluated no system-scoped perspective that books CO2 damage cost, so "
+            "there is no society story to tell.",
         )
     chapter = context.for_chapter(ReportChapters.SOCIETY)
     macro = stories.society[0]

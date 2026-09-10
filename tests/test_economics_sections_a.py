@@ -71,7 +71,12 @@ from hisim.economics.results import EvaluationMatrix, compare
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
 
-from tests.economics_report_test_helpers import rects, rendered_sections
+from tests.economics_report_test_helpers import (
+    back_link_target,
+    opens_with_four_parts,
+    rects,
+    rendered_sections,
+)
 
 pytestmark = pytest.mark.base
 
@@ -573,34 +578,21 @@ class TestSectionExplanations:
     one section at a time would never notice.
     """
 
-    #: `<p>` `<p>` `<details>` `<details>` in that order, immediately after a section's heading.
-    #: The heading is an `<h3>` under the chapter's `<h2>` and carries the chapter as a trailing
-    #: `<span>`.
-    FOUR_PART_OPENING = (
-        r"<section id=\"[^\"]+\"><h3>[^<]*(?:<span class='chapter-tag'>[^<]*</span>)?</h3>"
-        r"<p class='sub'>.+?</p>"
-        r"<p class='sub'>.+?</p>"
-        r"<details><summary>Terms used here</summary><dl><dt>.+?</dl></details>"
-        r"<details><summary>How this is calculated</summary><p class='sub'>.+?</details>"
-    )
-
-    #: The single paragraph a *repeated* section name renders instead of the four parts.
-    CROSS_REFERENCE_OPENING = (
-        r"<section id=\"[^\"]+\"><h3>[^<]*(?:<span class='chapter-tag'>[^<]*</span>)?</h3>"
-        r"<p class='sub'>The same chart, read the same way: see the explanation under "
-        r"<a href=\"#[^\"]+\">[^<]+</a>\.</p>"
-    )
-
     def test_every_rendered_section_opens_with_the_four_parts(self, report):
-        """No section may render its chart without the block that explains it — or a link to it."""
+        """No section may render its chart without the block that explains it — or a link to it.
+
+        The two patterns are `tests/economics_report_test_helpers`', shared with the chapter file
+        that asserts the same shape on a document with four chapters in it: two copies of the
+        regex is how one of them comes to accept an opening the other rejects.
+        """
         sections = rendered_sections(report)
         assert len(sections) > 15, "the fixture stopped reaching most sections"
         explained = set()
         for anchor, html in sections:
-            if re.match(self.FOUR_PART_OPENING, html, flags=re.S):
+            if opens_with_four_parts(html):
                 explained.add(anchor)
                 continue
-            assert re.match(self.CROSS_REFERENCE_OPENING, html, flags=re.S), anchor
+            assert back_link_target(html) is not None, anchor
         assert len(explained) > 15, "the four-part blocks disappeared entirely"
 
     def test_the_primer_renders_once_at_the_top(self, report):
@@ -636,12 +628,6 @@ class TestSectionExplanations:
             prose = ReportProse.for_section(name)
             assert prose.shows and prose.adds and prose.terms and prose.calculation
         assert ReportProse.for_section(ReportProse.LEDGER_HEATMAP_SECTION_NAME).shows
-
-    def test_the_chapter_carries_its_authored_lead_in(self, report):
-        """A chapter heading with no lead-in is a silent editorial regression."""
-        anchor, name = ReportChapters.THE_BUILDING
-        assert f"<h2 class='chapter' id=\"{anchor}\">" in report
-        assert ReportProse.to_html(ReportProse.for_chapter(name)) in report
 
     def test_anchors_are_unique_and_chapter_prefixed(self, report):
         """Two sections sharing an anchor would send every contents link to the same place.
@@ -771,7 +757,7 @@ class TestTheDocumentSaysWhatItDidNotDraw:
         assert "Not drawn for this run" in thin_report
         block = thin_report.split("Not drawn for this run", maxsplit=1)[1].split("</div>")[0]
         assert "<b>Loan</b>" in block
-        assert "every purchase in this bundle is a cash purchase" in block
+        assert "every purchase in it is a cash purchase" in block
         assert "<b>Cost of credit</b>" in block
         assert 'id="owner-loan"' not in thin_report  # named there instead of drawn here
 

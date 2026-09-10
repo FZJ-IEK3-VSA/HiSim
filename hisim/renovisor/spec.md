@@ -160,7 +160,7 @@ building types `SFH`, `TH`, `AB` and age bands `01`–`10`, each in refurbishmen
 |---|---|---|
 | `heating_system` | setup selection | The `HeatingSystems` enum member matching §4.1. |
 | `heat_distribution_system` | `heating.emitter` | `underfloor`→`HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING`, `steel_panel_radiators`/`cast_iron`→`HEAT_DISTRIBUTION_SYSTEM_RADIATOR`, absent→floor heating (building-sizer default). |
-| `share_of_maximum_pv_potential` | `pv.kWp` | `0.0` if `kWp == 0`, else `1.0` (the rooftop capacity in ArcheTypeConfig carries the size). |
+| `share_of_maximum_pv_potential` | `pv.kWp` | `0.0` if `kWp == 0`, else `1.0` (the rooftop capacity in ArcheTypeConfig carries the size). Only those two values are ever emitted, so no RenoVisor run is touched by the share the scaled photovoltaic factory records; the array's `PVSystemConfig` states the share it was really sized with, and its power is that share applied exactly once. |
 | `use_battery_and_ems` | `battery.kWh` | `kWh > 0` → `True`, else `False`. Battery **size** is auto-sized by the setup; the requested `kWh` is recorded as approximated. |
 
 ### 4.4 Occupancy lookup

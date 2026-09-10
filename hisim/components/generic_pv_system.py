@@ -153,7 +153,18 @@ class PVSystemConfig(ConfigBase):
         inverter_name: str = "Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]",
         inverter_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.CEC_INVERTER_DATABASE,  # noqa: E501
     ) -> "PVSystemConfig":
-        """Gets a default PV system."""
+        """Gets a default PV system.
+
+        ``power_in_watt`` is the array's *maximum*, not its result: the share is applied to it
+        here, and the field the returned config carries is what the share left of it. That is the
+        same meaning ``get_scaled_pv_system`` records, reached from the other side - there the
+        maximum comes from the rooftop area instead of from an argument.
+
+        The consequence is worth stating where it is easy to trip over: the ``(power_in_watt,
+        share_of_maximum_pv_potential)`` pair a *record* carries is a result and its provenance,
+        so handing a recorded pair back to this factory would apply the share a second time. A
+        record is rebuilt from its fields, never by replaying a factory over them.
+        """
         if component_id is None:
             component_id = ComponentID(name=name)
         power_in_watt = power_in_watt * share_of_maximum_pv_potential

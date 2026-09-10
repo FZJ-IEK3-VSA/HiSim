@@ -3,12 +3,16 @@
 import os
 
 import pytest
+import yaml
 from tests import functions_for_testing as fft
 from hisim import sim_repository
 from hisim import component
 from hisim import utils
 from hisim.components import weather
 from hisim.components import generic_pv_system
+from hisim.energy_system.codec import ConfigValueCodec
+from hisim.energy_system.path_resolver import PathResolver
+from hisim.energy_system.record import ConfigBlockWriter
 from hisim import simulator as sim
 from hisim import log
 
@@ -240,3 +244,56 @@ def test_scaled_pv_system_records_the_share_it_applied() -> None:
     )
     assert half_config.power_in_watt == expected_power_in_watt
     assert half_config.power_in_watt == pytest.approx(full_config.power_in_watt / 2, abs=0.01)
+
+
+@pytest.mark.base
+def test_a_scaled_pv_record_re_executes_to_the_same_power() -> None:
+    """Catches a scaled array whose own record would rebuild a differently sized array.
+
+    This is the property the recorded field exists for (D-12 in
+    ``roadmap/declarative_energy_systems/p4_class_survey.md``): a share is only worth recording if
+    the record it lands in reproduces the run it describes. The round trip here is the record's
+    own - the writer that renders a configuration into a ``config`` block, one pass through YAML,
+    and the reader the executor uses to hand a complete block back to the class - so what it
+    proves holds for a file somebody runs, not only for a value that happens to be stored.
+
+    The share must survive because it is the provenance, and the power must survive *unscaled*,
+    because the block already carries the scaled number. A reader that applied the recorded share
+    to the recorded power a second time would halve a half-share array on every re-run.
+    """
+    scaled_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+        rooftop_area_in_m2=120.0,
+        share_of_maximum_pv_potential=0.5,
+    )
+
+    block = ConfigBlockWriter(PathResolver.default()).block("PVSystem", scaled_config)
+    reloaded = yaml.safe_load(yaml.safe_dump(block))
+    codec = ConfigValueCodec(generic_pv_system.PVSystemConfig)
+    payload = codec.to_deserializer_payload(reloaded, "components.PVSystem.config", "PVSystem")
+    payload[ConfigBlockWriter.IDENTITY_FIELD] = {"name": scaled_config.component_id.name}
+    re_executed = generic_pv_system.PVSystemConfig.from_dict(payload)
+
+    assert re_executed.share_of_maximum_pv_potential == 0.5
+    assert re_executed.power_in_watt == scaled_config.power_in_watt
+    assert re_executed == scaled_config
+
+
+@pytest.mark.base
+def test_the_default_pv_factory_reads_its_power_argument_as_the_unscaled_maximum() -> None:
+    """Pins the one factory whose power argument is a maximum rather than a result.
+
+    ``get_default_pv_system`` multiplies the power it is given by the share, so its argument is
+    the array's maximum and the field it writes is what the share left of it - the same meaning
+    ``get_scaled_pv_system`` records, arrived at from the other side. The contrast is worth a test
+    because it is also the trap: the pair ``(power_in_watt, share)`` a record carries is a result
+    and a provenance, so feeding a *recorded* pair back through this factory would apply the share
+    twice. Records are rebuilt from their fields, which is what the round-trip test above proves;
+    this test only fixes what the factory itself promises to a caller who states a maximum.
+    """
+    config = generic_pv_system.PVSystemConfig.get_default_pv_system(
+        power_in_watt=10e3,
+        share_of_maximum_pv_potential=0.5,
+    )
+
+    assert config.power_in_watt == 5000.0
+    assert config.share_of_maximum_pv_potential == 0.5

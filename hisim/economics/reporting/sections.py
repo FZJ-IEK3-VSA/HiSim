@@ -1,8 +1,10 @@
 """Section builders of the HTML lifecycle report (cost_spec.md §7.2, §9.5).
 
 One function per report section along the calculation chain — the primer that opens the
-document, input audit, sources, investment, timeline, energy bill, CO2 and the subsidy
-tables/cards (with the D28 content-key de-duplication) — plus the report CSS. The sections of the visualization set
+document, input audit, sources, the assumptions the run was priced under, investment, timeline,
+energy bill, CO2 (with the table that states every mass as its own multiplication) and the
+subsidy tables/cards (with the D28 content-key de-duplication) — plus the report CSS. The
+sections of the visualization set
 live beside them in `sections_charts`; every one of them, here and there, opens through
 `scaffold._section_open` and `scaffold._explanation_html`, so its name, its anchor and its
 authored explanation come from one place. Assembly order and the document shell live in
@@ -13,6 +15,7 @@ authored explanation come from one place. Assembly order and the document shell 
 
 from __future__ import annotations
 
+import itertools
 from typing import List, Mapping, Optional, Sequence, Tuple
 
 from hisim.economics import views
@@ -326,6 +329,112 @@ def _sources_table_html(audit: InputAuditReport) -> str:
     )
 
 
+#: How each kind of assumption value is spelled, in the conventional form for its quantity: a
+#: rate to two decimals with a percent sign, a working price to four, a euro figure and an energy
+#: quantity with thousands separators. The view returns the numbers and this decides their
+#: digits — the formatting half of the seam `views.AssumptionRow` sits on.
+_ASSUMPTION_VALUE_FORMATS = {
+    views.AssumptionKinds.PERCENT: "{value:.2%}",
+    views.AssumptionKinds.YEARS: "{value:g}",
+    views.AssumptionKinds.YEAR: "{value:g}",
+    views.AssumptionKinds.FACTOR: "{value:.6f}",
+    views.AssumptionKinds.EURO_PER_KWH: "{value:.4f}",
+    views.AssumptionKinds.EURO_PER_YEAR: "{value:,.2f}",
+    views.AssumptionKinds.EURO_PER_TON: "{value:,.2f}",
+    views.AssumptionKinds.KWH_PER_YEAR: "{value:,.0f}",
+    views.AssumptionKinds.SQUARE_METERS: "{value:,.1f}",
+    views.AssumptionKinds.PLAIN: "{value}",
+}
+
+
+def _assumption_value_text(row: views.AssumptionRow) -> str:
+    """One assumption's value as the table prints it: the number, spelled by kind, then its unit.
+
+    The whole of the formatting the assumptions table needs, in one place, so a row's digits are
+    decided here rather than in the view that computes it. An unknown kind falls back to printing
+    the value as it stands, which is what a new kind would want before anyone has decided how it
+    reads — and is never silently empty.
+
+    Args:
+        row: The row to render the value cell of.
+
+    Returns:
+        The value text, unescaped — the caller escapes it like every other cell.
+    """
+    template = _ASSUMPTION_VALUE_FORMATS.get(row.kind, "{value}")
+    text = template.format(value=row.value)
+    return f"{text} {row.unit}" if row.unit else text
+
+
+def _assumptions_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
+    """Every economic assumption the run was priced under, with value and source (Q26 F2).
+
+    The boundary between input and result, placed directly after the input audit because that is
+    where a reader has just finished checking *what* was priced and needs to know *under which
+    assumptions*. The audit answers "which price did this device resolve to"; this answers "at
+    what interest rate, over what horizon, with which escalation and which tariff" — the causes
+    behind every consequence the rest of the report draws (rule 2.9).
+
+    Rows come from `views.economic_assumptions`, which reads the parameters and the assumption
+    record the evaluator resolved; nothing here is a literal, and the values arrive as *numbers* —
+    the digits each of them is printed with are decided here, by `_assumption_value_text`. The
+    computed rows are marked as such, so the annuity factor is not mistaken for something somebody
+    chose, and a value with no data-layer source states `configuration`, which is a statement about
+    its provenance rather than a blank.
+
+    The whole matrix is passed on rather than one perspective because the assumption set is a
+    property of the *run*: every row but one is identical across the evaluated perspectives, and
+    the exception — the CO2 damage cost — belongs in the table when any of them applies it, which
+    the view now decides for itself instead of taking a boolean from here.
+
+    Args:
+        matrix: Every evaluated perspective; the table is stated on the reference one and the
+            damage-cost row follows from the whole run.
+        context: The chapter this section is being rendered into.
+
+    Returns:
+        The section, or the empty string when the run publishes no assumption at all.
+
+    Raises:
+        ValueError: If the matrix holds no evaluated perspective (see `_reference_result`).
+    """
+    result = _reference_result(matrix)
+    rows = views.economic_assumptions(list(matrix.results.values()))
+    if not rows:
+        return ""
+    grouped = []
+    # One pass over rows that already arrive in `AssumptionGroups.ORDER`: the band header and the
+    # rows under it come out of the same walk, where re-filtering the whole list per group made
+    # the table's shape depend on two orderings agreeing.
+    for group, in_group in itertools.groupby(rows, key=lambda row: row.group):
+        grouped.append([f"<b>{_esc(group)}</b>", "", ""])
+        grouped.extend(
+            [
+                _esc(row.name) + (" <span class='sub'>(computed)</span>" if row.is_computed else ""),
+                _esc(_assumption_value_text(row)),
+                _esc(row.source),
+            ]
+            for row in in_group
+        )
+    missing = (
+        ""
+        if result.assumptions is not None else
+        "<p class='sub'>This result was stored before the resolved assumption record existed, so "
+        "the escalation rates and tariff terms are not available here; the calculation frame and "
+        "the building quantities below are complete.</p>"
+    )
+    return (
+        _section_open(ReportSections.ASSUMPTIONS, context, result.perspective_id)
+        + _explanation_html(ReportSections.ASSUMPTIONS, context)
+        + missing
+        + "<p class='sub'>Every figure elsewhere in this report is one of these values, escalated, "
+          "discounted or divided. A source of <code>configuration</code> means the run chose the "
+          "value rather than reading it from reviewed data.</p>"
+        + _table(["Assumption", "Value", "Source"], grouped)
+        + "</section>"
+    )
+
+
 def _investment_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
     """The year-0 investment build-up, one waterfall per subject.
 
@@ -347,8 +456,8 @@ def _investment_section_html(result: LifecycleCostResult, context: _ChapterConte
         context: The chapter this section is being rendered into.
 
     Returns:
-        The section — always rendered, carrying no waterfall at all when no subject has a
-        year-0 flow, because "nothing was bought in year 0" is itself worth stating.
+        The section — always rendered, carrying the "nothing was bought in year 0" note instead of
+        the waterfalls when no subject has a year-0 flow, because that is itself worth stating.
     """
     blocks = []
     build_ups = views.year_zero_build_up(result)
@@ -372,7 +481,15 @@ def _investment_section_html(result: LifecycleCostResult, context: _ChapterConte
             blocks.append(f"<h3 style='font-size:13px;margin:14px 0 2px'>{_esc(subject)}</h3>")
             blocks.append(_waterfall_svg(steps, "Net year-0 outflow", build_up.net_outflow_in_euro))
     if not blocks:
-        return ""
+        # "Always rendered" means this case too: a run whose year 0 is empty — an operating-only
+        # perspective, or a measure whose whole cost falls in a later year — used to drop the
+        # section, and a missing section reads as a broken renderer rather than as the finding it
+        # is. The waterfalls are what is absent, not the answer.
+        blocks.append(
+            "<p class='sub'>Nothing was bought in year 0: no subject of this perspective books an "
+            "investment, planning, removal, subsidy or loan flow in the first year, so there is no "
+            "build-up to walk down. The costs this run does carry are in the sections below.</p>"
+        )
     table_rows = []
     for subject, net in net_of_subsidies.items():
         breakdown = result.component_breakdowns[subject]
@@ -391,10 +508,17 @@ def _investment_section_html(result: LifecycleCostResult, context: _ChapterConte
             f"<p class='sub'>Written-off residual book value of replaced assets (sunk cost, §4.1 — "
             f"reported, excluded from decision KPIs): <b>{_esc(_band_str(sunk))}</b></p>"
         )
+    table = (
+        _details(
+            "investment table",
+            _table(["Subject", "Gross investment", "Subsidies", "Net"], table_rows),
+        )
+        if table_rows else ""
+    )
     return (
         _section_open(ReportSections.INVESTMENT_BUILD_UP, context, "year 0")
         + _explanation_html(ReportSections.INVESTMENT_BUILD_UP, context) + "".join(blocks)
-        + _details("investment table", _table(["Subject", "Gross investment", "Subsidies", "Net"], table_rows))
+        + table
         + sunk_note + "</section>"
     )
 
@@ -878,6 +1002,53 @@ def _co2_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str
         _section_open(ReportSections.CO2, context)
         + _explanation_html(ReportSections.CO2, context)
         + bars + line
+        + _co2_factors_table(result)
         + _details("CO2 table [kg]", _table(["Subject / carrier", "Embodied", "Operational", "Total"], table_rows))
         + "</section>"
+    )
+
+
+def _co2_factors_table(result: LifecycleCostResult) -> str:
+    """The conversions behind every mass in the section above (Q26 F3, rule 2.9).
+
+    One row per carrier and per device, each stating its factor, the quantity it multiplies and
+    the product — so every bar in the chart is one visible multiplication away from its inputs
+    instead of a number to be trusted. Operational rows carry the annual mass and the horizon
+    total; embodied rows carry the mass per installation and how many installations the horizon
+    booked, which is where a device replaced once inside the horizon shows its doubled mass.
+
+    Empty for a result stored before the factors were recorded, in which case the section renders
+    exactly as it did before rather than dividing masses by quantities to invent a factor.
+
+    Args:
+        result: The perspective whose CO2 accounting the table spells out.
+
+    Returns:
+        The disclosure, or the empty string when the result records no factor.
+    """
+    rows = views.co2_factor_rows(result)
+    if not rows:
+        return ""
+    table_rows = []
+    for row in rows:
+        if row.kind == views.Co2FactorKinds.OPERATIONAL:
+            arithmetic = (
+                f"{row.factor_in_kg_per_unit:,.4f} kg/kWh x {row.quantity:,.0f} kWh/a = "
+                f"{row.annual_mass_in_kg or 0.0:,.0f} kg/a"
+            )
+            over_horizon = f"x {row.installations} a = {row.total_in_kg:,.0f} kg"
+        else:
+            arithmetic = (
+                f"{row.factor_in_kg_per_unit:,.2f} kg/{_esc(row.quantity_unit)} x "
+                f"{row.quantity:,.2f} {_esc(row.quantity_unit)} = "
+                f"{row.per_installation_in_kg or 0.0:,.0f} kg per installation"
+            )
+            over_horizon = (
+                f"x {row.installations} installation(s) = {row.total_in_kg:,.0f} kg"
+            )
+        table_rows.append([_esc(row.subject), _esc(row.kind.value), arithmetic, over_horizon])
+    return _details(
+        "CO2 factors — every mass as its own multiplication",
+        _table(["Subject / carrier", "Kind", "Factor x quantity", "Over the horizon"], table_rows),
+        open_by_default=True,
     )

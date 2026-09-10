@@ -332,6 +332,24 @@ class TestStoryPerspectives:
         stories = views.story_perspectives([macro])
         assert stories.society == (macro,) and not stories.owner and not stories.rented
 
+    def test_a_party_scoped_view_that_books_co2_damage_is_not_societys_story(self):
+        """The society statement needs a SYSTEM-scoped result, so the classification requires one.
+
+        A macroeconomic view scoped to a landlord is a legal perspective, and classifying it by
+        its accounting alone sent it to the chapter whose statement then refused it — the report
+        raised instead of rendering. It is a party's view of a macroeconomic world, so it is told
+        as that party's story.
+        """
+        entries = [
+            entry(0, 10000.0, CostCategory.INVESTMENT, payer=Actor.LANDLORD),
+            entry(1, 200.0, CostCategory.CO2_DAMAGE, subject="co2 damage", payer=Actor.LANDLORD),
+        ]
+        landlord_macro = make_result(entries, horizon=5, scope=ActorScope.LANDLORD)
+        assert views.has_macroeconomic_accounting(landlord_macro)  # it does book the damage
+        stories = views.story_perspectives([landlord_macro])
+        assert stories.rented == (landlord_macro,)
+        assert not stories.society
+
     def test_landlord_and_tenant_scopes_are_the_rented_story(self):
         """A perspective scoped to either party of a tenancy belongs to that chapter."""
         entries = [entry(0, 10000.0, CostCategory.INVESTMENT, payer=Actor.LANDLORD)]

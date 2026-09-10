@@ -128,46 +128,95 @@ be resolved is an error too, in the CLI and in the postprocessing bridge alike �
 is never silently replaced by the §10.1 legacy flat shim.
 
 The report layer follows the money along the calculation chain — every spec feature has at
-least one visualization plus a result table. Sections carry **names**, not numbers, and the
-authoritative list of them and of their page order is
-`reporting.ReportSections.ORDER`; a table of contents at the top of the document provides
-the navigation the old 0-to-10 numbering was supposed to. In chain order:
+least one visualization plus a result table. Sections carry **names**, not numbers
+(`reporting.ReportSections` holds every name with its anchor), and the document is told as the
+**chapters** of `reporting.ReportChapters`: a perspective-free part, then one chapter per
+question a reader actually has. Which perspectives belong to which chapter is decided by
+`views.story_perspectives` from what each result *books* — a view that books CO2 damage **and
+reports on the system as a whole** is the society story, one scoped to a landlord or tenant the
+rented story (a party-scoped macroeconomic view included, since the macroeconomic statement is
+defined only on the system's basis), an owner-scoped or support-carrying one the owner story —
+never by matching ids. A chapter this run has no perspectives for is skipped, and so is a section
+whose subject matter this chapter's perspectives do not have; both are named with their reason in
+the document's own "Not drawn for this run" list under the contents, never in a log line the
+reader of an HTML file will never see. A perspective-scoped section therefore renders once per
+chapter, on that chapter's own perspectives, so **anchors are chapter-prefixed**
+(`owner-cash-curve`, `rented-cash-curve`) rather than bare section anchors, section headings name
+their chapter, and the two-level table of contents at the top provides the navigation the old
+0-to-10 numbering was supposed to.
+
+**The building** — what the technology costs, before asking whose money it is:
 **How to read this report** (the primer: discounting, the three worlds of a band, the sign
 rule), **At a glance** (assets, financing, support and milestones on one year axis),
 **Plausibility** (automated panel, thresholds in
 `cost_database/plausibility_checks.json` — range checks WARN, structural invariants FAIL),
-**Input audit** + the §3.10 sources-used table, **Investment build-up** (year-0 waterfalls +
-investment table + sunk-cost note), **Funding** (year-0 sources against year-0 uses, balanced
-to the euro), **Lifetimes** (the per-component purchase, replacement
-and write-down strip), **Cash-flow timeline** (annual flows, cumulative discounted cost with its
-min/max band, NPV-by-category and detail tables), **Cash curve** (the cumulative cash
-position nominal and discounted, with the payback interval), **Loan** and **Cost of credit**
-(§4.4 debt service, then what borrowing costs and at what effective rate), **Energy bill**
+**Input audit** + the §3.10 sources-used table, **Assumptions** (every rate, tariff term and
+building quantity the run was priced under, each with its source or the honest
+`configuration`), **Investment build-up** (year-0 waterfalls + investment table + sunk-cost
+note), **Lifetimes** (the per-component purchase, replacement and write-down strip),
+**Cash-flow timeline** (annual flows, cumulative discounted cost with its min/max band,
+NPV-by-category and detail tables), **Energy bill**
 (year-1 per carrier with implied effective prices — the fastest unit-mix-up detector),
 **Energy balance** (the year-1 household electricity balance in kWh, money only as an
 annotation on the two grid nodes), **CO2** (§3.8: embodied vs. operational bars, cumulative
-curve, table), **Subsidies**
+curve, the factors table in which every mass is one visible multiplication, and the totals
+table), **Subsidies**
 (composition bars + decision cards + awards table, flat-shim note when no catalog ships for
-the country), **Perspectives** (whiskers + result table: NPV/EAC/monthly/LCOH/sunk
-cost), **Landlord statement** (the cash side and the accounting side, and the income Sankey
-of the same partition), **Who pays what** (payer whiskers + payer-by-cost-group table,
-zero-sum checked) and **Who pays whom** (the same money as a flow diagram, one column per
-party), **Uncertainty drivers** (which subjects make the band as wide as it is),
+the country), **Uncertainty drivers** (which subjects make the band as wide as it is),
 **Component breakdown** (per-subject stacks + subject table), **Cost structure** (the
 composition as a treemap, gross and net of credits side by side), **Cost shapes** (which
-subject causes which kind of cost, credits kept apart), **Equity build-up** (asset book
-value against outstanding debt), **Scenarios** (tornado +
-all-scenarios table + robustness summary), **Monthly burden** (the recurring cost per month
-with its replacement reserve), **KPIs** (§7.3), and with a reference variant
-**Comparison** (delta waterfall + delta table + payback band), **NPV bridge** (the same
+subject causes which kind of cost, credits kept apart), **Scenarios** (tornado +
+all-scenarios table + robustness summary), **Perspectives** (whiskers + result table:
+NPV/EAC/monthly/system cost per kWh heat/sunk cost) as the bridge into the story chapters, and
+**KPIs** (§7.3).
+
+**Owner-occupied** — how a household pays for this and lives with it: **Owner statement** (the
+money that moved against the value that was merely booked), **Funding** (year-0 sources against
+year-0 uses, balanced to the euro), **Cash curve** (the cumulative cash position nominal and
+discounted, with the payback interval), **Loan** and **Cost of credit** (§4.4 debt service, then
+what borrowing costs and at what effective rate), **Monthly burden** (the recurring cost per
+month with its replacement reserve), **Equity build-up** (asset book value against outstanding
+debt) and **Who pays whom**.
+
+**Rented out** — the landlord's business case and the tenant's monthly reality: **Landlord
+statement** (the cash side and the accounting side, and the income Sankey of the same
+partition), **Tenant statement** (the levy set by law against the energy and operating costs set
+by physics, with an empty credit side stated as the zero it is; the two halves of the levy are
+checked against each other before either is drawn), **Who pays what** (payer
+whiskers + payer-by-cost-group table, zero-sum checked), **Who pays whom** (the same money as a
+flow diagram, one column per party), **Monthly burden**, **Cash curve** and the three financing
+sections. Either party may be absent — a bundle can evaluate a tenant without a landlord — and
+what the missing one would have carried is named under the contents rather than drawn on the
+other party's numbers.
+
+**Society** — the macroeconomic view in which transfers cancel and CO2 enters at its damage
+cost: **Society statement**, **Cash curve** and **Who pays whom**. No financing sections: who
+borrowed and at what rate is an owner's, a landlord's or a tenant's question, and a macroeconomic
+view books no debt service at all, so the chapter does not offer them and has nothing to report as
+undrawn either.
+
+**Loan**, **Cost of credit** and **Equity build-up** are therefore offered by the two chapters
+whose story can borrow — the owner-occupied one and the rented one — and drawn by whichever of
+them has a financed perspective, on that story's own perspectives: the owner's debt service is not
+the landlord's, and a chapter that showed the other party's loan would be answering a question
+about somebody else's money. A chapter that offers them and has no financed perspective says so
+under the contents.
+
+**Comparison with the reference**, present only when a reference variant was evaluated and
+carrying no authored lead-in because it answers a question about two runs rather than about one
+party: **Comparison** (delta waterfall + delta table + payback band), **NPV bridge** (the same
 difference decomposed by cost group) and **Bank benchmark** (renovate, or bank the money at
-1-10 %). Every one of them opens with the same four authored
+1-10 %).
+
+Every section opens with the same four authored
 parts — what it shows, what it adds, its terms of art and how its numbers are calculated —
-held in `report_prose.py`, which also holds the two run-specific captions both renderers print
-(the payback sentence and the treemap disclosure), so the page and its PNG companion word the
-same figure identically. The HTML is fully self-contained (inline SVG, light/dark aware,
-native tooltips); the markdown summary is deliberately git-diffable so price-data PRs show
-up as clean textual deltas on golden scenarios (§9.5).
+held in `report_prose.py`, and a section name that appears in a second chapter links back to
+the chapter that carries the full explanation instead of repeating it. That module also holds
+the two run-specific captions both renderers print (the payback sentence and the treemap
+disclosure), so the page and its PNG companion word the same figure identically. The HTML is
+fully self-contained (inline SVG, light/dark aware, native tooltips); the markdown summary is
+deliberately git-diffable so price-data PRs show up as clean textual deltas on golden
+scenarios (§9.5).
 
 To feed the engine what the simulation cannot know — the existing system, the applicant, the
 tenancy, envelope measures, scenario sets — attach a
@@ -208,7 +257,7 @@ simulation in shadow mode).
 | `exports.py` | All JSON/CSV exports and the namespaced lifecycle KPIs with `value_min`/`value_max` bands (§7.2–§7.4). |
 | `bridge.py` | The postprocessing entry point behind `COMPUTE_LIFECYCLE_COSTS`: collects facts/flows from a finished run, picks a covered price basis year, evaluates the default bundle, writes everything. Opt-in, and loud: a fleet the cost model cannot describe — an undeclared component (§9.2), a recognized one whose facts don't build, a meter missing a column it declares, a declared fact the database can't price — fails the run rather than producing a cost report with a hole in it (D7). |
 | `validation.py` | Data-file CI: source completeness, coverage matrix, question coverage, staleness (§9.6). |
-| `reporting.py` | Human-readable reports (option `LIFECYCLE_COST_REPORT`): plausibility panel, `cost_summary.md`, self-contained `lifecycle_report.html` with inline-SVG charts, variant-comparison section. |
+| `reporting/` | Human-readable reports (option `LIFECYCLE_COST_REPORT`): plausibility panel, `cost_summary.md`, self-contained `lifecycle_report.html` with inline-SVG charts, told as the building / owner-occupied / rented-out / society chapters plus the comparison block. |
 | `report_plots.py` | Matplotlib PNG companions, same display groups and colors as the HTML. `write_report_plots` writes the report-side set **once per perspective**, as `lifecycle_<chart>_<perspective_id>.png` — `annual_cash_flows`, `investment_waterfall`, `component_costs`, `swimlane` (V9), `liquidity_fan` (V2), `sources_and_uses` (V10), `cost_treemap` (V8), `actor_flows` (V1), `monthly_burden` (V14) — plus the matrix-wide `lifecycle_perspective_costs.png`, which is drawn once. Only with a comparison reference, and only for the perspective that reference names: `lifecycle_payback_curve_<id>.png`, `lifecycle_comparison_bridge_<id>.png` (V4) and `lifecycle_wealth_benchmark_<id>.png` (V13); a reference whose perspective the matrix does not carry skips them rather than substituting another. `write_audit_plots` writes `cost_audit_timeline_heatmap.png` (V6) next to `cost_audit.csv` on **every** cost run, which is why matplotlib is a dependency of the cost path and not only of the report path. A chart whose view has nothing to draw writes no file and returns a `SkippedPlot` (chart, perspective, reason); nothing here logs. The callers report: the bridge logs each skip and writes `lifecycle_plots_not_drawn.txt` beside the images, the CLI prints the same lines. |
 | `__main__.py` | The `evaluate` / `explain` / `report` / `validate` CLI. |
 

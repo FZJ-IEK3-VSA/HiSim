@@ -346,58 +346,109 @@ class TestFixtureIsRich:
         are named rather than numbered since the mnemonic switch-over, so this list is also the
         readable inventory of what the fixture reaches.
 
-        The energy balance used to be the one section of the set deliberately absent from it —
-        its quantities come from the simulation's own output columns, which `bridge.py` collects
-        and no in-memory fixture produces, so the section skipped itself here and the oracle
-        pinned nothing about a diagram the report draws for every real run. `DEVICE_ENERGY_FLOWS`
-        supplies that record by hand instead, reconciled against the fixture's own meter, and the
-        balance is now asserted like every other section.
+        Anchors carry their chapter prefix since the Q24 restructure, so this list is also the
+        statement of which chapter each section is expected to be told in — a perspective-scoped
+        section that drifted back into the perspective-free chapter fails here rather than in a
+        golden diff nobody reads line by line.
+
+        The energy balance used to be absent from it — its quantities come from the simulation's
+        own output columns, which `bridge.py` collects and no in-memory fixture produces, so the
+        section skipped itself here and the oracle pinned nothing about a diagram the report
+        draws for every real run. `DEVICE_ENERGY_FLOWS` supplies that record by hand instead,
+        reconciled against the fixture's own meter, and the balance is now asserted like every
+        other section of its chapter.
+
+        One section of the set is still deliberately absent. The society statement needs a
+        macroeconomic perspective, which this fixture's perspective set does not carry — adding
+        one would put a whole extra perspective into every table in both goldens — so the society
+        chapter is covered by `tests/test_economics_sections_c.py` instead.
         """
         for anchor in (
             "building-how-to-read",
             "building-at-a-glance",
             "building-plausibility",
             "building-input-audit",
+            "building-assumptions",
             "building-investment-build-up",
-            "building-funding",
             "building-lifetimes",
             "building-cash-flow-timeline",
-            "building-cash-curve",
-            "building-loan",
-            "building-cost-of-credit",
             "building-energy-bill",
             "building-energy-balance",
             "building-co2",
             "building-subsidies",
-            "building-perspectives",
-            "building-landlord-statement",
-            "building-who-pays-what",
-            "building-who-pays-whom",
             "building-uncertainty-drivers",
             "building-component-breakdown",
             "building-cost-structure",
             "building-cost-shapes",
-            "building-equity-build-up",
             "building-scenarios",
-            "building-monthly-burden",
+            "building-perspectives",
             "building-kpis",
-            "building-comparison",
-            "building-npv-bridge",
-            "building-bank-benchmark",
+            "owner-owner-statement",
+            "owner-funding",
+            "owner-cash-curve",
+            "owner-loan",
+            "owner-cost-of-credit",
+            "owner-monthly-burden",
+            "owner-equity-build-up",
+            "rented-landlord-statement",
+            "rented-tenant-statement",
+            "rented-who-pays-what",
+            "rented-who-pays-whom",
+            "vs-reference-comparison",
+            "vs-reference-npv-bridge",
+            "vs-reference-bank-benchmark",
         ):
             assert f'id="{anchor}"' in rendered.report, anchor
         assert "sources used" in rendered.report  # §3.10 registry table, inside the input audit
 
+    def test_every_story_this_fixture_has_is_told_as_its_own_chapter(self, rendered):
+        """Q24: the chapters the fixture's perspectives support all render, with their lead-ins.
+
+        A chapter is not decoration — it decides which perspectives a section is drawn on — so the
+        oracle checks the structure and not only the sections inside it. The society chapter is
+        the one this fixture cannot reach (no macroeconomic perspective) and is asserted absent
+        rather than ignored, because a chapter that rendered on no perspectives at all would be
+        the failure this skip exists to prevent.
+        """
+        from hisim.economics.report_prose import ReportProse
+        from hisim.economics.reporting import ReportChapters
+
+        positions = []
+        for anchor, name in ReportChapters.ORDER:
+            heading = f"<h2 class='chapter' id=\"{anchor}\">"
+            if (anchor, name) == ReportChapters.SOCIETY:
+                assert heading not in rendered.report
+                continue
+            assert heading in rendered.report, name
+            positions.append(rendered.report.index(heading))
+            if (anchor, name) not in ReportChapters.WITHOUT_INTRO:
+                assert ReportProse.to_html(ReportProse.for_chapter(name)) in rendered.report, name
+        assert positions == sorted(positions)
+
     def test_the_contents_link_every_rendered_section(self, rendered):
-        """Navigation replaced the numbering, so it has to reach every section that rendered."""
+        """Navigation replaced the numbering, so it has to reach every section that rendered.
+
+        Two levels since Q24: every chapter that rendered is a top-level entry linked exactly
+        once, and every section under it is linked from that entry. Both halves matter — a
+        section missing from the contents is unreachable, and a chapter listed twice would send
+        a reader to the wrong one of two identically named sections.
+        """
         import re
+
+        from hisim.economics.reporting import ReportChapters
 
         contents = rendered.report.split("</nav>")[0]
         anchors = re.findall(r'<section id="([^"]+)"', rendered.report)
         assert anchors, "the report rendered no anchored section at all"
         for anchor in anchors:
             assert f'href="#{anchor}"' in contents, anchor
-        assert contents.count("<a href=\"#building\">") == 1  # one chapter, linked once
+        rendered_chapters = [
+            chapter for chapter, _name in ReportChapters.ORDER
+            if any(anchor.startswith(f"{chapter}-") for anchor in anchors)
+        ]
+        assert len(rendered_chapters) == 4  # every story but society, which this fixture lacks
+        for chapter in rendered_chapters:
+            assert contents.count(f"<a href=\"#{chapter}\">") == 1, chapter
 
     def test_every_computation_path_is_exercised(self, rendered):
         """Bands, a loan, subsidies, feed-in, anyway credits and an allocation are all present."""

@@ -58,6 +58,7 @@ import pandas as pd
 from hisim import log
 from hisim import utils
 from hisim.component import ComponentOutput
+from hisim.components.weather import Weather
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
@@ -71,6 +72,39 @@ if TYPE_CHECKING:
 #: KPI that only a ``Building`` component produces. The building-sizer JSON normalizes almost
 #: every field by it, so a building object whose KPI collection lacks it has no Building at all.
 BUILDING_OWN_KPI_NAME: str = "Conditioned floor area"
+
+
+def region_of(ppdt: PostProcessingDataTransfer) -> str:
+    """Return the region the run is reported under: the locations its Weathers are configured for.
+
+    The region is report metadata only -- the ``region`` field of the pyam export written by
+    ``prepare_results_for_scenario_evaluation`` and of the scenario-evaluation config JSON written
+    by ``write_config_data_for_scenario_evaluation``. It is read off the run's own components
+    rather than a process-wide global, so both writers share one answer and cannot drift apart.
+
+    A run without a Weather has no region and gets ``""``. A run with one Weather is reported under
+    that Weather's configured location. A run with several -- a district drawing on more than one
+    station -- is reported under all of them, joined in component order with ``" / "``, so that the
+    answer is deterministic and no station is silently dropped.
+
+    Args:
+        ppdt: The data transfer object of the finished run, whose ``wrapped_components``
+            carry the components the simulation was built from.
+
+    Returns:
+        The configured locations of the run's Weathers joined in component order, or ``""``
+        if the run has no Weather.
+    """
+    locations: List[str] = []
+    for wrapped_component in ppdt.wrapped_components:
+        component = wrapped_component.my_component
+        if isinstance(component, Weather):
+            # Under this repository's mypy configuration the config attribute resolves to Any
+            # (see the dataclasses_json note in mypy.ini), so the annotation is what pins the
+            # value to a string rather than letting Any spread into the joined region.
+            location: str = component.weather_config.location
+            locations.append(location)
+    return " / ".join(locations)
 
 
 def _load_attribute(module_name: str, attribute_name: str) -> Any:
@@ -989,11 +1023,7 @@ class PostProcessor:
             if SingletonSimRepository().entry_exists(SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
             else ""
         )
-        self.region = (
-            SingletonSimRepository().get_entry(SingletonDictKeyEnum.LOCATION)
-            if SingletonSimRepository().entry_exists(SingletonDictKeyEnum.LOCATION)
-            else ""
-        )
+        self.region = region_of(ppdt)
         self.year = ppdt.simulation_parameters.year
 
         # Time series
@@ -1072,10 +1102,7 @@ class PostProcessor:
             self.scenario = ""
 
         # set region
-        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.LOCATION):
-            self.region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
-        else:
-            self.region = ""
+        self.region = region_of(ppdt)
 
         # set description
         if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.DESCRIPTION):

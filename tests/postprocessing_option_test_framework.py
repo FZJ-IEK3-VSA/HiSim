@@ -15,6 +15,7 @@ from uuid import uuid4
 
 from hisim import component as cp
 from hisim import log
+from hisim.component_wrapper import ComponentWrapper
 from hisim.postprocessing import postprocessing_main
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -251,12 +252,27 @@ def _clone_simulation_parameters(
 def _clone_ppdt(
     case: PreparedPostProcessingCase,
     simulation_parameters: SimulationParameters,
+    wrapped_components: list[ComponentWrapper] | None = None,
 ) -> PostProcessingDataTransfer:
+    """Copy a prepared run's data transfer object, with other parameters or components.
+
+    Args:
+        case: The prepared run whose results the copy carries.
+        simulation_parameters: The parameters the copy is post-processed under.
+        wrapped_components: Components the copy reports on, for a test that needs a
+            component list the prepared run does not have; the prepared run's own
+            components when omitted.
+
+    Returns:
+        A data transfer object over the prepared run's results.
+    """
     return PostProcessingDataTransfer(
         results=case.ppdt.results,
         all_outputs=case.ppdt.all_outputs,
         simulation_parameters=simulation_parameters,
-        wrapped_components=case.ppdt.wrapped_components,
+        wrapped_components=(
+            case.ppdt.wrapped_components if wrapped_components is None else wrapped_components
+        ),
         mode=case.ppdt.mode,
         setup_function=case.ppdt.setup_function,
         module_filename=case.ppdt.module_filename,

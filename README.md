@@ -33,6 +33,7 @@ git clone https://github.com/FZJ-IEK3-VSA/HiSim.git
 
 Virtual Environment
 -----------------------
+`ETHOS.HiSim` needs Python 3.11 or newer.
 Before installing `ETHOS.Hisim`, it is recommended to set up a Python virtual environment. Let `hisimvenv` be the name of
 virtual environment to be created. For Windows users, setting the virtual environment in the path `\Hisim` is done with
 the command line:
@@ -56,7 +57,7 @@ virtual hisimvenv source hisimvenv/bin/activate
 Alternatively, Anaconda can be used to set up and activate the virtual environment:
 
 ```python 
-conda create -n hisimvenv python=3.10
+conda create -n hisimvenv python=3.11
 conda activate hisimvenv
 ```
 

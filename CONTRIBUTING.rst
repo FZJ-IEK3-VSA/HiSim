@@ -99,8 +99,8 @@ Before you submit a pull request, check that it meets these guidelines:
 
 1. The pull request should include tests.
 2. If the pull request adds functionality, the docs should be updated. Put
-   your new functionality into a function with a docstring, and add the
-   feature to the list in README.rst.
+   your new functionality into a function with a docstring, and
+   mention it in README.md.
 3. The pull request has to pass on Python 3.11, the version the GitHub Actions
    checks run: the ``quality`` and ``tests`` workflows both use the ``py311`` test
    image. Check the checks on your pull request and make sure they are green.

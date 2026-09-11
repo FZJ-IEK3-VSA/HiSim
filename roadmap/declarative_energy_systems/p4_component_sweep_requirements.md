@@ -150,9 +150,10 @@ Legend: **conv** convert · **del** retired — moved to `obsolete/` under D-16'
 | `CarBatteryConfig` | conv | `standard` | runtime accumulators in the config | N | |
 | `ChargingStationConfig` | conv | `for_charging_station_set` (no preset, D-24) | `lower_threshold…` ← `Self(charging_station_set)` × 0.1 | N | D-24 |
 | `ElectrolyzerConfig`, `ElectrolyzerControllerConfig` | conv | `standard`, `for_device(electrolyzer_name)` | `read_config` folded in; raise on unknown name | N | D-26 |
-| `PTXControllerConfig`, `XTPControllerConfig` | conv | constructor only | `operation_mode` → enum | N | D-27 |
-| `FuelCellConfig`, `FuelCellControllerConfig` | conv | `pem` | manufacturer JSON absent, so the table path (`for_device`) goes to `obsolete/` (D-25) | N | D-25 |
-| `RsocConfig`, `RsocControllerConfig`, `RsocBatteryControllerConfig` | del | | JSON absent, no other builder → `obsolete/` with their tests (D-25) | | D-25 |
+| `PTXControllerConfig` | conv | constructor only | `operation_mode` → enum (`PtxOperationMode`) | N | D-27 |
+| `XTPControllerConfig` | conv | **needs a preset invented** | `operation_mode` → enum (`XtpOperationMode`); D-25 removed `read_config`/`control_fuel_cell`, its only factory, so the class has **no builder at all** until this batch writes one | N | D-25, D-27 |
+| `FuelCellConfig`, `FuelCellControllerConfig` | conv | `pem` only (~~`for_device`~~) | the hand-typed PEM defaults stay and are what converts; D-25 removed the `for_device`-shaped table path (manufacturer JSON absent) | N | ~~D-25~~ |
+| ~~`RsocConfig`, `RsocControllerConfig`, `RsocBatteryControllerConfig`~~ | **obsolete** | | moved to `obsolete/components/` under D-25 with their three tests and `rSOC_efficiency_curve_data.json`: JSON absent, no other builder | | ~~D-25~~ |
 | `GenericElectrolyzerConfig` | del | | **moved** 2026-09-11: `generic_electrolyzer.py` → `obsolete/components/` with `tests/test_generic_electrolyzer.py` (D-29 (c)); D-28 moot, so no `Self("max_power")` laws were minted | | D-28, D-29 |
 | `L1ElectrolyzerControllerConfig`, `GenericHydrogenStorageConfig` | del | | **moved** 2026-09-11: `controller_l1_electrolyzer.py` and `generic_hydrogen_storage.py` → `obsolete/components/`, the storage with `tests/test_h2storage.py`, the controller with the electrolyzer test that built it; `controller_l1_chp` dropped its optional H₂-storage default connection (D-29) | | D-29 |
 | `ElectrolyzerWithStorageConfig`, `ElectrolyzerWithHydrogenStorageConfig` | conv | `standard` | the survivors, confirmed alone in the tree 2026-09-11 (D-29 (c)): waste energy and part-load; preset carries the 2.4 kW factory values, nothing derived (D-28) | N | D-28, D-29 |
@@ -389,6 +390,24 @@ row is struck from the table, which keeps the question and the option chosen nex
   `electrolyzer_manufacturer_config.json`, so neither missing JSON has reappeared. `FuelCellConfig` and
   `FuelCellControllerConfig` keep preset `pem`, whose hand-typed defaults do build. Consistent with D-16's rule: moved,
   not deleted.
+
+  **Executed 2026-09-11.** Neither `hisim/inputs/fuel_cell_manufacturer_config.json` nor
+  `hisim/inputs/rSOC_manufacturer_config.json` is in this repository, and as far as its history shows neither
+  ever was. **Moved:** `generic_rsoc`, `controller_l1_rsoc` and `controller_l2_rsoc_battery_system` to
+  `obsolete/components/`, with their three tests to `obsolete/tests/` and `rSOC_efficiency_curve_data.json` —
+  read by `generic_rsoc` and nothing else — to `obsolete/inputs/`; and the six fuel-cell table functions, cut
+  out of three live modules and archived verbatim in `obsolete/components/fuel_cell_manufacturer_table.py`.
+  **Stayed:** the two hand-typed PEM presets, `FuelCellConfig.get_default_pem_fuel_cell_config` and
+  `FuelCellControllerConfig.get_default_fuel_cell_controller_config`, which build; and
+  `controller_l2_xtp_fuel_cell_ems` with its fields, its `XtpOperationMode` enum, its component and its tests —
+  but **`XTPControllerConfig` now has no default builder**, the table path having been its only factory, until
+  the B7 batch gives it a preset. `hisim/economics/adapter.py` loses its `Rsoc` and `RsocBatteryController` rows
+  and `tests/test_economics_extraction.py` the matching two, and `docs/modules/components.rst` its three entries
+  plus `docs/modules/inputs.rst` one. Nothing was deleted and no recorded result moves: no setup, energy system
+  or golden reference names any of these classes. D-26 narrows with this: its "raise on an unknown device" now
+  applies only to the three survivors `generic_electrolyzer_h2`, `controller_l1_electrolyzer_h2` and
+  `controller_l2_ptx_energy_management_system`, all three readers of the one manufacturer table that does exist,
+  `electrolyzer_manufacturer_config.json`.
 - **D-29** `[answered 2026-09-11]` **(c) keep the `_and_h2_storage` pair** — the survey recommended (a), the other way
   round. `ElectrolyzerWithStorageConfig` and `ElectrolyzerWithHydrogenStorageConfig`
   (`generic_electrolyzer_and_h2_storage.py`) survive as the richer model, the one that has waste energy and part-load
@@ -449,7 +468,7 @@ The 32 questions below are owner decisions surfaced by the survey, and **all 32 
 | D-8 | ~~`advanced_fuel_cell_controller` + 3 legacy `configuration.py` configs (unrunnable): obsolete together?~~ | `[answered 2026-09-10]` **(a)** one commit; the three configs move out into their own file under `obsolete/components/` rather than being deleted | R6 |
 | D-16 | ~~Storage controller, MPC, PID, wind, price signal, dead factories, 5 `configuration.py` classes~~ | `[answered 2026-09-10]` **beyond the three options: everything to `obsolete/`, nothing deleted** — MPC/PID/wind/price move now rather than being deferred, and a class sharing a file is moved out into its own file. Only the two dead factories are deleted; only `HouseholdWarmWaterDemandConfig` (live) and the D-25/D-29 pair stay in `configuration.py` | R3, R6 |
 | D-23 | ~~Car chain not expressible in a file~~ | `[answered 2026-08-31]` **(d), none of the three offered:** convert now by *routing around* `SizingContext` rather than through it. The occupancy publishes its per-car profiles into the per-simulation `SimRepository` in `i_prepare_simulation`; `Car` reads its own there in the same phase and loses its third constructor argument; `CarConfig` gains `household_name`, `car_name` and a `for_household` constructor. The survey's objection stands unamended — a time series can never be a fact — but a config can name one. The N-car loop stays Python. The shared-config aliasing bug is fixed on the way, since each car now builds its own config. | R3 mobility |
-| D-25 | ~~Two manufacturer JSONs absent; six H₂/RSOC classes unbuildable~~ | `[answered 2026-09-11]` **(b)** the RSOC trio and the fuel-cell table path move to `obsolete/` with their tests (re-verified 2026-09-11); `FuelCellConfig`/`FuelCellControllerConfig` keep `pem` | R3 H₂, R6 |
+| D-25 | ~~Two manufacturer JSONs absent; six H₂/RSOC classes unbuildable~~ | `[answered 2026-09-11]` **(b)** executed — the RSOC trio (plus its tests and its efficiency-curve data file) and the fuel-cell table path move to `obsolete/` (re-verified 2026-09-11), nothing deleted; `FuelCellConfig`/`FuelCellControllerConfig` keep `pem`; `XTPControllerConfig` is left with no default builder until B7 | R3 H₂, R6 |
 | D-29 | ~~Two electrolyzer + two H₂-storage classes for two devices~~ | `[answered 2026-09-11]` **(c)** keep the `_and_h2_storage` pair — survey recommended (a); `generic_electrolyzer`, `generic_hydrogen_storage`, `controller_l1_electrolyzer` and `AdvElectrolyzerConfig` move to `obsolete/`, and `controller_l1_chp`'s H₂-storage default connection is dropped | R3 H₂ |
 | D-30 | ~~`generic_smart_device` defective: delete or fix?~~ | `[answered 2026-09-11]` **(a)** `generic_smart_device` and `SmartDeviceConfig` move to `obsolete/` in one commit, with §6's `smart_devices_included` candidate | R6 |
 | **Physics changes (R5)** | | | |
@@ -477,7 +496,7 @@ The 32 questions below are owner decisions surfaced by the survey, and **all 32 
 | D-19 | ~~Constructor arguments undecoded — executor fix, widen signatures, or leave constructors Python-only?~~ | `[answered 2026-09-11]` **(a)** `codec.decode_argument` shared by `config:` and `constructor:`, decoded in `_call_builder`, EF-1A at the argument's key path, and `@constructor` refuses undecodable parameter types at import | R2.3, B1 |
 | D-20 | ~~`for_household` ignores its argument in the predefined-profile mode~~ | `[answered 2026-08-27, review of #592]` **(a)** implemented in P2: `data_acquisition_mode` parameter, profile derived from the household, refusal listing the shipped households and the computing modes | B1 UTSP |
 | D-22 | ~~Building's 20-field post-construction mutation: `config:` overrides, wider constructor, or `for_measured_envelope`?~~ | `[answered 2026-09-11]` **(a)** the 14 non-parameters become sparse `config:` overrides; the recorder diffs against a fresh preset, so no twin carries ten nulls | R3 Building, P3 recorder |
-| D-26 | ~~Five `read_config` readers zero-fill on unknown device: raise everywhere?~~ | `[answered 2026-09-11]` **(a)** all nine readers raise, listing the available device names | R3 H₂ |
+| D-26 | ~~Five `read_config` readers zero-fill on unknown device: raise everywhere?~~ — after D-25 only three are left (`generic_electrolyzer_h2`, `controller_l1_electrolyzer_h2`, `controller_l2_ptx_energy_management_system`, all reading `electrolyzer_manufacturer_config.json`) | `[answered 2026-09-11]` **(a)** all nine readers raise, listing the available device names | R3 H₂ |
 | D-32 | ~~Delete the `LOCATION` key and the six 5R1C keys?~~ | `[answered 2026-09-11]` **(a)** both, one commit each: postprocessing reads the Weather's `config.location`; the six 5R1C keys follow D-16's MPC/PID move, after which they have no reader | R2.4 |
 
 ## 12. Glossary

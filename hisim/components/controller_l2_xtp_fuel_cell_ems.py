@@ -4,9 +4,6 @@ from __future__ import annotations
 
 # clean
 from enum import Enum, unique
-from pathlib import Path
-from typing import Optional, Any, cast
-import json
 import math
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -14,7 +11,6 @@ from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
 
 from hisim import loadtypes as lt
-from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 from hisim.economics.facts import CostRelevance
 
@@ -49,7 +45,15 @@ class XtpOperationMode(str, Enum):
 @dataclass_json
 @dataclass
 class XTPControllerConfig(ConfigBase):
-    """Configuration of the PtX  Controller."""
+    """Configuration of the PtX  Controller.
+
+    This class has **no default builder**. Its only factory read
+    `hisim/inputs/fuel_cell_manufacturer_config.json`, a file that is not in this repository
+    and never was, so the factory raised `FileNotFoundError` on every call; component sweep
+    decision D-25 removed it and archived its text in
+    `obsolete/components/fuel_cell_manufacturer_table.py`. Until the conversion batch gives
+    this class a preset, a caller builds it by naming every field.
+    """
 
     @classmethod
     def get_main_classname(cls) -> str:
@@ -84,36 +88,6 @@ class XTPControllerConfig(ConfigBase):
                 f"Unknown XtP controller operation mode {self.operation_mode!r}. "
                 f"Write one of {[mode.value for mode in XtpOperationMode]}."
             ) from None
-
-    @staticmethod
-    def read_config(fuel_cell_name: str) -> dict[str, Any]:
-        """Read config."""
-        config_file = Path(utils.HISIMPATH["inputs"]) / "fuel_cell_manufacturer_config.json"
-        with config_file.open("r", encoding="utf-8") as json_file:
-            data = json.load(json_file)
-            return cast(dict[str, Any], data.get("Fuel Cell variants", {}).get(fuel_cell_name, {}))
-
-    @classmethod
-    def control_fuel_cell(
-        cls,
-        fuel_cell_name: str,
-        operation_mode: XtpOperationMode,
-        component_id: Optional[ComponentID] = None,
-    ) -> XTPControllerConfig:
-        """Sets the according parameters for the chosen fuel cell."""
-        if component_id is None:
-            component_id = ComponentID(name="L2XTPController")
-        config_json = cls.read_config(fuel_cell_name)
-
-        config = XTPControllerConfig(
-            component_id=component_id,  # config_json.get("name", "")
-            nom_output=config_json.get("nom_output", 0.0),
-            min_output=config_json.get("min_output", 0.0),
-            max_output=config_json.get("max_output", 0.0),
-            standby_load=config_json.get("standby_load", 0.0),
-            operation_mode=operation_mode,
-        )
-        return config
 
 
 class XTPController(Component):

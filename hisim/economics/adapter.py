@@ -631,7 +631,6 @@ class DeviceEnergySpecs:
         "FuelCellController": (),
         "L1Controller": (),
         "PTXController": (),
-        "RsocBatteryController": (),
         "XTPController": (),
         # ------------------------------------------------------ examples and templates
         # Shipped as documentation of the component API. They appear in no priced setup, and a
@@ -665,7 +664,6 @@ class DeviceEnergySpecs:
         "Electrolyzer": (),
         "HydrogenStorage": (),
         "FuelCell": (),
-        "Rsoc": (),
         "CHP": (),
         "SimpleCHP": (),
     }

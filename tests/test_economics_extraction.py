@@ -1300,7 +1300,6 @@ _ENERGY_BALANCE_MODULES = {
     "FuelCellController": "controller_l1_fuel_cell",
     "L1Controller": "controller_l1_generic_ev_charge",
     "PTXController": "controller_l2_ptx_energy_management_system",
-    "RsocBatteryController": "controller_l2_rsoc_battery_system",
     "XTPController": "controller_l2_xtp_fuel_cell_ems",
     "ExampleComponent": "example_component",
     "ComponentName": "example_template",
@@ -1314,7 +1313,6 @@ _ENERGY_BALANCE_MODULES = {
     "Electrolyzer": "generic_electrolyzer_h2",
     "HydrogenStorage": "generic_electrolyzer_and_h2_storage",
     "FuelCell": "generic_fuel_cell",
-    "Rsoc": "generic_rsoc",
     "CHP": "advanced_fuel_cell",
     "SimpleCHP": "generic_chp",
 }

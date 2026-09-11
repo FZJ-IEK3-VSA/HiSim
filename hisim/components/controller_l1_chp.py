@@ -8,6 +8,7 @@ CHP is controlled by both (i) thermal demand and (ii) electricity demand - it is
 """
 
 # Owned
+import dataclasses
 import importlib
 from dataclasses import dataclass
 from typing import Optional, List
@@ -30,11 +31,58 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
+#: Julian day of the simulation year on which the heating season begins.
+_DAY_OF_HEATING_SEASON_BEGIN = 270
+#: Julian day on which the heating season begins when a buffer storage is present: one day before
+#: the building's, so that the buffer has heated up a day ahead of the building it feeds.
+_BUFFER_DAY_OF_HEATING_SEASON_BEGIN = _DAY_OF_HEATING_SEASON_BEGIN - 1
+#: Upper set temperature of the buffer storage, given in °C.
+_BUFFER_T_MAX_HEATING_IN_CELSIUS = 40.0
+
+
+def _with_buffer_storage(
+    config: "L1CHPControllerConfig",
+    *,
+    t_min_heating_in_celsius: float,
+    t_min_dhw_in_celsius: float,
+) -> "L1CHPControllerConfig":
+    """Returns a copy of ``config`` regulated against a buffer storage rather than the building.
+
+    Two of the four changes are the same whichever fuel is burnt, and are taken from the module
+    constants here: the upper bound of the regulated band, which moves from the building's room
+    temperature up to the buffer's water temperature, and the start of the heating season, which
+    comes one day early so that the buffer is warm a day before the building calls for it.
+
+    The two lower bounds are *not* the same for both fuels - the gas and the hydrogen factory have
+    carried different ones since 2023, for reasons nothing on record explains, see
+    :class:`L1CHPControllerConfig` - so the caller passes them rather than this function choosing.
+    ``config`` itself is never modified.
+    """
+    return dataclasses.replace(
+        config,
+        t_min_heating_in_celsius=t_min_heating_in_celsius,
+        t_max_heating_in_celsius=_BUFFER_T_MAX_HEATING_IN_CELSIUS,
+        t_min_dhw_in_celsius=t_min_dhw_in_celsius,
+        day_of_heating_season_begin=_BUFFER_DAY_OF_HEATING_SEASON_BEGIN,
+    )
+
 
 @dataclass_json
 @dataclass
 class L1CHPControllerConfig(ConfigBase):
-    """CHP Controller Config."""
+    """CHP Controller Config.
+
+    The four default configurations cross two fuels - gas and green hydrogen, which differ in
+    ``use`` and in the hydrogen storage threshold that is only non-zero for the fuel cell - with
+    the presence of a buffer storage. Each of the four carries the temperature thresholds it was
+    written with in 2023, and they are not symmetric: the lower drain hot water bound runs 42 / 50
+    / 50 / 42 °C over chp, fuel cell, chp-with-buffer and fuel-cell-with-buffer, and a buffer
+    raises the lower heating bound to 35.0 °C on the gas axis but to 31.0 °C on the hydrogen one,
+    so the buffer axis differs per fuel. Nothing in this module, in the sibling controllers, in the
+    tests or in the commit history says why, and the values are kept as they stand rather than
+    guessed at: normalising them would change the behaviour of every simulation that uses them on
+    inference alone.
+    """
 
     component_id: ComponentID
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -62,6 +110,34 @@ class L1CHPControllerConfig(ConfigBase):
     # minimal resting time of heat source
     min_idle_time_in_seconds: int
 
+    def __post_init__(self) -> None:
+        """Refuses a set temperature band whose bounds are equal or the wrong way round.
+
+        :meth:`L1CHPController.determine_heating_mode` reads both bands as a state of charge - the
+        measured temperature's position inside the band, divided by the band's width - to decide
+        which of the two vessels is the emptier one and gets the heat. Equal bounds make that a
+        division by zero, and inverted bounds flip its sign, so the controller would quietly serve
+        whichever vessel is the fuller one instead. Neither surfaces as a failure later, so the
+        configuration is where both stop. The check covers the deserialising path and
+        :func:`dataclasses.replace` as well, because both route through ``__init__``.
+
+        Raises:
+            ValueError: If either band's lower bound is not strictly below its upper one, naming
+                the pair and both of its values.
+        """
+        if self.t_min_heating_in_celsius >= self.t_max_heating_in_celsius:
+            raise ValueError(
+                "The lower heating set temperature must be strictly below the upper one, but "
+                f"t_min_heating_in_celsius is {self.t_min_heating_in_celsius} °C and "
+                f"t_max_heating_in_celsius is {self.t_max_heating_in_celsius} °C."
+            )
+        if self.t_min_dhw_in_celsius >= self.t_max_dhw_in_celsius:
+            raise ValueError(
+                "The lower drain hot water set temperature must be strictly below the upper one, "
+                f"but t_min_dhw_in_celsius is {self.t_min_dhw_in_celsius} °C and "
+                f"t_max_dhw_in_celsius is {self.t_max_dhw_in_celsius} °C."
+            )
+
     @staticmethod
     def get_default_config_chp(
         component_id: Optional[ComponentID] = None,
@@ -79,7 +155,7 @@ class L1CHPControllerConfig(ConfigBase):
             t_max_heating_in_celsius=20.5,
             t_min_dhw_in_celsius=42,
             t_max_dhw_in_celsius=60,
-            day_of_heating_season_begin=270,
+            day_of_heating_season_begin=_DAY_OF_HEATING_SEASON_BEGIN,
             day_of_heating_season_end=150,
             min_operation_time_in_seconds=3600 * 4,
             min_idle_time_in_seconds=3600 * 2,
@@ -103,7 +179,7 @@ class L1CHPControllerConfig(ConfigBase):
             t_max_heating_in_celsius=20.5,
             t_min_dhw_in_celsius=50,
             t_max_dhw_in_celsius=60,
-            day_of_heating_season_begin=270,
+            day_of_heating_season_begin=_DAY_OF_HEATING_SEASON_BEGIN,
             day_of_heating_season_end=150,
             min_operation_time_in_seconds=3600 * 4,
             min_idle_time_in_seconds=3600 * 2,
@@ -115,50 +191,22 @@ class L1CHPControllerConfig(ConfigBase):
         component_id: Optional[ComponentID] = None,
     ) -> "L1CHPControllerConfig":
         """Returns default configuration for the CHP controller, when buffer storage for heating is available."""
-        # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
-        if component_id is None:
-            component_id = ComponentID(name="CHPController")
-        config = L1CHPControllerConfig(
-            component_id=component_id,
-            source_weight=1,
-            use=LoadTypes.GAS,
-            electricity_threshold=300,
-            h2_soc_threshold=0,
+        return _with_buffer_storage(
+            L1CHPControllerConfig.get_default_config_chp(component_id=component_id),
             t_min_heating_in_celsius=35.0,
-            t_max_heating_in_celsius=40.0,
             t_min_dhw_in_celsius=50,
-            t_max_dhw_in_celsius=60,
-            day_of_heating_season_begin=270 - 1,
-            day_of_heating_season_end=150,
-            min_operation_time_in_seconds=3600 * 4,
-            min_idle_time_in_seconds=3600 * 2,
         )
-        return config
 
     @staticmethod
     def get_default_config_fuel_cell_with_buffer(
         component_id: Optional[ComponentID] = None,
     ) -> "L1CHPControllerConfig":
         """Returns default configuration for the fuel cell controller, when buffer storage for heating is available."""
-        # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
-        if component_id is None:
-            component_id = ComponentID(name="CHPController")
-        config = L1CHPControllerConfig(
-            component_id=component_id,
-            source_weight=1,
-            use=LoadTypes.GREEN_HYDROGEN,
-            electricity_threshold=300,
-            h2_soc_threshold=8.0,
+        return _with_buffer_storage(
+            L1CHPControllerConfig.get_default_config_fuel_cell(component_id=component_id),
             t_min_heating_in_celsius=31.0,
-            t_max_heating_in_celsius=40.0,
             t_min_dhw_in_celsius=42,
-            t_max_dhw_in_celsius=60,
-            day_of_heating_season_begin=270 - 1,
-            day_of_heating_season_end=150,
-            min_operation_time_in_seconds=3600 * 4,
-            min_idle_time_in_seconds=3600 * 2,
         )
-        return config
 
 
 class L1CHPControllerState:

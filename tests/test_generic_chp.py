@@ -3,9 +3,19 @@
 Covers integration of ``generic_chp.SimpleCHP`` with ``controller_l1_chp.L1CHPController``
 under various demand/hydrogen scenarios, plus unit checks of ``CHPConfig``
 default-config builders and ``GenericCHPState.clone``.
+
+``L1CHPControllerConfig`` carries four default configurations whose thresholds are not
+symmetric: ``t_min_dhw_in_celsius`` runs 42/50/50/42 over chp, fuel cell, chp-with-buffer and
+fuel-cell-with-buffer, and a buffer raises ``t_min_heating_in_celsius`` to 35.0 for gas but to
+31.0 for hydrogen. Nothing in the module, the tests or the commit history explains either, so
+the values stand as they were written in 2023 and ``test_chp_controller_default_thresholds``
+pins all four as literals - a pin that read its expectation off a sibling factory would agree
+with any drift that happened to move both.
 """
 
 # -*- coding: utf-8 -*-
+import dataclasses
+
 import pytest
 from tests import functions_for_testing as fft
 
@@ -31,6 +41,25 @@ def test_chp_system() -> None:
       - CHP shuts down when hydrogen SOC is zero.
       - CHP shuts down when heat is not needed (temperatures above thresholds).
       - CHP shuts down when electricity is not needed (electricity target positive).
+
+    The controller is the fuel cell with a buffer storage, which regulates the buffer between
+    31.0 °C and 40.0 °C. Two things this test used to lean on had to be put right for the second
+    scenario to keep meaning what it says:
+
+    * The CHP's on/off input was wired to the controller's *heating mode* channel, so what arrived
+      at the CHP as "run" was really "heat the building rather than the water", and every "shuts
+      down" assertion below was an assertion about which vessel was being served. In the second
+      scenario the two states of charge tie exactly - ``(30 - 31) / (40 - 31)`` and
+      ``(40 - 42) / (60 - 42)`` are both -1/9, to the last bit - so the mode fell to 0 and every
+      output read as zero whatever the hydrogen store did. The input is now wired to the on/off
+      channel, which is what the assertions talk about.
+    * The second scenario then has to run long enough for the machine to be allowed to stop: the
+      minimum *operation* time, not the minimum idle time, is what holds a running CHP on.
+
+    The scenario's temperatures are left exactly as they were, tie included: once the on/off
+    channel is the one being read, the tie only decides which vessel would be served, not whether
+    the machine runs, and the second scenario's assertions fail when the hydrogen state of charge
+    below is raised from 0 to 50 - which is the check they were always meant to be.
     """
     seconds_per_timestep = 60
     thermal_power = 500  # thermal power in Watt
@@ -94,7 +123,7 @@ def test_chp_system() -> None:
     my_chp_controller.building_temperature_channel.source_output = buffer_temperature
     my_chp_controller.dhw_temperature_channel.source_output = boiler_temperature
 
-    my_chp.chp_onoff_signal_channel.source_output = my_chp_controller.chp_heatingmode_signal_channel
+    my_chp.chp_onoff_signal_channel.source_output = my_chp_controller.chp_onoff_signal_channel
     my_chp.chp_heatingmode_signal_channel.source_output = my_chp_controller.chp_heatingmode_signal_channel
 
     # Add Global Index and set values for fake Inputs
@@ -132,7 +161,7 @@ def test_chp_system() -> None:
 
     for timestep_t in range(
         timestep,
-        timestep + int((chp_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2),
+        timestep + int((chp_controller_config.min_operation_time_in_seconds / seconds_per_timestep) + 2),
     ):
         my_chp_controller.i_simulate(timestep_t, single_timestep_values, False)
         my_chp.i_simulate(timestep_t, single_timestep_values, False)
@@ -283,3 +312,109 @@ def test_generic_chp_state_clone_independence() -> None:
     cloned.state = 5
     assert original.state == 1
     assert cloned.state == 5
+
+
+@pytest.mark.base
+def test_chp_controller_default_thresholds() -> None:
+    """Pins every threshold that the four default controller configurations carry.
+
+    They cross two fuels with the presence of a buffer storage, and the numbers are not
+    symmetric: the lower drain hot water bound runs 42 / 50 / 50 / 42 °C down the list below, and
+    a buffer raises the lower heating bound to 35.0 °C for gas but to 31.0 °C for hydrogen.
+    Nothing on record says why, so the values are kept as they were written in 2023 rather than
+    guessed at, and pinned here so that any later change to one of them has to be deliberate.
+
+    Every expectation is a literal. Checking one factory against another would pass just as
+    happily if both of them drifted, which is the change this is meant to catch.
+    """
+    config_class = controller_l1_chp.L1CHPControllerConfig
+    expected: dict[str, dict[str, object]] = {
+        "chp": {
+            "component_name": "CHPController",
+            "use": lt.LoadTypes.GAS,
+            "h2_soc_threshold": 0,
+            "t_min_heating_in_celsius": 20.0,
+            "t_max_heating_in_celsius": 20.5,
+            "t_min_dhw_in_celsius": 42,
+            "t_max_dhw_in_celsius": 60,
+            "day_of_heating_season_begin": 270,
+            "day_of_heating_season_end": 150,
+            "min_operation_time_in_seconds": 3600 * 4,
+            "min_idle_time_in_seconds": 3600 * 2,
+        },
+        "fuel_cell": {
+            "component_name": "FuelCellController",
+            "use": lt.LoadTypes.GREEN_HYDROGEN,
+            "h2_soc_threshold": 8.0,
+            "t_min_heating_in_celsius": 20.0,
+            "t_max_heating_in_celsius": 20.5,
+            "t_min_dhw_in_celsius": 50,
+            "t_max_dhw_in_celsius": 60,
+            "day_of_heating_season_begin": 270,
+            "day_of_heating_season_end": 150,
+            "min_operation_time_in_seconds": 3600 * 4,
+            "min_idle_time_in_seconds": 3600 * 2,
+        },
+        "chp_with_buffer": {
+            "component_name": "CHPController",
+            "use": lt.LoadTypes.GAS,
+            "h2_soc_threshold": 0,
+            "t_min_heating_in_celsius": 35.0,
+            "t_max_heating_in_celsius": 40.0,
+            "t_min_dhw_in_celsius": 50,
+            "t_max_dhw_in_celsius": 60,
+            "day_of_heating_season_begin": 269,
+            "day_of_heating_season_end": 150,
+            "min_operation_time_in_seconds": 3600 * 4,
+            "min_idle_time_in_seconds": 3600 * 2,
+        },
+        "fuel_cell_with_buffer": {
+            "component_name": "FuelCellController",
+            "use": lt.LoadTypes.GREEN_HYDROGEN,
+            "h2_soc_threshold": 8.0,
+            "t_min_heating_in_celsius": 31.0,
+            "t_max_heating_in_celsius": 40.0,
+            "t_min_dhw_in_celsius": 42,
+            "t_max_dhw_in_celsius": 60,
+            "day_of_heating_season_begin": 269,
+            "day_of_heating_season_end": 150,
+            "min_operation_time_in_seconds": 3600 * 4,
+            "min_idle_time_in_seconds": 3600 * 2,
+        },
+    }
+
+    for factory_name, fields in expected.items():
+        config = getattr(config_class, "get_default_config_" + factory_name)()
+        actual: dict[str, object] = {
+            field: config.component_id.name if field == "component_name" else getattr(config, field)
+            for field in fields
+        }
+        assert actual == fields, factory_name
+
+
+@pytest.mark.base
+def test_chp_controller_config_refuses_a_heating_band_of_zero_width() -> None:
+    """Equal heating bounds are refused at construction, rather than dividing by zero later.
+
+    ``determine_heating_mode`` reads the building's heating level as the measured temperature's
+    position inside the band divided by the band's width, so a band of zero width would raise
+    only in the middle of a simulation, if at all.
+    """
+    config = controller_l1_chp.L1CHPControllerConfig.get_default_config_chp()
+
+    with pytest.raises(ValueError, match="t_min_heating_in_celsius"):
+        dataclasses.replace(config, t_min_heating_in_celsius=config.t_max_heating_in_celsius)
+
+
+@pytest.mark.base
+def test_chp_controller_config_refuses_an_inverted_dhw_band() -> None:
+    """A lower drain hot water bound above the upper one is refused at construction.
+
+    An inverted band does not fail anywhere later: it flips the sign of the storage's heating
+    level, so the controller would quietly serve the fuller vessel and the run would look like a
+    working simulation of a differently configured house.
+    """
+    config = controller_l1_chp.L1CHPControllerConfig.get_default_config_chp()
+
+    with pytest.raises(ValueError, match="t_min_dhw_in_celsius"):
+        dataclasses.replace(config, t_min_dhw_in_celsius=config.t_max_dhw_in_celsius + 1)

@@ -124,3 +124,16 @@ job that goes red because GitHub was busy trains everyone to ignore it.
 - The index lives in an artifact with a 7-day retention — 24 of them are written a day, and a
   week outlasts a weekend of failed runs. Losing it costs a cold start, not the history: the
   API still holds the runs, and the following sweeps fill the window back in.
+
+## Dependency updates
+
+`.github/dependabot.yml` points Dependabot at three things: the requirements, the third-party
+actions the workflows call, and the `python` base image of `Dockerfile` and `Dockerfile.test`.
+On the Python side it can only raise a version that is written down, so it reaches the pinned
+lines of `requirements.txt` — pandas, hplib, bslib, utspclient, pyhumps, the `timezonefinder`
+ceiling — and says nothing about the unpinned majority, which already resolve to the newest
+release. The image is held at 3.11 by an `ignore` rule for major and minor updates, so the bot
+proposes patch tags and leaves the Python floor to the owner; the two local composite actions
+under `.github/actions/` are this repository's own and are not covered either. Everything is
+grouped per ecosystem and scheduled weekly on Monday, so the result is one batch of pull
+requests a week rather than a trickle of single bumps.

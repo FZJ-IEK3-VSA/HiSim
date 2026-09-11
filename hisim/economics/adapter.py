@@ -630,7 +630,6 @@ class DeviceEnergySpecs:
         "L2GenericEnergyManagementSystem": (),
         "FuelCellController": (),
         "L1Controller": (),
-        "L1GenericElectrolyzerController": (),
         "PTXController": (),
         "RsocBatteryController": (),
         "XTPController": (),
@@ -668,7 +667,6 @@ class DeviceEnergySpecs:
         # a cumulative total in kWh).
         "AdvancedElectrolyzer": (),
         "Electrolyzer": (),
-        "GenericElectrolyzer": (),
         "HydrogenStorage": (),
         "FuelCell": (),
         "Rsoc": (),

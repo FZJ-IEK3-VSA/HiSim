@@ -69,12 +69,11 @@ is documented via autodoc.
   :py:mod:`~hisim.components.simple_air_conditioner`
 
 * **Power-to-gas / hydrogen** —
-  electrolyzers (:py:mod:`~hisim.components.generic_electrolyzer`,
-  :py:mod:`~hisim.components.generic_electrolyzer_h2`,
+  electrolyzers (:py:mod:`~hisim.components.generic_electrolyzer_h2`,
   :py:mod:`~hisim.components.generic_electrolyzer_and_h2_storage`),
   fuel cells (:py:mod:`~hisim.components.generic_fuel_cell`,
   :py:mod:`~hisim.components.advanced_fuel_cell`),
-  hydrogen storage (:py:mod:`~hisim.components.generic_hydrogen_storage`)
+  hydrogen storage (:py:mod:`~hisim.components.generic_electrolyzer_and_h2_storage`)
 
 * **Storage** —
   batteries (:py:mod:`~hisim.components.advanced_battery_bslib`),
@@ -95,7 +94,6 @@ is documented via autodoc.
   L1 device controllers
   (:py:mod:`~hisim.components.controller_l1_chp`,
   :py:mod:`~hisim.components.controller_l1_fuel_cell`,
-  :py:mod:`~hisim.components.controller_l1_electrolyzer`,
   :py:mod:`~hisim.components.controller_l1_electrolyzer_h2`,
   :py:mod:`~hisim.components.controller_l1_generic_ev_charge`,
   :py:mod:`~hisim.components.controller_l1_rsoc`,

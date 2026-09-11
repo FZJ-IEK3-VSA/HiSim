@@ -112,7 +112,7 @@ Legend: **conv** convert · **del** delete · **done** converted (remaining work
 | `SimpleHotWaterStorageConfig` | conv | `buffer` (+ `sizing_option: HotWaterStorageSizingEnum` field, D-10) | `volume_heating_water_storage_in_liter` ← **generator** `maximal_thermal_power_in_watt` × k (20/40/50 l/kW) — today the building load | — | **P** (C11: +10 % on 5 golden sizers, +54 % one ungated, up to +72 % MFH) | D-9, D-10, D-17 |
 | `SimpleHotWaterStorageControllerConfig` | del | | | | | D-16 |
 | `SimpleDHWStorageConfig` | conv | `standard` | volume ← number_of_apartments (250 l × max(apts,1)) | — | N | |
-| `SetTemperatureConfig`, `WarmWaterStorageConfig`, `HydrogenStorageConfig` (`configuration.py`), `LoadConfig`, `ElectricityDemandConfig`, `PVConfig` | del/ex | | | | | |
+| `SetTemperatureConfig`, `WarmWaterStorageConfig`, `HydrogenStorageConfig` (`configuration.py`), `LoadConfig`, `ElectricityDemandConfig`, `PVConfig` | del/ex | | `HydrogenStorageConfig` **moved** 2026-09-11 into `obsolete/components/configuration_hydrogen.py` with `AdvElectrolyzerConfig` (D-29); the other four left under D-16 | | | D-29 |
 | `HouseholdWarmWaterDemandConfig` | **ex** (live constant table; supplement wrongly lists it for deletion) | | | | | |
 
 **Electricity, EMS, meters (survey B)**
@@ -153,10 +153,10 @@ Legend: **conv** convert · **del** delete · **done** converted (remaining work
 | `PTXControllerConfig`, `XTPControllerConfig` | conv | constructor only | `operation_mode` → enum | N | D-27 |
 | `FuelCellConfig`, `FuelCellControllerConfig` | conv | `pem` | manufacturer JSON absent, so the table path (`for_device`) goes to `obsolete/` (D-25) | N | D-25 |
 | `RsocConfig`, `RsocControllerConfig`, `RsocBatteryControllerConfig` | del | | JSON absent, no other builder → `obsolete/` with their tests (D-25) | | D-25 |
-| `GenericElectrolyzerConfig` | del | | `generic_electrolyzer.py` → `obsolete/` (D-29 (c)); D-28 moot, so no `Self("max_power")` laws | | D-28, D-29 |
-| `L1ElectrolyzerControllerConfig`, `GenericHydrogenStorageConfig` | del | | `controller_l1_electrolyzer.py` and `generic_hydrogen_storage.py` → `obsolete/` with their tests; `controller_l1_chp` drops its optional H₂-storage default connection (D-29) | | D-29 |
-| `ElectrolyzerWithStorageConfig`, `ElectrolyzerWithHydrogenStorageConfig` | conv | `standard` | the survivors (D-29 (c)): waste energy and part-load; preset carries the 2.4 kW factory values, nothing derived (D-28) | N | D-28, D-29 |
-| `AdvElectrolyzerConfig` (`configuration.py`) | del | | dead third copy → `obsolete/` (D-29) | | D-29 |
+| `GenericElectrolyzerConfig` | del | | **moved** 2026-09-11: `generic_electrolyzer.py` → `obsolete/components/` with `tests/test_generic_electrolyzer.py` (D-29 (c)); D-28 moot, so no `Self("max_power")` laws were minted | | D-28, D-29 |
+| `L1ElectrolyzerControllerConfig`, `GenericHydrogenStorageConfig` | del | | **moved** 2026-09-11: `controller_l1_electrolyzer.py` and `generic_hydrogen_storage.py` → `obsolete/components/`, the storage with `tests/test_h2storage.py`, the controller with the electrolyzer test that built it; `controller_l1_chp` dropped its optional H₂-storage default connection (D-29) | | D-29 |
+| `ElectrolyzerWithStorageConfig`, `ElectrolyzerWithHydrogenStorageConfig` | conv | `standard` | the survivors, confirmed alone in the tree 2026-09-11 (D-29 (c)): waste energy and part-load; preset carries the 2.4 kW factory values, nothing derived (D-28) | N | D-28, D-29 |
+| `AdvElectrolyzerConfig` (`configuration.py`) | del | | **moved** 2026-09-11: the dead third copy, out of `configuration.py` into `obsolete/components/configuration_hydrogen.py` (D-29) | | D-29 |
 | `CSVLoaderConfig` | conv | `for_csv_file(…)` (10 params), no preset | conflict-9 precedent; do first | N | |
 | `ExampleComponentConfig` | conv | `standard` | `capacity` ← conditioned_floor_area × 45 (the hidden law) | N | D-31 |
 | `ComponentNameConfig` (template) | conv | `standard` | + one `sized_field`; no contribution — a documented comment block instead, since only `SizingContext` fields may be contributed (D-31 deviation) | N | D-31 |
@@ -337,7 +337,10 @@ row is struck from the table, which keeps the question and the option chosen nex
 - **D-28** `[answered 2026-09-11]` **moot by D-29.** The class the question was about, `GenericElectrolyzerConfig`,
   retires. The survivor `ElectrolyzerWithStorageConfig` converts as preset `standard` carrying the 2.4 kW factory
   values (minimum 1.2 kW, 400 W waste energy, 300–5000 Nl/h, 30 bar) — no constructor, nothing derived — so neither the
-  three `Self("max_power")` laws nor `for_rated_power` is ever minted.
+  three `Self("max_power")` laws nor `for_rated_power` is ever minted. **Confirmed by the D-29 execution
+  2026-09-11:** `GenericElectrolyzerConfig` left `hisim/` with its module, so the factory with the mandatory
+  `p_el` argument — the last of `plan.md`'s D13 "cannot be built from its own defaults" cases outside D-25/D-30 —
+  is gone from the live tree and the question closes unasked.
 - **D-31** `[answered 2026-09-11]` **(a) both.** `example_template.py` gains one `sized_field` and one
   `SIZING_CONTRIBUTIONS` entry, so the file every new component author copies demonstrates the mechanism it is supposed
   to teach (EAC4, AC-P4.9); and `example_component`'s `capacity = 45 * 121.2` becomes the real law,
@@ -395,6 +398,21 @@ row is struck from the table, which keeps the question and the option chosen nex
   `generic_hydrogen_storage` is dropped, not re-pointed; and `AdvElectrolyzerConfig` in `configuration.py`, the dead
   third copy, goes to `obsolete/` as well. The live setup `electrolyzer_with_renewables` uses the third electrolyzer,
   `generic_electrolyzer_h2` (the manufacturer-table one), and is untouched.
+  **Executed 2026-09-11.** Five things moved and nothing was deleted: `generic_electrolyzer.py` and
+  `generic_hydrogen_storage.py` to `obsolete/components/`, with `tests/test_generic_electrolyzer.py` (which built
+  the controller as well as the electrolyzer) and `tests/test_h2storage.py` to `obsolete/tests/`;
+  `controller_l1_electrolyzer.py` to `obsolete/components/`; and `HydrogenStorageConfig` with
+  `AdvElectrolyzerConfig` out of the shared `hisim/components/configuration.py` into the new
+  `obsolete/components/configuration_hydrogen.py`, the way D-16 made `configuration_legacy.py`.
+  `configuration.py` keeps everything else. `L1CHPController` lost `get_default_connections_from_h2_storage`,
+  its registration and the docstring line that listed it; its optional `HydrogenSOC` input stays, and no
+  connection to the surviving `HydrogenStorage` was added, so a fuel-cell setup wanting one wires it by hand.
+  `DeviceEnergySpecs.BY_CLASS_NAME` lost its `GenericElectrolyzer` and `L1GenericElectrolyzerController` rows
+  and `tests/test_economics_extraction.py` the two matching keys; `docs/modules/components.rst` lost three
+  module entries and now names `generic_electrolyzer_and_h2_storage` as the hydrogen store.
+  `tests/test_controller_l1_generic_electrolyzer.py` stayed behind despite its name — it builds the live
+  `controller_l1_electrolyzer_h2.ElectrolyzerController`, not the retired one. Result-neutral: no setup, scenario
+  JSON, energy-system file or golden reference named either retiring pair.
 - **D-30** `[answered 2026-09-11]` **(a) move to `obsolete/`.** `generic_smart_device` and `SmartDeviceConfig` go in
   one commit, before any preset is minted for a component whose `__init__` raises `KeyError: 'utsp_reports'` on every
   construction; §6's `smart_devices_included` copy-law candidate goes with it. Under D-16's rule, moved, not deleted.

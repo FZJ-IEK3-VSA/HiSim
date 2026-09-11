@@ -13,11 +13,11 @@ sphinx-rtd-theme
 sphinxcontrib-mermaid
 dataclasses_json
 hplib==1.9
-bslib==0.6
+bslib==0.7
 psutil
 pydot
 graphviz
-utspclient==0.1.6
+utspclient==0.2.1
 html2image
 control
 casadi
@@ -26,7 +26,7 @@ ordered_set
 typing_extensions
 python-dotenv
 windpowerlib # ==0.2.1
-timezonefinder<6.0
+timezonefinder<9.0
 #wetterdienst==0.63.0 # TODO: migrate weather_data_import.py to new API before upgrading
 cdsapi
 xarray

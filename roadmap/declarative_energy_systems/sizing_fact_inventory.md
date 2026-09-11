@@ -310,7 +310,7 @@ Three families of parameter recur across almost every module and account for mos
 |---|---|---|---|---|---|
 | `CarConfig` | number of car instances / `source_weight` | NEW: number of cars from occupancy (LPG `transportation_device_set`) | count → instance fan-out | many | medium |
 | `CarConfig` | `consumption_per_km` | `fuel` + NEW vehicle class | lookup | 1 | low |
-| `SmartDeviceConfig` | `smart_devices_included` | occupancy `profile_with_washing_machine_and_dishwasher` | copy | 1 | low |
+| `SmartDeviceConfig` | `smart_devices_included` | occupancy `profile_with_washing_machine_and_dishwasher` | copy | 1 | ~~low~~ retired with the module, which moved to `obsolete/` under D-30 |
 
 ### Occupancy / weather / building
 

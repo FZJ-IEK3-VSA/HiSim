@@ -169,20 +169,15 @@ jobs:
           path: verdicts
           merge-multiple: false
       - name: Print one table covering every triple
-        # No pipeline here: GitHub runs this step with 'sh' inside the test container, which
-        # rejects the bash-only `set -o pipefail` ("Illegal option -o pipefail") and expands
-        # PIPESTATUS to "Bad substitution". Redirect, then show the file, so the step keeps the
-        # checker's own exit code — the summarize path returns 1 when any triple missed parity
-        # or when no verdicts were collected at all, and `tee` would otherwise replace that
-        # with its own 0.
+        # bash by name: this step once fell back to sh in this container and died on the bash-only
+        # `set -o pipefail` ("Illegal option -o pipefail"), yet bash is installed here — the
+        # resource-monitor steps of this same job ask for it and run. pipefail keeps the checker's
+        # own exit code (1 when a triple missed parity, or when no verdicts were collected at all),
+        # which `tee` would otherwise replace with its own 0.
+        shell: bash
         run: |
-          set +e
-          python3 scripts/p3_parity_check.py --summarize verdicts > parity_summary.md 2>&1
-          rc=$?
-          set -e
-          cat parity_summary.md
-          cat parity_summary.md >> "$GITHUB_STEP_SUMMARY"
-          exit "$rc"
+          set -o pipefail
+          python3 scripts/p3_parity_check.py --summarize verdicts | tee "$GITHUB_STEP_SUMMARY"
       - name: Fail if any triple did not reach parity
         run: '[ "${{ needs.parity.result }}" = "success" ] || exit 1'
       # Kept on failure too: a job killed for running out of memory is the one

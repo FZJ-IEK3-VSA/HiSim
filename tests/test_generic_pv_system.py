@@ -240,3 +240,73 @@ def test_scaled_pv_system_records_the_share_it_applied() -> None:
     )
     assert half_config.power_in_watt == expected_power_in_watt
     assert half_config.power_in_watt == pytest.approx(full_config.power_in_watt / 2, abs=0.01)
+
+
+@pytest.mark.base
+def test_a_scaled_pv_record_re_executes_to_the_same_power() -> None:
+    """Catches a scaled array whose own record would rebuild a differently sized array.
+
+    A share is only worth recording if the record it lands in reproduces the run it describes.
+    The share must survive because it is the provenance, and the power must survive *unscaled*,
+    because the block already carries the scaled number: a reader that applied the recorded share
+    to the recorded power a second time would halve a half-share array on every re-run.
+    """
+    scaled_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+        rooftop_area_in_m2=120.0,
+        share_of_maximum_pv_potential=0.5,
+    )
+
+    re_executed = fft.round_trip_config_block(
+        scaled_config, generic_pv_system.PVSystemConfig, "PVSystem"
+    )
+
+    assert re_executed.share_of_maximum_pv_potential == 0.5
+    assert re_executed.power_in_watt == scaled_config.power_in_watt
+    assert re_executed == scaled_config
+
+
+@pytest.mark.base
+def test_the_default_pv_factory_reads_its_power_argument_as_the_unscaled_maximum() -> None:
+    """Pins the one factory whose power argument is a maximum rather than a result.
+
+    ``get_default_pv_system`` multiplies the power it is given by the share, so the argument
+    states the array's maximum while the field it writes is what the share left of it -- a
+    distinction the argument's name carries and this test keeps honest.
+    """
+    config = generic_pv_system.PVSystemConfig.get_default_pv_system(
+        maximum_power_in_watt=10e3,
+        share_of_maximum_pv_potential=0.5,
+    )
+
+    assert config.power_in_watt == 5000.0
+    assert config.share_of_maximum_pv_potential == 0.5
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("impossible_share", [2.0, -0.5])
+def test_the_default_pv_factory_refuses_a_share_that_is_not_a_share(impossible_share: float) -> None:
+    """Catches a share outside [0, 1] sizing an array in silence instead of stopping.
+
+    The share is multiplied onto the maximum, so a percentage typed as a fraction or a negative
+    value produces a run that finishes and reports plausible numbers for an array nobody asked
+    for. The refusal has to name the value, because the number that is wrong is the only clue.
+    """
+    with pytest.raises(ValueError, match=str(impossible_share)):
+        generic_pv_system.PVSystemConfig.get_default_pv_system(
+            share_of_maximum_pv_potential=impossible_share
+        )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("impossible_share", [2.0, -0.5])
+def test_the_scaled_pv_factory_refuses_a_share_that_is_not_a_share(impossible_share: float) -> None:
+    """Catches the same value slipping past on the rooftop path, where it is stamped afterwards.
+
+    The scaled factory applies the share in ``size_pv_system`` and writes it onto the finished
+    configuration, so it reaches the field by a second route; the check has to hold on both or it
+    holds on neither.
+    """
+    with pytest.raises(ValueError, match=str(impossible_share)):
+        generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+            rooftop_area_in_m2=120.0, share_of_maximum_pv_potential=impossible_share
+        )

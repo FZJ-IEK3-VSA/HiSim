@@ -270,7 +270,7 @@ def setup_function(
         )
     else:
         my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system(
-            power_in_watt=pv_power_in_watt,
+            maximum_power_in_watt=pv_power_in_watt,
             share_of_maximum_pv_potential=share_of_maximum_pv_potential,
             location=weather_location,
         )

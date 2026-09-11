@@ -28,7 +28,6 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import pytest
-import yaml
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
     Households,
@@ -45,6 +44,7 @@ from hisim.energy_system.codec import ConfigValueCodec
 from hisim.energy_system.executor import SimulationParametersReader, build_energy_system
 from hisim.energy_system.record import ConfigBlockWriter, realize
 from hisim.energy_system.path_resolver import PathResolver
+from tests import functions_for_testing as fft
 
 
 class References:
@@ -122,13 +122,8 @@ def test_a_named_constructors_catalogue_references_survive_the_record_round_trip
     exception reports.
     """
     written = References.deliberately_unusual()
-    block = ConfigBlockWriter(PathResolver.default()).block(References.NAME, written)
 
-    reloaded = yaml.safe_load(yaml.safe_dump(block))
-    codec = ConfigValueCodec(UtspLpgConnectorConfig)
-    payload = codec.to_deserializer_payload(reloaded, "components.occupancy.config", References.NAME)
-    payload[ConfigBlockWriter.IDENTITY_FIELD] = written.component_id.to_dict()  # type: ignore[attr-defined]
-    read_back = UtspLpgConnectorConfig.from_dict(payload)
+    read_back = fft.round_trip_config_block(written, UtspLpgConnectorConfig, References.NAME)
 
     References.assert_same(written, read_back)
 

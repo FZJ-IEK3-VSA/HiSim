@@ -722,12 +722,20 @@ Added by inspection of `ls hisim/components`: `dual_circuit_system.py` (`SetTemp
 
 ## B‑c — Electricity generation and storage
 
-### `PVSystemConfig` (`hisim/components/generic_pv_system.py:98`) → `PVSystem` (`:267`)
+### `PVSystemConfig` (`hisim/components/generic_pv_system.py:100`) → `PVSystem` (`:293`)
+
+*(The numbered items' line references are as recorded and may have drifted; only items 2 and 7
+were re-verified against today's file.)*
 
 1. The pvlib rooftop array; 17 instantiations, the most‑used unconverted class in the fleet (`p3 §3b`).
-2. **status: to convert — and it carries a recording defect that must be decided first (D‑12).**
+2. **status: to convert.** The recording defect it carried is fixed: D‑12 is answered (a) and
+   executed in the code (`:236-237`, test `tests/test_generic_pv_system.py`). What is left for B5 is the
+   law form, not the physics. After the #684 review the factory argument was renamed on 2026‑09‑11 —
+   `get_default_pv_system(maximum_power_in_watt=…)`, the field still `power_in_watt` — so the preset
+   and the law of that conversion must not reintroduce a *maximum* named `power_in_watt`; the field
+   is the result, and the share is now range‑checked in `PVSystemConfig.__post_init__`.
 3. **Factories.**
-   - `get_default_pv_system(name="PVSystem", power_in_watt=10e3, source_weight=0, share_of_maximum_pv_potential=1.0, location="Aachen", component_id=None, module_name="Trina Solar TSM-435NE09RC.05", module_database=CEC_MODULE_DATABASE, inverter_name="Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]", inverter_database=CEC_INVERTER_DATABASE)` — `:136`. setups **15**, tests **3** + 1 method reference (`test_config_enum_serialization.py:70`), hisim **1** (its own caller at `:202`). Four of the 15 call it with **no arguments at all** and thus depend on the 10 kW default: `basic_household.py:86`, `basic_household_with_weather_data_request.py:119`, `default_connections.py:77`, `dynamic_components.py:101`.
+   - `get_default_pv_system(name="PVSystem", maximum_power_in_watt=10e3, source_weight=0, share_of_maximum_pv_potential=1.0, location="Aachen", component_id=None, module_name="Trina Solar TSM-435NE09RC.05", module_database=CEC_MODULE_DATABASE, inverter_name="Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]", inverter_database=CEC_INVERTER_DATABASE)` — `:136`. setups **15**, tests **3** + 1 method reference (`test_config_enum_serialization.py:70`), hisim **1** (its own caller at `:202`). Four of the 15 call it with **no arguments at all** and thus depend on the 10 kW default: `basic_household.py:86`, `basic_household_with_weather_data_request.py:119`, `default_connections.py:77`, `dynamic_components.py:101`.
    - `get_scaled_pv_system(rooftop_area_in_m2, name="PVSystem", share_of_maximum_pv_potential=1.0, …)` — `:180`. setups **12**, tests **7** (`test_controller_l2_energy_management_system.py:125`, `test_heating_meter.py:92`, `test_gas_meter.py:91`, `test_fuel_meter.py:96`, `test_electricity_meter.py:60`, `test_time_resolution.py:376`, `test_sizing_energy_systems.py:147`), hisim **0**.
    - `PVSystem.get_default_config(power_in_watt=10e3, source_weight=1, share_of_maximum_pv_potential=1.0, component_id=None)` — `:441`, a **static method on the component class** returning `Any`, pinning `Hanwha HSL60P6-PA-4-250T [2013]` + Sandia databases against the config class's Trina/CEC. **0 call sites anywhere.**
 4. **Presets.** Supplement: `rooftop`, `rooftop_10kw`; conflict 5 resolves "delete the component‑class factory; canonical preset `rooftop` from `get_scaled_pv_system`". **Agreed on `rooftop` and on the deletion.** **Deviation flagged on `rooftop_10kw`, in the opposite direction from group A's D‑6:** 10 kW is a round default, not a catalogue rating, so conflict 3's rule says drop it — but unlike the hplib `_8kw` case, **four setups actually depend on that default** (list above), and dropping it turns four zero‑argument call sites into explicit `power_in_watt: 10000` overrides. Recommend **keeping** `rooftop_10kw` and recording the exception. → part of **D‑13**.
@@ -742,13 +750,20 @@ Added by inspection of `ls hisim/components`: `dual_circuit_system.py` (`SetTemp
    - `share_of_maximum_pv_potential` stays a **plain field** (an author/consumer choice, default 1.0 — `hisim/building_sizer_utils/interface_configs/system_config.py:181`). §6's "1 − ST_area/roof" is the roof‑contention many‑reader, deferred.
    - `location: str` is a second hand‑typed copy of the weather location (§6, confidence high); all 12 sizer setups pass `location=weather_location`. Group C owns the Weather side; leave a plain field in B5.
 6. **Facts provided.** `pv_peak_power_in_watt` = resolved `power_in_watt` (inventory §3) — **the fact does not exist in `SizingContext` yet**, and `PVSystemConfig` has no `SIZING_CONTRIBUTIONS`. Its only consumer is the battery.
-7. **Behaviour: neutral for the golden fleet, NOT neutral in general — a recording defect.** `get_scaled_pv_system` applies the share inside `size_pv_system` and then calls `get_default_pv_system` **without forwarding it** (`:202-211`), so the field records `1.0` regardless. Verified:
+7. **Behaviour: the recording defect is fixed; both factories now record the share they applied.** As surveyed, `get_scaled_pv_system` applied the share inside `size_pv_system` and then called `get_default_pv_system` **without forwarding it**, so the field recorded `1.0` regardless:
    ```
+   surveyed (before #638)
    get_scaled_pv_system(rooftop_area_in_m2=100, share_of_maximum_pv_potential=0.5)  -> power 6593.33, share recorded 1.0
    get_scaled_pv_system(rooftop_area_in_m2=100, share_of_maximum_pv_potential=1.0)  -> power 13186.67, share recorded 1.0
    get_default_pv_system(power_in_watt=10000, share_of_maximum_pv_potential=0.5)    -> power 5000.0, share recorded 0.5
    ```
-   The two factories therefore disagree on what the field *means*. Any law that reads `Self("share_of_maximum_pv_potential")` reproduces the `get_default_*` semantics, i.e. it **changes** every `get_scaled_*` result whose share ≠ 1. The golden fleet is safe because `share_of_maximum_pv_potential` defaults to `1.0`; RenoVisor and building‑sizer payloads that set it are not. Also: a realized record written today is **not re‑executable** for share ≠ 1 (EAC2/UC5), because replaying `share=1.0` with the recorded power double‑counts nothing but loses the provenance. → **D‑12.**
+   D‑12 was answered **(a)** and the fix shipped inside #638 (`d50e85de`), which needed an honest share to record its `half_pv` probe column. The scaled factory now stamps the share onto the finished config **after** delegating (`:226-237`) — after, because passing it to `get_default_pv_system` would multiply the power a second time. Re‑verified on `527129eb`:
+   ```
+   get_scaled_pv_system(rooftop_area_in_m2=100, share_of_maximum_pv_potential=0.5)  -> power 6593.33, share recorded 0.5
+   get_scaled_pv_system(rooftop_area_in_m2=100, share_of_maximum_pv_potential=1.0)  -> power 13186.67, share recorded 1.0
+   get_default_pv_system(power_in_watt=10000, share_of_maximum_pv_potential=0.5)    -> power 5000.0, share recorded 0.5
+   ```
+   The two factories therefore agree on what the field *means*: the share that was really applied, the power beside it being the result. A realized record **is** re‑executable for share ≠ 1 (EAC2/UC5), because a record is rebuilt from its fields and the block already carries the scaled power — pinned by `test_a_scaled_pv_record_re_executes_to_the_same_power`. What remains for B5 is only the *law form*: a law reading `Self("share_of_maximum_pv_potential")` over the rooftop maximum reproduces exactly what both factories now do, so the conversion is result‑neutral for every caller, not merely for the golden fleet. No caller was ever affected in practice either — the fleet's share is `1.0` (`system_config.py:181`) and RenoVisor emits only `0.0` or `1.0` (`hisim/renovisor/mapping.py:250`); the one caller that does pass `0.5` is the recorder's own `half_pv` probe. → **D‑12, done.**
 8. **Deletions.** `PVSystem.get_default_config` (`:441`, 0 call sites, diverging module/inverter/database — conflict 5). Both config‑class factories become the two presets. No SimRepository construction‑time keys (`:797` is inside `i_prepare_simulation`, `:649`).
 9. **Flags** (all A2 → `config:`): `integrate_inverter` (`True`), `load_module_data` (`False`, and `get_scaled_pv_system` overrides it *after* delegating, `:210`), `predictive` (`False`), `predictive_control` (`False`).
 10. **Hazards.**
@@ -962,7 +977,7 @@ What it *does* contribute, as dead-or-defective code the gate should sweep up:
 - **`MpcController`, `PIDController`, `Windturbine`, `PriceSignal` — 0 setup uses**, tests only.
 - **`configuration.WarmWaterStorageConfig`, `PVConfig`, `HydrogenStorageConfig`, `LoadConfig`, `ElectricityDemandConfig` — 0 call sites**, all five deletable in one commit.
 - **Not a D13 case but a latent defect:** `SimpleHotWaterStorage.i_simulate` would raise `UnboundLocalError` on `water_mass_flow_rate_from_secondary_heat_generator_in_kg_per_second` (assigned only at `:934`, read at `:971` and `:1091`) if `WATERMASSFLOWRATEOFHEATGENERATOR` ever had a writer again.
-- **Not a D13 case but a recording defect:** `PVSystemConfig.get_scaled_pv_system` records `share_of_maximum_pv_potential = 1.0` regardless of the share it applied (`:198`, `:202-211`; verified). See D‑12.
+- **Not a D13 case, and no longer a defect:** `PVSystemConfig.get_scaled_pv_system` recorded `share_of_maximum_pv_potential = 1.0` regardless of the share it applied (`:198`, `:202-211`; verified). Fixed in #638; it now stamps the real share (`:236`). See D‑12.
 - **No mutable defaults anywhere in group B** — every unconverted config has all fields mandatory (verified over all 21 classes). Group A's `Coordinates` hazard has no analogue here.
 
 ---
@@ -983,10 +998,10 @@ All 12 setups pass `my_building_information.max_thermal_building_demand_in_watt`
 *Consequence:* (a) makes all 13 heat‑distribution setups agree on one law, at the cost of an unwitnessed change in three of them (consider adding one of them to the golden fleet in the same commit); (b) preserves the diff and preserves the inconsistency.
 **Answered 2026-09-10: (a)** — convert and record the diff (16 → 18 °C for the three legacy-factory setups); no `fixed_threshold_16c` preset, and `basic_household_only_heating` is blessed in the same commit.
 
-**D‑12 — `share_of_maximum_pv_potential`: fix the recording or preserve it?**
-`get_scaled_pv_system(share=0.5)` halves the power and records `share = 1.0`; `get_default_pv_system(share=0.5)` halves the power and records `0.5`. Options: (a) **Fix** — the preset's law reads `Self("share_of_maximum_pv_potential")` and the field records the real share. Golden‑neutral (the fleet's share is 1.0, `system_config.py:181`) but changes results for every RenoVisor / building‑sizer payload with `share ≠ 1` that came through the *scaled* path. (b) **Preserve** — the law ignores the field and takes the share as a builder argument, i.e. the field stays a lie. (c) **Delete the field** and make the share a pure builder argument, recording only the resulting `power_in_watt`.
+**D‑12 — `share_of_maximum_pv_potential`: fix the recording or preserve it?** `[answered 2026-09-10]` **(a) fix — records must re‑execute.** As surveyed: `get_scaled_pv_system(share=0.5)` halved the power and recorded `share = 1.0`; `get_default_pv_system(share=0.5)` halved the power and recorded `0.5`. Options were: (a) **Fix** — the preset's law reads `Self("share_of_maximum_pv_potential")` and the field records the real share. Golden‑neutral (the fleet's share is 1.0, `system_config.py:181`) but changes results for every RenoVisor / building‑sizer payload with `share ≠ 1` that came through the *scaled* path. (b) **Preserve** — the law ignores the field and takes the share as a builder argument, i.e. the field stays a lie. (c) **Delete the field** and make the share a pure builder argument, recording only the resulting `power_in_watt`.
 *Consequence:* (a) is the only option under which a realized record re‑executes (EAC2/UC5) for a scaled PV with a share; (b) freezes a field that means two different things depending on which factory built it; (c) loses the provenance the epic exists to provide but is honest.
 **Answered 2026-09-10: (a)** — the law reads `Self("share_of_maximum_pv_potential")` and the field records the real share; golden-neutral, and RenoVisor payloads with a share below one change to what they meant, which the commit and the RenoVisor docs state.
+*Execution:* the physics half of (a) was already shipped inside #638 (`d50e85de`), which needed an honest share for its `half_pv` probe column: the scaled factory stamps the real share after delegating (`generic_pv_system.py:226-237`). No result moved — no caller in the repo passes a share below one outside that probe, the golden fleet is at `1.0`, and RenoVisor emits only `0.0` or `1.0`. Left for B5: the law form only, which is result‑neutral now that both factories agree.
 
 **D‑13 — Keep `rooftop_10kw`?**
 Conflict 3's rule ("rating suffix only for a real catalogue rating") says drop it — 10 kW is a round default. But four setups call `get_default_pv_system()` with no arguments and depend on it (`basic_household.py:86`, `basic_household_with_weather_data_request.py:119`, `default_connections.py:77`, `dynamic_components.py:101`), unlike group A's `air_water_8kw`, which had none. Options: (a) keep `rooftop_10kw` as a documented exception to conflict 3; (b) drop it and give the four setups a `power_in_watt: 10000` override.

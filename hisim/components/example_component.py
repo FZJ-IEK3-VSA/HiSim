@@ -62,7 +62,8 @@ class ExampleComponentConfig(ConfigBase):
     #: a default (``AUTO``) and must follow the fields that do not.
     capacity: Sizable[float] = sized_field(
         rule=Size.CONDITIONED_FLOOR_AREA_IN_M2 * SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2,
-        note="45 J/K per m² of conditioned floor area",
+        value_type=float,
+        note=f"{SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2} J/K per m² of conditioned floor area",
     )
 
     @classmethod

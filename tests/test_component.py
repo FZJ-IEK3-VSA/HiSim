@@ -289,7 +289,10 @@ def test_example_component_with_config() -> None:
         loadtype=lt.LoadTypes.ELECTRICITY,
         unit=lt.Units.WATT,
         electricity=-1e3,
-        capacity=example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2 * 121.2,
+        capacity=(
+            example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+            * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
+        ),
         initial_temperature=25.0,
     )
 
@@ -342,7 +345,10 @@ def test_component_connections() -> None:
         loadtype=lt.LoadTypes.HEATING,
         unit=lt.Units.WATT,
         electricity=-1e3,
-        capacity=example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2 * 121.2,
+        capacity=(
+            example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+            * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
+        ),
         initial_temperature=25.0,
     )
 
@@ -422,7 +428,10 @@ def test_add_default_connections_empty_raises() -> None:
         loadtype=lt.LoadTypes.HEATING,
         unit=lt.Units.WATT,
         electricity=-1e3,
-        capacity=example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2 * 121.2,
+        capacity=(
+            example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+            * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
+        ),
         initial_temperature=25.0,
     )
     component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)

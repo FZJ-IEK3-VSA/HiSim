@@ -8,7 +8,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import example_component
 from hisim.simulationparameters import SimulationParameters
-from hisim.config import AUTO, ComponentID, describe_config
+from hisim.config import AUTO, ComponentID, SizableFieldKind, describe_config
 from tests import functions_for_testing as fft
 
 
@@ -32,7 +32,12 @@ def test_example_component() -> None:
     assert example_component.ExampleComponentConfig.get_default_example_component().capacity is AUTO
     my_example_component_config = fft.sized_example_component_config()
     # The law reproduces the literal the module used to carry, exactly: 45 J/K/m2 x 121.2 m2.
-    assert my_example_component_config.capacity == 45 * 121.2 == 5454.0
+    assert (
+        my_example_component_config.capacity
+        == example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+        * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
+        == 5454.0
+    )
     log.information(f"default example component config {my_example_component_config}\n")
     my_example_component = example_component.ExampleComponent(
         config=my_example_component_config, my_simulation_parameters=mysim
@@ -109,15 +114,56 @@ def test_display_config_isolation() -> None:
 
 
 @pytest.mark.base
+def test_the_default_capacity_resolves_to_the_literal_it_replaced() -> None:
+    """The default config, resolved against the default building, still yields 5454.0 J/K.
+
+    The capacity used to be written as ``45 * 121.2``. That product is now a law over one
+    fact, so this is the assertion that keeps the change neutral for the default building --
+    and it is a base test, because a claim about a number should not need a system setup to
+    be checked.
+    """
+    config = fft.sized_example_component_config()
+    assert config.capacity == 5454.0
+    assert (
+        config.capacity
+        == example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+        * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
+    )
+
+
+@pytest.mark.base
+def test_a_capacity_written_as_a_string_is_coerced_to_a_float() -> None:
+    """``value_type=float`` types the wire value, so a JSON string never reaches arithmetic.
+
+    Without it the field's own AUTO-aware decoder passes whatever the file said straight
+    through, and ``concrete()`` would hand the component the string ``"5454.0"``.
+    """
+    written = {
+        "component_id": {"name": "FromAFile"},
+        "loadtype": "Heating",
+        "unit": "W",
+        "electricity": -1e3,
+        "initial_temperature": 25.0,
+        "capacity": "5454.0",
+    }
+    assert example_component.ExampleComponentConfig.from_dict(written).capacity == 5454.0
+    with pytest.raises(ValueError, match="could not convert string to float"):
+        example_component.ExampleComponentConfig.from_dict({**written, "capacity": "big"})
+
+
+@pytest.mark.base
 def test_capacity_is_described_as_a_sized_field() -> None:
-    """The capacity field describes itself as derived, with its law, its fact and its note.
+    """The capacity field describes itself as derived, with its fact and its note.
 
     This is what a reader of ``hisim energy-system describe`` sees, and what the template
     claims a component's sizing looks like: the value is not a literal in the module but a
-    law naming the fact it reads.
+    law naming the fact it reads. The description is asserted structurally rather than by its
+    rendered text -- the one place the rendering itself is pinned is the template's test.
     """
     description = describe_config(example_component.ExampleComponentConfig)
     capacity = next(field for field in description.sizable_fields if field.name == "capacity")
-    assert capacity.law == "45.0 * Size.CONDITIONED_FLOOR_AREA_IN_M2"
     assert capacity.facts_read == (("conditioned_floor_area_in_m2", "ONE"),)
-    assert capacity.note is not None and "45 J/K" in capacity.note
+    assert capacity.fields_read == ()
+    assert capacity.kind is SizableFieldKind.LAW
+    assert capacity.note is not None
+    assert str(example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2) in capacity.note

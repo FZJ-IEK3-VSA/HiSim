@@ -16,10 +16,11 @@ Steps to build a component, in the order they appear below:
    provides (``hisim/config/context.py`` holds the whole vocabulary).
 3. Write the factory / preset. A sized field is spelled :data:`~hisim.config.AUTO` there:
    the factory says "this one is computed", not what it computes to.
-4. If the component is itself a *source* of facts — a weather file contributing its
-   identity, a building contributing its heating load, a boiler contributing its power
-   band — declare that in ``SIZING_CONTRIBUTIONS``; see the note above
-   :class:`ComponentName` and ``weather.py`` for a real one.
+4. Where a contribution is declared: if the component is itself a *source* of facts — a
+   weather file contributing its identity, a building contributing its heating load, a
+   boiler contributing its power band — that goes into ``SIZING_CONTRIBUTIONS``. Shown as
+   a comment block below, since the template models no real fact; ``weather.py`` holds a
+   real one.
 5. Write the component class: declare inputs and outputs, implement the four lifecycle
    methods. By the time a config reaches the constructor the sizing kernel has already
    turned every ``AUTO`` into a number (``Component.__init__`` refuses anything else), so
@@ -92,19 +93,29 @@ class ComponentNameConfig(ConfigBase):
     #: * ``rule=`` is the **law**: an expression over ``Size.*`` terms. Each term is one
     #:   *fact* about the surrounding system; the complete vocabulary of facts, and the
     #:   ``SizingContext`` that carries them, live in ``hisim/config/context.py``. Laws
-    #:   can be scaled, clamped (``.at_least(...)``), rounded (``.rounded(2)``), read a
-    #:   sibling field (``Self("other_field")``) or be a plain function of the context —
-    #:   see ``generic_boiler.py`` and ``heat_distribution_system.py`` for real ones.
-    #: * ``note=`` records where the number comes from. The audit trail and
-    #:   ``hisim energy-system describe`` print it next to the computed value, so a
-    #:   hard-coded constant can cite its source.
+    #:   can be scaled, rounded (``.rounded(2)``), clamped (``.at_least(...)``), read a
+    #:   sibling field (``Self("other_field")``) or be a plain function of the context.
+    #:   Real ones: ``heat_distribution_system.py`` rounds a fact
+    #:   (``Size.WATER_MASS_FLOW_RATE_IN_KG_PER_SECOND.rounded(2)``) and ``generic_boiler.py``
+    #:   scales a sibling (``Self("maximal_thermal_power_in_watt") * (1 / 12)``); no component
+    #:   clamps today, so ``.at_least(...)`` is shown by ``tests/test_sizing.py`` only.
+    #: * ``value_type=`` names the concrete type the field's *wire* value is coerced into,
+    #:   so a ``"2.0"`` written in a JSON or YAML file arrives as a float instead of a string.
+    #: * ``note=`` records where the number comes from. ``hisim energy-system describe``
+    #:   prints it under the field, so a hard-coded constant can cite its source. (The
+    #:   audit written next to a run's results carries the law, the inputs and the value,
+    #:   but not the note.)
     #:
     #: The facts themselves are provided by the other components of the system (see the
     #: note on ``SIZING_CONTRIBUTIONS`` below) and the value is computed by the executor,
     #: before any component is constructed.
     rated_power_in_watt: Sizable[float] = sized_field(
         rule=Size.CONDITIONED_FLOOR_AREA_IN_M2 * SPECIFIC_RATED_POWER_IN_WATT_PER_M2,
-        note="2 W per m² of conditioned floor area (invented: the template models no real device)",
+        value_type=float,
+        note=(
+            f"{SPECIFIC_RATED_POWER_IN_WATT_PER_M2} W per m² of conditioned floor area"
+            " (invented: the template models no real device)"
+        ),
     )
 
     @classmethod
@@ -158,7 +169,8 @@ class ComponentName(Component):
     Attributes:
         InputFromOtherComponent: Name of the input field read from another component.
         OutputWithState: Name of the output field whose value is held in state.
-        OutputWithoutState: Name of the stateless output field.
+        OutputWithoutState: Name of the stateless output field, a power in watts capped
+            at the sized ``rated_power_in_watt``.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -227,7 +239,7 @@ class ComponentName(Component):
             object_name=self.componentnameconfig.component_id.name,
             field_name=self.OutputWithoutState,
             load_type=loadtypes.LoadTypes.ELECTRICITY,
-            unit=loadtypes.Units.WATT_HOUR,
+            unit=loadtypes.Units.WATT,
             output_description="Output without State",
         )
 
@@ -252,8 +264,8 @@ class ComponentName(Component):
         """Compute outputs for the current timestep.
 
         Reads the external input and the previous in-state output, computes the
-        two outputs (one accumulated into state, one stateless) and writes them
-        back to ``stsv`` and to :py:attr:`state`.
+        two outputs (one accumulated into state, one stateless power capped at the
+        sized rated power) and writes them back to ``stsv`` and to :py:attr:`state`.
 
         Args:
             timestep: Current simulation timestep index.
@@ -265,18 +277,18 @@ class ComponentName(Component):
         input_2_in_wh = self.state.output_with_state_in_wh
 
         # do your calculations
-        # NOTE: arithmetic is dimensionally inconsistent with the declared output
-        # units: input_1_in_w * seconds_per_timestep is W·s (J), not Wh, and
-        # output_2_in_wh sums two powers (W) for a WATT_HOUR output. Suffixes
-        # follow the declared channel units; this is a known template limitation.
+        # NOTE: the stateful branch is dimensionally inconsistent with its declared unit:
+        # input_1_in_w * seconds_per_timestep is W·s (J), not Wh. Suffixes follow the
+        # declared channel units; this is a known template limitation.
         output_1_in_wh = input_2_in_wh + input_1_in_w * self.my_simulation_parameters.seconds_per_timestep
         # The sized field is used here like any other number: the device cannot deliver
-        # more than the power it was sized for.
-        output_2_in_wh = min(input_1_in_w + self.factor_in_w, self.rated_power_in_watt)
+        # more than the power it was sized for. Both sides of the min are watts, which is
+        # why ``OutputWithoutState`` is declared in WATT.
+        output_2_in_w = min(input_1_in_w + self.factor_in_w, self.rated_power_in_watt)
 
         # write values for output time series
         stsv.set_output_value(self.output_with_state, output_1_in_wh)
-        stsv.set_output_value(self.output_without_state, output_2_in_wh)
+        stsv.set_output_value(self.output_without_state, output_2_in_w)
 
         # write values to state
         self.state.output_with_state_in_wh = output_1_in_wh

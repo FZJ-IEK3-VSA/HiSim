@@ -1,0 +1,76 @@
+# Dependabot watches three things: the pinned Python requirements, the third-party actions the
+# workflows call, and the Python base image of the two Dockerfiles. All three run weekly on the
+# same day, so the maintainers see one batch of pull requests a week rather than a trickle.
+version: 2
+updates:
+
+  # Python dependencies (requirements.txt).
+  #
+  # Most lines there are unpinned (numpy, matplotlib, pydantic, ...) and Dependabot will never
+  # propose anything for them: an unpinned requirement already resolves to the newest release, so
+  # there is no version in the file to raise. In practice this entry therefore covers the pinned
+  # handful only — pandas, hplib, bslib, utspclient, pyhumps and the timezonefinder<6.0 ceiling.
+  # The commented-out wetterdienst line is not seen at all; that upgrade waits on the API
+  # migration noted next to it.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      # One pull request for the lot. Five separate ones for five pinned packages is how a
+      # dependency bot stops being read.
+      python-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
+
+  # GitHub Actions used by the workflows: actions/checkout, actions/setup-python,
+  # actions/upload-artifact, actions/download-artifact, astral-sh/setup-uv,
+  # docker/build-push-action, docker/login-action, docker/setup-buildx-action,
+  # ts-graphviz/setup-graphviz and pypa/gh-action-pypi-publish.
+  #
+  # The two local composite actions — .github/actions/hisim-cache and
+  # .github/actions/resource-monitor — are referenced by path and live in this repository, so
+  # Dependabot does not cover them. They change when this repository changes them.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
+
+  # The base image of Dockerfile (python:3.11-slim) and Dockerfile.test
+  # (python:3.11-slim-bookworm).
+  #
+  # Patch tags only. The 3.11 floor is a decision about which Python this project supports, taken
+  # by the owner and stated in several places; a bot raising the image to 3.12 would quietly
+  # overrule it. Ignoring major and minor updates leaves Dependabot doing the part that is
+  # genuinely maintenance — picking up the security patches inside 3.11.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    ignore:
+      - dependency-name: "python"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"

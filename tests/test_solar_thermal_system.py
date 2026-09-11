@@ -8,7 +8,7 @@ from oemof.thermal.solar_thermal_collector import flat_plate_precalc
 from hisim import sim_repository, component, log, simulator as sim
 from hisim.components import weather, solar_thermal_system
 from hisim.loadtypes import LoadTypes, Units
-from hisim.config import ComponentID
+from hisim.config import AUTO, ComponentID, SizingContext
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
 
@@ -137,7 +137,7 @@ def test_only_the_sun_is_cached(tmp_path: Any) -> None:
     simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     simulation_parameters.cache_dir_path = str(tmp_path)
     collector = solar_thermal_system.SolarThermalSystem(
-        config=solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(),
+        config=solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(area_m2=1.5),
         my_simulation_parameters=simulation_parameters,
     )
 
@@ -164,7 +164,7 @@ def test_the_cached_sun_round_trips_exactly(tmp_path: Any) -> None:
     """
     simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     simulation_parameters.cache_dir_path = str(tmp_path)
-    config = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system()
+    config = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(area_m2=1.5)
 
     computed = solar_thermal_system.SolarThermalSystem(config=config, my_simulation_parameters=simulation_parameters)
     computed.i_prepare_simulation()
@@ -183,7 +183,7 @@ def test_every_timestep_gets_an_instant() -> None:
     """The timestamps are the cache key's claim about the contents, so they must match the run."""
     simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     collector = solar_thermal_system.SolarThermalSystem(
-        config=solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(),
+        config=solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(area_m2=1.5),
         my_simulation_parameters=simulation_parameters,
     )
 
@@ -192,3 +192,37 @@ def test_every_timestep_gets_an_instant() -> None:
     assert len(timestamps) == simulation_parameters.timesteps
     assert timestamps[0] == simulation_parameters.start_date
     assert (timestamps[1] - timestamps[0]).total_seconds() == simulation_parameters.seconds_per_timestep
+
+
+@pytest.mark.base
+def test_the_collector_grows_with_the_apartments() -> None:
+    """Four square metres per apartment: a single-family house gets 4 m2, a triplex 12 m2.
+
+    The arithmetic used to live in the setups -- one of them wrote ``4 * number_of_apartments``
+    and another just ``4``, so the two disagreed for every multi-family building. The law is
+    now the single place the factor is written down, and this pins both ends of it.
+    """
+    unresolved = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system()
+
+    assert unresolved.area_m2 is AUTO, "the factory must leave the area to its law"
+
+    for apartments, expected_area_m2 in ((1, 4.0), (3, 12.0)):
+        resolved = unresolved.resolve(SizingContext(number_of_apartments=apartments))
+        assert resolved.area_m2 == expected_area_m2, (
+            f"{apartments} apartment(s) must give {expected_area_m2} m2 of collector, "
+            f"got {resolved.area_m2}"
+        )
+
+
+@pytest.mark.base
+def test_a_named_collector_area_beats_the_law() -> None:
+    """An author who names the area gets that area, whatever the building holds.
+
+    Resolution is still allowed to run -- it is a no-op for a field that is already
+    concrete -- so a setup can hand every config the same context without having to know
+    which of them still has something to size.
+    """
+    config = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(area_m2=1.5)
+
+    assert config.area_m2 == 1.5
+    assert config.resolve(SizingContext(number_of_apartments=3)).area_m2 == 1.5

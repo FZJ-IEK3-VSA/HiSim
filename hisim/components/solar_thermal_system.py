@@ -18,7 +18,16 @@ from hisim.component import (
     OpexCostDataClass,
     SingleTimeStepValues,
 )
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import (
+    AUTO,
+    ComponentID,
+    ConfigBase,
+    DisplayConfig,
+    Sizable,
+    Size,
+    concrete,
+    sized_field,
+)
 from hisim import loadtypes, log, utils
 from hisim.caching import atomic_cache_write
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig, PhysicsConfig
@@ -40,6 +49,12 @@ __email__ = "k.dabrock@fz-juelich.de"
 __status__ = "development"
 
 
+#: How much collector a solar thermal system gets per apartment it serves. The whole
+#: of the collector sizing law: a building with three flats gets three times the
+#: collector of a single-family house, because it draws three times the hot water.
+COLLECTOR_AREA_IN_M2_PER_APARTMENT = 4.0
+
+
 @dataclass_json
 @dataclass
 class SolarThermalSystemConfig(ConfigBase):
@@ -56,7 +71,6 @@ class SolarThermalSystemConfig(ConfigBase):
     # Module configuration
     azimuth: float
     tilt: float
-    area_m2: float  # m2
     eta_0: float
     a_1_w_m2_k: float  # W/(m2*K)
     a_2_w_m2_k: float  # W/(m2*K2)
@@ -78,6 +92,15 @@ class SolarThermalSystemConfig(ConfigBase):
 
     # Weight of component, defines hierachy in control. The default is 1.
     source_weight: int
+
+    #: Collector area in m2, sized to the building it serves. A sizable field carries a
+    #: default (AUTO), so it sits here among the defaulted fields rather than up with the
+    #: other module parameters, which a dataclass would refuse.
+    area_m2: Sizable[float] = sized_field(
+        rule=Size.NUMBER_OF_APARTMENTS * COLLECTOR_AREA_IN_M2_PER_APARTMENT,
+        value_type=float,
+        note=f"{COLLECTOR_AREA_IN_M2_PER_APARTMENT} m2 of collector per apartment",
+    )
 
     # Temperature difference between collector inlet and mean temperature
     delta_temperature_n_k: float = 10  # K
@@ -107,14 +130,20 @@ class SolarThermalSystemConfig(ConfigBase):
         coordinates: Coordinates = Coordinates(latitude_in_degrees=50.78, longitude_in_degrees=6.08),
         azimuth: float = 180.0,
         tilt: float = 30.0,
-        area_m2: float = 1.5,
+        area_m2: Sizable[float] = AUTO,
         eta_0: float = 0.78,
         a_1_w_m2_k: float = 3.2,  # W/(m2*K)
         a_2_w_m2_k: float = 0.015,  # W/(m2*K2)
         old_solar_pump: bool = False,
         source_weight: int = 1,
     ) -> "SolarThermalSystemConfig":
-        """Gets a default SolarThermalSystem."""
+        """Gets a default SolarThermalSystem.
+
+        The collector area is left to the field's sizing law unless the caller names one:
+        the returned config then carries AUTO and has to be resolved against a
+        ``SizingContext`` that knows how many apartments the building holds. A caller that
+        passes a number keeps that number, as an explicit value always beats a law.
+        """
         if component_id is None:
             component_id = ComponentID(name="SolarThermalSystem")
         return SolarThermalSystemConfig(
@@ -154,7 +183,13 @@ class SolarThermalSystemConfig(ConfigBase):
         old_solar_pump: bool = False,
         source_weight: int = 1,
     ) -> "SolarThermalSystemConfig":
-        """Gets a default SolarThermalSystem."""
+        """Gets a SolarThermalSystem whose capex and device emissions are calculated here.
+
+        Unlike its sibling above, this factory cannot leave the collector area to the
+        field's sizing law: it turns the area into money and into kilograms of CO2 right
+        here, and neither derivation can run on the AUTO sentinel. So the area keeps a
+        concrete default and a caller who wants a different collector says so.
+        """
         if component_id is None:
             component_id = ComponentID(name="SolarThermalSystem")
         return SolarThermalSystemConfig(
@@ -356,7 +391,7 @@ class SolarThermalSystem(Component):
         component_type = loadtypes.ComponentType.SOLAR_THERMAL_SYSTEM
         kpi_tag = KpiTagEnumClass.SOLAR_THERMAL
         unit = loadtypes.Units.SQUARE_METER
-        size_of_energy_system = config.area_m2
+        size_of_energy_system = concrete(config.area_m2)
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
             simulation_parameters=simulation_parameters,

@@ -81,7 +81,7 @@ Legend: **conv** convert · **del** delete · **done** converted (remaining work
 | `SimpleAirConditionerConfig` | conv | `standard` | — | — | N | |
 | `IdealizedHeaterConfig` | conv | `standard` | — (setpoint copies would be P) | — | N | |
 | `SimpleHeatSourceConfig` | conv | `constant_thermal_power`, `constant_temperature`, `near_surface_brine` | — | — | N | |
-| `SolarThermalSystemConfig` | conv | `flat_plate` | `area_m2` ← number_of_apartments (×4; setup-side) | — | **P** (one setup passes 4 unmultiplied) | D-7 |
+| `SolarThermalSystemConfig` | conv | `flat_plate` | `area_m2` ← number_of_apartments (×4) **done 2026-09-11**; the preset is still to come | — | **P** — executed, golden-neutral | D-7 |
 | `generic_chp.CHPConfig` | conv | `gas`, `hydrogen` | `p_el`, `p_fuel` ← `Self("p_th")` × per-preset ratio; `p_th` stays a field | (`maximal_thermal_power_in_watt`) | N | |
 | `advanced_fuel_cell.CHPConfig` | conv | `hydrogen` | — | — | N | D-5 |
 | `CHPConfigAdvanced` | del | | | | | |
@@ -262,6 +262,32 @@ row is struck from the table, which keeps the question and the option chosen nex
   `4 m² × number_of_apartments`, which is what `household_gas_solar_thermal.py` looks like it meant when it passed
   `area_m2=4` unmultiplied and what its two sizer twins already do. That setup's week golden is re-blessed in the
   same commit; every MFH archetype in it changes.
+
+  **Executed 2026-09-11.** `SolarThermalSystemConfig.area_m2` is a sizable field with the law
+  `Size.NUMBER_OF_APARTMENTS * COLLECTOR_AREA_IN_M2_PER_APARTMENT`, the constant named once at module level, and
+  both factories default the parameter to `AUTO` — except the manually-calculated-capex one, which turns the area
+  into euros and kilograms at construction time and so keeps a concrete default; see the derived-field note below.
+  The three setups lose their hand arithmetic and resolve against a `SizingContext` carrying the dwelling count
+  they already scale the domestic hot water storage by: `household_gas_solar_thermal` (which passed `4`),
+  `household_gas_solar_thermal_building_sizer` and `household_heatpump_solar_thermal_building_sizer` (which passed
+  `4 * number_of_apartments`). **The golden did not move.** The week check for `household_gas_solar_thermal` runs
+  the setup under its class defaults, where the archetype holds one dwelling and the TABULA default building is a
+  single-family house, so the law computes the 4 m² the setup used to hardcode: no re-blessing was needed, and
+  the expectation that "every MFH archetype in it changes" does not apply — `scripts/golden_config.json` sweeps
+  simulation horizons, not archetypes. What the law does move is the setup's own configuration axis: its
+  `two_dwellings` probe column now records an 8 m² collector, so `SolarThermalSystem` joins `DHWStorage` as an
+  override in `household_gas_solar_thermal.grouping.yaml` and the probe prose says so. The three flat twins and
+  the three grouped twins are re-recorded; every one of them changes only by `area_m2` moving down the config
+  block, because a defaulted field has to follow the non-default ones.
+
+  **The derived-field obstacle, reported and not worked around.**
+  `get_default_solar_thermal_system_manually_calculated_capex` computes `investment_costs_in_euro = area × 797`
+  and `device_co2_footprint_in_kg` from the area. The first is `Self("area_m2") * 797` and the algebra expresses
+  it cleanly; the second is affine — `area × K + 108.28` — and `SizingLaw` has `__mul__` but no `__add__`, so
+  no `Self(...)` expression can say it. Spelling it would mean a function law plus turning two `Optional[float]`
+  fields into optional sizable fields, a wire-format change to the config class for a factory with zero callers
+  in the repository. The factory therefore keeps `area_m2: float = 1.5` and its docstring says why. If the class
+  gains its `flat_plate` preset later, that is the moment to decide the two capex fields as well.
 - **D-4** `[answered 2026-09-10]` **(a) it is a bug.** The CHP controller's 42/50/50/42 `t_min_dhw_in_celsius`
   cross and the 35-versus-31 `t_min_heating_in_celsius` split between the gas and hydrogen buffers are a
   copy-paste asymmetry nobody chose, so they are normalised rather than frozen into the wire format: `gas` and
@@ -434,7 +460,7 @@ The 32 questions below are owner decisions surfaced by the survey, and **all 32 
 | D-9 | ~~**C11**: buffer volume from generator power (+10 % on 5 golden sizers, +54 % one ungated, ≤ +72 % MFH) or bless the load?~~ | `[answered 2026-09-10]` **(b) fix the physics** — the law reads the generator's maximal thermal power; own commit, five golden sizers re-blessed at +10 %, `basic_household_only_heating` (+54 %) added to the week gate in the same commit | R3 buffer, R5 |
 | D-11 | ~~HDS controller: 16 → 18 °C for 3 ungated setups, or a `fixed_threshold_16c` preset?~~ | `[answered 2026-09-10]` **(a) convert, record the diff** — no `fixed_threshold_16c`; `basic_household_only_heating` blessed in the same commit | R3, R5 |
 | D-12 | ~~PV `share_of_maximum_pv_potential` recorded as 1.0 by the scaled factory: fix, preserve, or delete the field?~~ | `[answered 2026-09-10]` **(a) fix** — the law reads `Self(...)` and the field records the real share; golden-neutral, but RenoVisor payloads with a share below one change to what they meant, stated in the commit and the RenoVisor docs | R3 PV, R5 |
-| D-7 | ~~Solar-thermal `area_m2 = 4 × apartments` law (one setup passes 4 unmultiplied)~~ | `[answered 2026-09-10]` **(a) adopt, record the diff** — `household_gas_solar_thermal`'s week golden re-blessed | R3, R5 |
+| D-7 | ~~Solar-thermal `area_m2 = 4 × apartments` law (one setup passes 4 unmultiplied)~~ | `[answered 2026-09-10]` **(a) adopt, record the diff** — executed 2026-09-11; the golden did not move, the setup's `two_dwellings` probe did | R3, R5 |
 | D-4 | ~~CHP controller 42/50 °C flip across axes: bug or preserve?~~ | `[answered 2026-09-10; reversed 2026-09-11 after the #683 review]` **(b) preserve** — the four factories keep their 2023 values and the asymmetry is recorded as unexplained rather than guessed, so the class converts as **four** presets (`gas`, `hydrogen`, `gas_with_buffer`, `hydrogen_with_buffer`), not two plus a shared buffer override; the buffer helper, the module-private constants, the `FuelCellController` name and the `__post_init__` min<max check stay from the PR. No result change | R3, R5 |
 | D-21 | ~~`heating_reference_temperature` from the Weather in B6 (physics), defer, or plumb the fact only?~~ | `[answered 2026-09-10]` **(c) plumb the fact** from a per-station DIN 12831 table, Building's field stays a plain -7.0 default — no result change; the first two-provider fact, so two-station districts need a `sizing_sources` line | R2.1, R5 |
 | **Naming / shape** | | | |

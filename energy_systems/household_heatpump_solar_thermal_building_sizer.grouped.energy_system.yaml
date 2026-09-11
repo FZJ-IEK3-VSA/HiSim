@@ -163,7 +163,6 @@ components:
         longitude_in_degrees: 6.08
       azimuth: 180.0
       tilt: 30.0
-      area_m2: 4.0
       eta_0: 0.78
       a_1_w_m2_k: 3.2
       a_2_w_m2_k: 0.015
@@ -174,6 +173,7 @@ components:
       maintenance_costs_in_euro_per_year: null
       subsidy_as_percentage_of_investment_costs: null
       source_weight: 1
+      area_m2: 4.0
       delta_temperature_n_k: 10.0
     inputs:
       - Weather

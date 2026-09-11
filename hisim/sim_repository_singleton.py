@@ -196,12 +196,12 @@ class SingletonDictKeyEnum(enum.Enum):
     # 6 was LOCATION, written by the Weather at construction time and read back as the
     # report region; postprocessing now reads the Weather component's own config instead.
     RESULT_SCENARIO_NAME = 7
-    THERMALTRANSMISSIONCOEFFICIENTGLAZING = 8
-    THERMALTRANSMISSIONSURFACEINDOORAIR = 9
-    THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM = 10
-    THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS = 11
-    THERMALTRANSMISSIONCOEFFICIENTVENTILLATION = 12
-    THERMALCAPACITYENVELOPE = 13
+    # 8 to 13 were the six 5R1C thermal-model values the Building wrote at build time --
+    # THERMALTRANSMISSIONCOEFFICIENTGLAZING, THERMALTRANSMISSIONSURFACEINDOORAIR,
+    # THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM, THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS,
+    # THERMALTRANSMISSIONCOEFFICIENTVENTILLATION and THERMALCAPACITYENVELOPE. Their only
+    # readers were the PID and MPC controllers, which moved to obsolete/; the Building
+    # keeps the values on itself.
     PREDICTIVE = 14
     PREDICTIONHORIZON = 15
     PVINCLUDED = 16

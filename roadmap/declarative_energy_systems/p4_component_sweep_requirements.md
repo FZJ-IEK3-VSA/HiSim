@@ -383,6 +383,13 @@ row is struck from the table, which keeps the question and the option chosen nex
   component's `config.location` directly instead of `SingletonDictKeyEnum.LOCATION`; the six Building 5R1C keys go once
   this branch's D-16 move has put `controller_mpc` and `controller_pid` in `obsolete/`, after which they have no reader
   at all. The last construction-time globals leave the Weather and the Building.
+  **Part one executed 2026-09-11 (#686)**: `region_of(ppdt)` in `postprocessing_main` reads the run's own
+  Weather and `LOCATION` is gone from the enum, value 6 left as a comment. **Part two executed 2026-09-11**:
+  `Building.build()` stops writing the six 5R1C values and `SingletonDictKeyEnum` loses members 8-13, whose
+  numbers a comment holds in place of a renumbering; the stale comment naming the PID and MPC controllers goes
+  with the writes. Result-neutral -- nothing outside the retired controllers ever read them. The three
+  `HEATFLUX*NODEFORECAST` keys the Building writes in its predictive branch stay: the survey parks them with
+  the runtime forecast half, and dropping them would retire the whole `predictive` forecast path.
 - **D-25** `[answered 2026-09-11]` **(b) obsolete the RSOC trio and the fuel-cell table path.** `RsocConfig`,
   `RsocControllerConfig` and `RsocBatteryControllerConfig` move to `obsolete/` with their tests, together with the fuel
   cell's manufacturer-table builders — verified 2026-09-11 that `hisim/inputs/` still holds only

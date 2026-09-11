@@ -913,33 +913,6 @@ class Building(cp.Component):
             self.thermal_conductance_by_ventilation_in_watt_per_kelvin,
         ) = self.get_conductances()
 
-        # send building parameters 5r1c to PID controller and to the MPC controller to generate an equivalent state space model
-        # state space represntation is used for tuning of the pid and as a prediction model in the model predictive controller
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING,
-            entry=self.transmission_heat_transfer_coeff_windows_and_door_in_watt_per_kelvin,
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR,
-            entry=self.heat_transfer_coeff_indoor_air_and_internal_surface_in_watt_per_kelvin,
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM,
-            entry=self.external_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin,
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS,
-            entry=self.internal_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin,
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION,
-            entry=self.thermal_conductance_by_ventilation_in_watt_per_kelvin,
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.THERMALCAPACITYENVELOPE,
-            entry=self.my_building_information.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin,
-        )
-
         # Get windows
         self.windows, self.total_scaled_windows_area = self.get_windows()
 

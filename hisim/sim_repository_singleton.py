@@ -193,7 +193,8 @@ class SingletonDictKeyEnum(enum.Enum):
     MAXTHERMALBUILDINGDEMAND = 3
     SETHEATINGTEMPERATUREFORWATERSTORAGE = 4
     SETCOOLINGTEMPERATUREFORWATERSTORAGE = 5
-    LOCATION = 6
+    # 6 was LOCATION, written by the Weather at construction time and read back as the
+    # report region; postprocessing now reads the Weather component's own config instead.
     RESULT_SCENARIO_NAME = 7
     THERMALTRANSMISSIONCOEFFICIENTGLAZING = 8
     THERMALTRANSMISSIONSURFACEINDOORAIR = 9

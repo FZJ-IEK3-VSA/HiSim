@@ -151,9 +151,9 @@ def test_house(
     repo = SingletonSimRepository()
     assert repo.my_dict is not None
     assert len(repo.my_dict) > 0
-    # Weather registers its location in the singleton during construction.
-    assert SingletonDictKeyEnum.LOCATION in repo.my_dict
-    assert repo.my_dict[SingletonDictKeyEnum.LOCATION] == my_weather_config.location
+    # The Weather no longer registers its location here: the report region is read from the
+    # Weather component's own config, so the key is gone from the enum entirely.
+    assert not hasattr(SingletonDictKeyEnum, "LOCATION")
     # Building registers its 5R1C thermal parameters in the singleton during build().
     assert SingletonDictKeyEnum.THERMALCAPACITYENVELOPE in repo.my_dict
     assert SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING in repo.my_dict

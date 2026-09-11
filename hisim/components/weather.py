@@ -656,7 +656,6 @@ class Weather(Component):
             my_display_config = DisplayConfig()
         self.last_timestep_with_update = -1
         self.weather_config = config
-        SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.LOCATION, entry=self.weather_config.location)
         self.parameter_string = my_simulation_parameters.get_unique_key()
 
         self.my_simulation_parameters = my_simulation_parameters

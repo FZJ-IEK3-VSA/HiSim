@@ -365,8 +365,10 @@ class SchemaBuilder:
         The description carries an annotation as the string it was written as, which is enough
         for a human reading a ``describe`` output but not enough to build a schema from: an
         enumeration only becomes a closed list of member names once the annotation is resolved to
-        the class. So the builders are inspected once more here, and a constructor whose
-        annotations do not resolve simply contributes nothing, leaving its parameters permissive.
+        the class. The resolution is not done here: the ``@constructor`` decorator did it when the
+        class was declared, refusing anything it could not resolve, and the builder carries the
+        result. Reading it off the builder is what keeps the type the schema states and the type
+        the loader decodes against the same type.
 
         Args:
             config_class: The configuration dataclass.
@@ -374,13 +376,10 @@ class SchemaBuilder:
         Returns:
             Constructor name to parameter name to resolved annotation.
         """
-        resolved: Dict[str, Dict[str, Any]] = {}
-        for name, builder in constructors_of(config_class).items():
-            try:
-                resolved[name] = dict(typing.get_type_hints(builder.function))
-            except Exception:  # pylint: disable=broad-except  # an unresolvable annotation stays open
-                resolved[name] = {}
-        return resolved
+        return {
+            name: dict(builder.parameter_types)
+            for name, builder in constructors_of(config_class).items()
+        }
 
     @classmethod
     def _config(cls, config_class: type, description: ConfigDescription) -> Dict[str, Any]:

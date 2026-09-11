@@ -398,7 +398,7 @@ row is struck from the table, which keeps the question and the option chosen nex
   `generic_hydrogen_storage` is dropped, not re-pointed; and `AdvElectrolyzerConfig` in `configuration.py`, the dead
   third copy, goes to `obsolete/` as well. The live setup `electrolyzer_with_renewables` uses the third electrolyzer,
   `generic_electrolyzer_h2` (the manufacturer-table one), and is untouched.
-  **Executed 2026-09-11.** Five things moved and nothing was deleted: `generic_electrolyzer.py` and
+  **Executed 2026-09-11.** Five things moved and no module or class was deleted: `generic_electrolyzer.py` and
   `generic_hydrogen_storage.py` to `obsolete/components/`, with `tests/test_generic_electrolyzer.py` (which built
   the controller as well as the electrolyzer) and `tests/test_h2storage.py` to `obsolete/tests/`;
   `controller_l1_electrolyzer.py` to `obsolete/components/`; and `HydrogenStorageConfig` with

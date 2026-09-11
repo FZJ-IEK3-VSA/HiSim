@@ -40,7 +40,7 @@ def test_config_rsoc_from_in_memory_dict() -> None:
     """config_rsoc builds the config from an in-memory dict (no filesystem)."""
     config = l2.RsocBatteryControllerConfig.config_rsoc(
         rsoc_name="RSOC_TEST",
-        operation_mode="StandbyLoad",
+        operation_mode=l2.RsocBatteryOperationMode.STANDBY_LOAD,
         config_data=_make_rsoc_config_dict(),
     )
     assert config.component_id.building is None
@@ -52,7 +52,7 @@ def test_config_rsoc_from_in_memory_dict() -> None:
     assert config.nom_power_sofc_in_kw == 10.0
     assert config.min_power_sofc_in_kw == 1.7
     assert config.max_power_sofc_in_kw == 13.0
-    assert config.operation_mode == "StandbyLoad"
+    assert config.operation_mode is l2.RsocBatteryOperationMode.STANDBY_LOAD
 
 
 @pytest.mark.base
@@ -60,12 +60,12 @@ def test_config_rsoc_building_override_and_defaults() -> None:
     """config_rsoc forwards the component identity and applies defaults for missing keys."""
     config = l2.RsocBatteryControllerConfig.config_rsoc(
         rsoc_name="RSOC_TEST",
-        operation_mode="MinimumLoad",
+        operation_mode=l2.RsocBatteryOperationMode.MINIMUM_LOAD,
         component_id=ComponentID(name="RsocAndBatteryController", building="BUI2"),
         config_data={"nom_load_soec": 40.0},
     )
     assert config.component_id.building == "BUI2"
-    assert config.operation_mode == "MinimumLoad"
+    assert config.operation_mode is l2.RsocBatteryOperationMode.MINIMUM_LOAD
     assert config.nom_load_soec_in_kw == 40.0
     # Keys absent from the in-memory dict fall back to the documented defaults.
     assert config.min_load_soec_in_kw == 0.0
@@ -111,7 +111,7 @@ def test_rsoc_battery_controller_built_from_in_memory_config() -> None:
 
     config = l2.RsocBatteryControllerConfig.config_rsoc(
         rsoc_name="RSOC_TEST",
-        operation_mode="StandbyLoad",
+        operation_mode=l2.RsocBatteryOperationMode.STANDBY_LOAD,
         config_data=_make_rsoc_config_dict(),
     )
     my_controller = l2.RsocBatteryController(
@@ -195,7 +195,7 @@ def test_config_serialization_preserves_legacy_kw_keys() -> None:
     """
     config = l2.RsocBatteryControllerConfig.config_rsoc(
         rsoc_name="RSOC_TEST",
-        operation_mode="StandbyLoad",
+        operation_mode=l2.RsocBatteryOperationMode.STANDBY_LOAD,
         config_data=_make_rsoc_config_dict(),
     )
     serialized = config.to_dict()
@@ -224,7 +224,7 @@ def test_config_round_trip_from_legacy_kw_keys() -> None:
     assert config.nom_power_sofc_in_kw == 10.0
     assert config.min_power_sofc_in_kw == 1.7
     assert config.max_power_sofc_in_kw == 13.0
-    assert config.operation_mode == "StandbyLoad"
+    assert config.operation_mode is l2.RsocBatteryOperationMode.STANDBY_LOAD
 
     reloaded = l2.RsocBatteryControllerConfig.from_json(json.dumps(payload))
     assert reloaded.to_dict() == config.to_dict()
@@ -246,7 +246,7 @@ def test_get_string_dict_report_format_unchanged() -> None:
     """
     config = l2.RsocBatteryControllerConfig.config_rsoc(
         rsoc_name="RSOC_TEST",
-        operation_mode="StandbyLoad",
+        operation_mode=l2.RsocBatteryOperationMode.STANDBY_LOAD,
         config_data=_make_rsoc_config_dict(),
     )
     report = config.get_string_dict()
@@ -254,3 +254,49 @@ def test_get_string_dict_report_format_unchanged() -> None:
     assert "Max power sofc in kw: 13.0" in report
     # No raw snake_case attribute names leak into the report.
     assert not any("_in_kw" in entry for entry in report)
+
+
+@pytest.mark.base
+def test_operation_mode_round_trips_as_the_legacy_string() -> None:
+    """The enum-typed operation mode keeps the pre-enum wire value.
+
+    ``operation_mode`` used to be a free-text ``str``; configs already on disk
+    spell the mode as ``"NominalLoad"`` and friends, so every member's value
+    must stay that string and a payload carrying it must still decode.
+    """
+    config = l2.RsocBatteryControllerConfig.config_rsoc(
+        rsoc_name="RSOC_TEST",
+        operation_mode=l2.RsocBatteryOperationMode.STANDBY_LOAD,
+        config_data=_make_rsoc_config_dict(),
+    )
+
+    assert json.loads(config.to_json())["operation_mode"] == "StandbyLoad"
+
+    for mode in l2.RsocBatteryOperationMode:
+        payload = _make_legacy_serialized_payload()
+        payload["operation_mode"] = mode.value
+        assert l2.RsocBatteryControllerConfig.from_dict(payload).operation_mode is mode
+        assert l2.RsocBatteryControllerConfig.from_json(json.dumps(payload)).operation_mode is mode
+
+    assert {mode.value for mode in l2.RsocBatteryOperationMode} == {
+        "NominalLoad",
+        "MinimumLoad",
+        "StandbyLoad",
+    }
+
+
+@pytest.mark.base
+def test_system_operation_rejects_an_unbranched_mode() -> None:
+    """A mode with no branch raises instead of silently following the power delta."""
+    config = l2.RsocBatteryControllerConfig.config_rsoc(
+        rsoc_name="RSOC_TEST",
+        operation_mode=l2.RsocBatteryOperationMode.STANDBY_LOAD,
+        config_data=_make_rsoc_config_dict(),
+    )
+    controller = l2.RsocBatteryController(
+        my_simulation_parameters=SimulationParameters.one_day_only(2021, 60),
+        config=config,
+    )
+
+    with pytest.raises(ValueError, match="unknown operation mode"):
+        controller.system_operation("NoSuchMode", 5.0, 10.0, 1.7, 13.0)  # type: ignore[arg-type]

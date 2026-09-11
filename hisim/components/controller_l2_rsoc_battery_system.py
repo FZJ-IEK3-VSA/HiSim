@@ -1,6 +1,7 @@
 """L2 Controller for PtX Buffer Battery operation."""
 
 # clean
+from enum import Enum, unique
 from pathlib import Path
 from typing import Optional, Any
 import json
@@ -23,6 +24,25 @@ __version__ = "0.1"
 __maintainer__ = "Franz Oldopp"
 __email__ = "f.oldopp@fz-juelich.de"
 __status__ = "development"
+
+
+@unique
+class RsocBatteryOperationMode(str, Enum):
+    """How the rSOC is driven by the L2 controller.
+
+    Every member carries the operating-mode name as its value, so a serialized
+    configuration keeps spelling the mode out exactly as the string-typed field
+    did before -- the wire format is unchanged.
+
+    NOMINAL_LOAD: run at the constant nominal load.
+    MINIMUM_LOAD: follow the power delta within the part-load range.
+    STANDBY_LOAD: follow the power delta, but never fall below the minimum
+        load, so the system is not switched off.
+    """
+
+    NOMINAL_LOAD = "NominalLoad"
+    MINIMUM_LOAD = "MinimumLoad"
+    STANDBY_LOAD = "StandbyLoad"
 
 
 @dataclass_json
@@ -49,7 +69,7 @@ class RsocBatteryControllerConfig(ConfigBase):
     max_power_sofc_in_kw: float = field(metadata=dc_json_config(field_name="max_power_sofc_in_kW"))
     # standby_load_sofc: float
 
-    operation_mode: str
+    operation_mode: RsocBatteryOperationMode
 
     @staticmethod
     def read_config(
@@ -79,7 +99,7 @@ class RsocBatteryControllerConfig(ConfigBase):
     def config_rsoc(
         cls,
         rsoc_name: str,
-        operation_mode: str,
+        operation_mode: RsocBatteryOperationMode,
         component_id: Optional[ComponentID] = None,
         config_data: dict[str, Any] | None = None,
     ) -> "RsocBatteryControllerConfig":
@@ -219,7 +239,7 @@ class RsocBatteryController(Component):
 
     def system_operation(
         self,
-        operation_mode: str,
+        operation_mode: RsocBatteryOperationMode,
         power_delta_in_kw: float,
         nom_power_in_kw: float,
         min_power_in_kw: float,
@@ -227,12 +247,13 @@ class RsocBatteryController(Component):
     ) -> tuple[float, float]:
         """System operation."""
 
-        if operation_mode == "NominalLoad":
+        if operation_mode == RsocBatteryOperationMode.NOMINAL_LOAD:
             load_to_system_in_kw = nom_power_in_kw
-            power_to_battery_in_kw = power_delta_in_kw - nom_power_in_kw  # postive battery charge, negative battery discharges
+            # Positive charges the battery, negative discharges it.
+            power_to_battery_in_kw = power_delta_in_kw - nom_power_in_kw
 
             # pdb.set_trace()
-        elif operation_mode == "MinimumLoad":
+        elif operation_mode == RsocBatteryOperationMode.MINIMUM_LOAD:
             # pdb.set_trace()
             if min_power_in_kw <= power_delta_in_kw <= max_power_in_kw:
                 load_to_system_in_kw = power_delta_in_kw
@@ -244,7 +265,7 @@ class RsocBatteryController(Component):
                 load_to_system_in_kw = max_power_in_kw
                 power_to_battery_in_kw = power_delta_in_kw - max_power_in_kw
 
-        elif operation_mode == "StandbyLoad":
+        elif operation_mode == RsocBatteryOperationMode.STANDBY_LOAD:
             if min_power_in_kw <= power_delta_in_kw <= max_power_in_kw:
                 load_to_system_in_kw = power_delta_in_kw
                 power_to_battery_in_kw = 0.0
@@ -256,12 +277,9 @@ class RsocBatteryController(Component):
                 load_to_system_in_kw = min_power_in_kw
                 power_to_battery_in_kw = power_delta_in_kw - min_power_in_kw  # if
         else:
-            if power_delta_in_kw <= max_power_in_kw:
-                load_to_system_in_kw = power_delta_in_kw
-                power_to_battery_in_kw = 0.0
-            else:  # max_power_in_kw < power_delta_in_kw:
-                load_to_system_in_kw = max_power_in_kw
-                power_to_battery_in_kw = power_delta_in_kw - max_power_in_kw
+            # Unreachable for every member above; it only guards a member added
+            # later that nobody wrote a branch for.
+            raise ValueError(f"rSOC controller: unknown operation mode {operation_mode!r}")
 
         return load_to_system_in_kw, power_to_battery_in_kw
 

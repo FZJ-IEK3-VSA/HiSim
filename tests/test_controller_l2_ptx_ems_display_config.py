@@ -15,10 +15,13 @@ the misleading ``PowerToThird``/``EnergyToThird``) and the instance attribute
 
 # clean
 
+import json
+
 import pytest
 
 from hisim.config import ComponentID, DisplayConfig
 from hisim.components.controller_l2_ptx_energy_management_system import (
+    PtxOperationMode,
     PTXController,
     PTXControllerConfig,
 )
@@ -33,7 +36,7 @@ def _make_config() -> PTXControllerConfig:
         min_load=20.0,
         max_load=100.0,
         standby_load=10.0,
-        operation_mode="NominalLoad",
+        operation_mode=PtxOperationMode.NOMINAL_LOAD,
     )
 
 
@@ -120,3 +123,42 @@ def test_ptx_controller_config_attribute_name() -> None:
     assert not hasattr(controller, "ptxcontrollerconfig")
     # write_to_report delegates to the config, so it must still work after the rename.
     assert controller.write_to_report() == config.get_string_dict()
+
+
+@pytest.mark.base
+def test_operation_mode_round_trips_as_the_legacy_string() -> None:
+    """The enum-typed operation mode keeps the pre-enum wire value.
+
+    ``operation_mode`` used to be a free-text ``str``; configs already on disk
+    spell the mode as ``"NominalLoad"`` and friends, so every member's value
+    must stay that string and a payload carrying it must still decode.
+    """
+    config = _make_config()
+
+    assert json.loads(config.to_json())["operation_mode"] == "NominalLoad"
+
+    for mode in PtxOperationMode:
+        payload = json.loads(config.to_json())
+        payload["operation_mode"] = mode.value
+        reloaded = PTXControllerConfig.from_dict(payload)
+        assert reloaded.operation_mode is mode
+        assert PTXControllerConfig.from_json(json.dumps(payload)).operation_mode is mode
+
+    assert {mode.value for mode in PtxOperationMode} == {
+        "NominalLoad",
+        "MinimumLoad",
+        "StandbyLoad",
+        "StandbyandOffLoad",
+    }
+
+
+@pytest.mark.base
+def test_system_operation_rejects_an_unbranched_mode() -> None:
+    """A mode with no branch raises instead of silently idling the controller."""
+    controller = PTXController(
+        my_simulation_parameters=_make_sim_params(),
+        config=_make_config(),
+    )
+
+    with pytest.raises(ValueError, match="unknown operation mode"):
+        controller.system_operation("NoSuchMode", 50.0)  # type: ignore[arg-type]

@@ -5,6 +5,8 @@ coming from an upstream component, which would otherwise silently propagate
 through ``abs``/division and the downstream control logic.
 """
 
+import json
+
 import pytest
 
 from hisim import component as cp
@@ -15,12 +17,16 @@ from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
-def _build_controller(operation_mode: str = "StandbyLoad") -> "controller_l2_xtp_fuel_cell_ems.XTPController":
+def _build_controller(
+    operation_mode: controller_l2_xtp_fuel_cell_ems.XtpOperationMode = (
+        controller_l2_xtp_fuel_cell_ems.XtpOperationMode.STANDBY_LOAD
+    ),
+) -> "controller_l2_xtp_fuel_cell_ems.XTPController":
     """Build an XTPController backed by a one-day, 60 s-timestep simulation.
 
     Args:
         operation_mode: Operating mode forwarded to ``XTPControllerConfig``
-            (e.g. ``"StandbyLoad"``).
+            (e.g. ``XtpOperationMode.STANDBY_LOAD``).
 
     Returns:
         A configured ``XTPController`` instance with nominal output 10 kW,
@@ -90,3 +96,36 @@ def test_non_finite_demand_input_raises(raw_value: float) -> None:
     controller.i_restore_state()
     with pytest.raises(AssertionError, match="Non-finite demand input"):
         controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
+
+
+@pytest.mark.base
+def test_operation_mode_round_trips_as_the_legacy_string() -> None:
+    """The enum-typed operation mode keeps the pre-enum wire value.
+
+    ``operation_mode`` used to be a free-text ``str``; configs already on disk
+    spell the mode as ``"StandbyLoad"``/``"StandbyandOffLoad"``, so every
+    member's value must stay that string and such a payload must still decode.
+    """
+    config = _build_controller().config
+
+    assert json.loads(config.to_json())["operation_mode"] == "StandbyLoad"
+
+    for mode in controller_l2_xtp_fuel_cell_ems.XtpOperationMode:
+        payload = json.loads(config.to_json())
+        payload["operation_mode"] = mode.value
+        reloaded = controller_l2_xtp_fuel_cell_ems.XTPControllerConfig.from_dict(payload)
+        assert reloaded.operation_mode is mode
+
+    assert {mode.value for mode in controller_l2_xtp_fuel_cell_ems.XtpOperationMode} == {
+        "StandbyLoad",
+        "StandbyandOffLoad",
+    }
+
+
+@pytest.mark.base
+def test_system_operation_rejects_an_unbranched_mode() -> None:
+    """A mode with no branch raises instead of silently passing the demand through."""
+    controller = _build_controller()
+
+    with pytest.raises(ValueError, match="unknown operation mode"):
+        controller.system_operation("NoSuchMode", 5.0)  # type: ignore[arg-type]

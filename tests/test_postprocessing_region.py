@@ -16,10 +16,11 @@ import pytest
 
 from hisim.component import Component
 from hisim.component_wrapper import ComponentWrapper
-from hisim.components.example_component import ExampleComponent, ExampleComponentConfig
+from hisim.components.example_component import ExampleComponent
 from hisim.components.weather import LocationEnum, Weather, WeatherConfig
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.postprocessing_main import region_of
+from tests import functions_for_testing as fft
 from tests.postprocessing_option_test_framework import (
     PreparedPostProcessingCase,
     SETUP_MODULE_NAME,
@@ -69,7 +70,7 @@ def _non_weather(case: PreparedPostProcessingCase) -> ExampleComponent:
     """Build a component that is not a Weather, so the search cannot simply take the first one."""
     return ExampleComponent(
         my_simulation_parameters=case.ppdt.simulation_parameters,
-        config=ExampleComponentConfig.get_default_example_component(),
+        config=fft.sized_example_component_config(),
     )
 
 

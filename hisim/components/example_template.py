@@ -21,8 +21,18 @@ Steps to build a component, in the order they appear below:
    boiler contributing its power band — that goes into ``SIZING_CONTRIBUTIONS``. Shown as
    a comment block below, since the template models no real fact; ``weather.py`` holds a
    real one.
-5. Write the component class: declare inputs and outputs, implement the four lifecycle
-   methods. By the time a config reaches the constructor the sizing kernel has already
+5. Write the component class: declare inputs and outputs, implement the lifecycle methods
+   the ``Simulator`` calls, in the order they appear below:
+
+   * ``i_prepare_simulation``: called once, before the first timestep. The base class
+     raises rather than doing nothing, so a component that has nothing to prepare still
+     has to define it — see the no-op below.
+   * ``i_save_state``: caches the current state at the start of a timestep.
+   * ``i_restore_state``: puts that cached state back at the start of every iteration.
+   * ``i_doublecheck``: optional check once a timestep has converged.
+   * ``i_simulate``: one iteration — read the inputs, write the outputs.
+
+   By the time a config reaches the constructor the sizing kernel has already
    turned every ``AUTO`` into a number (``Component.__init__`` refuses anything else), so
    the component reads a sized field like any other value — through
    :func:`~hisim.config.concrete`, which says exactly that to the type checker.
@@ -242,6 +252,23 @@ class ComponentName(Component):
             unit=loadtypes.Units.WATT,
             output_description="Output without State",
         )
+
+    def i_prepare_simulation(self) -> None:
+        """No-op: this template has nothing to prepare before the first timestep.
+
+        The ``Simulator`` calls this once on every component, before the first timestep,
+        and this is where a real component does the work that is done once rather than
+        every step: open a data file and read the profile it drives, precompute a table
+        the timesteps only look up, or read a fact another component wrote into the
+        simulation repository (``self.simulation_repository``) while the system was built.
+
+        A component with nothing to prepare still has to define the method. The base
+        class, :meth:`hisim.component.Component.i_prepare_simulation`, raises
+        ``NotImplementedError`` rather than doing nothing, so a component that leaves it
+        out fails at the first thing a run does. (The one exception is
+        :class:`hisim.component.StatelessComponent`, which carries a no-op override of its
+        own.)
+        """
 
     def i_save_state(self) -> None:
         """Saves the current state."""

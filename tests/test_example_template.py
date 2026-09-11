@@ -1,10 +1,13 @@
 """Test for the Example Template."""
 
 # clean
+from pathlib import Path
+
 import pytest
 from hisim import component as cp
-from hisim.components import example_template
+from hisim.components import example_component, example_template
 from hisim.simulationparameters import SimulationParameters
+from hisim.simulator import Simulator
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.config import AUTO, ComponentID, ConfigSizingError, SizableFieldKind, SizingContext, describe_config
@@ -245,3 +248,58 @@ def test_an_unresolved_template_config_is_refused_by_the_component() -> None:
         example_template.ComponentName(config=config, my_simulation_parameters=mysim)
     assert "rated_power_in_watt" in str(refusal.value)
     assert "Size.CONDITIONED_FLOOR_AREA_IN_M2" in str(refusal.value)
+
+
+@pytest.mark.base
+def test_a_component_built_from_the_template_runs_inside_a_simulator(tmp_path: Path) -> None:
+    """The template's whole job: copy it, put it in a Simulator, and it runs.
+
+    Every other test in this file drives ``i_simulate`` directly, which skips the first
+    thing a run does -- the ``Simulator`` calls ``i_prepare_simulation`` on every component
+    before the first timestep, and ``Component`` raises ``NotImplementedError`` there rather
+    than doing nothing. While the template omitted the hook, a component copied from it died
+    on the first line of its first run and no test said so.
+
+    The ``ExampleComponent`` next door is the source here only because the template declares
+    its input mandatory and the Simulator refuses to run with an unconnected mandatory input;
+    its ``ElectricityOutput`` is the one port in the two example modules with a matching load
+    type and unit. It delivers 0 W over a day at hourly resolution, so the template's
+    stateless output is its 1 W offset, far below the power the default building sizes it for.
+    """
+    my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
+    my_simulation_parameters.result_directory = str(tmp_path / "results")
+    assert not my_simulation_parameters.post_processing_options
+
+    my_sim: Simulator = Simulator(
+        module_directory=str(tmp_path),
+        module_filename="template_component_in_a_simulator",
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    my_sim.set_simulation_parameters(my_simulation_parameters)
+
+    my_source = example_component.ExampleComponent(
+        config=fft.sized_example_component_config(), my_simulation_parameters=my_simulation_parameters
+    )
+    my_template_component = example_template.ComponentName(
+        config=example_template.ComponentNameConfig.get_default_template_component().resolve(
+            fft.default_building_sizing_context()
+        ),
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    my_template_component.connect_input(
+        my_template_component.InputFromOtherComponent,
+        my_source.component_name,
+        my_source.ElectricityOutput,
+    )
+
+    my_sim.add_component(my_source)
+    my_sim.add_component(my_template_component)
+
+    my_sim.run_all_timesteps()
+
+    results = my_sim.results_data_frame
+    assert len(results) == my_simulation_parameters.timesteps == 24
+    stateless_output = next(
+        column for column in results.columns if example_template.ComponentName.OutputWithoutState in column
+    )
+    assert (results[stateless_output] == 1.0).all()

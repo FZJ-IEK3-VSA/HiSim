@@ -1,6 +1,6 @@
 {
   "config_sha256": "15ff311a3d0ef9d2b14062ccfbb03b08762b1dbe052d91c8265b109c58f9c742",
-  "generated_at": "2026-09-09T18:43:17.832489+00:00",
+  "generated_at": "2026-09-11T16:27:32.090876+00:00",
   "golden_files": [
     "air_conditioned_house__one_week_60s.json",
     "automatic_default_connections__one_week_60s.json",
@@ -33,7 +33,7 @@
     "simple_system_setup_one__one_week_60s.json",
     "simple_system_setup_two__one_week_60s.json"
   ],
-  "hisim_commit": "64b01c93e0693275849b43c28444308fece2432f",
+  "hisim_commit": "d41f24d702eadf4605d9c1cf2cf04377b6aed4a0",
   "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.36",
   "python_version": "3.11.16"
 }

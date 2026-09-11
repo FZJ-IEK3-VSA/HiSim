@@ -64,6 +64,10 @@ file and without running it, the file's knobs — a flag per group and a selecte
 which is everything a consumer of a checked-in system edits — and then every fact somebody
 provides, every fact somebody reads, and which provider each read resolved to.
 
+A constructor's arguments are written and decoded exactly like a `config` value: an enum by its
+member name or its value, a nested object as a mapping of its own fields, several of them as a
+list, and a wrong one refused by name with the spellings that would have worked.
+
 Editors get the same knowledge from `hisim/energy_system_v3.schema.json`, which every file in this
 directory binds to with its first line. The schema is generated from the same declarations
 `describe` reads — regenerate it with `hisim energy-system schema` whenever a component gains a

@@ -8,7 +8,8 @@ lets a file be rejected for a sizing contradiction without anything having been 
 is what lets a run write down what it would have built even when it is not going to run.
 
 Three things happen per entry, in a fixed order. The configuration's *origin* is realized:
-the named preset is called, or the named constructor is called with the entry's arguments, or
+the named preset is called, or the named constructor is called with the entry's arguments —
+each decoded into the type its parameter asks for, exactly as a ``config`` value is — or
 the entry's own complete block is deserialized. The *overrides* are applied on top, each value
 decoded into the type its field holds, with the bare word ``AUTO`` re-opening a field that the
 preset had pinned. Then the *paths* are expanded, turning the portable ``${inputs}/…``
@@ -38,7 +39,7 @@ import dataclasses
 from dataclasses import dataclass
 from typing import Any, ClassVar, List, Mapping, Optional, Tuple
 
-from hisim.config.presets import ConfigBuilder
+from hisim.config.presets import ConfigBuilder, resolved_parameter_types
 from hisim.config.report import ResolutionReport
 from hisim.energy_system.bindings import ClassBinding, ClassBindings
 from hisim.energy_system.classes import validate_classes
@@ -254,6 +255,13 @@ class EntryConfigurator:
     def _call_builder(self, builder: ConfigBuilder, arguments: Mapping[str, Any]) -> Any:
         """Calls one preset or named constructor with the entry's key as the instance name.
 
+        The arguments are decoded before the call, not handed over as the file wrote them: a
+        constructor is an ordinary Python classmethod asking for an enum member or a nested
+        object, and a file can only write a string, a number or a mapping. Passing those
+        through unconverted made the builder fail somewhere inside itself — ``'str' object has
+        no attribute 'value'`` for a weather location — which named neither the argument nor
+        the spellings that would have worked.
+
         Args:
             builder: The declared builder the entry selected.
             arguments: The arguments the entry passes; empty for a preset.
@@ -262,12 +270,14 @@ class EntryConfigurator:
             The configuration the builder produced.
 
         Raises:
-            EnergySystemBindingError: ``EF-1A`` when the builder raises, naming the builder
-                and keeping its own message.
+            EnergySystemBindingError: ``EF-1A`` for an argument that does not fit its
+                parameter, or when the builder itself raises, naming the builder and keeping
+                its own message.
         """
         entry = self.binding.entry
+        decoded = self._decode_arguments(builder, arguments)
         try:
-            return builder.build(entry.name, **arguments)
+            return builder.build(entry.name, **decoded)
         except Exception as error:  # pylint: disable=broad-except
             raise EnergySystemBindingError(
                 EnergySystemErrorId.UNDECODABLE_VALUE,
@@ -275,6 +285,41 @@ class EntryConfigurator:
                 f"the {builder.kind.explain()} '{builder.name}' of '{entry.name}' failed: "
                 f"{error}.",
             ) from error
+
+    def _decode_arguments(
+        self, builder: ConfigBuilder, arguments: Mapping[str, Any]
+    ) -> Mapping[str, Any]:
+        """Decodes a builder's written arguments into the types its parameters ask for.
+
+        Each argument goes through the same codec a ``config`` value does, against the
+        parameter's own resolved annotation rather than against a field's, so the two forms
+        accept the same spellings and refuse the same mistakes with the same sentence. The
+        argument names are already known to be parameters — the class-bound validator checked
+        that, with the parameter list in its message — so the only question left here is
+        whether each value fits.
+
+        Args:
+            builder: The declared builder the entry selected.
+            arguments: The arguments the entry passes.
+
+        Returns:
+            The arguments, each decoded into the type its parameter holds.
+
+        Raises:
+            EnergySystemBindingError: ``EF-1A`` for an argument that does not fit its
+                parameter, located at the parameter that refused it.
+        """
+        if not arguments:
+            return {}
+        entry = self.binding.entry
+        annotations = resolved_parameter_types(builder.function)
+        location = f"components.{entry.name}.{builder.kind.value}.{builder.name}"
+        return {
+            key: self.codec.decode_argument(
+                annotations.get(key), value, f"{location}.{key}", entry.name, key
+            )
+            for key, value in arguments.items()
+        }
 
     def _apply_overrides(self, config: Any) -> Any:
         """Writes the entry's sparse ``config`` block onto the configuration it built.

@@ -41,10 +41,14 @@ the sizing machinery — which is why every builder spells the ``ComponentID`` o
 
 from __future__ import annotations
 
+import dataclasses
 import enum
 import functools
 import inspect
+import types
+import typing
 from dataclasses import dataclass
+from types import NoneType
 from typing import Any, Callable, ClassVar, Dict, Iterable, Mapping, Optional, Tuple, TypeVar, overload
 
 #: Type variable of the two decorators. It is deliberately unbounded and used as an
@@ -52,6 +56,10 @@ from typing import Any, Callable, ClassVar, Dict, Iterable, Mapping, Optional, T
 #: classmethod stay a fully typed classmethod for mypy, so a typo in its name is an
 #: ``attr-defined`` error and a wrong argument an ``arg-type`` error at the call site.
 BuilderT = TypeVar("BuilderT")
+
+#: Stands for "this parameter's annotation could not be evaluated", which is not the same
+#: answer as "it evaluated to something undecodable" and must not be refused as if it were.
+_UNRESOLVED = object()
 
 
 class BuilderKind(enum.Enum):
@@ -161,6 +169,104 @@ def _wire_name(kind: BuilderKind, method_name: str) -> str:
     return method_name
 
 
+class _AnnotationCarrier:
+    """A throwaway object holding just the annotations :func:`resolved_parameter_types` resolves.
+
+    ``typing.get_type_hints`` on a function resolves its *return* annotation too, and a
+    builder's return annotation names the very class whose body is still executing when the
+    decorator runs. Handing the resolver an object that carries only the parameter
+    annotations is what lets the same helper serve the import-time check and the run-time
+    decoding, instead of one spelling that works before the class exists and another after.
+    """
+
+    def __init__(self, annotations: Dict[str, Any]) -> None:
+        """Stores the annotations to resolve, keyed by parameter name."""
+        self.__annotations__ = annotations
+
+
+def resolved_parameter_types(function: Callable[..., Any]) -> Dict[str, Any]:
+    """Resolves the annotations of a builder's parameters into the types they name.
+
+    Under ``from __future__ import annotations`` every annotation is a string, so a caller
+    that wants the type rather than its spelling has to evaluate it against the defining
+    module's globals. The return annotation is deliberately left out: it names the config
+    class, which does not exist yet while the decorator runs.
+
+    An annotation that cannot be resolved at all is *omitted* rather than reported. That is
+    the same concession the value codec makes for a field whose annotation it cannot resolve
+    — the value is passed on for the builder itself to reject — and it keeps a forward
+    reference from turning into an import-time failure of the whole module.
+
+    Args:
+        function: The undecorated function underneath a builder's classmethod.
+
+    Returns:
+        A mapping from parameter name to resolved type, holding only the parameters whose
+        annotation could be evaluated.
+    """
+    written = {
+        name: annotation
+        for name, annotation in getattr(function, "__annotations__", {}).items()
+        if name != "return"
+    }
+    if not written:
+        return {}
+    namespace = getattr(function, "__globals__", {})
+    try:
+        return dict(typing.get_type_hints(_AnnotationCarrier(written), globalns=namespace))
+    except Exception:  # pylint: disable=broad-except
+        resolved: Dict[str, Any] = {}
+        for name, annotation in written.items():
+            try:
+                resolved.update(
+                    typing.get_type_hints(_AnnotationCarrier({name: annotation}), globalns=namespace)
+                )
+            except Exception:  # pylint: disable=broad-except
+                continue
+        return resolved
+
+
+def is_decodable_annotation(annotation: Any) -> bool:
+    """Whether a value written in a file can be decoded into the type this annotation names.
+
+    A named constructor is callable from an energy-system file, where its arguments arrive as
+    plain YAML — a string, a number, a boolean, a mapping, a list. The decoding of those into
+    the types a constructor asks for knows five shapes and no more: the four scalars, an enum
+    (by member name or by member value), a dataclass that can rebuild itself from a mapping,
+    and ``Optional``/``Union``/``List`` over those. This predicate is the closed statement of
+    that set, kept here in the bottom layer so the decorator can refuse an unusable parameter
+    at import time and the decoder can agree with it without either importing the other.
+
+    Args:
+        annotation: A resolved type annotation.
+
+    Returns:
+        ``True`` when a written value can be decoded into it.
+    """
+    if annotation is NoneType or annotation is None:
+        return True
+    origin = typing.get_origin(annotation)
+    arguments = typing.get_args(annotation)
+    if origin is None:
+        return isinstance(annotation, type) and (
+            annotation in (bool, int, float, str)
+            or issubclass(annotation, enum.Enum)
+            or (
+                dataclasses.is_dataclass(annotation)
+                and callable(getattr(annotation, "from_dict", None))
+            )
+        )
+    if origin is typing.Union or origin is types.UnionType:
+        return bool(arguments) and all(is_decodable_annotation(argument) for argument in arguments)
+    return origin is list and len(arguments) == 1 and is_decodable_annotation(arguments[0])
+
+
+def _render_annotation(annotation: Any) -> str:
+    """Renders a resolved annotation the way an error message should print it."""
+    name = getattr(annotation, "__name__", None)
+    return name if isinstance(name, str) else str(annotation)
+
+
 def _check_signature(kind: BuilderKind, method_name: str, function: Callable[..., Any]) -> None:
     """Checks that a builder takes the instance name first and nothing unusable after it.
 
@@ -170,10 +276,17 @@ def _check_signature(kind: BuilderKind, method_name: str, function: Callable[...
     what lets a scenario file spell the call as a mapping and the introspection describe
     it without reading the source.
 
+    The annotation itself must additionally be one a written value can be decoded into (see
+    :func:`is_decodable_annotation`). A file calling this constructor passes plain YAML, so a
+    parameter asking for something no YAML value can become — a callable, an arbitrary
+    object — is a constructor only Python can call, and that is a mistake worth reporting
+    while the class body is still executing rather than at the first file that tries.
+
     Raises:
         ValueError: If the first parameter after ``cls`` is not ``name``, if a preset
-            declares further parameters, or if a constructor parameter is variadic,
-            positional-only or unannotated.
+            declares further parameters, if a constructor parameter is variadic,
+            positional-only or unannotated, or if its annotation cannot be decoded from a
+            written value.
     """
     parameters = list(inspect.signature(function).parameters.values())[1:]
     if not parameters or parameters[0].name != "name":
@@ -201,6 +314,18 @@ def _check_signature(kind: BuilderKind, method_name: str, function: Callable[...
                 "type annotation; the description surface reports the type of every "
                 "parameter, so an unannotated one cannot be offered to a caller."
             )
+    annotations = resolved_parameter_types(function)
+    for parameter in parameters:
+        annotation = annotations.get(parameter.name, _UNRESOLVED)
+        if annotation is _UNRESOLVED or is_decodable_annotation(annotation):
+            continue
+        raise ValueError(
+            f"{kind.explain()} '{method_name}': parameter '{parameter.name}' is annotated "
+            f"{_render_annotation(annotation)}, which no value written in a file can be "
+            "decoded into; a parameter must be a bool, int, float or str, an Enum, a "
+            "dataclass with a 'from_dict', or an Optional, Union or List over those, "
+            "because a file passes its arguments as plain YAML."
+        )
 
 
 def _declare(kind: BuilderKind, decorated: Any, note: Optional[str]) -> Any:

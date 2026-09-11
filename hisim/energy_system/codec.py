@@ -15,6 +15,12 @@ second rule is ``AUTO``: the bare word re-opens a field that a preset pinned, wh
 author asks for a value to be sized rather than fixed, and it is legal only on a field that
 has a law to close it again.
 
+The same decoding serves the arguments of a named constructor, which a file writes as a
+mapping under ``constructor:`` and which reach a Python classmethod expecting the same enum
+members and nested objects a field holds. :meth:`ConfigValueCodec.decode_argument` is that one
+implementation, and the field path is a call into it, so the two cannot come to mean different
+things by the same written word.
+
 Everything the codec cannot decode is a hard error naming the entry, the field, the value and
 the type expected — never a silent pass-through of a wrong type, because a wrong number in a
 configuration surfaces as a wrong simulation result rather than as a crash.
@@ -26,6 +32,7 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import types
 import typing
 from types import NoneType
 from typing import Any, Dict, Mapping, Optional, Tuple, Type
@@ -238,6 +245,11 @@ class ConfigValueCodec:
     def _decode_by_annotation(self, field_name: str, value: Any, location: str, name: str) -> Any:
         """Decodes a value against the field's resolved type annotation.
 
+        A thin call into :meth:`decode_argument`, which is the whole of the annotation-driven
+        decoding and is shared with the arguments of a named constructor. Keeping one
+        implementation is what makes ``location: AACHEN`` mean the same thing whether it is
+        written as a ``config`` override or passed to ``for_location``.
+
         Args:
             field_name: The field being overridden.
             value: The written value.
@@ -251,9 +263,42 @@ class ConfigValueCodec:
         Raises:
             EnergySystemBindingError: ``EF-1A`` when the value contradicts the annotation.
         """
-        annotation = self.hints.get(field_name)
+        return self.decode_argument(self.hints.get(field_name), value, location, name, field_name)
+
+    def decode_argument(
+        self, annotation: Any, value: Any, location: str, name: str, field_name: str
+    ) -> Any:
+        """Decodes one written value against a type annotation, whatever declared it.
+
+        The annotation-driven half of the codec, factored out of the field path so that the
+        arguments of a named constructor get exactly the treatment a ``config`` block's values
+        get: an enum arrives as the member and not as the string that spells it, a mapping on
+        a dataclass-typed parameter is rebuilt by that class, a list is decoded item by item,
+        and a plain scalar is checked against the types the annotation admits.
+
+        Args:
+            annotation: The resolved annotation to decode against; ``None`` when there is
+                none, in which case the value is passed on untouched.
+            value: The written value.
+            location: The dotted key path of the value, for the message.
+            name: The component's name, for the message.
+            field_name: What the value is being written to — a field name or a parameter
+                name — as the message spells it.
+
+        Returns:
+            The decoded value.
+
+        Raises:
+            EnergySystemBindingError: ``EF-1A`` when the value contradicts the annotation.
+        """
         if annotation is None:
             return value
+        item_annotation = self._list_item_annotation(annotation)
+        if item_annotation is not None and isinstance(value, list):
+            return [
+                self.decode_argument(item_annotation, item, f"{location}[{index}]", name, field_name)
+                for index, item in enumerate(value)
+            ]
         candidates = self._candidate_types(annotation)
         for candidate in candidates:
             if isinstance(candidate, type) and issubclass(candidate, enum.Enum):
@@ -264,6 +309,33 @@ class ConfigValueCodec:
         if rebuilt is not None:
             return rebuilt
         return self._decode_scalar(candidates, value, location, name, field_name)
+
+    @classmethod
+    def _list_item_annotation(cls, annotation: Any) -> Optional[Any]:
+        """Returns the item type of a list-admitting annotation, or ``None`` for any other.
+
+        Both spellings that occur in HiSim are read: a plain ``List[X]`` and the
+        ``Union[X, List[X]]`` of a parameter that takes either one thing or several — the LPG
+        occupancy's household, where a list means one reference per apartment. Reading the
+        item type *before* the union is flattened is what keeps a list from being mistaken for
+        a single value of its own item type.
+
+        Args:
+            annotation: The resolved annotation.
+
+        Returns:
+            The type each item is decoded against, or ``None`` when no list is admitted.
+        """
+        origin = typing.get_origin(annotation)
+        if origin is list:
+            arguments = typing.get_args(annotation)
+            return arguments[0] if len(arguments) == 1 else None
+        if origin is typing.Union or origin is types.UnionType:
+            for member in typing.get_args(annotation):
+                item = cls._list_item_annotation(member)
+                if item is not None:
+                    return item
+        return None
 
     @classmethod
     def _rebuild_nested_dataclass(

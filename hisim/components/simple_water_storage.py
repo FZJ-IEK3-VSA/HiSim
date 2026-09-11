@@ -132,7 +132,18 @@ class SimpleHotWaterStorageConfig(ConfigBase):
         component_id: Optional[ComponentID] = None,
         sizing_option: HotWaterStorageSizingEnum = HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM,
     ) -> "SimpleHotWaterStorageConfig":
-        """Gets a default storage with scaling according to the heating load of the building.
+        """Gets a default storage scaled to the maximal thermal power of the heat generator it buffers.
+
+        ``max_thermal_power_in_watt_of_heating_system`` is the generator's maximal thermal
+        power -- the boiler's ``maximal_thermal_power_in_watt``, the heat pump's
+        ``set_thermal_output_power_in_watt`` -- and never the building's heating load. The
+        litres-per-kilowatt figures below are per kilowatt of *installed generator power*,
+        which is what decides how long a cycle the buffer has to absorb; a generator sized
+        above the load (a boiler covering domestic hot water as well is sized at 1.1x the
+        load, or at 2.5 kW per apartment when that is larger) therefore needs the larger
+        buffer that its own power asks for. Every setup passing the building load here was
+        the C11 defect (P4 decision D-9): it sized the buffer for a generator that does not
+        exist and undersized every buffer whose generator is larger than the load.
 
         The information for scaling the buffer storage is taken from the heating system guidelines from Buderus:
         https://www.baunetzwissen.de/heizung/fachwissen/speicher/dimensionierung-von-pufferspeichern-161296

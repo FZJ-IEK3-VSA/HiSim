@@ -4,6 +4,7 @@
 import pytest
 import numpy as np
 from hisim import component as cp
+from hisim.components import generic_boiler
 from hisim.components import simple_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -219,4 +220,41 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
         calculated_output_to_heat_distribution_system_in_celsius,
         water_temperature_output_in_celsius_to_heat_distribution_system,
         rtol=0.01,
+    )
+
+
+@pytest.mark.base
+def test_buffer_volume_follows_the_generator_not_the_building_load() -> None:
+    """The buffer volume is litres per kilowatt of the generator, not of the building load.
+
+    P4 decision D-9 (plan item C11): every setup used to hand the building's heating load
+    to ``max_thermal_power_in_watt_of_heating_system``, although the litres-per-kilowatt
+    figures are per kilowatt of installed generator power. A condensing gas boiler that
+    also prepares domestic hot water is sized at 1.1x the load
+    (``GenericBoilerConfig.scale_thermal_power``), so for the 7780.75 W load of the
+    standard building it is an 8558.83 W boiler, and its buffer is 171.18 l -- ten percent
+    more than the 155.62 l the load used to produce. This pins that arithmetic.
+    """
+
+    heating_load_of_building_in_watt = 7780.75
+    maximal_thermal_power_of_the_boiler_in_watt = generic_boiler.GenericBoilerConfig.scale_thermal_power(
+        heating_load_of_building_in_watt=heating_load_of_building_in_watt,
+        number_of_apartments_in_building=1.0,
+    )
+    assert maximal_thermal_power_of_the_boiler_in_watt == pytest.approx(8558.825)
+
+    sized_from_the_generator = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+        max_thermal_power_in_watt_of_heating_system=maximal_thermal_power_of_the_boiler_in_watt,
+        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER,
+    )
+    assert sized_from_the_generator.volume_heating_water_storage_in_liter == 171.18
+
+    # What the C11 defect produced, kept here as the measured size of the correction.
+    sized_from_the_building_load = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+        max_thermal_power_in_watt_of_heating_system=heating_load_of_building_in_watt,
+        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER,
+    )
+    assert sized_from_the_building_load.volume_heating_water_storage_in_liter == 155.62
+    assert sized_from_the_generator.volume_heating_water_storage_in_liter == pytest.approx(
+        1.1 * sized_from_the_building_load.volume_heating_water_storage_in_liter, rel=1e-4
     )

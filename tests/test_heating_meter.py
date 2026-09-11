@@ -141,9 +141,16 @@ def test_house(
         my_simulation_parameters=my_simulation_parameters,
     )
 
+    # Build the heat pump's config first: the buffer storage below is sized from the heat
+    # pump's rated thermal output, not from the building's heating load.
+    my_heatpump_config = (
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_default_generic_advanced_hp_lib()
+    )
+    my_heatpump_config.with_domestic_hot_water_preparation = True
+
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
+        max_thermal_power_in_watt_of_heating_system=my_heatpump_config.set_thermal_output_power_in_watt,
         sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
     )
     my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
@@ -172,11 +179,6 @@ def test_house(
     )
 
     # Build Heat Pump
-    my_heatpump_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_default_generic_advanced_hp_lib()
-    )
-    my_heatpump_config.with_domestic_hot_water_preparation = True
-
     my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
         config=my_heatpump_config,
         my_simulation_parameters=my_simulation_parameters,

@@ -1,6 +1,6 @@
 # P4 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-01 (2 findings)
+**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-11 (5 findings)
 **Context:** things that surfaced while working through
 `roadmap/declarative_energy_systems/p4_component_sweep_requirements.md` — the component sweep, decisions
 D-1 … D-32 — and were **not** what the work set out to do. Kept separately so the requirements stay about
@@ -82,6 +82,79 @@ scope for "retire a dead module". Two independent fixes are wanted, and they int
 
 Both rename things, so they want to land together or in that order, never against each other. P3's
 recordings inherit these names too, so the sequencing matters to the declarative stack as well.
+
+### F-3 — the CHP controller's summer branch switches off against the heating maximum, not the DHW maximum **[verified]**
+
+Found by the review of #683 (D-4), outside that PR's diff: the PR changes the factories' values, not
+`calculate_state`. `hisim/components/controller_l1_chp.py:485-497`, the branch whose own comment says "only
+consider water heating in summer":
+
+```python
+if t_dhw < self.config.t_min_dhw_in_celsius:
+    self.state.activate(timestep)
+    return
+if t_dhw > self.config.t_max_heating_in_celsius:
+    self.state.deactivate(timestep)   # ← t_max_dhw_in_celsius is meant
+    return
+```
+
+The activation reads the DHW band's lower bound, as it should; the deactivation compares the same DHW
+temperature against `t_max_heating_in_celsius`, the upper bound of the **heating** band. The winter branch two
+lines below reads each band for its own temperature (`t_building > t_max_heating`, `t_dhw > t_max_dhw`), which
+is what makes the summer line read as a slip rather than a choice.
+
+What it costs depends on the factory. With either buffer factory the heating maximum is 40 °C against a DHW
+maximum of 60 °C; without a buffer it is **20.5 °C**, below every `t_min_dhw_in_celsius` in the file. So in
+summer the CHP is switched off as soon as the DHW store passes 40 °C — or, for the two bufferless configs, at
+essentially every timestep the minimum-runtime guard does not already hold it on. The 60 °C the same config
+asks for is never reached in summer.
+
+*Cost of not finding it: the four factories' DHW maxima are the values D-4 spent a decision on, and in summer
+three of the four are unreachable. A conversion that froze them into the wire format would have frozen numbers
+the code cannot honour.*
+
+**Where it stands.** Not fixed, and not D-4's to fix. Own PR with a test that drives `calculate_state` at a
+summer timestep with `t_dhw` between the heating maximum and the DHW maximum and shows the controller
+deactivating where it should stay on. No setup builds `L1CHPController`, so it is a physics change (R5) with
+no recorded result behind it; it can land before or after the conversion.
+
+### F-4 — the `hisim` console script ignores the repository's `.env` **[verified]**
+
+`hisim/hisim_main.py` imports `load_dotenv` (`:12`) and calls it at import time (`:33`), so
+`python hisim/hisim_main.py …` picks up `UTSP_URL` and `UTSP_API_KEY` from the repository's `.env` — the file
+`CLAUDE.md` documents as the place to put them. `hisim/cli.py`, the entry point behind the installed `hisim`
+console script (`cli.main`, `:285`), neither imports `dotenv` nor calls it anywhere.
+
+Every command reached through the console script therefore runs with whatever the ambient environment happens
+to hold, `hisim energy-system run` included. The two documented ways to run the same setup — the script and
+the module — do not see the same configuration, and the failure is a UTSP request without credentials rather
+than a message naming the missing variable.
+
+*Cost of not finding it: the documented environment file works for one of the two documented entry points, and
+the one it fails for is the one the install instructions produce.*
+
+**Where it stands.** Not fixed. One line in `cli.main`, matching `hisim_main.py`.
+
+### F-5 — a component copied from `example_template.py` raises before its first timestep **[verified]**
+
+`Component.i_prepare_simulation` (`hisim/component.py:350`) raises
+`NotImplementedError("Simulation preparation is missing for …")`, and `Simulator.run_all_timesteps` calls it
+for every registered component through `prepare_calculation` (`hisim/simulator.py:441,212` →
+`component_wrapper.py:167`) before the loop starts. `hisim/components/example_template.py` implements
+`i_save_state`, `i_restore_state`, `i_doublecheck` and `i_simulate` (`:142-190`) and **not**
+`i_prepare_simulation`, and `ComponentName` inherits from `Component`, not from `StatelessComponent` (whose
+no-op override is at `component.py:734`). A component written from the template — the file `CLAUDE.md` tells
+every new author to copy — therefore fails inside a Simulator, at the first thing the Simulator does.
+
+`hisim/components/example_component.py` has the same gap, verified the same way; its 11 tests call `i_simulate`
+directly and never build a Simulator, which is why neither file's omission is caught.
+
+*Cost of not finding it: the template's whole job is that copying it produces something that runs, and the one
+lifecycle method it omits is the one that raises rather than doing nothing.*
+
+**Where it stands.** Not fixed. A no-op override with the docstring the other components carry, in both files.
+Fix alongside the D-31 follow-up, which is already editing both.
+
 
 ---
 

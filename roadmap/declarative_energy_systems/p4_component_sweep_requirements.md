@@ -98,7 +98,7 @@ Legend: **conv** convert · **del** delete · **done** converted (remaining work
 | `ElectricHeatingControllerConfig` | conv | `standard` | `specific_heating_load…` ← heating_load, floor area (ratio — reuse `SPECIFIC_LOAD_LAW`); threshold ← `Self(specific)` step table (reuse `HEATING_THRESHOLD_LAW`); removes a cross-module import | N | |
 | `DistrictHeatingControllerConfig` | conv | `standard` | threshold (copy) | N | |
 | `AirConditionerControllerConfig`, `SimpleAirConditionerControllerConfig`, `SolarThermalSystemControllerConfig`, `NightSetbackConfig` | conv | `standard` | — | N | |
-| `L1CHPControllerConfig` | conv | `gas`, `hydrogen` (+ buffer overrides) | — | **P** if the 42/50 flip is normalised | D-4 |
+| `L1CHPControllerConfig` | conv | `gas`, `hydrogen`, `gas_with_buffer`, `hydrogen_with_buffer` | — | N — D-4 reversed 2026-09-11, the 42/50 and 35/31 values are preserved, so no threshold moves | D-4 |
 | `L1HeatPumpConfig` (`controller_l1_heatpump`) | ? | (`space_heating`, `buffer`, `dhw`) | — | N | D-2 |
 | `GenericBoilerControllerConfig` | done | `modulating`, `on_off` | delete 4 legacy factories; pellet/wood-chip → `on_off` + overrides | N | |
 | `GasHeaterConfig`, `GasControllerConfig`, `CHPControllerConfig`, `ExtendedControllerConfig` (+ `advanced_fuel_cell_controller`) | del | | | | D-8 |
@@ -159,7 +159,7 @@ Legend: **conv** convert · **del** delete · **done** converted (remaining work
 | `AdvElectrolyzerConfig` (`configuration.py`) | del | | dead third copy → `obsolete/` (D-29) | | D-29 |
 | `CSVLoaderConfig` | conv | `for_csv_file(…)` (10 params), no preset | conflict-9 precedent; do first | N | |
 | `ExampleComponentConfig` | conv | `standard` | `capacity` ← conditioned_floor_area × 45 (the hidden law) | N | D-31 |
-| `ComponentNameConfig` (template) | conv | `standard` | + one `sized_field`, one contribution | N | D-31 |
+| `ComponentNameConfig` (template) | conv | `standard` | + one `sized_field`; no contribution — a documented comment block instead, since only `SizingContext` fields may be contributed (D-31 deviation) | N | D-31 |
 | `ExampleTransformerConfig`, `SimpleStorageConfig` (`thermal`), `SimpleControllerConfig` | conv | `standard` / `thermal` | | N | |
 
 ### R4 — Naming `[decided 2026-08-26; Q-P1.9 + A1–A3]`
@@ -267,6 +267,18 @@ row is struck from the table, which keeps the question and the option chosen nex
   copy-paste asymmetry nobody chose, so they are normalised rather than frozen into the wire format: `gas` and
   `hydrogen` presets with **one shared buffer override**, not one override per fuel. No setup builds this class;
   `tests/test_generic_chp.py` changes and its comment says which numbers moved and why.
+
+  **Reversed 2026-09-11 (b) preserve**, on the first review of the D-4 PR (#683), which questioned normalising
+  four thresholds on inference alone: nothing in the tree says the cross is a mistake, and a guessed value is
+  worse than an unexplained one. The four `L1CHPControllerConfig` factories keep their 2023 numbers — chp DHW
+  42/60; fuel cell DHW 50/60; chp-with-buffer heating 35/40 and DHW 50/60; fuel-cell-with-buffer heating 31/40
+  and DHW 42/60 — and the asymmetry is recorded as unexplained and kept rather than guessed. What stays from
+  the PR is everything that was not the physics: a pure, parameterised buffer helper; module-private constants
+  with the heating-season begin derived from one base value; `fuel_cell_with_buffer` keeping the default name
+  `FuelCellController` instead of `CHPController`; a `__post_init__` check that each minimum is below its
+  maximum; and literal pins in the tests. The conversion consequence is **four presets** — `gas`, `hydrogen`,
+  `gas_with_buffer`, `hydrogen_with_buffer` — not two plus one shared override, because with the values kept a
+  "buffer" override is not one thing.
 - **D-21** `[answered 2026-09-10]` **(c) plumb the fact, keep the Building's field a plain default.**
   `heating_reference_temperature_in_celsius` becomes a `WeatherConfig` contribution from a per-station DIN 12831
   table (the `LocationEnum` entries already carry the TRY region in their directory names), so the fact exists for
@@ -331,6 +343,16 @@ row is struck from the table, which keeps the question and the option chosen nex
   to teach (EAC4, AC-P4.9); and `example_component`'s `capacity = 45 * 121.2` becomes the real law,
   `45 J/K/m² × conditioned_floor_area_in_m2`, on the fact that already exists. The repository's last unexplained
   literal goes, at the accepted cost that the class's 11 tests now depend on the sizing kernel.
+
+  **Deviation on execution, 2026-09-11 (#688).** The kernel rule surfaced while writing the template's
+  contribution: `FactContribution.__post_init__` (`hisim/config/contributions.py`) refuses any fact name that is
+  not a `SizingContext` field, because the vocabulary of facts is one Size term per context field. A template
+  therefore cannot contribute a template-only fact without adding one to the shared vocabulary — which is the
+  opposite of what a template should teach. The owner chose **no `SIZING_CONTRIBUTIONS` entry on the template**:
+  in its place a documented comment block giving the exact shape a contribution takes and pointing at the real
+  providers (weather, occupancy, building), so the author who needs one copies a working example rather than a
+  fact invented for the template. The sized field, the `AUTO` factory and `example_component`'s real law are
+  implemented as decided.
 - **D-18** `[answered 2026-09-11]` **(b) a second constructor** — the survey recommended (a), two keyword parameters on
   `for_location`. `WeatherConfig` gets `for_data_file(path, data_source)` for the direct-file path seven of the eight
   golden setups take, and `for_location` stays purely catalogue-shaped: two clean identifier spaces instead of one
@@ -377,6 +399,24 @@ row is struck from the table, which keeps the question and the option chosen nex
   one commit, before any preset is minted for a component whose `__init__` raises `KeyError: 'utsp_reports'` on every
   construction; §6's `smart_devices_included` copy-law candidate goes with it. Under D-16's rule, moved, not deleted.
 
+**Follow-up defects found on the way, 2026-09-11.** Three defects in already-merged code surfaced while
+executing these decisions and belong to none of them. They are recorded in full beside F-1 in
+`roadmap/p4_random_findings.md`, which is where this sweep's incidental findings live; the numbers continue
+that document's own sequence.
+
+- **F-3** — `controller_l1_chp.calculate_state`'s summer branch deactivates on `t_max_heating_in_celsius`
+  (`:495`) where `t_max_dhw_in_celsius` is evidently meant, so in summer the CHP switches off once the DHW
+  store passes the heating band's top — 40 °C with a buffer, 20.5 °C without — instead of the 60 °C its own
+  config asks for. Found by the #683 review, outside that PR's diff. Own PR with a test showing the wrong
+  switch-off; a physics change (R5) behind no recorded result, since no setup builds the class.
+- **F-4** — `hisim/cli.py` never calls `load_dotenv()`; only `hisim/hisim_main.py` does, so the installed
+  `hisim` console script ignores the repository's `.env` and the `UTSP_URL`/`UTSP_API_KEY` in it. One line in
+  `cli.main`.
+- **F-5** — `hisim/components/example_template.py` implements no `i_prepare_simulation`, and `Component`'s
+  raises `NotImplementedError`, so a component copied from the template fails inside a Simulator before its
+  first timestep. `example_component.py` has the same gap. Fixed alongside the D-31 follow-up, which edits
+  both files anyway.
+
 The 32 questions below are owner decisions surfaced by the survey, and **all 32 are now answered**. **Each five-part entry (question, context with `file:line` evidence, options with consequences, recommendation) is in `p4_class_survey.md` under the same ID** — kept there because 32 full entries would triple this document; the table gives the question, the option taken and what it blocks. Answers are recorded here as dated decisions and mirrored into R3.
 
 | ID | Question | Recommendation | Blocks |
@@ -395,7 +435,7 @@ The 32 questions below are owner decisions surfaced by the survey, and **all 32 
 | D-11 | ~~HDS controller: 16 → 18 °C for 3 ungated setups, or a `fixed_threshold_16c` preset?~~ | `[answered 2026-09-10]` **(a) convert, record the diff** — no `fixed_threshold_16c`; `basic_household_only_heating` blessed in the same commit | R3, R5 |
 | D-12 | ~~PV `share_of_maximum_pv_potential` recorded as 1.0 by the scaled factory: fix, preserve, or delete the field?~~ | `[answered 2026-09-10]` **(a) fix** — the law reads `Self(...)` and the field records the real share; golden-neutral, but RenoVisor payloads with a share below one change to what they meant, stated in the commit and the RenoVisor docs | R3 PV, R5 |
 | D-7 | ~~Solar-thermal `area_m2 = 4 × apartments` law (one setup passes 4 unmultiplied)~~ | `[answered 2026-09-10]` **(a) adopt, record the diff** — `household_gas_solar_thermal`'s week golden re-blessed | R3, R5 |
-| D-4 | ~~CHP controller 42/50 °C flip across axes: bug or preserve?~~ | `[answered 2026-09-10]` **(a) bug** — normalise the 42/50 and 35/31 asymmetry, ship `gas` and `hydrogen` with one shared buffer override; `test_generic_chp` changes and says why | R3, R5 |
+| D-4 | ~~CHP controller 42/50 °C flip across axes: bug or preserve?~~ | `[answered 2026-09-10; reversed 2026-09-11 after the #683 review]` **(b) preserve** — the four factories keep their 2023 values and the asymmetry is recorded as unexplained rather than guessed, so the class converts as **four** presets (`gas`, `hydrogen`, `gas_with_buffer`, `hydrogen_with_buffer`), not two plus a shared buffer override; the buffer helper, the module-private constants, the `FuelCellController` name and the `__post_init__` min<max check stay from the PR. No result change | R3, R5 |
 | D-21 | ~~`heating_reference_temperature` from the Weather in B6 (physics), defer, or plumb the fact only?~~ | `[answered 2026-09-10]` **(c) plumb the fact** from a per-station DIN 12831 table, Building's field stays a plain -7.0 default — no result change; the first two-provider fact, so two-station districts need a `sizing_sources` line | R2.1, R5 |
 | **Naming / shape** | | | |
 | D-3 | ~~Air conditioner's 12-field database selection: constructor, multi-field law, or freeze the device?~~ | `[answered 2026-09-10]` **(a)** constructor `for_building_load(...)` runs the database search at build time; no `AUTO` field, and the selection is invisible to `sizing_sources` | R3 |
@@ -409,7 +449,7 @@ The 32 questions below are owner decisions surfaced by the survey, and **all 32 
 | D-24 | ~~`ChargingStationConfig`: `standard` = 3.7 kW, 11 kW, or constructor only?~~ | `[answered 2026-09-11]` **(c)** no `standard`; `for_charging_station_set` only | R3 |
 | D-27 | ~~`operation_mode: str` ×3 → one shared enum, three enums, or strings?~~ | `[answered 2026-09-11]` **(b)** three per-module enums (PTX controller, XTP controller, RSOC battery controller) | C-P4.5 |
 | D-28 | ~~`GenericElectrolyzerConfig`: `standard` + `Self` laws, constructor, or delete?~~ | `[answered 2026-09-11]` **moot by D-29** — the survivor `ElectrolyzerWithStorageConfig` ships preset `standard` with the 2.4 kW factory values; no constructor, nothing derived | R3 |
-| D-31 | ~~Template: add a `sized_field` + contribution; turn `example_component`'s `45 × 121.2` into the real law?~~ | `[answered 2026-09-11]` **(a)** both; the 11 example tests then depend on the sizing kernel | R3, AC-P4.9 |
+| D-31 | ~~Template: add a `sized_field` + contribution; turn `example_component`'s `45 × 121.2` into the real law?~~ | `[answered 2026-09-11]` **(a)** both; the 11 example tests then depend on the sizing kernel. **Deviation on execution (#688):** `FactContribution.__post_init__` admits only `SizingContext` fields, so the template gets no `SIZING_CONTRIBUTIONS` entry — a documented comment block with the contribution's exact shape points at the real providers instead; the sized field, the `AUTO` factory and the example's real law ship as decided | R3, AC-P4.9 |
 | **Providers and gates** | | | |
 | D-18 | ~~`for_location` lacks the direct-file parameters 7 golden setups need~~ | `[answered 2026-09-11]` **(b)** a second constructor `for_data_file(path, data_source)`; `for_location` stays catalogue-shaped — survey recommended (a); one more wire name frozen at P5 | B1 Weather, R3 |
 | D-19 | ~~Constructor arguments undecoded — executor fix, widen signatures, or leave constructors Python-only?~~ | `[answered 2026-09-11]` **(a)** `codec.decode_argument` shared by `config:` and `constructor:`, decoded in `_call_builder`, EF-1A at the argument's key path, and `@constructor` refuses undecodable parameter types at import | R2.3, B1 |

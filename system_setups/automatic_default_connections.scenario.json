@@ -211,7 +211,7 @@
                     "unit": null
                 },
                 "mode": 1,
-                "set_heating_threshold_outside_temperature_in_celsius": 16.0,
+                "set_heating_threshold_outside_temperature_in_celsius": 18.0,
                 "set_cooling_threshold_outside_temperature_in_celsius": 20.0,
                 "upper_temperature_offset_for_state_conditions_in_celsius": 5.0,
                 "lower_temperature_offset_for_state_conditions_in_celsius": 5.0,
@@ -254,12 +254,12 @@
                     "unit": null
                 },
                 "heating_system": "FLOORHEATING",
-                "set_heating_threshold_outside_temperature_in_celsius": 16.0,
+                "set_heating_threshold_outside_temperature_in_celsius": 18.0,
                 "heating_reference_temperature_in_celsius": -7,
                 "set_heating_temperature_for_building_in_celsius": 20.0,
                 "set_cooling_temperature_for_building_in_celsius": 25.0,
                 "heating_load_of_building_in_watt": 7780.75,
-                "specific_heating_load_of_building_in_watt_per_m2": null
+                "specific_heating_load_of_building_in_watt_per_m2": 64.19762541254126
             },
             "config_full_classname": "hisim.components.heat_distribution_system.HeatDistributionControllerConfig",
             "inputs": [],

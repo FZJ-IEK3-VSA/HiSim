@@ -6,8 +6,10 @@
 # The bless is sticky: a KPI whose fresh value the gate itself would still accept
 # keeps the value already committed, and a golden that comes out identical is not
 # rewritten, so the PR diff carries only what actually moved. When nothing moved at
-# all, the diff is the manifest alone. Someone who deliberately wants the stored
-# last-digit noise replaced by fresh values runs the script with --force-rewrite.
+# all, the diff is the manifest alone. Nothing is ever dropped: a KPI the run no
+# longer produces stays in its golden and the gate goes on reporting it as missing.
+# The force_rewrite input dumps the fresh values verbatim instead — the way to clear
+# accumulated noise, to retire a KPI, and to repair an unreadable golden.
 
 name: golden-update
 
@@ -18,6 +20,11 @@ on:
         description: "Why are you re-blessing the goldens?"
         required: true
         default: "intentional simulation-output change"
+      force_rewrite:
+        description: "Overwrite every stored value with the fresh one, dropping KPIs the runs no longer produce."
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -72,7 +79,9 @@ jobs:
       - name: Install HiSim package
         run: uv pip install --system -e .
       - name: Regenerate golden for this pair
-        run: python scripts/golden_update.py --setup "${{ matrix.setup }}" --param "${{ matrix.param }}"
+        run: >-
+          python scripts/golden_update.py --setup "${{ matrix.setup }}" --param "${{ matrix.param }}"
+          ${{ inputs.force_rewrite && '--force-rewrite' || '' }}
       - name: Upload regenerated golden
         uses: actions/upload-artifact@v6
         with:
@@ -136,6 +145,7 @@ jobs:
           PR_REPO: ${{ github.repository }}
           PR_BASE: ${{ github.ref_name }}
           PR_REASON: ${{ github.event.inputs.reason }}
+          PR_FORCED: ${{ inputs.force_rewrite }}
         run: |
           branch="bless/golden-${{ github.run_id }}"
           git config user.name "github-actions[bot]"
@@ -151,12 +161,23 @@ jobs:
           PR_HEAD="$branch" python - <<'PY'
           import json, os, urllib.request
           repo = os.environ["PR_REPO"]
+          forced = os.environ.get("PR_FORCED", "false") == "true"
+          how = (
+              "This bless was FORCED (--force-rewrite): every value was overwritten with\n"
+              "the fresh one and any KPI the runs no longer produce was dropped.\n\n"
+              if forced
+              else
+              "Only KPIs that moved beyond the gate's tolerance were rewritten, so a\n"
+              "manifest-only diff means every value reproduced within the gate's tolerance.\n\n"
+              "Any key the per-pair logs list as absent is still in its golden file: a bless\n"
+              "never removes a KPI, so the gate keeps reporting it as missing until someone\n"
+              "retires it deliberately by re-running this workflow with force_rewrite.\n\n"
+          )
           body = (
               "Re-ran the golden KPI references in the CI container.\n\n"
               f"Reason: {os.environ['PR_REASON']}\n\n"
-              "Only KPIs that moved beyond the gate's tolerance were rewritten, so a\n"
-              "manifest-only diff means every value reproduced. Review the per-KPI\n"
-              "diff before merging."
+              f"{how}"
+              "Review the per-KPI diff before merging."
           )
           payload = json.dumps({
               "title": "Bless golden references",

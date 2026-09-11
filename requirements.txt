@@ -20,7 +20,6 @@ graphviz
 utspclient==0.1.6
 html2image
 control
-casadi
 plotly
 ordered_set
 typing_extensions

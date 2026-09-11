@@ -128,7 +128,7 @@ Legend: **conv** convert · **del** delete · **done** converted (remaining work
 | `FuelMeterConfig` | conv | `oil`, `pellets`, `wood_chips`, `district_heating` | `fuel_loadtype`, `heating_value_of_fuel_in_kwh_per_liter`, `fuel_density_in_kg_per_m3` ← generator (copy, D-15 (b); `None` for district heating) | — | N | D-15 |
 | `HeatingMeterConfig` | conv | `standard` | — | — | N | |
 | `EMSConfig` | done | | delete obsolete `strategy` field; align the class-side default feed for the occupancy to weight 999 (its own channel rejects weight 1, so a bare `- occupancy` under the EMS fails EF-29 today — P2 R2.5); legacy-path behaviour check first | | N/? | |
-| `MpcControllerConfig`, `PIDControllerConfig` | del | | `controller_mpc.py` and `controller_pid.py` → `obsolete/` with their tests (D-16); 31 of 49 MPC fields are runtime buffers, and the two were the only readers of the Building's 5R1C keys (D-32) | | | D-16, D-32 |
+| `MpcControllerConfig`, `PIDControllerConfig` | del | | `controller_mpc.py` and `controller_pid.py` → `obsolete/` with their tests (D-16); 27 of 49 MPC fields are lists — 13 runtime result buffers and 12 forecast inputs, none of which belongs in a file — and the two were the only readers of the Building's 5R1C keys (D-32) | | | D-16, D-32 |
 | `SumBuilderConfig`, `TransformerConfig` | conv | `standard` | — | | N | |
 | `RandomNumbersConfig` | conv | `standard` | the class stays live (test helper); D-16 deleted only its dead `get_default_config`, so the preset is minted in its batch | | N | D-16 |
 

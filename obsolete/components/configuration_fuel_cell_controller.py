@@ -5,7 +5,8 @@ Moved out of `hisim/components/configuration.py` when
 `obsolete/components/` (component sweep decision D-8, 2026-09-10). That controller was their
 only user: `ExtendedControllerSimulation` and `ExtendedController` read `CHPControllerConfig`
 and `GasControllerConfig` as bare class attributes and take an `ExtendedControllerConfig` as
-their configuration, and nothing else in the repository ever named any of the three.
+their configuration, and nothing else in the repository except that controller and its test
+(`obsolete/tests/test_advanced_fuel_cell_controller.py`) ever named any of the three.
 
 `ExtendedControllerConfig` is a `@dataclass` with no field defaults, so the class-attribute
 reads in the controller (`ExtendedControllerConfig.chp`, `.chp_mode`,

@@ -9,8 +9,10 @@ the controller built on top of it -- is testable even when the
 """
 
 # clean
+import dataclasses
 import json
 import pathlib
+from typing import Any
 
 import pytest
 
@@ -252,6 +254,9 @@ def test_get_string_dict_report_format_unchanged() -> None:
     report = config.get_string_dict()
     assert "Nom load soec in kw: 40.0" in report
     assert "Max power sofc in kw: 13.0" in report
+    # An enum-typed field renders by its value, so the mode reads as it is written on
+    # the wire rather than as ``RsocBatteryOperationMode.STANDBY_LOAD``.
+    assert "Operation mode: StandbyLoad" in report
     # No raw snake_case attribute names leak into the report.
     assert not any("_in_kw" in entry for entry in report)
 
@@ -260,43 +265,67 @@ def test_get_string_dict_report_format_unchanged() -> None:
 def test_operation_mode_round_trips_as_the_legacy_string() -> None:
     """The enum-typed operation mode keeps the pre-enum wire value.
 
-    ``operation_mode`` used to be a free-text ``str``; configs already on disk
-    spell the mode as ``"NominalLoad"`` and friends, so every member's value
-    must stay that string and a payload carrying it must still decode.
+    ``operation_mode`` used to be a free-text ``str``, and configs already on disk
+    spell the mode as ``"NominalLoad"`` and friends. Those literal strings are written
+    out here rather than read back off the enum, so the test pins the wire contract
+    instead of pinning the enum against itself: every one of them must still decode,
+    and the enum must offer exactly them and nothing else.
     """
     config = l2.RsocBatteryControllerConfig.config_rsoc(
         rsoc_name="RSOC_TEST",
         operation_mode=l2.RsocBatteryOperationMode.STANDBY_LOAD,
         config_data=_make_rsoc_config_dict(),
     )
+    legacy_wire_values = ("NominalLoad", "MinimumLoad", "StandbyLoad")
 
     assert json.loads(config.to_json())["operation_mode"] == "StandbyLoad"
 
-    for mode in l2.RsocBatteryOperationMode:
+    for wire_value in legacy_wire_values:
         payload = _make_legacy_serialized_payload()
-        payload["operation_mode"] = mode.value
-        assert l2.RsocBatteryControllerConfig.from_dict(payload).operation_mode is mode
-        assert l2.RsocBatteryControllerConfig.from_json(json.dumps(payload)).operation_mode is mode
+        payload["operation_mode"] = wire_value
+        assert l2.RsocBatteryControllerConfig.from_dict(payload).operation_mode.value == wire_value
+        assert l2.RsocBatteryControllerConfig.from_json(json.dumps(payload)).operation_mode.value == wire_value
 
-    assert {mode.value for mode in l2.RsocBatteryOperationMode} == {
-        "NominalLoad",
-        "MinimumLoad",
-        "StandbyLoad",
-    }
+    assert {mode.value for mode in l2.RsocBatteryOperationMode} == set(legacy_wire_values)
 
 
 @pytest.mark.base
-def test_system_operation_rejects_an_unbranched_mode() -> None:
-    """A mode with no branch raises instead of silently following the power delta."""
+def test_a_mode_that_names_nothing_is_refused_where_it_is_written() -> None:
+    """A misspelt mode is refused by the config, not carried into the control law.
+
+    The mode arrives from a JSON or YAML file, where the type checker cannot see it,
+    which is why the misspelling below is typed ``Any``. Before the enum such a value
+    never raised: it fell through the ``if``/``elif`` chain into a catch-all that
+    quietly followed the power delta, so the controller ran a law nobody had asked for.
+    """
+    misspelt_mode: Any = "StandbyLoadd"
+
+    with pytest.raises(ValueError) as raised:
+        l2.RsocBatteryControllerConfig.config_rsoc(
+            rsoc_name="RSOC_TEST",
+            operation_mode=misspelt_mode,
+            config_data=_make_rsoc_config_dict(),
+        )
+
+    message = str(raised.value)
+    assert "StandbyLoadd" in message
+    assert all(mode.value in message for mode in l2.RsocBatteryOperationMode)
+
+
+@pytest.mark.base
+def test_replacing_the_mode_with_its_wire_string_yields_the_member() -> None:
+    """``dataclasses.replace`` runs ``__post_init__``, so a string becomes the member.
+
+    ``replace`` is how a config is edited in place in a setup, and a mode handed to it
+    can come from a file just as the constructor's can, hence the ``Any`` annotation.
+    """
+    wire_value: Any = "MinimumLoad"
     config = l2.RsocBatteryControllerConfig.config_rsoc(
         rsoc_name="RSOC_TEST",
         operation_mode=l2.RsocBatteryOperationMode.STANDBY_LOAD,
         config_data=_make_rsoc_config_dict(),
     )
-    controller = l2.RsocBatteryController(
-        my_simulation_parameters=SimulationParameters.one_day_only(2021, 60),
-        config=config,
-    )
 
-    with pytest.raises(ValueError, match="unknown operation mode"):
-        controller.system_operation("NoSuchMode", 5.0, 10.0, 1.7, 13.0)  # type: ignore[arg-type]
+    replaced = dataclasses.replace(config, operation_mode=wire_value)
+
+    assert replaced.operation_mode is l2.RsocBatteryOperationMode.MINIMUM_LOAD

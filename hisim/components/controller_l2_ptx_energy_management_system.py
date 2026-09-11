@@ -64,6 +64,28 @@ class PTXControllerConfig(ConfigBase):
     standby_load: float
     operation_mode: PtxOperationMode
 
+    def __post_init__(self) -> None:
+        """Normalises the operation mode into a :class:`PtxOperationMode` member.
+
+        The mode is wire format: a configuration read from JSON, from HDF5 or written by
+        hand arrives carrying the plain string the field has always been serialized as,
+        while a caller in Python passes the member. Both are accepted here and both leave
+        as the member, so only one kind of value ever reaches the control law. A value
+        that names no mode is refused where it was written, instead of travelling into a
+        controller that has no branch for it.
+
+        Raises:
+            ValueError: For an ``operation_mode`` that is neither a member of
+                :class:`PtxOperationMode` nor one of the members' wire values.
+        """
+        try:
+            self.operation_mode = PtxOperationMode(self.operation_mode)
+        except ValueError:
+            raise ValueError(
+                f"Unknown PtX controller operation mode {self.operation_mode!r}. "
+                f"Write one of {[mode.value for mode in PtxOperationMode]}."
+            ) from None
+
     @staticmethod
     def read_config(electrolyzer_name):
         """Read config."""

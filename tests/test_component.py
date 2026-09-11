@@ -7,9 +7,13 @@ Each test verifies a specific aspect of the component system.
 
 # clean
 
+from dataclasses import dataclass
+from enum import Enum, unique
+from typing import List
 from unittest.mock import patch
 
 import pytest
+from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -221,6 +225,49 @@ def test_config_base() -> None:
         config.get_main_classname()
 
     log.information("ConfigBase tests passed!")
+
+
+@unique
+class ReportedOperationMode(str, Enum):
+    """Two modes spelled the way a configuration file on disk spells them."""
+
+    NOMINAL = "NominalLoad"
+    STANDBY = "StandbyLoad"
+
+
+@dataclass_json
+@dataclass
+class ReportedConfig(ConfigBase):
+    """A config with an enum field, a list of enum values and a plain float field."""
+
+    component_id: ComponentID
+    operation_mode: ReportedOperationMode
+    fallback_modes: List[ReportedOperationMode]
+    rated_power_in_watt: float
+
+
+@pytest.mark.base
+def test_get_string_dict_renders_an_enum_field_by_its_value() -> None:
+    """An enum-typed field reads as its wire value in the report.
+
+    ``get_string_dict`` renders each field with ``str``, which spells an enum member as
+    ``ReportedOperationMode.NOMINAL`` -- a class name and a Python identifier in a line
+    whose job is to name a setting. The report names the value the field is written and
+    serialized as instead, for a field of its own and for enum values nested in a
+    container, while every non-enum field renders exactly as before.
+    """
+    config = ReportedConfig(
+        component_id=ComponentID(name="ReportedComponent"),
+        operation_mode=ReportedOperationMode.NOMINAL,
+        fallback_modes=[ReportedOperationMode.STANDBY],
+        rated_power_in_watt=1500.0,
+    )
+
+    report = config.get_string_dict()
+
+    assert "Operation mode: NominalLoad" in report
+    assert "Fallback modes: ['StandbyLoad']" in report
+    assert "Rated power in watt: 1500.0" in report
 
 
 @pytest.mark.base

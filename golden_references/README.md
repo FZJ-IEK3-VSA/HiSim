@@ -65,4 +65,7 @@ reference environment matches the check environment:
 It regenerates every pair (week and year) in the CI container and opens a PR with
 the updated `golden_references/`. Review the per-KPI diff, then merge — that merge
 is the bless. (`scripts/golden_update.py` can be run locally for inspection, but
-locally produced goldens are not the canonical committed ones.)
+locally produced goldens are not the canonical committed ones. A local run is
+sticky like the CI one — every value the gate would still accept stays exactly as
+committed, and nothing is dropped — so add `--force-rewrite` to see the fresh
+values verbatim.)

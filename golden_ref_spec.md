@@ -118,6 +118,22 @@ tests/
 ### 6.4 `golden_update.py`
 - Run all (or `--setup`/`--param`-filtered) pairs; write each pair's KPIs to
   `golden_references/<setup>__<param>.json` (sorted keys, indented).
+- **Sticky bless**: where a golden already exists, keep the stored value of every
+  KPI whose fresh value `compare` accepts at the gate's own tolerances (§7), and
+  write the file only when its values change — so a bless diff shows what moved,
+  not the container's last-digit float noise. The file always carries the full
+  mapping; only the *diff* is limited to the keys that moved or appeared.
+- **Never drop**: a KPI the fresh run no longer produces keeps its stored value
+  instead of disappearing, so the gate goes on failing with "missing KPI" until
+  someone retires it deliberately. Such keys are reported as `absent` in the pair's
+  summary line, always by name.
+- A stored golden that exists but cannot be merged onto — unreadable, not a JSON
+  object, or not the flat scalar mapping `flatten` produces — fails its pair like a
+  failed run (counted as errored, named with its reason, non-zero exit), rather than
+  being silently replaced.
+- `--force-rewrite` dumps the fresh values verbatim, ignoring whatever is on disk:
+  the deliberate noise clear-out, the only sanctioned way to retire a KPI, and the
+  repair path for a golden that has become unusable.
 - Write `manifest.json` (commit, python, platform, config hash, timestamp) as
   informational sidecar.
 - Print a summary; this is the deliberate "bless" button, **invoked only by the

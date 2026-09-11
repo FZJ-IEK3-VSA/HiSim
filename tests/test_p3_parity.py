@@ -591,3 +591,42 @@ def test_an_unavailable_stage_fails_its_triple_and_a_negative_tolerance_is_refus
     assert not verdict.passed
     with pytest.raises(ValueError):
         Tolerance(relative=-1.0)
+
+
+@pytest.mark.base
+def test_summarizing_a_dispatch_exits_nonzero_unless_every_collected_triple_reached_parity(
+    tmp_path: Path,
+) -> None:
+    """Catches the summary job reading green over a dispatch that did not reach parity.
+
+    The workflow's summary step is a pipeline — the table is teed into the step summary — so the
+    only thing that can still turn the job red is the checker's own exit code surviving the pipe.
+    That is what `set -o pipefail` under an explicitly requested bash is there for, and it protects
+    nothing if the ``--summarize`` path itself stops returning 1. Both failing shapes are pinned:
+    a triple that missed parity, and a dispatch whose verdict directory is empty — a run that
+    covered nothing must never read as a pass. The verdict files are written the way the run path
+    writes them, ``json.dumps`` over ``TripleVerdict.to_json()`` into a per-triple file under the
+    collection directory, so a change to the verdict's JSON shape reaches this test too.
+    """
+
+    def dispatch(name: str, *verdicts: TripleVerdict) -> Path:
+        directory = tmp_path / name
+        for verdict in verdicts:
+            written = directory / f"p3-parity-verdict-{verdict.stem}-{verdict.window}"
+            written.mkdir(parents=True, exist_ok=True)
+            (written / "verdict.json").write_text(
+                json.dumps([verdict.to_json()], indent=2), encoding="utf-8"
+            )
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory
+
+    reached = TripleVerdict(
+        stem=Rig.FIXTURE, window="january", wiring=Verdict.OK, results=Verdict.OK, kpis=Verdict.OK
+    )
+    missed = TripleVerdict(
+        stem="other", window="january", wiring=Verdict.OK, results=Verdict.FAILED, kpis=Verdict.OK
+    )
+
+    assert parity_main(["--summarize", str(dispatch("parity", reached))]) == 0
+    assert parity_main(["--summarize", str(dispatch("one_missed", reached, missed))]) == 1
+    assert parity_main(["--summarize", str(dispatch("nothing_collected"))]) == 1

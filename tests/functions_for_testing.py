@@ -1,15 +1,56 @@
 """Helper functions for testing."""
 # clean
-from typing import Any, ClassVar, Tuple, Type
+from typing import Any, ClassVar, Optional, Tuple, Type
 
 import yaml
 
 from hisim.component import ComponentOutput
+from hisim.components.example_component import ExampleComponentConfig
+from hisim.config import ComponentID, SizingContext
 from hisim.energy_system.codec import ConfigValueCodec
 from hisim.energy_system.path_resolver import PathResolver
 from hisim.energy_system.record import ConfigBlockWriter
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
+
+#: Conditioned floor area of the default TABULA building (``BuildingConfig.preset_standard``,
+#: building code ``DE.N.SFH.05.Gen.ReEx.001.002``) in m². The two example components size
+#: fields from this fact, and the tests below resolve their configs against exactly this
+#: value, which is what keeps their numbers identical to the literals the modules used to
+#: carry (45 J/K/m² x 121.2 m² = 5454.0 J/K for the example component's capacity).
+DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2: float = 121.2
+
+
+def default_building_sizing_context() -> SizingContext:
+    """The sizing context of a default-building scenario, for tests that size one component.
+
+    A real run gets its context from the building via ``SizingContext.for_building``, which
+    reads the TABULA catalogue; a unit test that only needs one fact states that fact instead,
+    so it stays fast and its numbers are visible in the test.
+
+    Returns:
+        SizingContext: a context carrying the default building's conditioned floor area.
+    """
+    return SizingContext(conditioned_floor_area_in_m2=DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2)
+
+
+def sized_example_component_config(component_id: Optional[ComponentID] = None) -> ExampleComponentConfig:
+    """The default example component configuration, resolved so a component may be built from it.
+
+    ``ExampleComponentConfig.capacity`` is a sizable field, so the factory hands back a config
+    carrying ``AUTO`` and ``Component.__init__`` refuses it. Every test that constructs an
+    ``ExampleComponent`` therefore resolves first, and does it through this one helper rather
+    than repeating the context.
+
+    Args:
+        component_id: the identity to build the configuration for; the factory default if None.
+
+    Returns:
+        ExampleComponentConfig: the resolved configuration, with ``capacity`` a real number.
+    """
+    return ExampleComponentConfig.get_default_example_component(component_id=component_id).resolve(
+        default_building_sizing_context()
+    )
 
 
 def round_trip_config_block(config: Any, config_class: Type, component_name: str) -> Any:

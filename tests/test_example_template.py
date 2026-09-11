@@ -7,7 +7,7 @@ from hisim.components import example_template
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import log
-from hisim.config import ComponentID
+from hisim.config import AUTO, ComponentID, ConfigSizingError, SizableFieldKind, SizingContext, describe_config
 from tests import functions_for_testing as fft
 
 
@@ -23,7 +23,15 @@ def test_example_template() -> None:
 
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
-    my_example_template_config = example_template.ComponentNameConfig.get_default_template_component()
+    # ``rated_power_in_watt`` is sized, so the factory's config carries AUTO and has to be
+    # resolved against the facts of the surrounding system before a component is built from it.
+    my_example_template_config = example_template.ComponentNameConfig.get_default_template_component().resolve(
+        fft.default_building_sizing_context()
+    )
+    assert (
+        my_example_template_config.rated_power_in_watt
+        == example_template.SPECIFIC_RATED_POWER_IN_WATT_PER_M2 * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
+    )
     print("\n")
     log.information(f"default componentname config {my_example_template_config}\n")
     my_example_template = example_template.ComponentName(
@@ -89,6 +97,8 @@ def test_get_default_template_component_no_args() -> None:
     assert config.component_id.name == "ComponentNameDefault"
     assert config.loadtype == lt.LoadTypes.ELECTRICITY
     assert config.unit == lt.Units.WATT
+    # The sized field is not a default *value*: the factory leaves it to the law.
+    assert config.rated_power_in_watt is AUTO
 
 
 @pytest.mark.base
@@ -101,6 +111,7 @@ def test_get_default_template_component_custom_building() -> None:
     assert config.component_id.name == "ComponentNameDefault"
     assert config.loadtype == lt.LoadTypes.ELECTRICITY
     assert config.unit == lt.Units.WATT
+    assert config.rated_power_in_watt is AUTO
 
 
 @pytest.mark.base
@@ -125,3 +136,112 @@ def test_get_main_classname() -> None:
     classname = example_template.ComponentNameConfig.get_main_classname()
     assert classname == example_template.ComponentName.get_full_classname()
     assert classname == "hisim.components.example_template.ComponentName"
+
+
+@pytest.mark.base
+def test_the_template_describes_its_sizing_mechanism() -> None:
+    """``describe_config`` shows the template's sized field with its law, fact and note.
+
+    This is what the template exists to demonstrate and what a reader gets from
+    ``hisim energy-system describe hisim.components.example_template.ComponentName``: the
+    field is derived from a named fact of the surrounding system, not from a literal in the
+    module, and the law says so in its own words.
+
+    This is also the one place where the law's *rendered* text is pinned: every other
+    assertion about a description reads its structure, but the template is the file whose
+    whole point is what ``describe`` prints, so the formatter is worth one exact string.
+    """
+    description = describe_config(example_template.ComponentNameConfig)
+    assert [field.name for field in description.sizable_fields] == ["rated_power_in_watt"]
+    rated_power = description.sizable_fields[0]
+    assert rated_power.law == "2.0 * Size.CONDITIONED_FLOOR_AREA_IN_M2"
+    assert rated_power.facts_read == (("conditioned_floor_area_in_m2", "ONE"),)
+    assert rated_power.kind is SizableFieldKind.LAW
+    assert rated_power.fields_read == ()
+    assert rated_power.note is not None
+    assert str(example_template.SPECIFIC_RATED_POWER_IN_WATT_PER_M2) in rated_power.note
+    assert [field.name for field in description.fields if field.sizable] == ["rated_power_in_watt"]
+    # The template contributes no fact of its own; see the note in the module about why.
+    assert not description.facts_provided
+
+
+def _stateless_output_of_one_step(conditioned_floor_area_in_m2: float, input_in_w: float) -> float:
+    """Runs one timestep of the template component sized for one building, and returns its output.
+
+    The stateless channel is the one the rated power caps, so this helper exists to let a test
+    choose the building -- and with it the rated power -- and read back what the cap did.
+
+    Args:
+        conditioned_floor_area_in_m2: the one fact the component's law reads.
+        input_in_w: the power offered at the component's input.
+
+    Returns:
+        float: the value written to ``OutputWithoutState``, in watts.
+    """
+    mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = example_template.ComponentNameConfig.get_default_template_component().resolve(
+        SizingContext(conditioned_floor_area_in_m2=conditioned_floor_area_in_m2)
+    )
+    component = example_template.ComponentName(config=config, my_simulation_parameters=mysim)
+    source = cp.ComponentOutput(
+        object_name="source",
+        field_name="input_from_another_component",
+        load_type=lt.LoadTypes.ELECTRICITY,
+        unit=lt.Units.WATT,
+        component_id=ComponentID("source"),
+    )
+    component.input_from_other_component.source_output = source
+    stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs([component, source]))
+    fft.add_global_index_of_components([component, source])
+    stsv.values[source.global_index] = input_in_w
+    component.i_simulate(0, stsv, False)
+    return stsv.values[component.output_without_state.global_index]
+
+
+@pytest.mark.base
+def test_the_stateless_output_is_capped_at_the_sized_rated_power() -> None:
+    """A building small enough to size the device below its input gets the rated power out.
+
+    This is what makes ``rated_power_in_watt`` more than decoration in the template: 20 m2 of
+    floor area size the device at 40 W, the input offers 50 W, and the output is the 40 W the
+    device was sized for -- both sides of the ``min`` being watts, which is why
+    ``OutputWithoutState`` is declared in WATT.
+    """
+    rated_power_in_watt = example_template.SPECIFIC_RATED_POWER_IN_WATT_PER_M2 * 20.0
+    assert rated_power_in_watt == 40.0
+    assert _stateless_output_of_one_step(conditioned_floor_area_in_m2=20.0, input_in_w=50.0) == rated_power_in_watt
+
+
+@pytest.mark.base
+def test_the_stateless_output_passes_the_input_through_when_the_cap_does_not_bind() -> None:
+    """The default building sizes the device at 242.4 W, well above the 51 W it is offered."""
+    rated_power_in_watt = (
+        example_template.SPECIFIC_RATED_POWER_IN_WATT_PER_M2 * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
+    )
+    output_in_w = _stateless_output_of_one_step(
+        conditioned_floor_area_in_m2=fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2, input_in_w=50.0
+    )
+    assert output_in_w == 51.0 < rated_power_in_watt
+
+
+@pytest.mark.base
+def test_a_rated_power_written_as_a_string_is_coerced_to_a_float() -> None:
+    """``value_type=float`` types the wire value: a file may write ``"242.4"`` and get a float."""
+    written = {
+        "component_id": {"name": "FromAFile"},
+        "loadtype": "Electricity",
+        "unit": "W",
+        "rated_power_in_watt": "242.4",
+    }
+    assert example_template.ComponentNameConfig.from_dict(written).rated_power_in_watt == 242.4
+
+
+@pytest.mark.base
+def test_an_unresolved_template_config_is_refused_by_the_component() -> None:
+    """A config that still says AUTO never reaches the component, and the error names the law."""
+    mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = example_template.ComponentNameConfig.get_default_template_component()
+    with pytest.raises(ConfigSizingError) as refusal:
+        example_template.ComponentName(config=config, my_simulation_parameters=mysim)
+    assert "rated_power_in_watt" in str(refusal.value)
+    assert "Size.CONDITIONED_FLOOR_AREA_IN_M2" in str(refusal.value)

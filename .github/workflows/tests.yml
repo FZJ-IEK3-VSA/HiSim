@@ -56,7 +56,7 @@ jobs:
             allow_empty: "true"
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     # Wall time, CPU time and peak memory for this job; see the action.
     - name: Start the resource monitor
       uses: ./.github/actions/resource-monitor
@@ -100,7 +100,7 @@ jobs:
     - name: Upload coverage data
       if: always()
       continue-on-error: true
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: coverage-${{ matrix.name }}
         path: tests/.coverage.*
@@ -134,7 +134,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     # Wall time, CPU time and peak memory for this job; see the action.
     - name: Start the resource monitor
       uses: ./.github/actions/resource-monitor
@@ -143,7 +143,7 @@ jobs:
     - name: Mark workspace as safe for git
       run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
     - name: Download coverage data from the pytest jobs
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         pattern: coverage-*
         path: coverage-data
@@ -161,7 +161,7 @@ jobs:
         coverage xml -o coverage.xml
         coverage html -d htmlcov
     - name: Upload combined coverage report
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: combined-coverage-report
         path: |

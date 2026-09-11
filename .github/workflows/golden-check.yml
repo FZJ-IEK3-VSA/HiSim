@@ -31,7 +31,7 @@ jobs:
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       # Wall time, CPU time and peak memory for this job; see the action.
       - name: Start the resource monitor
         uses: ./.github/actions/resource-monitor
@@ -61,7 +61,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       # Wall time, CPU time and peak memory for this job; see the action.
       - name: Start the resource monitor
         uses: ./.github/actions/resource-monitor
@@ -82,7 +82,7 @@ jobs:
         run: python scripts/golden_check.py --setup "${{ matrix.setup }}" --param "${{ matrix.param }}"
       - name: Upload deviation report
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: golden-report-${{ matrix.setup }}-${{ matrix.param }}
           path: results/golden-ref-check/report.*

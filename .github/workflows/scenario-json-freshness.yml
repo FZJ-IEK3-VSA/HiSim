@@ -52,7 +52,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       # Wall time, CPU time and peak memory for this job; see the action.
       - name: Start the resource monitor
         uses: ./.github/actions/resource-monitor
@@ -120,7 +120,7 @@ jobs:
           echo "Every .py setup builds and ships an up-to-date committed .scenario.json."
       - name: Upload drift diff
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: scenario-json-drift
           path: scenario_json_drift.txt
@@ -133,7 +133,7 @@ jobs:
       # tail is not enough.
       - name: Upload converter logs
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: scenario-json-converter-logs
           path: results/regenerate_scenario_jsons/

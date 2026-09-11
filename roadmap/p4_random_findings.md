@@ -85,6 +85,10 @@ recordings inherit these names too, so the sequencing matters to the declarative
 
 ### F-3 — the CHP controller's summer branch switches off against the heating maximum, not the DHW maximum **[verified]**
 
+**Fixed 2026-09-11**: the summer branch deactivates against `t_max_dhw_in_celsius`, so the water is heated
+to the top of its own band. `tests/test_generic_chp.py` holds the CHP on at 50 °C in July and off above
+60 °C; the paragraphs below are the finding as it was recorded.
+
 Found by the review of #683 (D-4), outside that PR's diff: the PR changes the factories' values, not
 `calculate_state`. `hisim/components/controller_l1_chp.py:485-497`, the branch whose own comment says "only
 consider water heating in summer":

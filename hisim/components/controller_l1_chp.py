@@ -540,8 +540,11 @@ class L1CHPController(cp.Component):
                     timestep
                 )  # activate CHP when storage temperature is too low and electricity is needed
                 return
-            if t_dhw > self.config.t_max_heating_in_celsius:
-                self.state.deactivate(timestep)  # deactivate CHP when storage temperature is too high
+            if t_dhw > self.config.t_max_dhw_in_celsius:
+                # deactivate CHP when the storage temperature has reached the top of the drain hot
+                # water band - in summer the water is the only vessel served, so its own maximum is
+                # what bounds the run, not the heating band's.
+                self.state.deactivate(timestep)
                 return
         else:
             if t_building < self.config.t_min_heating_in_celsius or t_dhw < self.config.t_min_dhw_in_celsius:

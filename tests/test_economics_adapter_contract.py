@@ -100,6 +100,8 @@ class AdapterContractScan:
         "HeatDistributionConfig.heating_system": HeatDistributionSystemType.RADIATOR,
         "HeatDistributionConfig.water_mass_flow_rate_in_kg_per_second": 0.5,
         "HeatDistributionConfig.absolute_conditioned_floor_area_in_m2": 120.0,
+        # The area law gives four square metres of collector per apartment.
+        "SolarThermalSystemConfig.area_m2": 4.0,
     }
 
     @staticmethod

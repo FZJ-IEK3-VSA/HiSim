@@ -1,10 +1,42 @@
 """Helper functions for testing."""
 # clean
-from typing import ClassVar, Tuple
+from typing import Any, ClassVar, Tuple, Type
+
+import yaml
 
 from hisim.component import ComponentOutput
+from hisim.energy_system.codec import ConfigValueCodec
+from hisim.energy_system.path_resolver import PathResolver
+from hisim.energy_system.record import ConfigBlockWriter
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
+
+
+def round_trip_config_block(config: Any, config_class: Type, component_name: str) -> Any:
+    """Sends a configuration through the record's own writer, a YAML file and the reader.
+
+    This is line for line what ``EntryConfigurator._realize_origin``
+    (:mod:`hisim.energy_system.configure`) does for an entry configured by a complete ``config``
+    block: the block writer renders the configuration, the value codec turns the block back into a
+    deserializer payload, the entry's key is injected as the identity the block itself never
+    carries, and the class reads it. The YAML pass in the middle is what makes it a file somebody
+    runs rather than a dictionary handed straight back.
+
+    Args:
+        config: The configuration to write out.
+        config_class: The configuration's class, which reads the block back.
+        component_name: The entry key the component is recorded under; also its identity.
+
+    Returns:
+        The configuration as its own record rebuilds it.
+    """
+    block = ConfigBlockWriter(PathResolver.default()).block(component_name, config)
+    reloaded = yaml.safe_load(yaml.safe_dump(block))
+    payload = ConfigValueCodec(config_class).to_deserializer_payload(
+        reloaded, f"components.{component_name}.config", component_name
+    )
+    payload[ConfigBlockWriter.IDENTITY_FIELD] = {"name": component_name}
+    return config_class.from_dict(payload)
 
 
 class SetupTestParameters:

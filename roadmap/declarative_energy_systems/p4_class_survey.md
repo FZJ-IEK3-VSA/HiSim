@@ -724,15 +724,18 @@ Added by inspection of `ls hisim/components`: `dual_circuit_system.py` (`SetTemp
 
 ### `PVSystemConfig` (`hisim/components/generic_pv_system.py:100`) → `PVSystem` (`:293`)
 
-*(The `file:line` references in the numbered items below are the ones the survey recorded and have
-drifted since; only the numbers quoted in item 2 and item 7 are against today's file.)*
+*(The numbered items' line references are as recorded and may have drifted; only items 2 and 7
+were re-verified against today's file.)*
 
 1. The pvlib rooftop array; 17 instantiations, the most‑used unconverted class in the fleet (`p3 §3b`).
 2. **status: to convert.** The recording defect it carried is fixed: D‑12 is answered (a) and
    executed in the code (`:236-237`, test `tests/test_generic_pv_system.py`). What is left for B5 is the
-   law form, not the physics.
+   law form, not the physics. After the #684 review the factory argument was renamed on 2026‑09‑11 —
+   `get_default_pv_system(maximum_power_in_watt=…)`, the field still `power_in_watt` — so the preset
+   and the law of that conversion must not reintroduce a *maximum* named `power_in_watt`; the field
+   is the result, and the share is now range‑checked in `PVSystemConfig.__post_init__`.
 3. **Factories.**
-   - `get_default_pv_system(name="PVSystem", power_in_watt=10e3, source_weight=0, share_of_maximum_pv_potential=1.0, location="Aachen", component_id=None, module_name="Trina Solar TSM-435NE09RC.05", module_database=CEC_MODULE_DATABASE, inverter_name="Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]", inverter_database=CEC_INVERTER_DATABASE)` — `:136`. setups **15**, tests **3** + 1 method reference (`test_config_enum_serialization.py:70`), hisim **1** (its own caller at `:202`). Four of the 15 call it with **no arguments at all** and thus depend on the 10 kW default: `basic_household.py:86`, `basic_household_with_weather_data_request.py:119`, `default_connections.py:77`, `dynamic_components.py:101`.
+   - `get_default_pv_system(name="PVSystem", maximum_power_in_watt=10e3, source_weight=0, share_of_maximum_pv_potential=1.0, location="Aachen", component_id=None, module_name="Trina Solar TSM-435NE09RC.05", module_database=CEC_MODULE_DATABASE, inverter_name="Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]", inverter_database=CEC_INVERTER_DATABASE)` — `:136`. setups **15**, tests **3** + 1 method reference (`test_config_enum_serialization.py:70`), hisim **1** (its own caller at `:202`). Four of the 15 call it with **no arguments at all** and thus depend on the 10 kW default: `basic_household.py:86`, `basic_household_with_weather_data_request.py:119`, `default_connections.py:77`, `dynamic_components.py:101`.
    - `get_scaled_pv_system(rooftop_area_in_m2, name="PVSystem", share_of_maximum_pv_potential=1.0, …)` — `:180`. setups **12**, tests **7** (`test_controller_l2_energy_management_system.py:125`, `test_heating_meter.py:92`, `test_gas_meter.py:91`, `test_fuel_meter.py:96`, `test_electricity_meter.py:60`, `test_time_resolution.py:376`, `test_sizing_energy_systems.py:147`), hisim **0**.
    - `PVSystem.get_default_config(power_in_watt=10e3, source_weight=1, share_of_maximum_pv_potential=1.0, component_id=None)` — `:441`, a **static method on the component class** returning `Any`, pinning `Hanwha HSL60P6-PA-4-250T [2013]` + Sandia databases against the config class's Trina/CEC. **0 call sites anywhere.**
 4. **Presets.** Supplement: `rooftop`, `rooftop_10kw`; conflict 5 resolves "delete the component‑class factory; canonical preset `rooftop` from `get_scaled_pv_system`". **Agreed on `rooftop` and on the deletion.** **Deviation flagged on `rooftop_10kw`, in the opposite direction from group A's D‑6:** 10 kW is a round default, not a catalogue rating, so conflict 3's rule says drop it — but unlike the hplib `_8kw` case, **four setups actually depend on that default** (list above), and dropping it turns four zero‑argument call sites into explicit `power_in_watt: 10000` overrides. Recommend **keeping** `rooftop_10kw` and recording the exception. → part of **D‑13**.

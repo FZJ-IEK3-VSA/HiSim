@@ -16,7 +16,7 @@ economic and CO2-footprint figures used in post-processing.
 import datetime
 import enum
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -139,11 +139,32 @@ class PVSystemConfig(ConfigBase):
     #: See ``roadmap/pylpg_flakiness.md`` F7.
     weather_identity: Sizable[str] = sized_field(rule=Size.WEATHER_IDENTITY, value_type=str)
 
+    def __post_init__(self) -> None:
+        """Refuses a share of the rooftop maximum that is not a share.
+
+        The field is a fraction in ``[0, 1]``: both factories multiply the array's maximum by it,
+        so a percentage typed as ``50`` sizes a fifty-fold rooftop and a negative share sizes a
+        generator that consumes -- each producing a run that finishes and reports plausible
+        numbers for a question nobody asked. It is also the provenance a record carries beside the
+        power it explains, so a value outside the range is a record that cannot be read back as
+        one. Only the share is checked here: ``power_in_watt`` is a sizable field and may still
+        hold ``AUTO`` or a law at construction time.
+
+        Raises:
+            ValueError: If ``share_of_maximum_pv_potential`` lies outside ``[0, 1]``.
+        """
+        if not 0.0 <= self.share_of_maximum_pv_potential <= 1.0:
+            raise ValueError(
+                "The share of the maximum PV potential is a fraction between 0 and 1, not "
+                f"{self.share_of_maximum_pv_potential}. It is multiplied onto the array's maximum "
+                "power, so a percentage or a negative value would size a different array in silence."
+            )
+
     @classmethod
     def get_default_pv_system(
         cls,
         name: str = "PVSystem",
-        power_in_watt: float = 10e3,
+        maximum_power_in_watt: float = 10e3,
         source_weight: int = 0,
         share_of_maximum_pv_potential: float = 1.0,
         location: str = "Aachen",
@@ -155,19 +176,14 @@ class PVSystemConfig(ConfigBase):
     ) -> "PVSystemConfig":
         """Gets a default PV system.
 
-        ``power_in_watt`` is the array's *maximum*, not its result: the share is applied to it
-        here, and the field the returned config carries is what the share left of it. That is the
-        same meaning ``get_scaled_pv_system`` records, reached from the other side - there the
-        maximum comes from the rooftop area instead of from an argument.
-
-        The consequence is worth stating where it is easy to trip over: the ``(power_in_watt,
-        share_of_maximum_pv_potential)`` pair a *record* carries is a result and its provenance,
-        so handing a recorded pair back to this factory would apply the share a second time. A
-        record is rebuilt from its fields, never by replaying a factory over them.
+        ``maximum_power_in_watt`` is the array's maximum; the share is applied to it here, exactly
+        once, and the ``power_in_watt`` field of the returned config is the result. A *record*
+        therefore carries a result beside its provenance, so it is rebuilt from its fields and
+        never replayed through this factory, which would apply the share a second time.
         """
         if component_id is None:
             component_id = ComponentID(name=name)
-        power_in_watt = power_in_watt * share_of_maximum_pv_potential
+        power_in_watt = maximum_power_in_watt * share_of_maximum_pv_potential
         return PVSystemConfig(
             time=2019,
             power_in_watt=power_in_watt,
@@ -226,16 +242,20 @@ class PVSystemConfig(ConfigBase):
         config = PVSystemConfig.get_default_pv_system(
             component_id=component_id,
             location=location,
-            power_in_watt=total_pv_power_in_watt,
+            maximum_power_in_watt=total_pv_power_in_watt,
             module_name=module_name,
             module_database=module_database,
             inverter_name=inverter_name,
             inverter_database=inverter_database,
         )
         # Stamped after the fact, not passed in above: the power already carries the share.
-        config.share_of_maximum_pv_potential = share_of_maximum_pv_potential
-        config.load_module_data = load_module_data
-        return config
+        # Through ``replace`` rather than by assignment, so that the share meets the range check
+        # in ``__post_init__`` on this path too.
+        return replace(
+            config,
+            share_of_maximum_pv_potential=share_of_maximum_pv_potential,
+            load_module_data=load_module_data,
+        )
 
     @classmethod
     def size_pv_system(

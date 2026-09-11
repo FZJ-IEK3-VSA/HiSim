@@ -8,7 +8,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import example_component
 from hisim.simulationparameters import SimulationParameters
-from hisim.config import ComponentID
+from hisim.config import AUTO, ComponentID, describe_config
 from tests import functions_for_testing as fft
 
 
@@ -26,7 +26,13 @@ def test_example_component() -> None:
 
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
-    my_example_component_config = example_component.ExampleComponentConfig.get_default_example_component()
+    # ``capacity`` is a sizable field, so the factory hands back AUTO and the config has to be
+    # resolved against the facts of the surrounding system before a component may be built from
+    # it. The helper carries the one fact this law reads: the building's conditioned floor area.
+    assert example_component.ExampleComponentConfig.get_default_example_component().capacity is AUTO
+    my_example_component_config = fft.sized_example_component_config()
+    # The law reproduces the literal the module used to carry, exactly: 45 J/K/m2 x 121.2 m2.
+    assert my_example_component_config.capacity == 45 * 121.2 == 5454.0
     log.information(f"default example component config {my_example_component_config}\n")
     my_example_component = example_component.ExampleComponent(
         config=my_example_component_config, my_simulation_parameters=mysim
@@ -91,7 +97,7 @@ def test_display_config_isolation() -> None:
     DisplayConfig instance, not a shared one.
     """
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
-    config = example_component.ExampleComponentConfig.get_default_example_component()
+    config = fft.sized_example_component_config()
 
     comp_a = example_component.ExampleComponent(my_simulation_parameters=mysim, config=config)
     comp_b = example_component.ExampleComponent(my_simulation_parameters=mysim, config=config)
@@ -100,3 +106,18 @@ def test_display_config_isolation() -> None:
     assert (
         comp_a.my_display_config is not comp_b.my_display_config
     ), "my_display_config must not be shared across instances"
+
+
+@pytest.mark.base
+def test_capacity_is_described_as_a_sized_field() -> None:
+    """The capacity field describes itself as derived, with its law, its fact and its note.
+
+    This is what a reader of ``hisim energy-system describe`` sees, and what the template
+    claims a component's sizing looks like: the value is not a literal in the module but a
+    law naming the fact it reads.
+    """
+    description = describe_config(example_component.ExampleComponentConfig)
+    capacity = next(field for field in description.sizable_fields if field.name == "capacity")
+    assert capacity.law == "45.0 * Size.CONDITIONED_FLOOR_AREA_IN_M2"
+    assert capacity.facts_read == (("conditioned_floor_area_in_m2", "ONE"),)
+    assert capacity.note is not None and "45 J/K" in capacity.note

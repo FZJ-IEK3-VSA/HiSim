@@ -10,7 +10,7 @@ from dataclasses_json import dataclass_json
 # Owned
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import AUTO, ConfigBase, ComponentID, DisplayConfig, Sizable, Size, concrete, sized_field
 from hisim import loadtypes as lt
 from hisim.economics.facts import CostRelevance
 
@@ -23,11 +23,28 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
+#: Specific heat capacity of the fictitious thermal mass this component stands for, in
+#: joule per kelvin and square metre of conditioned floor area. It is the constant half of
+#: the ``capacity`` sizing law below; the other half is the floor area of the building the
+#: component sits in. The number, and the law it forms, are where the literal
+#: ``45 * 121.2`` that this config used to carry came from: 121.2 m² is the conditioned
+#: floor area of the default TABULA building (``BuildingConfig.preset_standard``,
+#: ``DE.N.SFH.05.Gen.ReEx.001.002``), so the law reproduces the old value exactly for that
+#: building and scales with any other one.
+SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2: float = 45.0
+
 
 @dataclass_json
 @dataclass
 class ExampleComponentConfig(ConfigBase):
-    """Configuration of the Example Component."""
+    """Configuration of the Example Component.
+
+    ``capacity`` is a *sizable* field: its value is not a number written here but a law
+    declared at the field, which the sizing kernel evaluates against the facts of the
+    surrounding system (see :mod:`hisim.config.sizing`). The factory below therefore says
+    :data:`~hisim.config.AUTO` instead of a number, and a caller resolves the config
+    against a :class:`~hisim.config.SizingContext` before handing it to the component.
+    """
 
     @classmethod
     def get_main_classname(cls) -> str:
@@ -39,8 +56,14 @@ class ExampleComponentConfig(ConfigBase):
     unit: lt.Units
     electricity: Optional[float]
     # heat: float = 0.0,
-    capacity: Optional[float]
     initial_temperature: Optional[float]
+    #: Thermal capacity of the modelled mass in J/K: the specific capacity above times the
+    #: conditioned floor area of the building. Declared last because a sizable field carries
+    #: a default (``AUTO``) and must follow the fields that do not.
+    capacity: Sizable[float] = sized_field(
+        rule=Size.CONDITIONED_FLOOR_AREA_IN_M2 * SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2,
+        note="45 J/K per m² of conditioned floor area",
+    )
 
     @classmethod
     def get_default_example_component(
@@ -56,7 +79,7 @@ class ExampleComponentConfig(ConfigBase):
             loadtype=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
             # heat=0.0,
-            capacity=45 * 121.2,
+            capacity=AUTO,
             initial_temperature=25.0,
         )
 
@@ -122,7 +145,10 @@ class ExampleComponent(Component):
         self.build(
             electricity=config.electricity,
             # heat=config.heat,
-            capacity=config.capacity,
+            # The central check in Component.__init__ has already refused any config that
+            # still carries AUTO, so the sized field is a number by now; ``concrete`` is the
+            # read-side idiom that says so to the type checker as well.
+            capacity=concrete(config.capacity),
             initial_temperature=config.initial_temperature,
         )
 
@@ -161,7 +187,7 @@ class ExampleComponent(Component):
         self,
         electricity: Optional[float],
         # heat: float,
-        capacity: Optional[float],
+        capacity: float,
         initial_temperature: Optional[float],
     ) -> None:
         """Build load profile for entire simulation duration."""
@@ -173,10 +199,9 @@ class ExampleComponent(Component):
         else:
             self.electricity_output = -1e3 * electricity
 
-        if capacity is None:
-            self.capacity: float = 45 * 121.2
-        else:
-            self.capacity = capacity
+        # No None fallback: ``capacity`` is sized, and a config that still carried AUTO
+        # never reaches a component, so the value is always a real number here.
+        self.capacity: float = capacity
 
         if initial_temperature is None:
             self.temperature = 25.0

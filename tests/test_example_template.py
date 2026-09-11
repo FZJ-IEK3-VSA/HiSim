@@ -7,7 +7,7 @@ from hisim.components import example_template
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import log
-from hisim.config import ComponentID
+from hisim.config import AUTO, ComponentID, ConfigSizingError, SizableFieldKind, describe_config
 from tests import functions_for_testing as fft
 
 
@@ -23,7 +23,12 @@ def test_example_template() -> None:
 
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
-    my_example_template_config = example_template.ComponentNameConfig.get_default_template_component()
+    # ``rated_power_in_watt`` is sized, so the factory's config carries AUTO and has to be
+    # resolved against the facts of the surrounding system before a component is built from it.
+    my_example_template_config = example_template.ComponentNameConfig.get_default_template_component().resolve(
+        fft.default_building_sizing_context()
+    )
+    assert my_example_template_config.rated_power_in_watt == 2.0 * 121.2
     print("\n")
     log.information(f"default componentname config {my_example_template_config}\n")
     my_example_template = example_template.ComponentName(
@@ -89,6 +94,8 @@ def test_get_default_template_component_no_args() -> None:
     assert config.component_id.name == "ComponentNameDefault"
     assert config.loadtype == lt.LoadTypes.ELECTRICITY
     assert config.unit == lt.Units.WATT
+    # The sized field is not a default *value*: the factory leaves it to the law.
+    assert config.rated_power_in_watt is AUTO
 
 
 @pytest.mark.base
@@ -101,6 +108,7 @@ def test_get_default_template_component_custom_building() -> None:
     assert config.component_id.name == "ComponentNameDefault"
     assert config.loadtype == lt.LoadTypes.ELECTRICITY
     assert config.unit == lt.Units.WATT
+    assert config.rated_power_in_watt is AUTO
 
 
 @pytest.mark.base
@@ -125,3 +133,35 @@ def test_get_main_classname() -> None:
     classname = example_template.ComponentNameConfig.get_main_classname()
     assert classname == example_template.ComponentName.get_full_classname()
     assert classname == "hisim.components.example_template.ComponentName"
+
+
+@pytest.mark.base
+def test_the_template_describes_its_sizing_mechanism() -> None:
+    """``describe_config`` shows the template's sized field with its law, fact and note.
+
+    This is what the template exists to demonstrate and what a reader gets from
+    ``hisim energy-system describe hisim.components.example_template.ComponentName``: the
+    field is derived from a named fact of the surrounding system, not from a literal in the
+    module, and the law says so in its own words.
+    """
+    description = describe_config(example_template.ComponentNameConfig)
+    assert [field.name for field in description.sizable_fields] == ["rated_power_in_watt"]
+    rated_power = description.sizable_fields[0]
+    assert rated_power.law == "2.0 * Size.CONDITIONED_FLOOR_AREA_IN_M2"
+    assert rated_power.facts_read == (("conditioned_floor_area_in_m2", "ONE"),)
+    assert rated_power.kind is SizableFieldKind.LAW
+    assert rated_power.note is not None and "W per m" in rated_power.note
+    assert [field.name for field in description.fields if field.sizable] == ["rated_power_in_watt"]
+    # The template contributes no fact of its own; see the note in the module about why.
+    assert not description.facts_provided
+
+
+@pytest.mark.base
+def test_an_unresolved_template_config_is_refused_by_the_component() -> None:
+    """A config that still says AUTO never reaches the component, and the error names the law."""
+    mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = example_template.ComponentNameConfig.get_default_template_component()
+    with pytest.raises(ConfigSizingError) as refusal:
+        example_template.ComponentName(config=config, my_simulation_parameters=mysim)
+    assert "rated_power_in_watt" in str(refusal.value)
+    assert "Size.CONDITIONED_FLOOR_AREA_IN_M2" in str(refusal.value)

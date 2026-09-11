@@ -77,6 +77,36 @@ def test_describe_prints_the_presets_sizable_fields_and_facts_of_a_class(capsys)
 
 
 @pytest.mark.base
+@pytest.mark.parametrize(
+    "class_path, fact",
+    [
+        (
+            "hisim.components.heat_distribution_system.HeatDistributionControllerConfig",
+            "set_heating_threshold_outside_temperature_in_celsius",
+        ),
+        ("hisim.components.building.BuildingConfig", "roof_area_in_m2"),
+        ("hisim.components.generic_pv_system.PVSystemConfig", "pv_peak_power_in_watt"),
+        ("hisim.components.generic_boiler.GenericBoilerConfig", "energy_carrier"),
+        ("hisim.components.generic_boiler.GenericBoilerConfig", "heating_value_of_fuel_in_kwh_per_liter"),
+        ("hisim.components.generic_boiler.GenericBoilerConfig", "fuel_density_in_kg_per_m3"),
+    ],
+)
+def test_describe_lists_each_batch_one_fact_under_its_provider(capsys, class_path: str, fact: str) -> None:
+    """Every fact R2.1 added is visible as provided by the class that computes it.
+
+    ``describe`` is where an author finds out which component can supply the fact a
+    ``sizing_sources`` line has to name, so a contributed fact that does not reach this output is
+    a fact nobody can be pointed at.
+    """
+    code = main(["energy-system", "describe", class_path])
+    printed = capsys.readouterr().out
+
+    assert code == ExitCodes.OK
+    provided = printed.split("facts provided", 1)[1]
+    assert fact in provided
+
+
+@pytest.mark.base
 def test_describe_accepts_the_component_class_a_file_writes(capsys) -> None:
     """Catches the command demanding the configuration class an author never spells.
 

@@ -14,6 +14,7 @@ import copy
 import dataclasses
 import json
 from dataclasses import dataclass
+from typing import Dict
 
 import pytest
 from dataclasses_json import dataclass_json
@@ -254,6 +255,34 @@ def test_size_terms_and_sizing_context_fields_are_one_registry():
     for field in dataclasses.fields(SizingContext):
         term = getattr(Size, field.name.upper())
         assert term.facts_read() == ((field.name, Cardinality.ONE),)
+
+
+#: The facts R2.1 added to the vocabulary ahead of the batches that read them, and what each is
+#: for. Listed here as literals because a fact name is wire format: a ``sizing_sources`` line in a
+#: checked-in energy system spells it out, so a rename is a breaking change and has to fail here.
+BATCH_ONE_FACTS: Dict[str, str] = {
+    "set_heating_threshold_outside_temperature_in_celsius": "the emitter circuit's heating threshold",
+    "roof_area_in_m2": "the building's roof, which sizes a PV array",
+    "pv_peak_power_in_watt": "the array's peak power, which sizes a battery",
+    "energy_carrier": "the fuel the heat generator burns",
+    "heating_value_of_fuel_in_kwh_per_liter": "how much of that fuel a kilowatt hour is",
+    "fuel_density_in_kg_per_m3": "how heavy a litre of it is",
+}
+
+
+@pytest.mark.base
+def test_the_batch_one_facts_are_in_the_shared_vocabulary():
+    """The six facts the first conversion batch reads are fields of the context and Size terms.
+
+    Failure mode caught: a batch declaring a contribution for a fact that is not a
+    ``SizingContext`` field — ``FactContribution`` refuses it, but only when that batch lands,
+    which is exactly the shared-kernel change R2.1 exists to make before anything depends on it.
+    """
+    field_names = {field.name for field in dataclasses.fields(SizingContext)}
+    assert set(BATCH_ONE_FACTS) <= field_names
+    for fact in BATCH_ONE_FACTS:
+        assert getattr(SizingContext(), fact) is None, "a fact is absent until somebody contributes it"
+        assert getattr(Size, fact.upper()).facts_read() == ((fact, Cardinality.ONE),)
 
 
 @pytest.mark.base

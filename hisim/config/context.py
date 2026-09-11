@@ -14,6 +14,14 @@ exceptions (the other being ``hisim.log``, see the package ``__init__``):
 body — the building physics is what turns a ``BuildingConfig`` into sizing facts, and
 the building package necessarily imports ``ConfigBase`` from this package, so a
 module-level import here would close the cycle.
+
+A fact whose *type* comes from outside the package — ``heat_distribution_system_type``
+from ``hisim.components``, ``energy_carrier`` from ``hisim.loadtypes`` — is annotated as
+a string and its type imported under ``TYPE_CHECKING`` only. Nothing is imported at
+runtime, so the layering rule holds exactly as it does for a purely numeric fact, while
+type checkers and readers still see what the fact is. ``hisim.loadtypes`` is no
+exception to the rule: it sits above this package and is treated like any other module
+of the rest of HiSim.
 """
 
 # clean
@@ -29,6 +37,7 @@ from hisim.config.laws import _FactTerm
 if TYPE_CHECKING:
     from hisim.components.building.config import BuildingConfig
     from hisim.components.heat_distribution_system import HeatDistributionSystemType
+    from hisim.loadtypes import LoadTypes
 
 
 @dataclass(frozen=True)
@@ -54,6 +63,16 @@ class SizingContext:
     minimal_thermal_power_in_watt: Optional[float] = None
     set_heating_temperature_in_celsius: Optional[float] = None
     set_cooling_temperature_in_celsius: Optional[float] = None
+    set_heating_threshold_outside_temperature_in_celsius: Optional[float] = None
+    roof_area_in_m2: Optional[float] = None
+    pv_peak_power_in_watt: Optional[float] = None
+
+    # Fuel facts of the heat generator, for the meters that account its consumption. The
+    # carrier is the generator's own field; the two constants derive from it and from the
+    # boiler type, and are ``None`` for a carrier that burns nothing (district heating).
+    energy_carrier: Optional["LoadTypes"] = None
+    heating_value_of_fuel_in_kwh_per_liter: Optional[float] = None
+    fuel_density_in_kg_per_m3: Optional[float] = None
 
     # Identity facts. A component whose cached result depends on another component (PV on the
     # weather, the car on the occupancy) declares that component's identity as a sized field; the
@@ -125,5 +144,13 @@ class Size:
     MINIMAL_THERMAL_POWER_IN_WATT: ClassVar[_FactTerm] = _FactTerm("minimal_thermal_power_in_watt")
     SET_HEATING_TEMPERATURE_IN_CELSIUS: ClassVar[_FactTerm] = _FactTerm("set_heating_temperature_in_celsius")
     SET_COOLING_TEMPERATURE_IN_CELSIUS: ClassVar[_FactTerm] = _FactTerm("set_cooling_temperature_in_celsius")
+    SET_HEATING_THRESHOLD_OUTSIDE_TEMPERATURE_IN_CELSIUS: ClassVar[_FactTerm] = _FactTerm(
+        "set_heating_threshold_outside_temperature_in_celsius")
+    ROOF_AREA_IN_M2: ClassVar[_FactTerm] = _FactTerm("roof_area_in_m2")
+    PV_PEAK_POWER_IN_WATT: ClassVar[_FactTerm] = _FactTerm("pv_peak_power_in_watt")
+    ENERGY_CARRIER: ClassVar[_FactTerm] = _FactTerm("energy_carrier")
+    HEATING_VALUE_OF_FUEL_IN_KWH_PER_LITER: ClassVar[_FactTerm] = _FactTerm(
+        "heating_value_of_fuel_in_kwh_per_liter")
+    FUEL_DENSITY_IN_KG_PER_M3: ClassVar[_FactTerm] = _FactTerm("fuel_density_in_kg_per_m3")
     WEATHER_IDENTITY: ClassVar[_FactTerm] = _FactTerm("weather_identity")
     OCCUPANCY_IDENTITY: ClassVar[_FactTerm] = _FactTerm("occupancy_identity")

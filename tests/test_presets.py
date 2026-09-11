@@ -404,7 +404,14 @@ def test_describe_config_reports_fields_presets_laws_and_facts_of_the_pilots():
     assert presets["condensing_gas_12kw"].note == "nominal catalogue device"
     # the pellet preset overrides one field's law, which is still "to be sized", not pinned
     assert presets["pellets"].auto == ("minimal_thermal_power_in_watt", "maximal_thermal_power_in_watt")
-    assert description.facts_provided == ("maximal_thermal_power_in_watt", "minimal_thermal_power_in_watt")
+    assert description.facts_provided == (
+        "maximal_thermal_power_in_watt",
+        "minimal_thermal_power_in_watt",
+        # the fuel half, which the gas and fuel meters copy instead of repeating (D-15)
+        "energy_carrier",
+        "heating_value_of_fuel_in_kwh_per_liter",
+        "fuel_density_in_kg_per_m3",
+    )
     maximal = next(f for f in description.sizable_fields if f.name == "maximal_thermal_power_in_watt")
     assert maximal.kind is SizableFieldKind.LAW
     assert maximal.facts_read == (("heating_load_in_watt", "ONE"), ("number_of_apartments", "ONE"))

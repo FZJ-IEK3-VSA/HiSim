@@ -66,7 +66,7 @@ Own commits, before the batch that needs them, each golden-neutral:
 - R2.5 D13 sweep: the delete rows of §R3 removed (or moved to the obsolete repository) before their batch.
 
 ### R3 — Per-class table (the wire-format registry) `[proposed; p4_class_survey.md]`
-Legend: **conv** convert · **del** delete · **done** converted (remaining work in the last column) · **ex** exempt. *Behaviour* **N** neutral, **P** physics change (R5), **?** depends on a decision. Facts use the `SizingContext` names. Full entries with `file:line` evidence: the survey, by class name.
+Legend: **conv** convert · **del** retired — moved to `obsolete/` under D-16's rule, never deleted · **done** converted (remaining work in the last column) · **ex** exempt. *Behaviour* **N** neutral, **P** physics change (R5), **?** depends on a decision. Facts use the `SizingContext` names. Full entries with `file:line` evidence: the survey, by class name.
 
 **Heat generators (survey A)**
 

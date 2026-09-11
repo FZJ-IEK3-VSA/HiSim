@@ -15,19 +15,34 @@ constructor worked at all, by accident of taking nothing but strings and numbers
 So the four constructors HiSim ships are each called from a file here, with the four kinds of
 value the decoder knows — an enum by member name, an enum by member value, a mapping onto a
 nested dataclass and a list of them — and the configurations they produce are compared with
-the ones the same call produces in Python. Two more tests pin the messages a wrong value now
-gets, and the last one pins the import-time rule that keeps the two halves honest: a
-constructor may only ask for something a written value can become.
+the ones the same call produces in Python.
+
+Decoding a value is only half of getting an argument right; the other half is its *shape*. A
+field that receives something the codec cannot type-check is still read by the configuration
+class, which validates itself and refuses what does not fit. A constructor argument has no
+such second reader — it goes straight into a Python call — so the shape a parameter asks for
+is checked after the decoding, and a scalar where an object belongs, a list where one value
+belongs, a single value where a list belongs and a ``null`` where nothing may be absent are
+each refused at the argument's own key rather than inside the builder.
+
+The last two tests pin the import-time rules that keep all of this honest: a constructor may
+only ask for something a written value can become, and only for something its own module can
+resolve, since an unresolved parameter type is one the schema cannot state and the loader
+cannot decode against.
 """
 
 # clean
 
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List
+
+from dataclasses_json import dataclass_json
 
 import pytest
 from utspclient.helpers.lpgdata import Households
 
 from hisim import loadtypes as lt
+from hisim.component import Component, SingleTimeStepValues
 from hisim.components.building.config import BuildingConfig
 from hisim.components.generic_car import CarConfig
 from hisim.components.loadprofilegenerator_utsp_connector import (
@@ -35,11 +50,12 @@ from hisim.components.loadprofilegenerator_utsp_connector import (
     UtspLpgConnectorConfig,
 )
 from hisim.components.weather import LocationEnum, WeatherConfig, WeatherDataSourceEnum
-from hisim.config import ComponentID, ConfigBase, constructor
+from hisim.config import ComponentID, ConfigBase, DisplayConfig, constructor
 from hisim.energy_system import EnergySystemBindingError, EnergySystemErrorId, expand_groups
 from hisim.energy_system.configure import configure_energy_system
 from hisim.energy_system.document import RawDocument
 from hisim.energy_system.loader import EnergySystemReader
+from hisim.simulationparameters import SimulationParameters
 
 #: The one household reference every LPG fixture below uses. A file spells it as a mapping of
 #: the field names ``JsonReference`` and ``StrGuid`` declare; Python spells it as this
@@ -110,6 +126,99 @@ CAR_ENTRY = """  Car:
 """
 
 
+@dataclass_json
+@dataclass
+class Station:
+    """One entry of the station list the probe constructor below takes."""
+
+    code: str
+
+
+@dataclass_json
+@dataclass
+class StationProbeConfig(ConfigBase):
+    """The configuration of the probe component, whose constructor takes a list and only a list.
+
+    No constructor HiSim ships has a parameter annotated ``List[X]`` on its own: the LPG
+    household takes either one reference or several, which is a union, and every other list a
+    configuration holds is a field rather than an argument. The shape "a list is required" is
+    real all the same — it is what the next such constructor will be — so it is declared here
+    rather than left untested.
+    """
+
+    component_id: ComponentID
+    stations: List[Station]
+
+    @classmethod
+    def get_main_classname(cls) -> str:
+        """Returns the full class name of the component this configuration belongs to."""
+        return StationProbe.get_full_classname()
+
+    @constructor
+    @classmethod
+    def for_stations(cls, name: str, stations: List[Station]) -> "StationProbeConfig":
+        """Builds the probe from one station per entry of the list.
+
+        Args:
+            name: The instance name, which becomes the component's identity.
+            stations: The stations, one per list entry.
+
+        Returns:
+            The configuration.
+        """
+        return cls(component_id=ComponentID(name=name), stations=list(stations))
+
+
+class StationProbe(Component):
+    """A component that exists only so its configuration can be named by a file.
+
+    The class-bound stage resolves the dotted name under ``class:`` and pairs it with the
+    dataclass its constructor annotates, so a configuration cannot appear in a file without a
+    component to carry it. Nothing here ever runs a timestep.
+    """
+
+    def __init__(
+        self, my_simulation_parameters: SimulationParameters, config: StationProbeConfig
+    ) -> None:
+        """Builds the probe with no inputs and no outputs.
+
+        Args:
+            my_simulation_parameters: The run's simulation parameters.
+            config: The probe's configuration.
+        """
+        super().__init__(
+            name=config.component_id.key,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
+            my_display_config=DisplayConfig(),
+        )
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """No-op: the probe has nothing to simulate."""
+
+    def i_prepare_simulation(self) -> None:
+        """No-op: the probe needs no preparation."""
+
+    def i_save_state(self) -> None:
+        """No-op: the probe is stateless."""
+
+    def i_restore_state(self) -> None:
+        """No-op: the probe is stateless."""
+
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
+        """No-op: there is nothing to double-check."""
+
+
+#: The probe called with a single mapping where its parameter takes a list of them.
+STATIONS_ENTRY = """  Stations:
+    class: tests.test_energy_system_constructor_arguments.StationProbe
+    constructor:
+      for_stations:
+        stations:
+          code: DE.01
+"""
+
+
 def origins_of(entries: str) -> Dict[str, Any]:
     """Configures one inline file and returns each entry's configuration by name.
 
@@ -142,6 +251,10 @@ def test_an_enum_argument_reaches_the_constructor_as_the_member() -> None:
     assert origins["Weather"] == WeatherConfig.for_location(
         "Weather", location=LocationEnum.AACHEN, data_source=WeatherDataSourceEnum.DWD_TRY
     )
+    # Hand-derived, so that the constructor is not the only oracle in the test: the station's
+    # own spelling of itself, and the member the optional reader names.
+    assert origins["Weather"].location == "Aachen"
+    assert origins["Weather"].data_source is WeatherDataSourceEnum.DWD_TRY
 
 
 @pytest.mark.base
@@ -158,6 +271,9 @@ def test_an_enum_argument_may_be_written_as_the_members_value() -> None:
     assert origins["Car"] == CarConfig.for_household(
         "Car", household_name="CHR01", car_name="Car1", fuel=lt.LoadTypes.DIESEL, source_weight=2
     )
+    # By identity, not by equality: HiSim's load types derive from ``str``, so the undecoded
+    # string 'Diesel' compares equal to the member and would pass the comparison above.
+    assert origins["Car"].fuel is lt.LoadTypes.DIESEL
 
 
 @pytest.mark.base
@@ -242,6 +358,110 @@ def test_an_argument_of_the_wrong_scalar_type_is_refused_naming_the_type() -> No
         "absolute_conditioned_floor_area_in_m2" in message
     )
     assert "'large'" in message and "float" in message
+
+
+@pytest.mark.base
+def test_a_scalar_where_a_nested_object_belongs_is_refused_naming_the_shape() -> None:
+    """Catches a household reference written as a bare name reaching the builder as a string.
+
+    Nothing in the decoding refuses it — a string is a perfectly good string — and the
+    configuration would be built holding it, so the failure would surface inside the profile
+    lookup with the written word nowhere in sight.
+    """
+    with pytest.raises(EnergySystemBindingError) as raised:
+        origins_of(
+            """  Occupancy:
+    class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+    constructor:
+      for_household:
+        household: CHR01 Couple both at Work
+"""
+        )
+
+    message = str(raised.value)
+    assert raised.value.error_id is EnergySystemErrorId.UNDECODABLE_VALUE
+    assert "components.Occupancy.constructor.for_household.household" in message
+    assert "mapping of JsonReference's own fields" in message
+
+
+@pytest.mark.base
+def test_a_list_where_one_object_belongs_is_refused() -> None:
+    """Catches several values written for a parameter that takes one.
+
+    ``travel_route_set`` is a single optional reference, not a list of them. A list written
+    there is not decoded item by item — the parameter admits no list — and would otherwise be
+    handed to the builder as the list it is.
+    """
+    with pytest.raises(EnergySystemBindingError) as raised:
+        origins_of(
+            OCCUPANCY_ENTRY
+            + """        travel_route_set:
+          - Name: Travel Route Set for 10km Commuting Distance
+            Guid:
+              StrVal: e5b2e4e2-0b0f-4c6b-8c6f-000000000000
+"""
+        )
+
+    message = str(raised.value)
+    assert raised.value.error_id is EnergySystemErrorId.UNDECODABLE_VALUE
+    assert "components.Occupancy.constructor.for_household.travel_route_set" in message
+    assert "must not be a list" in message
+
+
+@pytest.mark.base
+def test_a_single_object_where_a_list_belongs_is_refused() -> None:
+    """Catches one mapping written for a parameter that takes a list of them.
+
+    The mapping is decoded — it rebuilds into the item class perfectly well — and only its
+    shape is wrong, which is exactly the mistake the decoding alone cannot see: the builder
+    would receive one object where it iterates over several.
+    """
+    with pytest.raises(EnergySystemBindingError) as raised:
+        origins_of(STATIONS_ENTRY)
+
+    message = str(raised.value)
+    assert raised.value.error_id is EnergySystemErrorId.UNDECODABLE_VALUE
+    assert "components.Stations.constructor.for_stations.stations" in message
+    assert "must be a list of Station" in message
+
+
+@pytest.mark.base
+def test_a_null_for_a_parameter_that_admits_no_absence_is_refused() -> None:
+    """Catches a written ``null`` becoming the value of a mandatory argument.
+
+    A TABULA code is a string and nothing else. Written as ``null`` it used to pass the
+    decoding untouched and reach the builder as ``None``, which fails on the first lookup that
+    slices it — far from the line that wrote it.
+    """
+    with pytest.raises(EnergySystemBindingError) as raised:
+        origins_of(WEATHER_ENTRY + BUILDING_ENTRY.replace("DE.N.SFH.05.Gen.ReEx.001.002", "null"))
+
+    message = str(raised.value)
+    assert raised.value.error_id is EnergySystemErrorId.UNDECODABLE_VALUE
+    assert "components.Building.constructor.for_tabula_code.building_code" in message
+    assert "must not be null" in message
+
+
+@pytest.mark.base
+def test_a_constructor_whose_parameter_type_names_nothing_is_refused_at_declaration() -> None:
+    """Catches a parameter annotation that resolves to nothing being quietly skipped.
+
+    An annotation naming a type that is not in scope used to be passed over: the parameter
+    then had no type at all, which left it permissive in the generated schema and undecoded at
+    the call — the two failures this whole check exists to prevent, arrived at by silence
+    rather than by declaration.
+    """
+    with pytest.raises(ValueError, match="Mystery"):
+
+        class _TakesAMystery(ConfigBase):
+            """A constructor asking for a type no module in scope defines."""
+
+            @constructor
+            @classmethod
+            def for_mystery(cls, name: str, x: "Mystery") -> "_TakesAMystery":  # type: ignore[name-defined]  # noqa: F821,E501
+                """A constructor whose parameter type is under test, not its body."""
+                del x
+                return cls(component_id=ComponentID(name=name))
 
 
 @pytest.mark.base

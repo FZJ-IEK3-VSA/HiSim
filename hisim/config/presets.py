@@ -57,10 +57,6 @@ from typing import Any, Callable, ClassVar, Dict, Iterable, Mapping, Optional, T
 #: ``attr-defined`` error and a wrong argument an ``arg-type`` error at the call site.
 BuilderT = TypeVar("BuilderT")
 
-#: Stands for "this parameter's annotation could not be evaluated", which is not the same
-#: answer as "it evaluated to something undecodable" and must not be refused as if it were.
-_UNRESOLVED = object()
-
 
 class BuilderKind(enum.Enum):
     """Whether a decorated classmethod is a named default or a named constructor.
@@ -123,6 +119,13 @@ class ConfigBuilder:
     build: Callable[..., Any]
     function: Callable[..., Any]
 
+    #: The resolved type of every parameter, by parameter name, computed once when the
+    #: builder was declared. The loader decodes an argument against it and the schema
+    #: exporter states it as the parameter's type; both read it here rather than resolving
+    #: the signature again, which is what keeps the file format's idea of a parameter's type
+    #: single.
+    parameter_types: Mapping[str, Any]
+
 
 @dataclass(frozen=True)
 class _BuilderMarker:
@@ -137,6 +140,7 @@ class _BuilderMarker:
     name: str
     note: Optional[str]
     function: Callable[..., Any]
+    parameter_types: Mapping[str, Any]
 
 
 def _wire_name(kind: BuilderKind, method_name: str) -> str:
@@ -192,17 +196,21 @@ def resolved_parameter_types(function: Callable[..., Any]) -> Dict[str, Any]:
     module's globals. The return annotation is deliberately left out: it names the config
     class, which does not exist yet while the decorator runs.
 
-    An annotation that cannot be resolved at all is *omitted* rather than reported. That is
-    the same concession the value codec makes for a field whose annotation it cannot resolve
-    — the value is passed on for the builder itself to reject — and it keeps a forward
-    reference from turning into an import-time failure of the whole module.
+    An annotation that cannot be resolved at all is *reported*, not skipped. A parameter of a
+    named constructor is part of the file format — the schema states its type and the loader
+    decodes a written value into it — so an annotation naming nothing is a declaration that
+    cannot be honoured, and a silent omission would leave the parameter permissive in the
+    schema and undecoded at the call, which is the failure this whole check exists to end.
 
     Args:
         function: The undecorated function underneath a builder's classmethod.
 
     Returns:
-        A mapping from parameter name to resolved type, holding only the parameters whose
-        annotation could be evaluated.
+        A mapping from parameter name to resolved type, holding every annotated parameter.
+
+    Raises:
+        TypeError: If an annotation cannot be evaluated, naming the parameter and the
+            annotation as it was written.
     """
     written = {
         name: annotation
@@ -214,28 +222,47 @@ def resolved_parameter_types(function: Callable[..., Any]) -> Dict[str, Any]:
     namespace = getattr(function, "__globals__", {})
     try:
         return dict(typing.get_type_hints(_AnnotationCarrier(written), globalns=namespace))
-    except Exception:  # pylint: disable=broad-except
-        resolved: Dict[str, Any] = {}
+    except Exception as error:  # pylint: disable=broad-except
+        # The batch failure names the first offender only in its own words; resolving one at
+        # a time is what lets the message say which parameter is the unusable one.
         for name, annotation in written.items():
             try:
-                resolved.update(
-                    typing.get_type_hints(_AnnotationCarrier({name: annotation}), globalns=namespace)
-                )
-            except Exception:  # pylint: disable=broad-except
-                continue
-        return resolved
+                typing.get_type_hints(_AnnotationCarrier({name: annotation}), globalns=namespace)
+            except Exception as single:  # pylint: disable=broad-except
+                raise TypeError(
+                    f"parameter '{name}' is annotated {_render_annotation(annotation)}, which "
+                    f"names nothing resolvable where the builder is declared: {single}"
+                ) from single
+        raise TypeError(f"the parameter annotations could not be resolved: {error}") from error
 
 
 def is_decodable_annotation(annotation: Any) -> bool:
     """Whether a value written in a file can be decoded into the type this annotation names.
 
     A named constructor is callable from an energy-system file, where its arguments arrive as
-    plain YAML — a string, a number, a boolean, a mapping, a list. The decoding of those into
-    the types a constructor asks for knows five shapes and no more: the four scalars, an enum
-    (by member name or by member value), a dataclass that can rebuild itself from a mapping,
-    and ``Optional``/``Union``/``List`` over those. This predicate is the closed statement of
-    that set, kept here in the bottom layer so the decorator can refuse an unusable parameter
-    at import time and the decoder can agree with it without either importing the other.
+    plain YAML — a string, a number, a boolean, a mapping, a list. This predicate is the
+    closed statement of what such a value can be decoded into, and it is the *only* one: the
+    decorator consults it to refuse an unusable parameter while the class body is still
+    executing, and :mod:`hisim.energy_system.codec` imports it and consults it before
+    decoding anything, so the gate and the decoder cannot come to disagree. It lives here in
+    the bottom layer because that is the direction the import may run.
+
+    Decodable, exactly:
+
+    * ``None`` (that is, ``NoneType``), which a written ``null`` becomes;
+    * ``bool``, ``int``, ``float`` and ``str``, which YAML writes directly;
+    * any :class:`enum.Enum`, written as a member name or as a member value;
+    * any dataclass, written as a mapping of its fields and rebuilt by its own ``from_dict``
+      or, where it has none, by its constructor;
+    * ``List[X]`` over a decodable ``X``, written as a list and decoded item by item;
+    * ``Optional[X]`` and any other ``Union`` whose members are all decodable and which holds
+      **at most one** dataclass member and **at most one** list member — ``Union[Reference,
+      List[Reference]]`` and ``Optional[Enum]`` pass, while ``Union[A, B]`` of two dataclasses
+      and ``Union[List[A], List[B]]`` do not, because nothing in a written mapping or list
+      would tell the decoder which of the two to build.
+
+    Everything else is refused: ``Any``, a bare ``list`` or ``dict``, a ``Dict``, a tuple, a
+    callable, and a plain class that is no dataclass and no enum.
 
     Args:
         annotation: A resolved type annotation.
@@ -251,23 +278,32 @@ def is_decodable_annotation(annotation: Any) -> bool:
         return isinstance(annotation, type) and (
             annotation in (bool, int, float, str)
             or issubclass(annotation, enum.Enum)
-            or (
-                dataclasses.is_dataclass(annotation)
-                and callable(getattr(annotation, "from_dict", None))
-            )
+            or dataclasses.is_dataclass(annotation)
         )
     if origin is typing.Union or origin is types.UnionType:
-        return bool(arguments) and all(is_decodable_annotation(argument) for argument in arguments)
+        if not arguments or not all(is_decodable_annotation(argument) for argument in arguments):
+            return False
+        nested = sum(
+            1
+            for argument in arguments
+            if isinstance(argument, type) and dataclasses.is_dataclass(argument)
+        )
+        listed = sum(1 for argument in arguments if typing.get_origin(argument) is list)
+        return nested <= 1 and listed <= 1
     return origin is list and len(arguments) == 1 and is_decodable_annotation(arguments[0])
 
 
 def _render_annotation(annotation: Any) -> str:
-    """Renders a resolved annotation the way an error message should print it."""
+    """Renders an annotation — resolved or still written as text — as a message prints it."""
+    if isinstance(annotation, str):
+        return annotation
     name = getattr(annotation, "__name__", None)
     return name if isinstance(name, str) else str(annotation)
 
 
-def _check_signature(kind: BuilderKind, method_name: str, function: Callable[..., Any]) -> None:
+def _check_signature(
+    kind: BuilderKind, method_name: str, function: Callable[..., Any]
+) -> Dict[str, Any]:
     """Checks that a builder takes the instance name first and nothing unusable after it.
 
     A preset takes exactly ``(cls, name)``: anything a preset would need beyond the name
@@ -282,11 +318,19 @@ def _check_signature(kind: BuilderKind, method_name: str, function: Callable[...
     object — is a constructor only Python can call, and that is a mistake worth reporting
     while the class body is still executing rather than at the first file that tries.
 
+    The resolved annotations are handed back rather than thrown away: they are what the
+    loader decodes an argument against and what the schema exporter states as a parameter's
+    type, and resolving them once here is what keeps those two from resolving them again,
+    differently.
+
+    Returns:
+        The resolved type of every annotated parameter, by parameter name.
+
     Raises:
         ValueError: If the first parameter after ``cls`` is not ``name``, if a preset
             declares further parameters, if a constructor parameter is variadic,
-            positional-only or unannotated, or if its annotation cannot be decoded from a
-            written value.
+            positional-only or unannotated, if an annotation names nothing resolvable, or if
+            it cannot be decoded from a written value.
     """
     parameters = list(inspect.signature(function).parameters.values())[1:]
     if not parameters or parameters[0].name != "name":
@@ -314,18 +358,26 @@ def _check_signature(kind: BuilderKind, method_name: str, function: Callable[...
                 "type annotation; the description surface reports the type of every "
                 "parameter, so an unannotated one cannot be offered to a caller."
             )
-    annotations = resolved_parameter_types(function)
+    try:
+        annotations = resolved_parameter_types(function)
+    except TypeError as error:
+        raise ValueError(
+            f"{kind.explain()} '{method_name}': {error}. A parameter's type is part of the "
+            "file format — the schema states it and the loader decodes a written value into "
+            "it — so an annotation naming nothing cannot be declared."
+        ) from error
     for parameter in parameters:
-        annotation = annotations.get(parameter.name, _UNRESOLVED)
-        if annotation is _UNRESOLVED or is_decodable_annotation(annotation):
+        annotation = annotations[parameter.name]
+        if is_decodable_annotation(annotation):
             continue
         raise ValueError(
             f"{kind.explain()} '{method_name}': parameter '{parameter.name}' is annotated "
             f"{_render_annotation(annotation)}, which no value written in a file can be "
             "decoded into; a parameter must be a bool, int, float or str, an Enum, a "
-            "dataclass with a 'from_dict', or an Optional, Union or List over those, "
-            "because a file passes its arguments as plain YAML."
+            "dataclass, or an Optional, Union or List over those, because a file passes its "
+            "arguments as plain YAML."
         )
+    return annotations
 
 
 def _declare(kind: BuilderKind, decorated: Any, note: Optional[str]) -> Any:
@@ -353,7 +405,7 @@ def _declare(kind: BuilderKind, decorated: Any, note: Optional[str]) -> Any:
     function = decorated.__func__
     method_name = function.__name__
     name = _wire_name(kind, method_name)
-    _check_signature(kind, method_name, function)
+    parameter_types = _check_signature(kind, method_name, function)
 
     @functools.wraps(function)
     def wrapper(cls: Any, *args: Any, **kwargs: Any) -> Any:
@@ -363,7 +415,11 @@ def _declare(kind: BuilderKind, decorated: Any, note: Optional[str]) -> Any:
             setattr(instance, ConfigBuilder.PROVENANCE_ATTRIBUTE, name)
         return instance
 
-    setattr(wrapper, ConfigBuilder.MARKER_ATTRIBUTE, _BuilderMarker(kind, name, note, function))
+    setattr(
+        wrapper,
+        ConfigBuilder.MARKER_ATTRIBUTE,
+        _BuilderMarker(kind, name, note, function, parameter_types),
+    )
     return classmethod(wrapper)
 
 
@@ -481,6 +537,7 @@ def _builders_of(config_class: type, kind: BuilderKind) -> Mapping[str, ConfigBu
             note=marker.note,
             build=getattr(config_class, method_name),
             function=marker.function,
+            parameter_types=marker.parameter_types,
         )
     return registry
 

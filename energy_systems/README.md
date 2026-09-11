@@ -66,7 +66,7 @@ provides, every fact somebody reads, and which provider each read resolved to.
 
 A constructor's arguments are written and decoded exactly like a `config` value: an enum by its
 member name or its value, a nested object as a mapping of its own fields, several of them as a
-list, and a wrong one refused by name with the spellings that would have worked.
+list, and a wrong one refused by name, listing the accepted members or types.
 
 Editors get the same knowledge from `hisim/energy_system_v3.schema.json`, which every file in this
 directory binds to with its first line. The schema is generated from the same declarations

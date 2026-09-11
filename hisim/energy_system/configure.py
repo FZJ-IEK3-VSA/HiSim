@@ -37,9 +37,9 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Any, ClassVar, List, Mapping, Optional, Tuple
+from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 
-from hisim.config.presets import ConfigBuilder, resolved_parameter_types
+from hisim.config.presets import ConfigBuilder
 from hisim.config.report import ResolutionReport
 from hisim.energy_system.bindings import ClassBinding, ClassBindings
 from hisim.energy_system.classes import validate_classes
@@ -294,9 +294,18 @@ class EntryConfigurator:
         Each argument goes through the same codec a ``config`` value does, against the
         parameter's own resolved annotation rather than against a field's, so the two forms
         accept the same spellings and refuse the same mistakes with the same sentence. The
-        argument names are already known to be parameters — the class-bound validator checked
-        that, with the parameter list in its message — so the only question left here is
-        whether each value fits.
+        annotations are the ones the ``@constructor`` decorator resolved when the class was
+        declared, read off the builder rather than resolved again here: a parameter's type is
+        part of the file format, and resolving it twice is how two readings of it start.
+
+        The decoded value is then checked against the shape its parameter asks for, which the
+        field path leaves to the configuration class. A constructor argument has no such
+        second reader — it goes straight into a Python call — so a mapping nothing rebuilt or
+        a list where one object belongs is refused here, at the argument's own key.
+
+        The argument names are already known to be parameters — the class-bound validator
+        checked that, with the parameter list in its message — so the only question left here
+        is whether each value fits.
 
         Args:
             builder: The declared builder the entry selected.
@@ -312,14 +321,18 @@ class EntryConfigurator:
         if not arguments:
             return {}
         entry = self.binding.entry
-        annotations = resolved_parameter_types(builder.function)
         location = f"components.{entry.name}.{builder.kind.value}.{builder.name}"
-        return {
-            key: self.codec.decode_argument(
-                annotations.get(key), value, f"{location}.{key}", entry.name, key
+        decoded: Dict[str, Any] = {}
+        for key, value in arguments.items():
+            annotation = builder.parameter_types.get(key)
+            argument_location = f"{location}.{key}"
+            decoded[key] = self.codec.decode_argument(
+                annotation, value, argument_location, entry.name, key
             )
-            for key, value in arguments.items()
-        }
+            self.codec.check_argument_shape(
+                annotation, decoded[key], argument_location, entry.name, key
+            )
+        return decoded
 
     def _apply_overrides(self, config: Any) -> Any:
         """Writes the entry's sparse ``config`` block onto the configuration it built.

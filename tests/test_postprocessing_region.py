@@ -1,17 +1,17 @@
-"""Tests for the report region, which postprocessing reads off the run's Weather component.
+"""Tests for the report region, which postprocessing reads off the run's Weather components.
 
-The region is report metadata -- the ``region`` field of the pyam export and of the webtool
-result JSON. It used to travel through a process-wide singleton key the Weather wrote at
-construction time; it now comes from the Weather component in the finished run, so these tests
-pin the three answers ``region_of`` can give: no Weather, one Weather, and more than one.
+The region is report metadata -- the ``region`` field of the pyam export and of the
+scenario-evaluation config JSON. It used to travel through a process-wide singleton key the
+Weather wrote at construction time; it now comes from the Weather components in the finished
+run, so these tests pin the three answers ``region_of`` can give: no Weather, one Weather, and
+more than one.
 """
 
 from __future__ import annotations
 
 import datetime
-from typing import List
+from typing import Iterator, List
 
-import pandas as pd
 import pytest
 
 from hisim.component import Component
@@ -20,79 +20,82 @@ from hisim.components.example_component import ExampleComponent, ExampleComponen
 from hisim.components.weather import LocationEnum, Weather, WeatherConfig
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.postprocessing_main import region_of
-from hisim.simulationparameters import SimulationParameters
-
-
-SIMULATION_PARAMETERS = SimulationParameters(
-    start_date=datetime.datetime(2021, 1, 1),
-    end_date=datetime.datetime(2021, 1, 2),
-    seconds_per_timestep=60,
-    result_directory="",
-    post_processing_options=[],
+from tests.postprocessing_option_test_framework import (
+    PreparedPostProcessingCase,
+    SETUP_MODULE_NAME,
+    _clone_ppdt,
+    _prepare_case,
 )
 
 
-def _data_transfer(components: List[Component]) -> PostProcessingDataTransfer:
-    """Build the smallest data transfer object ``region_of`` reads from."""
-    return PostProcessingDataTransfer(
-        results=pd.DataFrame(),
-        all_outputs=[],
-        simulation_parameters=SIMULATION_PARAMETERS,
+@pytest.fixture(name="prepared_case", scope="module")
+def prepared_case_fixture() -> Iterator[PreparedPostProcessingCase]:
+    """Run the smallest system setup once, to borrow a finished run's data transfer object."""
+    yield _prepare_case(
+        setup_module_name=SETUP_MODULE_NAME,
+        start_date=datetime.datetime(2021, 1, 1),
+        end_date=datetime.datetime(2021, 1, 2),
+        seconds_per_timestep=3600,
+        test_name_prefix="postprocessing_region",
+    )
+
+
+def _data_transfer_reporting_on(
+    case: PreparedPostProcessingCase, components: List[Component]
+) -> PostProcessingDataTransfer:
+    """Take the prepared run's data transfer object, reporting on these components instead."""
+    return _clone_ppdt(
+        case=case,
+        simulation_parameters=case.ppdt.simulation_parameters,
         wrapped_components=[
             ComponentWrapper(component, is_cachable=False, connect_automatically=False)
             for component in components
         ],
-        mode=1,
-        setup_function="setup_function",
-        module_filename="test_postprocessing_region",
-        module_config=None,
-        execution_time_in_s=0.0,
-        results_monthly=None,
-        results_hourly=None,
-        results_cumulative=None,
-        results_daily=None,
     )
 
 
-def _weather(location: LocationEnum, name: str) -> Weather:
+def _weather(case: PreparedPostProcessingCase, name: str, location: LocationEnum) -> Weather:
     """Build a Weather configured for one catalogue station."""
-    config = WeatherConfig.get_default(location_entry=location, name=name)
-    weather_component: Weather = Weather(my_simulation_parameters=SIMULATION_PARAMETERS, config=config)
+    # The config and component classes resolve to Any under the tests' mypy profile, so the
+    # annotation is what pins the built component to a Weather.
+    weather_component: Weather = Weather(
+        my_simulation_parameters=case.ppdt.simulation_parameters,
+        config=WeatherConfig.for_location(name, location=location),
+    )
     return weather_component
 
 
-def _non_weather() -> ExampleComponent:
+def _non_weather(case: PreparedPostProcessingCase) -> ExampleComponent:
     """Build a component that is not a Weather, so the search cannot simply take the first one."""
     return ExampleComponent(
-        my_simulation_parameters=SIMULATION_PARAMETERS,
+        my_simulation_parameters=case.ppdt.simulation_parameters,
         config=ExampleComponentConfig.get_default_example_component(),
     )
 
 
 @pytest.mark.base
-def test_region_is_the_weathers_configured_location() -> None:
+def test_region_is_the_weathers_configured_location(prepared_case: PreparedPostProcessingCase) -> None:
     """A run with a Weather is reported under the location that Weather is configured for."""
-    weather_component = _weather(LocationEnum.AACHEN, "Weather")
-    ppdt = _data_transfer([_non_weather(), weather_component])
+    components: List[Component] = [
+        _non_weather(prepared_case),
+        _weather(prepared_case, "Weather", LocationEnum.AACHEN),
+    ]
 
-    assert region_of(ppdt) == weather_component.weather_config.location
-    assert region_of(ppdt) != ""
+    assert region_of(_data_transfer_reporting_on(prepared_case, components)) == "Aachen"
 
 
 @pytest.mark.base
-def test_region_is_empty_without_a_weather() -> None:
+def test_region_is_empty_without_a_weather(prepared_case: PreparedPostProcessingCase) -> None:
     """A run with no Weather has no region, and gets the empty string the report falls back to."""
-    assert region_of(_data_transfer([])) == ""
-    assert region_of(_data_transfer([_non_weather()])) == ""
+    assert region_of(_data_transfer_reporting_on(prepared_case, [])) == ""
+    assert region_of(_data_transfer_reporting_on(prepared_case, [_non_weather(prepared_case)])) == ""
 
 
 @pytest.mark.base
-def test_region_of_two_weathers_is_the_first_one() -> None:
-    """A district drawing on two stations is reported under the first Weather's location."""
-    first = _weather(LocationEnum.AACHEN, "WeatherOne")
-    second = _weather(LocationEnum.MANNHEIM, "WeatherTwo")
-    assert first.weather_config.location != second.weather_config.location
+def test_region_of_several_weathers_names_them_all(prepared_case: PreparedPostProcessingCase) -> None:
+    """A district drawing on two stations is reported under both, joined in component order."""
+    aachen = _weather(prepared_case, "WeatherOne", LocationEnum.AACHEN)
+    madrid = _weather(prepared_case, "WeatherTwo", LocationEnum.MADRID)
 
-    ppdt = _data_transfer([first, second])
-
-    assert region_of(ppdt) == first.weather_config.location
+    assert region_of(_data_transfer_reporting_on(prepared_case, [aachen, madrid])) == "Aachen / Madrid"
+    assert region_of(_data_transfer_reporting_on(prepared_case, [madrid, aachen])) == "Madrid / Aachen"

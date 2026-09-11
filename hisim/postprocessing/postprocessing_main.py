@@ -75,32 +75,36 @@ BUILDING_OWN_KPI_NAME: str = "Conditioned floor area"
 
 
 def region_of(ppdt: PostProcessingDataTransfer) -> str:
-    """Return the region the run is reported under: the location its Weather is configured for.
+    """Return the region the run is reported under: the locations its Weathers are configured for.
 
-    The region is report metadata only -- the ``region`` field of the pyam export and of the
-    webtool result JSON. It is read off the run's own components, so the two report writers
-    that need it share one answer and cannot drift apart.
+    The region is report metadata only -- the ``region`` field of the pyam export written by
+    ``prepare_results_for_scenario_evaluation`` and of the scenario-evaluation config JSON written
+    by ``write_config_data_for_scenario_evaluation``. It is read off the run's own components
+    rather than a process-wide global, so both writers share one answer and cannot drift apart.
 
-    A run without a Weather has no region and gets ``""``. A run with more than one Weather --
-    a district drawing on two stations -- is reported under the first one's location; the
-    process-wide singleton key this replaced reported the last Weather constructed, which was
-    no more meaningful and, across two simulations in one process, not even this run's.
+    A run without a Weather has no region and gets ``""``. A run with one Weather is reported under
+    that Weather's configured location. A run with several -- a district drawing on more than one
+    station -- is reported under all of them, joined in component order with ``" / "``, so that the
+    answer is deterministic and no station is silently dropped.
 
     Args:
         ppdt: The data transfer object of the finished run, whose ``wrapped_components``
             carry the components the simulation was built from.
 
     Returns:
-        The configured location string of the first Weather in the run, or ``""`` if it has none.
+        The configured locations of the run's Weathers joined in component order, or ``""``
+        if the run has no Weather.
     """
+    locations: List[str] = []
     for wrapped_component in ppdt.wrapped_components:
         component = wrapped_component.my_component
         if isinstance(component, Weather):
-            # Config classes are opaque to mypy (see the dataclasses_json note in mypy.ini),
-            # so the field arrives as Any and the annotation is what pins it to a string.
+            # Under this repository's mypy configuration the config attribute resolves to Any
+            # (see the dataclasses_json note in mypy.ini), so the annotation is what pins the
+            # value to a string rather than letting Any spread into the joined region.
             location: str = component.weather_config.location
-            return location
-    return ""
+            locations.append(location)
+    return " / ".join(locations)
 
 
 def _load_attribute(module_name: str, attribute_name: str) -> Any:

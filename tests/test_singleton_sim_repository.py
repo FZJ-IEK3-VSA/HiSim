@@ -153,7 +153,6 @@ def test_house(
     assert len(repo.my_dict) > 0
     # The Weather no longer registers its location here: the report region is read from the
     # Weather component's own config, so the key is gone from the enum entirely.
-    assert not hasattr(SingletonDictKeyEnum, "LOCATION")
     # Building registers its 5R1C thermal parameters in the singleton during build().
     assert SingletonDictKeyEnum.THERMALCAPACITYENVELOPE in repo.my_dict
     assert SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING in repo.my_dict

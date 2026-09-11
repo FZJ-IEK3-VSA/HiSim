@@ -31,8 +31,9 @@ def test_house(
     """Check that a normal simulation works with the singleton sim repository implementation.
 
     What a Weather/occupancy/Building run still puts into the repository is the Weather's
-    yearly forecast series; the Weather's location and the Building's six 5R1C thermal
-    parameters used to live here too and are read off the components themselves now.
+    yearly forecast series, which the Weather writes unconditionally; the Weather's location
+    and the Building's six 5R1C thermal parameters used to live here too and are read off the
+    components themselves now.
 
     The singleton identity property is verified separately in
     ``test_singleton_returns_same_instance``.
@@ -158,12 +159,11 @@ def test_house(
     # The Weather no longer registers its location here: the report region is read from the
     # Weather component's own config, so the key is gone from the enum entirely. The Building
     # no longer registers its six 5R1C thermal parameters either -- their only readers were
-    # the PID and MPC controllers, now in obsolete/ -- so what the run leaves behind are the
-    # Weather's yearly forecast series, which the PV system and predictive components read.
-    assert SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST in repo.my_dict
-    assert SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST in repo.my_dict
-    # The forecasts must carry real series -- not just be present -- to confirm the Weather
-    # genuinely pushed its computed values through the singleton sim repository during the run.
+    # the PID and MPC controllers, now in obsolete/. What the run leaves behind are the two
+    # yearly forecast series the Weather writes unconditionally, which the PV system and the
+    # predictive components read. Each is asserted once: indexing the key proves it is there,
+    # and a non-empty series proves the Weather genuinely pushed its computed values through
+    # the singleton sim repository during the run rather than registering an empty entry.
     assert len(repo.my_dict[SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST]) > 0
     assert len(repo.my_dict[SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST]) > 0
     assert len(repo.my_dict) >= 7

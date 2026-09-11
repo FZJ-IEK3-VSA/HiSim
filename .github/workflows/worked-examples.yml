@@ -33,13 +33,13 @@ jobs:
     name: yaml matches the workbooks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       # Wall time, CPU time and peak memory for this job; see the action.
       - name: Start the resource monitor
         uses: ./.github/actions/resource-monitor
         with:
           mode: start
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - name: Install converter dependencies

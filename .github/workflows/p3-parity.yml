@@ -61,7 +61,7 @@ jobs:
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       # Wall time, CPU time and peak memory for this job; see the action.
       - name: Start the resource monitor
         uses: ./.github/actions/resource-monitor
@@ -95,7 +95,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       # Wall time, CPU time and peak memory for this job; see the action.
       - name: Start the resource monitor
         uses: ./.github/actions/resource-monitor
@@ -116,7 +116,7 @@ jobs:
             --json "verdicts/${{ matrix.setup }}-${{ matrix.window }}.json"
       - name: Upload this triple's verdict
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: p3-parity-verdict-${{ matrix.setup }}-${{ matrix.window }}
           path: verdicts/
@@ -125,7 +125,7 @@ jobs:
       # triple to leave behind.
       - name: Upload the evidence of a failing triple
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: p3-parity-artifacts-${{ matrix.setup }}-${{ matrix.window }}
           path: results/p3-parity/${{ matrix.setup }}/${{ matrix.window }}/artifacts/
@@ -152,7 +152,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       # Wall time, CPU time and peak memory for this job; see the action.
       - name: Start the resource monitor
         uses: ./.github/actions/resource-monitor
@@ -163,7 +163,7 @@ jobs:
       - name: Install HiSim package
         run: uv pip install --system -e .
       - name: Collect every triple's verdict
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           pattern: p3-parity-verdict-*
           path: verdicts

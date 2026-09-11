@@ -25,7 +25,7 @@ jobs:
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       # Wall time, CPU time and peak memory for this job; see the action.
       - name: Start the resource monitor
         uses: ./.github/actions/resource-monitor
@@ -54,7 +54,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       # Wall time, CPU time and peak memory for this job; see the action.
       - name: Start the resource monitor
         uses: ./.github/actions/resource-monitor
@@ -68,7 +68,7 @@ jobs:
       - name: Regenerate golden for this pair
         run: python scripts/golden_update.py --setup "${{ matrix.setup }}" --param "${{ matrix.param }}"
       - name: Upload regenerated golden
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: golden-${{ matrix.setup }}-${{ matrix.param }}
           path: golden_references/${{ matrix.setup }}__${{ matrix.param }}.json
@@ -94,7 +94,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       # Wall time, CPU time and peak memory for this job; see the action.
       - name: Start the resource monitor
         uses: ./.github/actions/resource-monitor
@@ -103,7 +103,7 @@ jobs:
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Download all regenerated goldens
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: golden-*
           # upload-artifact strips the common leading dir, so each artifact holds a bare

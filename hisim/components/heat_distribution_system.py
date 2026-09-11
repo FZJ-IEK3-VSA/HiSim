@@ -931,32 +931,6 @@ class HeatDistributionControllerConfig(ConfigBase):
         """
         return cls(component_id=ComponentID(name=name))
 
-    @classmethod
-    def get_default_heat_distribution_controller_config(
-        cls,
-        heating_load_of_building_in_watt: float,
-        set_heating_temperature_for_building_in_celsius: float,
-        set_cooling_temperature_for_building_in_celsius: float,
-        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
-        heating_reference_temperature_in_celsius: float = -7.0,
-        heating_system: HeatDistributionSystemType = HeatDistributionSystemType.FLOORHEATING,
-        component_id: Optional[ComponentID] = None,
-    ) -> "HeatDistributionControllerConfig":
-        """Gets a default HeatDistribution Controller."""
-
-        if component_id is None:
-            component_id = ComponentID(name="HeatDistributionController")
-        return HeatDistributionControllerConfig(
-            component_id=component_id,
-            heating_system=heating_system,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
-            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
-            heating_load_of_building_in_watt=round(heating_load_of_building_in_watt, 2),
-            specific_heating_load_of_building_in_watt_per_m2=None,
-        )
-
     @staticmethod
     def set_heating_threshold_temperature_based_on_building_efficiency(
         specific_heating_load_of_building_in_watt_per_m2: float,

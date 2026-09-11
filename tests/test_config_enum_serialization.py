@@ -89,11 +89,16 @@ class ConfigEnumSerializationCases:
             )
         ),
         "HeatDistributionControllerConfig": lambda: (
-            heat_distribution_system.HeatDistributionControllerConfig
-            .get_default_heat_distribution_controller_config(
-                heating_load_of_building_in_watt=8000.0,
-                set_heating_temperature_for_building_in_celsius=20.0,
-                set_cooling_temperature_for_building_in_celsius=25.0,
+            heat_distribution_system.HeatDistributionControllerConfig.preset_standard(
+                "HeatDistributionController"
+            ).resolve(
+                SizingContext(
+                    heating_load_in_watt=8000.0,
+                    conditioned_floor_area_in_m2=120.0,
+                    heating_reference_temperature_in_celsius=-7.0,
+                    set_heating_temperature_in_celsius=20.0,
+                    set_cooling_temperature_in_celsius=25.0,
+                )
             )
         ),
     }

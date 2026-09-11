@@ -23,14 +23,15 @@ components:
       - SimpleHotWaterStorage
   HeatDistributionController:
     class: hisim.components.heat_distribution_system.HeatDistributionController
+    preset: standard
     config:
       heating_system: RADIATOR
-      set_heating_threshold_outside_temperature_in_celsius: 16.0
+      set_heating_threshold_outside_temperature_in_celsius: 18.0
       heating_reference_temperature_in_celsius: -12.2
       set_heating_temperature_for_building_in_celsius: 20.0
       set_cooling_temperature_for_building_in_celsius: 25.0
       heating_load_of_building_in_watt: 7780.75
-      specific_heating_load_of_building_in_watt_per_m2: null
+      specific_heating_load_of_building_in_watt_per_m2: 64.19762541254126
     inputs:
       - Weather
       - Building

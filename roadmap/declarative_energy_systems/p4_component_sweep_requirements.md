@@ -107,7 +107,7 @@ Legend: **conv** convert · **del** retired — moved to `obsolete/` under D-16'
 
 | Class | Act | Presets | `AUTO` fields ← facts | Provides | Beh. | Dec. |
 |---|---|---|---|---|---|---|
-| `HeatDistributionControllerConfig` | done | `standard` | delete 2 factories (21 sites); `heating_system` plain default until Q-P1.8 | threshold fact **landed 2026-09-11** (R2.1) | **P** for 3 setups + 8 tests (16 → 18 °C) | D-11 |
+| `HeatDistributionControllerConfig` | done | `standard` | `get_default_*` **deleted** (11 sites, D-11 executed 2026-09-11); `get_config_based_on_building_efficiency` still carries 10 building-sizer setups (B1); `heating_system` plain default until Q-P1.8 | threshold fact **landed 2026-09-11** (R2.1) | **P**, executed: 3 setups + 8 tests at 16 → 18 °C; week goldens unchanged (January never reaches the threshold), +0.060 % gas over a full year | D-11 |
 | `HeatDistributionConfig` | done | | nothing left | | | |
 | `SimpleHotWaterStorageConfig` | conv | `buffer` (+ `sizing_option: HotWaterStorageSizingEnum` field, D-10) | `volume_heating_water_storage_in_liter` ← **generator** `maximal_thermal_power_in_watt` × k (20/40/50 l/kW) — C11 executed 2026-09-11, the twelve setups pass the generator's power | — | **P** — C11 done (3 twins +10 %, `basic_household_only_heating` +54 %, 8 twins byte-identical); the conversion itself is behaviour-neutral | D-9, D-10, D-17 |
 | `SimpleHotWaterStorageControllerConfig` | del | | | | | D-16 |
@@ -276,6 +276,37 @@ row is struck from the table, which keeps the question and the option chosen nex
   (`basic_household_only_heating`, `household_gas_solar_thermal`, `automatic_default_connections`); no
   `fixed_threshold_16c` preset is minted for a value nobody chose. `basic_household_only_heating` is blessed **in
   the same commit**, so all 13 heat-distribution setups agree on one law and one of the three is gated.
+  — **Executed 2026-09-11.** `get_default_heat_distribution_controller_config` is **deleted**; every one of its
+  eleven call sites now spells `HeatDistributionControllerConfig.preset_standard("HeatDistributionController")
+  .resolve(SizingContext(...))` with the facts of its own building.
+  `get_config_based_on_building_efficiency` stays: its ten building-sizer setups already compute the threshold
+  from the same step table, and retiring it is B1 work, not a physics decision.
+  **The number is 18** because all three setups build the default `BuildingConfig.preset_standard("Building")` —
+  7780.75 W over 121.2 m² = 64.198 W/m², the middle band of
+  `set_heating_threshold_temperature_based_on_building_efficiency` (≤ 50 → 16, ≤ 80 → 18, > 80 → 20), which is
+  kept and is now the preset's law. `basic_household_only_heating` keeps its two author choices explicitly: the
+  `RADIATOR` emitter, and the −12.2 °C design outside temperature it has always run its heating curve against
+  while its building carries the default −7.0 °C — that fact is passed into the context by hand rather than read
+  off the building, so nothing but the threshold moves.
+  **The eight tests** (`test_heat_distribution_system`, `test_gas_meter`, `test_fuel_meter`, `test_heating_meter`,
+  `test_time_resolution`, `test_controller_l2_energy_management_system`, `test_sizing_engine`,
+  `test_config_enum_serialization`) all take the computed 18: not one of them asserts an absolute number, they
+  compare a meter against the component it measures within 5 %, so none of them wanted 16 and no threshold is
+  pinned anywhere. `test_sizing_engine`'s pilot chain now hands the *unresolved* preset to `resolve_all`, which is
+  what that test is about; its resolved numbers are unchanged. A new test in `test_heat_distribution_system.py`
+  pins 18.0 for the default building and walks the three bands (16 / 18 / 20, band edges included) through the
+  context, so the law is tested where the setups meet it.
+  **The measured deviation is zero.** All three twins were re-recorded (they now carry `preset: standard`, the
+  threshold 18.0, and the specific heating load 64.198 W/m² where the factory wrote `null`; in
+  `automatic_default_connections` the heat pump's space-heating controller inherits the threshold and moves to
+  18.0 as well), and `scripts/golden_check.py --param one_week_60s` **passes with an empty deviation list for all
+  three** setups. The week gate is the first week of January, where the daily average outside temperature never
+  reaches 16 °C, so the threshold never binds; all three are week-only in `golden_config.json`, so **no
+  re-bless is required** — the bless the commit anticipated turns out to be a no-op, and the gate demonstrably
+  cannot see this class of change. Measured outside the gate instead, one full year of
+  `basic_household_only_heating` at 15-minute resolution: 29 of 102 KPIs move, gas consumption
+  **+0.060 %** (61 289.8 → 61 326.8 kWh) with opex and CO₂ following it, and the largest relative move is an
+  extremum rather than an energy — the minimum flow temperature of the distribution system, 20.16 → 14.83 °C.
 - **D-12** `[answered 2026-09-10]` **(a) fix.** The PV preset's law reads `Self("share_of_maximum_pv_potential")`
   and the field records the share actually applied, so a realized record re-executes (EAC2/UC5). Golden-neutral —
   the fleet's share is 1.0 — but every RenoVisor and building-sizer payload with a share below one, which came

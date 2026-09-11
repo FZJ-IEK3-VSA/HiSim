@@ -86,12 +86,25 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Heat Distribution
-    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
-        set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
-        set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+    # Build Heat Distribution. The controller's facts come from the building, except the design
+    # outside temperature: this setup has always run its heating curve against -12.2 °C while the
+    # building itself is the default -7.0 °C, so that number is passed explicitly and stays as it was.
+    my_heat_distribution_controller_config = (
+        heat_distribution_system.HeatDistributionControllerConfig.preset_standard(
+            "HeatDistributionController"
+        ).resolve(
+            SizingContext(
+                heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+                conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+                heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+                set_heating_temperature_in_celsius=(
+                    my_building_information.set_heating_temperature_for_building_in_celsius
+                ),
+                set_cooling_temperature_in_celsius=(
+                    my_building_information.set_cooling_temperature_for_building_in_celsius
+                ),
+            )
+        )
     )
     my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
 

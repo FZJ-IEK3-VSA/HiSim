@@ -2,11 +2,10 @@
 
 # clean
 
-from typing import Any, Optional
+from typing import Optional
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 from hisim.loadtypes import LoadTypes, ComponentType
-from hisim.config import ConfigBase, ComponentID
 from hisim import log
 
 """
@@ -693,64 +692,6 @@ class EmissionFactorsAndCostsForDevicesConfig:
         return capex_techno_economic_values
 
 
-@dataclass_json
-@dataclass
-class WarmWaterStorageConfig(ConfigBase):
-    """Warm water storage config class."""
-
-    component_id: ComponentID
-    tank_diameter: float  # [m]
-    tank_height: float  # [m]
-    tank_start_temperature: float  # [°C]
-    temperature_difference: float  # [°C]
-    tank_u_value: float  # [W/m^2*K]
-    slice_height_minimum: float  # [m]
-
-    @classmethod
-    def get_default_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Gets a default config."""
-        if component_id is None:
-            component_id = ComponentID(name="WarmWaterStorage")
-        return WarmWaterStorageConfig(
-            component_id=component_id,
-            tank_diameter=1,  # 0.9534        # [m]
-            tank_height=2,  # 3.15              # [m]
-            tank_start_temperature=65,  # [°C]
-            temperature_difference=0.3,  # [°C]
-            tank_u_value=0,  # 0.35                 # [W/m^2*K]
-            slice_height_minimum=0.05,  # [m]
-        )
-
-
-class CHPControllerConfig:
-    """Chp controller config.
-
-    The CHP controller is used to implement an on and off hysteresis
-    Decide if its heat- or electricity-led
-
-    Two temperature sensors in the tank are giving the needed information.
-    They can be set at a height percentage in the tank. =% is the top, 100 % s the bottom of the tank.
-    If the T at the upper sensor is below temperature_switch_on the chp will run until the lower sensor is above temperature_switch_off.
-    A minimum runtime in minutes can be defined for the chp.
-
-    If the chp is electric-led, ths is not needed and the electricity demand is provided directly to the chp
-    """
-
-    method_of_operation = "heat"
-    temperature_switch_on = 60  # [°C]
-    temperature_switch_off = 65  # [°C]
-
-    # in steps of 20 % [0, 20, 40 ,60, 80, 100]
-    heights_in_tank = [0, 20, 40, 60, 80, 100]
-    height_upper_sensor = 20  # [%]
-    height_lower_sensor = 60  # [%]
-
-    minimum_runtime_minutes = 4000  # [min]
-
-
 class GasHeaterConfig:
     """Gas heater config class."""
 
@@ -762,49 +703,6 @@ class GasHeaterConfig:
     delta_temperature = 25
     mass_flow_max = P_th_max / (4180 * delta_temperature)  # kg/s ## -> ~0.07
     temperature_max = 80  # [°C]
-
-
-class GasControllerConfig:
-    """Gas controller config class.
-
-    This controller works like the CHP controller, but switches on later so the CHP is used more often.
-    Gas heater is used as a backup if the CHP power is not high enough.
-    If the minimum_runtime is smaller than the timestep, the minimum_runtime is 1 timestep --> generic_gas_heater.py
-    """
-
-    temperature_switch_on = 55  # [°C]
-    temperature_switch_off = 70  # [°C]
-
-    # in steps of 20 % [0, 20, 40 ,60, 80, 100]
-    height_upper_sensor = 20  # [%]
-    height_lower_sensor = 80  # [%]
-
-    # minimal timestep is minute
-    minimum_runtime_minutes = 7000  # [min]
-
-
-class LoadConfig:
-    """Load config."""
-
-    # massflow_load_minute = 2.5          # [kg/min]
-    # massflow_load = massflow_load_minute / 60   # [kg/s]
-
-    possible_massflows_load = [0.1, 0.2, 0.3, 0.4]  # [kg/s]
-    delta_temperature = 20
-
-    # the returnflow shows if there was enough energy in the water
-    # -> use in load! Not in storage, there the water from WW is included
-    temperature_returnflow_minimum = 30  # [°C]
-
-    kwh_per_year = 20_201
-    demand_factor = kwh_per_year / 1000
-
-
-class ElectricityDemandConfig:
-    """Electricity demand config class."""
-
-    kwh_per_year = 6000
-    demand_factor = kwh_per_year / 1000
 
 
 class HouseholdWarmWaterDemandConfig:
@@ -869,52 +767,6 @@ class AdvElectrolyzerConfig:
 
     --> Solution: efficiency of the electrolyzer is calculated and is an Output
     """
-
-
-class PVConfig:
-    """PV config class."""
-
-    peak_power = 20_000  # [W]
-
-
-@dataclass_json
-@dataclass
-class ExtendedControllerConfig(ConfigBase):
-    """Extended controller config class."""
-
-    component_id: ComponentID
-    # Active Components
-    chp: bool
-    gas_heater: bool
-    electrolyzer: bool
-    # electrolyzer: bool
-
-    # power mode chp
-    # chp_mode: str
-    chp_mode: str
-    chp_power_states_possible: int
-    maximum_autarky: bool
-
-    @classmethod
-    def get_default_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Gets a default ExtendedControllerConfig."""
-        if component_id is None:
-            component_id = ComponentID(name="ExtendedController")
-        return ExtendedControllerConfig(
-            component_id=component_id,
-            chp=True,
-            gas_heater=True,
-            electrolyzer=True,
-            # electrolyzer = False,
-            # power mode chp,
-            # chp_mode = "heat",
-            chp_mode="power",
-            chp_power_states_possible=10,
-            maximum_autarky=False,
-        )
 
 
 @dataclass_json

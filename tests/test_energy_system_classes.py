@@ -80,6 +80,14 @@ class ExpectedFailures:
     ``EF-15`` means it declares no such named constructor, ``EF-10`` means the module the
     entry names does not exist in this repository at all, and ``EF-43`` means the class reads
     no such sizing fact.
+
+    Four entries moved from ``EF-13`` to ``EF-10`` when the component sweep retired
+    ``controller_l1_heatpump`` to ``obsolete/`` (decision D-2, 2026-09-10): the mockups still name
+    ``L1HeatPumpController`` because they are written against the format rather than against the
+    classes that exist today, and the class is now missing outright rather than merely missing a
+    preset. Those entries need a live controller when a conversion reaches them, which is a
+    decision for the batch that converts the heat-pump controllers, not for the sweep that
+    retired a class nothing built.
     """
 
     #: The minimal mockup is empty: every class it names is converted, which is what makes it
@@ -97,7 +105,8 @@ class ExpectedFailures:
         "battery": "EF-13",
         "ems": "EF-43",
         "heating_rod": "EF-13",
-        "heating_rod_controller": "EF-13",
+        # `controller_l1_heatpump` retired to `obsolete/` under D-2: module gone, not preset gone.
+        "heating_rod_controller": "EF-10",
     }
 
     MULTI_FAMILY: ClassVar[Mapping[str, str]] = {
@@ -115,7 +124,8 @@ class ExpectedFailures:
                 ("hds", "EF-13"),
                 ("dhw_storage", "EF-13"),
                 ("dhw_heater", "EF-13"),
-                ("dhw_controller", "EF-13"),
+                # `controller_l1_heatpump` retired to `obsolete/` under D-2 (see above).
+                ("dhw_controller", "EF-10"),
                 ("car", "EF-13"),
                 ("charger", "EF-13"),
             )

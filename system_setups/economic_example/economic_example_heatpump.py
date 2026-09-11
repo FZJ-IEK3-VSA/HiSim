@@ -230,11 +230,12 @@ def attach_tariff_provider(my_sim, params: SimulationParameters) -> TariffProvid
     **What consumes what, honestly stated.** Its `ElectricityFromGridInWatt` input is connected to
     the meter's grid draw, which is what makes the two capacity-charge outputs
     (`BillingPeriodPeakSoFar`, `CapacityChargeMarginal`) real rather than constant zero. Its two
-    price outputs are *published*, not consumed: no component in this setup takes a price input —
-    the only price consumer in the component library is `controller_mpc`, and it reads the 24 h
-    forecast this provider publishes to the `SingletonSimRepository` rather than a wired input.
-    The prices are therefore in the results frame for a reader and for any controller wired to
-    them, and the README says so.
+    price outputs are *published*, not consumed: no component in this setup takes a price input, and
+    since the component sweep retired `controller_mpc` and `generic_price_signal` to `obsolete/`
+    (decision D-16, 2026-09-10) no component in the library does either — this provider is now the
+    library's only price source, and the 24 h forecast it publishes to the `SingletonSimRepository`
+    waits for the controller that will read it. The prices are therefore in the results frame for a
+    reader and for any controller wired to them, and the README says so.
 
     Args:
         my_sim: The `Simulator` returned by `initialize_from_python`, already wired.

@@ -165,7 +165,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # nothing to work from, and the run dies in post-processing.
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
+        config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
     )
     my_gas_meter = gas_meter.GasMeter(
         my_simulation_parameters=my_simulation_parameters,

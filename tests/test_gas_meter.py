@@ -192,7 +192,7 @@ def test_house(
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
+        config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
     )
 
     # Build Gas Meter

@@ -1,4 +1,4 @@
-"""Tests for the ElectricityMeterConfig factory/classname classmethods and ElectricityMeterState.self_copy.
+"""Tests for the ElectricityMeterConfig preset/classname classmethods and ElectricityMeterState.self_copy.
 
 These tests pin down the pure, side-effect-free helpers on
 ``ElectricityMeterConfig`` and ``ElectricityMeterState`` that are otherwise
@@ -8,6 +8,8 @@ simulation, no I/O.
 """
 
 # clean
+
+import dataclasses
 
 import pytest
 
@@ -31,8 +33,8 @@ _OPTIONAL_FIELDS: tuple[str, ...] = (
 def _assert_all_optional_fields_are_none(config: ElectricityMeterConfig) -> None:
     """Assert every Optional cost/emission field on ``config`` is ``None``.
 
-    These are deliberately left unset by the default factory because capex and
-    device emissions are computed later in ``get_cost_capex``.
+    These are deliberately left unset by the preset because capex and device
+    emissions are computed later in ``get_cost_capex``.
     """
     for field_name in _OPTIONAL_FIELDS:
         assert getattr(config, field_name) is None, (
@@ -41,9 +43,9 @@ def _assert_all_optional_fields_are_none(config: ElectricityMeterConfig) -> None
 
 
 @pytest.mark.base
-def test_get_electricity_meter_default_config_defaults() -> None:
-    """``get_electricity_meter_default_config()`` returns the documented defaults."""
-    config: ElectricityMeterConfig = ElectricityMeterConfig.get_electricity_meter_default_config()
+def test_preset_standard_defaults() -> None:
+    """``preset_standard("ElectricityMeter")`` returns the documented defaults."""
+    config: ElectricityMeterConfig = ElectricityMeterConfig.preset_standard("ElectricityMeter")
     assert isinstance(config, ElectricityMeterConfig)
     assert config.component_id.name == "ElectricityMeter"
     assert config.component_id.building is None
@@ -51,24 +53,25 @@ def test_get_electricity_meter_default_config_defaults() -> None:
 
 
 @pytest.mark.base
-def test_get_electricity_meter_default_config_custom_name_and_building() -> None:
-    """Passing a full component_id sets name and building while keeping Optional fields ``None``."""
-    config: ElectricityMeterConfig = ElectricityMeterConfig.get_electricity_meter_default_config(
-        component_id=ComponentID(name="MyMeter", building="HouseA")
-    )
+def test_preset_standard_names_the_instance() -> None:
+    """The preset names the meter it builds; the name is the caller's, not a default."""
+    config: ElectricityMeterConfig = ElectricityMeterConfig.preset_standard("X")
     assert isinstance(config, ElectricityMeterConfig)
-    assert config.component_id.name == "MyMeter"
-    assert config.component_id.building == "HouseA"
+    assert config.component_id.name == "X"
+    assert config.component_id.building is None
     _assert_all_optional_fields_are_none(config)
 
 
 @pytest.mark.base
-def test_get_electricity_meter_default_config_name_only_defaults_building() -> None:
-    """Passing only ``name`` leaves the identity without a building."""
-    config: ElectricityMeterConfig = ElectricityMeterConfig.get_electricity_meter_default_config(name="X")
+def test_a_building_is_an_explicit_override_on_the_preset() -> None:
+    """A meter inside a named building is the preset plus an explicit identity override."""
+    config: ElectricityMeterConfig = dataclasses.replace(
+        ElectricityMeterConfig.preset_standard("MyMeter"),
+        component_id=ComponentID(name="MyMeter", building="HouseA"),
+    )
     assert isinstance(config, ElectricityMeterConfig)
-    assert config.component_id.name == "X"
-    assert config.component_id.building is None
+    assert config.component_id.name == "MyMeter"
+    assert config.component_id.building == "HouseA"
     _assert_all_optional_fields_are_none(config)
 
 

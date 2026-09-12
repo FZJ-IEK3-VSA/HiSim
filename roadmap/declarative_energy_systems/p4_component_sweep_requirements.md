@@ -123,7 +123,7 @@ Legend: **conv** convert · **del** retired — moved to `obsolete/` under D-16'
 | `BatteryConfig` | conv | `standard` | capacity ← pv_peak_power × 1e-3; inverter ← pv_peak_power × 0.5 (**not** `Self(capacity)` — rounding trap) | — | N | D-14 |
 | `WindturbineConfig` | del | | `generic_windturbine.py` → `obsolete/` with its test (D-16); the KPI vocabulary keys on `ComponentType.WINDTURBINE`, so no result moves | | | D-16 |
 | `PriceSignalConfig` | del | | `generic_price_signal.py` → `obsolete/` with its test (D-16); superseded by `tariff_provider.py` | | | D-16 |
-| `ElectricityMeterConfig` | done | `standard` | delete legacy factory (25 sites) | | N | |
+| `ElectricityMeterConfig` | done | `standard` | legacy factory **deleted 2026-09-12** (B1), 29 sites moved to `preset_standard(name)`: 17 setups, 12 calls in 10 test files | | N | |
 | `GasMeterConfig` | conv | `gas`, `hydrogen` | `gas_loadtype` ← generator carrier (copy, D-15 (b); the `energy_carrier` fact **landed 2026-09-11**, the `LoadTypes` codec has not) | — | N | D-15 |
 | `FuelMeterConfig` | conv | `oil`, `pellets`, `wood_chips`, `district_heating` | `fuel_loadtype`, `heating_value_of_fuel_in_kwh_per_liter`, `fuel_density_in_kg_per_m3` ← generator (copy, D-15 (b); `None` for district heating) — all three facts **landed 2026-09-11** | — | N | D-15 |
 | `HeatingMeterConfig` | conv | `standard` | — | — | N | |

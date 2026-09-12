@@ -116,7 +116,7 @@ def test_lifecycle_cost_engine_runs_in_shadow_mode() -> None:
     )
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
+        config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
     )
     my_idealized_electric_heater = idealized_electric_heater.IdealizedElectricHeater(
         my_simulation_parameters=my_simulation_parameters,

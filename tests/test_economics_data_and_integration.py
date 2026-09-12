@@ -29,15 +29,18 @@ pytestmark = pytest.mark.base
 # staging area (#604), and its `get_cost_facts` adoption went with the module. The fleet's hplib
 # heat pump is MoreAdvancedHeatPumpHPLib, which declares PRICED and is priced through the adapter
 # table rather than the hook, so it has no declaration for this test to check.
+# The last element of each row is what the builder is called with: a legacy factory takes
+# nothing, a preset takes the instance name of the component it configures.
 ADOPTED_COMPONENTS = [
-    ("hisim.components.generic_pv_system", "PVSystem", "PVSystemConfig", "get_default_pv_system", "config"),
-    ("hisim.components.advanced_battery_bslib", "Battery", "BatteryConfig", "get_default_config", "battery_config"),
+    ("hisim.components.generic_pv_system", "PVSystem", "PVSystemConfig", "get_default_pv_system", "config", ()),
+    ("hisim.components.advanced_battery_bslib", "Battery", "BatteryConfig", "get_default_config", "battery_config",
+     ()),
     ("hisim.components.electricity_meter", "ElectricityMeter", "ElectricityMeterConfig",
-     "get_electricity_meter_default_config", "config"),
+     "preset_standard", "config", ("ElectricityMeter",)),
 ]
 
 
-def _facts_from_default_config(module_name, class_name, config_class_name, default_factory, config_attr):
+def _facts_from_default_config(module_name, class_name, config_class_name, default_factory, config_attr, builder_args):
     """Builds a component's cost facts from its own default config, without constructing it.
 
     `get_cost_facts` reads only the config, so a `SimpleNamespace` carrying that config under both
@@ -53,7 +56,7 @@ def _facts_from_default_config(module_name, class_name, config_class_name, defau
 
     module = importlib.import_module(module_name)
     component_class = getattr(module, class_name)
-    config = getattr(getattr(module, config_class_name), default_factory)()
+    config = getattr(getattr(module, config_class_name), default_factory)(*builder_args)
     dummy = types.SimpleNamespace(**{config_attr: config, "config": config})
     return component_class, config, component_class.get_cost_facts(dummy)
 
@@ -90,11 +93,11 @@ class TestCostFactsContract:
         """
         import importlib
 
-        module_name, class_name, config_class_name, default_factory, config_attr = spec
+        module_name, class_name, config_class_name, default_factory, config_attr, builder_args = spec
         module = importlib.import_module(module_name)
         component_class = getattr(module, class_name)
         config_class = getattr(module, config_class_name)
-        config = getattr(config_class, default_factory)()
+        config = getattr(config_class, default_factory)(*builder_args)
         capacity_fields = [
             data_field.name for data_field in dataclasses.fields(config_class) if data_field.metadata.get("capacity")
         ]

@@ -6,7 +6,7 @@ between machines. These tests pin what is left of that: the base rule and the co
 fields that decide the result move the key, fields that only place the run do not, and a key built from
 the repository's own data files contains no absolute path.
 
-The weather has left this path entirely. Its series is produced by ``hisim.components.weather_calculation``
+The weather has left this path entirely. Its series is produced by ``hisim.components.weather.calculation``
 and keyed under the producer scheme of ``roadmap/cache_service_spec.md`` §3, where the data file is
 identified by the hash of its contents and the path is not key material at all;
 ``tests/test_weather_producer.py`` pins that.

@@ -23,8 +23,9 @@ import pytest
 
 from hisim import sim_repository
 from hisim.caching import CacheKey, Fingerprints, ImportClosure, ProducerLayering
-from hisim.components import weather, weather_calculation
-from hisim.components.weather_calculation import (
+from hisim.components import weather
+from hisim.components.weather import calculation
+from hisim.components.weather.calculation import (
     ARTIFACT_KIND,
     WeatherDataSourceEnum,
     WeatherSeriesInputs,
@@ -68,7 +69,7 @@ class ProducerCopy:
         self.directory = directory / self.ROOT
         self.directory.mkdir()
         (self.directory / "__init__.py").write_text("", encoding="utf-8")
-        self.write(self.PRODUCER, pathlib.Path(weather_calculation.__file__).read_text(encoding="utf-8"))
+        self.write(self.PRODUCER, pathlib.Path(calculation.__file__).read_text(encoding="utf-8"))
         monkeypatch.syspath_prepend(str(directory))
 
     def write(self, module: str, source: str) -> None:
@@ -147,7 +148,7 @@ def digest_of(inputs: WeatherSeriesInputs) -> str:
     Returns:
         str: the digest.
     """
-    return CacheKey.for_producer(ARTIFACT_KIND, weather_calculation, inputs).digest
+    return CacheKey.for_producer(ARTIFACT_KIND, calculation, inputs).digest
 
 
 @pytest.mark.base
@@ -163,12 +164,12 @@ def test_the_producer_obeys_the_layering_rule() -> None:
     Catches: a producer reaching for ``Component``, ``loadtypes`` or the singleton repository, which
     would make it uncallable without a simulator and its key hostage to unrelated edits.
     """
-    closure = ImportClosure.of(weather_calculation)
+    closure = ImportClosure.of(calculation)
 
     ProducerLayering.check(closure)
     assert not ProducerLayering.violations(closure)
     assert set(closure.package_modules) == {
-        "hisim.components.weather_calculation",
+        "hisim.components.weather.calculation",
         "hisim.caching.keys",
     }, (
         "every HiSim module in the closure is hashed into the weather's cache key, so adding one means "
@@ -240,7 +241,7 @@ def test_the_data_file_enters_the_key_by_its_contents_and_not_by_its_path() -> N
 
     assert digest_of(here) == digest_of(there)
     assert digest_of(here) != digest_of(other_data)
-    assert here.source_path not in CacheKey.for_producer(ARTIFACT_KIND, weather_calculation, here).material
+    assert here.source_path not in CacheKey.for_producer(ARTIFACT_KIND, calculation, here).material
 
 
 @pytest.mark.base

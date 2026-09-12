@@ -12,6 +12,7 @@ import pytest
 from hisim import sim_repository
 from hisim import component
 from hisim.components import weather
+from hisim.components.weather import weather as weather_module
 from hisim.simulationparameters import SimulationParameters
 from hisim.config import DisplayConfig
 from tests import functions_for_testing as fft
@@ -207,7 +208,7 @@ def test_weather_cache_pressure_non_keyerror_propagates(
     """
     my_weather = _build_weather_with_cache(tmp_path, include_pressure=True)
 
-    original_read_csv = weather.pd.read_csv
+    original_read_csv = weather_module.pd.read_csv
 
     class _PressureCorruptDataFrame(pd.DataFrame):
         """DataFrame whose ``'Pressure'`` access raises ``ValueError``."""
@@ -223,7 +224,7 @@ def test_weather_cache_pressure_non_keyerror_propagates(
         df = original_read_csv(*args, **kwargs)
         return _PressureCorruptDataFrame(df)
 
-    monkeypatch.setattr(weather.pd, "read_csv", fake_read_csv)
+    monkeypatch.setattr(weather_module.pd, "read_csv", fake_read_csv)
     with pytest.raises(ValueError, match="simulated cache corruption"):
         my_weather.i_prepare_simulation()
 

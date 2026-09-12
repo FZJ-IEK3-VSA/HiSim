@@ -17,17 +17,16 @@ key means one thing per simulation and the collision cannot occur.
 uses it legitimately, for a value that really is process-wide.
 
 Migration: new code must not use the singleton repository at all. The retirement is under way and
-`SingletonDictKeyEnum` is down to ten members, which are two flows and two steps:
+`SingletonDictKeyEnum` is down to two members, ``RESULT_SCENARIO_NAME`` and ``DESCRIPTION``, written
+by the building-sizer setups and ``hisim_main`` and read by postprocessing. They become attributes of
+the run rather than repository entries -- they describe the run, so they belong with it. When that
+lands, this module keeps only ``SingletonMeta``.
 
-1. The eight full-year weather series the Weather publishes and the PV system reads at prepare
-   time. They move onto the per-simulation repository, which is where a whole-year array that
-   belongs to one run belongs.
-2. ``RESULT_SCENARIO_NAME`` and ``DESCRIPTION``, written by ``hisim_main`` and read by
-   postprocessing. They become parameters rather than repository entries -- they describe the run,
-   so they belong with the other run parameters.
-
-Everything else was deleted on 2026-09-12: nothing read it. When the two steps above land, this
-module keeps only ``SingletonMeta``.
+Everything else was deleted or moved on 2026-09-12: the Weather's eight full-year series (outside
+temperature, diffuse horizontal, direct normal, direct normal extra and global horizontal
+irradiance, azimuth, apparent zenith, wind speed), which the PV system reads at prepare time, travel
+through the per-simulation :class:`hisim.sim_repository.SimRepository` under ``Weather.YEARLY_*``;
+nothing read the rest.
 """
 # clean
 import enum
@@ -214,7 +213,6 @@ class SingletonDictKeyEnum(enum.Enum):
     # COEFFICIENT_OF_PERFORMANCE_HEATING and ENERGY_EFFICIENY_RATIO_COOLING. The first
     # seven had no reference outside this file at all; the air conditioner wrote the last
     # two for the PID and MPC controllers now in obsolete/.
-    WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST = 23
     # 24 to 26 were HEATFLUXTHERMALMASSNODEFORECAST, HEATFLUXSURFACENODEFORECAST and
     # HEATFLUXINDOORAIRNODEFORECAST, and 28 was PVFORECASTYEARLY: the disturbance and
     # generation forecasts the Building and the PV system computed under their `predictive`
@@ -226,13 +224,10 @@ class SingletonDictKeyEnum(enum.Enum):
     # forecast, whose only reader was that same controller.
     # 37 and 46 were WEATHERALTITUDEYEARLYFORECAST and WEATHERPRESSUREYEARLYFORECAST, two
     # of the Weather's full-year publications that nothing read.
-    WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST = 38
-    WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST = 39
-    WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST = 40
-    WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST = 41
-    WEATHERAZIMUTHYEARLYFORECAST = 42
-    WEATHERAPPARENTZENITHYEARLYFORECAST = 43
     # 44 was HEATINGBYRESIDENTSYEARLYFORECAST, written by the UTSP connector under its own
     # `predictive` flag and read only by the Building's predictive branch.
-    WEATHERWINDSPEEDYEARLYFORECAST = 45
+    # 23 and 38 to 45 were the eight full-year weather series (outside temperature, diffuse
+    # horizontal, direct normal, direct normal extra and global horizontal irradiance, azimuth,
+    # apparent zenith, wind speed) the Weather published for the PV system. Since 2026-09-12
+    # they travel through the per-simulation SimRepository, keyed by Weather.YEARLY_*.
     DESCRIPTION = 47

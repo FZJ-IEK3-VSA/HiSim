@@ -14,7 +14,7 @@ from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.sim_repository_singleton import SingletonSimRepository
 from hisim import log
 from hisim import utils
 
@@ -28,12 +28,13 @@ PATH: str = "../system_setups/household_for_test_sim_repository.py"
 def test_house(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """Check that a normal simulation works with the singleton sim repository implementation.
+    """Check that a normal simulation exchanges its whole-year series without the singleton.
 
-    What a Weather/occupancy/Building run still puts into the repository is the Weather's
-    yearly forecast series, which the Weather writes unconditionally; the Weather's location
-    and the Building's six 5R1C thermal parameters used to live here too and are read off the
-    components themselves now.
+    A Weather/occupancy/Building run leaves the process-wide repository untouched: the Weather's
+    ten full-year series travel through the per-simulation repository the ``Simulator`` owns,
+    under the key names the ``Weather`` class publishes. The Weather's location and the
+    Building's six 5R1C thermal parameters used to live in the singleton too and are read off
+    the components themselves now.
 
     The singleton identity property is verified separately in
     ``test_singleton_returns_same_instance``.
@@ -54,6 +55,11 @@ def test_house(
         my_simulation_parameters = SimulationParameters.one_day_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
+
+    # What the process-wide repository holds before this test starts: other tests in the same
+    # session may have left entries there, so the assertion at the end compares against this
+    # snapshot rather than against an empty dict.
+    singleton_entries_before = dict(SingletonSimRepository().my_dict)
 
     # this part is copied from hisim_main
     path_to_be_added = str(Path(PATH).resolve().parent)
@@ -144,30 +150,33 @@ def test_house(
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_building)
 
+    # Prepare the components explicitly first, so the per-simulation repository can be inspected:
+    # ``run_all_timesteps`` prepares them again and then clears the repository at the end of the
+    # run, which drops the very entries under test.
+    my_sim.prepare_calculation()
+    published = dict(my_sim.simulation_repository.entries)
+
     my_sim.run_all_timesteps()
 
     log.information(f"singleton sim repo {SingletonSimRepository().my_dict}")
 
-    # The components exchange data through the singleton sim repository while
-    # the simulation is built and run. Assert that the repository was actually
-    # populated during the run instead of only checking that "nothing raised" --
-    # this pins down the behaviour the docstring promises (a normal simulation
-    # works *with* the singleton sim repository).
+    # The Weather publishes its eight full-year series into the repository the Simulator owns,
+    # which is where the PV system reads them. Two are asserted by name: indexing the key proves
+    # it is there, and a non-empty series proves the Weather genuinely pushed its computed values
+    # through rather than registering an empty entry. The count is the eight series plus the
+    # weather location the report region is read from.
+    assert len(published[weather.Weather.YEARLY_TEMPERATURE_OUTSIDE]) > 0
+    assert len(published[weather.Weather.YEARLY_AZIMUTH]) > 0
+    assert len(published) >= 9
+
+    # Nothing of this household reaches the process-wide repository any more: the Weather no
+    # longer registers its location there (the report region is read from the Weather's own
+    # config), the Building no longer registers its six 5R1C thermal parameters (their only
+    # readers were the PID and MPC controllers, now in obsolete/), and the yearly series moved
+    # to the per-simulation repository. A key left here would be a key that survives into the
+    # next simulation in this process.
     repo = SingletonSimRepository()
-    assert repo.my_dict is not None
-    assert len(repo.my_dict) > 0
-    # The Weather no longer registers its location here: the report region is read from the
-    # Weather component's own config, so the key is gone from the enum entirely. The Building
-    # no longer registers its six 5R1C thermal parameters either -- their only readers were
-    # the PID and MPC controllers, now in obsolete/. What the run leaves behind are the eight
-    # yearly forecast series the Weather writes unconditionally, which the PV system reads;
-    # the pressure and altitude series went the way of the predictive branch that was their
-    # only plausible consumer. Two are asserted here: indexing the key proves it is there,
-    # and a non-empty series proves the Weather genuinely pushed its computed values through
-    # the singleton sim repository during the run rather than registering an empty entry.
-    assert len(repo.my_dict[SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST]) > 0
-    assert len(repo.my_dict[SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST]) > 0
-    assert len(repo.my_dict) >= 7
+    assert repo.my_dict == singleton_entries_before
 
 
 @pytest.mark.base

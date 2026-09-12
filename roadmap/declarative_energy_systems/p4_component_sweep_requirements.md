@@ -100,7 +100,7 @@ Legend: **conv** convert · **del** retired — moved to `obsolete/` under D-16'
 | `AirConditionerControllerConfig`, `SimpleAirConditionerControllerConfig`, `SolarThermalSystemControllerConfig`, `NightSetbackConfig` | conv | `standard` | — | N | |
 | `L1CHPControllerConfig` | conv | `gas`, `hydrogen`, `gas_with_buffer`, `hydrogen_with_buffer` | — | N — D-4 reversed 2026-09-11, the 42/50 and 35/31 values are preserved, so no threshold moves | D-4 |
 | `L1HeatPumpConfig` (`controller_l1_heatpump`) | ? | (`space_heating`, `buffer`, `dhw`) | — | N | D-2 |
-| `GenericBoilerControllerConfig` | done | `modulating`, `on_off` | delete 4 legacy factories; pellet/wood-chip → `on_off` + overrides | N | |
+| `GenericBoilerControllerConfig` | done | `modulating`, `on_off` | 4 legacy factories **deleted 2026-09-12** (B1), 11 sites (8 setups, 3 tests): `modulating` ×8, `on_off` ×3, pellet and wood chip as `on_off` + their two runtime/resting overrides | N | |
 | `GasHeaterConfig`, `GasControllerConfig`, `CHPControllerConfig`, `ExtendedControllerConfig` (+ `advanced_fuel_cell_controller`) | del | | | | D-8 |
 
 **Heat distribution, storages (survey B)**

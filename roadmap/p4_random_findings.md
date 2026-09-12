@@ -141,7 +141,7 @@ its `main`, so moving it would take the file away from them. Both calls resolve 
 walks up from the directory of the module that calls it, which is `hisim/` for both. A test in `tests/test_cli.py`
 plants a sentinel `.env` and asserts the console script has read it.
 
-### F-5 — a component copied from `example_template.py` raises before its first timestep **[verified]**
+### F-5 — a component copied from `example_template.py` raises before its first timestep **[verified, fixed]**
 
 `Component.i_prepare_simulation` (`hisim/component.py:350`) raises
 `NotImplementedError("Simulation preparation is missing for …")`, and `Simulator.run_all_timesteps` calls it
@@ -158,8 +158,19 @@ directly and never build a Simulator, which is why neither file's omission is ca
 *Cost of not finding it: the template's whole job is that copying it produces something that runs, and the one
 lifecycle method it omits is the one that raises rather than doing nothing.*
 
-**Where it stands.** Not fixed. A no-op override with the docstring the other components carry, in both files.
-Fix alongside the D-31 follow-up, which is already editing both.
+**Where it stands.** Fixed. Both `example_template.ComponentName` and `example_component.ExampleComponent`
+implement `i_prepare_simulation` as a documented no-op: the template's docstring says what a real component
+does in that hook (open a data file, precompute a profile, read a fact out of the simulation repository) and
+that a component with nothing to prepare still has to define it, because the base class refuses to run
+without it; the example component's says the same, and that its `build()` already ran at construction — no
+behaviour moved. The template's numbered steps now list all five lifecycle methods with a line each, so the
+file names the hook before the reader reaches the class.
+
+Each test file gained the test that was missing: it builds the component, adds it to a `Simulator` and runs
+`run_all_timesteps()` over one day at hourly resolution with no post-processing option set. Both fail with
+`NotImplementedError` on the code as it stood — which is the whole finding, since every other test in those
+files calls `i_simulate` directly. (The template declares its input mandatory, so its test wires the
+`ExampleComponent`'s `ElectricityOutput` to it; the Simulator refuses an unconnected mandatory input.)
 
 
 ---

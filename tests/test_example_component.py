@@ -1,6 +1,8 @@
 """Test for the Example Component."""
 
 # clean
+from pathlib import Path
+
 import pytest
 
 from hisim import component as cp
@@ -8,6 +10,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import example_component
 from hisim.simulationparameters import SimulationParameters
+from hisim.simulator import Simulator
 from hisim.config import AUTO, ComponentID, SizableFieldKind, describe_config
 from tests import functions_for_testing as fft
 
@@ -167,3 +170,35 @@ def test_capacity_is_described_as_a_sized_field() -> None:
     assert capacity.kind is SizableFieldKind.LAW
     assert capacity.note is not None
     assert str(example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2) in capacity.note
+
+
+@pytest.mark.base
+def test_the_example_component_runs_inside_a_simulator(tmp_path: Path) -> None:
+    """The example component survives a real run, which every other test here bypasses.
+
+    The rest of this file calls ``i_simulate`` by hand, so for a long time nothing noticed
+    that ``ExampleComponent`` did not implement ``i_prepare_simulation``: the ``Simulator``
+    calls that hook on every component before the first timestep, and the base class raises
+    ``NotImplementedError`` instead of doing nothing. A component copied from this file
+    therefore died at the first thing a run does. One day at hourly resolution, with no
+    post-processing option set, is enough to reach that hook and finish.
+    """
+    my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
+    my_simulation_parameters.result_directory = str(tmp_path / "results")
+    assert not my_simulation_parameters.post_processing_options
+
+    my_sim: Simulator = Simulator(
+        module_directory=str(tmp_path),
+        module_filename="example_component_in_a_simulator",
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    my_sim.set_simulation_parameters(my_simulation_parameters)
+    my_sim.add_component(
+        example_component.ExampleComponent(
+            config=fft.sized_example_component_config(), my_simulation_parameters=my_simulation_parameters
+        )
+    )
+
+    my_sim.run_all_timesteps()
+
+    assert len(my_sim.results_data_frame) == my_simulation_parameters.timesteps == 24

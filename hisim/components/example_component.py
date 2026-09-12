@@ -217,6 +217,22 @@ class ExampleComponent(Component):
         lines: List[str] = []
         return lines
 
+    def i_prepare_simulation(self) -> None:
+        """No-op: everything this component needs is already built in ``__init__``.
+
+        The ``Simulator`` calls this once on every component before the first timestep.
+        This one has nothing left to do here: :meth:`build` has already fixed the load
+        profile, the capacity and the initial temperature at construction time, from
+        constants in the config. A component whose preparation is expensive, or that
+        depends on something only known once every component of the system exists — a
+        data file, a precomputed profile, a fact left in the simulation repository —
+        does that work here instead.
+
+        The method cannot simply be left out: :meth:`hisim.component.Component.i_prepare_simulation`
+        raises ``NotImplementedError``, so a component without it fails before its first
+        timestep.
+        """
+
     def i_save_state(self) -> None:
         """Saves the current state of the temperature."""
         self.previous_temperature = self.temperature

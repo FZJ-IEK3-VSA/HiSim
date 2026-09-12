@@ -106,18 +106,20 @@ class Rig:
     CANARY_AGGREGATOR: ClassVar[str] = "L2EMSElectricityController"
 
     #: Every legacy port the canary setup's energy manager grows, as the table declares them. The
-    #: numbers are the whole point: an input carries its insertion index and a dispatch output the
-    #: controller's output counter, so both move when anything before them is added or removed.
+    #: numbers are the whole point, and the two halves now carry different ones: an input carries
+    #: its insertion index, which still moves when anything before it is added or removed, while a
+    #: dispatch output carries the weight it steers on, which is the setup's own and moves only
+    #: when the setup re-weights a participant.
     CANARY_LEGACY_PORTS: ClassVar[Tuple[str, ...]] = (
         "Input_PVSystem_ElectricityOutput_2",
         "Input_Battery1_AcBatteryPowerUsed_3",
         "Input_Battery2_AcBatteryPowerUsed_4",
         "Input_CHP1_ElectricityOutput_5",
         "Input_CHP2_ElectricityOutput_6",
-        "ElectricityTargetOutput14",
-        "ElectricityTargetOutput15",
-        "ElectricityTargetOutput16",
-        "ElectricityTargetOutput17",
+        "ElectricityTarget1",
+        "ElectricityTarget2",
+        "ElectricityTarget3",
+        "ElectricityTarget4",
     )
 
     @classmethod
@@ -355,7 +357,7 @@ def test_the_renaming_table_declares_one_meaning_per_legacy_port() -> None:
     assert pairs, "the table declares nothing, so every aggregator port would fail literally"
     assert pairs[("ElectricityMeter", "Input_PVSystem_ElectricityOutput_0")] == "ElectricityOutputFromPVSystem"
     assert (
-        pairs[("L2EMSElectricityController", "LoadingPowerInputForBattery_Output14")]
+        pairs[("L2EMSElectricityController", "LoadingPowerInputForBattery_6")]
         == "DispatchToBattery_LoadingPowerInput"
     )
     renaming = DeclaredPortRenamings.port_renaming()
@@ -364,28 +366,30 @@ def test_the_renaming_table_declares_one_meaning_per_legacy_port() -> None:
 
 @pytest.mark.base
 def test_the_table_still_spells_the_ports_the_dynamic_components_setup_actually_grows(tmp_path: Path) -> None:
-    """Catches a renaming table whose dispatch counter no longer matches the controller's build.
+    """Catches a renaming table whose legacy spellings no longer match the controller's build.
 
     Every legacy dynamic port name in the table carries a number the two paths do not agree on: an
-    aggregator input carries its insertion index, and a dispatch output carries the aggregator's
-    running output counter, which counts the outputs the component had already declared when the
-    setup added the dispatch. That counter is not the setup's to control — an energy manager that
-    gains or loses one declared output renumbers every dispatch output of every setup that uses
-    it — so a hand-authored number can be wrong without any setup changing. Exactly that once
-    failed the whole fleet's dispatch at once, with a wiring difference that was nothing but a
-    name; the table's own comment on the battery dispatch tells that story.
+    aggregator input carries its insertion index, and a dispatch output carries the source weight
+    the aggregator steers that participant on. The dispatch half used to carry the aggregator's
+    running output counter instead — the outputs it had already declared when the setup added the
+    dispatch — which was not the setup's to control: an energy manager that gained or lost one
+    declared output renumbered every dispatch output of every setup that used it. Exactly that
+    once failed the whole fleet's dispatch at once, with a wiring difference that was nothing but
+    a name; the table's own comment on the battery dispatch tells that story, and F-1 replaced the
+    counter with the weight so that it cannot happen again.
 
-    This is the canary for the counter class of that failure. One setup is enough for it because
-    the counter is the controller's: all twelve energy manager setups start their dispatch numbers
-    from the same thirteen constructor-declared outputs, so a shift moves this setup's names
-    exactly as it moves every other's. This setup also needs no load profile, so it costs a base
-    test seconds instead of minutes. The per-setup insertion indices of the setups the canary does
-    not build are outside its net; those are cross-checked against the recorded scenario files by
-    the next test and verified against live builds only by the fleet workflow. The canary asserts
-    both halves: that every legacy name the table declares for this setup is a port the Python
-    build really has — a name nobody grows any more can never be exercised again — and that
-    translating the Python wiring through the table yields precisely the twin's wiring, which is
-    the claim the rig makes fleet-wide.
+    This is the canary for that class of failure, and it still earns its place: a weight is stable
+    under unrelated edits but not under a setup re-weighting a participant, and an input index
+    moves as freely as it ever did. One setup is enough for the dispatch half because the naming
+    rule is the aggregator's, and this one steers four participants on four different weights
+    through it; it also needs no load profile, so it costs a base test seconds instead of minutes.
+    The per-setup insertion indices of the setups the canary does not build are outside its net;
+    those are cross-checked against the recorded twins by the next test and verified
+    against live builds only by the fleet workflow. The canary asserts both halves: that every
+    legacy name the table declares for this setup is a port the Python build really has — a name
+    nobody grows any more can never be exercised again — and that translating the Python wiring
+    through the table yields precisely the twin's wiring, which is the claim the rig makes
+    fleet-wide.
     """
     legacy, declarative = Rig.canary_wiring(tmp_path)
     grown = (

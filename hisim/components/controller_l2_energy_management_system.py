@@ -363,6 +363,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             output_description=f"here a description for {self.ElectricityToBuildingFromDistrictEMSOutput} will follow.",
         )
 
+        # Describing the connections creates no port. Each of these methods returns the feeds one
+        # participant class would bring and, where the controller steers that participant, the
+        # target output it would need; both are grown later, by
+        # connect_with_dynamic_connections_list, and only for a class the system setup built. The
+        # methods used to create their target outputs as a side effect of being asked, which gave
+        # every controller the ports of every device it could ever meet (F-1).
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
         self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
@@ -417,19 +423,15 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.RESIDENTS, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
                 source_weight=1,
+                target_output=dynamic_component.DynamicComponentTargetOutput(
+                    source_output_name=f"ElectricityToOrFromGridOf{occupancy_class_name}_",
+                    source_tags=[
+                        lt.ComponentType.RESIDENTS,
+                        lt.InandOutputType.ELECTRICITY_TARGET,
+                    ],
+                    output_description="Target electricity for Occupancy. ",
+                ),
             )
-        )
-        self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOf{occupancy_class_name}_",
-            source_tags=[
-                lt.ComponentType.RESIDENTS,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_component_class=occupancy_class_name,
-            source_weight=1,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for Occupancy. ",
         )
         return dynamic_connections
 
@@ -456,6 +458,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
                 source_weight=2,
+                target_output=dynamic_component.DynamicComponentTargetOutput(
+                    source_output_name=f"ElectricityToOrFromGridOfSH{more_advanced_heat_pump_class_name}_",
+                    source_tags=[
+                        lt.ComponentType.HEAT_PUMP_BUILDING,
+                        lt.InandOutputType.ELECTRICITY_TARGET,
+                    ],
+                    output_description="Target electricity for Heating Heat Pump. ",
+                ),
             )
         )
         dynamic_connections.append(
@@ -474,31 +484,15 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 # has domestic hot water preparation enabled; allow this mandatory
                 # input to remain unconnected when DHW is deactivated.
                 allow_unconnected_mandatory=True,
+                target_output=dynamic_component.DynamicComponentTargetOutput(
+                    source_output_name=f"ElectricityToOrFromGridOfDHW{more_advanced_heat_pump_class_name}_",
+                    source_tags=[
+                        lt.ComponentType.HEAT_PUMP_DHW,
+                        lt.InandOutputType.ELECTRICITY_TARGET,
+                    ],
+                    output_description="Target electricity for Heating Heat Pump. ",
+                ),
             )
-        )
-        self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOfSH{more_advanced_heat_pump_class_name}_",
-            source_tags=[
-                lt.ComponentType.HEAT_PUMP_BUILDING,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_component_class=more_advanced_heat_pump_class_name,
-            source_weight=2,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for Heating Heat Pump. ",
-        )
-        self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOfDHW{more_advanced_heat_pump_class_name}_",
-            source_tags=[
-                lt.ComponentType.HEAT_PUMP_DHW,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_component_class=more_advanced_heat_pump_class_name,
-            source_weight=3,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for Heating Heat Pump. ",
         )
         return dynamic_connections
 
@@ -523,6 +517,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
                 source_weight=2,
+                target_output=dynamic_component.DynamicComponentTargetOutput(
+                    source_output_name=f"ElectricityToOrFromGridOfSH{electric_heater_class_name}_",
+                    source_tags=[
+                        lt.ComponentType.ELECTRIC_HEATING_SH,
+                        lt.InandOutputType.ELECTRICITY_TARGET,
+                    ],
+                    output_description="Target electricity for electric heater space heating.",
+                ),
             )
         )
         dynamic_connections.append(
@@ -537,32 +539,15 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
                 source_weight=3,
+                target_output=dynamic_component.DynamicComponentTargetOutput(
+                    source_output_name=f"ElectricityToOrFromGridOfDHW{electric_heater_class_name}_",
+                    source_tags=[
+                        lt.ComponentType.ELECTRIC_HEATING_DHW,
+                        lt.InandOutputType.ELECTRICITY_TARGET,
+                    ],
+                    output_description="Target electricity for electric heater domestic hot water.",
+                ),
             )
-        )
-
-        self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOfSH{electric_heater_class_name}_",
-            source_tags=[
-                lt.ComponentType.ELECTRIC_HEATING_SH,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_component_class=electric_heater_class_name,
-            source_weight=2,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for electric heater space heating.",
-        )
-        self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOfDHW{electric_heater_class_name}_",
-            source_tags=[
-                lt.ComponentType.ELECTRIC_HEATING_DHW,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_component_class=electric_heater_class_name,
-            source_weight=3,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for electric heater domestic hot water.",
         )
         return dynamic_connections
 
@@ -610,19 +595,15 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
                 source_weight=4,
+                target_output=dynamic_component.DynamicComponentTargetOutput(
+                    source_output_name=f"ElectricityToOrFromGridOf{solar_thermal_class_name}_",
+                    source_tags=[
+                        lt.ComponentType.SOLAR_THERMAL_SYSTEM,
+                        lt.InandOutputType.ELECTRICITY_TARGET,
+                    ],
+                    output_description="Target electricity for solar thermal domestic hot water.",
+                ),
             )
-        )
-        self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOf{solar_thermal_class_name}_",
-            source_tags=[
-                lt.ComponentType.SOLAR_THERMAL_SYSTEM,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_component_class=solar_thermal_class_name,
-            source_weight=4,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for solar thermal domestic hot water.",
         )
 
         return dynamic_connections

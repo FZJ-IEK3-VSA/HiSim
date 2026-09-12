@@ -12,7 +12,6 @@ import humps
 # 1st party imports
 from hisim import log
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
 from hisim.config import ConfigBase, ComponentID
 import hisim.component as cp
 import hisim.dynamic_component as dcp
@@ -62,27 +61,35 @@ class Scenario(BaseModel):
     connections: dict[str, Any] | list[Any] | None = None
 
 
-def count_outputs_created_by_constructor(component: L2GenericEnergyManagementSystem) -> int:
-    """Count the outputs the EMS builds for itself, before any system setup adds more.
+def is_grown_by_a_default_connection(component: DynamicComponent, field_name: str) -> bool:
+    """Says whether an aggregator grew this dispatch output from one of its default connections.
 
-    The EMS creates dynamic outputs from inside its own ``__init__``, one per
-    ``get_default_connections_from_*`` helper. Those must not be written to the scenario
-    JSON, because the JSON executor instantiates the component the same way and would end
-    up with each of them twice. Outputs a system setup appended afterwards must be written,
-    and they are exactly the ones whose ``OutputN`` index runs past this count.
+    Such an output must not be written to the scenario JSON: the JSON executor applies the same
+    default connections when it builds the component, so a written one would be created twice.
+    Only the targets a system setup added by hand belong in the file.
 
-    The count is measured rather than assumed: a pristine instance of the same class is
-    built from the same config and its outputs are counted. ``Component.__init__`` only
-    populates the instance -- it registers nothing globally -- so the throwaway instance is
-    free of side effects. Hard-coding the number instead silently rotted once already, when
-    retiring the modular DHW heat pump removed one of the EMS helpers and shifted every
-    setup-added output down by one index.
+    The question is asked of the declarations rather than of a counter over the outputs. Until
+    F-1 an aggregator grew every default connection's target port in its constructor and named
+    ports by their position, so "the setup's own outputs" could be spelled as "the ones past the
+    constructor's count" -- a cut-off that moved whenever a default connection was added or
+    retired. Now a target port is grown only for a participant the run has, and named after the
+    prefix and weight its declaration carries, which is exactly what is matched here.
+
+    Args:
+        component: The aggregator being written down.
+        field_name: The name of one of its dynamic outputs.
+
+    Returns:
+        True if one of the component's default connections declares that port.
     """
-    pristine_instance = type(component)(
-        my_simulation_parameters=component.my_simulation_parameters,
-        config=component.ems_config,
-    )
-    return len(pristine_instance.outputs)
+    for connections in component.dynamic_default_connections.values():
+        for connection in connections:
+            target_output = connection.target_output
+            if target_output is None:
+                continue
+            if target_output.source_output_name + str(connection.source_weight) == field_name:
+                return True
+    return False
 
 
 # Adapted from old json_generator.py
@@ -104,12 +111,6 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
 
     outs = []
     ins = []
-    # Used by the EMS special case inside the output loop below; see the comment there.
-    number_of_outputs_built_by_constructor = (
-        count_outputs_created_by_constructor(component)
-        if isinstance(component, L2GenericEnergyManagementSystem)
-        else 0
-    )
     for out in component.outputs:
         if isinstance(component, DynamicComponent):
             output_matches = [
@@ -122,30 +123,19 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
                     f"Multiple dynamic outputs found for field '{out.field_name}' in component '{component.component_name}'"
                 )
             if len(output_matches) == 1:
-                match = re.search(r"Output(\d+)$", out.field_name)
-                number = int(match.group(1)) if match else 100
+                # A target port the aggregator grows for itself when the executor applies its
+                # default connections is left out; writing it down would create it twice.
+                if is_grown_by_a_default_connection(component, out.field_name):
+                    continue
 
-                # Handle special case for EMS: its constructor already builds a batch of
-                # dynamic outputs (one per `get_default_connections_from_*` helper), and the
-                # JSON executor gets those back for free when it instantiates the component.
-                # Re-declaring them here would duplicate them, so only the outputs a system
-                # setup added on top of the constructor's belong in the file. The cut-off is
-                # read off a pristine instance instead of hard-coded, because it shifts
-                # whenever a default-connection helper is added or retired.
-                if isinstance(component, L2GenericEnergyManagementSystem):
-                    if number <= number_of_outputs_built_by_constructor:
-                        continue
-
-                # add_component_output has been used
+                # add_component_output has been used. Its name is the prefix the caller passed
+                # plus the source weight, so the prefix is what remains when the weight is cut
+                # off the end again.
                 dynamic_output = output_matches[0]
-                # Extract source_output_name from the field_name
-                match = re.match(r"^(.*?)(Output\d+)$", out.field_name)
-                if not match:
-                    raise ValueError(f"Invalid field_name format: {out.field_name}")
-                source_object_name = match.group(1)
+                source_output_name = out.field_name[: -len(str(dynamic_output.source_weight))]
                 outs.append({
                     "dynamic": True,
-                    "source_output_name": source_object_name,
+                    "source_output_name": source_output_name,
                     "source_tags": dynamic_output.source_tags,
                     "source_load_type": dynamic_output.source_load_type.value,
                     "source_unit": dynamic_output.source_unit.value,

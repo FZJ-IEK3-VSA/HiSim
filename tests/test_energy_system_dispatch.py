@@ -644,8 +644,8 @@ class MiniAggregator(DynamicComponent):
     #: agree for the port to be adoptable at all.
     PARTICIPANT_WEIGHT: ClassVar[int] = 4
 
-    #: Base name of the constructor-published port; ``add_component_output`` appends its
-    #: internal ``Output<n>`` counter to it.
+    #: Base name of the constructor-published port; ``add_component_output`` appends the source
+    #: weight the port is dispatched on to it.
     PUBLISHED_PORT_BASENAME: ClassVar[str] = "ConstructorGrownCommand"
 
     CHANNELS: ClassVar[Tuple[DynamicConnectionChannel, ...]] = (

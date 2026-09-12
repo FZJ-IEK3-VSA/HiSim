@@ -165,13 +165,15 @@ def test_house(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    my_oil_heater_controller_config = (
-        generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-            minimal_thermal_power_in_watt=my_oil_heater_config.minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=my_oil_heater_config.maximal_thermal_power_in_watt,
-            with_domestic_hot_water_preparation=True,
+    my_oil_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.preset_modulating(
+        "ModulatingBoilerController"
+    ).resolve(
+        SizingContext(
+            minimal_thermal_power_in_watt=concrete(my_oil_heater_config.minimal_thermal_power_in_watt),
+            maximal_thermal_power_in_watt=concrete(my_oil_heater_config.maximal_thermal_power_in_watt),
         )
     )
+    my_oil_heater_controller_config.with_domestic_hot_water_preparation = True
     my_oil_heater_controller = generic_boiler.GenericBoilerController(
         my_simulation_parameters=my_simulation_parameters,
         config=my_oil_heater_controller_config,

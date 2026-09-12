@@ -105,17 +105,14 @@ components:
       - SimpleHotWaterStorage
   WoodChipBoilerController:
     class: hisim.components.generic_boiler.GenericBoilerController
+    preset: on_off
     config:
-      is_modulating: false
       set_heating_threshold_outside_temperature_in_celsius: 18.0
       minimal_thermal_power_in_watt: 713.2356183333334
       maximal_thermal_power_in_watt: 8558.827420000001
-      set_temperature_difference_for_full_power: 5.0
       minimum_runtime_in_seconds: 3600.0
       minimum_resting_time_in_seconds: 1800.0
       with_domestic_hot_water_preparation: true
-      secondary_mode: false
-      hysteresis_water_temperature_offset: 10.0
     inputs:
       - Weather
       - HeatDistributionController

@@ -1,6 +1,6 @@
 # P4 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-12 (7 findings)
+**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-12 (8 findings)
 **Context:** things that surfaced while working through
 `roadmap/declarative_energy_systems/p4_component_sweep_requirements.md` — the component sweep, decisions
 D-1 … D-32 — and were **not** what the work set out to do. Kept separately so the requirements stay about
@@ -252,6 +252,50 @@ rewritten anyway. Until then it costs nothing but a misleading line in every PV 
 
 *Logged 2026-09-03 while landing the zenith clamp (#628), re-verified 2026-09-12 against main. Do not fix
 piecemeal; fold into the PV conversion.*
+
+
+### F-8 — the caches did not know which code filled them, so a physics change was invisible to the golden gate **[verified, fixed]**
+
+Found by #628. That branch changes the direct normal irradiance at every low-sun timestep — the zenith
+clamp was a chained assignment that pandas' copy-on-write discarded — and on a cold cache it moves 33 KPIs
+on `basic_household / one_week_60s` alone. On CI it moved nothing: `golden-check` passed all 24 week pairs,
+and the bless run regenerated no reference at all. The change was real; the gate could not see it.
+
+Every weather reader computed the DNI while it processed the source file, and the processed frame — DNI
+column included — was what the component wrote to its cache. The key that entry was filed under was
+`utils.build_cache_key_string`: the configuration's JSON plus the simulation parameters' unique key, and
+nothing else. No part of it named the code that produced the content. CI restores `hisim/inputs/cache` from
+the previous run (`.github/actions/hisim-cache`), whose own restore key hashes `hisim/utils.py` and
+`hisim/caching/*.py` — the files that decide *where* an entry is filed, not the ones that decide *what is in
+it*. So the runner read a DNI column computed by the old code, produced the old numbers, and the check
+compared old numbers with old references and agreed. The two caches downstream sat on the same blind spot,
+and worse: the PV cached AC power ratios computed from that irradiance, and the building cached the solar
+gains through its windows, under keys that mention neither the weather nor the code that computed either.
+A weather change could not have reached them even if the weather had recomputed.
+
+**Fixed by phase 1 of the cache service** (`roadmap/cache_service_spec.md` §10), which the owner chose over
+the version constant this finding first proposed. Three producers now key on their own code:
+`hisim/components/weather/calculation.py` (`weather_series`),
+`hisim/components/generic_pv_system/calculation.py` (`pv_series`) and
+`hisim/components/building/solar_gains.py` (`building_solar_gains`). Each
+key is a fingerprint of the producer module's source and of every `hisim` module in its transitive import
+closure, plus the third-party versions in it and the calculation's DTO (§3). The `Weather` publishes its
+artifact key, and the two downstream producers take it as key material while the series themselves travel as
+payload excluded from the hash — the Merkle composition of §3.1. So an edit to the DNI moves the weather's
+digest, and the PV's and the building's with it, by construction and with nothing to remember.
+
+This branch is the first change the chain catches, and it was measured on it: with the cache warmed by the
+producer stack and the clamp fix then applied to the same directory, the run logs `Weather series cache
+miss`, `PV series cache miss` and `Building solar gains cache miss` — three new digests — and reports the
+same 33 divergences a cold cache reports. Before the producers, that second run was a clean pass.
+
+Two legacy caches still key on configuration and simulation parameters alone: `solar_thermal_system.py`
+(pvlib solar positions, so a pvlib upgrade is what would be invisible) and `generic_car.py` (an LPG export
+resampled by our own `resample_meters_driven`). Both are future producers; the survey in the spec's §12
+lists them.
+
+*Logged 2026-09-12 while landing the zenith clamp (#628). The finding is what the producer work was written
+for, so it is filed here fixed rather than open.*
 
 
 ---

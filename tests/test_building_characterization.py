@@ -210,7 +210,6 @@ class CharacterizationConfigs:
             window_area_in_m2=None,
             door_u_value_in_watt_per_m2_per_kelvin=None,
             door_area_in_m2=None,
-            predictive=False,
             set_heating_temperature_in_celsius=cls.SET_HEATING_TEMPERATURE_IN_CELSIUS,
             set_cooling_temperature_in_celsius=cls.SET_COOLING_TEMPERATURE_IN_CELSIUS,
             enable_opening_windows=False,

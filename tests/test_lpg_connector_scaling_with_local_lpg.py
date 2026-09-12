@@ -159,7 +159,6 @@ def build_lpg_utsp_connector(
         charging_station_set=charging_station_set,
         profile_with_washing_machine_and_dishwasher=True,
         predictive_control=False,
-        predictive=False,
         energy_intensity=energy_intensity,
         guid=guid,
     )

@@ -122,7 +122,6 @@ def setup_function(
         window_area_in_m2=None,
         door_u_value_in_watt_per_m2_per_kelvin=None,
         door_area_in_m2=None,
-        predictive=False,
         device_co2_footprint_in_kg=None,
         investment_costs_in_euro=None,
         maintenance_costs_in_euro_per_year=None,
@@ -177,7 +176,6 @@ def setup_function(
         subsidy_as_percentage_of_investment_costs=0.0,
         lifetime_in_years=25,
         share_of_maximum_pv_potential=1.0,
-        predictive=False,
         predictive_control=False,
         prediction_horizon=None,
     )

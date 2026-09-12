@@ -62,7 +62,6 @@ class BuildingConfig(ConfigBase):
     window_area_in_m2: Optional[float]
     door_u_value_in_watt_per_m2_per_kelvin: Optional[float]
     door_area_in_m2: Optional[float]
-    predictive: bool
     set_heating_temperature_in_celsius: float
     set_cooling_temperature_in_celsius: float
     enable_opening_windows: bool
@@ -161,7 +160,6 @@ class BuildingConfig(ConfigBase):
             door_area_in_m2=None,
             total_base_area_in_m2=total_base_area_in_m2,
             number_of_apartments=number_of_apartments,
-            predictive=False,
             set_heating_temperature_in_celsius=20.0,
             set_cooling_temperature_in_celsius=25.0,
             enable_opening_windows=False,

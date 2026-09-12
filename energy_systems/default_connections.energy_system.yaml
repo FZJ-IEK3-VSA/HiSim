@@ -27,7 +27,6 @@ components:
           StrVal: 78dae308-24c4-45cc-8bdf-b001d61f45c2
       profile_with_washing_machine_and_dishwasher: true
       predictive_control: false
-      predictive: false
       result_dir_path: ${utsp_results}
       cache_dir_path: null
       name_of_predefined_loadprofile: CHR01 Couple both at Work
@@ -73,7 +72,6 @@ components:
       lifetime_in_years: null
       maintenance_costs_in_euro_per_year: null
       subsidy_as_percentage_of_investment_costs: null
-      predictive: false
       predictive_control: false
       prediction_horizon: null
       weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center

@@ -124,7 +124,6 @@ components:
       lifetime_in_years: null
       maintenance_costs_in_euro_per_year: null
       subsidy_as_percentage_of_investment_costs: null
-      predictive: false
       predictive_control: false
       prediction_horizon: null
     inputs:

@@ -159,9 +159,10 @@ def test_house(
     # The Weather no longer registers its location here: the report region is read from the
     # Weather component's own config, so the key is gone from the enum entirely. The Building
     # no longer registers its six 5R1C thermal parameters either -- their only readers were
-    # the PID and MPC controllers, now in obsolete/. What the run leaves behind are the two
-    # yearly forecast series the Weather writes unconditionally, which the PV system and the
-    # predictive components read. Each is asserted once: indexing the key proves it is there,
+    # the PID and MPC controllers, now in obsolete/. What the run leaves behind are the eight
+    # yearly forecast series the Weather writes unconditionally, which the PV system reads;
+    # the pressure and altitude series went the way of the predictive branch that was their
+    # only plausible consumer. Two are asserted here: indexing the key proves it is there,
     # and a non-empty series proves the Weather genuinely pushed its computed values through
     # the singleton sim repository during the run rather than registering an empty entry.
     assert len(repo.my_dict[SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST]) > 0

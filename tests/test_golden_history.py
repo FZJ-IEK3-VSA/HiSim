@@ -268,7 +268,7 @@ def test_a_move_is_reported_against_the_last_value_actually_recorded() -> None:
 def test_a_change_within_the_gate_tolerance_is_not_a_move() -> None:
     """What the golden gate would have accepted does not count as movement."""
     history = _history([{"k": 1.0}, {"k": 1.0 + 1e-15}])
-    assert collect_moves(history) == []
+    assert not collect_moves(history)
 
 
 def test_a_move_out_of_zero_has_no_relative_change() -> None:
@@ -408,7 +408,9 @@ def current_keys() -> Dict[str, set]:
 
 
 @requires_history
-def test_every_declared_old_kpi_name_really_existed(historical_keys: Dict[str, set]) -> None:
+def test_every_declared_old_kpi_name_really_existed(  # pylint: disable=redefined-outer-name
+    historical_keys: Dict[str, set],
+) -> None:
     """A rename claims a name the goldens once carried; a typo in it would go unnoticed."""
     for stem, entries in KPI_RENAMES.items():
         for entry in entries:
@@ -423,7 +425,9 @@ def test_every_declared_old_kpi_name_really_existed(historical_keys: Dict[str, s
                 )
 
 
-def test_every_declared_new_kpi_name_is_carried_today(current_keys: Dict[str, set]) -> None:
+def test_every_declared_new_kpi_name_is_carried_today(  # pylint: disable=redefined-outer-name
+    current_keys: Dict[str, set],
+) -> None:
     """The other end of the claim: the new name must be in the files as they stand."""
     for stem, entries in KPI_RENAMES.items():
         for entry in entries:
@@ -436,7 +440,9 @@ def test_every_declared_new_kpi_name_is_carried_today(current_keys: Dict[str, se
                 assert entry.new in current_keys[stem], f"{stem!r} does not carry {entry.new!r}"
 
 
-def test_no_declared_rename_is_still_in_effect_under_its_old_name(current_keys: Dict[str, set]) -> None:
+def test_no_declared_rename_is_still_in_effect_under_its_old_name(  # pylint: disable=redefined-outer-name
+    current_keys: Dict[str, set],
+) -> None:
     """A pair that still carries the old name today was not renamed and must not be listed."""
     for stem, entries in KPI_RENAMES.items():
         if stem == FLEET_WIDE:
@@ -459,8 +465,9 @@ def test_every_rename_names_a_commit_that_touched_the_goldens() -> None:
 
 
 @requires_history
-def test_pair_renames_name_a_file_that_existed_and_one_that_exists(
-    historical_keys: Dict[str, set], current_keys: Dict[str, set]
+def test_pair_renames_name_a_file_that_existed_and_one_that_exists(  # pylint: disable=redefined-outer-name
+    historical_keys: Dict[str, set],
+    current_keys: Dict[str, set],
 ) -> None:
     """Both ends of a file rename must be real; today the table is empty and that is fine."""
     for old, rename in PAIR_RENAMES.items():
@@ -469,7 +476,9 @@ def test_pair_renames_name_a_file_that_existed_and_one_that_exists(
         assert canonical_pair(old) in current_keys, f"{old!r} resolves to a stem nothing carries"
 
 
-def test_the_table_is_keyed_by_pairs_that_exist_today(current_keys: Dict[str, set]) -> None:
+def test_the_table_is_keyed_by_pairs_that_exist_today(  # pylint: disable=redefined-outer-name
+    current_keys: Dict[str, set],
+) -> None:
     """A KPI table keyed by a pair nobody gates any more would never be applied."""
     for stem in KPI_RENAMES:
         if stem != FLEET_WIDE:

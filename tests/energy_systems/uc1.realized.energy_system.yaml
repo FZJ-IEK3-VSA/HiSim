@@ -82,21 +82,20 @@ components:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     config: # built from preset: standard
       heating_system: FLOORHEATING
-      set_heating_threshold_outside_temperature_in_celsius: 18.0 # sized from self.specific_heating_load_of_building_in_watt_per_m2=64.19762541254126
+      set_heating_threshold_outside_temperature_in_celsius: 18.0 # sized from building.heating_load_in_watt=7780.752200000001, building.conditioned_floor_area_in_m2=121.2
       heating_reference_temperature_in_celsius: -7.0 # sized from building.heating_reference_temperature_in_celsius=-7.0
       set_heating_temperature_for_building_in_celsius: 20.0 # sized from building.set_heating_temperature_in_celsius=20.0
       set_cooling_temperature_for_building_in_celsius: 25.0 # sized from building.set_cooling_temperature_in_celsius=25.0
       heating_load_of_building_in_watt: 7780.75 # sized from building.heating_load_in_watt=7780.752200000001
-      specific_heating_load_of_building_in_watt_per_m2: 64.19762541254126 # sized from building.heating_load_in_watt=7780.752200000001, building.conditioned_floor_area_in_m2=121.2
     inputs:
       - weather
       - building
     sizing_sources:
+      heating_load_in_watt: building.heating_load_in_watt # unique provider, written for re-execution
+      conditioned_floor_area_in_m2: building.conditioned_floor_area_in_m2 # unique provider, written for re-execution
       heating_reference_temperature_in_celsius: building.heating_reference_temperature_in_celsius # unique provider, written for re-execution
       set_heating_temperature_in_celsius: building.set_heating_temperature_in_celsius # unique provider, written for re-execution
       set_cooling_temperature_in_celsius: building.set_cooling_temperature_in_celsius # unique provider, written for re-execution
-      heating_load_in_watt: building.heating_load_in_watt # unique provider, written for re-execution
-      conditioned_floor_area_in_m2: building.conditioned_floor_area_in_m2 # unique provider, written for re-execution
   hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
     config: # built from preset: standard

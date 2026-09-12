@@ -163,12 +163,7 @@ def test_the_pilot_chain_resolves_without_any_sources_mapping():
 
     building = BuildingConfig.preset_standard("Building")
     heating_load = SizingContext.for_building(building).heating_load_in_watt
-    controller = HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
-        set_heating_temperature_for_building_in_celsius=20.0,
-        set_cooling_temperature_for_building_in_celsius=25.0,
-        heating_load_of_building_in_watt=7780.8,
-        heating_reference_temperature_in_celsius=-7.0,
-    )
+    controller = HeatDistributionControllerConfig.preset_standard("HeatDistributionController")
     hds = HeatDistributionConfig.preset_standard("HeatDistributionSystem")
     boiler = GenericBoilerConfig.preset_condensing_gas("CondensingGasBoiler")
     # The chain has no weather, and the building now records which weather it is computed against, so

@@ -1305,19 +1305,6 @@
                         "const": "AUTO"
                       }
                     ]
-                  },
-                  "specific_heating_load_of_building_in_watt_per_m2": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "null"
-                      },
-                      {
-                        "const": "AUTO"
-                      }
-                    ]
                   }
                 }
               },

@@ -101,7 +101,7 @@ components:
     preset: oil
     config:
       minimal_thermal_power_in_watt: 0.0
-      maximal_thermal_power_in_watt: 7780.752200000001
+      maximal_thermal_power_in_watt: 8558.827420000001
     inputs:
       - ModulatingBoilerController
       - DHWStorage
@@ -112,7 +112,7 @@ components:
       is_modulating: true
       set_heating_threshold_outside_temperature_in_celsius: 18.0
       minimal_thermal_power_in_watt: 0.0
-      maximal_thermal_power_in_watt: 7780.752200000001
+      maximal_thermal_power_in_watt: 8558.827420000001
       set_temperature_difference_for_full_power: 5.0
       minimum_runtime_in_seconds: 1800.0
       minimum_resting_time_in_seconds: 1800.0
@@ -140,7 +140,7 @@ components:
   SimpleHotWaterStorage:
     class: hisim.components.simple_water_storage.SimpleHotWaterStorage
     config:
-      volume_heating_water_storage_in_liter: 155.62
+      volume_heating_water_storage_in_liter: 171.18
       heat_transfer_coefficient_in_watt_per_m2_per_kelvin: 2.0
       heat_exchanger_is_present: true
       position_hot_water_storage_in_system: PARALLEL_TO_HEAT_SOURCE

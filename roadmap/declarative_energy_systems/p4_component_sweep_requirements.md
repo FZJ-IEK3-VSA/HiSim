@@ -271,6 +271,9 @@ row is struck from the table, which keeps the question and the option chosen nex
   +0.16 %), `household_heatpump_building_sizer` **no deviations**. All twelve setups are in the golden gate
   (`scripts/golden_config.json`) — the bullet's "added to the week gate" clause was already true before this PR, so
   nothing was added here; the owner re-blesses the affected goldens with the `golden-update` workflow.
+  The separate sizing defect this measurement exposed is logged as **F-6** in `roadmap/p4_random_findings.md`
+  and **executed 2026-09-12**: the four setups pass `number_of_apartments` into the boiler's `SizingContext`,
+  their boilers go 7780.75 → 8558.83 W and their buffers move with them (seven goldens re-blessed).
 - **D-11** `[answered 2026-09-10]` **(a) convert, record the diff.** The heat-distribution controller's threshold
   becomes the computed one, 16 → 18 °C for the three setups still on the legacy factory
   (`basic_household_only_heating`, `household_gas_solar_thermal`, `automatic_default_connections`); no

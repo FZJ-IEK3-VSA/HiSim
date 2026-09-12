@@ -1,6 +1,6 @@
 # P4 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-11 (5 findings)
+**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-12 (6 findings)
 **Context:** things that surfaced while working through
 `roadmap/declarative_energy_systems/p4_component_sweep_requirements.md` — the component sweep, decisions
 D-1 … D-32 — and were **not** what the work set out to do. Kept separately so the requirements stay about
@@ -175,6 +175,54 @@ Each test file gained the test that was missing: it builds the component, adds i
 `NotImplementedError` on the code as it stood — which is the whole finding, since every other test in those
 files calls `i_simulate` directly. (The template declares its input mandatory, so its test wires the
 `ExampleComponent`'s `ElectricityOutput` to it; the Simulator refuses an unconnected mandatory input.)
+
+
+### F-6 — four boilers that prepare domestic hot water are sized as if they only heated the rooms **[verified, fixed]**
+
+Found by the D-9 review of #700: of the five boiler sizers whose recorded power that change was expected to
+move, only three did. Chasing the silent two turned up four setups that resolve their boiler with a
+`SizingContext` carrying `heating_load_in_watt` and nothing else:
+
+- `system_setups/household_oil_building_sizer.py:337`
+- `system_setups/household_pellets_building_sizer.py:311`
+- `system_setups/household_wood_chips_building_sizer.py:325`
+- `system_setups/household_gas_solar_thermal.py:147`
+
+`GenericBoilerConfig.scale_thermal_power` (`hisim/components/generic_boiler.py:117-136`) takes the larger of
+the space-heating load and the domestic hot water demand — 2.5 kW per apartment — and adds ten percent when
+the boiler serves both at once. Both terms after the first read `number_of_apartments_in_building`, which
+`MAXIMAL_POWER_LAW` takes from the context. A context without `number_of_apartments` makes the DHW term
+zero, so the maximum is the space-heating load alone and the `dhw > 0 and sh > 0` guard on the uplift never
+opens. Each of the four controllers is nevertheless built with `with_domestic_hot_water_preparation=True`,
+and each boiler is wired to a `DHWStorage`: the water is heated by a machine sized as though it were not.
+`system_setups/household_gas_building_sizer.py` and `household_gas_solar_thermal_building_sizer.py` pass
+both facts, which is what makes the four read as omissions rather than as a choice. Every one of the four
+already computes `number_of_apartments` from `arche_type_config_.number_of_dwellings_per_building` a couple
+of hundred lines above, for the building config.
+
+*Cost of not finding it: the sizing law is one expression, and half of it was unreachable in four of the six
+setups that call it — not because the law was wrong, but because the caller never handed it the second fact.*
+
+**Where it stands.** Decided 2026-09-11: fix, in its own PR with a golden bless, after D-9. Fixed. The four
+setups now pass `number_of_apartments=number_of_apartments` into the boiler's context, exactly as the gas
+sizer does; `generic_boiler.py` is untouched. All four buildings are single-dwelling, so the DHW term is
+2.5 kW against a 7.78 kW heating load and the change is the 1.1× uplift alone:
+
+| setup | boiler max thermal power | buffer storage volume |
+|---|---|---|
+| `household_oil_building_sizer` | 7780.75 W → 8558.83 W | 155.62 l → 171.18 l |
+| `household_pellets_building_sizer` | 7780.75 W → 8558.83 W | 311.23 l → 342.35 l |
+| `household_wood_chips_building_sizer` | 7780.75 W → 8558.83 W | 389.04 l → 427.94 l |
+| `household_gas_solar_thermal` | 7780.75 W → 8558.83 W | 155.62 l → 171.18 l |
+
+The buffer moves because D-9 (#700) sizes `SimpleHotWaterStorage` from the generator power; the pellet and
+wood-chip boilers also carry a minimum power, 648.40 W → 713.24 W, a fixed twelfth of the maximum. Nothing else in the recorded twins changed. On `household_oil_building_sizer`'s one-week golden the
+KPI effect is: boiler CAPEX +10.0 % (6050 € → 6655 €), boiler maintenance +10.0 %, total costs for the
+period +2.2 % (146.69 € → 149.88 €), oil consumption +1.85 % (795.4 kWh → 810.1 kWh), total CO₂ +1.7 %, and
+thermal energy delivered +0.3 % — the larger boiler and the larger buffer together shift the run pattern, and
+the week ends having burnt slightly more. Seven golden references go stale and need a bless:
+`household_oil_building_sizer`, `household_pellets_building_sizer` and `household_wood_chips_building_sizer`
+(one-week and full-year each) and `household_gas_solar_thermal` (one-week).
 
 
 ---

@@ -322,7 +322,10 @@ def setup_function(
     my_wood_chip_heater_config = generic_boiler.GenericBoilerConfig.preset_wood_chips(
         "ConventionalWoodChipBoiler"
     ).resolve(
-        SizingContext(heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt)
+        SizingContext(
+            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            number_of_apartments=number_of_apartments,
+        )
     )
     my_wood_chip_heater = generic_boiler.GenericBoiler(
         config=my_wood_chip_heater_config,

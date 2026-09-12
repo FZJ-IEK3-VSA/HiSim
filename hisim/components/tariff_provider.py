@@ -6,9 +6,9 @@ into a provider driven by a :class:`hisim.economics.tariffs.TariffContract`, the
 the postprocessing billing engine reads, so control and billing can never diverge.
 
 Per timestep it outputs the total marginal purchase/injection price and the capacity-charge
-state a peak-shaving strategy needs, and publishes a 24 h price forecast to the
-`SingletonSimRepository` — the mechanism `generic_price_signal.py` used, and the one an MPC
-controller would read.
+state a peak-shaving strategy needs. It also published a 24 h price forecast to the
+`SingletonSimRepository` until that publication was deleted: its only reader was the MPC
+controller, which had already left for `obsolete/`.
 
 **Two consumers, one contract.** `hisim/economics/tariffs.py` owns the contract schema, its
 loaders and the pure billing engine; this module is its *simulation-side* consumer. During the
@@ -49,7 +49,6 @@ from hisim.economics.tariffs import (
     synthetic_reference_spot_series,
     validate_billing_interval,
 )
-from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "HiSim Team"
@@ -117,21 +116,21 @@ class TariffProvider(cp.Component):
     that the postprocessing billing engine later bills the resulting load profile with, so control
     decisions and their bill cannot be based on different prices.
 
-    **Who consumes what, as of today: nobody.** The 24 h forecast published to the
-    `SingletonSimRepository` was read by `controller_mpc.py`, which took exactly those two keys;
-    that controller was retired to `obsolete/components/` under component sweep decision D-16
-    (2026-09-10), so the forecast is published for a consumer that will be written rather than one
-    that exists. The four per-timestep outputs are available for ordinary input wiring and are
-    recorded in the results frame, but no component in the shipped library takes a price input yet;
+    **Who consumes what, as of today: nobody.** A 24 h forecast used to go to the
+    `SingletonSimRepository` under two keys `controller_mpc.py` read; that controller was retired
+    to `obsolete/components/` under component sweep decision D-16 (2026-09-10), leaving a
+    publication with no reader, and it was deleted with the other dead singleton keys. The four
+    per-timestep outputs are available for ordinary input wiring and are recorded in the results
+    frame, but no component in the shipped library takes a price input yet;
     `system_setups/economic_example/economic_example_heatpump.py` wires the provider in and its
     README states which output is read by whom. A rule-based EMS reacting to
     `CapacityChargeMarginal` is the intended next consumer, not a claim about the present.
 
     **It replaced `generic_price_signal.PriceSignal`**, which ran beside it during the parallel
     phase and was retired to `obsolete/components/` under component sweep decision D-16
-    (2026-09-10). The two must never have appeared in one setup, and now cannot: both published
-    the same two `SingletonSimRepository` forecast keys, the repository holds one value per key,
-    and two publishers meant whichever ran last silently decided what an MPC controller optimized
+    (2026-09-10). The two must never have appeared in one setup: both published the same two
+    `SingletonSimRepository` forecast keys, the repository holds one value per key, and two
+    publishers meant whichever ran last silently decided what an MPC controller optimized
     against.
     """
 
@@ -406,25 +405,6 @@ class TariffProvider(cp.Component):
         else:
             stsv.set_output_value(self.peak_so_far_output, 0.0)
             stsv.set_output_value(self.capacity_charge_output, 0.0)
-
-        # 24 h price forecast for MPC (§8.3), under the keys the retired generic_price_signal.py
-        # published and the retired controller_mpc.py read; both left for obsolete/ under D-16.
-        if timestep == 0 and self._price_series is not None:
-            steps_per_day = int(24 * 3600 / self.my_simulation_parameters.seconds_per_timestep)
-            # Both series are exactly one day long. The purchase forecast used to be truncated to
-            # the length of the resampled price series while the injection forecast was not, so a
-            # run shorter than a day published two forecasts of different lengths under keys that
-            # both promise 24 h — and an MPC controller zipping them silently optimizes the shorter
-            # horizon. `_purchase_price` clamps a step past the end of the series to its last
-            # value, which is the same degradation the resampling itself applies.
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.PRICEPURCHASEFORECAST24H,
-                entry=[self._purchase_price(step) for step in range(steps_per_day)],
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.PRICEINJECTIONFORECAST24H,
-                entry=[self._injection_price()] * steps_per_day,
-            )
 
     def i_save_state(self) -> None:
         """Saves the peak tracker.

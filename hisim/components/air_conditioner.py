@@ -27,10 +27,6 @@ from hisim.loadtypes import InandOutputType, LoadTypes, Units
 from hisim.components.weather import Weather
 from hisim.components.building import Building
 from hisim import utils
-from hisim.sim_repository_singleton import (
-    SingletonSimRepository,
-    SingletonDictKeyEnum,
-)
 from hisim.economics.facts import CostRelevance
 
 __authors__ = "Marwa Alfouly, Kristina Dabrock"
@@ -467,15 +463,6 @@ class AirConditioner(cp.Component):
         )
         self.heating_capacity_coef = np.polyfit(
             self.config.t_out_heating_ref, self.config.heating_capacity_ref, 1
-        )
-
-        # Save coefficients for use by other components
-        SingletonSimRepository().set_entry(
-            SingletonDictKeyEnum.COEFFICIENT_OF_PERFORMANCE_HEATING,
-            self.cop_coef,
-        )
-        SingletonSimRepository().set_entry(
-            SingletonDictKeyEnum.ENERGY_EFFICIENY_RATIO_COOLING, self.eer_coef
         )
 
     # Interpolation functions

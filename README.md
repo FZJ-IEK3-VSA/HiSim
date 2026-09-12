@@ -84,9 +84,9 @@ UTSP_API_KEY
 
 They are needed only when the occupancy is taken from the UTSP connector
 (`hisim/components/loadprofilegenerator_utsp_connector.py`) in its `USE_UTSP` data-acquisition mode; the
-`USE_PREDEFINED_PROFILE` and `USE_LOCAL_LPG` modes of the same component do without them. An `.env` file in the
-repository root is read automatically by `hisim/hisim_main.py`, which calls `load_dotenv()` on start-up; the `hisim`
-console script does not read the file, so with it the two variables have to be set in the environment.
+`USE_PREDEFINED_PROFILE` and `USE_LOCAL_LPG` modes of the same component do without them. Both the `hisim`
+console script and `hisim/hisim_main.py` call `load_dotenv()` on start-up, so either of them reads an `.env` file from
+the repository root without anything else being set.
 
 Executing a Building Simulation
 -----------------------

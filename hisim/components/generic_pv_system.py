@@ -44,10 +44,6 @@ from hisim.config import (
 )
 from hisim.components.weather import Weather
 from hisim.economics.facts import ComponentCostFacts, CostRelevance
-from hisim.sim_repository_singleton import (
-    SingletonSimRepository,
-    SingletonDictKeyEnum,
-)
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiTagEnumClass,

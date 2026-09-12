@@ -1,6 +1,6 @@
 # P4 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-12 (6 findings)
+**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-12 (7 findings)
 **Context:** things that surfaced while working through
 `roadmap/declarative_energy_systems/p4_component_sweep_requirements.md` — the component sweep, decisions
 D-1 … D-32 — and were **not** what the work set out to do. Kept separately so the requirements stay about
@@ -226,6 +226,32 @@ thermal energy delivered +0.3 % — the larger boiler and the larger buffer toge
 the week ends having burnt slightly more. Seven golden references go stale and need a bless:
 `household_oil_building_sizer`, `household_pellets_building_sizer` and `household_wood_chips_building_sizer`
 (one-week and full-year each) and `household_gas_solar_thermal` (one-week).
+
+
+### F-7 — `PVSystemConfig.location` is a string nobody reads, and it now sits beside a field it can contradict **[verified]**
+
+`PVSystemConfig.location: str` (`hisim/components/generic_pv_system.py:116`) is passed by 23 setup call
+sites (`location=weather_location`) and written into all 27 PV blocks of the committed energy-system YAMLs,
+and the PV component never reads it: inside `generic_pv_system.py` it appears seven times — the module
+docstring, the dataclass field, a parameter of the two factory methods and their two `location=location`
+forwardings, and one docstring line — and in no computation. Its purpose was to make the PV cache key differ
+between sites, which worked only as long as every setup copied the same variable into the weather and the PV
+— a habit, not an invariant, and the origin of `pylpg_flakiness.md` F7.
+
+F7 has since landed: the PV carries a `weather_identity` field sized from the weather itself
+(`generic_pv_system.py:145`), so the key no longer needs `location` for anything. The key still contains it,
+because the key is the whole configuration's JSON. What remains is a field that can visibly disagree with its
+neighbour: a setup with Seville weather and a PV built with the factories' default `location="Aachen"`
+records `location: Aachen` and `weather_identity: Sevilla/...` side by side, and the first is wrong without
+consequence.
+
+Retiring it is a P4-sweep item and not a small fix: the field is in the config class, two factory signatures,
+23 setup call sites, one test and 27 energy-system YAML blocks, and the conversion of `PVSystemConfig`
+(B-batch, `p4_component_sweep_requirements.md` R3 row `PVSystemConfig`) is the point at which those are all
+rewritten anyway. Until then it costs nothing but a misleading line in every PV block.
+
+*Logged 2026-09-03 while landing the zenith clamp (#628), re-verified 2026-09-12 against main. Do not fix
+piecemeal; fold into the PV conversion.*
 
 
 ---

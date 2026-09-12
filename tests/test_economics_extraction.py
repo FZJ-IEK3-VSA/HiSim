@@ -1314,7 +1314,7 @@ _ENERGY_BALANCE_MODULES = {
     "HydrogenStorage": "generic_electrolyzer_and_h2_storage",
     "FuelCell": "generic_fuel_cell",
     "CHP": "advanced_fuel_cell",
-    "SimpleCHP": "generic_chp",
+    "SimpleCHP": "generic_chp.chp",
 }
 
 #: Unit values the energy collector can convert, i.e. the ones that make an electricity output
@@ -1331,7 +1331,8 @@ def _declared_electricity_outputs(module_name: str, class_name: str):
     call in the class body's `__init__`, so the syntax tree is the faithful source.
 
     Args:
-        module_name: The `hisim.components` submodule holding the class.
+        module_name: The `hisim.components` submodule holding the class, dotted when it sits
+            inside a component package (``generic_chp.chp``).
         class_name: The class whose declarations to collect.
 
     Returns:
@@ -1342,8 +1343,8 @@ def _declared_electricity_outputs(module_name: str, class_name: str):
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "hisim",
         "components",
-        f"{module_name}.py",
-    )
+        *module_name.split("."),
+    ) + ".py"
     with open(path, encoding="utf-8") as file:
         source = file.read()
     tree = ast.parse(source, filename=path)

@@ -92,7 +92,7 @@ is documented via autodoc.
 
 * **Controllers** —
   L1 device controllers
-  (:py:mod:`~hisim.components.controller_l1_chp`,
+  (:py:mod:`~hisim.components.generic_chp.controller`,
   :py:mod:`~hisim.components.controller_l1_fuel_cell`,
   :py:mod:`~hisim.components.controller_l1_electrolyzer_h2`,
   :py:mod:`~hisim.components.controller_l1_generic_ev_charge`,

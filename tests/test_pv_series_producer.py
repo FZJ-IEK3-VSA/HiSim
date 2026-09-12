@@ -26,8 +26,8 @@ import numpy as np
 import pytest
 
 from hisim.caching import CacheKey, CanonicalJson, Fingerprints, ImportClosure, ProducerLayering
-from hisim.components import generic_pv_calculation as pv_calculation
-from hisim.components.generic_pv_calculation import (
+from hisim.components.generic_pv_system import calculation as pv_calculation
+from hisim.components.generic_pv_system.calculation import (
     ARTIFACT_KIND,
     PVLibModuleAndInverterEnum,
     PvSeriesInputs,
@@ -224,7 +224,7 @@ def test_the_producer_obeys_the_layering_rule() -> None:
     ProducerLayering.check(closure)
     assert not ProducerLayering.violations(closure)
     assert set(closure.package_modules) == {
-        "hisim.components.generic_pv_calculation",
+        "hisim.components.generic_pv_system.calculation",
         "hisim.caching.keys",
     }, (
         "every HiSim module in the closure is hashed into the PV's cache key, so adding one means its "

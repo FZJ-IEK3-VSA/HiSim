@@ -117,7 +117,8 @@ def test_writing_a_cache_entry_directly_exposes_a_partial_file(tmp_path: pathlib
     """Pins the defect the atomic write exists to prevent, so the next test means something.
 
     This is the control arm. Writing straight to the final cache path -- what all six cache writers
-    (``weather.py``, ``building/building.py``, ``generic_pv_system.py``, ``solar_thermal_system.py``,
+    (``weather/weather.py``, ``building/building.py``, ``generic_pv_system/pv_system.py``,
+    ``solar_thermal_system.py``,
     ``generic_car.py`` and the UTSP connector) used to do -- lets a concurrent reader open the entry
     while it is still being written and come away with a truncated prefix of it. In HiSim that prefix
     is a weather year cut in half, which either fails to parse or, worse, parses cleanly and silently

@@ -7,7 +7,7 @@ fields that decide the result move the key, fields that only place the run do no
 the repository's own data files contains no absolute path.
 
 The weather and the PV system have left this path entirely. Their series are produced by
-``hisim.components.weather.calculation`` and ``hisim.components.generic_pv_calculation`` and keyed
+``hisim.components.weather.calculation`` and ``hisim.components.generic_pv_system.calculation`` and keyed
 under the producer scheme of ``roadmap/cache_service_spec.md`` §3, where a data file is identified by the
 hash of its contents and no path is key material at all; ``tests/test_weather_producer.py`` and
 ``tests/test_pv_series_producer.py`` pin that. ``PVSystemConfig`` still serves below as a sample of a

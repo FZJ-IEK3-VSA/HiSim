@@ -380,6 +380,11 @@ version coupling.
    (`hisim/components/generic_pv_system/calculation.py`, artifact kind `pv_series`): its DTO carries
    the weather's artifact key as key material and the weather arrays as payload, so the two keys
    compose Merkle-style (§3.1) and an edit to the weather calculation moves the PV entry too.
+   2026-09-12: the building's solar gains are the third producer
+   (`hisim/components/building/solar_gains.py`, artifact kind `building_solar_gains`), chained to the
+   weather: its series enter the key as the artifact key the `Weather` publishes (§3.1) and travel
+   beside it as payload. The deferred write of §12 goes with it — the series is produced and filed
+   before the first timestep instead of being accumulated and written at the last one.
 2. **Remote read/write tier** — `remote.py`, `client.py`, settings, circuit breaker; the two
    server endpoints (§2.1) + `/health`; static-token auth; enable on the cluster and in
    RenoVisor first (highest volume, simplest auth).

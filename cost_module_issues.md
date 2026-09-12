@@ -291,7 +291,9 @@ were resolved with a documented default to keep the implementation moving; they 
     - **CHP** — `advanced_fuel_cell.CHP`, `generic_chp.SimpleCHP`. No CHP device type exists at
       all. This is the reason `system_setups/dynamic_components.py` fails fast under all options:
       it wires two CHPs, and the run is refused before the first timestep.
-    - **Fuel cell / reversible SOC** — `generic_fuel_cell.FuelCell`, `generic_rsoc.Rsoc`.
+    - **Fuel cell / reversible SOC** — `generic_fuel_cell.FuelCell`, ~~`generic_rsoc.Rsoc`~~ (the
+      reversible cell moved to `obsolete/components/` under component sweep decision D-25 on
+      2026-09-11, so only the fuel cell is left to close here).
     - **Electrolyzers other than the one migrated** — `generic_electrolyzer.GenericElectrolyzer`,
       `generic_electrolyzer_and_h2_storage.AdvancedElectrolyzer`. The `ELECTROLYZER` device type
       now exists (migrated from the proposed legacy rows, see below), so these two need an adapter

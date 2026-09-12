@@ -96,18 +96,15 @@ is documented via autodoc.
   :py:mod:`~hisim.components.controller_l1_fuel_cell`,
   :py:mod:`~hisim.components.controller_l1_electrolyzer_h2`,
   :py:mod:`~hisim.components.controller_l1_generic_ev_charge`,
-  :py:mod:`~hisim.components.controller_l1_rsoc`,
   :py:mod:`~hisim.components.controller_l1_example_controller`),
   L2 energy-management systems
   (:py:mod:`~hisim.components.controller_l2_energy_management_system`,
   :py:mod:`~hisim.components.controller_l2_ptx_energy_management_system`,
-  :py:mod:`~hisim.components.controller_l2_rsoc_battery_system`,
   :py:mod:`~hisim.components.controller_l2_xtp_fuel_cell_ems`),
   night setback (:py:mod:`~hisim.components.night_setback_controller`)
 
 * **Signal sources & utilities** —
   tariffs (:py:mod:`~hisim.components.tariff_provider`),
-  RSoC (:py:mod:`~hisim.components.generic_rsoc`),
   CSV loader (:py:mod:`~hisim.components.csvloader`),
   sum-builder (:py:mod:`~hisim.components.sumbuilder`),
   transformer/rectifier (:py:mod:`~hisim.components.transformer_rectifier`),

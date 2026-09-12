@@ -83,38 +83,6 @@ class FuelCellConfig(ConfigBase):
             # H_s_h2 = 33.33,
         )
 
-    @staticmethod
-    def read_config(fuel_cell_name):
-        """Read config."""
-        config_file = Path(utils.HISIMPATH["inputs"]) / "fuel_cell_manufacturer_config.json"
-        with config_file.open("r", encoding="utf-8") as json_file:
-            data = json.load(json_file)
-            return data.get("Fuel Cell variants", {}).get(fuel_cell_name, {})
-
-    @classmethod
-    def config_fuel_cell(
-        cls,
-        fuel_cell_name: str,
-        component_id: Optional[ComponentID] = None,
-    ) -> "FuelCellConfig":
-        """Get config of fuel cell."""
-        if component_id is None:
-            component_id = ComponentID(name="FuelCell")
-        config_json = cls.read_config(fuel_cell_name)
-        config = FuelCellConfig(
-            component_id=component_id,  # config_json.get("name", "")
-            type=config_json.get("type", ""),
-            nom_output_in_kilowatt=config_json.get("nom_output", 0.0),
-            max_output_in_kilowatt=config_json.get("max_output", 0.0),
-            min_output_in_kilowatt=config_json.get("min_output", 0.0),
-            nom_h2_flow_rate_in_m3_per_h=config_json.get("nom_h2_flow_rate", 0.0),
-            faraday_eff=config_json.get("faraday_eff", 0.0),
-            i_cell_nom_in_ampere_per_cm2=config_json.get("i_cell_nom", 0.0),
-            ramp_up_rate_in_percent_per_s=config_json.get("ramp_up_rate", 0.0),
-            ramp_down_rate_in_percent_per_s=config_json.get("ramp_down_rate", 0.0),
-        )
-        return config
-
 
 class FuelCell(cp.Component):
     """PEM fuel cell component that converts hydrogen into electricity.

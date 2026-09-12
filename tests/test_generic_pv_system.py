@@ -6,7 +6,6 @@ import pytest
 from tests import functions_for_testing as fft
 from hisim import sim_repository
 from hisim import component
-from hisim import utils
 from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim import simulator as sim
@@ -173,16 +172,16 @@ def test_photovoltaic_cache_roundtrip(tmp_path) -> None:
     )
     my_pvs.set_sim_repo(repo)
 
-    file_exists, cache_filepath = utils.get_cache_file(
-        my_pvs_config.component_id.name, my_pvs_config, my_sim_params
-    )
-    assert not file_exists, "The isolated cache directory must start out empty."
+    # The entry the run will look for, derived the way the component derives it: from the producer's
+    # code and inputs (roadmap/cache_service_spec.md §3), the weather's artifact key among them.
+    entry = my_pvs.cache_entry(my_pvs.build_calculation_inputs())
+    assert not entry.exists, "The isolated cache directory must start out empty."
 
     my_pvs.i_prepare_simulation()
 
     # The cache must be written during preparation, not at the end of the
     # simulation loop, so that interrupted runs still populate it.
-    assert os.path.exists(cache_filepath)
+    assert os.path.exists(entry.path)
     assert (
         len(my_pvs.ac_power_ratios_for_all_timesteps_output)
         == my_sim_params.timesteps

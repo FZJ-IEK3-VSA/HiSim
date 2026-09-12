@@ -266,8 +266,9 @@ def test_get_component_kpi_entries_heating_and_cooling_hours_match_active_time(i
     heatpump = MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=simpars)
 
     streak = _running_streak_counter(is_active_profile, simpars.seconds_per_timestep)
-    heating_output = cp.ComponentOutput(heatpump.component_name, heatpump.TimeOnHeating, lt.LoadTypes.TIME, lt.Units.SECONDS)
-    cooling_output = cp.ComponentOutput(heatpump.component_name, heatpump.TimeOnCooling, lt.LoadTypes.TIME, lt.Units.SECONDS)
+    # The component's own output objects, so the test cannot drift from how they are declared.
+    heating_output = heatpump.time_on_heating
+    cooling_output = heatpump.time_on_cooling
     postprocessing_results = pd.DataFrame({heatpump.TimeOnHeating: streak, heatpump.TimeOnCooling: streak})
 
     kpi_entries = heatpump.get_component_kpi_entries(

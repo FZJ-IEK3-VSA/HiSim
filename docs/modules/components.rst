@@ -108,7 +108,6 @@ is documented via autodoc.
 * **Signal sources & utilities** —
   tariffs (:py:mod:`~hisim.components.tariff_provider`),
   RSoC (:py:mod:`~hisim.components.generic_rsoc`),
-  smart device (:py:mod:`~hisim.components.generic_smart_device`),
   CSV loader (:py:mod:`~hisim.components.csvloader`),
   sum-builder (:py:mod:`~hisim.components.sumbuilder`),
   transformer/rectifier (:py:mod:`~hisim.components.transformer_rectifier`),

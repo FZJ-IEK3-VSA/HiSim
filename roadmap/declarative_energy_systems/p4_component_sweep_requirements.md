@@ -66,7 +66,7 @@ Own commits, before the batch that needs them, each golden-neutral:
 - R2.5 D13 sweep: the delete rows of §R3 removed (or moved to the obsolete repository) before their batch.
 
 ### R3 — Per-class table (the wire-format registry) `[proposed; p4_class_survey.md]`
-Legend: **conv** convert · **del** delete · **done** converted (remaining work in the last column) · **ex** exempt. *Behaviour* **N** neutral, **P** physics change (R5), **?** depends on a decision. Facts use the `SizingContext` names. Full entries with `file:line` evidence: the survey, by class name.
+Legend: **conv** convert · **del** retired — moved to `obsolete/` under D-16's rule, never deleted · **done** converted (remaining work in the last column) · **ex** exempt. *Behaviour* **N** neutral, **P** physics change (R5), **?** depends on a decision. Facts use the `SizingContext` names. Full entries with `file:line` evidence: the survey, by class name.
 
 **Heat generators (survey A)**
 
@@ -140,7 +140,7 @@ Legend: **conv** convert · **del** delete · **done** converted (remaining work
 | `BuildingConfig` | done | `standard`, `for_tabula_code` | + `roof_area_in_m2` fact; the 14 non-parameter post-construction mutations → sparse `config:` overrides (D-22); `heating_reference_temperature` stays a plain default (D-21 (c)) | N / P | D-21, D-22 |
 | `UtspLpgConnectorConfig` | done | `standard`, `for_household` | delete legacy factory (32 sites); the 11 sizers' `USE_LOCAL_LPG` + household-list + `cache_dir_path` overrides become `config:`/constructor arguments (`for_household` now takes `data_acquisition_mode`, P2 2026-08-27) | N | ~~D-20~~ |
 | `WeatherDataImport` | ex | | not a config; import fails (`wetterdienst`) | | |
-| `SmartDeviceConfig` | del | | defective (`KeyError` on construction); module and config → `obsolete/` (D-30) | | D-30 |
+| `SmartDeviceConfig` | del | | defective (`KeyError` on construction); module and config **moved** to `obsolete/` (D-30, 2026-09-11) | | D-30 |
 
 **Mobility, H₂ chain, examples (survey C)**
 
@@ -416,6 +416,10 @@ row is struck from the table, which keeps the question and the option chosen nex
 - **D-30** `[answered 2026-09-11]` **(a) move to `obsolete/`.** `generic_smart_device` and `SmartDeviceConfig` go in
   one commit, before any preset is minted for a component whose `__init__` raises `KeyError: 'utsp_reports'` on every
   construction; §6's `smart_devices_included` copy-law candidate goes with it. Under D-16's rule, moved, not deleted.
+  **Executed 2026-09-11**: `obsolete/components/generic_smart_device.py`, unchanged. `DeviceEnergySpecs.BY_CLASS_NAME`
+  and the class-to-module table of `tests/test_economics_extraction.py` lose their `SmartDevice` row and
+  `docs/modules/components.rst` its module entry; `ComponentType.SMART_DEVICE`, `KpiTagEnumClass.SMART_DEVICE` and
+  `SingletonDictKeyEnum.SMARTDEVICESINCLUDED` stay, the last because nothing ever wrote or read it (D-32).
 
 **Follow-up defects found on the way, 2026-09-11.** Three defects in already-merged code surfaced while
 executing these decisions and belong to none of them. They are recorded in full beside F-1 in

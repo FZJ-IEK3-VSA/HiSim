@@ -376,6 +376,10 @@ version coupling.
    (`hisim/components/weather/calculation.py`, artifact kind `weather_series`, looked up through
    `CacheClient.lookup_producer`); its keys changed once, every other component still keys through
    `utils.build_cache_key_string`.
+   2026-09-12: PV series is the second producer, chained to the weather
+   (`hisim/components/generic_pv_calculation.py`, artifact kind `pv_series`): its DTO carries
+   the weather's artifact key as key material and the weather arrays as payload, so the two keys
+   compose Merkle-style (§3.1) and an edit to the weather calculation moves the PV entry too.
 2. **Remote read/write tier** — `remote.py`, `client.py`, settings, circuit breaker; the two
    server endpoints (§2.1) + `/health`; static-token auth; enable on the cluster and in
    RenoVisor first (highest volume, simplest auth).

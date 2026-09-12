@@ -62,6 +62,8 @@ scripts/
   golden_matrix.py          # NEW: emit GH Actions matrix JSON (per-horizon) from golden_config.json
   golden_validate.py        # NEW: vet the manually-listed setups (offline/KPI/deterministic)
   ci_all_green.sh           # NEW: gh-api helper — did quality+tests+golden-check all pass for a SHA?
+  # [2026-09-12: ci_all_green.sh was never wired into any workflow — the gate polls with
+  #  scripts/ci_wait_all.sh instead — and the unused helper was removed on that date.]
 .github/workflows/
   golden-check.yml          # NEW: Tier 1 — week pairs, every PR + push
   golden-year.yml           # NEW: Tier 2 — full-year pairs, PR→main only, gated on all CI green

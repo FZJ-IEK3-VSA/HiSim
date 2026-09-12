@@ -21,7 +21,6 @@ from hisim.caching import atomic_cache_write
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, FactContribution, constructor, preset
 from hisim.component import Component, ComponentOutput, SingleTimeStepValues, OpexCostDataClass, CapexCostDataClass
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
 from hisim.economics.facts import CostRelevance
 
@@ -624,14 +623,21 @@ class Weather(Component):
     Weather_Temperature_Forecast_24h: str = "Weather_Temperature_Forecast_24h"
     DailyAverageOutsideTemperatures: str = "DailyAverageOutsideTemperatures"
 
-    # Weather_TemperatureOutside_yearly_forecast = "Weather_TemperatureOutside_yearly_forecast"
-    # Weather_DiffuseHorizontalIrradiance_yearly_forecast = "Weather_DiffuseHorizontalIrradiance_yearly_forecast"
-    # Weather_DirectNormalIrradiance_yearly_forecast = "Weather_DirectNormalIrradiance_yearly_forecast"
-    # Weather_DirectNormalIrradianceExtra_yearly_forecast = "Weather_DirectNormalIrradianceExtra_yearly_forecast"
-    # Weather_GlobalHorizontalIrradiance_yearly_forecast = "Weather_GlobalHorizontalIrradiance_yearly_forecast"
-    # Weather_Azimuth_yearly_forecast = "Weather_Azimuth_yearly_forecast"
-    # Weather_ApparentZenith_yearly_forecast = "Weather_ApparentZenith_yearly_forecast"
-    Weather_WindSpeed_yearly_forecast: str = "Weather_WindSpeed_yearly_forecast"
+    # Keys under which this component publishes its full-year series into the per-simulation
+    # repository (``self.simulation_repository``). They live here, on the writer, so that the
+    # readers -- the PV system and the predictive branch of the Building -- import the name
+    # instead of repeating a string literal that could drift away from the writer's.
+    YEARLY_TEMPERATURE_OUTSIDE: str = "weather_yearly_temperature_outside_in_celsius"
+    YEARLY_DIFFUSE_HORIZONTAL_IRRADIANCE: str = "weather_yearly_diffuse_horizontal_irradiance_in_watt_per_square_meter"
+    YEARLY_DIRECT_NORMAL_IRRADIANCE: str = "weather_yearly_direct_normal_irradiance_in_watt_per_square_meter"
+    YEARLY_DIRECT_NORMAL_IRRADIANCE_EXTRA: str = (
+        "weather_yearly_direct_normal_irradiance_extra_in_watt_per_square_meter"
+    )
+    YEARLY_GLOBAL_HORIZONTAL_IRRADIANCE: str = "weather_yearly_global_horizontal_irradiance_in_watt_per_square_meter"
+    YEARLY_AZIMUTH: str = "weather_yearly_azimuth_in_degrees"
+    YEARLY_APPARENT_ZENITH: str = "weather_yearly_apparent_zenith_in_degrees"
+    YEARLY_WIND_SPEED: str = "weather_yearly_wind_speed_in_meter_per_second"
+    # The pressure list is in hectopascal; the per-timestep output converts it to pascal.
 
     @utils.measure_execution_time
     def __init__(
@@ -969,43 +975,24 @@ class Weather(Component):
             ) as temporary_cache_filepath:
                 database.to_csv(temporary_cache_filepath)
 
-        # Publish the full-year weather series the PV system reads to the singleton repository
-        # unconditionally. The PV system precomputes its whole-year output from these arrays in
-        # its i_prepare_simulation (vectorized pvlib run). Publishing is free: the singleton only
-        # stores references to lists this component keeps alive as attributes anyway. The pressure
-        # and altitude series were published here too until nothing was left that read them.
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST,
-            entry=self.temperature_list,
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST,
-            entry=self.dhi_list,
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST,
-            entry=self.dni_list,
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST,
-            entry=self.dniextra_list,
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST,
-            entry=self.ghi_list,
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST,
-            entry=self.azimuth_list,
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST,
-            entry=self.apparent_zenith_list,
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST,
-            entry=self.wind_speed_list,
-        )
+        # Publish the full-year weather series into this simulation's repository, unconditionally.
+        # The PV system needs the whole year rather than the current timestep: it runs one
+        # vectorized pvlib pass over the year in its own i_prepare_simulation. It runs after this
+        # component, because prepare_calculation walks the components in the order the setup added
+        # them (hisim/simulator.py, prepare_calculation) -- the Weather therefore has to be added
+        # before it, and the PV says so if it is not.
+        # Publishing is free: the repository only stores references to the lists this component
+        # keeps alive as attributes anyway. It is the per-simulation repository, created by the
+        # Simulator and cleared when the run ends, so no array outlives the run that computed it
+        # and a second simulation in the same process cannot read this one's weather.
+        self.simulation_repository.set_entry(self.YEARLY_TEMPERATURE_OUTSIDE, self.temperature_list)
+        self.simulation_repository.set_entry(self.YEARLY_DIFFUSE_HORIZONTAL_IRRADIANCE, self.dhi_list)
+        self.simulation_repository.set_entry(self.YEARLY_DIRECT_NORMAL_IRRADIANCE, self.dni_list)
+        self.simulation_repository.set_entry(self.YEARLY_DIRECT_NORMAL_IRRADIANCE_EXTRA, self.dniextra_list)
+        self.simulation_repository.set_entry(self.YEARLY_GLOBAL_HORIZONTAL_IRRADIANCE, self.ghi_list)
+        self.simulation_repository.set_entry(self.YEARLY_AZIMUTH, self.azimuth_list)
+        self.simulation_repository.set_entry(self.YEARLY_APPARENT_ZENITH, self.apparent_zenith_list)
+        self.simulation_repository.set_entry(self.YEARLY_WIND_SPEED, self.wind_speed_list)
 
     def interpolate(self, pd_database: Any, year: int) -> Any:
         """Interpolates a time series."""

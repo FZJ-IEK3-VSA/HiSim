@@ -44,10 +44,6 @@ from hisim.config import (
 )
 from hisim.components.weather import Weather
 from hisim.economics.facts import ComponentCostFacts, CostRelevance
-from hisim.sim_repository_singleton import (
-    SingletonSimRepository,
-    SingletonDictKeyEnum,
-)
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiTagEnumClass,
@@ -741,7 +737,7 @@ class PVSystem(cp.Component):
 
         On a cache hit, the AC power ratios for every timestep are read from the
         cache CSV. On a cache miss, the yearly weather arrays published by the
-        weather component in the singleton simulation repository are truncated
+        weather component in this simulation's repository are truncated
         to the simulated period and fed through one vectorized pvlib run
         (``simulate_cec`` or ``simulate_sandia``), which is orders of magnitude
         faster than the per-timestep scalar pvlib calls that were previously
@@ -789,36 +785,26 @@ class PVSystem(cp.Component):
                 inverter_name=self.pvconfig.inverter_name,
             )
 
-            if not SingletonSimRepository().entry_exists(
-                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST
-            ):
+            # The Weather publishes its full-year series into this simulation's repository in its
+            # own i_prepare_simulation. prepare_calculation walks the components in the order the
+            # setup added them, so a Weather added after this component has not published yet and
+            # the lookup below would fail with a bare key name. Say what to do instead.
+            if not self.simulation_repository.entry_exists(Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE):
                 raise KeyError(
-                    "The yearly weather arrays were not found in the singleton "
+                    "The yearly weather arrays were not found in this simulation's "
                     "sim repository. Please check in your system setup that the "
                     "weather component is added to the simulator before the pv "
                     "system; its i_prepare_simulation publishes these arrays."
                 )
 
-            dni_extra = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST  # noqa: E501
-            )
-            dni = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST  # noqa: E501
-            )
-            dhi = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST  # noqa: E501
-            )
-            ghi = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST  # noqa: E501
-            )
-            azimuth = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST)
-            apparent_zenith = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST  # noqa: E501
-            )
-            temperature = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST  # noqa: E501
-            )
-            wind_speed = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST)
+            dni_extra = self.simulation_repository.get_entry(Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE_EXTRA)
+            dni = self.simulation_repository.get_entry(Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE)
+            dhi = self.simulation_repository.get_entry(Weather.YEARLY_DIFFUSE_HORIZONTAL_IRRADIANCE)
+            ghi = self.simulation_repository.get_entry(Weather.YEARLY_GLOBAL_HORIZONTAL_IRRADIANCE)
+            azimuth = self.simulation_repository.get_entry(Weather.YEARLY_AZIMUTH)
+            apparent_zenith = self.simulation_repository.get_entry(Weather.YEARLY_APPARENT_ZENITH)
+            temperature = self.simulation_repository.get_entry(Weather.YEARLY_TEMPERATURE_OUTSIDE)
+            wind_speed = self.simulation_repository.get_entry(Weather.YEARLY_WIND_SPEED)
 
             # The weather component always publishes arrays covering the whole
             # year at the simulation's resolution, while the simulation itself
@@ -829,7 +815,7 @@ class PVSystem(cp.Component):
             number_of_timesteps = self.my_simulation_parameters.timesteps
             if len(dni) < number_of_timesteps:
                 raise ValueError(
-                    f"The yearly weather arrays in the singleton sim repository "
+                    f"The yearly weather arrays in this simulation's sim repository "
                     f"hold {len(dni)} values but the simulation needs "
                     f"{number_of_timesteps}. The arrays do not match the "
                     f"simulation parameters (wrong resolution or duration)."
@@ -873,7 +859,7 @@ class PVSystem(cp.Component):
                     f"The computed PV values have the wrong length. "
                     f"Expected {self.my_simulation_parameters.timesteps} values, "
                     f"but got {len(self.ac_power_ratios_for_all_timesteps_output)}. "
-                    f"The yearly weather arrays in the singleton sim repository "
+                    f"The yearly weather arrays in this simulation's sim repository "
                     f"do not match the simulation parameters."
                 )
 

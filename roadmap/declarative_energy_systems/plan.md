@@ -189,4 +189,6 @@ batch that re-records, and its renaming tables are kept current as P4 renames th
 | Multi-zone `Building`, per-unit facts, aggregating occupancy input | separate epic |
 | Nested groups, inter-group `requires` | only if flat groups prove insufficient in real files |
 | `at_least` / `at_most` law operators | first law that needs a clamp; otherwise delete (Q-P1.2) |
-| Runtime half of `SingletonSimRepository` (MPC/PID heat-flux, weather and price forecasts) — still live, needs its own redesign, probably proper wiring | separate decision after P4 removes the dead construction-time keys |
+| Runtime half of `SingletonSimRepository` (MPC/PID heat-flux and price forecasts) — still live, needs its own redesign, probably proper wiring | separate decision after P4 removes the dead construction-time keys |
+
+2026-09-12: the weather half of that row is done — the Weather's ten full-year series and the occupancy's heating-by-residents forecast now travel through the per-simulation `SimRepository`, under key names owned by their writers (`Weather.YEARLY_*`, `UtspLpgConnector.YEARLY_HEATING_BY_RESIDENTS`). The readers are unchanged otherwise: the PV system and the predictive branch of the `Building`. What is left in the singleton's runtime half is the MPC/PID heat-flux forecasts, the price forecasts, the PV yearly forecast, and the two process-wide strings postprocessing reads.

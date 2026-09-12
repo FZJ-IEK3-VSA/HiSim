@@ -154,34 +154,6 @@ class UtspLpgConnectorConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return UtspLpgConnector.get_full_classname()  # type: ignore[no-any-return]
 
-    @classmethod
-    def get_default_utsp_connector_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "UtspLpgConnectorConfig":
-        """Creates a default configuration. Chooses default values for the LPG parameters."""
-
-        if component_id is None:
-            component_id = ComponentID(name="UTSPConnector")
-        config = UtspLpgConnectorConfig(
-            component_id=component_id,
-            data_acquisition_mode=LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE,
-            name_of_predefined_loadprofile="CHR01 Couple both at Work",
-            predefined_loadprofile_filepaths=None,
-            household=Households.CHR01_Couple_both_at_Work,
-            result_dir_path=utils.HISIMPATH["utsp_results"],
-            energy_intensity=EnergyIntensityType.EnergySaving,
-            travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
-            transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
-            charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
-            profile_with_washing_machine_and_dishwasher=True,
-            predictive_control=False,
-            cache_dir_path=None,
-            guid="",
-            calculation_index_for_local_lpg=None
-        )
-        return config
-
     @preset(note="CHR01, a couple both at work, on the shipped predefined profile")
     @classmethod
     def preset_standard(cls, name: str) -> "UtspLpgConnectorConfig":

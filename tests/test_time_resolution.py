@@ -178,12 +178,12 @@ def test_cluster_house_for_several_time_resolutions():
     # which builds the variable name from the component output's pretty name
     # (object_name == component_name). The load-profile generator is configured
     # with the name "UTSPConnector"
-    # (see UtspLpgConnectorConfig.get_default_utsp_connector_config), so its class
+    # (the name every setup passes to UtspLpgConnectorConfig.preset_standard), so its class
     # name "UtspLpgConnector" does not appear in the yearly-result keys -- match
     # the configured name instead. PVSystem's and Weather's configured names equal
     # their class names, so their get_classname() matches their yearly-result keys.
     utsp_connector_name = (
-        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config().component_id.name
+        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_standard("UTSPConnector").component_id.name
     )
     # Predefined-input components whose aggregated yearly results must be stable
     # across the three time resolutions (15/30/60 min).
@@ -233,7 +233,7 @@ def test_cluster_house_for_several_time_resolutions():
     # configured component name (Component.component_name == config.component_id.name for this
     # single-building simulation), not by the Python class name. The load-profile
     # generator is configured with the name "UTSPConnector"
-    # (see UtspLpgConnectorConfig.get_default_utsp_connector_config), so its class
+    # (the name every setup passes to UtspLpgConnectorConfig.preset_standard), so its class
     # name "UtspLpgConnector" does not appear in the opex keys -- match the
     # configured name instead. PVSystem's configured name equals its class name, so
     # PVSystem.get_classname() matches its opex key. The opex CSV also contains
@@ -361,7 +361,7 @@ def run_cluster_house(
     my_sim.add_component(my_building, connect_automatically=True)
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_standard("UTSPConnector")
     my_occupancy_config.data_acquisition_mode = (
         loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
     )

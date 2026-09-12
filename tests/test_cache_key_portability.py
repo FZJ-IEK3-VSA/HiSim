@@ -112,7 +112,7 @@ def test_where_the_occupancy_result_is_written_does_not_change_its_key() -> None
     Catches: the defect this change exists for -- an absolute ``result_dir_path`` in the key, so that
     no LoadProfileGenerator entry computed on one machine is ever found on another.
     """
-    baseline = UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    baseline = UtspLpgConnectorConfig.preset_standard("UTSPConnector")
     elsewhere = dataclasses.replace(
         baseline,
         result_dir_path="/home/runner/work/HiSim/HiSim/hisim/results",
@@ -131,7 +131,7 @@ def test_what_decides_the_occupancy_profile_still_moves_its_key() -> None:
     Catches: an over-eager view that clears a field the profile depends on, which would hand one
     household's profile to another.
     """
-    baseline = UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    baseline = UtspLpgConnectorConfig.preset_standard("UTSPConnector")
 
     assert Keys.of(baseline) != Keys.of(dataclasses.replace(baseline, guid="another-seed"))
     assert Keys.of(baseline) != Keys.of(dataclasses.replace(baseline, profile_with_washing_machine_and_dishwasher=False))
@@ -190,7 +190,7 @@ def test_the_base_rule_survives_an_override() -> None:
     becomes house-specific again.
     """
     weather = WeatherConfig.get_default(location_entry=LocationEnum.AACHEN)
-    occupancy = UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    occupancy = UtspLpgConnectorConfig.preset_standard("UTSPConnector")
     for in_house_a in (weather, occupancy):
         in_house_b = dataclasses.replace(
             in_house_a, component_id=dataclasses.replace(in_house_a.component_id, building="BUI2")
@@ -209,7 +209,7 @@ def test_the_view_never_touches_the_live_configuration() -> None:
     relative path it cannot open.
     """
     weather = WeatherConfig.get_default(location_entry=LocationEnum.AACHEN)
-    occupancy = UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    occupancy = UtspLpgConnectorConfig.preset_standard("UTSPConnector")
     source_before, result_dir_before = weather.source_path, occupancy.result_dir_path
 
     Keys.of(weather)

@@ -158,7 +158,9 @@ def _build_weather_with_cache(
     location_dict = weather.get_coordinates(
         filepath=my_config.source_path, source_enum=my_config.data_source
     )
-    entry = my_weather.cache_entry(my_weather.build_calculation_inputs(location_dict))
+    entry = my_weather.cache_entry(
+        my_weather.series_cache_key(my_weather.build_calculation_inputs(location_dict))
+    )
     columns = list(_CACHE_COLUMNS)
     if include_pressure:
         columns.append("Pressure")

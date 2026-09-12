@@ -134,16 +134,12 @@ class SimpleHotWaterStorageConfig(ConfigBase):
     ) -> "SimpleHotWaterStorageConfig":
         """Gets a default storage scaled to the maximal thermal power of the heat generator it buffers.
 
-        ``max_thermal_power_in_watt_of_heating_system`` is the generator's maximal thermal
-        power -- the boiler's ``maximal_thermal_power_in_watt``, the heat pump's
-        ``set_thermal_output_power_in_watt`` -- and never the building's heating load. The
-        litres-per-kilowatt figures below are per kilowatt of *installed generator power*,
-        which is what decides how long a cycle the buffer has to absorb; a generator sized
-        above the load (a boiler covering domestic hot water as well is sized at 1.1x the
-        load, or at 2.5 kW per apartment when that is larger) therefore needs the larger
-        buffer that its own power asks for. Every setup passing the building load here was
-        the C11 defect (P4 decision D-9): it sized the buffer for a generator that does not
-        exist and undersized every buffer whose generator is larger than the load.
+        ``max_thermal_power_in_watt_of_heating_system`` is the heat generator's maximal thermal
+        power -- a boiler's ``maximal_thermal_power_in_watt``, a heat pump's
+        ``set_thermal_output_power_in_watt``. The litres-per-kilowatt figures below are per
+        kilowatt of installed generator power. Passing the building's heating load here was the
+        C11 defect (P4 decision D-9); where a setup sizes its generator at exactly the load, the
+        two coincide.
 
         The information for scaling the buffer storage is taken from the heating system guidelines from Buderus:
         https://www.baunetzwissen.de/heizung/fachwissen/speicher/dimensionierung-von-pufferspeichern-161296
@@ -160,7 +156,7 @@ class SimpleHotWaterStorageConfig(ConfigBase):
             volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 50
             # https://www.flexiheatuk.com/buffer-vessel-sizing-for-hydronic-heating-systems/#:~:text=20%2D25%20litres%20per%20kW,kW%20for%20heat%20pump%20systems
 
-        # otherwise use approximation: 60l per kw thermal power
+        # otherwise use approximation: 20 l per kW thermal power
         elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM:
             volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 20
 

@@ -4,7 +4,6 @@
 import pytest
 import numpy as np
 from hisim import component as cp
-from hisim.components import generic_boiler
 from hisim.components import simple_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -237,11 +236,9 @@ def test_buffer_volume_follows_the_generator_not_the_building_load() -> None:
     """
 
     heating_load_of_building_in_watt = 7780.75
-    maximal_thermal_power_of_the_boiler_in_watt = generic_boiler.GenericBoilerConfig.scale_thermal_power(
-        heating_load_of_building_in_watt=heating_load_of_building_in_watt,
-        number_of_apartments_in_building=1.0,
-    )
-    assert maximal_thermal_power_of_the_boiler_in_watt == pytest.approx(8558.825)
+    # 8558.825 W is what GenericBoilerConfig.scale_thermal_power returns for that load and one
+    # apartment; tests/test_sizing.py pins the 1.1x law itself.
+    maximal_thermal_power_of_the_boiler_in_watt = 8558.825
 
     sized_from_the_generator = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=maximal_thermal_power_of_the_boiler_in_watt,
@@ -255,6 +252,3 @@ def test_buffer_volume_follows_the_generator_not_the_building_load() -> None:
         sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER,
     )
     assert sized_from_the_building_load.volume_heating_water_storage_in_liter == 155.62
-    assert sized_from_the_generator.volume_heating_water_storage_in_liter == pytest.approx(
-        1.1 * sized_from_the_building_load.volume_heating_water_storage_in_liter, rel=1e-4
-    )

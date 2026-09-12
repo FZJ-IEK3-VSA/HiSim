@@ -210,14 +210,16 @@ def test_advisory_missing_golden_returns_zero(tmp_path: Path) -> None:
 
 
 def test_cli_mode_and_advisory_flags() -> None:
-    """``--mode json`` and ``--advisory`` parse; defaults stay python/blocking."""
+    """``--mode yaml`` and ``--advisory`` parse; defaults stay python/blocking."""
     default = _parse_args([])
     assert default.mode == "python"
     assert default.advisory is False
-    parsed = _parse_args(["--mode", "json", "--advisory"])
-    assert parsed.mode == "json"
+    parsed = _parse_args(["--mode", "yaml", "--advisory"])
+    assert parsed.mode == "yaml"
     assert parsed.advisory is True
-    assert _parse_args(["--mode", "yaml"]).mode == "yaml"
+    # 'json' was the third mode until the v1 scenario files retired; it is refused now.
+    with pytest.raises(SystemExit):
+        _parse_args(["--mode", "json"])
 
 
 def test_setup_param_filter_narrows_to_one_pair(tmp_path: Path) -> None:

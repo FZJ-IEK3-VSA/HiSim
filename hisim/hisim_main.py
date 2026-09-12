@@ -13,7 +13,6 @@ from dotenv import load_dotenv
 
 try:
     from hisim.energy_system.executor import SimulationParametersReader, run_energy_system
-    from hisim.json_executor import setup_components_and_connections
     from hisim.postprocessingoptions import PostProcessingOptions
     import hisim.simulator as sim
     from hisim import log
@@ -41,8 +40,8 @@ __email__: str = "v.janser@fz-juelich.de"
 class EnergySystemMode:
     """The file names that select the declarative energy-system mode of this entry point.
 
-    HiSim's command line dispatches on the first argument's suffix and on nothing else, so the
-    third mode is defined by the two suffixes below and by no flag. The compound suffix is what
+    HiSim's command line dispatches on the first argument's suffix and on nothing else, so this
+    mode is defined by the two suffixes below and by no flag. The compound suffix is what
     makes the dispatch unambiguous: a plain ``.yaml`` first argument stays unclaimed, because the
     simulation-parameters files carry that suffix too and one of them handed over by mistake
     should be reported as such rather than parsed as a household.
@@ -52,7 +51,9 @@ class EnergySystemMode:
     """
 
     #: Suffixes of an energy-system file. A ``.json`` spelling is deliberately absent: this
-    #: format is YAML, and the ``.json`` first argument belongs to the older scenario mode.
+    #: format is YAML. The ``.json`` first argument belongs to no mode at all since the v1
+    #: scenario files retired; a simulation-parameters file in that spelling is the second
+    #: argument of this mode, never the first.
     SUFFIXES: tuple[str, ...] = (".energy_system.yaml", ".energy_system.yml")
 
     #: Suffixes a simulation-parameters file may carry in this mode.
@@ -175,8 +176,8 @@ def initialize_from_python(
         setup_function=function_in_module,
         my_simulation_parameters=sim_params,
         my_module_config=my_module_config,
-        # Always log component connections in Python mode (mirrors the JSON path, hisim_main.py:215)
-        # so component_connections.json is written for easy post-processing and debugging.
+        # Always log component connections in Python mode so component_connections.json is
+        # written for easy post-processing and debugging.
         force_log_connections=True,
     )
 
@@ -216,139 +217,11 @@ def load_json_file(path_str: str) -> dict[str, Any]:
         raise ValueError(f"Invalid JSON in file {path}: {e}") from e
 
 
-def initialize_from_json(
-    scenario: str,
-    simulation_parameters: str,
-    path_to_module: str,
-    delta: Optional[str],
-) -> sim.Simulator:
-    """Initialize the simulator from JSON scenario and simulation-parameter files.
-
-    Loads both JSON files, deserializes ``SimulationParameters`` (converting
-    ISO date strings and post-processing option names), and delegates to
-    ``_build_simulator_from_scenario``.
-
-    Args:
-        scenario: Path to the scenario ``.json`` file.
-        simulation_parameters: Path to the simulation-parameters ``.json``
-            file.
-        path_to_module: Path whose parent directory is added to
-            ``sys.path`` for component imports.
-        delta: Optional path to a delta ``.json`` file. Currently
-            unsupported -- a warning is logged and the value is ignored.
-
-    Returns:
-        The initialized ``Simulator`` with its component graph wired.
-
-    Raises:
-        ValueError: If either JSON file is invalid or the module directory
-            does not exist.
-    """
-
-    # Load JSON files
-    scenario_data = load_json_file(scenario)
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}"
-    )
-    # Missing in the following data: result_directory, surplus_control, cache_dir_path, multiple_buildings
-    # -> Result Directory is set in prepare_simulation_directory function, called by run_all_timesteps
-    # -> Cache Dir Path is filled by default in SimulationParameters
-    # -> Surplus Control: see comment in hisim_convert_to_json.py
-    sim_params_data = load_json_file(simulation_parameters)
-    sim_params_data["multiple_buildings"] = scenario_data.get("multiple_buildings", False)
-    sim_params_data["start_date"] = datetime.fromisoformat(sim_params_data["start_date"])
-    sim_params_data["end_date"] = datetime.fromisoformat(sim_params_data["end_date"])
-    sim_params_data["post_processing_options"] = [
-        PostProcessingOptions[option]
-        for option in sim_params_data.get("post_processing_options", [])
-    ]
-    sim_params = SimulationParameters(**sim_params_data)
-
-    my_sim = _build_simulator_from_scenario(scenario_data, path_to_module, sim_params)
-
-    if delta:
-        log.warning("====================================================================")
-        log.warning("== The delta file is currently not supported and will be ignored. ==")
-        log.warning("====================================================================")
-
-    return my_sim
-
-
-def _build_simulator_from_scenario(
-    scenario_data: dict[str, Any],
-    path_to_module: str,
-    sim_params: SimulationParameters,
-) -> sim.Simulator:
-    """Wire a JSON scenario onto a simulator using already-prepared simulation parameters.
-
-    Shared tail of :func:`initialize_from_json` (file-based sim params) and
-    :func:`initialize_from_json_with_parameters` (a pre-built
-    :class:`SimulationParameters`, e.g. from the golden-reference runner). Resolves
-    the scenario's ``.json`` path, puts its directory on ``sys.path``, constructs
-    the :class:`Simulator`, and builds the component graph from ``scenario_data``.
-    """
-    # Normalize module path and resolve absolute path
-    path_obj = Path(path_to_module).with_suffix(".json").resolve()
-    # Get module name (filename without suffix)
-    module_filename = path_obj.stem
-    # Add parent directory to PYTHONPATH
-    module_dir = path_obj.parent
-    if module_dir.exists():
-        sys.path.append(str(module_dir))
-    else:
-        raise ValueError(f"Directory of module does not exist: {module_dir}")
-
-    my_sim: sim.Simulator = sim.Simulator(
-        module_directory=str(module_dir),
-        module_filename=module_filename,
-        # In JSON mode we do not use a setup function; but it must not be None for post-processing
-        setup_function="setup_function",
-        my_module_config=None,
-        my_simulation_parameters=sim_params,
-    )
-
-    setup_components_and_connections(scenario_data, my_sim, sim_params)
-    return my_sim
-
-
-def initialize_from_json_with_parameters(
-    scenario: str,
-    my_simulation_parameters: SimulationParameters,
-) -> sim.Simulator:
-    """Initialize the simulator from a JSON scenario using a pre-built :class:`SimulationParameters`.
-
-    Unlike :func:`initialize_from_json`, the simulation parameters are supplied by
-    the caller instead of read from a ``.simulation.json`` file. This lets a caller
-    (the golden-reference runner) drive a JSON scenario with the *exact* same
-    :class:`SimulationParameters` object it would use for the Python setup — same
-    dates, timestep, post-processing options and ``result_directory`` — so the two
-    runs are comparable with no risk of parameter drift.
-
-    Args:
-        scenario: Path to the ``.scenario.json`` file describing the component
-            graph.
-        my_simulation_parameters: A pre-built ``SimulationParameters`` instance
-            to drive the scenario (dates, timestep, post-processing options,
-            result directory).
-
-    Returns:
-        The initialized ``Simulator`` with its component graph wired.
-    """
-    scenario_data = load_json_file(scenario)
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}"
-    )
-    my_simulation_parameters.multiple_buildings = scenario_data.get("multiple_buildings", False)
-    my_simulation_parameters.log_connections = True  # For easy post-processing (and debugging)
-    return _build_simulator_from_scenario(scenario_data, scenario, my_simulation_parameters)
-
-
 def run_simulation(my_sim: sim.Simulator, path_to_module: Optional[str]) -> None:
     """Run all time steps of an initialized simulator and log timing.
 
     Args:
-        my_sim: An initialized ``Simulator`` (from ``initialize_from_python``
-            or ``initialize_from_json``).
+        my_sim: An initialized ``Simulator`` (from ``initialize_from_python``).
         path_to_module: Path to the setup module, used only for log messages.
     """
 
@@ -407,8 +280,6 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Energy-system mode:\n"
             "  <household.energy_system.yaml> <simulation_params.{yaml,json}>\n\n"
-            "JSON mode:\n"
-            "  <scenario_params.json> <simulation_params.json> [scenario_delta.json]\n\n"
             "Legacy Python mode:\n"
             "  <module.py> [module_config]"
         ),
@@ -433,11 +304,6 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
               or ``None``.
             - ``my_simulation_parameters``: Path to the simulation parameters
               JSON file, or ``None``.
-
-        For ``"json"`` mode, the dictionary contains:
-            - ``scenario``: Path to the scenario JSON file.
-            - ``simulation``: Path to the simulation parameters JSON file.
-            - ``delta``: Path to the optional delta JSON file, or ``None``.
 
         For ``"energy_system"`` mode, the dictionary contains:
             - ``energy_system``: Path to the ``*.energy_system.yaml`` file.
@@ -491,31 +357,9 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
             "my_simulation_parameters": my_simulation_parameters,
         }
 
-    if inputs[0].endswith(".json"):
-        if len(inputs) < 2:
-            raise ValueError("The JSON mode requires at least 2 files:\n"
-                             "  <scenario.json> <simulation_params.json> [delta.json]")
-        if len(inputs) > 3:
-            raise ValueError("The JSON mode accepts at most 3 files:\n"
-                             "  <scenario.json> <simulation_params.json> [delta.json]")
-
-        for f in inputs:
-            if not f.endswith(".json"):
-                raise ValueError(f"Invalid file in JSON mode (must be .json): {f}")
-            if not os.path.isfile(f):
-                raise FileNotFoundError(f"File not found: {f}")
-
-        return {
-            "mode": "json",
-            "scenario": inputs[0],
-            "simulation": inputs[1],
-            "delta": inputs[2] if len(inputs) == 3 else None,
-        }
-
     raise ValueError("First argument must be either:\n"
-                     f"  - an energy-system file (*{EnergySystemMode.SUFFIXES[0]}) for energy-system mode,\n"
-                     "  - a Python file (*.py) for legacy Python mode, or\n"
-                     "  - a JSON file (*.json) for JSON mode")
+                     f"  - an energy-system file (*{EnergySystemMode.SUFFIXES[0]}) for energy-system mode, or\n"
+                     "  - a Python file (*.py) for legacy Python mode")
 
 
 def get_required_config_value(config: dict[str, Optional[str]], key: str) -> str:
@@ -538,7 +382,7 @@ def get_required_config_value(config: dict[str, Optional[str]], key: str) -> str
 
 
 def main_cli() -> None:
-    """Main function for command-line execution of HiSim, supporting both Python-based and JSON-based scenarios."""
+    """Main function for command-line execution of HiSim, in energy-system or legacy Python mode."""
 
     args = parse_args()
     config = validate_args(args)
@@ -553,35 +397,15 @@ def main_cli() -> None:
         run_energy_system(energy_system, simulation)
         return
 
-    my_sim: sim.Simulator
-    ptm: str
-    # Dispatching logic
-    if config["mode"] == "python":
-        module_file = get_required_config_value(config, "module_file")
-        print(f"Calling setup_function from {module_file}")
-        my_sim = initialize_from_python(
-            path_to_module=module_file,
-            my_simulation_parameters=config["my_simulation_parameters"],
-            my_module_config=config["module_config"],
-        )
-        ptm = module_file
+    module_file = get_required_config_value(config, "module_file")
+    print(f"Calling setup_function from {module_file}")
+    my_sim = initialize_from_python(
+        path_to_module=module_file,
+        my_simulation_parameters=config["my_simulation_parameters"],
+        my_module_config=config["module_config"],
+    )
 
-    elif config["mode"] == "json":
-        scenario = get_required_config_value(config, "scenario")
-        simulation = get_required_config_value(config, "simulation")
-        print(
-            f"Running simulation of scenario {scenario} with simulation parameters {simulation}"
-            + (f" and delta {config['delta']}" if config["delta"] else "")
-        )
-        my_sim = initialize_from_json(
-            scenario=scenario,
-            simulation_parameters=simulation,
-            path_to_module=scenario,
-            delta=config["delta"],
-        )
-        ptm = scenario
-
-    run_simulation(my_sim, path_to_module=ptm)
+    run_simulation(my_sim, path_to_module=module_file)
 
 
 def main(
@@ -622,33 +446,6 @@ def main(
         my_module_config=my_module_config,
     )
     run_simulation(my_sim, path_to_module=path_to_module)
-    return my_sim.get_simulation_parameters().result_directory
-
-
-def main_json(scenario: str, my_simulation_parameters: SimulationParameters) -> str:
-    """Run a JSON-based system setup and return the directory it wrote results to.
-
-    The JSON counterpart of :func:`main`: it wires the ``.scenario.json`` at
-    *scenario* onto a simulator using the caller-supplied *my_simulation_parameters*
-    (rather than a ``.simulation.json`` file), runs every time step and the
-    post-processing, and returns the filesystem path of the result directory the
-    simulator actually wrote to. Used by the golden-reference runner to execute a
-    JSON setup with the same parameters as its Python twin and compare KPIs.
-
-    Args:
-        scenario: Path to the ``.scenario.json`` file describing the component
-            graph.
-        my_simulation_parameters: A pre-built ``SimulationParameters`` instance
-            to drive the scenario.
-
-    Returns:
-        The absolute path of the directory the simulation wrote its results to.
-    """
-    my_sim = initialize_from_json_with_parameters(
-        scenario=scenario,
-        my_simulation_parameters=my_simulation_parameters,
-    )
-    run_simulation(my_sim, path_to_module=scenario)
     return my_sim.get_simulation_parameters().result_directory
 
 

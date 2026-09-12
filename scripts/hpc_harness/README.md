@@ -29,10 +29,10 @@ cd scripts
 python -m hpc_harness server --config server.json
 
 # 2. Submit jobs
-python -m hpc_harness submit --server-url-file /project/run/server.url \
-    --runner hisim --batch run1 \
-    --scenario-dir /project/run/scenarios --glob '*.scenario.json' \
-    --sim-params /project/run/2021.simulation.json
+python scripts/hpc_harness/submit_energy_systems.py \
+    --server-url-file /project/run/server.url --batch run1 \
+    --energy-system-dir energy_systems --name-filter building_sizer \
+    --sim-params energy_systems/2021_minutely.simulation.yaml
 
 # 3. Start workers (or enable the autoscaler in server.json)
 sbatch hpc_harness/slurm/worker.sbatch            # one exclusive node each
@@ -40,6 +40,23 @@ sbatch hpc_harness/slurm/worker.sbatch            # one exclusive node each
 
 # 4. Watch: open http://<server>:8080/  (or `python -m hpc_harness status ...`)
 ```
+
+## Systematic test: all declarative energy systems
+
+`submit_energy_systems.py` enqueues every runnable `energy_systems/*.energy_system.yaml`
+(the `*.grouped.energy_system.yaml` variants are skipped — they describe the same
+household as the flat twin beside them) as a job under the `hisim` runner, paired with
+one shared `*.simulation.yaml` or `*.simulation.json` that fixes the period, the
+resolution and the post-processing:
+
+```bash
+python scripts/hpc_harness/submit_energy_systems.py --server-url-file /project/run/server.url
+python scripts/hpc_harness/submit_energy_systems.py ... --name-filter household
+```
+
+The payload of one such job is `{"energy_system": …, "sim_params": …}`, run through
+`hisim.energy_system.executor.run_energy_system` with the result directory the harness
+assigned. Workers must serve the `hisim` runner.
 
 ## Systematic test: all Python system setups
 
@@ -72,7 +89,7 @@ hpc_harness/
   db.py         core DB: tasks/attempts/workers/slurm_submissions, fenced lease/report
   logdb.py      disposable logging DB: metrics, shipped logs, console snapshots
   client.py     HTTP client with retry/backoff + lease replay
-  run_one.py    run exactly one HiSim simulation (moved from hisim/hpc_harness)
+  run_one.py    run exactly one HiSim energy system through the declarative executor
   runners/      Runner protocol + registry; hisim + generic subprocess runners
   worker/       spawner (fork-server), warm_pool, child loop, gates, log shipping
   server/       FastAPI app, service (queue logic + reconciliation), writer thread,

@@ -100,7 +100,7 @@ during the last sweep), prunes to the window and uploads it again. An hour in wh
 was pushed costs a handful of requests, and the request cap is 500.
 
 Hourly rather than nightly because of the artifacts. Memory artifacts are the expensive half —
-one download each, and the four golden workflows alone upload 88 per push to `main` — so a
+one download each, and the three golden workflows alone upload 66 per push to `main` — so a
 single sweep a day could never keep up with them, and they are collected for `main` and for
 flagged jobs rather than for everything. Pull-request jobs still produce and print their own
 numbers; they just don't feed the trend.

@@ -281,27 +281,6 @@ def resolve_setup_path(setup: SetupConfig, repo_root: Path) -> Path:
     return resolved
 
 
-def resolve_scenario_path(setup: SetupConfig, repo_root: Path) -> Path:
-    """Resolve the ``.scenario.json`` sibling of the setup's ``.py`` path.
-
-    The JSON system-setup design mirrors each ``<name>.py`` with a same-named
-    ``<name>.scenario.json`` in the same directory. This returns the absolute path
-    of that sibling so the JSON golden check can run the identical setup expressed
-    as JSON.
-
-    Raises:
-        FileNotFoundError: if the ``.scenario.json`` sibling does not exist.
-    """
-    py_path = Path(setup.path)
-    scenario_rel = py_path.parent / f"{py_path.stem}.scenario.json"
-    resolved = (repo_root / scenario_rel).resolve()
-    if not resolved.exists():
-        raise FileNotFoundError(
-            f"Scenario JSON not found for setup {setup.id!r}: {scenario_rel} (resolved to {resolved})"
-        )
-    return resolved
-
-
 def resolve_twin_path(setup: SetupConfig, repo_root: Path) -> Path:
     """Resolve the recorded ``.energy_system.yaml`` twin of the setup.
 
@@ -339,13 +318,11 @@ def run_one(
     Builds :class:`SimulationParameters`, resolves the setup, runs it, then reads
     and flattens ``<result_directory>/all_kpis.json``. With ``mode="python"``
     (default) it runs the ``.py`` setup via :func:`hisim.hisim_main.main`; with
-    ``mode="json"`` it runs the same-named ``.scenario.json`` sibling via
-    :func:`hisim.hisim_main.main_json`; with ``mode="yaml"`` it runs the recorded
-    ``.energy_system.yaml`` twin through the declarative executor. All three receive
-    the *same* built :class:`SimulationParameters`, so the runs are directly
-    comparable. The oracle is the KPI set, deliberately: the legacy and declarative
-    paths name aggregator result columns differently (C-P3.2), but KPIs do not
-    depend on column names.
+    ``mode="yaml"`` it runs the recorded ``.energy_system.yaml`` twin through the
+    declarative executor. Both receive the *same* built
+    :class:`SimulationParameters`, so the runs are directly comparable. The oracle is
+    the KPI set, deliberately: the legacy and declarative paths name aggregator result
+    columns differently (C-P3.2), but KPIs do not depend on column names.
 
     Any exception (including a missing ``all_kpis.json``, which means the parameter
     set did not enable both ``COMPUTE_KPIS`` and ``WRITE_KPIS_TO_JSON``) is captured
@@ -359,10 +336,7 @@ def run_one(
         # HiSim execution stack.
         from hisim import hisim_main
 
-        if mode == "json":
-            scenario_path = resolve_scenario_path(setup, repo_root)
-            hisim_main.main_json(str(scenario_path), params)
-        elif mode == "yaml":
+        if mode == "yaml":
             from hisim.energy_system.executor import build_energy_system
 
             twin_path = resolve_twin_path(setup, repo_root)
@@ -402,7 +376,7 @@ def run_all(
 
     For each pair, sets ``result_directory = base_root/subdir/<setup_id>/<param_id>/``,
     creates parent directories, and calls :func:`run_one` in the given ``mode``
-    (``"python"`` or ``"json"``). Returns one :class:`RunResult` per pair.
+    (``"python"`` or ``"yaml"``). Returns one :class:`RunResult` per pair.
     """
     results: list[RunResult] = []
     for setup, param_set in select_pairs(config):
@@ -410,17 +384,6 @@ def run_all(
         Path(result_directory).mkdir(parents=True, exist_ok=True)
         results.append(run_one(setup, param_set, result_directory, repo_root, mode=mode))
     return results
-
-
-def run_all_json(
-    config: GoldenConfig, base_root: Path, repo_root: Path, subdir: str
-) -> list[RunResult]:
-    """Run every pair via its ``.scenario.json`` sibling (JSON mode).
-
-    Thin ``mode="json"`` wrapper around :func:`run_all` so it can be injected as
-    ``golden_check.main``'s ``run_fn`` (which expects the 4-argument signature).
-    """
-    return run_all(config, base_root, repo_root, subdir, mode="json")
 
 
 def run_all_yaml(

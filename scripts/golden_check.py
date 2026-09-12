@@ -32,7 +32,6 @@ try:  # run as a script from scripts/ ...
         filter_config,
         load_config,
         run_all,
-        run_all_json,
         run_all_yaml,
         select_pairs,
     )
@@ -44,7 +43,6 @@ except ModuleNotFoundError:  # ... or imported as scripts.golden_check (tests)
         filter_config,
         load_config,
         run_all,
-        run_all_json,
         run_all_yaml,
         select_pairs,
     )
@@ -182,9 +180,8 @@ def main(
 
     When ``advisory`` is ``True`` the full comparison still runs and the reports
     are written exactly as usual, but the process return code is forced to ``0`` so
-    the check can surface divergences without blocking (used by the JSON golden
-    check until JSON/Python parity is proven). The written ``report.json`` still
-    records the true ``passed`` verdict.
+    the check can surface divergences without blocking a gate that is still burning
+    in. The written ``report.json`` still records the true ``passed`` verdict.
     """
     config = load_config(config_path)
     config = filter_config(config, setup_id=setup_id, param_id=param_id)
@@ -276,16 +273,16 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--abs-tol", type=float, default=ABS_TOL)
     parser.add_argument(
         "--mode",
-        choices=("python", "json", "yaml"),
+        choices=("python", "yaml"),
         default="python",
-        help="Run the '.py' setups (python), their '.scenario.json' siblings (json), or their "
-        "recorded '.energy_system.yaml' twins through the declarative executor (yaml). "
-        "All compare against the same committed golden references.",
+        help="Run the '.py' setups (python) or their recorded '.energy_system.yaml' twins "
+        "through the declarative executor (yaml). Both compare against the same committed "
+        "golden references.",
     )
     parser.add_argument(
         "--advisory",
         action="store_true",
-        help="Report divergences but always exit 0 (never block). Used by the JSON check.",
+        help="Report divergences but always exit 0 (never block).",
     )
     return parser.parse_args(argv)
 
@@ -302,7 +299,7 @@ if __name__ == "__main__":
             param_id=args.param_id,
             rel_tol=args.rel_tol,
             abs_tol=args.abs_tol,
-            run_fn={"json": run_all_json, "yaml": run_all_yaml}.get(args.mode, run_all),
+            run_fn={"yaml": run_all_yaml}.get(args.mode, run_all),
             advisory=args.advisory,
             ignore_kpis=PORT_NAMED_KPIS if args.mode == "yaml" else None,
         )

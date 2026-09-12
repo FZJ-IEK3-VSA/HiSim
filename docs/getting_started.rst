@@ -45,16 +45,18 @@ a heat pump. Run it the same way::
     cd system_setups
     python ../hisim/hisim_main.py basic_household
 
-Run a Simulation with JSON Configuration
-----------------------------------------
+Run a Simulation from an Energy-System File
+-------------------------------------------
 
-JSON-based setups separate the *scenario* (components and connections)
-from the *simulation parameters* (time range and post-processing).
-For example, to run the basic household with 15-minute timesteps and
-plotting enabled::
+The declarative input separates the *energy system* (components and
+connections, in :file:`energy_systems/*.energy_system.yaml`) from the
+*simulation parameters* (time range and post-processing). Either spelling of
+the parameters file is read, the YAML files beside the energy systems and the
+JSON files in :file:`system_setups/`. For example, to run the basic household
+with 15-minute timesteps and plotting enabled::
 
     cd system_setups
-    python ../hisim/hisim_main.py basic_household.scenario.json 2021_15minutely_plots.simulation.json
+    python ../hisim/hisim_main.py ../energy_systems/basic_household.energy_system.yaml 2021_15minutely_plots.simulation.json
 
 The pre-defined simulation parameter files in :file:`system_setups/`
 include:

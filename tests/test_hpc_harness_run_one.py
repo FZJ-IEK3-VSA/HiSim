@@ -7,47 +7,69 @@ from hpc_harness import run_one
 pytestmark = pytest.mark.hpcharness
 
 
-# ------------------------------------------------------------------ run_one (moved)
+# ------------------------------------------------------------------ run_one
 
 
 class _FakeSimParams:
     """Minimal stand-in for SimulationParameters exposing a settable result_directory."""
 
-    def __init__(self):
-        self.result_directory = ""
+    def __init__(self, result_directory):
+        self.result_directory = result_directory
 
 
 class _FakeSimulator:
     """Minimal stand-in for the Simulator that just hands back its parameters."""
 
-    def __init__(self):
-        self.params = _FakeSimParams()
+    def __init__(self, result_directory):
+        self.params = _FakeSimParams(result_directory)
 
     def get_simulation_parameters(self):
         """Return the fake simulation parameters."""
         return self.params
 
 
-def test_run_single_overrides_result_dir_before_running():
-    """run_single sets result_directory before invoking run_fn, in init-then-run order."""
-    order = []
-    simulator = _FakeSimulator()
+class _FakeBuiltSystem:
+    """Minimal stand-in for the BuiltEnergySystem the executor returns."""
 
-    def fake_init(scenario, simulation_parameters, path_to_module, delta):  # pylint: disable=unused-argument
-        """Fake init_fn: assert the scenario/param args and return the fake simulator."""
-        order.append("init")
-        assert scenario == "scn.json" and simulation_parameters == "sim.json"
-        return simulator
+    def __init__(self, result_directory):
+        self.simulator = _FakeSimulator(result_directory)
 
-    def fake_run(sim, path_to_module):
-        """Fake run_fn: assert result_directory was set and the module path forwarded."""
-        order.append("run")
-        # The harness contract: result_directory is set BEFORE run_fn is invoked.
-        assert sim.get_simulation_parameters().result_directory == "/results/000001"
-        assert path_to_module == "scn.json"
 
-    returned = run_one.run_single(
-        "scn.json", "sim.json", "/results/000001", init_fn=fake_init, run_fn=fake_run
+def test_run_single_hands_the_job_directory_to_the_executor():
+    """run_single passes both files and the harness-assigned result dir to the executor."""
+    calls = []
+
+    def fake_run(energy_system_path, simulation_parameters_path, result_directory):
+        """Fake run_fn: record the arguments and return a built system."""
+        calls.append((energy_system_path, simulation_parameters_path, result_directory))
+        return _FakeBuiltSystem(result_directory)
+
+    built = run_one.run_single(
+        "house.energy_system.yaml", "sim.simulation.yaml", "/results/000001", run_fn=fake_run
     )
-    assert order == ["init", "run"]
-    assert returned is simulator
+
+    # The harness contract: the result directory is an argument of the run, not something
+    # patched onto the parameters after the system was built.
+    assert calls == [("house.energy_system.yaml", "sim.simulation.yaml", "/results/000001")]
+    assert built.simulator.get_simulation_parameters().result_directory == "/results/000001"
+
+
+def test_main_forwards_the_command_line_to_run_single():
+    """The standalone entry point maps its three flags onto the executor's arguments."""
+    calls = []
+
+    def fake_run(energy_system_path, simulation_parameters_path, result_directory):
+        """Fake run_fn: record the arguments the CLI resolved."""
+        calls.append((energy_system_path, simulation_parameters_path, result_directory))
+        return _FakeBuiltSystem(result_directory)
+
+    run_one.main(
+        [
+            "--energy-system", "house.energy_system.yaml",
+            "--sim-params", "sim.simulation.json",
+            "--result-dir", "/results/000002",
+        ],
+        run_fn=fake_run,
+    )
+
+    assert calls == [("house.energy_system.yaml", "sim.simulation.json", "/results/000002")]

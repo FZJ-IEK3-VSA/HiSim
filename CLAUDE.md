@@ -27,9 +27,9 @@ pytest -m base                                  # only base tests
 pytest -m "not buildingtest and not system_setups"  # exclude slow tests
 ```
 
-Test markers: `base`, `buildingtest`, `system_setups`, `mpc`, `utsp`, `jsonconfig`
+Test markers: `base`, `buildingtest`, `system_setups`, `mpc`, `utsp`
 
-### Run an energy system (declarative YAML — preferred for new systems)
+### Run an energy system (declarative YAML — the declarative input)
 ```bash
 python hisim/hisim_main.py energy_systems/gas_boiler_household.energy_system.yaml \
     energy_systems/one_day_15min.simulation.yaml
@@ -41,16 +41,15 @@ hisim energy-system run energy_systems/gas_boiler_household.energy_system.yaml \
 See `energy_systems/README.md`. Related commands: `hisim energy-system describe <class>`,
 `hisim energy-system facts <file>`, `hisim energy-system schema`.
 
-### Run a simulation (JSON mode — preferred)
+### Run a simulation (imperative Python mode)
 ```bash
 # From system_setups/ directory:
-python ../hisim/hisim_main.py basic_household.scenario.json 2021_minutely_plots.simulation.json
-```
-
-### Run a simulation (legacy Python mode)
-```bash
 python ../hisim/hisim_main.py simple_system_setup_one.py
 ```
+
+The v1 `*.scenario.json` files and their reader retired on 2026-09-12: energy-system YAML
+files are HiSim's declarative input and Python setups its imperative one. The
+`system_setups/*.simulation.json` parameter files stay, and both modes still read them.
 
 ### Linting / type checking
 ```bash
@@ -103,7 +102,7 @@ Two ways to wire components together:
 2. **Default connections** — a component declares `add_default_connections(...)` listing which other component classes it expects inputs from; `simulator.add_component(comp, connect_automatically=True)` wires these automatically.
 
 ### System setups (`system_setups/`)
-Each `.py` file contains a `setup_function(sim, sim_params)` that instantiates components and connects them. Each `.scenario.json` file is the JSON-based equivalent (uses `json_executor.py` to build components from fully-qualified class names). Simulation parameters (time range, resolution, post-processing options) live in separate `.simulation.json` files like `2021_minutely_plots.simulation.json`.
+Each `.py` file contains a `setup_function(sim, sim_params)` that instantiates components and connects them — the imperative input. Every setup has a recorded declarative twin in `energy_systems/<stem>.energy_system.yaml`. Simulation parameters (time range, resolution, post-processing options) live in separate `.simulation.json` files like `2021_minutely_plots.simulation.json`, which both modes read.
 
 ### Post-processing (`hisim/postprocessing/`)
 `PostProcessor` is invoked after simulation. Behavior is controlled by `PostProcessingOptions` flags set on `SimulationParameters`. Key options: `COMPUTE_KPIS`, `PLOT_LINE`, `EXPORT_TO_CSV`, `GENERATE_PDF_REPORT`, `MAKE_RESULT_JSON_FOR_WEBTOOL`. KPI computation lives in `postprocessing/kpi_computation/`. Results land in a `results/` subdirectory next to the scenario file.

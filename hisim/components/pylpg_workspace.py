@@ -487,8 +487,8 @@ class LpgBaseIndexPool:
     (see :meth:`PylpgWorkspace.calculation_index`). Two processes with the same base index write
     into the same directory and corrupt each other's results.
 
-    A script such as ``scripts/regenerate_scenario_jsons.py`` runs N worker threads, each of which
-    starts one HiSim subprocess after another. Numbering the subprocesses would not work, because
+    A driver that runs N worker threads, each of which starts one HiSim subprocess after
+    another, needs one index per worker. Numbering the subprocesses would not work, because
     there are more of them than workers and the numbers would grow without bound. Instead the script
     creates a pool of N indices and each worker borrows one for the duration of a subprocess::
 

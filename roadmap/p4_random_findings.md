@@ -19,6 +19,9 @@ Found by D-1. Retiring `advanced_heat_pump_hplib` — a class **no system setup 
 `golden-json-check` and `scenario-json-freshness` across twelve committed scenario JSONs. Two separate
 defects compose to produce that blast radius.
 
+*(Both of those gates, and the scenario JSONs they guarded, were retired on 2026-09-12; the finding's
+text is kept as written, because the defects it describes are about the energy manager, not the gates.)*
+
 **Outputs are created eagerly; inputs are not.** `add_dynamic_default_connections`
 (`hisim/dynamic_component.py:438`) only records a connection list in a dict keyed by source class name — it
 creates nothing, and the matching inputs are materialised later, in `connect_everything_automatically`, only

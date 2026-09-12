@@ -1,6 +1,8 @@
-"""HiSim runner: wraps ``run_one.run_single`` (spec §4.4) — no behavioural change.
+"""HiSim runner: wraps ``run_one.run_single`` (spec §4.4).
 
-Payload contract: ``{"scenario": "<*.scenario.json>", "sim_params": "<*.simulation.json>"}``.
+Payload contract: ``{"energy_system": "<*.energy_system.yaml>", "sim_params":
+"<*.simulation.yaml|json>"}`` — the declarative energy-system path, which is HiSim's
+only file-based input since the v1 scenario JSONs retired.
 """
 
 import logging
@@ -49,7 +51,7 @@ class HiSimRunner:
         from hpc_harness.run_one import run_single  # pylint: disable=import-outside-toplevel
 
         run_single(
-            scenario_path=payload["scenario"],
+            energy_system_path=payload["energy_system"],
             sim_params_path=payload["sim_params"],
             result_dir=result_dir,
         )

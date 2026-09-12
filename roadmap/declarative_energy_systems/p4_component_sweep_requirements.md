@@ -40,7 +40,7 @@ Surveyed: **88 config classes** in 65 modules; **9 converted** (4 of them still 
 ## 5. Goals and Non-Goals
 
 **Goals** — G1 every component config has presets/constructors and no legacy factory · G2 every sized value is computed by a class-side law from declared facts; no arithmetic in setups · G3 every name that becomes wire format is listed in this document before it is minted · G4 every result-changing conversion is a separate, diffed commit · G5 dead classes are removed before anyone mints a name for them.
-**Non-Goals** — many-cardinality laws (EQ2: no first consumer found in any group) · climate facts beyond D-21 · the runtime half of `SingletonSimRepository` (forecasts, 5R1C coefficients) · template/repeat layer (the car setup's N-car loop stays Python even after D-23) · renaming legacy aggregator port names (P3 Q-P3.2) · retiring `system_setups/` or the v1 JSONs.
+**Non-Goals** — many-cardinality laws (EQ2: no first consumer found in any group) · climate facts beyond D-21 · the runtime half of `SingletonSimRepository` (forecasts, 5R1C coefficients) · template/repeat layer (the car setup's N-car loop stays Python even after D-23) · renaming legacy aggregator port names (P3 Q-P3.2) · retiring `system_setups/` (the v1 JSONs *were* retired mid-sweep, on 2026-09-12, by the owner's decision on Q-P2.5).
 
 ## 6. Use Cases
 
@@ -194,7 +194,7 @@ Each batch PR contains: the R3 rows it implements (unchanged or with the amendme
 - C-P4.4 `[proposed; survey C]` `Car` and `SmartDevice` depend on a simulation result, not a catalogue, so no constructor can carry their *payload* (D-23, D-30). D-23 (answered 2026-08-31) shows what a constructor can still do for such a class: carry the payload's **identity** and leave the payload itself to a repository hand-off between the producing component and the consuming one.
 - C-P4.5 `[proposed]` Enum-typed sizable fields carry `value_type=` (P2 R3.7); free-text fields over closed sets (`gas_type`, `operating_mode`, `operation_mode`, `building_heat_capacity_class`, `electrolyzer_type`) become enums before P5 freezes them (D-27 for three of them).
 - C-P4.6 `[proposed]` Many-cardinality is not needed by any class in R3 (EQ2 confirmed by all three surveys); `Many` stays a raising hook.
-- A1 `[proposed]` Batches are reviewed against recorded-file diffs (P3 Q-P3.1 (a), decided 2026-08-28). A batch that lands before its classes have been recorded uses the Python setups' regenerated v1 fixtures instead, and re-records as soon as the file exists.
+- A1 `[proposed]` Batches are reviewed against recorded-file diffs (P3 Q-P3.1 (a), decided 2026-08-28). A batch that lands before its classes have been recorded re-records as soon as the file exists. (Until 2026-09-12 such a batch could fall back on the Python setups' regenerated v1 fixtures; those retired with the v1 JSONs, so the recorded twin is the only fixture.)
 - A2 `[proposed]` The obsolete repository (#590) is the destination for deletions that may still be wanted.
 
 ## 10. Acceptance Criteria

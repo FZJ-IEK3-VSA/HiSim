@@ -51,6 +51,22 @@ path never called the legacy wiring, so it simply loses the constructor's phanto
 `household_heatpump_building_sizer` run now publishes four dispatch columns, `DispatchFor…`/`DispatchTo…`,
 and no `_OutputN` name anywhere.
 
+That cost five declarative houses a KPI, which is the follow-up this branch also carries. The manager's
+`get_component_kpi_entries` identified the dispatch outputs it derives its per-participant grid-consumption
+KPIs from by looking for the participant's *class name* inside the port's field name — a spelling only the
+legacy wiring produces, and one that in a declarative run had been matching nothing but the constructor's
+phantom, which `sort_source_weights_and_components` found by tag and wrote to alongside the file's own
+`DispatchFor…` port. With the phantoms gone the substring matched nothing and
+`household_district_heating_building_sizer`, `household_heatpump_building_sizer`,
+`household_wood_chips_building_sizer`, `household_hydrogen_boiler_building_sizer` and
+`household_gas_solar_thermal_building_sizer` each silently dropped a KPI the golden expects. The block now
+asks `dispatch_target_component_type` which participant kind a port is the electricity target of, reading
+the `ELECTRICITY_TARGET` tag and the component type off the same `my_component_outputs` bookkeeping the
+dispatch itself steers by, so both wiring paths report the same KPIs — the seven that were name-matched
+(`HEAT_PUMP_BUILDING`, `HEAT_PUMP_DHW`, `RESIDENTS`, `ELECTRIC_HEATING_SH`, `ELECTRIC_HEATING_DHW`,
+`SOLAR_THERMAL_SYSTEM`, and the car's `CAR_BATTERY` that already was) collapse into one table keyed by
+component type, because every one of them computed the same thing and differed only in what it was called.
+
 Two places that spelled the counter were respelled with it. `scripts/p3_parity_renamings.py` — the
 legacy→declarative table — keeps its seven EMS rows with their new legacy names and a comment block that
 tells the counter's story in the past tense; `tests/test_p3_parity.py`'s canary asserts the new spellings

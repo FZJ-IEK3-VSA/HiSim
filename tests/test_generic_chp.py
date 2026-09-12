@@ -227,6 +227,141 @@ def test_chp_system() -> None:
 
 
 @pytest.mark.base
+def test_chp_heats_the_water_to_the_dhw_maximum_in_summer() -> None:
+    """Outside the heating season the CHP runs until the *water's* maximum, not the room's.
+
+    ``calculate_state`` has a branch of its own for the months between
+    ``day_of_heating_season_end`` and ``day_of_heating_season_begin``, where the drain hot water
+    storage is the only vessel served. It switched the machine off at
+    ``t_max_heating_in_celsius`` - the top of the space-heating band, 20.5 °C for the bufferless
+    gas configuration used here - while the band the same configuration asks for the water is
+    42 to 60 °C. Every summer run therefore stopped as soon as the minimum runtime let it, and
+    the 60 °C was never reached.
+
+    The three phases below are one continuous run of the same controller: the store starts under
+    its lower bound and the machine comes on, then sits at 50 °C - inside the water band, above
+    the heating maximum - for longer than the minimum operation time, which is what makes the
+    assertion about the state machine rather than about the runtime guard, and only above 60 °C
+    does it switch off.
+    """
+    seconds_per_timestep = 60
+    thermal_power = 500  # thermal power in Watt
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
+
+    chp_config = generic_chp.CHPConfig.get_default_config_chp(thermal_power=thermal_power)
+    my_chp = generic_chp.SimpleCHP(my_simulation_parameters=my_simulation_parameters, config=chp_config)
+
+    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_chp()
+    my_chp_controller = controller_l1_chp.L1CHPController(
+        my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
+    )
+
+    # Set Fake Inputs
+    building_temperature = cp.ComponentOutput(
+        "FakeBuilding",
+        "BuildingTemperature",
+        lt.LoadTypes.TEMPERATURE,
+        lt.Units.WATT,
+        component_id=ComponentID("FakeBuilding"),
+    )
+    boiler_temperature = cp.ComponentOutput(
+        "FakeBoilerTemperature",
+        "HotWaterStorageTemperature",
+        lt.LoadTypes.TEMPERATURE,
+        lt.Units.WATT,
+        component_id=ComponentID("FakeBoilerTemperature"),
+    )
+    electricity_target = cp.ComponentOutput(
+        "FakeElectricityTarget",
+        "ElectricityTarget",
+        lt.LoadTypes.ELECTRICITY,
+        lt.Units.WATT,
+        component_id=ComponentID("FakeElectricityTarget"),
+    )
+
+    number_of_outputs = fft.get_number_of_outputs(
+        [
+            my_chp,
+            my_chp_controller,
+            building_temperature,
+            boiler_temperature,
+            electricity_target,
+        ]
+    )
+    single_timestep_values: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
+
+    my_chp_controller.electricity_target_channel.source_output = electricity_target
+    my_chp_controller.building_temperature_channel.source_output = building_temperature
+    my_chp_controller.dhw_temperature_channel.source_output = boiler_temperature
+
+    my_chp.chp_onoff_signal_channel.source_output = my_chp_controller.chp_onoff_signal_channel
+    my_chp.chp_heatingmode_signal_channel.source_output = my_chp_controller.chp_heatingmode_signal_channel
+
+    fft.add_global_index_of_components(
+        [
+            my_chp,
+            my_chp_controller,
+            building_temperature,
+            boiler_temperature,
+            electricity_target,
+        ]
+    )
+
+    # The heating season runs from day 270 to day 150 of the following year, so a day in July is
+    # outside it. The controller measures the season in timesteps, as it does in __init__.
+    day_in_july = 190
+    first_summer_timestep = int(day_in_july * 24 * 3600 / seconds_per_timestep)
+    assert my_chp_controller.heating_season_end < first_summer_timestep < my_chp_controller.heating_season_begin
+    minimum_runtime_in_timesteps = int(chp_controller_config.min_operation_time_in_seconds / seconds_per_timestep)
+
+    # The store is below its lower bound (42 °C) and electricity is wanted: the CHP comes on and,
+    # summer being water-heating only, serves the drain hot water storage.
+    single_timestep_values.values[electricity_target.global_index] = -2.5e3
+    single_timestep_values.values[building_temperature.global_index] = 22
+    single_timestep_values.values[boiler_temperature.global_index] = 40
+
+    for timestep in range(first_summer_timestep, first_summer_timestep + 2):
+        my_chp_controller.i_simulate(timestep, single_timestep_values, False)
+        my_chp.i_simulate(timestep, single_timestep_values, False)
+
+    assert single_timestep_values.values[my_chp_controller.chp_onoff_signal_channel.global_index] == 1
+    assert single_timestep_values.values[my_chp_controller.chp_heatingmode_signal_channel.global_index] == 0
+    assert single_timestep_values.values[my_chp.thermal_power_output_dhw_channel.global_index] == thermal_power
+
+    # 50 °C is above the heating maximum of 20.5 °C and well inside the water band of 42 to 60 °C.
+    # The run continues past the minimum operation time, so nothing but the set temperatures holds
+    # the machine on any more.
+    single_timestep_values.values[boiler_temperature.global_index] = 50
+
+    for timestep in range(
+        first_summer_timestep + 2,
+        first_summer_timestep + minimum_runtime_in_timesteps + 2,
+    ):
+        my_chp_controller.i_simulate(timestep, single_timestep_values, False)
+        my_chp.i_simulate(timestep, single_timestep_values, False)
+
+    assert single_timestep_values.values[my_chp_controller.chp_onoff_signal_channel.global_index] == 1
+    assert single_timestep_values.values[my_chp.thermal_power_output_dhw_channel.global_index] == thermal_power
+    assert single_timestep_values.values[my_chp.thermal_power_output_building_channel.global_index] == 0
+
+    # Above the water's own maximum it stops.
+    single_timestep_values.values[boiler_temperature.global_index] = 61
+
+    for timestep in range(
+        first_summer_timestep + minimum_runtime_in_timesteps + 2,
+        first_summer_timestep + minimum_runtime_in_timesteps + 4,
+    ):
+        my_chp_controller.i_simulate(timestep, single_timestep_values, False)
+        my_chp.i_simulate(timestep, single_timestep_values, False)
+
+    assert single_timestep_values.values[my_chp_controller.chp_onoff_signal_channel.global_index] == 0
+    assert single_timestep_values.values[my_chp.thermal_power_output_dhw_channel.global_index] == 0
+    assert single_timestep_values.values[my_chp.thermal_power_output_building_channel.global_index] == 0
+    assert single_timestep_values.values[my_chp.electricity_output_channel.global_index] == 0
+    assert single_timestep_values.values[my_chp.fuel_consumption_channel.global_index] == 0
+
+
+@pytest.mark.base
 def test_get_default_config_chp_basic() -> None:
     """Test CHPConfig.get_default_config_chp with thermal_power=1000 and default building name."""
     config = generic_chp.CHPConfig.get_default_config_chp(thermal_power=1000)

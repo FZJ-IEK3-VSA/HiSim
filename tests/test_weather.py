@@ -11,8 +11,6 @@ import pandas as pd
 import pytest
 from hisim import sim_repository
 from hisim import component
-from hisim import utils
-from hisim.caching import atomic_cache_write
 from hisim.components import weather
 from hisim.simulationparameters import SimulationParameters
 from hisim.config import DisplayConfig
@@ -110,11 +108,11 @@ def test_weather_config_with_direct_filepath_without_data_source(tmp_path: pathl
         )
 
 
-# Columns that the cached-file branch of ``Weather.i_prepare_simulation`` reads
-# before the optional "Pressure" column.
+# Columns that ``Weather.read_series`` reads before the optional "Pressure" column.
 _CACHE_COLUMNS = [
     "t_out",
     "t_out_daily_average",
+    "DryBulb",
     "DHI",
     "DNI",
     "DNIextra",
@@ -137,12 +135,14 @@ def _build_weather_with_cache(
     re-processing the raw weather data.  When *include_pressure* is ``True``
     a ``Pressure`` column is added; otherwise it is omitted.
 
-    The entry goes in through ``atomic_cache_write`` rather than straight to the
-    path, because ``get_cache_file`` only counts an entry as present when the
-    companion metadata beside it hashes to the name it is filed under.  Writing
-    the CSV alone would leave an entry nothing describes, which the lookup
-    deletes on sight, and the cached-file branch this fixture exists to reach
-    would never be taken.
+    The entry goes in through the cache entry's own ``writing`` rather than
+    straight to the path, because a lookup only counts an entry as present when
+    the companion metadata beside it hashes to the name it is filed under.
+    Writing the CSV alone would leave an entry nothing describes, which the
+    lookup deletes on sight, and the cached branch this fixture exists to reach
+    would never be taken.  The entry is filed under the producer key the
+    component itself derives, so the fixture cannot drift away from the key the
+    component looks up.
     """
     mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
     mysim.cache_dir_path = str(tmp_path)
@@ -154,16 +154,15 @@ def _build_weather_with_cache(
     )
     my_weather.set_sim_repo(sim_repository.SimRepository())
 
-    _, cache_filepath = utils.get_cache_file(
-        my_weather.config.component_id.name, my_config, mysim
+    location_dict = weather.get_coordinates(
+        filepath=my_config.source_path, source_enum=my_config.data_source
     )
+    entry = my_weather.cache_entry(my_weather.build_calculation_inputs(location_dict))
     columns = list(_CACHE_COLUMNS)
     if include_pressure:
         columns.append("Pressure")
     data = {col: [float(i) * 10 for i in range(5)] for col in columns}
-    with atomic_cache_write(
-        cache_filepath, utils.build_cache_key_string(my_config, mysim)
-    ) as temporary_cache_filepath:
+    with entry.writing() as temporary_cache_filepath:
         pd.DataFrame(data).to_csv(temporary_cache_filepath, index=False)
     return my_weather
 

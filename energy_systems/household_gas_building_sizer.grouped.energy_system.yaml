@@ -82,8 +82,8 @@ components:
       - Weather
   HeatDistributionController:
     class: hisim.components.heat_distribution_system.HeatDistributionController
+    preset: standard
     config:
-      heating_system: FLOORHEATING
       set_heating_threshold_outside_temperature_in_celsius: 18.0
       heating_reference_temperature_in_celsius: -7.0
       set_heating_temperature_for_building_in_celsius: 20.0

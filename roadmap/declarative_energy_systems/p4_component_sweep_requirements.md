@@ -107,7 +107,7 @@ Legend: **conv** convert · **del** retired — moved to `obsolete/` under D-16'
 
 | Class | Act | Presets | `AUTO` fields ← facts | Provides | Beh. | Dec. |
 |---|---|---|---|---|---|---|
-| `HeatDistributionControllerConfig` | done | `standard` | `get_default_*` **deleted** (11 sites, D-11 executed 2026-09-11); `get_config_based_on_building_efficiency` still carries 10 building-sizer setups (B1); `heating_system` plain default until Q-P1.8 | threshold fact **landed 2026-09-11** (R2.1) | **P**, executed: 3 setups + 8 tests at 16 → 18 °C; week goldens unchanged (January never reaches the threshold), +0.060 % gas over a full year | D-11 |
+| `HeatDistributionControllerConfig` | done | `standard` | `get_default_*` **deleted** (11 sites, D-11 executed 2026-09-11); `get_config_based_on_building_efficiency` **deleted 2026-09-12** (B1, neutral half), its 10 building-sizer setups resolve `preset_standard` against the building's facts and override `heating_system` alone; `heating_system` plain default until Q-P1.8 | threshold fact **landed 2026-09-11** (R2.1) | **P**, executed: 3 setups + 8 tests at 16 → 18 °C; week goldens unchanged (January never reaches the threshold), +0.060 % gas over a full year | D-11 |
 | `HeatDistributionConfig` | done | | nothing left | | | |
 | `SimpleHotWaterStorageConfig` | conv | `buffer` (+ `sizing_option: HotWaterStorageSizingEnum` field, D-10) | `volume_heating_water_storage_in_liter` ← **generator** `maximal_thermal_power_in_watt` × k (20/40/50 l/kW) — C11 executed 2026-09-11, the twelve setups pass the generator's power | — | **P** — C11 done (3 twins +10 %, `basic_household_only_heating` +54 %, 8 twins byte-identical); the conversion itself is behaviour-neutral | D-9, D-10, D-17 |
 | `SimpleHotWaterStorageControllerConfig` | del | | | | | D-16 |
@@ -282,8 +282,9 @@ row is struck from the table, which keeps the question and the option chosen nex
   — **Executed 2026-09-11.** `get_default_heat_distribution_controller_config` is **deleted**; every one of its
   eleven call sites now spells `HeatDistributionControllerConfig.preset_standard("HeatDistributionController")
   .resolve(SizingContext(...))` with the facts of its own building.
-  `get_config_based_on_building_efficiency` stays: its ten building-sizer setups already compute the threshold
-  from the same step table, and retiring it is B1 work, not a physics decision.
+  `get_config_based_on_building_efficiency` stayed: its ten building-sizer setups already computed the threshold
+  from the same step table, and retiring it was B1 work, not a physics decision — **done 2026-09-12**, the ten
+  setups resolve the same preset and override the emitter alone, and no recorded value moved.
   **The number is 18** because all three setups build the default `BuildingConfig.preset_standard("Building")` —
   7780.75 W over 121.2 m² = 64.198 W/m², the middle band of
   `set_heating_threshold_temperature_based_on_building_efficiency` (≤ 50 → 16, ≤ 80 → 18, > 80 → 20), which is

@@ -927,37 +927,6 @@ class HeatDistributionControllerConfig(ConfigBase):
             pass
         return set_heating_threshold_outside_temperature_in_celsius
 
-    @classmethod
-    def get_config_based_on_building_efficiency(
-        cls,
-        heating_load_of_building_in_watt: float,
-        set_heating_temperature_for_building_in_celsius: float,
-        set_cooling_temperature_for_building_in_celsius: float,
-        specific_heating_load_of_building_in_watt_per_m2: float,
-        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
-        heating_reference_temperature_in_celsius: float = -7.0,
-        heating_system: HeatDistributionSystemType = HeatDistributionSystemType.FLOORHEATING,
-        component_id: Optional[ComponentID] = None,
-    ) -> "HeatDistributionControllerConfig":
-        """Gets a default HeatDistribution Controller."""
-        # avoid that inefficient building cool out in summer time (in the mornings and evenings)
-        if component_id is None:
-            component_id = ComponentID(name="HeatDistributionController")
-        set_heating_threshold_outside_temperature_in_celsius = HeatDistributionControllerConfig.set_heating_threshold_temperature_based_on_building_efficiency(
-            specific_heating_load_of_building_in_watt_per_m2=specific_heating_load_of_building_in_watt_per_m2,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
-        )
-
-        return HeatDistributionControllerConfig(
-            component_id=component_id,
-            heating_system=heating_system,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
-            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
-            heating_load_of_building_in_watt=round(heating_load_of_building_in_watt, 2),
-        )
-
 
 class HeatDistributionController(cp.Component):
     """Heat Distribution Controller.

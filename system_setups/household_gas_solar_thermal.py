@@ -155,7 +155,10 @@ def setup_function(
 
     # Gas Heater (for space heating and DHW) - Component
     my_gas_heater_config = generic_boiler.GenericBoilerConfig.preset_condensing_gas("CondensingGasBoiler").resolve(
-        SizingContext(heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt)
+        SizingContext(
+            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            number_of_apartments=number_of_apartments,
+        )
     )
     my_gas_heater = generic_boiler.GenericBoiler(
         config=my_gas_heater_config,

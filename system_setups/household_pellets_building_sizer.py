@@ -308,7 +308,10 @@ def setup_function(
 
     # Build Pellets heater For Space Heating
     my_pellet_heater_config = generic_boiler.GenericBoilerConfig.preset_pellets("ConventionalPelletBoiler").resolve(
-        SizingContext(heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt)
+        SizingContext(
+            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            number_of_apartments=number_of_apartments,
+        )
     )
     my_pellet_heater = generic_boiler.GenericBoiler(
         config=my_pellet_heater_config,

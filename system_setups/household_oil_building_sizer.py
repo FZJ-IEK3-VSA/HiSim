@@ -334,7 +334,10 @@ def setup_function(
 
     # Build Oil heater
     my_oil_heater_config = generic_boiler.GenericBoilerConfig.preset_oil("ConventionalOilBoiler").resolve(
-        SizingContext(heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt)
+        SizingContext(
+            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            number_of_apartments=number_of_apartments,
+        )
     )
     my_oil_heater = generic_boiler.GenericBoiler(
         config=my_oil_heater_config,

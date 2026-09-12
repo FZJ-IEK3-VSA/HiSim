@@ -78,6 +78,14 @@ class Weather(Component):
     Weather_Temperature_Forecast_24h: str = "Weather_Temperature_Forecast_24h"
     DailyAverageOutsideTemperatures: str = "DailyAverageOutsideTemperatures"
 
+    #: The key this component publishes the identity of its produced series under, in the
+    #: per-simulation repository. The value is the digest of the series' cache key, which is what
+    #: ``roadmap/cache_service_spec.md`` §3.1 calls the artifact key: a downstream producer that
+    #: computes from the weather -- the PV series is the first -- takes this string as key material and
+    #: the series themselves as payload, so that the two keys chain Merkle-style and any change to the
+    #: weather, its code included, moves every key downstream of it.
+    SERIES_ARTIFACT_KEY: str = "weather_series_artifact_key"
+
     # Keys under which this component publishes its full-year series into the per-simulation
     # repository (``self.simulation_repository``). They live here, on the writer, so that the
     # readers -- the PV system and the predictive branch of the Building -- import the name
@@ -290,7 +298,8 @@ class Weather(Component):
         self.simulation_repository.set_entry("weather_location", location_dict)
 
         calculation_inputs = self.build_calculation_inputs(location_dict)
-        entry = self.cache_entry(calculation_inputs)
+        key = self.series_cache_key(calculation_inputs)
+        entry = self.cache_entry(key)
         if entry.exists:
             log.information(f"Weather series cache hit: {entry.path}")
             # float_precision="round_trip": pandas' default CSV reader uses a fast, inexact float
@@ -325,6 +334,11 @@ class Weather(Component):
         self.simulation_repository.set_entry(self.YEARLY_APPARENT_ZENITH, self.apparent_zenith_list)
         self.simulation_repository.set_entry(self.YEARLY_WIND_SPEED, self.wind_speed_list)
 
+        # Publish which series these are, so that a component computing from them can name them in its
+        # own cache key without knowing anything about how they were made (spec §3.1). The digest is
+        # enough: it already stands for the producer's code, its libraries and every input.
+        self.simulation_repository.set_entry(self.SERIES_ARTIFACT_KEY, key.digest)
+
     def build_calculation_inputs(self, location_dict: Dict[str, Any]) -> WeatherSeriesInputs:
         """Build the DTO the weather producer is a pure function of.
 
@@ -358,8 +372,8 @@ class Weather(Component):
             source_path=self.weather_config.source_path,
         )
 
-    def cache_entry(self, calculation_inputs: WeatherSeriesInputs) -> CacheEntry:
-        """Look the produced series up in the cache under the key of the producer that makes it.
+    def series_cache_key(self, calculation_inputs: WeatherSeriesInputs) -> CacheKey:
+        """Build the key the produced series is filed under, and which identifies it downstream.
 
         The key is ``sha256(artifact kind : code fingerprint : third-party fingerprint : DTO JSON)``
         (``roadmap/cache_service_spec.md`` §3). The two fingerprints are read from the producer
@@ -367,13 +381,26 @@ class Weather(Component):
         thing the weather cache did not do when #628 fixed the direct normal irradiance and CI, running
         on a restored cache, reported all 24 golden pairs unchanged.
 
+        Its digest is also what :attr:`SERIES_ARTIFACT_KEY` publishes, so a downstream producer's key
+        inherits everything this one stands for.
+
         Args:
             calculation_inputs: the DTO from :meth:`build_calculation_inputs`.
 
         Returns:
+            CacheKey: the key.
+        """
+        return CacheKey.for_producer(ARTIFACT_KIND, calculation, calculation_inputs)
+
+    def cache_entry(self, key: CacheKey) -> CacheEntry:
+        """Look the produced series up in the cache under the key of the producer that makes it.
+
+        Args:
+            key: the key from :meth:`series_cache_key`.
+
+        Returns:
             CacheEntry: where the entry is or will be, and whether it is there.
         """
-        key = CacheKey.for_producer(ARTIFACT_KIND, calculation, calculation_inputs)
         return CacheClient.from_environment().lookup_producer(key, self.my_simulation_parameters.cache_dir_path)
 
     def read_series(self, weather_series: pd.DataFrame) -> None:

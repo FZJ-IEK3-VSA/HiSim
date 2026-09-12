@@ -141,7 +141,6 @@ class PVSystemConfig(ConfigBase):
     maintenance_costs_in_euro_per_year: Optional[float]
     # subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: Optional[float]
-    predictive: bool
     predictive_control: bool
     prediction_horizon: Optional[int]
     #: The weather this system is computed with, as ``WeatherConfig.identity()`` spells it. Sized from
@@ -215,7 +214,6 @@ class PVSystemConfig(ConfigBase):
             lifetime_in_years=None,
             maintenance_costs_in_euro_per_year=None,
             subsidy_as_percentage_of_investment_costs=None,
-            predictive=False,
             predictive_control=False,
             prediction_horizon=None,
         )
@@ -889,16 +887,6 @@ class PVSystem(cp.Component):
                 self.cache_filepath, utils.build_cache_key_string(self.pvconfig, self.my_simulation_parameters)
             ) as temporary_cache_filepath:
                 database.to_csv(temporary_cache_filepath, sep=",", decimal=".", index=False)
-
-        if self.pvconfig.predictive:
-            pv_forecast_yearly = [
-                self.ac_power_ratios_for_all_timesteps_output[t] * self.pvconfig.power_in_watt
-                for t in range(self.my_simulation_parameters.timesteps)
-            ]
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.PVFORECASTYEARLY,
-                entry=pv_forecast_yearly,
-            )
 
     def interpolate(self, pd_database: Any, year: Any) -> Any:
         """Interpolates."""

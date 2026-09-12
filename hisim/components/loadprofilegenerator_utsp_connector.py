@@ -48,7 +48,6 @@ from hisim.components.configuration import HouseholdWarmWaterDemandConfig, Physi
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, FactContribution, constructor, preset
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.lpg_car_information import CarProfileHandover, GenericCarInformation
 from hisim.economics.facts import CostRelevance
 
@@ -79,7 +78,6 @@ class UtspLpgConnectorConfig(ConfigBase):
     charging_station_set: Optional[JsonReference]
     profile_with_washing_machine_and_dishwasher: bool
     predictive_control: bool
-    predictive: bool
     result_dir_path: str
     cache_dir_path: Optional[str] = None
     name_of_predefined_loadprofile: Optional[str] = "CHR01 Couple both at Work"
@@ -178,7 +176,6 @@ class UtspLpgConnectorConfig(ConfigBase):
             charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
             profile_with_washing_machine_and_dishwasher=True,
             predictive_control=False,
-            predictive=False,
             cache_dir_path=None,
             guid="",
             calculation_index_for_local_lpg=None
@@ -355,7 +352,6 @@ class UtspLpgConnectorConfig(ConfigBase):
             ),
             profile_with_washing_machine_and_dishwasher=True,
             predictive_control=False,
-            predictive=False,
             cache_dir_path=None,
             guid="",
             calculation_index_for_local_lpg=None,
@@ -1256,12 +1252,6 @@ class UtspLpgConnector(cp.Component):
                     self.max_hot_water_demand = max(self.water_consumption)
 
                     # no caching if predefined profile is used
-
-                    if self.utsp_config.predictive:
-                        SingletonSimRepository().set_entry(
-                            key=SingletonDictKeyEnum.HEATINGBYRESIDENTSYEARLYFORECAST,
-                            entry=self.heating_by_residents,
-                        )
 
     def get_result_lists_by_summing_over_value_dict(
         self, value_dict: Dict[Any, Any]

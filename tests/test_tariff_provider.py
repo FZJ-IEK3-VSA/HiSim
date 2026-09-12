@@ -12,9 +12,10 @@ published price series against the bill for exactly that energy. The expected va
 never a stored constant — it is recomputed from the same load and the same contract on the
 billing side, which is what makes the test an agreement check rather than a second copy of the
 formula. The three supply kinds are covered separately because each selects its price
-differently (constant / weekday-hour band mask / spot series x `spot_factor`), and a fourth test
-pins the MPC forecast against the published output so the forecast cannot become a third
-implementation.
+differently (constant / weekday-hour band mask / spot series x `spot_factor`). A fourth test used
+to pin the component's 24 h `SingletonSimRepository` forecast against the same published output;
+the forecast itself was deleted once the MPC controller that read it moved to `obsolete/`, and the
+test went with it -- it asserted nothing about the provider's own outputs.
 
 **Error class.** A failure here is the §8.1 consistency problem returning: the simulation
 optimized against one price and the lifecycle cost engine billed another. That is a *coupling*
@@ -222,19 +223,6 @@ class TestSimulationPriceEqualsBillingPrice:
         simulated_cost = sum(price * ENERGY_PER_TIMESTEP_IN_KWH for price in prices)
         assert bill.by_category[CostCategory.ENERGY_WORKING].best_estimate == pytest.approx(simulated_cost)
 
-    def test_forecast_matches_the_published_price(self):
-        """The MPC forecast is the same price series the outputs carry (no second formula)."""
-        from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
-
-        supply = additive_components()
-        supply.kind = SupplyKind.DYNAMIC
-        supply.spot_series = "__synthetic__"
-        provider = make_provider(make_contract(supply))
-        stsv = _single_time_step_values(provider)
-        provider.i_simulate(0, stsv, False)
-        forecast = SingletonSimRepository().get_entry(SingletonDictKeyEnum.PRICEPURCHASEFORECAST24H)
-        assert forecast[:5] == pytest.approx([provider._purchase_price(step) for step in range(5)])  # noqa: SLF001
-
 
 class TestCapacityChargeMarginalIsAPeakSignal:
     """§8.3: `CapacityChargeMarginal` costs money only where a kilowatt more raises the peak.
@@ -312,44 +300,6 @@ class TestCapacityChargeMarginalIsAPeakSignal:
             CAPACITY_PRICE_IN_EURO_PER_KW
         )
         assert stsv.values[provider.peak_so_far_output.global_index] == pytest.approx(2.0)
-
-
-class TestPublishedForecasts:
-    """The two 24 h series an MPC controller reads out of the SingletonSimRepository."""
-
-    def test_both_forecasts_have_the_same_length(self):
-        """Catches an MPC controller silently optimizing a shorter horizon than it thinks.
-
-        Both series are published under keys promising 24 hours and are meant to be read together,
-        step by step. The purchase forecast used to be truncated to the length of the resampled
-        price series while the injection forecast was not, so any run shorter than a day published
-        two different lengths under those two keys — and a consumer zipping them loses the tail
-        without an error.
-        """
-        from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
-
-        # One simulated day at hourly resolution would make the two lengths agree by accident, so
-        # the provider below runs on a *shorter* horizon than the 24 h the keys promise.
-        provider = make_provider(make_contract(dynamic_supply()), seconds_per_timestep=3600)
-        # pylint: disable=protected-access
-        assert provider._price_series is not None  # a DYNAMIC contract resamples one in i_prepare
-        provider._price_series = provider._price_series[:5]
-        stsv = _single_time_step_values(provider)
-
-        provider.i_simulate(0, stsv, False)
-
-        repository = SingletonSimRepository()
-        purchase = repository.get_entry(SingletonDictKeyEnum.PRICEPURCHASEFORECAST24H)
-        injection = repository.get_entry(SingletonDictKeyEnum.PRICEINJECTIONFORECAST24H)
-        assert len(purchase) == len(injection) == 24
-
-
-def dynamic_supply() -> TariffSupply:
-    """A DYNAMIC supply on the synthetic reference profile, for the forecast tests."""
-    supply = additive_components()
-    supply.kind = SupplyKind.DYNAMIC
-    supply.spot_series = "__synthetic__"
-    return supply
 
 
 #: Capacity price of the contracts below, in EUR/kW — round, and unlike any per-kWh price here.

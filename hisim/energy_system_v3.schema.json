@@ -400,9 +400,6 @@
                       }
                     ]
                   },
-                  "predictive": {
-                    "type": "boolean"
-                  },
                   "set_heating_temperature_in_celsius": {
                     "type": "number"
                   },
@@ -1415,9 +1412,6 @@
                     "type": "boolean"
                   },
                   "predictive_control": {
-                    "type": "boolean"
-                  },
-                  "predictive": {
                     "type": "boolean"
                   },
                   "result_dir_path": {

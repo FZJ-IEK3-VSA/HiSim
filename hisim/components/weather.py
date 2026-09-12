@@ -969,12 +969,11 @@ class Weather(Component):
             ) as temporary_cache_filepath:
                 database.to_csv(temporary_cache_filepath)
 
-        # Publish the full-year weather series to the singleton repository unconditionally.
-        # The PV system precomputes its whole-year output from these arrays in its
-        # i_prepare_simulation (vectorized pvlib run), and predictive components
-        # (building, MPC controller) read them at prepare time as well. Publishing is
-        # free: the singleton only stores references to lists this component keeps
-        # alive as attributes anyway.
+        # Publish the full-year weather series the PV system reads to the singleton repository
+        # unconditionally. The PV system precomputes its whole-year output from these arrays in
+        # its i_prepare_simulation (vectorized pvlib run). Publishing is free: the singleton only
+        # stores references to lists this component keeps alive as attributes anyway. The pressure
+        # and altitude series were published here too until nothing was left that read them.
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST,
             entry=self.temperature_list,
@@ -1006,14 +1005,6 @@ class Weather(Component):
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST,
             entry=self.wind_speed_list,
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.WEATHERPRESSUREYEARLYFORECAST,
-            entry=self.pressure_list,
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.WEATHERALTITUDEYEARLYFORECAST,
-            entry=self.altitude_list,
         )
 
     def interpolate(self, pd_database: Any, year: int) -> Any:

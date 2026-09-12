@@ -16,10 +16,18 @@ key means one thing per simulation and the collision cannot occur.
 `SingletonMeta` is **not** deprecated — `hisim.result_path_provider.ResultPathProviderSingleton`
 uses it legitimately, for a value that really is process-wide.
 
-Migration: new code must not use the singleton repository at all. Existing call sites (82 in
-`hisim/` across 30 files at the time of writing) move as the components around them are touched;
-publish with ``self.simulation_repository.set_entry`` and read with ``get_entry``, guarding with
-``entry_exists`` so a missing entry fails with a message naming what was expected.
+Migration: new code must not use the singleton repository at all. The retirement is under way and
+`SingletonDictKeyEnum` is down to ten members, which are two flows and two steps:
+
+1. The eight full-year weather series the Weather publishes and the PV system reads at prepare
+   time. They move onto the per-simulation repository, which is where a whole-year array that
+   belongs to one run belongs.
+2. ``RESULT_SCENARIO_NAME`` and ``DESCRIPTION``, written by ``hisim_main`` and read by
+   postprocessing. They become parameters rather than repository entries -- they describe the run,
+   so they belong with the other run parameters.
+
+Everything else was deleted on 2026-09-12: nothing read it. When the two steps above land, this
+module keeps only ``SingletonMeta``.
 """
 # clean
 import enum
@@ -188,11 +196,10 @@ class SingletonDictKeyEnum(enum.Enum):
         household's entry from another's.
     """
 
-    NUMBEROFAPARTMENTS = 1
-    WATERMASSFLOWRATEOFHEATGENERATOR = 2
-    MAXTHERMALBUILDINGDEMAND = 3
-    SETHEATINGTEMPERATUREFORWATERSTORAGE = 4
-    SETCOOLINGTEMPERATUREFORWATERSTORAGE = 5
+    # 1 to 5 were the sizing keys NUMBEROFAPARTMENTS, WATERMASSFLOWRATEOFHEATGENERATOR,
+    # MAXTHERMALBUILDINGDEMAND, SETHEATINGTEMPERATUREFORWATERSTORAGE and
+    # SETCOOLINGTEMPERATUREFORWATERSTORAGE. Nothing wrote any of them; the two reads of
+    # WATERMASSFLOWRATEOFHEATGENERATOR went with them (R2.4).
     # 6 was LOCATION, written by the Weather at construction time and read back as the
     # report region; postprocessing now reads the Weather component's own config instead.
     RESULT_SCENARIO_NAME = 7
@@ -202,36 +209,30 @@ class SingletonDictKeyEnum(enum.Enum):
     # THERMALTRANSMISSIONCOEFFICIENTVENTILLATION and THERMALCAPACITYENVELOPE. Their only
     # readers were the PID and MPC controllers, which moved to obsolete/; the Building
     # keeps the values on itself.
-    PREDICTIVE = 14
-    PREDICTIONHORIZON = 15
-    PVINCLUDED = 16
-    PVPEAKPOWER = 17
-    SMARTDEVICESINCLUDED = 18
-    BATTERYINCLUDED = 19
-    MPCBATTERYCAPACITY = 20
-    COEFFICIENT_OF_PERFORMANCE_HEATING = 21
-    ENERGY_EFFICIENY_RATIO_COOLING = 22
+    # 14 to 22 were the MPC configuration keys PREDICTIVE, PREDICTIONHORIZON, PVINCLUDED,
+    # PVPEAKPOWER, SMARTDEVICESINCLUDED, BATTERYINCLUDED, MPCBATTERYCAPACITY,
+    # COEFFICIENT_OF_PERFORMANCE_HEATING and ENERGY_EFFICIENY_RATIO_COOLING. The first
+    # seven had no reference outside this file at all; the air conditioner wrote the last
+    # two for the PID and MPC controllers now in obsolete/.
     WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST = 23
-    HEATFLUXTHERMALMASSNODEFORECAST = 24
-    HEATFLUXSURFACENODEFORECAST = 25
-    HEATFLUXINDOORAIRNODEFORECAST = 26
-    PVFORECASTYEARLY = 28
-    MAXIMUMBATTERYCAPACITY = 29
-    MINIMUMBATTERYCAPACITY = 30
-    MAXIMALCHARGINGPOWER = 31
-    MAXIMALDISCHARGINGPOWER = 32
-    BATTERYEFFICIENCY = 33
-    INVERTEREFFICIENCY = 34
-    PRICEPURCHASEFORECAST24H = 35
-    PRICEINJECTIONFORECAST24H = 36
-    WEATHERALTITUDEYEARLYFORECAST = 37
+    # 24 to 26 were HEATFLUXTHERMALMASSNODEFORECAST, HEATFLUXSURFACENODEFORECAST and
+    # HEATFLUXINDOORAIRNODEFORECAST, and 28 was PVFORECASTYEARLY: the disturbance and
+    # generation forecasts the Building and the PV system computed under their `predictive`
+    # flags for the MPC controller. The flags and the branches went with the controller.
+    # 29 to 36 were MAXIMUMBATTERYCAPACITY, MINIMUMBATTERYCAPACITY, MAXIMALCHARGINGPOWER,
+    # MAXIMALDISCHARGINGPOWER, BATTERYEFFICIENCY, INVERTEREFFICIENCY,
+    # PRICEPURCHASEFORECAST24H and PRICEINJECTIONFORECAST24H -- the battery parameters the
+    # MPC controller read and never found a writer for, and the tariff provider's 24 h
+    # forecast, whose only reader was that same controller.
+    # 37 and 46 were WEATHERALTITUDEYEARLYFORECAST and WEATHERPRESSUREYEARLYFORECAST, two
+    # of the Weather's full-year publications that nothing read.
     WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST = 38
     WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST = 39
     WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST = 40
     WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST = 41
     WEATHERAZIMUTHYEARLYFORECAST = 42
     WEATHERAPPARENTZENITHYEARLYFORECAST = 43
-    HEATINGBYRESIDENTSYEARLYFORECAST = 44
+    # 44 was HEATINGBYRESIDENTSYEARLYFORECAST, written by the UTSP connector under its own
+    # `predictive` flag and read only by the Building's predictive branch.
     WEATHERWINDSPEEDYEARLYFORECAST = 45
-    WEATHERPRESSUREYEARLYFORECAST = 46
     DESCRIPTION = 47

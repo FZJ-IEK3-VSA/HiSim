@@ -23,7 +23,6 @@ from hisim.components.building.window import Window
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.components.weather import Weather
 from hisim.loadtypes import OutputPostprocessingRules
-from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import prorate_to_simulated_period
@@ -792,75 +791,6 @@ class Building(cp.Component):
             log.warning(
                 f"Building '{self.component_name}': the 'HeatingByDevices' input is not "
                 "connected. Internal heat gains from devices default to 0 W."
-            )
-        if self.buildingconfig.predictive:
-            # get weather forecast to compute forecasted solar gains
-
-            azimuth_forecast = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST)
-            apparent_zenith_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST
-            )
-            direct_horizontal_irradiance_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST
-            )
-            direct_normal_irradiance_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST
-            )
-            direct_normal_irradiance_extra_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST
-            )
-            global_horizontal_irradiance_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST
-            )
-
-            solar_gains_forecast = []
-            for i in range(self.my_simulation_parameters.timesteps):
-                solar_gains_forecast_yearly = self.get_solar_heat_gain_through_windows(
-                    azimuth=azimuth_forecast[i],
-                    direct_normal_irradiance=direct_normal_irradiance_forecast[i],
-                    direct_horizontal_irradiance=direct_horizontal_irradiance_forecast[i],
-                    global_horizontal_irradiance=global_horizontal_irradiance_forecast[i],
-                    direct_normal_irradiance_extra=direct_normal_irradiance_extra_forecast[i],
-                    apparent_zenith=apparent_zenith_forecast[i],
-                )
-
-                solar_gains_forecast.append(solar_gains_forecast_yearly)
-
-            # get internal gains forecast
-            internal_gains_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.HEATINGBYRESIDENTSYEARLYFORECAST
-            )
-
-            # compute the forecast of phi_ia phi_st and phi_m
-            phi_m_forecast: list = []
-            phi_st_forecast: list = []
-            phi_ia_forecast: list = []
-            for i in range(self.my_simulation_parameters.timesteps):
-                (
-                    # _,
-                    phi_ia_yearly,
-                    phi_st_yearly,
-                    phi_m_yearly,
-                ) = self.calc_internal_heat_flows_from_internal_gains_and_solar_gains(
-                    internal_gains_forecast[i],
-                    solar_gains_forecast[i],
-                )
-                phi_m_forecast.append(phi_m_yearly)
-                phi_st_forecast.append(phi_st_yearly)
-                phi_ia_forecast.append(phi_ia_yearly)
-
-            # disturbance forecast for model predictive control
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.HEATFLUXTHERMALMASSNODEFORECAST,
-                entry=phi_m_forecast,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.HEATFLUXSURFACENODEFORECAST,
-                entry=phi_st_forecast,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.HEATFLUXINDOORAIRNODEFORECAST,
-                entry=phi_ia_forecast,
             )
 
     def i_restore_state(

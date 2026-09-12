@@ -27,7 +27,6 @@ components:
           StrVal: 78dae308-24c4-45cc-8bdf-b001d61f45c2
       profile_with_washing_machine_and_dishwasher: true
       predictive_control: false
-      predictive: false
       result_dir_path: ${utsp_results}
       cache_dir_path: null
       name_of_predefined_loadprofile: CHR01 Couple both at Work
@@ -63,7 +62,6 @@ components:
       lifetime_in_years: 25.0
       maintenance_costs_in_euro_per_year: 21.432399999999998
       subsidy_as_percentage_of_investment_costs: 0.0
-      predictive: false
       predictive_control: false
       prediction_horizon: null
       weather_identity: Seville/NSRDB/weather/NSRDB/Seville/Seville
@@ -127,7 +125,6 @@ components:
       window_area_in_m2: null
       door_u_value_in_watt_per_m2_per_kelvin: null
       door_area_in_m2: null
-      predictive: false
       set_heating_temperature_in_celsius: 20.0
       set_cooling_temperature_in_celsius: 24.0
       enable_opening_windows: false

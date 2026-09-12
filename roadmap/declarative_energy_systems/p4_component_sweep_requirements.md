@@ -435,9 +435,28 @@ row is struck from the table, which keeps the question and the option chosen nex
   against a fresh preset and omits every field equal to the default — so the golden fleet's twins do not carry the ten
   `null` envelope opt-ins the survey warned the option would otherwise produce.
 - **D-26** `[answered 2026-09-11]` **(a) raise, listing the devices.** All nine hydrogen-chain `read_config` readers
+  `[count as written 2026-09-11; D-25 moved six of the nine to obsolete/ the same day, leaving three]`
   raise on an unknown device name and name the available ones, so the eight that zero-fill today stop building a
   plausible-looking config of zeros. A file that names a device which does not exist fails at build time, as
   everything else in P2's error catalogue does.
+
+  **Executed 2026-09-12**: the three readers left after D-25 -- `ElectrolyzerConfig.read_config`,
+  `ElectrolyzerControllerConfig.read_config` and `PTXControllerConfig.read_config`, all reading
+  `hisim/inputs/electrolyzer_manufacturer_config.json` -- raise through one shared lookup,
+  `generic_electrolyzer_h2.read_electrolyzer_variant`, which the two controller modules import. An unknown name
+  raises `ValueError` naming the name, the file, a `difflib` "Did you mean" near match and the nine device names
+  in sorted order, worded as `EnergySystemCatalogueError` words its alternatives (the readers are plain Python
+  factories, not the codec, so the exception is plain). The two controllers' per-field `.get(key, 0.0)` zero-fill
+  is gone: each declares the fields it reads as `TABLE_FIELDS`, the lookup checks them before returning, and the
+  factories index the row directly, so a row missing a field is an error naming the field and the device rather
+  than a load of zero. The electrolyzer's own reader requires the three fields it already read without a fallback
+  (`electrolyzer_type`, `nom_load`, `max_load`). A missing table file is not caught; the `FileNotFoundError`
+  carries the path. **Field check**: all nine variants carry all six fields the two controllers read, so nothing
+  had to be invented; five of them (`KumaTecPEM40100`, `McPhy - McLyzer 3200`, `NEL - MC250`, `NEL - MC500`,
+  `SunfireHYLINKSOEC`) write `standby_load` as `null`, which the readers passed through before and still do --
+  only presence is checked, because `.get` never defaulted a written `null` either. Result-neutral: the live
+  setup `electrolyzer_with_renewables` builds `HTecME450` through two of the readers and its recorded twin is
+  unchanged. Tested in `tests/test_electrolyzer_manufacturer_table.py`.
 - **D-32** `[answered 2026-09-11]` **(a) both key groups go, one commit each.** Postprocessing reads the Weather
   component's `config.location` directly instead of `SingletonDictKeyEnum.LOCATION`; the six Building 5R1C keys go once
   this branch's D-16 move has put `controller_mpc` and `controller_pid` in `obsolete/`, after which they have no reader
@@ -561,7 +580,7 @@ The 32 questions below are owner decisions surfaced by the survey, and **all 32 
 | D-19 | ~~Constructor arguments undecoded — executor fix, widen signatures, or leave constructors Python-only?~~ | `[answered 2026-09-11]` **(a)** `codec.decode_argument` shared by `config:` and `constructor:`, decoded in `_call_builder`, EF-1A at the argument's key path, and `@constructor` refuses undecodable parameter types at import | R2.3, B1 |
 | D-20 | ~~`for_household` ignores its argument in the predefined-profile mode~~ | `[answered 2026-08-27, review of #592]` **(a)** implemented in P2: `data_acquisition_mode` parameter, profile derived from the household, refusal listing the shipped households and the computing modes | B1 UTSP |
 | D-22 | ~~Building's 20-field post-construction mutation: `config:` overrides, wider constructor, or `for_measured_envelope`?~~ | `[answered 2026-09-11]` **(a)** the 14 non-parameters become sparse `config:` overrides; the recorder diffs against a fresh preset, so no twin carries ten nulls | R3 Building, P3 recorder |
-| D-26 | ~~Five `read_config` readers zero-fill on unknown device: raise everywhere?~~ — after D-25 only three are left (`generic_electrolyzer_h2`, `controller_l1_electrolyzer_h2`, `controller_l2_ptx_energy_management_system`, all reading `electrolyzer_manufacturer_config.json`) | `[answered 2026-09-11]` **(a)** all nine readers raise, listing the available device names | R3 H₂ |
+| D-26 | ~~Five `read_config` readers zero-fill on unknown device: raise everywhere?~~ — after D-25 only three are left (`generic_electrolyzer_h2`, `controller_l1_electrolyzer_h2`, `controller_l2_ptx_energy_management_system`, all reading `electrolyzer_manufacturer_config.json`) | `[answered 2026-09-11]` **(a)** all nine readers raise, listing the available device names — **executed 2026-09-12** for the three survivors, through one shared lookup | R3 H₂ |
 | D-32 | ~~Delete the `LOCATION` key and the six 5R1C keys?~~ | `[answered 2026-09-11]` **(a)** both, one commit each: postprocessing reads the Weather's `config.location`; the six 5R1C keys follow D-16's MPC/PID move, after which they have no reader | R2.4 |
 
 ## 12. Glossary

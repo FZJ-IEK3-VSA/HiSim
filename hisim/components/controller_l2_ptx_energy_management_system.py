@@ -1,17 +1,15 @@
 """ L2 Controller for PtX Buffer Battery operation. """
 
 # clean
-import os
 from enum import Enum, unique
-from typing import Optional, List, Any
-import json
+from typing import Any, ClassVar, Dict, List, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.components.generic_electrolyzer_h2 import read_electrolyzer_variant
 
 from hisim import loadtypes as lt
-from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 from hisim.economics.facts import CostRelevance
 
@@ -86,13 +84,30 @@ class PTXControllerConfig(ConfigBase):
                 f"Write one of {[mode.value for mode in PtxOperationMode]}."
             ) from None
 
+    #: the manufacturer-table fields this controller is built from, checked before any is read.
+    TABLE_FIELDS: ClassVar[tuple[str, ...]] = ("nom_load", "min_load", "max_load", "standby_load")
+
     @staticmethod
-    def read_config(electrolyzer_name):
-        """Read config."""
-        config_file = os.path.join(utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json")
-        with open(config_file, "r", encoding="utf-8") as json_file:
-            config_data = json.load(json_file)
-            return config_data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
+    def read_config(electrolyzer_name: str) -> Dict[str, Any]:
+        """Returns the manufacturer table's row for that device, refusing a name it does not carry.
+
+        The lookup is the electrolyzer module's own, so this controller, the L1 controller and the
+        machine itself accept and refuse exactly the same device names. It used to answer an
+        unknown name with an empty dictionary, out of which the zero fallbacks below built a PtX
+        system whose four loads were all zero -- a mistyped name ran, and ran nothing.
+
+        Args:
+            electrolyzer_name: the device name as written by the setup or the configuration file.
+
+        Returns:
+            The row of "Electrolyzer variants" belonging to that device, carrying every field in
+            :attr:`TABLE_FIELDS`.
+
+        Raises:
+            ValueError: if no device of that name is in the table, or its row lacks one of the
+                fields this controller reads.
+        """
+        return read_electrolyzer_variant(electrolyzer_name, required_fields=PTXControllerConfig.TABLE_FIELDS)
 
     @classmethod
     def control_electrolyzer(
@@ -104,7 +119,17 @@ class PTXControllerConfig(ConfigBase):
         """Sets the according parameters for the chosen electrolyzer.
 
         The operation mode selects how the electrolyser is operated; see
-        :class:`PtxOperationMode` for what each member means.
+        :class:`PtxOperationMode` for what each member means. The four loads are read straight
+        out of the row, which :meth:`read_config` has already checked carries all of them: a
+        table entry missing one is an error naming the field and the device, not a load of zero.
+
+        Args:
+            electrolyzer_name: the device name to look up in the manufacturer table.
+            operation_mode: how the PtX system is to be driven.
+            component_id: the identity to give the controller, defaulted when not supplied.
+
+        Returns:
+            The PtX controller configuration of that device.
         """
         if component_id is None:
             component_id = ComponentID(name="L2PtXController")
@@ -112,10 +137,10 @@ class PTXControllerConfig(ConfigBase):
 
         config = PTXControllerConfig(
             component_id=component_id,  # config_json.get("name", "")
-            nom_load=config_json.get("nom_load", 0.0),
-            min_load=config_json.get("min_load", 0.0),
-            max_load=config_json.get("max_load", 0.0),
-            standby_load=config_json.get("standby_load", 0.0),
+            nom_load=config_json["nom_load"],
+            min_load=config_json["min_load"],
+            max_load=config_json["max_load"],
+            standby_load=config_json["standby_load"],
             operation_mode=operation_mode,
         )
         return config

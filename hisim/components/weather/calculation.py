@@ -794,22 +794,48 @@ def calculate_direct_normal_irradiance_in_watt_per_square_meter(
     lat_in_degrees: float
         Latitude of the location in degrees
     zenith_tol_in_degrees: float, optional
-        Avoid cosines of values above a certain zenith angle in degrees in order to avoid division by zero.
+        The zenith angle in degrees at which the sun's position is clamped before dividing by its cosine,
+        so that the divisor cannot approach zero toward the horizon or go negative past it. Must lie
+        strictly between 0 and 90.
 
     Returns
     -------
     dni_in_watt_per_square_meter: pd.Series
         Direct normal irradiance in W/m²
 
-    """
+    Raises
+    ------
+    ValueError
+        If ``zenith_tol_in_degrees`` is not strictly between 0 and 90, or if the result contains NaN, which
+        means the horizontal irradiance or the solar position was NaN at some timestep.
 
+    """
+    if not 0 < zenith_tol_in_degrees < 90:
+        raise ValueError(
+            "zenith_tol_in_degrees must lie strictly between 0 and 90 degrees so that its cosine is "
+            f"positive, got {zenith_tol_in_degrees}."
+        )
     solar_pos = pvlib.solarposition.get_solarposition(
         direct_horizontal_irradiance_in_watt_per_square_meter.index, lat_in_degrees, lon_in_degrees
     )
-    solar_pos["apparent_zenith"][solar_pos.apparent_zenith > zenith_tol_in_degrees] = zenith_tol_in_degrees
+    # Clamp the zenith angle at zenith_tol_in_degrees before dividing by its cosine. This must be a single
+    # .loc assignment: the earlier chained form (solar_pos["apparent_zenith"][mask] = tol) wrote into a
+    # temporary under pandas copy-on-write and had no effect, so DNI was unbounded near the horizon
+    # and negative past it (pandas reported this as ChainedAssignmentError).
+    solar_pos.loc[solar_pos["apparent_zenith"] > zenith_tol_in_degrees, "apparent_zenith"] = zenith_tol_in_degrees
     dni_in_watt_per_square_meter = direct_horizontal_irradiance_in_watt_per_square_meter.div(
         solar_pos["apparent_zenith"].apply(math.radians).apply(math.cos)
     )
-    if sum(dni_in_watt_per_square_meter.isnull()) > 0:
-        raise ValueError("Something went wrong...")
+    if dni_in_watt_per_square_meter.isnull().any():
+        nan_irradiance = int(direct_horizontal_irradiance_in_watt_per_square_meter.isnull().sum())
+        nan_zenith = int(solar_pos["apparent_zenith"].isnull().sum())
+        nan_mask = dni_in_watt_per_square_meter.isnull()
+        raise ValueError(
+            f"The direct normal irradiance is NaN at {int(nan_mask.sum())} of "
+            f"{len(dni_in_watt_per_square_meter)} timesteps, the first at "
+            f"{dni_in_watt_per_square_meter.index[nan_mask][0]}. The direct horizontal irradiance is NaN "
+            f"at {nan_irradiance} timesteps and the solar zenith angle at {nan_zenith} "
+            f"(lat={lat_in_degrees}, lon={lon_in_degrees}). A NaN irradiance points at a gap in the "
+            "weather file; a NaN zenith at the time index or the coordinates."
+        )
     return dni_in_watt_per_square_meter

@@ -261,12 +261,14 @@ row is struck from the table, which keeps the question and the option chosen nex
 - **D-7** `[answered 2026-09-10]` **(a) adopt the law, record the diff.** Solar-thermal collector area becomes
   `4 m² × number_of_apartments`, which is what `household_gas_solar_thermal.py` looks like it meant when it passed
   `area_m2=4` unmultiplied and what its two sizer twins already do. That setup's week golden is re-blessed in the
-  same commit; every MFH archetype in it changes.
+  same commit; every MFH archetype in it changes. [2026-09-11: no golden moved, and no MFH archetype was
+  involved; see the executed note below for what the gate actually sweeps.]
 
   **Executed 2026-09-11.** `SolarThermalSystemConfig.area_m2` is a sizable field with the law
   `Size.NUMBER_OF_APARTMENTS * COLLECTOR_AREA_IN_M2_PER_APARTMENT`, the constant named once at module level, and
-  both factories default the parameter to `AUTO` — except the manually-calculated-capex one, which turns the area
-  into euros and kilograms at construction time and so keeps a concrete default; see the derived-field note below.
+  the class's one factory defaults the parameter to `AUTO`. (It had a second, the manually-calculated-capex one,
+  which could not: it turned the area into euros and kilograms at construction time and so kept a concrete
+  default. The first review of this PR deleted it — see the derived-field note below.)
   The three setups lose their hand arithmetic and resolve against a `SizingContext` carrying the dwelling count
   they already scale the domestic hot water storage by: `household_gas_solar_thermal` (which passed `4`),
   `household_gas_solar_thermal_building_sizer` and `household_heatpump_solar_thermal_building_sizer` (which passed
@@ -288,6 +290,11 @@ row is struck from the table, which keeps the question and the option chosen nex
   fields into optional sizable fields, a wire-format change to the config class for a factory with zero callers
   in the repository. The factory therefore keeps `area_m2: float = 1.5` and its docstring says why. If the class
   gains its `flat_plate` preset later, that is the moment to decide the two capex fields as well.
+  [2026-09-12: the review resolved it the other way. Under the D-16 rule a factory with zero callers is deleted
+  rather than carried, so `get_default_solar_thermal_system_manually_calculated_capex` is gone, and with it
+  `_compute_device_co2_footprint`, whose only caller it was, the €797/m² figure and the emission-factor
+  breakdown, whose sources now live in git history alone; `obsolete/README.md` records the deletion. A
+  `flat_plate` preset that wants capex fields of its own starts from those sources, not from this code.]
 - **D-4** `[answered 2026-09-10]` **(a) it is a bug.** The CHP controller's 42/50/50/42 `t_min_dhw_in_celsius`
   cross and the 35-versus-31 `t_min_heating_in_celsius` split between the gas and hydrogen buffers are a
   copy-paste asymmetry nobody chose, so they are normalised rather than frozen into the wire format: `gas` and

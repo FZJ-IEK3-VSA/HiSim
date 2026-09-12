@@ -226,3 +226,78 @@ def test_a_named_collector_area_beats_the_law() -> None:
 
     assert config.area_m2 == 1.5
     assert config.resolve(SizingContext(number_of_apartments=3)).area_m2 == 1.5
+
+
+@pytest.mark.base
+def test_the_timestep_reads_the_resolved_area() -> None:
+    """Three times the collector, three times the heat: ``i_simulate`` reads the sized field.
+
+    The area reaches the physics through ``self.area_m2``, read once in ``__init__`` through
+    ``concrete()`` -- the constructor has already refused any config still carrying AUTO. Two
+    collectors that differ in nothing but the dwelling count they were resolved against, driven
+    by the same weather at the same instant, must give thermal power in the ratio of their areas.
+    """
+    seconds_per_timestep = 60
+    repo = sim_repository.SimRepository()
+    mysim: sim.SimulationParameters = sim.SimulationParameters.full_year(
+        year=2021, seconds_per_timestep=seconds_per_timestep
+    )
+
+    my_weather = weather.Weather(
+        config=weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN),
+        my_simulation_parameters=mysim,
+    )
+    my_weather.set_sim_repo(repo)
+    my_weather.i_prepare_simulation()
+
+    unresolved = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system()
+
+    def collector_of(apartments: int) -> solar_thermal_system.SolarThermalSystem:
+        """Builds the collector the law gives a building with that many dwellings."""
+        config = unresolved.resolve(SizingContext(number_of_apartments=apartments))
+        config.component_id = ComponentID(name=f"SolarThermalSystem{apartments}")
+        return solar_thermal_system.SolarThermalSystem(config=config, my_simulation_parameters=mysim)
+
+    single_family = collector_of(1)
+    triplex = collector_of(3)
+    collectors = [single_family, triplex]
+
+    assert single_family.area_m2 == 4.0
+    assert triplex.area_m2 == 12.0
+
+    state_controller = component.ComponentOutput(
+        "FakeControlState",
+        "ControlSignal",
+        LoadTypes.ANY,
+        Units.BINARY,
+        component_id=ComponentID("FakeControlState"),
+    )
+    for collector in collectors:
+        collector.control_signal_channel.source_output = state_controller
+        collector.set_sim_repo(repo)
+        collector.i_prepare_simulation()
+        collector.t_out_channel.source_output = my_weather.air_temperature_output
+        collector.dhi_channel.source_output = my_weather.dhi_output
+        collector.ghi_channel.source_output = my_weather.ghi_output
+
+    everything = [my_weather, *collectors, state_controller]
+    stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(
+        fft.get_number_of_outputs(everything)
+    )
+    fft.add_global_index_of_components(everything)
+    stsv.values[state_controller.global_index] = 1
+
+    timestep = 12 * 60 + 60 * 24 * 183  # 3rd July at noon
+    my_weather.i_simulate(timestep, stsv, False)
+    for collector in collectors:
+        collector.i_simulate(timestep, stsv, False)
+
+    power_of = {
+        collector: stsv.values[collector.thermal_power_w_output_channel.global_index]
+        for collector in collectors
+    }
+    assert power_of[single_family] > 0, "the reference instant has to produce heat at all"
+    assert power_of[triplex] == pytest.approx(3 * power_of[single_family]), (
+        f"a 12 m2 collector gave {power_of[triplex]} W where a 4 m2 one gave "
+        f"{power_of[single_family]} W; i_simulate is not reading the resolved area"
+    )

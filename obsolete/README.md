@@ -43,7 +43,12 @@ consequence is worth naming. `hisim/json_executor.py` builds a component whose s
 `configuration` block by invoking the config class's single `get_default_*` classmethod, so the JSON
 default-construction path for the live `RandomNumbers` component is closed until the P4 conversion mints its
 `standard` preset; both in-repo scenarios pass explicit configuration blocks, so nothing in the tree relies
-on it today.
+on it today. A third joined them on **2026-09-12**, on review of the D-7 PR:
+`SolarThermalSystemConfig.get_default_solar_thermal_system_manually_calculated_capex`, also with zero callers,
+took the private `_compute_device_co2_footprint` with it — the two carried the only in-repo record of the
+€797/m² collector price and of the emission-factor breakdown behind it, and the sources both figures cited
+now live in git history alone; the D-7 note in
+`roadmap/declarative_energy_systems/p4_component_sweep_requirements.md` §11 says so.
 
 One live component gave something up rather than receiving it. `controller_l1_chp.L1CHPController` declared an
 optional default connection from `GenericHydrogenStorage`, resolved by module name at runtime; D-29 dropped it

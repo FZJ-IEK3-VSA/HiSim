@@ -39,6 +39,7 @@ import pytest
 
 from hisim.component import Component
 from hisim.components.heat_distribution_system import HeatDistributionConfig, HeatDistributionSystemType
+from hisim.components.solar_thermal_system import COLLECTOR_AREA_IN_M2_PER_APARTMENT
 from hisim.config import auto_fields, presets_of
 from hisim.dynamic_component import DynamicComponent
 from hisim.economics.adapter import (
@@ -100,8 +101,8 @@ class AdapterContractScan:
         "HeatDistributionConfig.heating_system": HeatDistributionSystemType.RADIATOR,
         "HeatDistributionConfig.water_mass_flow_rate_in_kg_per_second": 0.5,
         "HeatDistributionConfig.absolute_conditioned_floor_area_in_m2": 120.0,
-        # The area law gives four square metres of collector per apartment.
-        "SolarThermalSystemConfig.area_m2": 4.0,
+        # What the area law gives the single apartment of a single-family house.
+        "SolarThermalSystemConfig.area_m2": COLLECTOR_AREA_IN_M2_PER_APARTMENT,
     }
 
     @staticmethod

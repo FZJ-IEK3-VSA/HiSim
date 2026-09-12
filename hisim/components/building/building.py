@@ -16,10 +16,14 @@ import pandas as pd
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log, utils
-from hisim.caching import atomic_cache_write
+from hisim.caching import CacheClient, CacheEntry, CacheKey
 from hisim.components.building.config import BuildingConfig
 from hisim.components.building.information import BuildingInformation
-from hisim.components.building.window import Window
+# The module object itself is what the cache key is fingerprinted from: ``CacheKey.for_producer``
+# walks its import closure and hashes the source of everything in it, the window optics included, so
+# an edit to the calculation changes the key without anyone declaring anything.
+from hisim.components.building import solar_gains
+from hisim.components.building.solar_gains import SolarGainsInputs, WindowGeometry, produce_solar_gains
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.components.weather import Weather
 from hisim.loadtypes import OutputPostprocessingRules
@@ -155,17 +159,9 @@ class Building(cp.Component):
         self.set_cooling_temperature_in_celsius = self.buildingconfig.set_cooling_temperature_in_celsius
         self.window_open: int = 0
 
-        (
-            self.is_in_cache,
-            self.cache_file_path,
-        ) = utils.get_cache_file(
-            self.config.component_id.name,
-            self.buildingconfig,
-            self.my_simulation_parameters,
-        )
-
-        self.cache: List[float]
-        self.solar_heat_gain_through_windows: List[float]
+        #: The produced solar-gain series, one value per timestep. ``None`` until the first
+        #: simulated timestep fetches it; see :meth:`fetch_solar_heat_gains_through_windows`.
+        self.solar_heat_gain_through_windows: Optional[List[float]] = None
 
         self.my_building_information = BuildingInformation(
             config=self.buildingconfig,
@@ -558,15 +554,10 @@ class Building(cp.Component):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the thermal behaviour of the building."""
 
-        # Gets inputs
-        if hasattr(self, "solar_gain_through_windows") is False:
-            azimuth = stsv.get_input_value(self.azimuth_channel)
-            direct_normal_irradiance = stsv.get_input_value(self.direct_normal_irradiance_channel)
-            direct_horizontal_irradiance = stsv.get_input_value(self.direct_horizontal_irradiance_channel)
-            global_horizontal_irradiance = stsv.get_input_value(self.global_horizontal_irradiance_channel)
-            direct_normal_irradiance_extra = stsv.get_input_value(self.direct_normal_irradiance_extra_channel)
-            apparent_zenith = stsv.get_input_value(self.apparent_zenith_channel)
+        if self.solar_heat_gain_through_windows is None:
+            self.solar_heat_gain_through_windows = self.fetch_solar_heat_gains_through_windows()
 
+        # Gets inputs
         internal_heat_gains_through_occupancy_in_watt = stsv.get_input_value(self.occupancy_heat_gain_channel)
 
         internal_heat_gains_through_devices_in_watt = stsv.get_input_value(self.device_heat_gain_channel)
@@ -588,17 +579,7 @@ class Building(cp.Component):
         previous_thermal_mass_temperature_in_celsius = self.state.thermal_mass_temperature_in_celsius
 
         # Performs calculations
-        if hasattr(self, "solar_gain_through_windows") is False:
-            solar_heat_gain_through_windows_in_watt = self.get_solar_heat_gain_through_windows(
-                azimuth=azimuth,
-                direct_normal_irradiance=direct_normal_irradiance,
-                direct_horizontal_irradiance=direct_horizontal_irradiance,
-                global_horizontal_irradiance=global_horizontal_irradiance,
-                direct_normal_irradiance_extra=direct_normal_irradiance_extra,
-                apparent_zenith=apparent_zenith,
-            )
-        else:
-            solar_heat_gain_through_windows_in_watt = self.solar_heat_gain_through_windows[timestep]
+        solar_heat_gain_through_windows_in_watt = self.solar_heat_gain_through_windows[timestep]
 
         # calc total thermal power to building from all heat sources
 
@@ -746,25 +727,6 @@ class Building(cp.Component):
             self.window_open,
         )
 
-        # Saves solar gains cache
-        if not self.is_in_cache:
-            self.cache[timestep] = solar_heat_gain_through_windows_in_watt
-            if timestep + 1 == self.my_simulation_parameters.timesteps:
-                database = pd.DataFrame(
-                    self.cache,
-                    columns=["solar_gain_through_windows"],
-                )
-                with atomic_cache_write(
-                    self.cache_file_path,
-                    utils.build_cache_key_string(self.buildingconfig, self.my_simulation_parameters),
-                ) as temporary_cache_filepath:
-                    database.to_csv(
-                        temporary_cache_filepath,
-                        sep=",",
-                        decimal=".",
-                        index=False,
-                    )
-
     # =================================================================================================================================
 
     def i_save_state(
@@ -792,6 +754,148 @@ class Building(cp.Component):
                 f"Building '{self.component_name}': the 'HeatingByDevices' input is not "
                 "connected. Internal heat gains from devices default to 0 W."
             )
+
+    def fetch_solar_heat_gains_through_windows(self) -> List[float]:
+        """Fetch the whole solar-gain series -- from the cache when it is there, from the producer when it is not.
+
+        Called once, from the first simulated timestep, rather than from
+        :meth:`i_prepare_simulation`: sixteen of the eighteen system setups that build a Building add
+        it to the Simulator *before* the Weather, and ``prepare_calculation`` walks the components in
+        the order the setup added them, so at prepare time the weather series are not published yet.
+        Reordering those setups would change the order the convergence loop evaluates the components
+        in, and with it their results, which is not a thing this change is allowed to do. By the first
+        timestep every component has been prepared, so the series and the key identifying them are
+        there.
+
+        It is still "compute, write, then simulate": the whole series is produced and filed before the
+        first value of it is used, which is what retires the deferred write of spec §12 -- the legacy
+        cache was filled during ``i_simulate`` and written only at the last timestep, so an
+        interrupted run cached nothing.
+
+        Returns:
+            List[float]: the gains in watt, one value per timestep.
+        """
+        calculation_inputs = self.build_solar_gains_inputs()
+        entry = self.cache_entry(calculation_inputs)
+        if entry.exists:
+            log.information(f"Building solar gains cache hit: {entry.path}")
+            # float_precision="round_trip" is what makes a cached run and an uncached one the
+            # same run. pandas' default CSV reader uses a fast, inexact float parser and loses
+            # the last bit of a sixth of the values, whatever precision they were written with;
+            # measured on this data: 317 of 2000 with the default write format, 358 with
+            # "%.17g", 542 with "%.20g", zero with this argument. The loss is in the reader,
+            # not the digits on disk, which is why writing more of them does not help.
+            cached_series = pd.read_csv(
+                entry.path,
+                sep=",",
+                decimal=".",
+                float_precision="round_trip",
+            )
+            cached_gains_in_watt: List[float] = cached_series[solar_gains.SERIES_COLUMN].tolist()
+            return cached_gains_in_watt
+        log.information(f"Building solar gains cache miss: computing them and filing them at {entry.path}")
+        produced_series = produce_solar_gains(calculation_inputs)
+        with entry.writing() as temporary_cache_filepath:
+            produced_series.to_csv(
+                temporary_cache_filepath,
+                sep=",",
+                decimal=".",
+                index=False,
+            )
+        produced_gains_in_watt: List[float] = produced_series[solar_gains.SERIES_COLUMN].tolist()
+        return produced_gains_in_watt
+
+    def build_solar_gains_inputs(self) -> SolarGainsInputs:
+        """Build the DTO the solar-gains producer is a pure function of.
+
+        The windows enter as the plain numbers :meth:`get_windows` collected, the weather as the six
+        series it publishes plus the artifact key that says which series they are: the key is the
+        material, the series are the payload that travels with it (spec §3.1). Nothing the component
+        keeps to itself -- its name, its setpoints, its costs, its display settings -- is part of the
+        calculation and therefore part of its key.
+
+        Returns:
+            SolarGainsInputs: the producer's single argument.
+        """
+        return SolarGainsInputs(
+            weather_artifact_key=self.weather_artifact_key(),
+            year=self.my_simulation_parameters.year,
+            seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
+            timesteps=self.my_simulation_parameters.timesteps,
+            windows=self.window_geometries,
+            azimuth_in_degrees=self.published_weather_series(Weather.YEARLY_AZIMUTH),
+            direct_normal_irradiance_in_watt_per_square_meter=self.published_weather_series(
+                Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE
+            ),
+            diffuse_horizontal_irradiance_in_watt_per_square_meter=self.published_weather_series(
+                Weather.YEARLY_DIFFUSE_HORIZONTAL_IRRADIANCE
+            ),
+            global_horizontal_irradiance_in_watt_per_square_meter=self.published_weather_series(
+                Weather.YEARLY_GLOBAL_HORIZONTAL_IRRADIANCE
+            ),
+            direct_normal_irradiance_extra_in_watt_per_square_meter=self.published_weather_series(
+                Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE_EXTRA
+            ),
+            apparent_zenith_in_degrees=self.published_weather_series(Weather.YEARLY_APPARENT_ZENITH),
+        )
+
+    def weather_artifact_key(self) -> str:
+        """Return the digest identifying the weather series this building computes its gains from.
+
+        Returns:
+            str: the artifact key the Weather published.
+
+        Raises:
+            KeyError: if no weather component published one. The gains are a function of the weather,
+                and a key that did not say which weather would be shared between buildings that do not
+                have the same one -- so a missing key stops the run instead of guessing.
+        """
+        if not self.simulation_repository.entry_exists(Weather.SERIES_ARTIFACT_KEY):
+            raise KeyError(
+                f"Building '{self.component_name}': no weather series were published under "
+                f"'{Weather.SERIES_ARTIFACT_KEY}'. The solar gains through the windows are computed from "
+                "the weather series, so a weather component has to take part in the simulation and to "
+                "publish them in its i_prepare_simulation."
+            )
+        return str(self.simulation_repository.get_entry(Weather.SERIES_ARTIFACT_KEY))
+
+    def published_weather_series(self, key: str) -> Tuple[float, ...]:
+        """Return one full-year weather series the Weather published, as an immutable tuple.
+
+        Args:
+            key: the repository key, one of the ``Weather.YEARLY_*`` names.
+
+        Returns:
+            Tuple[float, ...]: the series, one value per timestep of the weather's own frame.
+
+        Raises:
+            KeyError: if the series is missing although the artifact key is there, which would mean a
+                weather that publishes half of what this component reads.
+        """
+        if not self.simulation_repository.entry_exists(key):
+            raise KeyError(
+                f"Building '{self.component_name}': the weather series '{key}' was not published, "
+                "although the weather artifact key was. The Building reads six series; a weather that "
+                "publishes fewer of them cannot drive it."
+            )
+        return tuple(self.simulation_repository.get_entry(key))
+
+    def cache_entry(self, calculation_inputs: SolarGainsInputs) -> CacheEntry:
+        """Look the produced series up in the cache under the key of the producer that makes it.
+
+        The key is ``sha256(artifact kind : code fingerprint : third-party fingerprint : DTO JSON)``
+        (``roadmap/cache_service_spec.md`` §3), and the DTO JSON names the weather by its own key, so
+        the two compose Merkle-style: a changed weather file, a changed station or an edit to the
+        weather calculation moves this entry as well.
+
+        Args:
+            calculation_inputs: the DTO from :meth:`build_solar_gains_inputs`.
+
+        Returns:
+            CacheEntry: where the entry is or will be, and whether it is there.
+        """
+        key = CacheKey.for_producer(solar_gains.ARTIFACT_KIND, solar_gains, calculation_inputs)
+        return CacheClient.from_environment().lookup_producer(key, self.my_simulation_parameters.cache_dir_path)
 
     def i_restore_state(
         self,
@@ -844,14 +948,20 @@ class Building(cp.Component):
         ) = self.get_conductances()
 
         # Get windows
-        self.windows, self.total_scaled_windows_area = self.get_windows()
+        self.window_geometries, self.total_scaled_windows_area = self.get_windows()
 
     def get_windows(
         self,
-    ):
+    ) -> Tuple[Tuple[WindowGeometry, ...], float]:
         """Retrieve data about windows sizes.
 
-        :return:
+        Returns the geometry of every window as plain numbers rather than as
+        :class:`hisim.components.building.window.Window` objects: the optics live in the solar-gains
+        producer now, and these seven numbers per window are exactly what travels in its calculation
+        DTO and therefore in its cache key.
+
+        Returns:
+            Tuple[Tuple[WindowGeometry, ...], float]: the windows and their total scaled area in m².
         """
 
         windows = []
@@ -881,41 +991,27 @@ class Building(cp.Component):
 
         for index, windows_direction in enumerate(self.my_building_information.windows_directions):
             if windows_direction == "Horizontal":
-                window_tilt_angle = 0
+                window_tilt_angle = 0.0
             else:
-                window_tilt_angle = 90
+                window_tilt_angle = 90.0
 
+            azimuth_angle = windows_azimuth_angles[windows_direction]
+            azimuth_angle_in_degrees = None if azimuth_angle is None else float(azimuth_angle)
             windows.append(
-                Window(
-                    window_tilt_angle=window_tilt_angle,
-                    window_azimuth_angle=windows_azimuth_angles[windows_direction],
-                    area=self.my_building_information.scaled_window_areas_in_m2[index],
-                    frame_area_fraction_reduction_factor=reduction_factor_for_frame_area_fraction_of_window,
-                    glass_solar_transmittance=total_solar_energy_transmittance_for_perpedicular_radiation,
-                    nonperpendicular_reduction_factor=reduction_factor_for_non_perpedicular_radiation,
-                    external_shading_vertical_reduction_factor=reduction_factor_for_external_vertical_shading,
+                WindowGeometry(
+                    tilt_angle_in_degrees=window_tilt_angle,
+                    azimuth_angle_in_degrees=azimuth_angle_in_degrees,
+                    area_in_m2=float(self.my_building_information.scaled_window_areas_in_m2[index]),
+                    frame_area_fraction_reduction_factor=float(reduction_factor_for_frame_area_fraction_of_window),
+                    glass_solar_transmittance=float(total_solar_energy_transmittance_for_perpedicular_radiation),
+                    nonperpendicular_reduction_factor=float(reduction_factor_for_non_perpedicular_radiation),
+                    external_shading_vertical_reduction_factor=float(reduction_factor_for_external_vertical_shading),
                 )
             )
 
             total_windows_area += self.my_building_information.scaled_window_areas_in_m2[index]
-        # if nothing exists, initialize the empty arrays for caching, else read stuff
-        if not self.is_in_cache:  # cache_filepath is None or  (not os.path.isfile(cache_filepath)):
-            self.cache = [0] * self.my_simulation_parameters.timesteps
-        else:
-            # float_precision="round_trip" is what makes a cached run and an uncached one the
-            # same run. pandas' default CSV reader uses a fast, inexact float parser and loses
-            # the last bit of a sixth of the values, whatever precision they were written with;
-            # measured on this data: 317 of 2000 with the default write format, 358 with
-            # "%.17g", 542 with "%.20g", zero with this argument. The loss is in the reader,
-            # not the digits on disk, which is why writing more of them does not help.
-            self.solar_heat_gain_through_windows = pd.read_csv(
-                self.cache_file_path,
-                sep=",",
-                decimal=".",
-                float_precision="round_trip",
-            )["solar_gain_through_windows"].tolist()
 
-        return windows, total_windows_area
+        return tuple(windows), total_windows_area
 
     def __str__(
         self,
@@ -1496,39 +1592,6 @@ class Building(cp.Component):
             door_area_in_m2,
             door_u_value_in_watt_per_m2_per_kelvin,
         )
-
-    # =====================================================================================================================================
-
-    def get_solar_heat_gain_through_windows(
-        self,
-        azimuth,
-        direct_normal_irradiance,
-        direct_horizontal_irradiance,
-        global_horizontal_irradiance,
-        direct_normal_irradiance_extra,
-        apparent_zenith,
-    ):
-        """Calculate the thermal solar gain passed to the building through the windows.
-
-        Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (** Check header)
-        """
-        solar_heat_gains = 0.0
-
-        if direct_normal_irradiance != 0 or direct_horizontal_irradiance != 0 or global_horizontal_irradiance != 0:
-            for window in self.windows:
-                solar_heat_gain = window.calc_solar_heat_gains(
-                    sun_azimuth=azimuth,
-                    direct_normal_irradiance=direct_normal_irradiance,
-                    direct_horizontal_irradiance=direct_horizontal_irradiance,
-                    global_horizontal_irradiance=global_horizontal_irradiance,
-                    direct_normal_irradiance_extra=direct_normal_irradiance_extra,
-                    apparent_zenith=apparent_zenith,
-                    window_tilt_angle=window.window_tilt_angle,
-                    window_azimuth_angle=window.window_azimuth_angle,
-                    reduction_factor_with_area=window.reduction_factor_with_area,
-                )
-                solar_heat_gains += solar_heat_gain
-        return solar_heat_gains
 
     # =====================================================================================================================================
     # Calculation of the heat flows from internal and solar heat sources.

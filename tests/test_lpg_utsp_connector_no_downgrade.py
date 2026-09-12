@@ -58,7 +58,7 @@ def build_connector_config(
     Returns:
         UtspLpgConnectorConfig: the default configuration with the mode and cache path applied.
     """
-    config = lpg_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    config = lpg_connector.UtspLpgConnectorConfig.preset_standard("UTSPConnector")
     config.data_acquisition_mode = mode
     config.cache_dir_path = cache_directory
     config.result_dir_path = os.path.join(cache_directory, "results")

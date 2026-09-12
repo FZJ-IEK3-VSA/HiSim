@@ -138,7 +138,7 @@ Legend: **conv** convert · **del** retired — moved to `obsolete/` under D-16'
 |---|---|---|---|---|---|
 | `WeatherConfig` | done | `standard`, `for_location(…)`, `for_data_file(path, data_source)` (D-18) | delete `get_default` (44 sites) after the two gates: the direct-file constructor (D-18) and argument decoding (D-19) | N | D-18, D-19 |
 | `BuildingConfig` | done | `standard`, `for_tabula_code` | `roof_area_in_m2` fact **landed 2026-09-11** (R2.1); the 14 non-parameter post-construction mutations → sparse `config:` overrides (D-22); `heating_reference_temperature` stays a plain default (D-21 (c)) | N / P | D-21, D-22 |
-| `UtspLpgConnectorConfig` | done | `standard`, `for_household` | delete legacy factory (32 sites); the 11 sizers' `USE_LOCAL_LPG` + household-list + `cache_dir_path` overrides become `config:`/constructor arguments (`for_household` now takes `data_acquisition_mode`, P2 2026-08-27) | N | ~~D-20~~ |
+| `UtspLpgConnectorConfig` | done | `standard`, `for_household` | legacy factory **deleted 2026-09-12** (B1), 43 sites (18 setups, 23 calls in 17 test files, 2 comments): `preset_standard("UTSPConnector")` everywhere; the 11 sizers keep `USE_LOCAL_LPG` + household + `cache_dir_path` as `config:` overrides rather than `for_household(…)` arguments, because the constructor also clears `name_of_predefined_loadprofile` and would move the recorded occupancy identity — its own commit, not a factory removal | N | ~~D-20~~ |
 | `WeatherDataImport` | ex | | not a config; import fails (`wetterdienst`) | | |
 | `SmartDeviceConfig` | del | | defective (`KeyError` on construction); module and config **moved** to `obsolete/` (D-30, 2026-09-11) | | D-30 |
 

@@ -58,6 +58,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from hisim import log
 from hisim import loadtypes as lt
+from hisim.config import concrete
 from hisim.economics.carriers import EnergyCarrier, EnergyFlowRole
 from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
@@ -126,7 +127,7 @@ def _boiler_facts(config: Any) -> Optional[ComponentCostFacts]:
     asset_class, kpi_tag = mapping
     return ComponentCostFacts(
         asset_class=asset_class,
-        size=config.maximal_thermal_power_in_watt * 1e-3,
+        size=concrete(config.maximal_thermal_power_in_watt) * 1e-3,
         size_unit=Units.KILOWATT,
         kpi_tag=kpi_tag,
     )
@@ -156,7 +157,7 @@ def _hds_facts(config: Any) -> Optional[ComponentCostFacts]:
         return None  # low-temperature radiators have no cost database entry yet
     return ComponentCostFacts(
         asset_class=asset_class,
-        size=config.absolute_conditioned_floor_area_in_m2,
+        size=concrete(config.absolute_conditioned_floor_area_in_m2),
         size_unit=Units.SQUARE_METER,
         kpi_tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
     )

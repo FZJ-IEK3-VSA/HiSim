@@ -61,6 +61,8 @@ scripts/
   golden_check.py           # REWRITE: config-driven, tolerance compare, --setup filter, report, exit codes
   golden_matrix.py          # NEW: emit GH Actions matrix JSON (per-horizon) from golden_config.json
   golden_validate.py        # NEW: vet the manually-listed setups (offline/KPI/deterministic)
+  golden_history.py         # local-only: draw how every golden KPI moved across the blesses (walks git history)
+  golden_kpi_renames.py     # the old-name → new-name table golden_history.py stitches renamed series with
   ci_all_green.sh           # NEW: gh-api helper — did quality+tests+golden-check all pass for a SHA?
   # [2026-09-12: ci_all_green.sh was never wired into any workflow — the gate polls with
   #  scripts/ci_wait_all.sh instead — and the unused helper was removed on that date.]

@@ -1,56 +1,165 @@
 # Tier 2 of the golden-reference gate: the heavy full-year pairs.
 #
-# Runs on pull requests to main as a NORMAL, visible check (previously it was
-# workflow_run-triggered, which GitHub never surfaces in the PR checks list).
+# WHY workflow_run — the wait must cost no runner. This workflow used to run on
+# `pull_request`, and its `gate` job polled `gh run list` until quality, tests and
+# golden-check had finished for the commit. A gate is an ordinary job, so it held a
+# runner for the whole wait: 28 idle minutes in a good run, 60 when it timed out. On
+# 2026-09-12 eight pull requests re-ran at once; eight idle gates occupied the very
+# runners the ~22-job golden-check matrices were queued behind, golden-check stayed
+# queued past the hour, every gate timed out and the full-year tier never ran at all.
+# So the wait is now the trigger. Every completion of a prerequisite fires this
+# workflow and the gate decides in seconds, from one `gh run list` query per
+# prerequisite (scripts/ci_prereqs_done.sh): the earlier completions bail, the last
+# one proceeds. Nothing idles.
 #
-# To avoid spending the full-year compute when a cheaper check has already
-# failed, the `gate` job first waits for quality + tests + golden-check to finish
-# for this commit (scripts/ci_wait_all.sh) and FAILS FAST the moment any of them
-# concludes non-success — the heavy `golden-year` matrix then never runs, and the
-# failure carries an explanatory message. Only when all prerequisites are green
-# does the full-year matrix run.
+# WHY the commit status — the PR checks list. `workflow_run` runs are not listed
+# among a pull request's checks; that is exactly why this workflow was moved off
+# `workflow_run` and onto `pull_request` once before. Rather than pay for visibility
+# with idle runners, it now reports itself onto the head commit through the commit
+# status API (`permissions: statuses: write`), context `golden-year`: pending when
+# the gate starts the matrix, success or failure from the summary job. Commit
+# statuses do appear on the pull request. A gate that skips posts nothing, so a
+# commit that was never eligible shows no stray status.
+#
+# THE FORK GUARD. A workflow_run job runs in the base repository, with a token that
+# can write commit statuses, and it checks out the head commit. Running a fork's
+# code from that position is how a pull request from anyone gets that token, so the
+# gate runs only when the triggering run was a `pull_request` whose head repository
+# is this repository. Fork pull requests still get tier 1 and everything below it;
+# the full-year tier is for branches with push access.
+#
+# DUPLICATES. Three prerequisites complete, so this workflow fires three times per
+# commit. `concurrency: golden-year-<head_sha>` with cancel-in-progress: false
+# serialises them, and the gate additionally refuses to start a matrix when an older
+# golden-year run for the same commit is already running or has already succeeded.
+#
+# A CANCELLED prerequisite counts as a failed one: it will never go green by itself.
+# In practice that is a superseded commit — golden-check and tests cancel their
+# in-progress runs on feature branches — and the failure status then lands on the old
+# commit, which no pull request displays. The new head gets its own clean run.
+#
+# THE COMMIT TESTED is `workflow_run.head_sha` — the branch head, not the pull
+# request's merge commit. That is the commit a status can be shown on, and the
+# commit the prerequisite runs are indexed by.
+#
+# EDITING THIS FILE. `workflow_run` always uses the copy of the workflow that is on
+# the default branch, so changes here do nothing on the pull request that makes
+# them. They take effect once merged, on the next pull request.
 
 name: golden-year
 
 on:
-  pull_request:
-    branches: [ main ]
+  workflow_run:
+    workflows: [quality, tests, golden-check]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: read
-  actions: read      # gh run list, to poll the prerequisite workflow runs
+  actions: read      # gh run list, to read the prerequisite runs and our own siblings
+  statuses: write    # the commit status that carries the result back to the pull request
 
 concurrency:
-  group: golden-year-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  # Per commit, not per branch: the three prerequisite completions of one commit must
+  # not race each other, and a queued run holds no runner while it waits its turn.
+  group: golden-year-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  GH_REPO: ${{ github.repository }}
+  # The prerequisite workflows report against the pull request's head commit.
+  SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+  RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
   gate:
-    name: gate (wait for prerequisites)
+    name: gate (prerequisites)
+    # The fork guard, as a job condition so a fork's pull request costs no runner at
+    # all: proceed for a manual dispatch, or for a workflow_run whose triggering run
+    # was a pull_request from a branch of this same repository.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     outputs:
+      proceed: ${{ steps.decide.outputs.proceed }}
       matrix: ${{ steps.gen.outputs.matrix }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GH_REPO: ${{ github.repository }}
-      # The prerequisite workflows report against the PR head commit.
-      SHA: ${{ github.event.pull_request.head.sha }}
+      RUN_ID: ${{ github.run_id }}
+      TRIGGER_WORKFLOW: ${{ github.event.workflow_run.name }}
+      HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       # Wall time, CPU time and peak memory for this job; see the action.
       - name: Start the resource monitor
         uses: ./.github/actions/resource-monitor
         with:
           mode: start
-      - name: Wait for quality + tests + golden-check (fail fast if any failed)
-        # Only PRs have prerequisites to gate on; a manual workflow_dispatch run
-        # goes straight to the full-year matrix.
-        if: github.event_name == 'pull_request'
-        run: bash scripts/ci_wait_all.sh "$SHA"
+      - name: Decide whether the full-year tier runs
+        id: decide
+        run: |
+          set -euo pipefail
+          post_status() {
+            gh api -X POST "repos/$GH_REPO/statuses/$SHA" \
+              -f state="$1" -f context=golden-year -f description="$2" -f target_url="$RUN_URL" \
+              >/dev/null \
+              || echo "::warning title=golden-year::Could not post the '$1' commit status for $SHA."
+          }
+
+          # A manual run is the operator asking for the full year; it gates on nothing.
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "Manual run for $SHA — the prerequisite check is skipped."
+            post_status pending "Full-year golden check running (manual)."
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "'$TRIGGER_WORKFLOW' completed for $HEAD_BRANCH @ $SHA"
+          verdict="$(bash scripts/ci_prereqs_done.sh "$SHA")"
+          kind="${verdict%% *}"
+          detail="${verdict#"$kind"}"
+          detail="${detail# }"
+          echo "prerequisites: $verdict"
+
+          case "$kind" in
+            pending)
+              echo "waiting for $detail; a later completion will start the year tier"
+              echo "proceed=false" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            failed)
+              post_status failure "Prerequisite CI failed ($detail) — the full-year check did not run."
+              echo "::error title=golden-year skipped::Prerequisite '$detail' did not conclude 'success' for $SHA, so the full-year golden check was NOT run. Fix that check and re-run."
+              echo "proceed=false" >> "$GITHUB_OUTPUT"
+              exit 1
+              ;;
+          esac
+
+          # Two prerequisites finishing together can both see everything green. The
+          # concurrency group serialises them; this refuses the second one. Only runs
+          # older than this one count, because the run queued behind us is not a
+          # duplicate of us — we are a duplicate of it.
+          siblings="$(gh run list --workflow golden-year.yml --commit "$SHA" --limit 50 \
+            --json databaseId,status,conclusion \
+            --jq '[.[] | select(.databaseId < (env.RUN_ID | tonumber))
+                       | select(.status != "completed" or .conclusion == "success")] | length')"
+          if [ "${siblings:-0}" -gt 0 ]; then
+            echo "An earlier golden-year run for $SHA is already running or has already succeeded — nothing to do."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "quality, tests and golden-check are all green for $SHA — starting the full-year tier."
+          post_status pending "Full-year golden check running."
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
       - name: Build full-year matrix
         id: gen
+        if: steps.decide.outputs.proceed == 'true'
         run: echo "matrix=$(python3 scripts/golden_matrix.py --horizon year)" >> "$GITHUB_OUTPUT"
       # Kept on failure too: a job killed for running out of memory is the one
       # whose measurement matters most.
@@ -62,9 +171,11 @@ jobs:
 
   golden-year:
     name: golden-year ${{ matrix.setup }} / ${{ matrix.param }}
-    # Skipped automatically when `gate` fails, so the heavy compute never runs
-    # unless every prerequisite passed.
+    # Skipped when `gate` fails, and when the gate decided this trigger was too early
+    # or a duplicate, so the heavy compute runs exactly once per commit and only with
+    # every prerequisite green.
     needs: gate
+    if: needs.gate.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
@@ -76,6 +187,8 @@ jobs:
       matrix: ${{ fromJSON(needs.gate.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       # Wall time, CPU time and peak memory for this job; see the action.
       - name: Start the resource monitor
         uses: ./.github/actions/resource-monitor
@@ -122,18 +235,40 @@ jobs:
     needs: [gate, golden-year]
     if: always()
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Conclude
         run: |
+          set -uo pipefail
           gate="${{ needs.gate.result }}"
+          proceed="${{ needs.gate.outputs.proceed }}"
           gy="${{ needs.golden-year.result }}"
-          echo "gate=$gate  golden-year=$gy"
+          echo "gate=$gate  proceed=${proceed:-<unset>}  golden-year=$gy"
+          post_status() {
+            gh api -X POST "repos/$GH_REPO/statuses/$SHA" \
+              -f state="$1" -f context=golden-year -f description="$2" -f target_url="$RUN_URL" \
+              >/dev/null \
+              || echo "::warning title=golden-year::Could not post the '$1' commit status for $SHA."
+          }
+
+          # The gate skipped (fork, or not a pull request) or decided this trigger was
+          # too early or a duplicate: it posted no pending status, so there is nothing
+          # to conclude either.
+          if [ "$gate" = "skipped" ] || { [ "$gate" = "success" ] && [ "$proceed" != "true" ]; }; then
+            echo "The full-year tier did not start for this trigger; no status to report."
+            exit 0
+          fi
+
           if [ "$gate" != "success" ]; then
+            post_status failure "Prerequisite CI failed — the full-year golden check did not run."
             echo "::error title=golden-year::Prerequisite CI failed, so the full-year golden check did not run. See the 'gate' job for which prerequisite failed."
             exit 1
           fi
           if [ "$gy" != "success" ]; then
+            post_status failure "Full-year golden KPI check failed."
             echo "::error title=golden-year::Full-year golden KPI check failed."
             exit 1
           fi
+          post_status success "Full-year golden KPI check passed."
           echo "Full-year golden check passed."

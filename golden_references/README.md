@@ -51,9 +51,12 @@ never waste compute.
 In CI this runs as two tiers (see `.github/workflows/`):
 
 - **`golden-check.yml`** — one-week pairs, on every PR and push to `main`.
-- **`golden-year.yml`** — full-year pairs, on PRs to `main` **only after** `quality`,
+- **`golden-year.yml`** — full-year pairs, for PRs to `main` **only after** `quality`,
   `tests`, and `golden-check` have all gone green for the commit (no wasted
-  full-year compute when a cheaper check already failed).
+  full-year compute when a cheaper check already failed). It is triggered by those
+  workflows completing (`workflow_run`), not by the pull request itself, so that
+  waiting for them costs no runner; its result reaches the pull request as a
+  `golden-year` commit status rather than as an entry in the checks list.
 
 ## Blessing (updating the goldens)
 

@@ -42,7 +42,11 @@ Note on the package layout:
     This module was split mechanically (zero behavior change) from a single 3,000-line
     ``building.py`` into a package: ``config.py`` holds ``BuildingConfig``,
     ``information.py`` holds ``BuildingInformation``, ``window.py`` holds ``Window`` and
-    ``building.py`` holds ``Building`` together with its ``BuildingState``. This
+    ``building.py`` holds ``Building`` together with its ``BuildingState``.
+    ``solar_gains.py`` joined them later: the static producer of the gains-through-windows
+    series, whose cache key carries a fingerprint of its own source and of the window optics
+    (``roadmap/cache_service_spec.md`` §3). It is not re-exported here -- a producer is
+    imported by its module, because that module object is what the key is computed from. This
     ``__init__`` re-exports all public names, so the public import path is stable:
     ``hisim.components.building.Building`` (and the other classes) keep resolving both
     for Python imports and for the fully-qualified classname strings stored in committed

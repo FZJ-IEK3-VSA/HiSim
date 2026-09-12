@@ -226,8 +226,7 @@ class DynamicConnectionResolver:
             feeds: The feeds addressed at it.
 
         Returns:
-            The resolved connections in deterministic order, each dispatching one carrying the
-            control port it was assigned.
+            The resolved connections in deterministic order.
 
         Raises:
             EnergySystemWiringError: On any feed condition of the error catalogue, and on a
@@ -238,7 +237,7 @@ class DynamicConnectionResolver:
         resolved = [self._resolve_feed(target_name, target, channels, feed) for feed in feeds]
         AggregatorPortChecker.check_participant_ports_are_unique(target_name, resolved)
         resolved.sort(key=lambda connection: connection.sort_key())
-        resolved = DispatchSignalPlanner(target_name, target).plan(resolved)
+        DispatchSignalPlanner(target_name, target).check(resolved)
         created = AggregatorPortChecker.check_port_names_are_free(target_name, target, resolved)
         try:
             getattr(target, self.RESOLUTION_HOOK)(list(resolved))

@@ -67,6 +67,18 @@ dispatch itself steers by, so both wiring paths report the same KPIs — the sev
 `SOLAR_THERMAL_SYSTEM`, and the car's `CAR_BATTERY` that already was) collapse into one table keyed by
 component type, because every one of them computed the same thing and differed only in what it was called.
 
+Removing the phantoms also removed the only thing adoption ever had to adopt, which is the branch's third
+commit. A dispatch block used to ask the aggregator for a *signal* at `(tags, weight)` and take over the
+port the constructor had already published for that participant, growing its own only where there was none
+(P3, `adopted_dispatch_output`). No aggregator publishes a dynamic output before resolution any more — a
+probe over all 36 committed twins finds the dispatch planner's "already published" table empty every time —
+so the field, its guard, the name-property branch it overruled, the resolver branch that set it and the
+port-collision exemption it needed are all deleted, and `created_dispatch_output_name` collapses into
+`dispatch_output_name` because a dispatch block's port is now always the one it creates. What survives is
+the *refusal*: a port the aggregator publishes that the runtime's tag-and-weight lookup would answer a
+claim with is `EF-2B`, in exactly the containment terms the runtime uses, rather than something to be
+absorbed — two ports for one signal is what this whole rule set exists to prevent.
+
 Two places that spelled the counter were respelled with it. `scripts/p3_parity_renamings.py` — the
 legacy→declarative table — keeps its seven EMS rows with their new legacy names and a comment block that
 tells the counter's story in the past tense; `tests/test_p3_parity.py`'s canary asserts the new spellings

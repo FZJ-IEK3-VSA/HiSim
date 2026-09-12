@@ -15,35 +15,27 @@ pin the rejections that make the rule unambiguous — a controlled participant w
 consumes leaves a mandatory input unfed, an author may not reach the derived output from the
 participant's side because that name is not in the file they are reading, and no two participants
 may end up sharing one control signal, which an aggregator matches by tags and weight and could
-therefore never tell apart. The ambiguity rejections — a shared claim, a signal another class
-owns, an aggregator already publishing two answers, and a published superset of a claim — are
-provoked on the resolver, because no realistic file arranges an aggregator's published signals
-that way today.
+therefore never tell apart. The ambiguity rejections — a claim two feeds share, and a claim a port
+the aggregator already publishes would answer — are provoked on the resolver, because nothing a
+file builds publishes a control signal before resolution any more (F-1) and no aggregator arranges
+its ports that way today.
 
 Each test states the failure mode it catches.
 """
 
 # clean
 
-import dataclasses
-from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar, Tuple
+from typing import ClassVar
 
-import pandas as pd
 import pytest
-from dataclasses_json import dataclass_json
 
 from hisim import loadtypes as lt
-from hisim.component import Component, SingleTimeStepValues
 from hisim.components.advanced_battery_bslib import Battery, BatteryConfig
 from hisim.components.controller_l2_energy_management_system import (
     EMSConfig,
     L2GenericEnergyManagementSystem,
 )
-from hisim.config import ComponentID, ConfigBase, DisplayConfig
-from hisim.config.channels import DispatchRule, DynamicConnectionChannel
-from hisim.dynamic_component import DynamicComponent
 from hisim.energy_system.channels import FeedRequest
 from hisim.energy_system.errors import EnergySystemWiringError
 from hisim.energy_system.executor import build_energy_system, run_energy_system
@@ -367,15 +359,15 @@ def test_two_participants_may_not_claim_one_control_signal() -> None:
 
 
 @pytest.mark.base
-def test_a_signal_another_participant_class_already_owns_is_refused() -> None:
-    """Catches a file quietly duplicating a signal an aggregator publishes for somebody else.
+def test_a_signal_the_aggregator_already_publishes_is_refused() -> None:
+    """Catches a file quietly duplicating a signal the aggregator already has a port for.
 
-    Adoption is what keeps a file from growing a second output beside one the aggregator's own
-    constructor made, and it is deliberately narrow: an output created *for* a participant class
-    serves that class only, because the registry drops the outputs of classes absent from the
-    system and adopting one across classes would hand a participant a port about to be pruned.
-    Where adoption is therefore impossible and creation would duplicate, the only honest answer
-    is a refusal that names the port and the class it belongs to.
+    A dispatch block used to take such a port over instead of growing a second one, because an
+    aggregator's constructor published a control output per participant class it declared a
+    default feed for. None does any more (F-1): before resolution a component built from a file
+    carries only its declared outputs, so a port answering a claim was grown outside the format
+    and the run would end up with two ports for one signal, which the runtime's tag-and-weight
+    lookup cannot tell apart. The refusal names the port so whoever grew it can be found.
     """
     ems = SignalCollisions.ems()
     ems.add_component_output(
@@ -385,7 +377,7 @@ def test_a_signal_another_participant_class_already_owns_is_refused() -> None:
         source_weight=SignalCollisions.BATTERY_WEIGHT,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        output_description="A signal the battery's feed must not take over.",
+        output_description="A signal the battery's feed must not collide with.",
     )
     resolver = DynamicConnectionResolver({"battery": SignalCollisions.battery("battery"), "ems": ems})
 
@@ -394,49 +386,18 @@ def test_a_signal_another_participant_class_already_owns_is_refused() -> None:
 
     assert caught.value.error_id.value == "EF-2B"
     assert "SignalOfSomebodyElse" in str(caught.value)
-    assert "SomeOtherParticipant" in str(caught.value)
-
-
-@pytest.mark.base
-def test_an_aggregator_already_publishing_two_answers_is_refused() -> None:
-    """Catches adoption blessing an ambiguity the aggregator already carries.
-
-    Two published ports at one (tags, weight) are indistinguishable to the runtime's lookup
-    before any file arrives; adopting the first would leave the second in the pairing lists,
-    which is the very duplicate the planner exists to refuse. The refusal names both ports so
-    the constructor that grew them can be fixed.
-    """
-    ems = SignalCollisions.ems()
-    for port_name in ("SignalA", "SignalB"):
-        ems.add_component_output(
-            source_output_name=port_name,
-            source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-            source_component_class=None,
-            source_weight=SignalCollisions.BATTERY_WEIGHT,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="one of two ports the runtime cannot tell apart",
-        )
-    resolver = DynamicConnectionResolver({"battery": SignalCollisions.battery("battery"), "ems": ems})
-
-    with pytest.raises(EnergySystemWiringError) as caught:
-        resolver.resolve_target("ems", [SignalCollisions.feed("battery")])
-
-    assert caught.value.error_id.value == "EF-2B"
-    assert "SignalA" in str(caught.value)
-    assert "SignalB" in str(caught.value)
+    assert "ELECTRICITY_TARGET" in str(caught.value)
 
 
 @pytest.mark.base
 def test_a_published_superset_of_a_claim_is_refused_instead_of_shadowed() -> None:
-    """Catches the planner's exact identity silently diverging from the runtime's containment.
+    """Catches a published port answering a claim it does not exactly match.
 
-    The planner treats two signals as one only when their tag sets are equal, but the runtime
-    lookup matches by containment: a published port whose tags strictly contain a claim's set at
-    the same weight is found by that lookup alongside whatever the claim produces, and the
-    pairing lists come out one entry too long. Such a port cannot come out of the format itself,
-    so meeting one means an imperative constructor built it — and the answer is a refusal naming
-    both tag sets, never a quietly grown duplicate.
+    The runtime lookup matches a signal by weight and tag *containment*, so a published port
+    whose tags contain a claim's set at the same weight is found by that lookup alongside the
+    port the claim creates, and the pairing lists come out one entry too long. Asking the
+    question in the runtime's own terms is what makes the superset as refusable as the exact
+    match, rather than something that slips past a stricter equality test.
     """
     ems = SignalCollisions.ems()
     ems.add_component_output(
@@ -460,343 +421,3 @@ def test_a_published_superset_of_a_claim_is_refused_instead_of_shadowed() -> Non
     assert caught.value.error_id.value == "EF-2B"
     assert "SupersetSignal" in str(caught.value)
     assert "containment" in str(caught.value)
-
-
-@pytest.mark.base
-def test_a_port_published_for_a_class_object_still_serves_that_class() -> None:
-    """Catches adoption being defeated by the type of the stored participant class.
-
-    Some imperative call sites hand the participant class over as the class object rather than
-    its name; stored verbatim it would never equal the class-name string the planner compares
-    against, the port would refuse every adoption, and a duplicate would grow beside it. The
-    planner normalises the identity to the name, so the object and the string mean one class.
-    """
-    ems = SignalCollisions.ems()
-    ems.add_component_output(
-        source_output_name="SignalStoredByClassObject",
-        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-        source_component_class=Battery,  # type: ignore[arg-type] # the imperative sites do this
-        source_weight=SignalCollisions.BATTERY_WEIGHT,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        output_description="a port whose participant class arrived as the class object",
-    )
-    resolver = DynamicConnectionResolver({"battery": SignalCollisions.battery("battery"), "ems": ems})
-
-    resolved = resolver.resolve_target("ems", [SignalCollisions.feed("battery")])
-
-    adopted = resolved[0].adopted_dispatch_output
-    assert adopted is not None
-    assert adopted.startswith("SignalStoredByClassObject"), (
-        "the numeric suffix is the aggregator's internal output counter, not a contract"
-    )
-
-
-@pytest.mark.base
-def test_an_adoption_without_a_dispatch_block_cannot_be_constructed() -> None:
-    """Catches the dangling state both name properties would silently hide.
-
-    An adopted port means something only for a dispatching connection: with the dispatch block
-    gone, dispatch_output_name and created_dispatch_output_name both answer None and the adopted
-    name sits on the record invisible to every consumer. The record refuses the combination at
-    construction, which also guards the dataclasses.replace escape hatch the planner uses.
-    """
-    ems = SignalCollisions.ems()
-    ems.add_component_output(
-        source_output_name="TheSignal",
-        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-        source_component_class=None,
-        source_weight=SignalCollisions.BATTERY_WEIGHT,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        output_description="the port the feed adopts",
-    )
-    resolver = DynamicConnectionResolver({"battery": SignalCollisions.battery("battery"), "ems": ems})
-    resolved = resolver.resolve_target("ems", [SignalCollisions.feed("battery")])
-    assert resolved[0].adopted_dispatch_output is not None
-
-    with pytest.raises(ValueError, match="dispatch"):
-        dataclasses.replace(resolved[0], dispatch=None)
-
-
-@dataclass_json
-@dataclass
-class MiniActuatorConfig(ConfigBase):
-    """Configuration of the echoing actuator of the adoption round-trip test.
-
-    The actuator draws one constant power and repeats whatever command it is given, so the
-    only knob it has is that constant draw. The class exists because the executor pairs a
-    component with the dataclass its constructor annotates, and a component without a config
-    class therefore cannot appear in a file at all.
-    """
-
-    component_id: ComponentID
-    idle_power_in_watt: float
-
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the component this configuration belongs to."""
-        return MiniActuator.get_full_classname()
-
-
-class MiniActuator(Component):
-    """The smallest controllable participant: one measured draw, one command it echoes.
-
-    Its power output is what the aggregator measures and its command input is what the
-    dispatch back-channel must reach; the echo output turns the received command into a result
-    column, which is the only way a file-driven test can observe what arrived at run time
-    without reaching into simulator internals.
-    """
-
-    #: The mandatory input the ``dispatch`` block of the aggregator's feed must end up feeding.
-    ControlInput: ClassVar[str] = "ControlInput"
-
-    #: The received command, written back out so the run's result table proves delivery.
-    ControlEcho: ClassVar[str] = "ControlEcho"
-
-    #: The constant draw the aggregator's feed measures.
-    PowerUsed: ClassVar[str] = "PowerUsed"
-
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: MiniActuatorConfig) -> None:
-        """Builds the actuator with its one input and two outputs.
-
-        Args:
-            my_simulation_parameters: The run's simulation parameters.
-            config: The actuator's configuration, carrying its identity and constant draw.
-        """
-        super().__init__(
-            name=config.component_id.key,
-            my_simulation_parameters=my_simulation_parameters,
-            my_config=config,
-            my_display_config=DisplayConfig(),
-        )
-        self.actuator_config = config
-        self.control_input = self.add_input(
-            self.component_name, self.ControlInput, lt.LoadTypes.ELECTRICITY, lt.Units.WATT, mandatory=True
-        )
-        self.echo_output = self.add_output(
-            self.component_name,
-            self.ControlEcho,
-            lt.LoadTypes.ELECTRICITY,
-            lt.Units.WATT,
-            output_description="The command the aggregator's adopted port delivered, repeated verbatim.",
-        )
-        self.power_output = self.add_output(
-            self.component_name,
-            self.PowerUsed,
-            lt.LoadTypes.ELECTRICITY,
-            lt.Units.WATT,
-            output_description="The constant draw the aggregator's feed measures.",
-        )
-
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Echoes the received command and reports the constant draw."""
-        stsv.set_output_value(self.echo_output, stsv.get_input_value(self.control_input))
-        stsv.set_output_value(self.power_output, self.actuator_config.idle_power_in_watt)
-
-    def i_prepare_simulation(self) -> None:
-        """No-op: the actuator needs no preparation."""
-
-    def i_save_state(self) -> None:
-        """No-op: the actuator is stateless."""
-
-    def i_restore_state(self) -> None:
-        """No-op: the actuator is stateless."""
-
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
-        """No-op: there is nothing to double-check about an echo."""
-
-
-@dataclass_json
-@dataclass
-class MiniAggregatorConfig(ConfigBase):
-    """Configuration of the steering aggregator of the adoption round-trip test.
-
-    The aggregator's whole behaviour is to send one constant command to every participant it
-    controls, so that constant is its only field beside the identity every configuration
-    carries.
-    """
-
-    component_id: ComponentID
-    steering_command_in_watt: float
-
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the component this configuration belongs to."""
-        return MiniAggregator.get_full_classname()
-
-
-class MiniAggregator(DynamicComponent):
-    """An aggregator whose constructor already publishes the actuator's control signal.
-
-    A realistic aggregator grows its dispatch outputs from the file's feeds; this one instead
-    publishes the port in ``__init__``, tagged and weighted exactly as the actuator's claim
-    will be and reserved for the actuator's class — the arrangement adoption exists for. Its
-    simulation code then finds the port the way every aggregator does, by tags and weight
-    through the shared bookkeeping, so a port that was adopted rather than created must behave
-    identically or the run fails.
-    """
-
-    #: The one channel this aggregator declares: a controlled consumer it must steer.
-    ACTUATION_CHANNEL: ClassVar[str] = "actuation"
-
-    #: The weight both the constructor's published port and the file's feed use; they must
-    #: agree for the port to be adoptable at all.
-    PARTICIPANT_WEIGHT: ClassVar[int] = 4
-
-    #: Base name of the constructor-published port; ``add_component_output`` appends the source
-    #: weight the port is dispatched on to it.
-    PUBLISHED_PORT_BASENAME: ClassVar[str] = "ConstructorGrownCommand"
-
-    CHANNELS: ClassVar[Tuple[DynamicConnectionChannel, ...]] = (
-        DynamicConnectionChannel(
-            key=ACTUATION_CHANNEL,
-            tags=frozenset(
-                {
-                    lt.ComponentType.BATTERY,
-                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
-                }
-            ),
-            load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT,
-            dispatch=DispatchRule.REQUIRED,
-            dispatch_tags=frozenset({lt.InandOutputType.ELECTRICITY_TARGET}),
-        ),
-    )
-
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: MiniAggregatorConfig) -> None:
-        """Builds the aggregator and publishes the port the file's feed is meant to adopt.
-
-        Args:
-            my_simulation_parameters: The run's simulation parameters.
-            config: The aggregator's configuration, carrying its identity and the command.
-        """
-        super().__init__(
-            my_component_inputs=[],
-            my_component_outputs=[],
-            name=config.component_id.key,
-            my_simulation_parameters=my_simulation_parameters,
-            my_config=config,
-            my_display_config=DisplayConfig(),
-        )
-        self.aggregator_config = config
-        self.add_component_output(
-            source_output_name=self.PUBLISHED_PORT_BASENAME,
-            source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-            source_component_class=MiniActuator.get_classname(),
-            source_weight=self.PARTICIPANT_WEIGHT,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="The control signal, published before any file is read.",
-        )
-
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Steers every controlled participant with the configured constant command.
-
-        The lookup goes through the same tag-and-weight search the real aggregators use, so it
-        finds the constructor-published port only through the bookkeeping the planner promised
-        to keep truthful when it adopted the port instead of growing a second one.
-        """
-        channel = self.get_channel(self.ACTUATION_CHANNEL)
-        signals = self.get_all_dynamic_outputs(
-            tags=[lt.ComponentType.BATTERY, *channel.dispatch_tags],
-            weight_counter=self.PARTICIPANT_WEIGHT,
-        )
-        for signal in signals:
-            stsv.set_output_value(signal, self.aggregator_config.steering_command_in_watt)
-
-    def i_prepare_simulation(self) -> None:
-        """No-op: the aggregator needs no preparation."""
-
-    def i_save_state(self) -> None:
-        """No-op: the aggregator is stateless."""
-
-    def i_restore_state(self) -> None:
-        """No-op: the aggregator is stateless."""
-
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
-        """No-op: a constant command needs no double-check."""
-
-
-class AdoptionRoundTrip:
-    """The two-component file whose dispatch block adopts a constructor-published port.
-
-    The file is the smallest one in which adoption can happen at all: the actuator, and the
-    aggregator whose constructor already publishes the matching signal. Everything the test
-    asserts — the adopted wire and the delivered command — is decided by this text plus the
-    two classes above.
-    """
-
-    #: The command the aggregator sends; chosen to be unmistakable among the zeros
-    #: an unwired signal would produce.
-    COMMAND_IN_WATT: ClassVar[float] = 321.0
-
-    #: The complete energy-system file.
-    TEXT: ClassVar[str] = f"""schema_version: 3
-name: adoption round trip
-components:
-  actuator:
-    class: tests.test_energy_system_dispatch.MiniActuator
-    config:
-      idle_power_in_watt: 100.0
-  mini_ems:
-    class: tests.test_energy_system_dispatch.MiniAggregator
-    config:
-      steering_command_in_watt: {COMMAND_IN_WATT}
-    inputs:
-      - from: actuator.PowerUsed
-        component_type: BATTERY
-        tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
-        weight: {MiniAggregator.PARTICIPANT_WEIGHT}
-        dispatch: {{target_input: ControlInput}}
-"""
-
-    @classmethod
-    def write(cls, directory: Path) -> Path:
-        """Writes the file into a test directory.
-
-        Args:
-            directory: The test's temporary directory.
-
-        Returns:
-            The path of the written file.
-        """
-        path = directory / "adoption_round_trip.energy_system.yaml"
-        path.write_text(cls.TEXT, encoding="utf-8")
-        return path
-
-
-@pytest.mark.base
-def test_an_adopted_dispatch_port_steers_its_participant_through_a_whole_run(tmp_path: Path) -> None:
-    """Catches an adopted port that exists on paper but carries nothing at run time.
-
-    The resolver tests above prove that adoption is decided correctly; none of them prove that
-    an adopted port is then actually wired to the participant and found by the aggregator's own
-    tag-and-weight lookup during simulation. If adoption dropped the back-wire, or the adopted
-    port's bookkeeping diverged from what the runtime searches, the actuator's mandatory input
-    would either fail the build or silently read zero — and the echo column is where either
-    mistake becomes visible as a number.
-    """
-    path = AdoptionRoundTrip.write(tmp_path)
-
-    built = run_energy_system(
-        path, Household.SHIPPED_PARAMETERS, result_directory=str(tmp_path / "results")
-    )
-
-    resolved = dict(built.wired.resolved_feeds)["mini_ems"]
-    assert len(resolved) == 1
-    connection = resolved[0]
-    assert connection.adopted_dispatch_output is not None
-    assert connection.adopted_dispatch_output.startswith(MiniAggregator.PUBLISHED_PORT_BASENAME)
-    assert connection.created_dispatch_output_name is None, "adoption must not also grow a port"
-    wires = {
-        f"{wire.source_name}.{wire.source_output} -> {wire.target_name}.{wire.target_input}"
-        for wire in built.wired.wires
-    }
-    assert f"mini_ems.{connection.dispatch_output_name} -> actuator.ControlInput" in wires
-
-    echo_table = pd.read_csv(tmp_path / "results" / "actuator_ControlEcho.csv", index_col=0)
-    echoed = echo_table[echo_table.columns[0]]
-    assert (echoed == AdoptionRoundTrip.COMMAND_IN_WATT).all(), (
-        "the actuator did not hear the command through the adopted port"
-    )

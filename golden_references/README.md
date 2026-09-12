@@ -72,3 +72,35 @@ locally produced goldens are not the canonical committed ones. A local run is
 sticky like the CI one — every value the gate would still accept stays exactly as
 committed, and nothing is dropped — so add `--force-rewrite` to see the fresh
 values verbatim.)
+
+## Seeing how the references moved
+
+The git history of this directory is a record of which KPI moved in which pull
+request. To draw it:
+
+```bash
+python scripts/golden_history.py                    # every pair, PNG + HTML
+python scripts/golden_history.py --pairs household_oil_building_sizer --since 2026-09-01
+```
+
+Output lands in `results/golden_history/` (gitignored): one figure per pair in both
+formats, an `index.html` linking them, a shared `plotly.min.js` the pages reference
+relatively, and one `moves.csv` — `commit, date, pr, pair, kpi, previous, value,
+relative_change` for every value that changed beyond the gate's tolerance, which is
+the greppable answer to "what moved when". Nothing is committed and no CI job runs it.
+
+A figure is one panel per KPI. The x axis is the commits that changed *this* pair's
+file, labelled with the date and the PR number; the y axis is the KPI's change
+against its first recorded value, in percent. A KPI whose first value is exactly `0`
+has no percentage, so its panel shows the absolute change and is marked `[abs]`.
+Non-numeric values (`null`, strings) are skipped and leave a gap. Panels are sorted
+with the largest total movement first — the three largest carry their rank — and a
+KPI that never moved is drawn in grey, so the eye lands on the movers.
+
+Renames are stitched back into one series through
+[`../scripts/golden_kpi_renames.py`](../scripts/golden_kpi_renames.py). To add one,
+find the commit that renamed the key (diff the key sets of two neighbouring golden
+commits), add the old and new spelling under the pair's stem with that commit and its
+PR, and run `pytest tests/test_golden_history.py` — it checks every old name against
+the real history and every new name against the files as they stand.
+

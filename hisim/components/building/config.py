@@ -77,8 +77,12 @@ class BuildingConfig(ConfigBase):
     subsidy_as_percentage_of_investment_costs: Optional[float]
 
     #: The weather this building is computed with, as ``WeatherConfig.identity()`` spells it. Sized
-    #: from the weather by the sizing engine, so the solar-gains cache key includes it.
-    #: See ``roadmap/pylpg_flakiness.md`` F7.
+    #: from the weather by the sizing engine (``roadmap/pylpg_flakiness.md`` F7). It exists because
+    #: the legacy solar-gains cache key was a hash of this config and nothing else, so without it two
+    #: buildings under different weathers shared one entry. The gains are keyed by their producer
+    #: now, under the weather's own artifact key, and this field is no longer part of that key -- but
+    #: it stays: it is sizing wire format, spelled out in every recorded energy-system twin and in the
+    #: generated schema, and removing it would move all of them.
     weather_identity: Sizable[str] = sized_field(rule=Size.WEATHER_IDENTITY, value_type=str)
 
     #: Sizing facts this config contributes to the scenario-wide fact pool.

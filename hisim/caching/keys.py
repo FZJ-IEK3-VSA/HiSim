@@ -16,8 +16,11 @@ The fingerprints need no declarations: they are read from the module's ``import`
 dynamic imports, and no imports of the component or simulator machinery, which would pull most of the
 package into the closure.
 
-No component uses this scheme yet. ``hisim.utils.build_cache_key_string`` produces the legacy key until
-each producer is extracted. This module imports the standard library only.
+The first component on this scheme is the weather: ``hisim.components.weather_calculation`` produces the
+processed weather series and ``Weather.i_prepare_simulation`` looks it up through
+:meth:`hisim.caching.client.CacheClient.lookup_producer`. Everything else still keys through
+``hisim.utils.build_cache_key_string``, the legacy key, until its producer is extracted too. This module
+imports the standard library only.
 """
 
 # clean

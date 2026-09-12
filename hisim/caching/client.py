@@ -4,7 +4,9 @@
 local directory, server, shared directory -- and falls back to computing. This phase implements the
 local tier only. It is already shaped as the client, and ``hisim.utils.get_cache_file`` already
 delegates to it, so that the later tiers can be added behind :meth:`CacheClient.lookup` without any
-component changing.
+component changing. A component that has been extracted into a producer goes through
+:meth:`CacheClient.lookup_producer` instead, which names the entry after the producer and its
+fingerprints (§3) rather than after the component and its configuration JSON.
 
 The local tier does what ``get_cache_file`` used to do inline: derive the filename from the component
 key and the hash of the key material, create the directory, and count an existing file as a hit only if
@@ -22,6 +24,7 @@ from dataclasses import dataclass
 from typing import ClassVar, Iterator
 
 from hisim import log
+from hisim.caching.keys import CacheKey
 from hisim.caching.local import CacheEntryMetadata, atomic_cache_write
 from hisim.caching.settings import CacheSettings
 
@@ -138,6 +141,33 @@ class CacheClient:
         os.makedirs(directory, exist_ok=True)
         path = os.path.join(directory, self.entry_filename(component_key, CacheEntryMetadata.hash_of(key_material)))
         return CacheEntry(path=path, exists=self._validated_local_hit(path), key_material=key_material)
+
+    def lookup_producer(self, key: CacheKey, default_directory: str) -> CacheEntry:
+        """Look a producer's artifact up under the key scheme of spec §3.
+
+        This is the entry point a migrated component uses instead of :func:`hisim.utils.get_cache_file`.
+        The difference is entirely in what names the entry: the artifact kind rather than the component
+        instance, and a digest over the producer's code fingerprint, its libraries and its calculation
+        DTO rather than over a configuration JSON. The entry therefore changes when the calculation
+        changes, and it is the same on every machine that runs the same code on the same inputs.
+
+        The directory is resolved here, because a producer has no reason to know about the
+        ``HISIM_CACHE_DIR`` override: the caller passes the simulation's own cache directory and the
+        settings decide whether something else takes its place.
+
+        Args:
+            key: the key, from :meth:`hisim.caching.keys.CacheKey.for_producer`.
+            default_directory: the directory to use unless the environment redirects it, normally
+                ``SimulationParameters.cache_dir_path``.
+
+        Returns:
+            CacheEntry: where the entry is or will be, and whether a validated one is there. On a miss,
+                the caller computes the artifact and writes it through :meth:`CacheEntry.writing`.
+        """
+        directory = self.settings.resolve_local_directory(default_directory)
+        if self.settings.local_directory is not None:
+            self.announce_environment_override(directory)
+        return self.lookup(key.artifact_kind, key.material, directory)
 
     @staticmethod
     def _validated_local_hit(path: str) -> bool:

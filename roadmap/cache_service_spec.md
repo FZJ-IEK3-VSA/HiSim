@@ -372,6 +372,10 @@ version coupling.
    fingerprints, atomic writes, `utils.get_cache_file` delegating. Pure refactor,
    no network, fixes the shared-filesystem race. Golden tests must stay green (all local keys
    change once due to the new schema — one-time full recompute, coordinated with a golden run).
+   2026-09-12: the weather series is the first producer on this scheme
+   (`hisim/components/weather_calculation.py`, artifact kind `weather_series`, looked up through
+   `CacheClient.lookup_producer`); its keys changed once, every other component still keys through
+   `utils.build_cache_key_string`.
 2. **Remote read/write tier** — `remote.py`, `client.py`, settings, circuit breaker; the two
    server endpoints (§2.1) + `/health`; static-token auth; enable on the cluster and in
    RenoVisor first (highest volume, simplest auth).

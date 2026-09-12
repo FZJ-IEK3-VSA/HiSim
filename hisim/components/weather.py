@@ -1,23 +1,40 @@
-""" Handles all the weather data processing. """
+""" Handles all the weather data processing.
+
+The processing itself lives next door, in :mod:`hisim.components.weather_calculation`: it is a static
+producer whose cache key carries a fingerprint of its own source, so a change to the way the series is
+computed can no longer be served from a cache written before it (the #628 cache finding, and
+``roadmap/cache_service_spec.md`` §3). What is left here is the component around that series -- its
+outputs, the location entry, the 24 h temperature forecast and the yearly arrays the PV system reads.
+"""
 
 # clean
-import csv
 import datetime
 import math
 import os
 from dataclasses import dataclass
-from enum import Enum, unique
+from enum import Enum
 from pathlib import PurePath
 from typing import Any, Dict, List, Optional, Union
 
 from dataclasses_json import dataclass_json
-import numpy as np
 import pandas as pd
-import pvlib
 
 from hisim import loadtypes as lt
 from hisim import log, utils
-from hisim.caching import atomic_cache_write
+from hisim.caching import CacheClient, CacheEntry, CacheKey
+# The module object itself is what the cache key is fingerprinted from: ``CacheKey.for_producer`` walks
+# its import closure and hashes the source of everything in it, so an edit to the calculation changes
+# the key without anyone declaring anything. The names below are re-exported for the configuration and
+# for every system setup that spells ``weather.WeatherDataSourceEnum``.
+from hisim.components import weather_calculation
+from hisim.components.weather_calculation import (
+    ARTIFACT_KIND,
+    WeatherDataSourceEnum,
+    WeatherSeriesInputs,
+    WeatherSourceFiles,
+    get_coordinates,
+    produce_weather_series,
+)
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, FactContribution, constructor, preset
 from hisim.component import Component, ComponentOutput, SingleTimeStepValues, OpexCostDataClass, CapexCostDataClass
 from hisim.simulationparameters import SimulationParameters
@@ -41,24 +58,6 @@ ID: http://hdl.handle.net/2128/21115
 The implementation of the tsib project can be found under the following repository:
 https://github.com/FZJ-IEK3-VSA/tsib
 """
-
-
-@unique
-class WeatherDataSourceEnum(str, Enum):
-    """Describes where the weather data is from. Used to choose the correct reading function.
-
-    Every member carries its own name as its value so that a serialized config
-    reads ``"DWD_TRY"`` instead of an opaque integer code. Only the member
-    identity matters at runtime; nothing in the weather module depends on an
-    ordinal.
-    """
-
-    DWD_TRY = "DWD_TRY"
-    NSRDB = "NSRDB"
-    NSRDB_15MIN = "NSRDB_15MIN"
-    DWD_10MIN = "DWD_10MIN"
-    ERA5 = "ERA5"
-    DWD_15MIN = "DWD_15MIN"
 
 
 class LocationEnum(Enum):
@@ -507,25 +506,6 @@ class WeatherConfig(ConfigBase):
         del ctx
         return {"weather_identity": config.identity()}
 
-    def _clear_non_key_fields(self, view: "WeatherConfig") -> None:
-        """Make ``source_path`` portable in the copy hashed into the weather cache key.
-
-        ``source_path`` selects the data file, so it stays in the key, but for a catalogue file it is an
-        absolute path that differs between checkouts. A file under the inputs directory is therefore spelled
-        relative to that directory with forward slashes
-        (``weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center``), which is the
-        same on every machine. A file outside the inputs directory keeps its absolute path: it is
-        machine-specific by nature, and shortening it to its file name would make two different files that
-        share a name collide in the cache.
-
-        Args:
-            view: the copy to adjust.
-        """
-        inputs_directory = os.path.abspath(utils.get_input_directory())
-        source = os.path.abspath(str(self.source_path))
-        if self._is_under(inputs_directory, source):
-            view.source_path = os.path.relpath(source, inputs_directory).replace(os.sep, "/")
-
     @staticmethod
     def _is_under(directory: str, path: str) -> bool:
         """Whether ``path`` lies inside ``directory``, both absolute.
@@ -826,154 +806,30 @@ class Weather(Component):
         self.last_timestep_with_update = timestep
 
     def i_prepare_simulation(self) -> None:
-        """Generates the lists to be used later."""
-        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        """Fetches the processed weather series -- from the cache when it is there, from the producer when it is not."""
         log.information("Weather config: " + self.weather_config.to_json())  # type: ignore
         location_dict = get_coordinates(
             filepath=self.weather_config.source_path,
             source_enum=self.weather_config.data_source,
         )
         self.simulation_repository.set_entry("weather_location", location_dict)
-        cachefound, cache_filepath = utils.get_cache_file(
-            self.config.component_id.name, self.weather_config, self.my_simulation_parameters
-        )
-        if cachefound:
-            # read cached files
+
+        calculation_inputs = self.build_calculation_inputs(location_dict)
+        entry = self.cache_entry(calculation_inputs)
+        if entry.exists:
+            log.information(f"Weather series cache hit: {entry.path}")
             # float_precision="round_trip": pandas' default CSV reader uses a fast, inexact float
             # parser, so without this a cached run and an uncached one are not the same run. See the
             # measurement in the commit that introduced this across the caches.
-            my_weather = pd.read_csv(
-                cache_filepath, sep=",", decimal=".", encoding="cp1252", float_precision="round_trip"
+            weather_series = pd.read_csv(
+                entry.path, sep=",", decimal=".", encoding="cp1252", float_precision="round_trip"
             )
-            self.temperature_list = my_weather["t_out"].tolist()
-            self.daily_average_outside_temperature_list_in_celsius = my_weather["t_out_daily_average"].tolist()
-            self.dry_bulb_list = self.temperature_list
-            self.dhi_list = my_weather["DHI"].tolist()
-            self.dni_list = my_weather["DNI"].tolist()  # self np.float64( maybe not needed? - Noah
-            self.dniextra_list = my_weather["DNIextra"].tolist()
-            self.ghi_list = my_weather["GHI"].tolist()
-            self.altitude_list = my_weather["altitude"].tolist()
-            self.azimuth_list = my_weather["azimuth"].tolist()
-            self.apparent_zenith_list = my_weather["apparent_zenith"].tolist()
-            self.wind_speed_list = my_weather["Wspd"].tolist()
-            try:
-                self.pressure_list = my_weather["Pressure"].tolist()
-            except KeyError:
-                log.warning("Weather key 'Pressure' not found in cache; falling back to zeros.")
-                self.pressure_list = [0] * len(self.wind_speed_list)
         else:
-            tmy_data = read_test_reference_year_data(
-                weatherconfig=self.weather_config,
-                simulation_parameters=self.my_simulation_parameters,
-            )
-    # todo: check if this should indeed be daily resample or if another time frequency would be needed.
-            if self.weather_config.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
-                dni = tmy_data["DNI"].resample("1min").asfreq().interpolate(method="linear")
-                temperature = tmy_data["T"].resample("1min").asfreq().interpolate(method="linear")
-                dhi = tmy_data["DHI"].resample("1min").asfreq().interpolate(method="linear")
-                ghi = tmy_data["GHI"].resample("1min").asfreq().interpolate(method="linear")
-                wind_speed = tmy_data["Wspd"].resample("1min").asfreq().interpolate(method="linear")
-                pressure = tmy_data["Pressure"].resample("1min").asfreq().interpolate(method="linear")
-            elif self.weather_config.data_source in (WeatherDataSourceEnum.DWD_10MIN, WeatherDataSourceEnum.DWD_15MIN):
-                dni = tmy_data["DNI"].resample("1min").asfreq().interpolate(method="linear")
-                temperature = tmy_data["T"].resample("1min").asfreq().interpolate(method="linear")
-                dhi = tmy_data["DHI"].resample("1min").asfreq().interpolate(method="linear")
-                ghi = tmy_data["GHI"].resample("1min").asfreq().interpolate(method="linear")
-                wind_speed = tmy_data["Wspd"].resample("1min").asfreq().interpolate(method="linear")
-                pressure = tmy_data["Pressure"].resample("1min").asfreq().interpolate(method="linear")
-            elif self.weather_config.data_source == WeatherDataSourceEnum.ERA5:
-                dni = tmy_data["DNI"].resample("1min").asfreq().interpolate(method="linear")
-                temperature = tmy_data["T"].resample("1min").asfreq().interpolate(method="linear")
-                dhi = tmy_data["DHI"].resample("1min").asfreq().interpolate(method="linear")
-                ghi = tmy_data["GHI"].resample("1min").asfreq().interpolate(method="linear")
-                wind_speed = tmy_data["Wspd"].resample("1min").asfreq().interpolate(method="linear")
-                pressure = tmy_data["Pressure"].resample("1min").asfreq().interpolate(method="linear")
-            else:
-                dni = self.interpolate(tmy_data["DNI"], self.my_simulation_parameters.year)
-                temperature = self.interpolate(tmy_data["T"], self.my_simulation_parameters.year)
-                dhi = self.interpolate(tmy_data["DHI"], self.my_simulation_parameters.year)
-                ghi = self.interpolate(tmy_data["GHI"], self.my_simulation_parameters.year)
-                wind_speed = self.interpolate(tmy_data["Wspd"], self.my_simulation_parameters.year)
-                pressure = self.interpolate(tmy_data["Pressure"], self.my_simulation_parameters.year)
-            # calculate extra terrestrial radiation- n eeded for perez array diffuse irradiance models
-            dni_extra = pd.Series(pvlib.irradiance.get_extra_radiation(dni.index), index=dni.index)  # type: ignore
-
-            solpos = pvlib.solarposition.get_solarposition(dni.index, location_dict["latitude"], location_dict["longitude"])  # type: ignore
-            altitude = solpos["elevation"]
-            azimuth = solpos["azimuth"]
-            apparent_zenith = solpos["apparent_zenith"]
-
-            if seconds_per_timestep != 60:
-                self.temperature_list = temperature.resample(str(seconds_per_timestep) + "s").mean().tolist()
-                self.dry_bulb_list = temperature.resample(str(seconds_per_timestep) + "s").mean().to_list()
-                self.calculate_daily_average_outside_temperature(
-                    temperaturelist=self.temperature_list,
-                    seconds_per_timestep=seconds_per_timestep,
-                )
-
-                self.dhi_list = dhi.resample(str(seconds_per_timestep) + "s").mean().tolist()
-                # np.float64( ## not sure what this is fore. python float and npfloat 64 are the same.
-                self.dni_list = dni.resample(str(seconds_per_timestep) + "s").mean().tolist()  # )  # type: ignore
-                self.dniextra_list = dni_extra.resample(str(seconds_per_timestep) + "s").mean().tolist()
-                self.ghi_list = ghi.resample(str(seconds_per_timestep) + "s").mean().tolist()
-                self.altitude_list = altitude.resample(str(seconds_per_timestep) + "s").mean().tolist()
-                self.azimuth_list = azimuth.resample(str(seconds_per_timestep) + "s").mean().tolist()
-                self.apparent_zenith_list = apparent_zenith.resample(str(seconds_per_timestep) + "s").mean().tolist()
-                self.wind_speed_list = wind_speed.resample(str(seconds_per_timestep) + "s").mean().tolist()
-                self.pressure_list = pressure.resample(str(seconds_per_timestep) + "s").mean().tolist()
-            else:
-                self.temperature_list = temperature.tolist()
-                self.dry_bulb_list = temperature.to_list()
-                self.calculate_daily_average_outside_temperature(
-                    temperaturelist=self.temperature_list,
-                    seconds_per_timestep=seconds_per_timestep,
-                )
-                self.dhi_list = dhi.tolist()
-                self.dni_list = dni.tolist()
-                self.dniextra_list = dni_extra.tolist()
-                self.ghi_list = ghi.tolist()
-                self.altitude_list = altitude.tolist()
-                self.azimuth_list = azimuth.tolist()
-                self.apparent_zenith_list = apparent_zenith.tolist()
-                self.wind_speed_list = wind_speed.resample(str(seconds_per_timestep) + "s").mean().tolist()
-                self.pressure_list = pressure.tolist()
-
-            solardata = [
-                self.dni_list,
-                self.dhi_list,
-                self.ghi_list,
-                self.temperature_list,
-                self.altitude_list,
-                self.azimuth_list,
-                self.apparent_zenith_list,
-                self.dry_bulb_list,
-                self.wind_speed_list,
-                self.pressure_list,
-                self.dniextra_list,
-                self.daily_average_outside_temperature_list_in_celsius,
-            ]
-
-            database = pd.DataFrame(
-                np.transpose(solardata),
-                columns=[
-                    "DNI",
-                    "DHI",
-                    "GHI",
-                    "t_out",
-                    "altitude",
-                    "azimuth",
-                    "apparent_zenith",
-                    "DryBulb",
-                    "Wspd",
-                    "Pressure",
-                    "DNIextra",
-                    "t_out_daily_average",
-                ],
-            )
-            with atomic_cache_write(
-                cache_filepath, utils.build_cache_key_string(self.weather_config, self.my_simulation_parameters)
-            ) as temporary_cache_filepath:
-                database.to_csv(temporary_cache_filepath)
+            log.information(f"Weather series cache miss: computing it and filing it at {entry.path}")
+            weather_series = produce_weather_series(calculation_inputs)
+            with entry.writing() as temporary_cache_filepath:
+                weather_series.to_csv(temporary_cache_filepath)
+        self.read_series(weather_series)
 
         # Publish the full-year weather series into this simulation's repository, unconditionally.
         # The PV system needs the whole year rather than the current timestep: it runs one
@@ -994,19 +850,81 @@ class Weather(Component):
         self.simulation_repository.set_entry(self.YEARLY_APPARENT_ZENITH, self.apparent_zenith_list)
         self.simulation_repository.set_entry(self.YEARLY_WIND_SPEED, self.wind_speed_list)
 
-    def interpolate(self, pd_database: Any, year: int) -> Any:
-        """Interpolates a time series."""
-        firstday = pd.Series(
-            [0.0],
-            index=[pd.to_datetime(datetime.datetime(year - 1, 12, 31, 23, 0), utc=True).tz_convert(tz="Europe/Berlin")],
+    def build_calculation_inputs(self, location_dict: Dict[str, Any]) -> WeatherSeriesInputs:
+        """Build the DTO the weather producer is a pure function of.
+
+        Everything the calculation depends on is extracted here from the configuration and the
+        simulation parameters, and nothing else: the data file enters as the hash of its contents
+        rather than as its path, and the simulated span only for the one data source whose reader is
+        sized by it. What the component keeps to itself -- its name, the building it belongs to, the
+        predictive-control flag, cost and display settings -- is not part of the calculation and
+        therefore not part of its key.
+
+        Args:
+            location_dict: the station header read by :func:`get_coordinates`.
+
+        Returns:
+            WeatherSeriesInputs: the producer's single argument.
+        """
+        data_source = self.weather_config.data_source
+        duration_in_days = (
+            int(self.my_simulation_parameters.duration.days)
+            if data_source in WeatherSeriesInputs.DURATION_DEPENDENT_SOURCES
+            else None
         )
-        lastday = pd.Series(
-            pd_database.iloc[-1],
-            index=[pd.to_datetime(datetime.datetime(year, 12, 31, 22, 59), utc=True).tz_convert(tz="Europe/Berlin")],
+        return WeatherSeriesInputs(
+            data_source=data_source,
+            source_content_hash=WeatherSourceFiles.content_hash(data_source, self.weather_config.source_path),
+            year=self.my_simulation_parameters.year,
+            seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
+            latitude_in_degrees=float(location_dict["latitude"]),
+            longitude_in_degrees=float(location_dict["longitude"]),
+            duration_in_days=duration_in_days,
+            source_path=self.weather_config.source_path,
         )
-        pd_database = pd.concat([pd_database, firstday, lastday])
-        pd_database = pd_database.sort_index()
-        return pd_database.resample("1min").asfreq().interpolate(method="linear")
+
+    def cache_entry(self, calculation_inputs: WeatherSeriesInputs) -> CacheEntry:
+        """Look the produced series up in the cache under the key of the producer that makes it.
+
+        The key is ``sha256(artifact kind : code fingerprint : third-party fingerprint : DTO JSON)``
+        (``roadmap/cache_service_spec.md`` §3). The two fingerprints are read from the producer
+        module's import closure, so an edit to the calculation invalidates the entry by itself -- the
+        thing the weather cache did not do when #628 fixed the direct normal irradiance and CI, running
+        on a restored cache, reported all 24 golden pairs unchanged.
+
+        Args:
+            calculation_inputs: the DTO from :meth:`build_calculation_inputs`.
+
+        Returns:
+            CacheEntry: where the entry is or will be, and whether it is there.
+        """
+        key = CacheKey.for_producer(ARTIFACT_KIND, weather_calculation, calculation_inputs)
+        return CacheClient.from_environment().lookup_producer(key, self.my_simulation_parameters.cache_dir_path)
+
+    def read_series(self, weather_series: pd.DataFrame) -> None:
+        """Take the component's per-timestep lists out of the produced frame.
+
+        The same reading serves a cache hit and a fresh computation, so the two cannot drift apart.
+
+        Args:
+            weather_series: the frame from the cache or from the producer.
+        """
+        self.temperature_list = weather_series["t_out"].tolist()
+        self.daily_average_outside_temperature_list_in_celsius = weather_series["t_out_daily_average"].tolist()
+        self.dry_bulb_list = weather_series["DryBulb"].tolist()
+        self.dhi_list = weather_series["DHI"].tolist()
+        self.dni_list = weather_series["DNI"].tolist()
+        self.dniextra_list = weather_series["DNIextra"].tolist()
+        self.ghi_list = weather_series["GHI"].tolist()
+        self.altitude_list = weather_series["altitude"].tolist()
+        self.azimuth_list = weather_series["azimuth"].tolist()
+        self.apparent_zenith_list = weather_series["apparent_zenith"].tolist()
+        self.wind_speed_list = weather_series["Wspd"].tolist()
+        try:
+            self.pressure_list = weather_series["Pressure"].tolist()
+        except KeyError:
+            log.warning("Weather key 'Pressure' not found in cache; falling back to zeros.")
+            self.pressure_list = [0] * len(self.wind_speed_list)
 
     def calc_sun_position(self, latitude_deg, longitude_deg, year, hoy):
         """Calculates the Sun Position for a specific hour and location.
@@ -1073,21 +991,6 @@ class Weather(Component):
         """Calculates the sun position."""
         return self.altitude_list[hoy], self.azimuth_list[hoy]
 
-    def calculate_daily_average_outside_temperature(
-        self, temperaturelist: List[float], seconds_per_timestep: int
-    ) -> List[float]:
-        """Calculate the daily average outside temperatures."""
-        timestep_24h = int(24 * 3600 / seconds_per_timestep)
-        total_number_of_timesteps_temperature_list = len(temperaturelist)
-        self.daily_average_outside_temperature_list_in_celsius = []
-        start_index = 0
-        for index in range(0, total_number_of_timesteps_temperature_list):
-            daily_average_temperature = float(np.mean(temperaturelist[start_index : start_index + timestep_24h]))
-            if index == start_index + timestep_24h:
-                start_index = index
-            self.daily_average_outside_temperature_list_in_celsius.append(daily_average_temperature)
-        return self.daily_average_outside_temperature_list_in_celsius
-
     def get_cost_opex(
         self,
         all_outputs: List,
@@ -1110,324 +1013,3 @@ class Weather(Component):
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         return []
-
-
-def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
-    """Reads a test reference year file and gets the GHI, DHI and DNI from it.
-
-    Based on the tsib project @[tsib-kotzur] (Check header)
-    """
-    # get the correct file path
-    # filepath = os.path.join(utils.HISIMPATH["weather"][location])
-
-    if source_enum == WeatherDataSourceEnum.NSRDB_15MIN:
-        with open(filepath, encoding="utf-8") as csvfile:
-            spamreader = csv.reader(csvfile)
-            for i, row in enumerate(spamreader):
-                if i == 1:
-                    location_name = row[1]
-                    lat = float(row[5])
-                    lon = float(row[6])
-                elif i > 1:
-                    break
-
-    elif source_enum in (WeatherDataSourceEnum.DWD_10MIN, WeatherDataSourceEnum.DWD_15MIN):
-        with open(filepath, encoding="utf-8") as csvfile:
-            spamreader = csv.reader(csvfile)
-            for i, row in enumerate(spamreader):
-                if i == 1:
-                    location_name = row[0]
-                    lat = float(row[1])
-                    lon = float(row[2])
-                elif i > 1:
-                    break
-
-    elif source_enum == WeatherDataSourceEnum.ERA5:
-        with open(filepath, encoding="utf-8") as csvfile:
-            spamreader = csv.reader(csvfile)
-            for i, row in enumerate(spamreader):
-                if i == 1:
-                    location_name = row[0]
-                    lat = float(row[1])
-                    lon = float(row[2])
-                elif i > 1:
-                    break
-
-    else:
-        # get the geoposition
-        with open(filepath + ".dat", encoding="utf-8") as file_stream:
-            lines = file_stream.readlines()
-            location_name = lines[0].split(maxsplit=2)[2].replace("\n", "")
-            lat = float(lines[1][20:37])
-            lon = float(lines[2][15:30])
-    return {"name": location_name, "latitude": lat, "longitude": lon}
-    # self.index = pd.date_range(f"{year}-01-01 00:00:00", periods=60 * 24 * 365, freq="T", tz="Europe/Berlin")
-
-
-def read_test_reference_year_data(weatherconfig: WeatherConfig, simulation_parameters: SimulationParameters) -> Any:
-    """Reads a test reference year file and gets the GHI, DHI and DNI from it.
-
-    Based on the tsib project @[tsib-kotzur] (Check header)
-    """
-    # get the correct file path
-    filepath = os.path.join(weatherconfig.source_path)
-
-    if weatherconfig.data_source == WeatherDataSourceEnum.NSRDB:
-        data = read_nsrdb_data(filepath, simulation_parameters.year)
-    elif weatherconfig.data_source == WeatherDataSourceEnum.DWD_TRY:
-        data = read_dwd_try_data(filepath, simulation_parameters.year)
-    elif weatherconfig.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
-        data = read_nsrdb_15min_data(filepath, simulation_parameters.year)
-    elif weatherconfig.data_source == WeatherDataSourceEnum.DWD_10MIN:
-        data = read_dwd_10min_data(filepath, simulation_parameters.year)
-    elif weatherconfig.data_source == WeatherDataSourceEnum.DWD_15MIN:
-        data = read_dwd_15min_data(filepath, simulation_parameters)
-    elif weatherconfig.data_source == WeatherDataSourceEnum.ERA5:
-        data = read_era5_data(filepath, simulation_parameters.year)
-    else:
-        raise ValueError(f"Unsupported weather data source: {weatherconfig.data_source}")
-
-    return data
-
-
-def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
-    """Reads the DWD Test Reference Year (TRY) data."""
-
-    # get the geoposition
-    with open(filepath + ".dat", encoding="utf-8") as file_stream:
-        lines = file_stream.readlines()
-        lat_in_degrees = float(lines[1][20:37])
-        lon_in_degrees = float(lines[2][15:30])
-    # check if time series data already exists as .csv with DNI
-    if os.path.isfile(filepath + ".csv"):
-        data = pd.read_csv(filepath + ".csv", index_col=0, parse_dates=True, sep=";", decimal=",")
-        data.index = pd.to_datetime(data.index, utc=True).tz_convert("Europe/Berlin")
-    # else read from .dat and calculate DNI etc.
-    else:
-        # get data
-        data = pd.read_csv(filepath + ".dat", sep=r"\s+", skiprows=list(range(0, 31)))
-
-        data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="h", tz="Europe/Berlin")
-        data["GHI"] = data["D"] + data["B"]
-        data = data.rename(
-            columns={
-                "D": "DHI",
-                "t": "T",
-                "WG": "Wspd",
-                "MM": "Month",
-                "DD": "Day",
-                "HH": "Hour",
-                "p": "Pressure",
-                "WR": "Wdir",
-            }
-        )
-
-        # calculate direct normal
-        data["DNI"] = calculate_direct_normal_irradiance_in_watt_per_square_meter(data["B"], lon_in_degrees, lat_in_degrees)
-    return data
-
-
-def read_nsrdb_data(filepath: str, year: int) -> pd.DataFrame:
-    """Reads a set of NSRDB data."""
-    # get data
-    data = pd.read_csv(filepath + ".dat", sep=",", skiprows=list(range(0, 11)))
-    data = data.drop(data.index[8761:8772])
-    data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="h", tz="Europe/Berlin")
-    data = data.rename(
-        columns={
-            "DHI": "DHI",
-            "Temperature": "T",
-            "Wind Speed": "Wspd",
-            "MM": "Month",
-            "DD": "Day",
-            "HH": "Hour",
-            "Pressure": "Pressure",
-            "Wind Direction": "Wdir",
-            "GHI": "GHI",
-            "DNI": "DNI",
-        }
-    )
-    return data
-
-
-def read_nsrdb_15min_data(filepath: str, year: int) -> pd.DataFrame:
-    """Reads a set of NSRDB data in 15 min resolution."""
-    data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
-    # get data
-    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=24 * 4 * 365, freq="900s", tz="UTC")
-    data = data.rename(
-        columns={
-            "Temperature": "T",
-            "Wind Speed": "Wspd",
-        }
-    )
-    return data
-
-
-def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
-    """Reads a set of DWD data in 10 min resolution.
-
-    https://github.com/earthobservations/wetterdienst/tree/main
-    """
-
-    # get location
-    location = pd.read_csv(  # type: ignore
-        filepath,
-        nrows=1,
-        skiprows=1,
-        header=None,
-        names=pd.read_csv(filepath, nrows=1).columns,
-    )
-    longitude_in_degrees = location["longitude"][0]
-    latitude_in_degrees = location["latitude"][0]
-
-    # get data
-    data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
-    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=24 * 6 * 365, freq="600s", tz="UTC")
-    data = data.rename(
-        columns={
-            "diffuse_irradiance": "DHI",
-            "temperature": "T",
-            "wind_speed": "Wspd",
-            "month": "Month",
-            "day": "Day",
-            "hour": "Hour",
-            "minute": "Minutes",
-            "pressure": "Pressure",
-            "wind_direction": "Wdir",
-            "global_irradiance": "GHI",
-        }
-    )
-    # calculate direct normal
-    data["direct_horizontal_irradiance"] = data["GHI"] - data["DHI"]
-    data["DNI"] = calculate_direct_normal_irradiance_in_watt_per_square_meter(data["direct_horizontal_irradiance"], longitude_in_degrees, latitude_in_degrees)
-
-    return data
-
-
-def read_dwd_15min_data(filepath: str, simulation_parameters: SimulationParameters) -> pd.DataFrame:
-    """Reads a set of DWD data in 15 min resolution.
-
-    https://github.com/earthobservations/wetterdienst/tree/main
-    """
-
-    # get location
-    location = pd.read_csv(  # type: ignore
-        filepath,
-        nrows=1,
-        skiprows=1,
-        header=None,
-        names=pd.read_csv(filepath, nrows=1).columns,
-    )
-    longitude_in_degrees = location["longitude"][0]
-    latitude_in_degrees = location["latitude"][0]
-
-    # get data
-    data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
-
-    data.index = pd.date_range(
-        f"{simulation_parameters.year}-01-01 00:00:00",
-        periods=24 * 4 * int(simulation_parameters.duration.days),
-        freq="900s",
-        tz="UTC",
-    )
-
-    data = data.rename(
-        columns={
-            "diffuse_irradiance": "DHI",
-            "temperature": "T",
-            "wind_speed": "Wspd",
-            "month": "Month",
-            "day": "Day",
-            "hour": "Hour",
-            "minute": "Minutes",
-            "pressure": "Pressure",
-            "wind_direction": "Wdir",
-            "global_irradiance": "GHI",
-        }
-    )
-    # calculate direct normal
-    data["direct_horizontal_irradiance"] = data["GHI"] - data["DHI"]
-    data["DNI"] = calculate_direct_normal_irradiance_in_watt_per_square_meter(data["direct_horizontal_irradiance"], longitude_in_degrees, latitude_in_degrees)
-
-    return data
-
-
-def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
-    """Reads a set of era5 in 60 min resolution.
-
-    https://cds.climate.copernicus.eu/cdsapp#!/dataset/reanalysis-era5-single-levels?tab=overview
-    """
-
-    # get location
-    location = pd.read_csv(  # type: ignore
-        filepath,
-        nrows=1,
-        skiprows=1,
-        header=None,
-        names=pd.read_csv(filepath, nrows=1).columns,
-    )
-    longitude_in_degrees = location["longitude"][0]
-    latitude_in_degrees = location["latitude"][0]
-
-    # get data
-    data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
-    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=8760, freq="h", tz="UTC")
-    data = data.rename(
-        columns={
-            "month": "Month",
-            "day": "Day",
-            "hour": "Hour",
-            "minute": "Minutes",
-            "temperature": "T",
-            "pressure": "Pressure",
-            "wind_direction": "Wdir",
-            "wind_speed": "Wspd",
-            "global_irradiance": "GHI",
-        }
-    )
-    # calculate direct normal
-    data["DHI"] = data["GHI"] - data["direct_irradiance"]
-    data["DNI"] = calculate_direct_normal_irradiance_in_watt_per_square_meter(data["direct_irradiance"], longitude_in_degrees, latitude_in_degrees)
-
-    return data
-
-
-def calculate_direct_normal_irradiance_in_watt_per_square_meter(
-    direct_horizontal_irradiance_in_watt_per_square_meter: pd.Series,
-    lon_in_degrees: float,
-    lat_in_degrees: float,
-    zenith_tol_in_degrees: float = 87.0,
-) -> pd.Series:
-    """Calculates the direct NORMAL irradiance in W/m² from the direct horizontal irradiance in W/m² using PV lib.
-
-    Based on the tsib project @[tsib-kotzur] (Check header)
-
-    Parameters
-    ----------
-    direct_horizontal_irradiance_in_watt_per_square_meter: pd.Series with time index
-        Direct horizontal irradiance in W/m²
-    lon_in_degrees: float
-        Longitude of the location in degrees
-    lat_in_degrees: float
-        Latitude of the location in degrees
-    zenith_tol_in_degrees: float, optional
-        Avoid cosines of values above a certain zenith angle in degrees in order to avoid division by zero.
-
-    Returns
-    -------
-    dni_in_watt_per_square_meter: pd.Series
-        Direct normal irradiance in W/m²
-
-    """
-
-    solar_pos = pvlib.solarposition.get_solarposition(
-        direct_horizontal_irradiance_in_watt_per_square_meter.index, lat_in_degrees, lon_in_degrees
-    )
-    solar_pos["apparent_zenith"][solar_pos.apparent_zenith > zenith_tol_in_degrees] = zenith_tol_in_degrees
-    dni_in_watt_per_square_meter = direct_horizontal_irradiance_in_watt_per_square_meter.div(
-        solar_pos["apparent_zenith"].apply(math.radians).apply(math.cos)
-    )
-    if sum(dni_in_watt_per_square_meter.isnull()) > 0:
-        raise ValueError("Something went wrong...")
-    return dni_in_watt_per_square_meter

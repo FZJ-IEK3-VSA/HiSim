@@ -70,9 +70,9 @@ class TariffProviderConfig(ConfigBase):
     publishes under are named `...FORECAST24H` and every consumer reads exactly 24 hours, so a
     knob setting anything else would have been a promise nothing keeps.
 
-    As a `dataclasses_json` `ConfigBase` dataclass it is also the JSON-mode surface of this
-    component:
-    a `*.scenario.json` names `TariffProvider.get_full_classname()` and supplies these fields.
+    As a `dataclasses_json` `ConfigBase` dataclass it is also the declarative surface of this
+    component: an `*.energy_system.yaml` names `TariffProvider`'s class and supplies these fields
+    in its `config` block.
     """
 
     component_id: ComponentID

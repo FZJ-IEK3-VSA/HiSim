@@ -80,22 +80,31 @@ def test_the_new_mode_accepts_both_simulation_parameter_spellings() -> None:
 
 
 @pytest.mark.base
-def test_the_two_older_modes_still_claim_what_they_claimed() -> None:
-    """Catches the new dispatch stealing an argument from the Python or the v1 JSON mode.
+def test_the_python_mode_still_claims_what_it_claimed() -> None:
+    """Catches the energy-system dispatch stealing an argument from the Python mode.
 
-    Nothing released may change: a ``.py`` first argument is still a Python setup and a ``.json``
-    first argument is still a v1 scenario, whatever the second argument happens to be.
+    A ``.py`` first argument is still a Python setup, whatever the second argument happens to be.
     """
     root = Path(__file__).resolve().parents[1]
     setup = root / "system_setups" / "basic_household.py"
-    scenario = root / "system_setups" / "basic_household.scenario.json"
-    parameters = root / "system_setups" / "2021_minutely_plots.simulation.json"
 
     python_mode = validate_args(parsed(str(setup)))
-    json_mode = validate_args(parsed(str(scenario), str(parameters)))
 
     assert python_mode["mode"] == "python" and python_mode["module_file"] == str(setup)
-    assert json_mode["mode"] == "json" and json_mode["scenario"] == str(scenario)
+
+
+@pytest.mark.base
+def test_a_json_first_argument_belongs_to_no_mode() -> None:
+    """Catches a ``.json`` first argument being silently accepted after the v1 scenarios retired.
+
+    The v1 ``*.scenario.json`` path is gone, so a parameters file handed over as the *first*
+    argument — the mistake the old mode made plausible — has to be reported rather than parsed.
+    """
+    root = Path(__file__).resolve().parents[1]
+    parameters = root / "system_setups" / "2021_minutely_plots.simulation.json"
+
+    with pytest.raises(ValueError, match="First argument must be"):
+        validate_args(parsed(str(parameters), str(Shipped.HOUSEHOLD)))
 
 
 @pytest.mark.base

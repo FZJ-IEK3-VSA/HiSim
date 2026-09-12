@@ -23,7 +23,7 @@ The sweep is incremental because it has to be. At roughly 150 runs a day, each w
 jobs, a full re-read would want some 9000 requests where ``GITHUB_TOKEN`` allows 1000 an hour.
 So the previous sweep's index is downloaded from its own artifact, only runs newer than its
 watermark are fetched, and the result is pruned to the window and uploaded again. That is also
-why it runs hourly rather than nightly: the four golden workflows alone upload 88 resource
+why it runs hourly rather than nightly: the three golden workflows alone upload 66 resource
 artifacts per push to main, which one sweep a day cannot collect, while an hour in which
 nothing was pushed costs a handful of requests. Memory records are swept for the default
 branch and for flagged jobs rather than for everything; a pull request's own numbers are in

@@ -92,8 +92,8 @@ We are moving **to a REST job-distribution model**:
   **independent**. Dependencies, if ever needed, are a future extension.
 - Not multi-tenant with per-user auth/RBAC. A single shared bearer token guards the
   mutating API (the fleet runs inside the trusted cluster network); reads are open (§11).
-- Not responsible for **generating** scenarios. As today, an external script produces
-  the payloads; the harness only distributes and runs them.
+- Not responsible for **generating** the systems it runs. As today, an external script
+  produces the payloads; the harness only distributes and runs them.
 - Not a replacement for Slurm scheduling — Slurm still allocates nodes; the harness
   layers a fine-grained job queue on top of the coarse node allocation.
 
@@ -383,8 +383,9 @@ class Runner(Protocol):
 
 - Runners are registered in a registry (dict keyed by name; optionally discoverable via
   setuptools entry points so external programs can plug in without editing the harness).
-- **`HiSimRunner`** wraps the existing `run_one.run_single(scenario, sim_params,
-  result_dir)` — no behavioural change to how a HiSim sim executes.
+- **`HiSimRunner`** wraps `run_one.run_single(energy_system, sim_params, result_dir)`,
+  which runs the energy-system file through `hisim.energy_system.executor`. (It wrapped
+  the v1 `*.scenario.json` path until those files retired on 2026-09-12.)
 - **`SubprocessRunner`** (built-in, fully generic): `run()` builds an argv from the
   payload and `subprocess.run()`s it, writing into `result_dir`. This gives the
   "arbitrary command per job" capability for non-Python programs (it forgoes the
@@ -630,9 +631,9 @@ logging DB.
 |--------|-------|
 | `id` | PK |
 | `runner` | runner name (e.g. `hisim`) |
-| `payload` | JSON blob passed to `Runner.run` (e.g. `{scenario, sim_params}`) |
+| `payload` | JSON blob passed to `Runner.run` (e.g. `{energy_system, sim_params}`) |
 | `batch_id` | submit batch (nullable); scopes dedup and groups jobs on the dashboard |
-| `dedup_key` | nullable — idempotent submit (e.g. the scenario path); `UNIQUE(batch_id, dedup_key)`, so re-running the same scenarios in a **new batch** is not blocked by an old run |
+| `dedup_key` | nullable — idempotent submit (e.g. the energy-system path); `UNIQUE(batch_id, dedup_key)`, so re-running the same systems in a **new batch** is not blocked by an old run |
 | `label` | optional human label, used in result-dir naming and dashboard |
 | `priority` | integer, higher leased first (default 0) — enables lease ordering |
 | `lease_id` | client-generated id of the lease call that leased this row (for idempotent lease replay, §7) |
@@ -1046,12 +1047,12 @@ lease.
   **job array** (or a loop of `sbatch`) of M worker jobs; each grabs its allocation and
   joins the queue. Scale up mid-run by submitting more; scale down by cancelling — the
   server requeues anything in flight (fenced, §5.1).
-- **Submit CLI** — `python -m hisim.hpc_harness submit --runner hisim --batch run123
-  --scenario-dir … --glob '*.scenario.json' --sim-params …` builds payloads and
+- **Submit CLI** — `python scripts/hpc_harness/submit_energy_systems.py --batch run123
+  --energy-system-dir energy_systems --name-filter … --sim-params …` builds payloads and
   `POST /jobs` to the server (run from a login node). Idempotent via
-  `dedup_key = scenario path` **within the batch**; a new `--batch` name re-runs the same
-  scenarios without colliding with a previous run (default batch name: the scenario-dir
-  basename + date).
+  `dedup_key = energy-system path` **within the batch**; a new `--batch` name re-runs the
+  same systems without colliding with a previous run (default batch name:
+  `energy-systems-<name-filter>-<date>`).
 
 ### 13.1 Autoscaler (single-core workers)
 

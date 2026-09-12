@@ -61,7 +61,10 @@ open, so nothing survives only in a conversation. Items are removed when done, n
 
 - P6 tears down the parity rig (R11.8 amended; AC-P3.20 moved there) and decides which setups the rig's
   evidence promotes into the permanent full-year gate.
-- v1 scenario JSONs, `json_executor.py` and `scenario-json-freshness.yml` retire in P5 (Q-P3.4).
+- ~~v1 scenario JSONs, `json_executor.py` and `scenario-json-freshness.yml` retire in P5 (Q-P3.4).~~
+  **Done 2026-09-12**, in P4 rather than P5 (owner): retired together with `hisim_convert_to_json.py`,
+  `scripts/regenerate_scenario_jsons.py` and `golden-json-check.yml`, because every setup has a
+  recorded twin and the YAML gates cover what the JSON pair covered, at ~48 CI minutes per PR less.
 - The `cars` field on `UtspLpgConnectorConfig` is dead (declared, read by nothing) — removal is a small
   serialization change with a scenario regeneration, noted 2026-09-05 during the #625 review.
 

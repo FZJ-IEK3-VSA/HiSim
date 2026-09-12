@@ -227,32 +227,6 @@ def test_a_vacuous_identity_is_refused_like_auto() -> None:
 
 
 @pytest.mark.base
-def test_a_stale_identity_literal_in_a_scenario_is_refused() -> None:
-    """The scenario executor refuses a recorded identity that disagrees with the file's own provider.
-
-    On the JSON path the identities are frozen literals; a user who edits the weather block by hand
-    and forgets the literal would silently reuse cache entries computed for the old weather.
-
-    Catches: the cross-check being dropped, or failing to find the provider through its
-    ``SIZING_CONTRIBUTIONS``.
-    """
-    from hisim.json_executor import _verify_identity_literals  # pylint: disable=import-outside-toplevel
-
-    weather = WeatherConfig.get_default(location_entry=LocationEnum.AACHEN)
-    building = Keys.sized_from(BuildingConfig.preset_standard("Building"), weather_identity=weather.identity())
-
-    _verify_identity_literals([weather, building])  # matching literal passes
-
-    seville = WeatherConfig.get_default(location_entry=LocationEnum.SEVILLE)
-    stale = Keys.sized_from(BuildingConfig.preset_standard("Building"), weather_identity=seville.identity())
-    with pytest.raises(ValueError, match="stale"):
-        _verify_identity_literals([weather, stale])
-
-    # With two providers no single expected value exists, so the literal is taken as given.
-    _verify_identity_literals([weather, seville, stale])
-
-
-@pytest.mark.base
 def test_a_building_cannot_be_built_without_knowing_its_weather() -> None:
     """A building whose ``weather_identity`` is still ``AUTO`` is refused at construction.
 

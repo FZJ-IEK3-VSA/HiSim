@@ -1,11 +1,13 @@
-"""Unit tests for :func:`hisim.hisim_convert_to_json.get_description_from_py`.
+"""Unit tests for :func:`hisim.hisim_main.get_description_from_py`.
 
 ``get_description_from_py`` reads only the first line of a Python setup file and
-strips a leading triple-double-quote or triple-single-quote delimiter. It is the
-only self-contained,
-deterministic function in ``hisim_convert_to_json`` (the others require a full
-simulator), so these are pure-function tests using pytest's ``tmp_path`` fixture:
-no mocking, no simulator, no network.
+strips a leading triple-double-quote or triple-single-quote delimiter. It is what
+puts a setup's one-line docstring into the result directory's name and into the
+recorded twin's ``description``, and it is self-contained and deterministic, so
+these are pure-function tests using pytest's ``tmp_path`` fixture: no mocking, no
+simulator, no network. (A second copy of it lived in ``hisim_convert_to_json``,
+which these tests imported until that module retired with the v1 scenario JSONs on
+2026-09-12.)
 
 The function uses ``str.replace(quote_type, '')`` (no ``count`` argument), which
 removes *every* occurrence of the delimiter on the first line, not only the
@@ -19,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from hisim.hisim_convert_to_json import get_description_from_py
+from hisim.hisim_main import get_description_from_py
 
 
 def _write_first_line(tmp_path: Path, first_line: str) -> Path:

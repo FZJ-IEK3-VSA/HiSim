@@ -42,8 +42,6 @@ jobs:
             marker: "buildingtest"
           - name: extendedbase
             marker: "extendedbase"
-          - name: jsonconfig
-            marker: "jsonconfig"
           - name: postprocessingoptions
             marker: "postprocessingoptions"
             durations: "40"
@@ -52,7 +50,7 @@ jobs:
           - name: utsp
             marker: "utsp"
           - name: others
-            marker: "not base and not buildingtest and not system_setups and not extendedbase and not utsp and not jsonconfig and not postprocessingoptions"
+            marker: "not base and not buildingtest and not system_setups and not extendedbase and not utsp and not postprocessingoptions"
             allow_empty: "true"
 
     steps:

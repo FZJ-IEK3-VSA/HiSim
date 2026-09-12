@@ -3,8 +3,9 @@
 This module provides :func:`setup_function`, the entry point that assembles a
 complete HiSim household simulation built around an oil-fired heating system.
 It is run through the documented HiSim entry points -- ``hisim_main.py`` (to
-execute a simulation) and ``hisim_convert_to_json.py`` (to export the setup to
-a JSON scenario) -- which import the module and invoke ``setup_function``.
+execute a simulation) and ``hisim energy-system record`` (to write down what it
+built as an energy-system file) -- which import the module and invoke
+``setup_function``.
 
 The setup wires together the following components:
 

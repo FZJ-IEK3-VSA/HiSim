@@ -2,7 +2,7 @@
 
 ## What HiSim is
 
-ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python package for time-step simulation of household energy systems — it models electricity consumption, heating demand, PV generation, heat pumps, batteries, EVs, hydrogen systems, and more. A simulation is a set of components wired together, iterated over every time step until each step's outputs converge, followed by post-processing (KPIs, plots, CSV/JSON/PDF reports). The top-level layout is: `hisim/` (the package — simulator core, the `Component` model, `components/`, `postprocessing/`, input data under `hisim/inputs/`); `system_setups/` (one `setup_function(sim, sim_params)` per `.py` file, plus the equivalent `.scenario.json` + `.simulation.json` pairs); `tests/` (pytest suite, organized by marker); and `hisim/hisim_main.py` (the CLI entrypoint that runs a setup or JSON scenario).
+ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python package for time-step simulation of household energy systems — it models electricity consumption, heating demand, PV generation, heat pumps, batteries, EVs, hydrogen systems, and more. A simulation is a set of components wired together, iterated over every time step until each step's outputs converge, followed by post-processing (KPIs, plots, CSV/JSON/PDF reports). The top-level layout is: `hisim/` (the package — simulator core, the `Component` model, `components/`, `postprocessing/`, input data under `hisim/inputs/`); `system_setups/` (one `setup_function(sim, sim_params)` per `.py` file — the imperative input — plus the shared `.simulation.json` parameter files); `energy_systems/` (the declarative input: `*.energy_system.yaml`, one recorded twin per setup, plus `*.simulation.yaml`); `tests/` (pytest suite, organized by marker); and `hisim/hisim_main.py` (the CLI entrypoint that runs either).
 
 ## Guidelines for coding
 - All result files should always end up in the results directory directly underneath the repository directory. If that directory doesn't exist it needs to be created.
@@ -33,7 +33,6 @@ Markers are defined in `pytest.ini`:
 - `system_setups` — runs full system setups end to end. Slow. Avoid.
 - `mpc` — model-predictive-control system tests. Slow. Avoid.
 - `utsp` — exercises the LPG/UTSP connector. **Networked + requires credentials.** Avoid.
-- `jsonconfig` — JSON config generation/execution tests.
 
 Deselect the slow/networked ones explicitly when running a broader-than-base subset, e.g.:
 ```bash
@@ -55,12 +54,12 @@ cd system_setups
 python ../hisim/hisim_main.py simple_system_setup_one.py
 ```
 
-Or the JSON-based equivalent (scenario + simulation-parameters pair):
+Or the declarative equivalent (energy system + simulation-parameters pair):
 ```bash
-cd system_setups
-python ../hisim/hisim_main.py basic_household.scenario.json 2021_minutely_plots.simulation.json
+python hisim/hisim_main.py energy_systems/simple_system_setup_one.energy_system.yaml \
+    energy_systems/one_day_15min.simulation.yaml
 ```
 
-Results land in a `results/` subdirectory next to the scenario. Use `simple_system_setup_one.py` for the cheapest smoke test.
+Results land in a `results/` subdirectory next to the input file. Use `simple_system_setup_one.py` for the cheapest smoke test.
 
 

@@ -28,7 +28,9 @@ from typing import ClassVar, Optional, Set, Tuple
 
 import pandas as pd
 import pytest
+import yaml
 
+from hisim.config.channels import ResolvedDynamicConnection
 from hisim.energy_system.parity import WiringParityHarness, WiringSnapshot
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
@@ -198,37 +200,64 @@ class Rig:
         return legacy, declarative
 
     @classmethod
-    def scenario_port_spellings(cls) -> Set[Tuple[str, str]]:
-        """Every ``(component name, port name)`` pair a committed scenario file spells out.
+    def twin_port_spellings(cls) -> Set[Tuple[str, str]]:
+        """Every ``(aggregator, declarative port)`` pair a committed twin implies.
 
-        The ``.scenario.json`` files are regenerated from live builds of the Python setups
-        (``scripts/regenerate_scenario_jsons.py``), and every connection endpoint in them names its
-        component and its port — the same two strings that key the renaming table. Collecting the
-        endpoints of all of them therefore yields the fleet's legacy port names without building a
-        single setup, which is what lets a base test cross-check the whole table in milliseconds.
+        The recorded ``*.energy_system.yaml`` twins are regenerated from live builds of the Python
+        setups and held current by the ``energy-system-freshness`` gate, so their ``inputs:``
+        blocks are the fleet's own statement of which participant feeds which aggregator. A feed's
+        port names are not written out there — the format derives them from frozen templates — so
+        this applies the very templates the resolver applies: ``<output>From<source>`` for the
+        input an aggregator grows, and ``DispatchTo<source>_<input>`` for the dispatch output of a
+        feed that names a target input. That yields the fleet's declarative port names without
+        building a single setup, which is what lets a base test cross-check the whole table in
+        milliseconds.
 
-        The walk is structural rather than schema-bound: any mapping that carries both a
-        ``component_name`` and a ``field_name`` string is an endpoint, wherever the file nests it,
-        so the collection survives a scenario format that moves its connection list.
+        This is the declarative half of each table entry. It replaced a collection over the v1
+        ``*.scenario.json`` twins, which spelled the *legacy* half, when those files retired on
+        2026-09-12; nothing committed carries a legacy aggregator port name any more, so an entry's
+        legacy spelling is proven by the canary above and by the fleet workflow.
+
+        The walk is structural rather than schema-bound: any mapping whose value carries an
+        ``inputs`` list is a component, wherever the file nests it, so the collection survives a
+        grouped file that puts components inside groups and variants.
 
         Returns:
-            The set of ``(component_name, field_name)`` pairs found in all scenario files.
+            The set of ``(component name, derived port name)`` pairs found in all twins.
         """
         spellings: Set[Tuple[str, str]] = set()
 
+        def collect(name: str, feeds: object) -> None:
+            if not isinstance(feeds, list):
+                return
+            for feed in feeds:
+                if not isinstance(feed, dict):
+                    continue
+                origin = feed.get("from")
+                if not isinstance(origin, str) or "." not in origin:
+                    continue
+                source, _, output = origin.partition(".")
+                spellings.add((name, ResolvedDynamicConnection.AGGREGATOR_INPUT_TEMPLATE.format(
+                    source_output=output, source_name=source)))
+                dispatch = feed.get("dispatch")
+                target_input = dispatch.get("target_input") if isinstance(dispatch, dict) else None
+                if isinstance(target_input, str):
+                    spellings.add((name, ResolvedDynamicConnection.DISPATCH_OUTPUT_TEMPLATE.format(
+                        source_name=source, target_input=target_input)))
+
         def walk(node: object) -> None:
             if isinstance(node, dict):
-                component, field = node.get("component_name"), node.get("field_name")
-                if isinstance(component, str) and isinstance(field, str):
-                    spellings.add((component, field))
+                for name, spec in node.items():
+                    if isinstance(name, str) and isinstance(spec, dict):
+                        collect(name, spec.get("inputs"))
                 for value in node.values():
                     walk(value)
             elif isinstance(node, list):
                 for item in node:
                     walk(item)
 
-        for path in sorted(cls.SETUPS.glob("*.scenario.json")):
-            walk(json.loads(path.read_text(encoding="utf-8")))
+        for path in sorted(cls.ENERGY_SYSTEMS.glob("*.energy_system.yaml")):
+            walk(yaml.safe_load(path.read_text(encoding="utf-8")))
         return spellings
 
 
@@ -375,25 +404,28 @@ def test_the_table_still_spells_the_ports_the_dynamic_components_setup_actually_
 
 
 @pytest.mark.base
-def test_every_declared_legacy_port_is_spelled_by_a_committed_scenario_file() -> None:
-    """Catches a table entry whose legacy spelling no committed scenario file carries.
+def test_every_declared_declarative_port_is_implied_by_a_committed_twin() -> None:
+    """Catches a table entry that claims a declarative port the fleet does not grow.
 
     The canary above builds one setup live, so it can only vouch for that setup's ports; the
-    entries of every other setup — above all their insertion indices, which are per-setup and move
-    whenever a setup reorders its participants — would otherwise be guarded only by the manually
-    dispatched fleet workflow. This test closes that gap statically: every ``(aggregator, legacy
-    port)`` key the table declares must appear verbatim as a connection endpoint in some committed
-    ``.scenario.json``, because those files are regenerated from live builds and spell the exact
-    names the legacy add-API grew. A typo in a newly authored entry fails here immediately, and an
-    entry gone stale fails as soon as the scenario files are regenerated — cheaper and earlier than
-    the fleet workflow, though only that workflow proves an entry against a live build.
+    entries of every other setup would otherwise be guarded only by the manually dispatched fleet
+    workflow. This test closes that gap statically: every declarative name the table promises must
+    be a port some committed twin's feed implies, because the twins are recorded from live builds
+    and the resolver derives these names from them by frozen template. A typo in a newly authored
+    entry fails here immediately, and an entry gone stale fails as soon as the twins are
+    re-recorded — cheaper and earlier than the fleet workflow, though only that workflow proves an
+    entry against a live build.
+
+    The legacy half of each entry was cross-checked the same way against the v1 ``.scenario.json``
+    twins until those retired; it is now proven by the canary and by the fleet workflow.
     """
-    spelled = Rig.scenario_port_spellings()
-    assert spelled, "no scenario file spells any connection endpoint, so the cross-check checks nothing"
-    for key in DeclaredPortRenamings.pairs():
-        assert key in spelled, (
-            f"the table declares '{key[0]}.{key[1]}', but no committed scenario file spells that port — "
-            "either the entry has a typo, or the fleet stopped growing it and the entry is dead"
+    implied = Rig.twin_port_spellings()
+    assert implied, "no committed twin declares any feed, so the cross-check checks nothing"
+    for key, declarative in DeclaredPortRenamings.pairs().items():
+        assert (key[0], declarative) in implied, (
+            f"the table claims '{key[0]}.{key[1]}' is '{key[0]}.{declarative}', but no committed twin "
+            "grows that port — either the entry has a typo, or the fleet stopped growing the feed "
+            "and the entry is dead"
         )
 
 

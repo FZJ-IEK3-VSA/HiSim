@@ -187,12 +187,6 @@ pytest-system-setups:
     - cd tests
     - coverage run --parallel-mode --source=../hisim -m pytest -m "system_setups" --durations=20 --junitxml=pytest-system-setups.xml
 
-pytest-jsonconfig:
-  extends: .pytest_template
-  script:
-    - cd tests
-    - coverage run --parallel-mode --source=../hisim -m pytest -m "jsonconfig" --durations=20 --junitxml=pytest-jsonconfig.xml
-
 pytest-postprocessingoptions:
   extends: .pytest_template
   script:
@@ -205,7 +199,7 @@ pytest-others:
     - cd tests
     - |
       markers="not base and not buildingtest and not system_setups and not extendedbase"
-      markers="$markers and not utsp and not jsonconfig and not postprocessingoptions"
+      markers="$markers and not utsp and not postprocessingoptions"
       coverage run --parallel-mode --source=../hisim -m pytest \
         -m "$markers" \
         --durations=20 \
@@ -236,8 +230,6 @@ coverage:
     - job: pytest-buildingtest
       artifacts: true
     - job: pytest-system-setups
-      artifacts: true
-    - job: pytest-jsonconfig
       artifacts: true
     - job: pytest-postprocessingoptions
       artifacts: true

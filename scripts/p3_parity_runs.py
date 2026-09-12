@@ -164,6 +164,11 @@ class ParitySide:
     the path it is being compared against. The two entry points differ only in how the simulator
     comes into being: one imports a Python setup module and calls its ``setup_function``, the other
     loads a recorded file through the executor.
+
+    Both sides run in the same interpreter, which is what makes the comparison an A/B on one
+    machine rather than a comparison of two environments. Nothing carries over between them: each
+    side's repository belongs to the ``Simulator`` that owns it and is cleared when that run ends,
+    so a side reads only what it published itself.
     """
 
     #: The post-processing both sides run. A setup routinely appends options of its own to the
@@ -192,7 +197,6 @@ class ParitySide:
         """
         from hisim.hisim_main import initialize_from_python  # noqa: PLC0415
 
-        cls.reset_singletons()
         simulator = initialize_from_python(str(setup_path), parameters, None)
         effective = simulator.get_simulation_parameters()
         effective.post_processing_options = list(cls.POST_PROCESSING_OPTIONS)
@@ -213,22 +217,8 @@ class ParitySide:
         """
         from hisim.energy_system.executor import build_energy_system  # noqa: PLC0415
 
-        cls.reset_singletons()
         built = build_energy_system(energy_system_path, parameters)
         return cls.finish(built.simulator, Path(parameters.result_directory))
-
-    @classmethod
-    def reset_singletons(cls) -> None:
-        """Empties the process-wide simulation repository before a side starts.
-
-        Both sides run in one interpreter, which is what makes the comparison an A/B on one
-        machine rather than a comparison of two environments; the price is that HiSim's singleton
-        repository would otherwise carry the first side's entries into the second. Resetting it
-        keeps the second side reading only what it published itself.
-        """
-        from hisim.sim_repository_singleton import SingletonSimRepository  # noqa: PLC0415
-
-        SingletonSimRepository().reset()
 
     @classmethod
     def finish(cls, simulator: Any, result_directory: Path) -> RunOutcome:

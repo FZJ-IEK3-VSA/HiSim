@@ -129,7 +129,7 @@ class TariffProvider(cp.Component):
     **It replaced `generic_price_signal.PriceSignal`**, which ran beside it during the parallel
     phase and was retired to `obsolete/components/` under component sweep decision D-16
     (2026-09-10). The two must never have appeared in one setup: both published the same two
-    `SingletonSimRepository` forecast keys, the repository holds one value per key, and two
+    `SingletonSimRepository` forecast keys, that repository held one value per key, and two
     publishers meant whichever ran last silently decided what an MPC controller optimized
     against.
     """

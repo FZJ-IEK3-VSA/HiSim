@@ -11,6 +11,7 @@ import json
 from typing import Optional
 import pytest
 import numpy as np
+import pandas as pd
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
@@ -557,3 +558,35 @@ def test_two_target_outputs_of_one_name_are_refused() -> None:
 
     with pytest.raises(ValueError, match="already publishes a dynamic output"):
         add_the_battery_target()
+
+
+@pytest.mark.base
+def test_the_kpi_block_finds_a_dispatch_port_that_is_not_named_after_a_class() -> None:
+    """Catches a per-participant KPI going missing because the port carries no class name.
+
+    The KPI block used to find the residents' electricity target by looking for the string
+    ``UtspLpgConnector`` inside the port's name, which only the legacy wiring puts there: an
+    energy-system file names the very same port ``DispatchFor<instance>_<output>``. While the
+    manager still declared a target port for every device it might ever meet, the substring found
+    that phantom and the KPI came out anyway; once the phantoms went, five declarative houses
+    silently lost a KPI their golden expects. The port is found by the tags it carries instead,
+    which is what the dispatch itself steers by.
+    """
+    manager = _energy_manager()
+    dispatch_output = manager.add_component_output(
+        source_output_name="DispatchForUTSPConnector_",
+        source_tags=[lt.ComponentType.RESIDENTS, lt.InandOutputType.ELECTRICITY_TARGET],
+        source_weight=1,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for Occupancy. ",
+    )
+    assert "UtspLpgConnector" not in dispatch_output.field_name
+    results = pd.DataFrame({dispatch_output.field_name: [-1000.0, -1000.0]})
+
+    kpi_entries = manager.get_component_kpi_entries(all_outputs=[dispatch_output], postprocessing_results=results)
+
+    assert [entry.name for entry in kpi_entries] == ["Residents' electricity consumption from grid"]
+    assert kpi_entries[0].name_of_source_component == "UtspLpgConnector"
+    assert kpi_entries[0].unit == "kWh"
+    assert kpi_entries[0].value == pytest.approx(0.5)

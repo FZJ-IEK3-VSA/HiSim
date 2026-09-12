@@ -2,6 +2,7 @@
 
 # clean
 import os
+from enum import Enum, unique
 from typing import Optional, List, Any
 import json
 from dataclasses import dataclass
@@ -24,6 +25,28 @@ __email__ = "f.oldopp@fz-juelich.de"
 __status__ = "development"
 
 
+@unique
+class PtxOperationMode(str, Enum):
+    """How the PtX system is driven by the L2 controller.
+
+    Every member carries the operating-mode name as its value, so a serialized
+    configuration keeps spelling the mode out exactly as the string-typed field
+    did before -- the wire format is unchanged.
+
+    NOMINAL_LOAD: run at the constant nominal load.
+    MINIMUM_LOAD: follow the load within the part-load range.
+    STANDBY_LOAD: follow the load, but never fall below the standby load, so
+        the system is not switched off.
+    STANDBY_AND_OFF_LOAD: like STANDBY_LOAD, but switch off once the standby
+        load has been held for the standby operation time.
+    """
+
+    NOMINAL_LOAD = "NominalLoad"
+    MINIMUM_LOAD = "MinimumLoad"
+    STANDBY_LOAD = "StandbyLoad"
+    STANDBY_AND_OFF_LOAD = "StandbyandOffLoad"
+
+
 @dataclass_json
 @dataclass
 class PTXControllerConfig(ConfigBase):
@@ -39,7 +62,29 @@ class PTXControllerConfig(ConfigBase):
     min_load: float
     max_load: float
     standby_load: float
-    operation_mode: str
+    operation_mode: PtxOperationMode
+
+    def __post_init__(self) -> None:
+        """Normalises the operation mode into a :class:`PtxOperationMode` member.
+
+        The mode is wire format: a configuration read from JSON, from HDF5 or written by
+        hand arrives carrying the plain string the field has always been serialized as,
+        while a caller in Python passes the member. Both are accepted here and both leave
+        as the member, so only one kind of value ever reaches the control law. A value
+        that names no mode is refused where it was written, instead of travelling into a
+        controller that has no branch for it.
+
+        Raises:
+            ValueError: For an ``operation_mode`` that is neither a member of
+                :class:`PtxOperationMode` nor one of the members' wire values.
+        """
+        try:
+            self.operation_mode = PtxOperationMode(self.operation_mode)
+        except ValueError:
+            raise ValueError(
+                f"Unknown PtX controller operation mode {self.operation_mode!r}. "
+                f"Write one of {[mode.value for mode in PtxOperationMode]}."
+            ) from None
 
     @staticmethod
     def read_config(electrolyzer_name):
@@ -53,15 +98,13 @@ class PTXControllerConfig(ConfigBase):
     def control_electrolyzer(
         cls,
         electrolyzer_name: str,
-        operation_mode: str,
+        operation_mode: PtxOperationMode,
         component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Sets the according parameters for the chosen electrolyzer.
 
-        The operations mode can be used to select how the electrolyser is operated:
-        Nominal Load: Operated with a constant nominal load.
-        Minimum Load: Operated within the part load range.
-        Standby Load: Operated so that the system is not switched off.
+        The operation mode selects how the electrolyser is operated; see
+        :class:`PtxOperationMode` for what each member means.
         """
         if component_id is None:
             component_id = ComponentID(name="L2PtXController")
@@ -176,13 +219,13 @@ class PTXController(Component):
         self.standby_time_count_previous = self.standby_time_count
         self.total_energy_to_battery_previous = self.total_energy_to_battery
 
-    def system_operation(self, operation_mode, res_load):
+    def system_operation(self, operation_mode: PtxOperationMode, res_load: float) -> tuple[float, float]:
         """System operation."""
-        if operation_mode == "NominalLoad":
+        if operation_mode == PtxOperationMode.NOMINAL_LOAD:
             load_to_system = self.nom_load
             power_to_battery = res_load - self.nom_load  # postive battery charge, negative battery discharges
 
-        elif operation_mode == "MinimumLoad":
+        elif operation_mode == PtxOperationMode.MINIMUM_LOAD:
             if self.min_load <= res_load <= self.max_load:
                 load_to_system = res_load
                 power_to_battery = 0.0
@@ -193,7 +236,7 @@ class PTXController(Component):
                 load_to_system = self.max_load
                 power_to_battery = res_load - self.max_load
 
-        elif operation_mode == "StandbyLoad":
+        elif operation_mode == PtxOperationMode.STANDBY_LOAD:
             if self.min_load <= res_load <= self.max_load:
                 load_to_system = res_load
                 power_to_battery = 0.0
@@ -205,7 +248,7 @@ class PTXController(Component):
                 load_to_system = self.standby_load
                 power_to_battery = res_load - self.standby_load  # if
 
-        elif operation_mode == "StandbyandOffLoad":
+        elif operation_mode == PtxOperationMode.STANDBY_AND_OFF_LOAD:
             if self.min_load <= res_load <= self.max_load:
                 self.standby_time_count = 0.0
                 load_to_system = res_load
@@ -229,12 +272,9 @@ class PTXController(Component):
                     self.standby_time_count += self.my_simulation_parameters.seconds_per_timestep
 
         else:
-            if res_load <= self.max_load:
-                load_to_system = res_load
-                power_to_battery = 0.0
-            else:  # max_power < power_delta:
-                load_to_system = self.max_load
-                power_to_battery = res_load - self.max_load
+            # Unreachable for every member above; it only guards a member added
+            # later that nobody wrote a branch for.
+            raise ValueError(f"PtX controller: unknown operation mode {operation_mode!r}")
 
         return load_to_system, power_to_battery
 

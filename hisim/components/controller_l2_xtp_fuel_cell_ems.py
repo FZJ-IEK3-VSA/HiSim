@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 # clean
+from enum import Enum, unique
 from pathlib import Path
 from typing import Optional, Any, cast
 import json
@@ -27,6 +28,24 @@ __email__ = "f.oldopp@fz-juelich.de"
 __status__ = "development"
 
 
+@unique
+class XtpOperationMode(str, Enum):
+    """How the XtP fuel cell is driven by the L2 controller.
+
+    Every member carries the operating-mode name as its value, so a serialized
+    configuration keeps spelling the mode out exactly as the string-typed field
+    did before -- the wire format is unchanged.
+
+    STANDBY_LOAD: serve the demand, but never fall below the standby load, so
+        the system is not switched off.
+    STANDBY_AND_OFF_LOAD: like STANDBY_LOAD, but switch off once the standby
+        load has been held for the standby operation time.
+    """
+
+    STANDBY_LOAD = "StandbyLoad"
+    STANDBY_AND_OFF_LOAD = "StandbyandOffLoad"
+
+
 @dataclass_json
 @dataclass
 class XTPControllerConfig(ConfigBase):
@@ -42,7 +61,29 @@ class XTPControllerConfig(ConfigBase):
     min_output: float
     max_output: float
     standby_load: float
-    operation_mode: str
+    operation_mode: XtpOperationMode
+
+    def __post_init__(self) -> None:
+        """Normalises the operation mode into a :class:`XtpOperationMode` member.
+
+        The mode is wire format: a configuration read from JSON, from HDF5 or written by
+        hand arrives carrying the plain string the field has always been serialized as,
+        while a caller in Python passes the member. Both are accepted here and both leave
+        as the member, so only one kind of value ever reaches the control law. A value
+        that names no mode is refused where it was written, instead of travelling into a
+        controller that has no branch for it.
+
+        Raises:
+            ValueError: For an ``operation_mode`` that is neither a member of
+                :class:`XtpOperationMode` nor one of the members' wire values.
+        """
+        try:
+            self.operation_mode = XtpOperationMode(self.operation_mode)
+        except ValueError:
+            raise ValueError(
+                f"Unknown XtP controller operation mode {self.operation_mode!r}. "
+                f"Write one of {[mode.value for mode in XtpOperationMode]}."
+            ) from None
 
     @staticmethod
     def read_config(fuel_cell_name: str) -> dict[str, Any]:
@@ -56,7 +97,7 @@ class XTPControllerConfig(ConfigBase):
     def control_fuel_cell(
         cls,
         fuel_cell_name: str,
-        operation_mode: str,
+        operation_mode: XtpOperationMode,
         component_id: Optional[ComponentID] = None,
     ) -> XTPControllerConfig:
         """Sets the according parameters for the chosen fuel cell."""
@@ -161,9 +202,9 @@ class XTPController(Component):
         self.threshold_exceeded_previous: bool = self.threshold_exceeded
         self.standby_time_count_previous: float = self.standby_time_count
 
-    def system_operation(self, operation_mode: str, demand_load: float) -> tuple[float, float]:
+    def system_operation(self, operation_mode: XtpOperationMode, demand_load: float) -> tuple[float, float]:
         """System operation."""
-        if operation_mode == "StandbyLoad":
+        if operation_mode == XtpOperationMode.STANDBY_LOAD:
             if self.min_output <= demand_load <= self.max_output:
                 demand_to_system = demand_load
                 power_from_battery = 0.0
@@ -178,7 +219,7 @@ class XTPController(Component):
                 demand_to_system = self.standby_load
                 power_from_battery = -self.standby_load
 
-        elif operation_mode == "StandbyandOffLoad":
+        elif operation_mode == XtpOperationMode.STANDBY_AND_OFF_LOAD:
             if self.min_output <= demand_load <= self.max_output:
                 self.standby_time_count = 0.0
                 demand_to_system = demand_load
@@ -202,8 +243,9 @@ class XTPController(Component):
                     self.standby_time_count += self.my_simulation_parameters.seconds_per_timestep
 
         else:
-            demand_to_system = demand_load
-            power_from_battery = 0.0
+            # Unreachable for every member above; it only guards a member added
+            # later that nobody wrote a branch for.
+            raise ValueError(f"XtP controller: unknown operation mode {operation_mode!r}")
 
         return demand_to_system, power_from_battery
 

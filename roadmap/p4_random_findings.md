@@ -118,7 +118,7 @@ summer timestep with `t_dhw` between the heating maximum and the DHW maximum and
 deactivating where it should stay on. No setup builds `L1CHPController`, so it is a physics change (R5) with
 no recorded result behind it; it can land before or after the conversion.
 
-### F-4 — the `hisim` console script ignores the repository's `.env` **[verified]**
+### F-4 — the `hisim` console script ignores the repository's `.env` **[verified, fixed]**
 
 `hisim/hisim_main.py` imports `load_dotenv` (`:12`) and calls it at import time (`:33`), so
 `python hisim/hisim_main.py …` picks up `UTSP_URL` and `UTSP_API_KEY` from the repository's `.env` — the file
@@ -133,7 +133,13 @@ than a message naming the missing variable.
 *Cost of not finding it: the documented environment file works for one of the two documented entry points, and
 the one it fails for is the one the install instructions produce.*
 
-**Where it stands.** Not fixed. One line in `cli.main`, matching `hisim_main.py`.
+**Where it stands.** Fixed. `cli.main` now calls `load_dotenv()` before it parses anything, matching
+`hisim_main.py`; the call sits in `main` rather than at import, because importing a library should not read files.
+`hisim_main.py`'s import-time call stays where it is: `scripts/hpc_harness/run_one.py`, `scripts/p3_parity_runs.py`
+and the economic-example setups import `initialize_from_json` / `initialize_from_python` without ever going through
+its `main`, so moving it would take the file away from them. Both calls resolve to the same file — python-dotenv
+walks up from the directory of the module that calls it, which is `hisim/` for both. A test in `tests/test_cli.py`
+plants a sentinel `.env` and asserts the console script has read it.
 
 ### F-5 — a component copied from `example_template.py` raises before its first timestep **[verified]**
 

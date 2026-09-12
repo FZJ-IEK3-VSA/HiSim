@@ -69,6 +69,11 @@ jobs:
           mode: restore
           scope: ${{ github.workflow }}
       - name: Regenerate all scenario JSONs
+        # bash by name, as in the energy-system gate and the parity summary: a plain `run:`
+        # step in this container was once observed to fall back to sh. Nothing below is
+        # bash-only today, but with the shell named the next pipe or array added here behaves
+        # as written.
+        shell: bash
         run: |
           # Auto-adapt parallelism to the runner: one worker per vCPU, capped so a
           # very large runner cannot oversubscribe memory with concurrent LPG builds.
@@ -85,12 +90,12 @@ jobs:
           # failure, but we do NOT abort here: we record the script's exit code and
           # let the check step below run too, so build failures AND drift are both
           # reported in a single run instead of the first one masking the rest.
-          set +e
+          # `|| rc=$?` is what records it -- the exit code survives, and the failure
+          # does not trip the -e that GitHub's bash invocation sets.
+          rc=0
           python scripts/regenerate_scenario_jsons.py \
             -j "${jobs}" \
-            --all-py
-          rc=$?
-          set -e
+            --all-py || rc=$?
           echo "REGEN_RC=${rc}" >> "$GITHUB_ENV"
           if [ "${rc}" -ne 0 ]; then
             echo "::error title=Setup failed to convert::One or more .py setups could not be built into a scenario JSON (see the summary above and the per-setup logs). Every setup must produce a valid JSON."

@@ -273,7 +273,6 @@ class L1CHPController(cp.Component):
     (1) Hot Water Storage (generic_hot_water_storage_modular)
     (2) Either buffer storage or building (generic_hot_water_storage_modular or building)
     (3) EMS controller (controller_l2_energy_management_system) -> optional if electricity should be involved in control.
-    (4) Hydrogen storage (generic_hydrogen_storage) -> optional if component is fuel cell and amount of hydrogen in storage is relevant.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -379,7 +378,6 @@ class L1CHPController(cp.Component):
 
         self.add_default_connections(self.get_default_connections_simple_water_storage())
         self.add_default_connections(self.get_default_connections_from_building())
-        self.add_default_connections(self.get_default_connections_from_h2_storage())
 
     def get_default_connections_simple_water_storage(self):
         """Sets default connections for the boiler."""
@@ -411,23 +409,6 @@ class L1CHPController(cp.Component):
                 L1CHPController.BuildingTemperature,
                 building_classname,
                 component_class.TemperatureMeanThermalMass,
-            )
-        )
-        return connections
-
-    def get_default_connections_from_h2_storage(self):
-        """Sets default connections for the hydrogen storage."""
-        # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.generic_hydrogen_storage"
-        component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "GenericHydrogenStorage")
-        connections = []
-        h2_storage_classname = component_class.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                L1CHPController.HydrogenSOC,
-                h2_storage_classname,
-                component_class.HydrogenSOC,
             )
         )
         return connections

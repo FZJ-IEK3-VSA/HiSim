@@ -85,21 +85,27 @@ jobs:
           mode: restore
           scope: ${{ github.workflow }}
       - name: Re-record every setup and compare with the committed twins
+        # bash by name: this step once fell back to sh in this container and died on the
+        # bash-only PIPESTATUS ("Bad substitution"), yet bash is installed here -- the
+        # resource-monitor steps of this same job ask for it and run. With the shell named,
+        # the recorder goes back into a pipeline: pipefail keeps the recorder's own exit
+        # code (1 on drift, a missing twin, a setup that cannot be recorded, or two
+        # parameter files describing one run), which `tee` would otherwise replace with 0.
+        shell: bash
         run: |
           # --check records into a throwaway directory inside the workspace and
           # never writes into energy_systems/, so the job cannot mask drift by
           # repairing it. It prints the diff of every twin that moved, names every
           # setup it could not record, and asserts that no two committed
           # simulation-parameters files describe the same run.
-          # No pipeline here: GitHub runs this step with 'sh' inside the test container,
-          # where the bash-only PIPESTATUS array expands to "Bad substitution".
-          # Redirect, then show the file, so the exit code is the recorder's own.
-          set +e
-          python scripts/record_all_setups.py --check > energy_system_drift.txt 2>&1
-          rc=$?
-          set -e
-          cat energy_system_drift.txt
-          if [ "${rc}" -ne 0 ]; then
+          #
+          # `tee` shows the report in the log and writes the file the failure artifact
+          # uploads; stderr is merged into the pipe so a recorder traceback reaches both.
+          # GitHub already invokes this shell as `bash -eo pipefail`, so the `set` line is
+          # belt and braces for a reader. The failure is caught by the `if` rather than by
+          # -e, because the step has to print its annotation before it exits.
+          set -o pipefail
+          if ! python scripts/record_all_setups.py --check 2>&1 | tee energy_system_drift.txt; then
             echo "::error title=Energy-system twins are stale or a setup cannot be recorded::Run 'python scripts/record_all_setups.py' locally, resolve any recorder errors, and commit what it writes."
             exit 1
           fi

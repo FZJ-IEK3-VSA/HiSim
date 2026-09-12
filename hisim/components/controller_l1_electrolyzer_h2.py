@@ -4,15 +4,13 @@ from __future__ import annotations
 
 # clean
 from typing import Any, ClassVar, Optional
-from pathlib import Path
-import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.components.generic_electrolyzer_h2 import read_electrolyzer_variant
 
 from hisim import loadtypes as lt
-from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim.economics.facts import CostRelevance
@@ -64,17 +62,40 @@ class ElectrolyzerControllerConfig(ConfigBase):
         )
         return config
 
+    #: the manufacturer-table fields this controller is built from, checked before any is read.
+    TABLE_FIELDS: ClassVar[tuple[str, ...]] = (
+        "nom_load",
+        "min_load",
+        "max_load",
+        "standby_load",
+        "warm_start_time",
+        "cold_start_time",
+    )
+
     @staticmethod
     def read_config(electrolyzer_name: str) -> dict[str, Any]:
-        """Opens the according JSON-file, based on the electrolyzer_name."""
+        """Returns the manufacturer table's row for that device, refusing a name it does not carry.
 
-        config_file = Path(utils.HISIMPATH["inputs"]) / "electrolyzer_manufacturer_config.json"
-        with config_file.open("r", encoding="utf-8") as json_file:
-            data = json.load(json_file)
-            config = data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
-            if isinstance(config, dict):
-                return config
-            return {}
+        The lookup is the electrolyzer module's own, so the controller and the machine it controls
+        accept and refuse exactly the same device names. It used to answer an unknown name with an
+        empty dictionary, out of which the zero fallbacks below built a controller whose loads were
+        all zero -- a mistyped name ran, and ran an electrolyzer that never left standby.
+
+        Args:
+            electrolyzer_name: the device name as written by the setup or the configuration file.
+
+        Returns:
+            The row of "Electrolyzer variants" belonging to that device, carrying every field in
+            :attr:`TABLE_FIELDS`.
+
+        Raises:
+            ValueError: if no device of that name is in the table, or its row lacks one of the
+                fields this controller reads.
+        """
+        return read_electrolyzer_variant(
+            electrolyzer_name,
+            required_fields=ElectrolyzerControllerConfig.TABLE_FIELDS,
+        )
 
     @classmethod
     def control_electrolyzer(
@@ -82,7 +103,19 @@ class ElectrolyzerControllerConfig(ConfigBase):
         electrolyzer_name: str,
         component_id: Optional[ComponentID] = None,
     ) -> "ElectrolyzerControllerConfig":
-        """Initializes the config variables based on the JSON-file."""
+        """Initializes the config variables based on the JSON-file.
+
+        Every field is read straight out of the row, which :meth:`read_config` has already
+        checked carries all of them: a table entry missing one is an error naming the field and
+        the device, not a load of zero.
+
+        Args:
+            electrolyzer_name: the device name to look up in the manufacturer table.
+            component_id: the identity to give the controller, defaulted when not supplied.
+
+        Returns:
+            The controller configuration of that device.
+        """
 
         if component_id is None:
             component_id = ComponentID(name="L1ElectrolyzerController")
@@ -91,12 +124,12 @@ class ElectrolyzerControllerConfig(ConfigBase):
 
         config = ElectrolyzerControllerConfig(
             component_id=component_id,  # config_json.get("name", "")
-            nom_load=config_json.get("nom_load", 0.0),
-            min_load=config_json.get("min_load", 0.0),
-            max_load=config_json.get("max_load", 0.0),
-            standby_load=config_json.get("standby_load", 0.0),
-            warm_start_time=config_json.get("warm_start_time", 0.0),
-            cold_start_time=config_json.get("cold_start_time", 0.0),
+            nom_load=config_json["nom_load"],
+            min_load=config_json["min_load"],
+            max_load=config_json["max_load"],
+            standby_load=config_json["standby_load"],
+            warm_start_time=config_json["warm_start_time"],
+            cold_start_time=config_json["cold_start_time"],
         )
         return config
 

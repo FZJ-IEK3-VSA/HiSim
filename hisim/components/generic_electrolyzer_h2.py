@@ -2,7 +2,8 @@
 
 # clean
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional, Tuple
+from typing import Any, ClassVar, Dict, List, Optional, Sequence, Tuple
+import difflib
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -36,6 +37,74 @@ __license__ = "-"
 __version__ = "1.0"
 __maintainer__ = "Franz Oldopp"
 __status__ = "development"
+
+
+ELECTROLYZER_TABLE_FILE_NAME = "electrolyzer_manufacturer_config.json"
+ELECTROLYZER_VARIANTS_SECTION = "Electrolyzer variants"
+
+
+def electrolyzer_table_path() -> Path:
+    """Returns the path of the manufacturer table every electrolyzer reader looks a device up in."""
+    return Path(utils.HISIMPATH["inputs"]) / ELECTROLYZER_TABLE_FILE_NAME
+
+
+def read_electrolyzer_variant(
+    electrolyzer_name: str,
+    required_fields: Sequence[str] = (),
+) -> Dict[str, Any]:
+    """Returns one device's row of the manufacturer table, or refuses naming the rows that exist.
+
+    The three configurations built from that table -- the electrolyzer's own, its L1 controller's
+    and the L2 PtX controller's -- share this one lookup so that a device name is accepted or
+    refused identically wherever it is written. Two of them used to answer a name the table does
+    not carry with an empty dictionary, which the per-field ``.get(key, 0.0)`` fallbacks behind it
+    turned into a machine rated at zero kW: a mistyped name produced a plausible-looking run with
+    an idle electrolyzer instead of an error. Both the unknown name and a row missing a field a
+    caller asked for are refused here, with the message naming what is missing and what exists,
+    the way the energy-system error catalogue words its rejections.
+
+    A missing table file is not caught: the ``FileNotFoundError`` carries the path it looked for,
+    which is what a caller needs, and no substitute for the file exists. Only the presence of a
+    required field is checked, not its value: five of the nine rows write ``standby_load`` as
+    ``null``, which the readers have always passed through as it stands, and reading a written
+    ``null`` as an absent field would refuse machines that run today.
+
+    Args:
+        electrolyzer_name: the device name as written by the setup or the configuration file.
+        required_fields: the field names the caller is about to read out of the row. Each one is
+            checked here so that a row missing a field is refused by name rather than silently
+            read as a zero.
+
+    Returns:
+        The row of "Electrolyzer variants" belonging to that device.
+
+    Raises:
+        ValueError: if no device of that name is in the table, or if the device's row does not
+            carry one of ``required_fields``.
+    """
+    config_file = electrolyzer_table_path()
+    with config_file.open("r", encoding="utf-8") as json_file:
+        data = json.load(json_file)
+    electrolyzer_variants: Dict[str, Dict[str, Any]] = data[ELECTROLYZER_VARIANTS_SECTION]
+
+    if electrolyzer_name not in electrolyzer_variants:
+        available = sorted(electrolyzer_variants)
+        hint = difflib.get_close_matches(electrolyzer_name, available, n=3)
+        did_you_mean = f"Did you mean: {', '.join(hint)}? " if hint else ""
+        raise ValueError(
+            f"Electrolyzer {electrolyzer_name!r} is not in {config_file}. "
+            f"{did_you_mean}"
+            f"Available: {', '.join(available)}."
+        )
+
+    variant: Dict[str, Any] = electrolyzer_variants[electrolyzer_name]
+    missing = [field_name for field_name in required_fields if field_name not in variant]
+    if missing:
+        raise ValueError(
+            f"The entry for electrolyzer {electrolyzer_name!r} in {config_file} carries no "
+            f"{', '.join(missing)}. Present: {', '.join(sorted(variant))}."
+        )
+    return variant
 
 
 @dataclass_json
@@ -123,24 +192,25 @@ class ElectrolyzerConfig(ConfigBase):
         )
         return config
 
+    #: the manufacturer-table fields this configuration reads without a fallback, checked first.
+    TABLE_FIELDS: ClassVar[Tuple[str, ...]] = ("electrolyzer_type", "nom_load", "max_load")
+
     @staticmethod
-    def read_config(electrolyzer_name):
-        """Opens the according JSON-file, based on the electrolyzer_name."""
+    def read_config(electrolyzer_name: str) -> Dict[str, Any]:
+        """Returns the manufacturer table's row for that device; see :func:`read_electrolyzer_variant`.
 
-        config_file = Path(utils.HISIMPATH["inputs"]) / "electrolyzer_manufacturer_config.json"
-        with config_file.open("r", encoding="utf-8") as json_file:
-            data = json.load(json_file)
-            electrolyzer_variants = data["Electrolyzer variants"]
-            if electrolyzer_name not in electrolyzer_variants:
-                raise KeyError(
-                    f"The electrolyzer {electrolyzer_name} could not be found in the input data. Please check the input data for electrolyzer names."
-                )
+        Args:
+            electrolyzer_name: the device name as written by the setup or the configuration file.
 
-            for key, values in electrolyzer_variants.items():
-                if key == electrolyzer_name:
-                    data_for_specific_electrolyzer = values
+        Returns:
+            The row of "Electrolyzer variants" belonging to that device, carrying every field in
+            :attr:`TABLE_FIELDS`.
 
-            return data_for_specific_electrolyzer
+        Raises:
+            ValueError: if no device of that name is in the table, or its row lacks the type or
+                one of the two ratings, which are read without a fallback.
+        """
+        return read_electrolyzer_variant(electrolyzer_name, required_fields=ElectrolyzerConfig.TABLE_FIELDS)
 
     @classmethod
     def config_electrolyzer(
@@ -156,10 +226,11 @@ class ElectrolyzerConfig(ConfigBase):
 
         config = ElectrolyzerConfig(
             component_id=component_id,  # config_json.get("name", "")
-            electrolyzer_type=config_json.get("electrolyzer_type"),
-            # The two ratings are read without a fallback: a variant that carries neither is a
-            # broken input file, and defaulting them to zero would silently produce a machine
+            # The type and the two ratings are read without a fallback: a variant that carries
+            # neither is a broken input file, and defaulting them would silently produce a machine
             # that is refused above -- or, worse, costed as free -- instead of naming the key.
+            # read_config has already checked all three are there, naming the device if not.
+            electrolyzer_type=config_json["electrolyzer_type"],
             nom_load=config_json["nom_load"],
             max_load=config_json["max_load"],
             nom_h2_flow_rate=config_json.get("nom_h2_flow_rate", 0.0),

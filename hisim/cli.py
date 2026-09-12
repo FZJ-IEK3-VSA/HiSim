@@ -34,6 +34,8 @@ import sys
 from pathlib import Path
 from typing import Optional, Sequence, TextIO
 
+from dotenv import load_dotenv
+
 from hisim.cli_exit import ExitCodes
 from hisim.cli_grouping import GroupingCommands, GroupingPaths
 from hisim.config.introspection import describe_config
@@ -297,6 +299,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         Zero on success, two when the command line itself was wrong, and one when a file was
         rejected — the message having gone to the standard error stream.
     """
+    # The two documented ways to run the same setup have to see the same configuration, so the
+    # console script reads the `.env` holding UTSP_URL and UTSP_API_KEY exactly as
+    # `hisim/hisim_main.py` does: python-dotenv walks up from the directory of the module that
+    # calls it, which is `hisim/` for both of them, so both find the same file. It is read here
+    # and not at import, because importing a library should not read files.
+    load_dotenv()
     parser = build_parser()
     try:
         arguments = parser.parse_args(list(argv) if argv is not None else None)

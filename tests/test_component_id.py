@@ -27,6 +27,7 @@ from hisim.components import example_component
 from hisim.energy_system.errors import EnergySystemFormatError
 from hisim.energy_system.model import NameRules
 from hisim.simulationparameters import SimulationParameters
+from tests import functions_for_testing as fft
 
 
 @dataclass_json
@@ -214,7 +215,7 @@ def test_default_factories_produce_building_less_identities() -> None:
     default configuration used to carry was suppressed by ``multiple_buildings=False`` anyway,
     so dropping it leaves every runtime name and therefore every result column unchanged.
     """
-    config = example_component.ExampleComponentConfig.get_default_example_component()
+    config = fft.sized_example_component_config()
     assert config.component_id.building is None
     assert config.component_id.key == "ExampleComponent"
 
@@ -228,7 +229,7 @@ def test_default_factories_produce_building_less_identities() -> None:
 def test_outputs_carry_the_identity_of_their_component() -> None:
     """Every output records the identity of the component that produced it."""
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    config = example_component.ExampleComponentConfig.get_default_example_component(
+    config = fft.sized_example_component_config(
         component_id=ComponentID(name="ExampleComponent", building="BUI2")
     )
     component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
@@ -279,7 +280,7 @@ def test_district_style_setup_groups_by_building() -> None:
     ]
     components = [
         example_component.ExampleComponent(
-            config=example_component.ExampleComponentConfig.get_default_example_component(component_id=identity),
+            config=fft.sized_example_component_config(component_id=identity),
             my_simulation_parameters=sim_params,
         )
         for identity in identities
@@ -336,7 +337,7 @@ def test_a_component_refuses_a_runtime_name_that_is_not_an_identifier() -> None:
     the two from diverging silently.
     """
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    config = example_component.ExampleComponentConfig.get_default_example_component()
+    config = fft.sized_example_component_config()
     with pytest.raises(ValueError) as rejection:
         cp.Component(
             name="Bad Name",

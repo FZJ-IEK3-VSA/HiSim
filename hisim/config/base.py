@@ -234,6 +234,31 @@ class ComponentID:
 ConfigBaseT = TypeVar("ConfigBaseT", bound="ConfigBase")
 
 
+def _rendered_for_report(value: Any) -> Any:
+    """Renders one configuration value the way the report should read it.
+
+    The report is prose meant for a human, so an enum-typed field is worth the value it
+    is written and serialized as (``"NominalLoad"``) rather than the member spelling
+    ``str`` gives it (``PtxOperationMode.NOMINAL_LOAD``), which puts a class name and a
+    Python identifier into a line that is meant to name a setting. Containers are walked,
+    because a field can hold a list, a tuple, a set or a dict of enum values; everything
+    else is returned untouched, so every non-enum field renders exactly as before.
+    """
+    if isinstance(value, enum.Enum):
+        return _rendered_for_report(value.value)
+    if isinstance(value, dict):
+        return {_rendered_for_report(key): _rendered_for_report(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_rendered_for_report(item) for item in value]
+    if isinstance(value, tuple):
+        rendered = tuple(_rendered_for_report(item) for item in value)
+        # A namedtuple keeps its class, so the report keeps the field names it prints with.
+        return type(value)(*rendered) if hasattr(value, "_fields") else rendered
+    if isinstance(value, (set, frozenset)):
+        return type(value)(_rendered_for_report(item) for item in value)
+    return value
+
+
 @dataclass
 class ConfigBase:
     """Base class for all configurations.
@@ -399,13 +424,20 @@ class ConfigBase:
         return sizing_auto_fields(self)
 
     def get_string_dict(self) -> List[str]:
-        """Turns the config into a str list for the report."""
+        """Turns the config into a str list for the report.
+
+        Every field renders as ``str`` gives it, with one exception: an enum value renders
+        as its wire value, through :func:`_rendered_for_report`. A mode field therefore
+        reads ``Operation mode: NominalLoad`` rather than naming the enum class and the
+        member identifier. This holds for every enum-typed field of every config in the
+        repository, values nested in a list or a dict included.
+        """
         my_dict = self.to_dict()
         my_list = []
         if len(my_dict) > 0:
             for entry in my_dict.items():
                 label = " ".join(entry[0].rsplit("_")).capitalize()
-                my_list.append(label + ": " + str(entry[1]))
+                my_list.append(label + ": " + str(_rendered_for_report(entry[1])))
         return my_list
 
 

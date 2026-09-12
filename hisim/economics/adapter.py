@@ -630,7 +630,6 @@ class DeviceEnergySpecs:
         "L2GenericEnergyManagementSystem": (),
         "FuelCellController": (),
         "L1Controller": (),
-        "L1GenericElectrolyzerController": (),
         "PTXController": (),
         "RsocBatteryController": (),
         "XTPController": (),
@@ -656,10 +655,6 @@ class DeviceEnergySpecs:
         "ElectricHeating": (),
         "AirConditioner": (),
         "SimpleAirConditioner": (),
-        # A shiftable appliance whose profile may or may not already sit inside the household
-        # load profile, depending on how the LPG connector was configured — exactly the question
-        # a terminal would have to answer before it could be drawn.
-        "SmartDevice": (),
         # Auxiliary pump electricity of a solar thermal loop.
         "SolarThermalSystem": (),
         # The hydrogen chain (electrolyzers, fuel cells, reversible cells, CHP and their storage):
@@ -668,7 +663,6 @@ class DeviceEnergySpecs:
         # a cumulative total in kWh).
         "AdvancedElectrolyzer": (),
         "Electrolyzer": (),
-        "GenericElectrolyzer": (),
         "HydrogenStorage": (),
         "FuelCell": (),
         "Rsoc": (),

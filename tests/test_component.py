@@ -7,9 +7,13 @@ Each test verifies a specific aspect of the component system.
 
 # clean
 
+from dataclasses import dataclass
+from enum import Enum, unique
+from typing import List
 from unittest.mock import patch
 
 import pytest
+from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -223,6 +227,49 @@ def test_config_base() -> None:
     log.information("ConfigBase tests passed!")
 
 
+@unique
+class ReportedOperationMode(str, Enum):
+    """Two modes spelled the way a configuration file on disk spells them."""
+
+    NOMINAL = "NominalLoad"
+    STANDBY = "StandbyLoad"
+
+
+@dataclass_json
+@dataclass
+class ReportedConfig(ConfigBase):
+    """A config with an enum field, a list of enum values and a plain float field."""
+
+    component_id: ComponentID
+    operation_mode: ReportedOperationMode
+    fallback_modes: List[ReportedOperationMode]
+    rated_power_in_watt: float
+
+
+@pytest.mark.base
+def test_get_string_dict_renders_an_enum_field_by_its_value() -> None:
+    """An enum-typed field reads as its wire value in the report.
+
+    ``get_string_dict`` renders each field with ``str``, which spells an enum member as
+    ``ReportedOperationMode.NOMINAL`` -- a class name and a Python identifier in a line
+    whose job is to name a setting. The report names the value the field is written and
+    serialized as instead, for a field of its own and for enum values nested in a
+    container, while every non-enum field renders exactly as before.
+    """
+    config = ReportedConfig(
+        component_id=ComponentID(name="ReportedComponent"),
+        operation_mode=ReportedOperationMode.NOMINAL,
+        fallback_modes=[ReportedOperationMode.STANDBY],
+        rated_power_in_watt=1500.0,
+    )
+
+    report = config.get_string_dict()
+
+    assert "Operation mode: NominalLoad" in report
+    assert "Fallback modes: ['StandbyLoad']" in report
+    assert "Rated power in watt: 1500.0" in report
+
+
 @pytest.mark.base
 def test_example_component_with_config() -> None:
     """Test ExampleComponent with a custom configuration.
@@ -242,7 +289,10 @@ def test_example_component_with_config() -> None:
         loadtype=lt.LoadTypes.ELECTRICITY,
         unit=lt.Units.WATT,
         electricity=-1e3,
-        capacity=45 * 121.2,
+        capacity=(
+            example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+            * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
+        ),
         initial_temperature=25.0,
     )
 
@@ -295,7 +345,10 @@ def test_component_connections() -> None:
         loadtype=lt.LoadTypes.HEATING,
         unit=lt.Units.WATT,
         electricity=-1e3,
-        capacity=45 * 121.2,
+        capacity=(
+            example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+            * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
+        ),
         initial_temperature=25.0,
     )
 
@@ -375,7 +428,10 @@ def test_add_default_connections_empty_raises() -> None:
         loadtype=lt.LoadTypes.HEATING,
         unit=lt.Units.WATT,
         electricity=-1e3,
-        capacity=45 * 121.2,
+        capacity=(
+            example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+            * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
+        ),
         initial_temperature=25.0,
     )
     component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
@@ -493,7 +549,7 @@ def test_example_component_simulation() -> None:
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
 
     # Create component with default config
-    config = example_component.ExampleComponentConfig.get_default_example_component()
+    config = fft.sized_example_component_config()
     component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
 
     # Create outputs
@@ -723,7 +779,7 @@ def test_connect_inputs_raises_for_unconnected_mandatory() -> None:
     from hisim.component_wrapper import ComponentWrapper
 
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    config = example_component.ExampleComponentConfig.get_default_example_component()
+    config = fft.sized_example_component_config()
     component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
 
     mandatory_input = cp.ComponentInput(
@@ -748,7 +804,7 @@ def test_connect_inputs_warns_for_allow_unconnected_mandatory() -> None:
     from hisim.component_wrapper import ComponentWrapper
 
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    config = example_component.ExampleComponentConfig.get_default_example_component()
+    config = fft.sized_example_component_config()
     component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
 
     optional_mandatory_input = cp.ComponentInput(

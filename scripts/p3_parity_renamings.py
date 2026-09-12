@@ -7,8 +7,8 @@ with it in phase P6 (R11.8 amended and AC-P3.20 deferred to P6, 2026-08-31).
 An aggregator does not declare a port per participant; it grows one per feed, and the two paths
 derive that port's name differently. The imperative add-API names an aggregator input after the
 participant, the output being measured and its insertion order — ``Input_<source>_<field>_<n>`` —
-and a dispatch output after whatever the setup passed as a prefix plus a counter over the
-aggregator's outputs. The declarative path derives both from the frozen templates of the format:
+and a dispatch output after whatever the setup passed as a prefix plus the source weight it
+steers on. The declarative path derives both from the frozen templates of the format:
 ``<field>From<source>`` for an input and ``DispatchTo<source>_<input>`` for a dispatch output. The
 two names denote the same wire, so comparing them literally would report a difference where there
 is none — and dropping the comparison would hide a real one (C-P3.2).
@@ -22,9 +22,11 @@ table does not list must still match literally, so a name difference nobody decl
 comparison instead of being absorbed by it.
 
 The table is keyed by ``(aggregator component name, legacy port name)`` and is the union over the
-whole fleet. A key can be that specific because the legacy index is part of the name: the same
+whole fleet. A key can be that specific because the legacy input name carries an index: the same
 participant feeding the same aggregator in two setups produces two different legacy names when it
-was inserted at two different positions, and both appear below with the same declarative name.
+was inserted at two different positions, and both appear below with the same declarative name. The
+dispatch outputs no longer work that way — since F-1 their legacy names carry a weight instead of
+a counter — so one row per channel and weight covers the whole fleet.
 """
 
 from __future__ import annotations
@@ -183,36 +185,35 @@ class DeclaredPortRenamings:
     DISPATCH_OUTPUTS: ClassVar[Mapping[str, Mapping[str, str]]] = {
         "L2EMSElectricityController": {
             # The battery target of the ten EMS sizers that pass this prefix. The legacy name is
-            # that prefix, 'LoadingPowerInputForBattery_', plus the controller's fourteenth
-            # output: the controller declares thirteen outputs before any setup adds a dispatch —
-            # seven of its own plus six grown by its default connections (one each for the
-            # occupancy and the solar-thermal pump, two each for the heat pump and the electric
-            # heater, none for PV or the battery) — so the first dispatch a setup adds is number
-            # fourteen. That count is the controller's, not the setup's, and this row was authored
-            # stale: retiring the old advanced heat pump (#604) had already removed one of those
-            # outputs when the table was first written, yet the row spelled the pre-retirement
-            # 'Output15', so every EMS setup failed the parity comparison from the table's first
-            # day. A test now asserts the numbers against a live build, so a wrong counter — born
-            # stale or moved later — is caught there instead of failing the whole fleet.
-            "LoadingPowerInputForBattery_Output14": "DispatchToBattery_LoadingPowerInput",
+            # that prefix, 'LoadingPowerInputForBattery_', plus the source weight the controller
+            # steers the battery on, which is 6 in every one of them. Until F-1 was fixed the
+            # suffix was instead the controller's output counter — the battery was its fourteenth
+            # output, after seven static ones and six grown eagerly by its default connections —
+            # so a port's name was a function of how many unrelated ports had been declared
+            # before it. That is how this table came to be authored stale: retiring the old
+            # advanced heat pump (#604) had already removed one of those outputs when the rows
+            # were first written, yet they spelled the pre-retirement 'Output15', and every EMS
+            # setup failed the parity comparison from the table's first day. The suffix is now
+            # the weight, which no unrelated edit moves, and the canary test still asserts these
+            # spellings against a live build.
+            "LoadingPowerInputForBattery_6": "DispatchToBattery_LoadingPowerInput",
             # The dynamic-components example steers four participants and names all four targets
-            # 'ElectricityTargetOutput', so in the legacy spelling only the counter tells them
-            # apart — which is exactly the fragility the declarative templates remove. They start
-            # from the same fourteenth output and count up in the order the setup adds them.
-            "ElectricityTargetOutput14": "DispatchToBattery1_LoadingPowerInput",
-            "ElectricityTargetOutput15": "DispatchToBattery2_LoadingPowerInput",
-            "ElectricityTargetOutput16": "DispatchToCHP1_ElectricityFromCHPTarget",
-            "ElectricityTargetOutput17": "DispatchToCHP2_ElectricityFromCHPTarget",
+            # 'ElectricityTarget', so what tells them apart is the weight each is dispatched on:
+            # the two batteries carry 1 and 2, the two fuel cells 3 and 4.
+            "ElectricityTarget1": "DispatchToBattery1_LoadingPowerInput",
+            "ElectricityTarget2": "DispatchToBattery2_LoadingPowerInput",
+            "ElectricityTarget3": "DispatchToCHP1_ElectricityFromCHPTarget",
+            "ElectricityTarget4": "DispatchToCHP2_ElectricityFromCHPTarget",
             # The car sizer steers two participants and passes a prefix of its own for each: the
-            # car's charge control first, so it takes the fourteenth output, then the house
-            # battery, which takes the fifteenth. That setup is therefore the one place where the
-            # battery target is not spelled 'LoadingPowerInputForBattery_' — the declarative name
-            # is the same either way, because it is derived from the participant and its input
-            # rather than from what a setup chose to call the channel.
-            "ElectricityToOrFromGridOfL1Controller_Output14": (
+            # car's charge control on weight 5, the house battery on weight 6. That setup is
+            # therefore the one place where the battery target is not spelled
+            # 'LoadingPowerInputForBattery_' — the declarative name is the same either way,
+            # because it is derived from the participant and its input rather than from what a
+            # setup chose to call the channel.
+            "ElectricityToOrFromGridOfL1Controller_5": (
                 "DispatchToL1EVChargeControl_1_ElectricityTargetFromEMS"
             ),
-            "ChargingPowerForBattery_Output15": "DispatchToBattery_LoadingPowerInput",
+            "ChargingPowerForBattery_6": "DispatchToBattery_LoadingPowerInput",
         },
     }
 

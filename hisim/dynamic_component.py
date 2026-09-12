@@ -17,6 +17,34 @@ from hisim.simulationparameters import SimulationParameters
 
 
 @dataclass
+class DynamicComponentTargetOutput:
+
+    """The dispatch output an aggregator grows for the participant one default connection describes.
+
+    A default connection says where a participant's measurement comes *from*; this says what the
+    aggregator sends *back* to that same participant. The two belong together, so they are
+    described together and created together: the output is materialised beside the input, in
+    :meth:`DynamicComponent.connect_with_dynamic_connections_list`, and only for a source
+    component the system setup actually built. Describing a connection creates nothing.
+
+    Only the three fields the output does not share with its connection live here. Load type,
+    unit, weight and the source class name are read off the connection itself, because a target
+    output that disagreed with its own feed about any of them could never be paired with it by
+    the tag-and-weight lookups that do the dispatching.
+    """
+
+    #: Name prefix of the port, saying what the port is — for instance
+    #: ``"ElectricityToOrFromGridOfSHMoreAdvancedHeatPumpHPLib_"``. The weight is appended to it.
+    source_output_name: str
+
+    #: The tags the dispatch carries, which is what the aggregator's runtime lookup searches for.
+    source_tags: List[Union[lt.ComponentType, lt.InandOutputType]]
+
+    #: Human-readable description of the port, shown in reports.
+    output_description: str
+
+
+@dataclass
 class DynamicComponentConnection:
 
     """Used in the dynamic component class for defining a dynamic connection."""
@@ -30,6 +58,10 @@ class DynamicComponentConnection:
     source_weight: int
     source_instance_name: Optional[str] = None
     allow_unconnected_mandatory: bool = False
+    #: The dispatch output this connection asks for, if the aggregator steers this participant
+    #: rather than only measuring it. ``None`` for a pure measurement — a PV system's production,
+    #: say — and for a participant whose target port the system setup creates by hand.
+    target_output: Optional[DynamicComponentTargetOutput] = None
 
 
 @dataclass
@@ -111,10 +143,11 @@ class DynamicComponent(Component):
 
     A dynamic component is an *aggregator*: it grows one input per participant handed to it
     rather than declaring a fixed port per source. Two ways of handing participants over live
-    side by side. A Python setup calls the imperative add-API below, which names the created
-    port after the participant and a running counter. A declarative energy-system file instead
-    produces resolved feeds, which :meth:`resolve_dynamic_connections` turns into ports named by
-    the format's derived templates. Both paths fill the same ``my_component_inputs`` and
+    side by side. A Python setup calls the imperative add-API below, which names a created input
+    after the participant and a running counter and a created dispatch output after what it
+    steers and the weight it steers it on. A declarative energy-system file instead produces
+    resolved feeds, which :meth:`resolve_dynamic_connections` turns into ports named by the
+    format's derived templates. Both paths fill the same ``my_component_inputs`` and
     ``my_component_outputs`` bookkeeping, so every tag-based runtime lookup behaves identically
     on a component wired either way and only the port names differ.
 
@@ -159,17 +192,55 @@ class DynamicComponent(Component):
         output_description: str,
         source_component_class: Optional[str] = None,
     ) -> ComponentOutput:
-        """Adds an output channel to a component."""
-        # Label Output and generate variable
-        num_inputs = len(self.outputs)
-        # label = f"{source_weight}"
-        label = f"Output{num_inputs + 1}"
-        vars(self)[label] = label
+        """Adds a dispatch output to this aggregator, named by what it is.
+
+        The name is the caller's prefix — which already says what the port does and for whom,
+        ``LoadingPowerInputForBattery_`` or ``ElectricityToOrFromGridOfSolarThermalSystem_`` —
+        plus the source weight, which is the thing the aggregator dispatches on and the only part
+        of a port's identity that distinguishes two ports sharing a prefix. It used to be the
+        prefix plus a running count of the aggregator's outputs, so a port's name was a function
+        of how many unrelated ports had been declared before it: retiring one dead default
+        connection renamed every port after it across the whole fleet, and twelve committed files
+        went stale at once for a change that touched none of them (F-1). A name derived from
+        meaning cannot move that way.
+
+        Args:
+            source_output_name: The name prefix, saying what the port is.
+            source_tags: The tags the dispatch carries, searched by the runtime lookups.
+            source_load_type: The load type of the dispatched flow.
+            source_unit: The unit of the dispatched flow.
+            source_weight: The participant's weight; appended to the prefix to form the name.
+            output_description: Human-readable description of the port.
+            source_component_class: Class name of the participant this port steers, if any. An
+                output naming a class no component of the run carries is dropped at registration.
+
+        Returns:
+            The created output port.
+
+        Raises:
+            ValueError: If this aggregator already publishes a port of that name. Two ports with
+                the same prefix and the same weight would be indistinguishable to the tag-and-
+                weight lookup that dispatches them, so this is a defect in the system setup —
+                one participant steered twice, or two participants sharing a weight — and not
+                something to paper over with a counter.
+        """
+        label = source_output_name + str(source_weight)
+        for existing_output in self.outputs:
+            if existing_output.field_name == label:
+                raise ValueError(
+                    f"'{self.component_name}' already publishes a dynamic output named '{label}', "
+                    f"and something is adding a second one. A dispatch port is named after what it "
+                    f"is — the prefix '{source_output_name}' — and the source weight "
+                    f"{source_weight} it steers, so two ports of that name would be one and the "
+                    f"same port to every tag-and-weight lookup. Either one participant is being "
+                    f"given a target output twice (by hand and by a default connection, say), or "
+                    f"two participants were given the same source weight."
+                )
 
         # Define Output as Component Input and add it to inputs
         myoutput = ComponentOutput(
             object_name=self.component_name,
-            field_name=source_output_name + label,
+            field_name=label,
             load_type=source_load_type,
             unit=source_unit,
             sankey_flow_direction=True,
@@ -184,7 +255,7 @@ class DynamicComponent(Component):
             DynamicConnectionOutput(
                 source_component_label=label,
                 source_component_class=source_component_class,
-                source_output_field_name=source_output_name + label,
+                source_output_field_name=label,
                 source_tags=source_tags,
                 source_load_type=source_load_type,
                 source_unit=source_unit,
@@ -470,7 +541,23 @@ class DynamicComponent(Component):
     def connect_with_dynamic_connections_list(
         self, dynamic_component_connections: List[DynamicComponentConnection]
     ) -> None:
-        """Connect all inputs based on a dynamic component connections list."""
+        """Grows the ports of one present source component and wires its measurement in.
+
+        This is where a default connection becomes real, and it is reached once per source
+        component the system setup actually built — the simulator resolves the aggregator's
+        default connections against the components of the run, so a class nobody instantiated
+        never gets here. Both ports of a steered participant are therefore created here: the
+        input that measures it, and, when the connection describes one, the output that steers
+        it back. Creating the target output anywhere earlier — inside the method that *describes*
+        the connection, as it was until F-1 — gave every aggregator the target ports of every
+        device it could ever meet, whether the house had them or not: a district-heated house
+        carried five ports for a heat pump, an electric heater and a solar collector it does not
+        have, wired to nothing and renumbering every port declared after them.
+
+        Args:
+            dynamic_component_connections: The default connections of one source component,
+                already carrying that component's runtime instance name.
+        """
         for connection in dynamic_component_connections:
             src_name: str = cast(str, connection.source_instance_name)
 
@@ -483,6 +570,17 @@ class DynamicComponent(Component):
                 source_object_name=src_name,
                 allow_unconnected_mandatory=connection.allow_unconnected_mandatory,
             )
+
+            if connection.target_output is not None:
+                self.add_component_output(
+                    source_output_name=connection.target_output.source_output_name,
+                    source_tags=connection.target_output.source_tags,
+                    source_component_class=connection.source_class_name,
+                    source_weight=connection.source_weight,
+                    source_load_type=connection.source_load_type,
+                    source_unit=connection.source_unit,
+                    output_description=connection.target_output.output_description,
+                )
 
     def add_dynamic_default_connections(self, connections: List[DynamicComponentConnection]) -> None:
         """Adds a dynamic default connection list definition."""

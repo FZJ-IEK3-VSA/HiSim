@@ -471,3 +471,86 @@ def test_house(
         other_kpi_grid_injection_in_kilowatt_hour,
         rtol=0.05,
     )
+
+
+def _energy_manager() -> controller_l2_energy_management_system.L2GenericEnergyManagementSystem:
+    """Builds a bare energy manager, the way every setup with one does.
+
+    Returns:
+        A freshly constructed controller, before anything has been wired to it.
+    """
+    return controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+        my_simulation_parameters=SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 15),
+        config=controller_l2_energy_management_system.EMSConfig.preset_optimize_own_consumption(
+            "L2EMSElectricityController"
+        ),
+    )
+
+
+@pytest.mark.base
+def test_the_manager_grows_no_target_output_until_something_is_wired_to_it() -> None:
+    """Catches the manager declaring target ports for devices the house does not have.
+
+    Asking a default connection to *describe* itself used to create the target output as a side
+    effect, and the constructor asks all six. A district-heated house therefore carried five
+    target ports — two for a heat pump, two for an electric heater, one for a solar collector —
+    wired to nothing, and because the ports were named after their position in the list, deleting
+    one dead device renamed every port after it in every setup (F-1).
+    """
+    manager = _energy_manager()
+
+    assert manager.my_component_outputs == []
+    assert [output.field_name for output in manager.outputs if "ElectricityToOrFromGridOf" in output.field_name] == []
+
+
+@pytest.mark.base
+def test_a_present_device_gets_its_target_output_where_its_input_is_created() -> None:
+    """Catches the target output going missing for a device that is there, or being misnamed.
+
+    This is the other half: what the simulator does for a source component the setup actually
+    built. Both of the heat pump's feeds are wired and both of its target ports appear, named
+    after what they steer and the weight they are steered on — and nothing belonging to the
+    electric heater or the solar collector comes with them.
+    """
+    manager = _energy_manager()
+    connections = manager.dynamic_default_connections["MoreAdvancedHeatPumpHPLib"]
+    for connection in connections:
+        connection.source_instance_name = "MoreAdvancedHeatPumpHPLib"
+
+    manager.connect_with_dynamic_connections_list(connections)
+
+    grown = [output.field_name for output in manager.outputs if "ElectricityToOrFromGridOf" in output.field_name]
+    assert grown == [
+        "ElectricityToOrFromGridOfSHMoreAdvancedHeatPumpHPLib_2",
+        "ElectricityToOrFromGridOfDHWMoreAdvancedHeatPumpHPLib_3",
+    ]
+    assert [entry.source_weight for entry in manager.my_component_outputs] == [2, 3]
+
+
+@pytest.mark.base
+def test_two_target_outputs_of_one_name_are_refused() -> None:
+    """Catches a port name that is no longer an identity.
+
+    A target port is named after what it steers and the weight it steers on, so two ports of one
+    name would be one and the same port to every tag-and-weight lookup the dispatch uses. That is
+    a setup wiring one participant twice, or two participants sharing a weight, and it has to say
+    so rather than be absorbed by a counter.
+    """
+    manager = _energy_manager()
+
+    def add_the_battery_target() -> None:
+        """Adds the battery target port the ten energy-manager sizers add by hand."""
+        manager.add_component_output(
+            source_output_name="LoadingPowerInputForBattery_",
+            source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+            source_weight=6,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for Battery Control. ",
+        )
+
+    add_the_battery_target()
+    assert manager.outputs[-1].field_name == "LoadingPowerInputForBattery_6"
+
+    with pytest.raises(ValueError, match="already publishes a dynamic output"):
+        add_the_battery_target()

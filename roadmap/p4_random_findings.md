@@ -13,7 +13,57 @@ Numbering is local to this document, as it is in `roadmap/p3_random_findings.md`
 
 ## 1. Defects in already-merged code
 
-### F-1 — the energy manager declares target outputs for devices the setup does not have, and names them by list position **[verified]**
+### F-1 — the energy manager declares target outputs for devices the setup does not have, and names them by list position **[verified, fixed]**
+
+**Fixed 2026-09-12**: both halves, in one change. The six `get_default_connections_from_*` methods are
+pure again — they describe, and create nothing. What each of them used to create on the side, the target
+output of the participant it describes, now travels with the connection that describes it, as a
+`DynamicComponentTargetOutput` on `DynamicComponentConnection` carrying the three things the port does not
+share with its own feed: the name prefix, the dispatch tags and the description. Load type, unit, weight and
+source class come off the connection, because a target that disagreed with its feed about any of them could
+never be paired with it. The port is materialised in `connect_with_dynamic_connections_list` — beside the
+input, in the same loop, for a source component the run actually has. That is later than components are
+registered, so the ports grown while wiring are registered then:
+`ComponentWrapper.register_outputs_grown_while_wiring`, called by `Simulator.prepare_calculation` right
+after the automatic connection, before `run_all_timesteps` sizes its values vector. A port that already
+existed at registration is not reconsidered, so one deliberately skipped there — its class is not in this
+run — stays skipped.
+
+The naming rule is now the prefix plus the source weight: `LoadingPowerInputForBattery_6`,
+`ElectricityToOrFromGridOfSHMoreAdvancedHeatPumpHPLib_2`, `ElectricityTarget1` … `ElectricityTarget4` for
+the four targets `dynamic_components` names alike and tells apart by weight. The prefix already says what
+the port is and the weight is what the manager dispatches on, so the name is a function of the port and of
+nothing else; a second port of the same name is refused with a `ValueError` naming both halves, because two
+ports of one name would be one port to every tag-and-weight lookup. The commented-out
+`# label = f"{source_weight}"` is gone, having finally been done.
+
+`household_district_heating_building_sizer`'s energy manager declares **9 ports where it declared 14**: the
+five phantoms are gone and the nine that remain are seven static ones, the occupancy target and the
+battery target the setup adds by hand. `household_heatpump_building_sizer` goes from 14 to 11 and keeps both
+heat pump targets, which is the other half of the same rule. The registered result columns do not move with
+them: `ComponentWrapper.register_component_outputs` was already dropping any output whose source class is
+absent from the run, which is why the phantoms never reached a result file or a KPI — and why this change is
+measurably neutral. All twelve recorded twins are byte-identical under
+`scripts/record_all_setups.py --check`; the eleven grouped twins among them re-record to no change; the
+one-week goldens of `household_heatpump_building_sizer` (a house whose manager grows two targets while
+wiring) and of `dynamic_components` (four hand-made targets) both report GOLDEN CHECK OK. The declarative
+path never called the legacy wiring, so it simply loses the constructor's phantoms: a declarative
+`household_heatpump_building_sizer` run now publishes four dispatch columns, `DispatchFor…`/`DispatchTo…`,
+and no `_OutputN` name anywhere.
+
+Two places that spelled the counter were respelled with it. `scripts/p3_parity_renamings.py` — the
+legacy→declarative table — keeps its seven EMS rows with their new legacy names and a comment block that
+tells the counter's story in the past tense; `tests/test_p3_parity.py`'s canary asserts the new spellings
+against a live build, and its static cross-check against the committed scenario files now covers the
+aggregator inputs alone, since the dispatch names moved and those files are being retired with the JSON path
+rather than regenerated. `hisim/json_generator.py` no longer reads a port's number out of its name or counts
+the manager's constructor-built outputs: it asks the declarations which target ports the executor will grow
+for itself, and takes a prefix by cutting the weight off the end.
+
+The committed `system_setups/*.scenario.json` still spell the old names and were deliberately not
+regenerated (#708 deletes them); `scenario-json-freshness` and `golden-json-check` are expected red on this
+branch until it rebases past that deletion. Everything from here on is the finding as it was recorded,
+including the two fixes it asked for, which are the two that landed.
 
 Found by D-1. Retiring `advanced_heat_pump_hplib` — a class **no system setup instantiates** — broke
 `golden-json-check` and `scenario-json-freshness` across twelve committed scenario JSONs. Two separate

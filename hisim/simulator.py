@@ -215,6 +215,12 @@ class Simulator:
         connect it to matching source components via default connections. Then calls
         `prepare_calculation` on every wrapped component so they can initialise
         internal state before the timestep loop begins.
+
+        Applying a default connection can grow ports: a dynamic component creates the input that
+        measures a participant and, where it steers that participant, the output that steers it
+        back — which is why those outputs exist only for participants the run actually has. Those
+        ports are registered here, while `run_all_timesteps` has still to size its values vector
+        from the global output list.
         """
         for wrapped_component in self.wrapped_components:
             # check if component should be connected to default connections automatically
@@ -223,6 +229,7 @@ class Simulator:
                     source_component_list=[wp.my_component for wp in self.wrapped_components],
                     target_component=wrapped_component.my_component,
                 )
+                wrapped_component.register_outputs_grown_while_wiring(self.all_outputs)
             wrapped_component.prepare_calculation()
 
     def process_one_timestep(

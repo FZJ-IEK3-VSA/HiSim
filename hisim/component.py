@@ -277,7 +277,6 @@ class Component:
         if my_simulation_parameters is None:
             raise ValueError("My Simulation parameters was None.")
         self.simulation_repository: SimRepository
-        # self.singleton_simulation_repository: SingletonSimRepository
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
         if isinstance(my_config, cfg.ConfigBase):
             # The central sizing check: a config that still

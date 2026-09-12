@@ -58,7 +58,11 @@ saying out loud:
 | `ElectricityFromGridInWatt` (input) | the provider itself, from the setup's `ElectricityMeter`; it is what makes the two capacity-charge outputs real instead of constant zero |
 | `PricePurchase`, `PriceInjection` | **nothing in this setup.** They are written to the results frame for the reader and are available for wiring; no component in the shipped library takes a price input yet |
 | `BillingPeriodPeakSoFar`, `CapacityChargeMarginal` | **nothing in this setup.** They are the peak-shaving signal a rule-based EMS would react to |
-| `PRICEPURCHASEFORECAST24H`, `PRICEINJECTIONFORECAST24H` (SingletonSimRepository) | **nothing.** `controller_mpc.py` read exactly these two keys until the component sweep retired it to `obsolete/` (decision D-16, 2026-09-10); the keys are published for the controller that will read them |
+
+The provider also published a 24 h forecast under two `SingletonSimRepository` keys,
+`PRICEPURCHASEFORECAST24H` and `PRICEINJECTIONFORECAST24H`. Their only reader was
+`controller_mpc.py`, retired to `obsolete/` by the component sweep (decision D-16, 2026-09-10);
+the publication was deleted on 2026-09-12, and the process-global repository with it.
 
 The example uses the `SYNTHETIC_TEST` contract, whose spot profile is a closed formula: real
 day-ahead series cannot be shipped for licensing reasons. Swap `tariff_contract_id` for a

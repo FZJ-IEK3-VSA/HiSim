@@ -42,6 +42,20 @@
 # request's merge commit. That is the commit a status can be shown on, and the
 # commit the prerequisite runs are indexed by.
 #
+# THE TOOLING COMMIT. The gate checks out no ref at all, which on a workflow_run
+# event means the default branch's head — the very commit this workflow file itself
+# comes from. Its helper script (scripts/ci_prereqs_done.sh) and the actions it uses
+# are therefore always the copies that belong to the workflow calling them. Only two
+# things come from the commit under test: scripts/golden_config.json, checked out into
+# `under-test/` so the matrix fans out over the setups the pull request defines, and
+# the golden-year matrix jobs, which are the test. A branch that predates a change to
+# this workflow has no copy of the workflow's helpers — on 2026-09-12 the gate ran
+# `bash scripts/ci_prereqs_done.sh` out of a branch older than the commit that added
+# that script, died with "No such file or directory" and hung a red status on a pull
+# request whose prerequisites were in fact all green. The workflow copy and its helpers
+# must not come apart. It is also the safer arrangement: the job holding the
+# status-writing token now runs nothing that came from the head commit.
+#
 # EDITING THIS FILE. `workflow_run` always uses the copy of the workflow that is on
 # the default branch, so changes here do nothing on the pull request that makes
 # them. They take effect once merged, on the next pull request.
@@ -92,9 +106,11 @@ jobs:
       TRIGGER_WORKFLOW: ${{ github.event.workflow_run.name }}
       HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
     steps:
+      # Deliberately no `ref:`, so this is `github.sha`: the default branch's head for a
+      # workflow_run event, the dispatched ref for a manual one — either way the commit
+      # this workflow file comes from. The gate's helper script and the actions below
+      # come from it too. See THE TOOLING COMMIT in the header.
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       # Wall time, CPU time and peak memory for this job; see the action.
       - name: Start the resource monitor
         uses: ./.github/actions/resource-monitor
@@ -157,10 +173,23 @@ jobs:
           echo "quality, tests and golden-check are all green for $SHA — starting the full-year tier."
           post_status pending "Full-year golden check running."
           echo "proceed=true" >> "$GITHUB_OUTPUT"
+      # Which pairs exist is the commit under test's business: a pull request may add or
+      # remove golden setups, and the matrix has to fan out over the ones it defines. Only
+      # the config comes from there; the emitter reading it stays this workflow's own copy.
+      # Guarded on the decision so the two early-bail firings per commit stay cheap.
+      - name: Check out the golden config of the commit under test
+        if: steps.decide.outputs.proceed == 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          path: under-test
+          sparse-checkout: scripts      # cone mode: the directory the config lives in
       - name: Build full-year matrix
         id: gen
         if: steps.decide.outputs.proceed == 'true'
-        run: echo "matrix=$(python3 scripts/golden_matrix.py --horizon year)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "matrix=$(python3 scripts/golden_matrix.py --horizon year \
+            --config under-test/scripts/golden_config.json)" >> "$GITHUB_OUTPUT"
       # Kept on failure too: a job killed for running out of memory is the one
       # whose measurement matters most.
       - name: Report the resource usage
@@ -260,9 +289,23 @@ jobs:
             exit 0
           fi
 
+          # A failed gate is two different things. When it found a failed prerequisite it
+          # wrote `proceed=false` and then exited 1, having already posted a failure status
+          # naming the prerequisite; re-posting here would only replace that description
+          # with a vaguer one, so this says nothing and just carries the red over. When the
+          # gate itself broke — a missing helper, a checkout or matrix-build failure, a
+          # cancellation — nobody has concluded the pending status it may have posted, and
+          # a status blaming the prerequisites would be a lie: the prerequisites are not
+          # what failed. `proceed` separates the two: the other branches that write
+          # 'false' — too early, duplicate — exit 0 and are already handled above, so a
+          # failed gate with proceed='false' is the prerequisite verdict and nothing else.
           if [ "$gate" != "success" ]; then
-            post_status failure "Prerequisite CI failed — the full-year golden check did not run."
-            echo "::error title=golden-year::Prerequisite CI failed, so the full-year golden check did not run. See the 'gate' job for which prerequisite failed."
+            if [ "${proceed:-}" = "false" ]; then
+              echo "The gate found a failed prerequisite and posted its own status; nothing to add."
+              exit 1
+            fi
+            post_status failure "The golden-year gate itself failed — see the run."
+            echo "::error title=golden-year::The golden-year gate job did not complete, so the full-year golden check did not run. This is a failure of the gate, not of a prerequisite — see the 'gate' job."
             exit 1
           fi
           if [ "$gy" != "success" ]; then

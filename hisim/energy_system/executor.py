@@ -307,8 +307,14 @@ class EnergySystemExecutor:
         is switched off, because every connection this format makes is an item of the file and
         has already been made.
 
+        The run metadata a Python setup has to assemble by hand — the scenario name and the
+        description — the file already carries: its ``name`` becomes the scenario name that
+        post-processing writes into the pyam "scenario" column, and its ``description`` the
+        run's description. Before this, a declarative run left both empty because only the
+        twelve building-sizer setups ever set them.
+
         Args:
-            model: The expanded energy system, for its name.
+            model: The expanded energy system, for its name and description.
             wired: The constructed and connected components.
 
         Returns:
@@ -321,6 +327,8 @@ class EnergySystemExecutor:
             my_module_config=None,
             my_simulation_parameters=self.simulation_parameters,
         )
+        simulator.scenario_name = model.name
+        simulator.description = model.description or ""
         for _name, component in wired.components:
             simulator.add_component(component, connect_automatically=self.CONNECT_AUTOMATICALLY)
         return simulator

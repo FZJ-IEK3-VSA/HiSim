@@ -114,6 +114,16 @@ class Simulator:
         self.module_filename = module_filename
         self.module_directory = module_directory
         self.my_module_config = my_module_config
+        #: Name of the scenario this run represents, carried into post-processing as the
+        #: pyam "scenario" column. A Python setup function sets it on the simulator it is
+        #: handed (the building-sizer setups write their scenario hash string here); a
+        #: declarative run gets the energy-system file's own ``name``. Empty when nobody
+        #: names the run, which is what post-processing wrote before this was run metadata.
+        self.scenario_name: str = ""
+        #: One-line description of the run. The Python entry point takes it from the first
+        #: line of the setup module's docstring, a declarative run from the energy-system
+        #: file's ``description`` field. Post-processing writes it into ``scenario.json``.
+        self.description: str = ""
         self.simulation_repository = sim_repository.SimRepository()
         self.results_data_frame: pd.DataFrame
         self.iteration_logging_path: str = ""
@@ -572,6 +582,8 @@ class Simulator:
             module_filename=self.module_filename,
             module_config=self.my_module_config,
             execution_time_in_s=execution_time,
+            scenario_name=self.scenario_name,
+            description=self.description,
             results_monthly=results_merged_monthly,
             results_cumulative=results_merged_cumulative,
             results_hourly=results_merged_hourly,

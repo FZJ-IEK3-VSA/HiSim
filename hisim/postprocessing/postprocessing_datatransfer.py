@@ -37,6 +37,8 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         results_cumulative: Optional[pd.DataFrame],
         results_daily: Optional[pd.DataFrame],
         kpi_collection_dict: Optional[Dict[str, Any]] = None,
+        scenario_name: str = "",
+        description: str = "",
     ) -> None:
         """Initialize a PostProcessingDataTransfer instance.
 
@@ -56,6 +58,12 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
             results_daily: Optional daily-aggregated results DataFrame.
             kpi_collection_dict: Optional dictionary of KPI name to KPI value mappings.
                 Defaults to an empty dict if not provided.
+            scenario_name: Name of the scenario this run represents, as the simulator
+                carries it. Post-processing writes it into the pyam "scenario" column.
+                Empty when the run was not named.
+            description: One-line description of the run, as the simulator carries it.
+                Post-processing writes it into ``scenario.json``. Empty when the run has
+                no description.
         """
         if kpi_collection_dict is None:
             kpi_collection_dict = {}
@@ -80,3 +88,5 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         self.results_daily: Optional[pd.DataFrame] = results_daily
         self.post_processing_options: List[int] = simulation_parameters.post_processing_options
         self.kpi_collection_dict: Dict[str, Any] = kpi_collection_dict
+        self.scenario_name: str = scenario_name
+        self.description: str = description

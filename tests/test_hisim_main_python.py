@@ -9,7 +9,9 @@ Python
 
 from pathlib import Path
 import argparse
+import time
 
+import numpy
 import pytest
 
 from hisim import hisim_main
@@ -45,6 +47,34 @@ def test_initialize_from_python_without_optional_arguments():
     simulator = hisim_main.initialize_from_python(PYTHON_SETUP)
 
     assert simulator is not None
+
+
+@pytest.mark.base
+def test_the_scenario_name_and_the_description_reach_post_processing(tmp_path):
+    """The run's two pieces of metadata travel on the simulator, not through a global.
+
+    The scenario name is written by the setup function — the building-sizer setups hash their
+    configuration into one — and the description by this entry point, from the first line of the
+    setup module's docstring. Post-processing reads both off the transfer object: the scenario
+    name becomes the pyam "scenario" column, the description lands in ``scenario.json``. Until
+    2026-09-12 both went through the process-global ``SingletonSimRepository``, where a second
+    simulation in the same process inherited the first one's name.
+    """
+    parameters = SimulationParameters.one_day_only(2021, 60)
+    parameters.result_directory = str(tmp_path / "results")
+    simulator = hisim_main.initialize_from_python(PYTHON_SETUP, my_simulation_parameters=parameters)
+
+    assert simulator.description == "Basic household new system setup."
+    assert simulator.scenario_name, "the setup function named no scenario"
+
+    empty_line = numpy.zeros(len(simulator.all_outputs))
+    ppdt = simulator.prepare_post_processing(
+        all_result_lines=[empty_line] * parameters.timesteps,
+        start_counter=time.perf_counter(),
+    )
+
+    assert ppdt.scenario_name == simulator.scenario_name
+    assert ppdt.description == "Basic household new system setup."
 
 
 @pytest.mark.base

@@ -61,7 +61,6 @@ from hisim.component import ComponentOutput
 from hisim.components.weather import Weather
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 if TYPE_CHECKING:
     from hisim.postprocessing import reportgenerator
@@ -1018,11 +1017,7 @@ class PostProcessor:
 
         # Set meta info
         self.model = f"HiSim_{ppdt.module_filename}"
-        self.scenario = (
-            SingletonSimRepository().get_entry(SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
-            if SingletonSimRepository().entry_exists(SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
-            else ""
-        )
+        self.scenario = ppdt.scenario_name
         self.region = region_of(ppdt)
         self.year = ppdt.simulation_parameters.year
 
@@ -1096,19 +1091,13 @@ class PostProcessor:
         self.model = "".join(["HiSim_", ppdt.module_filename])
 
         # set pyam scenario name
-        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME):
-            self.scenario = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
-        else:
-            self.scenario = ""
+        self.scenario = ppdt.scenario_name
 
         # set region
         self.region = region_of(ppdt)
 
         # set description
-        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.DESCRIPTION):
-            self.description = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.DESCRIPTION)
-        else:
-            self.description = ""
+        self.description = ppdt.description
 
         # set year or timeseries
         self.year = ppdt.simulation_parameters.year

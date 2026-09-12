@@ -131,6 +131,24 @@ def test_the_minimal_mockup_sizes_its_boiler_and_its_controller_from_the_buildin
 
 
 @pytest.mark.base
+def test_a_declarative_run_carries_the_file_name_and_description_as_run_metadata(
+    tmp_path: Path,
+) -> None:
+    """Catches a declarative run losing the name its own file gives it.
+
+    The scenario name is what post-processing writes into the pyam "scenario" column, and the
+    description is what lands in ``scenario.json``. A Python setup has to assemble both by hand,
+    and until the run metadata left the process-global singleton only twelve building-sizer
+    setups ever did, so a declarative run was anonymous. The file states both, so the executor
+    reads them off it.
+    """
+    built = build_energy_system(Fixtures.MINIMAL, Fixtures.parameters(tmp_path))
+
+    assert built.simulator.scenario_name == built.model.name == "Gas boiler household"
+    assert built.simulator.description == built.model.description
+
+
+@pytest.mark.base
 def test_a_component_nothing_reads_is_reported_as_a_warning(tmp_path: Path) -> None:
     """Catches an unread component being rejected, or being passed over in silence.
 

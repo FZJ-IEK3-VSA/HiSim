@@ -310,7 +310,8 @@ def test_the_heating_threshold_is_computed_from_the_building_it_serves() -> None
     The number the default building produces is 18 °C, not the 16 °C the deleted
     ``get_default_heat_distribution_controller_config`` hard-coded: the standard building
     asks for 7780.75 W over 121.2 m², i.e. 64.2 W/m², which lands in the middle band. The
-    three bands of
+    ratio itself is nowhere on the controller — the law reads the building's heating load
+    and its floor area from the context and divides them there. The three bands of
     :meth:`HeatDistributionControllerConfig.set_heating_threshold_temperature_based_on_building_efficiency`
     are pinned through the context as well, so the law is tested where the setups meet it
     rather than only as a bare function.
@@ -320,7 +321,6 @@ def test_the_heating_threshold_is_computed_from_the_building_it_serves() -> None
         "HeatDistributionController"
     ).resolve(SizingContext.for_building(default_building))
 
-    assert resolved.specific_heating_load_of_building_in_watt_per_m2 == pytest.approx(64.198, abs=1e-3)
     assert resolved.set_heating_threshold_outside_temperature_in_celsius == 18.0
 
     # The three bands, through the context: a well insulated building keeps heating off
@@ -344,9 +344,6 @@ def test_the_heating_threshold_is_computed_from_the_building_it_serves() -> None
         banded = heat_distribution_system.HeatDistributionControllerConfig.preset_standard(
             "HeatDistributionController"
         ).resolve(context)
-        assert banded.specific_heating_load_of_building_in_watt_per_m2 == pytest.approx(
-            specific_load_in_watt_per_m2
-        )
         assert banded.set_heating_threshold_outside_temperature_in_celsius == expected_threshold_in_celsius, (
             f"{specific_load_in_watt_per_m2} W/m² must give {expected_threshold_in_celsius} °C"
         )

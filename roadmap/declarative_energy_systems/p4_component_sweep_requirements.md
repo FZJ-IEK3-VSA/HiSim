@@ -307,6 +307,13 @@ row is struck from the table, which keeps the question and the option chosen nex
   `basic_household_only_heating` at 15-minute resolution: 29 of 102 KPIs move, gas consumption
   **+0.060 %** (61 289.8 → 61 326.8 kWh) with opex and CO₂ following it, and the largest relative move is an
   extremum rather than an energy — the minimum flow temperature of the distribution system, 20.16 → 14.83 °C.
+  **Amended 2026-09-12 after review:** the intermediate field
+  `specific_heating_load_of_building_in_watt_per_m2` is removed from `HeatDistributionControllerConfig` — the
+  specific heating load is a property of the building, not of the controller, and sat on the config only so the
+  threshold law could read it as a sibling — so the threshold law now reads the building's heating load and its
+  conditioned floor area directly from the context and divides them there, a file carries only the threshold, and
+  an explicit threshold still overrides the law; the values are unchanged (same bands, same inputs), and all 13
+  twins, their grouped twins and their scenario JSONs were re-recorded with nothing but that field gone.
 - **D-12** `[answered 2026-09-10]` **(a) fix.** The PV preset's law reads `Self("share_of_maximum_pv_potential")`
   and the field records the share actually applied, so a realized record re-executes (EAC2/UC5). Golden-neutral —
   the fleet's share is 1.0 — but every RenoVisor and building-sizer payload with a share below one, which came

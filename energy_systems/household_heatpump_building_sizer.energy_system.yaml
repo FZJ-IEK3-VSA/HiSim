@@ -90,7 +90,6 @@ components:
       set_heating_temperature_for_building_in_celsius: 20.0
       set_cooling_temperature_for_building_in_celsius: 25.0
       heating_load_of_building_in_watt: 7780.75
-      specific_heating_load_of_building_in_watt_per_m2: 64.19762541254126
     inputs:
       - L2EMSElectricityController
       - Weather

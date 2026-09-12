@@ -36,7 +36,7 @@ class CacheReaders:
     """
 
     SITES: Tuple[Tuple[str, str], ...] = (
-        ("hisim/components/generic_pv_system.py", "Get PV results from cache."),
+        ("hisim/components/generic_pv_system/pv_system.py", "Get PV results from cache."),
         ("hisim/components/building/building.py", "if not self.is_in_cache:  #"),
         ("hisim/components/weather/weather.py", "weather_series = pd.read_csv("),
         ("hisim/components/loadprofilegenerator_utsp_connector.py", "dataframe = pd.read_csv("),

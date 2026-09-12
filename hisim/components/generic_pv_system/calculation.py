@@ -3,8 +3,8 @@
 What this module produces is one artifact: the AC power of the array divided by its peak power, one
 value per simulated timestep, computed in a single vectorized pvlib run over the whole simulation
 period. It is the second producer under ``roadmap/cache_service_spec.md`` (§3, §12), after the weather
-series it consumes, which is why it is a module of its own beside the component rather than a section of
-it.
+series it consumes, which is why it is a module of its own inside the component's package rather than a
+section of the component.
 
 **The Merkle reference.** The PV series is a function of the weather series, and the spec's answer to
 that (§3.1, "Upstream artifacts as references, not payloads") is a reference rather than a copy: the DTO
@@ -33,8 +33,9 @@ callable without a running HiSim, so the prewarm CLI of the spec can fill the ca
 and every module in the closure is hashed into the key, so importing a frequently edited registry like
 ``loadtypes`` would throw the PV cache away on every enum addition. Anything a calculation needs from the
 component's world is passed as a plain value through the DTO instead -- which is why
-:class:`PVLibModuleAndInverterEnum` lives here and is re-exported by the component, and why the
-component, not this module, resolves a database enum to a path under ``hisim/inputs``.
+:class:`PVLibModuleAndInverterEnum` lives here rather than in ``config.py`` (whose ``hisim.config`` import
+reaches the component machinery), and why the component, not this module, resolves a database enum to a
+path under ``hisim/inputs``.
 
 **Extraction only.** The calculation is the one the component ran before, moved verbatim: the same
 vectorized pvlib run on the same arrays, so the produced values are bit-identical. The numeric change the
@@ -127,9 +128,9 @@ class PVLibModuleAndInverterEnum(str, Enum):
     https://pvlib-python.readthedocs.io/en/v0.9.0/generated/pvlib.pvsystem.retrieve_sam.html.
 
     It lives in the producer module because the database choice decides both the parameters and the
-    model the calculation runs, and its value is key material; ``hisim.components.generic_pv_system``
-    re-exports it, so ``generic_pv_system.PVLibModuleAndInverterEnum`` keeps working for configurations
-    and system setups.
+    model the calculation runs, and its value is key material; the package ``__init__`` re-exports it,
+    so ``generic_pv_system.PVLibModuleAndInverterEnum`` keeps working for configurations and system
+    setups.
     """
 
     SANDIA_MODULE_DATABASE = "SANDIA_MODULE_DATABASE"

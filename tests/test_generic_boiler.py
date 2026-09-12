@@ -2,13 +2,16 @@
 
 from typing import Any, Dict, Optional
 import pytest
+from hisim import loadtypes as lt
 from hisim import simulator as sim
+from hisim.components import generic_boiler
 from hisim.components.dual_circuit_system import HeatingMode
 from hisim.components.generic_boiler import (
     GenericBoilerController,
     GenericBoilerControllerConfig,
 )
-from hisim.config import DisplayConfig
+from hisim.config import ComponentID, DisplayConfig, SizingContext
+from hisim.simulationparameters import SimulationParameters
 
 
 @pytest.mark.base
@@ -140,3 +143,116 @@ def test_determine_summer_heating_mode_handles_equality_case(
         set_heating_threshold_temperature_in_celsius,
     )
     assert result == expected_mode
+
+
+class FuelConstants:
+    """What the boiler's two fuel constants are checked against, and with what.
+
+    The numbers themselves are not repeated here: the point of the check is that the
+    configuration and the component agree, so repeating a literal would only pin the
+    ``PhysicsConfig`` table a second time and would pass even if the two derivations drifted
+    apart. The building load is any load that sizes a boiler; nothing about the fuel depends
+    on it.
+    """
+
+    #: A load big enough to size a real device, small enough to be a single-family home.
+    HEATING_LOAD_IN_WATT: float = 8000.0
+
+    #: One apartment, so the domestic-hot-water branch of the power law is exercised too.
+    NUMBER_OF_APARTMENTS: float = 1.0
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "preset_name, energy_carrier, boiler_type",
+    [
+        ("preset_condensing_gas", lt.LoadTypes.GAS, generic_boiler.BoilerType.CONDENSING),
+        ("preset_oil", lt.LoadTypes.OIL, generic_boiler.BoilerType.CONVENTIONAL),
+    ],
+)
+def test_the_config_derives_the_fuel_constants_the_component_exposes(
+    preset_name: str,
+    energy_carrier: lt.LoadTypes,
+    boiler_type: "generic_boiler.BoilerType",
+) -> None:
+    """The build-time derivation is the one the component runs on, for both boiler types.
+
+    Failure mode caught: the derivation moving to ``GenericBoilerConfig`` (D-15) and drifting
+    from what ``GenericBoiler.build`` sets, so the meter reading the contributed facts would
+    account litres and kilograms the boiler beside it never burnt. Both boiler types are
+    covered because the type is what picks the higher or the lower heating value.
+    """
+    config = getattr(generic_boiler.GenericBoilerConfig, preset_name)("Boiler").resolve(
+        SizingContext(
+            heating_load_in_watt=FuelConstants.HEATING_LOAD_IN_WATT,
+            number_of_apartments=FuelConstants.NUMBER_OF_APARTMENTS,
+        )
+    )
+    component = generic_boiler.GenericBoiler(
+        config=config,
+        my_simulation_parameters=SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60),
+    )
+
+    heating_value_in_kwh_per_liter, density_in_kg_per_m3 = generic_boiler.GenericBoilerConfig.fuel_constants(
+        energy_carrier, boiler_type
+    )
+
+    assert component.heating_value_of_fuel_in_kwh_per_liter == heating_value_in_kwh_per_liter
+    assert component.fuel_density_in_kg_per_m3 == density_in_kg_per_m3
+    assert heating_value_in_kwh_per_liter is not None and density_in_kg_per_m3 is not None
+
+
+@pytest.mark.base
+def test_the_contributed_facts_carry_the_carrier_and_its_two_constants() -> None:
+    """The boiler ships its fuel as sizing facts, with the values the component burns by.
+
+    Failure mode caught: the contribution computing the constants a second way, or declaring
+    a fact it does not return — the engine checks the names, but only a test checks that the
+    values are the component's.
+    """
+    config = generic_boiler.GenericBoilerConfig.preset_condensing_gas("Boiler").resolve(
+        SizingContext(
+            heating_load_in_watt=FuelConstants.HEATING_LOAD_IN_WATT,
+            number_of_apartments=FuelConstants.NUMBER_OF_APARTMENTS,
+        )
+    )
+    component = generic_boiler.GenericBoiler(
+        config=config,
+        my_simulation_parameters=SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60),
+    )
+
+    contributions = generic_boiler.GenericBoilerConfig.SIZING_CONTRIBUTIONS
+    assert len(contributions) == 1
+    facts = contributions[0].compute(config, SizingContext())
+
+    assert facts["energy_carrier"] is lt.LoadTypes.GAS
+    assert facts["heating_value_of_fuel_in_kwh_per_liter"] == component.heating_value_of_fuel_in_kwh_per_liter
+    assert facts["fuel_density_in_kg_per_m3"] == component.fuel_density_in_kg_per_m3
+
+
+@pytest.mark.base
+def test_district_heating_has_no_heating_value_and_no_fuel_density() -> None:
+    """A carrier that burns nothing ships ``None`` for both constants, not a stand-in number.
+
+    Failure mode caught: district heating inheriting whatever the neighbouring setup happened
+    to pass — today's setups hand a district-heating meter the *oil* constants — so its
+    consumption would be reported as litres of a fuel nobody burnt (D-15).
+    """
+    assert generic_boiler.GenericBoilerConfig.fuel_constants(
+        lt.LoadTypes.DISTRICTHEATING, generic_boiler.BoilerType.CONDENSING
+    ) == (None, None)
+
+    config = generic_boiler.GenericBoilerConfig(
+        component_id=ComponentID(name="DistrictHeatingBoiler"),
+        energy_carrier=lt.LoadTypes.DISTRICTHEATING,
+        boiler_type=generic_boiler.BoilerType.CONDENSING,
+        minimal_thermal_power_in_watt=0.0,
+        maximal_thermal_power_in_watt=FuelConstants.HEATING_LOAD_IN_WATT,
+    )
+    contributions = generic_boiler.GenericBoilerConfig.SIZING_CONTRIBUTIONS
+    assert len(contributions) == 1
+    facts = contributions[0].compute(config, SizingContext())
+
+    assert facts["heating_value_of_fuel_in_kwh_per_liter"] is None
+    assert facts["fuel_density_in_kg_per_m3"] is None
+    assert facts["energy_carrier"] is lt.LoadTypes.DISTRICTHEATING

@@ -31,7 +31,17 @@ from hisim import log
 from hisim import utils
 from hisim.caching import atomic_cache_write
 from hisim.component import OpexCostDataClass, CapexCostDataClass
-from hisim.config import ConfigBase, ComponentID, DisplayConfig, Sizable, Size, sized_field
+from hisim.config import (
+    ComponentID,
+    ConfigBase,
+    DisplayConfig,
+    FactContribution,
+    Sizable,
+    Size,
+    SizingContext,
+    concrete,
+    sized_field,
+)
 from hisim.components.weather import Weather
 from hisim.economics.facts import ComponentCostFacts, CostRelevance
 from hisim.sim_repository_singleton import (
@@ -308,6 +318,35 @@ class PVSystemConfig(ConfigBase):
         ) * share_of_maximum_pv_potential
 
         return round(total_pv_power_in_watt, 2)
+
+
+def _pv_sizing_facts(config: PVSystemConfig, ctx: SizingContext) -> Dict[str, Any]:
+    """Contributes the array's peak power for the components sized from it.
+
+    A battery's capacity and a charging station's power are read off the generator they
+    are installed beside, so the peak power is a fact of the system and not only a field
+    of this config. The value is the resolved one — ``compute`` runs after this config
+    was sized, so ``power_in_watt`` is a number here whether an author pinned it or a law
+    derived it from the roof — and the context argument is unused: the peak power is this
+    config's own field.
+
+    Args:
+        config: this PV configuration, fully resolved.
+        ctx: the sizing context; unused.
+
+    Returns:
+        Dict[str, Any]: ``{"pv_peak_power_in_watt": config.power_in_watt}``.
+    """
+    del ctx
+    return {"pv_peak_power_in_watt": concrete(config.power_in_watt)}
+
+
+# Declared after the class because it refers to it, exactly as ``WeatherConfig`` does. A
+# scenario with two arrays has two providers of this fact, and a consumer then names the one
+# it means through its ``sizing_sources`` line.
+PVSystemConfig.SIZING_CONTRIBUTIONS = (
+    FactContribution(facts=("pv_peak_power_in_watt",), compute=_pv_sizing_facts),
+)
 
 
 class PVSystem(cp.Component):

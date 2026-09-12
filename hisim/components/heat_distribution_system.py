@@ -1559,18 +1559,30 @@ def _hds_controller_sizing_facts(
     Uses the same HeatDistributionControllerInformation derivation the setups call today,
     so engine-resolved values are identical to the hand-threaded ones. The context is
     unused: the controller config already carries its building-derived parameters.
+
+    The heating threshold is passed on as the value this controller resolved to, whether
+    that came from :attr:`HeatDistributionControllerConfig.HEATING_THRESHOLD_LAW` or from
+    an author pinning it: every generator controller that heats below the same threshold
+    reads the one the emitter circuit actually uses, instead of repeating the step table.
     """
     del ctx
     information = HeatDistributionControllerInformation(config=config)
     return {
         "water_mass_flow_rate_in_kg_per_second": information.water_mass_flow_rate_in_kg_per_second,
         "heat_distribution_system_type": config.heating_system,
+        "set_heating_threshold_outside_temperature_in_celsius": concrete(
+            config.set_heating_threshold_outside_temperature_in_celsius
+        ),
     }
 
 
 HeatDistributionControllerConfig.SIZING_CONTRIBUTIONS = (
     FactContribution(
-        facts=("water_mass_flow_rate_in_kg_per_second", "heat_distribution_system_type"),
+        facts=(
+            "water_mass_flow_rate_in_kg_per_second",
+            "heat_distribution_system_type",
+            "set_heating_threshold_outside_temperature_in_celsius",
+        ),
         compute=_hds_controller_sizing_facts,
     ),
 )

@@ -135,6 +135,67 @@ class GenericBoilerConfig(ConfigBase):
             maximal_thermal_power_in_watt *= 1.1  # add 10% when used for both SH and DHW
         return maximal_thermal_power_in_watt
 
+    @staticmethod
+    def heating_value_in_joule_per_m3(
+        energy_carrier: lt.LoadTypes, boiler_type: "BoilerType"
+    ) -> float:
+        """Returns the heating value of the fuel the way this boiler type exploits it.
+
+        A condensing boiler recovers the latent heat of the flue gas and is therefore
+        rated on the higher heating value; a conventional one loses it and is rated on the
+        lower. Which of the two applies is a property of the configured device, so the
+        choice lives here rather than in the component that later divides by it.
+
+        Args:
+            energy_carrier: The fuel burnt.
+            boiler_type: Condensing or conventional.
+
+        Returns:
+            The heating value in joule per cubic metre.
+
+        Raises:
+            ValueError: If the carrier has no entry in ``PhysicsConfig`` (district heating
+                burns nothing), or if the boiler type is neither of the two.
+        """
+        properties = PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=energy_carrier)
+        if boiler_type == BoilerType.CONDENSING:
+            return properties.higher_heating_value_in_joule_per_m3
+        if boiler_type == BoilerType.CONVENTIONAL:
+            return properties.lower_heating_value_in_joule_per_m3
+        raise ValueError(f"Boiler type {boiler_type} is not implemented.")
+
+    @classmethod
+    def fuel_constants(
+        cls, energy_carrier: lt.LoadTypes, boiler_type: "BoilerType"
+    ) -> Tuple[Optional[float], Optional[float]]:
+        """Returns the fuel's heating value in kWh per litre and its density in kg per m3.
+
+        The pair the fuel meter needs to turn kilowatt hours back into litres and
+        kilograms. It is derived at *build* time rather than inside the component, so a
+        meter can read the same two numbers off the generator's configuration through the
+        sizing facts instead of repeating them — a gas boiler beside an oil meter is what
+        the repetition used to produce (D-15).
+
+        District heating is the one carrier that burns nothing: it has no heating value
+        and no fuel density, and both are ``None`` rather than a stand-in number that
+        would be accounted as litres of something.
+
+        Args:
+            energy_carrier: The fuel burnt.
+            boiler_type: Condensing or conventional, which picks the heating value.
+
+        Returns:
+            ``(heating value in kWh/l, density in kg/m3)``, both ``None`` for district heating.
+        """
+        if energy_carrier == lt.LoadTypes.DISTRICTHEATING:
+            return None, None
+        # J = kWh/(3.6 * 1e6) and m3 = 1e3 l
+        heating_value_in_kwh_per_liter = cls.heating_value_in_joule_per_m3(energy_carrier, boiler_type) / (3.6 * 1e9)
+        density_in_kg_per_m3 = PhysicsConfig.get_properties_for_energy_carrier(
+            energy_carrier=energy_carrier
+        ).density_in_kg_per_m3
+        return heating_value_in_kwh_per_liter, density_in_kg_per_m3
+
     #: Sizing law of the maximal thermal power: cover space heating or DHW, whichever is
     #: larger (see :meth:`scale_thermal_power`). Named as a ClassVar so that the field
     #: declaration reads as one line and the law can be described in one place.
@@ -159,9 +220,11 @@ class GenericBoilerConfig(ConfigBase):
     consumption_in_kilowatt_hour: float = 0.0
 
     #: Sizing facts this config contributes: its resolved power band, for consumers that
-    #: size from this boiler (its controller). With two boilers in one scenario each is
-    #: addressable as "<its name>.maximal_thermal_power_in_watt" and a consumer must say
-    #: which one it means; assigned below the class.
+    #: size from this boiler (its controller), and its fuel — the carrier plus the two
+    #: constants derived from it — for the meter that accounts what it burns. With two
+    #: boilers in one scenario each is addressable as
+    #: "<its name>.maximal_thermal_power_in_watt" and a consumer must say which one it
+    #: means; assigned below the class.
     SIZING_CONTRIBUTIONS: ClassVar[Tuple["FactContribution", ...]] = ()
 
     #: The named default boilers, one per fuel plus the nominal catalogue devices, are
@@ -520,23 +583,21 @@ class GenericBoiler(Component):
             ).specific_heat_capacity_in_joule_per_kg_per_kelvin
         )
 
-        # Here use higher heating value for condesing boiler and lower heating value for conventional boiler
-        if self.config.boiler_type == BoilerType.CONDENSING:
-            self.heating_value_of_fuel_in_joule_per_m3 = PhysicsConfig.get_properties_for_energy_carrier(
-                energy_carrier=self.energy_carrier
-            ).higher_heating_value_in_joule_per_m3
-        elif self.config.boiler_type == BoilerType.CONVENTIONAL:
-            self.heating_value_of_fuel_in_joule_per_m3 = PhysicsConfig.get_properties_for_energy_carrier(
-                energy_carrier=self.energy_carrier
-            ).lower_heating_value_in_joule_per_m3
-        else:
-            raise ValueError(f"Boiler type {self.config.boiler_type} is not implemented.")
-
-        # J = kWh/(3.6 * 1e6) and m3 = 1e3 l
-        self.heating_value_of_fuel_in_kwh_per_liter = self.heating_value_of_fuel_in_joule_per_m3 / (3.6 * 1e9)
-        self.fuel_density_in_kg_per_m3 = PhysicsConfig.get_properties_for_energy_carrier(
-            energy_carrier=self.config.energy_carrier
-        ).density_in_kg_per_m3
+        # The fuel constants are derived by the config, which is also what contributes them
+        # as sizing facts, so the meter accounting this boiler's consumption reads exactly
+        # the numbers the boiler itself burns by. Condensing/conventional picks the higher
+        # or the lower heating value; an unknown carrier still raises here, as it always did.
+        self.heating_value_of_fuel_in_joule_per_m3 = GenericBoilerConfig.heating_value_in_joule_per_m3(
+            self.energy_carrier, self.config.boiler_type
+        )
+        heating_value_in_kwh_per_liter, density_in_kg_per_m3 = GenericBoilerConfig.fuel_constants(
+            self.energy_carrier, self.config.boiler_type
+        )
+        # ``fuel_constants`` returns None only for district heating, and the line above already
+        # refused that carrier the way it always did, so both values are numbers here.
+        assert heating_value_in_kwh_per_liter is not None and density_in_kg_per_m3 is not None
+        self.heating_value_of_fuel_in_kwh_per_liter = heating_value_in_kwh_per_liter
+        self.fuel_density_in_kg_per_m3 = density_in_kg_per_m3
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -1632,21 +1693,39 @@ class GenericBoilerController(Component):
 
 
 def _boiler_sizing_facts(config: GenericBoilerConfig, ctx: SizingContext) -> dict:
-    """Contributes the boiler's resolved power band for connected consumers.
+    """Contributes the boiler's resolved power band and fuel for connected consumers.
 
     Computed after the boiler itself resolved, so the values are the final concrete
     numbers whether they came from a law, a preset constant or a manual override.
+
+    The fuel half — the carrier and the two constants
+    :meth:`GenericBoilerConfig.fuel_constants` derives from it and from the boiler type —
+    is what the gas and fuel meters copy instead of repeating (D-15): a meter accounting
+    this boiler's consumption then cannot state a different fuel from the one it burns.
+    Both constants are ``None`` for district heating, which burns nothing.
     """
     del ctx
+    heating_value_in_kwh_per_liter, density_in_kg_per_m3 = GenericBoilerConfig.fuel_constants(
+        config.energy_carrier, config.boiler_type
+    )
     return {
         "maximal_thermal_power_in_watt": concrete(config.maximal_thermal_power_in_watt),
         "minimal_thermal_power_in_watt": concrete(config.minimal_thermal_power_in_watt),
+        "energy_carrier": config.energy_carrier,
+        "heating_value_of_fuel_in_kwh_per_liter": heating_value_in_kwh_per_liter,
+        "fuel_density_in_kg_per_m3": density_in_kg_per_m3,
     }
 
 
 GenericBoilerConfig.SIZING_CONTRIBUTIONS = (
     FactContribution(
-        facts=("maximal_thermal_power_in_watt", "minimal_thermal_power_in_watt"),
+        facts=(
+            "maximal_thermal_power_in_watt",
+            "minimal_thermal_power_in_watt",
+            "energy_carrier",
+            "heating_value_of_fuel_in_kwh_per_liter",
+            "fuel_density_in_kg_per_m3",
+        ),
         compute=_boiler_sizing_facts,
     ),
 )

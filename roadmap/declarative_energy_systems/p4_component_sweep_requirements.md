@@ -59,7 +59,7 @@ For every class in §R3 marked *convert*: legacy factories deleted; presets `pre
 
 ### R2 — Gates that touch shared code `[proposed; survey A Gate 0, B Gate B-0, C D-19]`
 Own commits, before the batch that needs them, each golden-neutral:
-- R2.1 Facts added to `SizingContext`/`Size`: `set_heating_threshold_outside_temperature_in_celsius` (contributed by `HeatDistributionControllerConfig`), `roof_area_in_m2` (Building; value exists as `BuildingInformation.roof_area_in_m2`), `pv_peak_power_in_watt` (PV). Plus D-15's three carrier/fuel facts (contributed by `GenericBoilerConfig`, decided (b)) and D-21's `heating_reference_temperature_in_celsius` (contributed by `WeatherConfig`, decided (c)).
+- R2.1 Facts added to `SizingContext`/`Size` — **executed 2026-09-11**, D-21 excepted: `set_heating_threshold_outside_temperature_in_celsius` (contributed by `HeatDistributionControllerConfig`), `roof_area_in_m2` (Building; value exists as `BuildingInformation.roof_area_in_m2`), `pv_peak_power_in_watt` (PV, `PVSystemConfig`'s first contribution), plus D-15's three carrier/fuel facts `energy_carrier`, `heating_value_of_fuel_in_kwh_per_liter` and `fuel_density_in_kg_per_m3` (contributed by `GenericBoilerConfig`, decided (b); its `__init__` derivation moved to `GenericBoilerConfig.fuel_constants`, `None` for district heating). Six facts, no reader yet: every one of them draws the "provides X, which no component reads" warning until the batch that consumes it lands, and no recorded twin moved. D-21's `heating_reference_temperature_in_celsius` (contributed by `WeatherConfig`, decided (c)) is **pending its own PR**: it needs a per-station DIN 12831 table, which is a data decision and not a vocabulary one. The `value_type=lt.LoadTypes` codec and the `Many` aggregator D-15 also names stay with the meter batch that needs them.
 - R2.2 `CHANNELS` declared on `GasMeter`, `FuelMeter`, `HeatingMeter` (own modules).
 - R2.3 Executor decodes constructor arguments by annotation (enum, `JsonReference`) — D-19; without it the constructor form of P2 is decorative.
 - R2.4 Deletions of dead singleton keys: `WATERMASSFLOWRATEOFHEATGENERATOR` (now); the six 5R1C keys and `LOCATION` per D-32.
@@ -85,9 +85,9 @@ Legend: **conv** convert · **del** retired — moved to `obsolete/` under D-16'
 | `generic_chp.CHPConfig` | conv | `gas`, `hydrogen` | `p_el`, `p_fuel` ← `Self("p_th")` × per-preset ratio; `p_th` stays a field | (`maximal_thermal_power_in_watt`) | N | |
 | `advanced_fuel_cell.CHPConfig` | conv | `hydrogen` | — | — | N | D-5 |
 | `CHPConfigAdvanced` | del | | | | | |
-| `GenericBoilerConfig` | done | 7 presets | done | done | | |
+| `GenericBoilerConfig` | done | 7 presets | done | power band; + carrier and fuel constants **landed 2026-09-11** (R2.1, D-15) | | |
 
-**Heat-generator controllers (survey A)** — all need R2.1's threshold fact except where noted.
+**Heat-generator controllers (survey A)** — all need R2.1's threshold fact except where noted; the fact itself exists since 2026-09-11, contributed by `HeatDistributionControllerConfig`, so each conversion only has to read it.
 
 | Class | Act | Presets | `AUTO` fields ← facts | Beh. | Dec. |
 |---|---|---|---|---|---|
@@ -107,7 +107,7 @@ Legend: **conv** convert · **del** retired — moved to `obsolete/` under D-16'
 
 | Class | Act | Presets | `AUTO` fields ← facts | Provides | Beh. | Dec. |
 |---|---|---|---|---|---|---|
-| `HeatDistributionControllerConfig` | done | `standard` | delete 2 factories (21 sites); `heating_system` plain default until Q-P1.8 | + threshold fact (R2.1) | **P** for 3 setups + 8 tests (16 → 18 °C) | D-11 |
+| `HeatDistributionControllerConfig` | done | `standard` | delete 2 factories (21 sites); `heating_system` plain default until Q-P1.8 | threshold fact **landed 2026-09-11** (R2.1) | **P** for 3 setups + 8 tests (16 → 18 °C) | D-11 |
 | `HeatDistributionConfig` | done | | nothing left | | | |
 | `SimpleHotWaterStorageConfig` | conv | `buffer` (+ `sizing_option: HotWaterStorageSizingEnum` field, D-10) | `volume_heating_water_storage_in_liter` ← **generator** `maximal_thermal_power_in_watt` × k (20/40/50 l/kW) — today the building load | — | **P** (C11: +10 % on 5 golden sizers, +54 % one ungated, up to +72 % MFH) | D-9, D-10, D-17 |
 | `SimpleHotWaterStorageControllerConfig` | del | | | | | D-16 |
@@ -119,13 +119,13 @@ Legend: **conv** convert · **del** retired — moved to `obsolete/` under D-16'
 
 | Class | Act | Presets | `AUTO` fields ← facts | Provides | Beh. | Dec. |
 |---|---|---|---|---|---|---|
-| `PVSystemConfig` | conv | `rooftop` | `power_in_watt` ← roof_area_in_m2 × 0.6 / module area × module power × `Self(share)` (fn, `fields=`) | `pv_peak_power_in_watt` | N for fleet; **P** for share ≠ 1 | D-12, D-13 |
+| `PVSystemConfig` | conv | `rooftop` | `power_in_watt` ← roof_area_in_m2 × 0.6 / module area × module power × `Self(share)` (fn, `fields=`) | `pv_peak_power_in_watt` **landed 2026-09-11** (R2.1) | N for fleet; **P** for share ≠ 1 | D-12, D-13 |
 | `BatteryConfig` | conv | `standard` | capacity ← pv_peak_power × 1e-3; inverter ← pv_peak_power × 0.5 (**not** `Self(capacity)` — rounding trap) | — | N | D-14 |
 | `WindturbineConfig` | del | | `generic_windturbine.py` → `obsolete/` with its test (D-16); the KPI vocabulary keys on `ComponentType.WINDTURBINE`, so no result moves | | | D-16 |
 | `PriceSignalConfig` | del | | `generic_price_signal.py` → `obsolete/` with its test (D-16); superseded by `tariff_provider.py` | | | D-16 |
 | `ElectricityMeterConfig` | done | `standard` | delete legacy factory (25 sites) | | N | |
-| `GasMeterConfig` | conv | `gas`, `hydrogen` | `gas_loadtype` ← generator carrier (copy, D-15 (b)) | — | N | D-15 |
-| `FuelMeterConfig` | conv | `oil`, `pellets`, `wood_chips`, `district_heating` | `fuel_loadtype`, `heating_value_of_fuel_in_kwh_per_liter`, `fuel_density_in_kg_per_m3` ← generator (copy, D-15 (b); `None` for district heating) | — | N | D-15 |
+| `GasMeterConfig` | conv | `gas`, `hydrogen` | `gas_loadtype` ← generator carrier (copy, D-15 (b); the `energy_carrier` fact **landed 2026-09-11**, the `LoadTypes` codec has not) | — | N | D-15 |
+| `FuelMeterConfig` | conv | `oil`, `pellets`, `wood_chips`, `district_heating` | `fuel_loadtype`, `heating_value_of_fuel_in_kwh_per_liter`, `fuel_density_in_kg_per_m3` ← generator (copy, D-15 (b); `None` for district heating) — all three facts **landed 2026-09-11** | — | N | D-15 |
 | `HeatingMeterConfig` | conv | `standard` | — | — | N | |
 | `EMSConfig` | done | | delete obsolete `strategy` field; align the class-side default feed for the occupancy to weight 999 (its own channel rejects weight 1, so a bare `- occupancy` under the EMS fails EF-29 today — P2 R2.5); legacy-path behaviour check first | | N/? | |
 | `MpcControllerConfig`, `PIDControllerConfig` | del | | `controller_mpc.py` and `controller_pid.py` → `obsolete/` with their tests (D-16); 27 of 49 MPC fields are lists — 13 runtime result buffers and 12 forecast inputs, none of which belongs in a file — and the two were the only readers of the Building's 5R1C keys (D-32) | | | D-16, D-32 |
@@ -137,7 +137,7 @@ Legend: **conv** convert · **del** retired — moved to `obsolete/` under D-16'
 | Class | Act | Presets / constructors | Remaining work | Beh. | Dec. |
 |---|---|---|---|---|---|
 | `WeatherConfig` | done | `standard`, `for_location(…)`, `for_data_file(path, data_source)` (D-18) | delete `get_default` (44 sites) after the two gates: the direct-file constructor (D-18) and argument decoding (D-19) | N | D-18, D-19 |
-| `BuildingConfig` | done | `standard`, `for_tabula_code` | + `roof_area_in_m2` fact; the 14 non-parameter post-construction mutations → sparse `config:` overrides (D-22); `heating_reference_temperature` stays a plain default (D-21 (c)) | N / P | D-21, D-22 |
+| `BuildingConfig` | done | `standard`, `for_tabula_code` | `roof_area_in_m2` fact **landed 2026-09-11** (R2.1); the 14 non-parameter post-construction mutations → sparse `config:` overrides (D-22); `heating_reference_temperature` stays a plain default (D-21 (c)) | N / P | D-21, D-22 |
 | `UtspLpgConnectorConfig` | done | `standard`, `for_household` | delete legacy factory (32 sites); the 11 sizers' `USE_LOCAL_LPG` + household-list + `cache_dir_path` overrides become `config:`/constructor arguments (`for_household` now takes `data_acquisition_mode`, P2 2026-08-27) | N | ~~D-20~~ |
 | `WeatherDataImport` | ex | | not a config; import fails (`wetterdienst`) | | |
 | `SmartDeviceConfig` | del | | defective (`KeyError` on construction); module and config **moved** to `obsolete/` (D-30, 2026-09-11) | | D-30 |
@@ -179,7 +179,7 @@ Ordered by recorded-setup impact and fact dependency (Building → generator →
 - **B3 Storages** — DHW storage; buffer storage after D-9/D-10 (C11 commit separate).
 - **B4 Heat generators** — hplib (D-1/D-6), electric, district, generic HP, air conditioners (D-3), heat source, solar thermal (D-7 separate), CHP ×2 (D-5).
 - **B5 Generator controllers** — gate R2.1 threshold fact; all controllers of B4; CHP controller (D-4 separate); D-2 delete.
-- **B6 Providers** — Building `roof_area` contribution (with B2's gate), D-22 overrides, D-21 (separate, physics); *`german_multi_family_home` clause struck — void by conflict 8*.
+- **B6 Providers** — Building `roof_area` contribution (**landed 2026-09-11** with R2.1, ahead of B2), D-22 overrides, D-21 (separate, physics); *`german_multi_family_home` clause struck — void by conflict 8*.
 - **B7 Mobility and H₂** — after D-23/D-25/D-29; CSVLoader constructor first.
 - **B8 Examples, template, `configuration.py` deletion, `describe` review of every converted class**.
 
@@ -352,7 +352,9 @@ row is struck from the table, which keeps the question and the option chosen nex
   `Many` has a consumer. The gas and fuel meters copy the carrier, `heating_value_of_fuel_in_kwh_per_liter` and
   `fuel_density_in_kg_per_m3` from the generator rather than repeating them, which closes the "gas boiler + oil meter"
   foot-gun. The prerequisites are accepted with the option: three new facts contributed by `GenericBoilerConfig`, whose
-  `__init__` derivation moves to build time; a `value_type=lt.LoadTypes` codec; and the consistency aggregator for
+  `__init__` derivation moves to build time (**both done 2026-09-11**, R2.1: the derivation now lives in
+  `GenericBoilerConfig.fuel_constants`, which the component's `build` calls, so the two provably agree); a
+  `value_type=lt.LoadTypes` codec; and the consistency aggregator for
   `Many`, unimplemented in `hisim/config/laws.py` — and since the meters convert after the boiler, a group-A class
   enters the meter group's scope. The survey's two side facts stand: the presets ship the setups' exact constants (not
   the rounded 9.82), and district heating ships `None` for both.

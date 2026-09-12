@@ -188,24 +188,36 @@ class PilotWireFormat:
     #: ``CarConfig`` is the first and so far only one: a preset takes nothing but the instance
     #: name, and a car cannot be configured without naming the household and the car whose
     #: LoadProfileGenerator driving profile it drives by, so every one of its builders has to
-    #: be a constructor (D-23, 2026-08-31).
-    CLASSES_WITHOUT_PRESETS: Tuple[str, ...] = ("CarConfig",)
+    #: be a constructor (D-23, 2026-08-31). ``PVSystemConfig`` is the second, and for now a
+    #: different reason: it is not converted yet and enters the scan only as a fact provider
+    #: (R2.1), so it still ships the legacy ``get_default_pv_system`` factory. Batch B2 gives
+    #: it the ``rooftop`` preset and takes it off this list.
+    CLASSES_WITHOUT_PRESETS: Tuple[str, ...] = ("CarConfig", "PVSystemConfig")
 
     #: Config class name → the facts it contributes, in declaration order.
     FACT_NAMES: Dict[str, Tuple[str, ...]] = {
-        "GenericBoilerConfig": ("maximal_thermal_power_in_watt", "minimal_thermal_power_in_watt"),
+        "GenericBoilerConfig": (
+            "maximal_thermal_power_in_watt",
+            "minimal_thermal_power_in_watt",
+            "energy_carrier",
+            "heating_value_of_fuel_in_kwh_per_liter",
+            "fuel_density_in_kg_per_m3",
+        ),
         "HeatDistributionControllerConfig": (
             "water_mass_flow_rate_in_kg_per_second",
             "heat_distribution_system_type",
+            "set_heating_threshold_outside_temperature_in_celsius",
         ),
         "BuildingConfig": (
             "heating_load_in_watt",
             "number_of_apartments",
             "conditioned_floor_area_in_m2",
+            "roof_area_in_m2",
             "heating_reference_temperature_in_celsius",
             "set_heating_temperature_in_celsius",
             "set_cooling_temperature_in_celsius",
         ),
+        "PVSystemConfig": ("pv_peak_power_in_watt",),
         "WeatherConfig": ("weather_identity",),
         "UtspLpgConnectorConfig": ("occupancy_identity",),
         "ElectricityMeterConfig": (),
@@ -282,6 +294,31 @@ def test_no_two_classes_declare_the_same_fact_unless_they_are_interchangeable(sc
             "fact in InterchangeableProviders.ALLOWED with the family that shares it."
         )
         assert names <= allowed, f"'{fact}' is declared by {sorted(names - allowed)}, which is not in the family"
+
+
+@pytest.mark.base
+def test_the_batch_one_facts_have_exactly_the_provider_they_were_added_for(scan):
+    """Each fact R2.1 added is declared by one class, and by that class.
+
+    Failure mode caught: a fact landing on the wrong config — the roof area on the PV rather
+    than on the building, say — which binds silently today (nothing reads it yet) and becomes
+    a wrong number or an ambiguity only once the batch that reads it lands.
+    """
+    expected = {
+        "set_heating_threshold_outside_temperature_in_celsius": "HeatDistributionControllerConfig",
+        "roof_area_in_m2": "BuildingConfig",
+        "pv_peak_power_in_watt": "PVSystemConfig",
+        "energy_carrier": "GenericBoilerConfig",
+        "heating_value_of_fuel_in_kwh_per_liter": "GenericBoilerConfig",
+        "fuel_density_in_kg_per_m3": "GenericBoilerConfig",
+    }
+    declarers: Dict[str, Set[str]] = {}
+    for config_class in scan[0]:
+        for contribution in getattr(config_class, FactContribution.CLASS_ATTRIBUTE, ()):
+            for fact in contribution.facts:
+                declarers.setdefault(fact, set()).add(config_class.__name__)
+    for fact, provider in expected.items():
+        assert declarers.get(fact) == {provider}, f"'{fact}' is declared by {sorted(declarers.get(fact) or ())}"
 
 
 @pytest.mark.base
@@ -447,6 +484,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         HeatDistributionConfig,
         HeatDistributionControllerConfig,
     )
+    from hisim.components.generic_pv_system import PVSystemConfig
     from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnectorConfig
     from hisim.components.weather import WeatherConfig
 
@@ -457,6 +495,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "HeatDistributionControllerConfig": HeatDistributionControllerConfig,
         "EMSConfig": EMSConfig,
         "BuildingConfig": BuildingConfig,
+        "PVSystemConfig": PVSystemConfig,
         "WeatherConfig": WeatherConfig,
         "UtspLpgConnectorConfig": UtspLpgConnectorConfig,
         "ElectricityMeterConfig": ElectricityMeterConfig,

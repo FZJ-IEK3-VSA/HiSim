@@ -479,12 +479,15 @@ def _energy_manager() -> controller_l2_energy_management_system.L2GenericEnergyM
     Returns:
         A freshly constructed controller, before anything has been wired to it.
     """
-    return controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-        my_simulation_parameters=SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 15),
-        config=controller_l2_energy_management_system.EMSConfig.preset_optimize_own_consumption(
-            "L2EMSElectricityController"
-        ),
+    manager: controller_l2_energy_management_system.L2GenericEnergyManagementSystem = (
+        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+            my_simulation_parameters=SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 15),
+            config=controller_l2_energy_management_system.EMSConfig.preset_optimize_own_consumption(
+                "L2EMSElectricityController"
+            ),
+        )
     )
+    return manager
 
 
 @pytest.mark.base

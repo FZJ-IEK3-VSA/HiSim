@@ -6,8 +6,13 @@ assignments:
   DHWStorage:
     assign: override
     note: The storage volume and its heat loss are scaled per dwelling, so the one
-      field this setup reads out of its module configuration lands here and nowhere
-      else. Same storage, same wiring, a different size - a number a consumer picks.
+      field this setup reads out of its module configuration lands here. Same storage,
+      same wiring, a different size - a number a consumer picks.
+  SolarThermalSystem:
+    assign: override
+    note: Four square metres of collector per dwelling, so the same field reaches the
+      collector as reaches the storage it preheats. Same collector, same wiring, a
+      larger array - a number a consumer picks, not a component that comes or goes.
 configurations:
   baseline: {}
   two_dwellings: {}

@@ -7,9 +7,9 @@
 # the building code, which every sizer probes, is not read either.
 #
 # So the one axis it has is the one probed: the dwelling count, which reaches the domestic hot water
-# storage and stops. Two columns are the smallest list that proves that - a baseline alone would
-# make the grouped file a copy of the twin with a header line added and assert nothing the twin does
-# not already assert.
+# storage and the solar thermal collector that preheats it, and stops. Two columns are the smallest
+# list that proves that - a baseline alone would make the grouped file a copy of the twin with a
+# header line added and assert nothing the twin does not already assert.
 setup: system_setups/household_gas_solar_thermal.py
 defaults: hisim.building_sizer_utils.interface_configs.modular_household_config.ModularHouseholdConfig.get_default_config_for_household_gas_solar_thermal
 probes:
@@ -22,9 +22,10 @@ probes:
   - column: two_dwellings
     description: >-
       Two dwellings instead of one. The only field this setup reads, moved to its next value: the
-      domestic hot water storage is scaled per dwelling and follows it, and nothing else in the
-      household does. The column exists to make that claim provable rather than assumed - the
-      boiler, the collector, the emitter and the meters are recorded twice and have to come back
-      identical.
+      domestic hot water storage is scaled per dwelling and follows it, and so, since D-7 made the
+      collector area a sizing law of four square metres per dwelling, does the solar thermal system
+      that preheats it. Nothing else in the household moves. The column exists to make that claim
+      provable rather than assumed - the boiler, the emitter and the meters are recorded twice and
+      have to come back identical.
     module_config:
       archetype_config_.number_of_dwellings_per_building: 2

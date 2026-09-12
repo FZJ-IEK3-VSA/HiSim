@@ -58,6 +58,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from hisim import log
 from hisim import loadtypes as lt
+from hisim.config import concrete
 from hisim.economics.carriers import EnergyCarrier, EnergyFlowRole
 from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
@@ -233,7 +234,7 @@ class FactsExtractors:
         ),
         "SolarThermalSystem": lambda config: ComponentCostFacts(
             asset_class=ComponentType.SOLAR_THERMAL_SYSTEM,
-            size=config.area_m2,
+            size=concrete(config.area_m2),
             size_unit=Units.SQUARE_METER,
             kpi_tag=KpiTagEnumClass.SOLAR_THERMAL,
         ),

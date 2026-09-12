@@ -18,7 +18,16 @@ from hisim.component import (
     OpexCostDataClass,
     SingleTimeStepValues,
 )
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import (
+    AUTO,
+    ComponentID,
+    ConfigBase,
+    DisplayConfig,
+    Sizable,
+    Size,
+    concrete,
+    sized_field,
+)
 from hisim import loadtypes, log, utils
 from hisim.caching import atomic_cache_write
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig, PhysicsConfig
@@ -40,6 +49,13 @@ __email__ = "k.dabrock@fz-juelich.de"
 __status__ = "development"
 
 
+#: How much collector a solar thermal system gets per apartment it serves. The whole
+#: of the collector sizing law: a building with three flats gets three times the
+#: collector of a single-family house, the law assuming that hot water demand scales
+#: with the number of dwellings.
+COLLECTOR_AREA_IN_M2_PER_APARTMENT = 4.0
+
+
 @dataclass_json
 @dataclass
 class SolarThermalSystemConfig(ConfigBase):
@@ -56,7 +72,6 @@ class SolarThermalSystemConfig(ConfigBase):
     # Module configuration
     azimuth: float
     tilt: float
-    area_m2: float  # m2
     eta_0: float
     a_1_w_m2_k: float  # W/(m2*K)
     a_2_w_m2_k: float  # W/(m2*K2)
@@ -79,26 +94,17 @@ class SolarThermalSystemConfig(ConfigBase):
     # Weight of component, defines hierachy in control. The default is 1.
     source_weight: int
 
+    #: Collector area in m2, sized to the building it serves. A sizable field carries a
+    #: default (AUTO), so it sits here among the defaulted fields rather than up with the
+    #: other module parameters, which a dataclass would refuse.
+    area_m2: Sizable[float] = sized_field(
+        rule=Size.NUMBER_OF_APARTMENTS * COLLECTOR_AREA_IN_M2_PER_APARTMENT,
+        value_type=float,
+        note=f"{COLLECTOR_AREA_IN_M2_PER_APARTMENT} m2 of collector per apartment",
+    )
+
     # Temperature difference between collector inlet and mean temperature
     delta_temperature_n_k: float = 10  # K
-
-    @staticmethod
-    def _compute_device_co2_footprint(area_m2: float) -> float:
-        """Compute the CO2 footprint of a solar thermal system in kg.
-
-        Emission factors are derived from:
-        https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1255
-        """
-        return (
-            area_m2 * (240.1 / 2.03)  # material solar collector
-            + area_m2 * (34.74 / 2.03)
-            + 108.28  # material external support
-            + area_m2 * (8.64 / 2.03)  # manufacturing solar collector
-            + area_m2 * (2.53 / 2.03)  # manufacturing external support
-            + area_m2 * (4.39 * 0.56 / 2.03)
-            # 56% (share of mass of solar collector+support/total, i.e.,
-            # including storage) of transport phase 1
-        )
 
     @classmethod
     def get_default_solar_thermal_system(
@@ -107,14 +113,20 @@ class SolarThermalSystemConfig(ConfigBase):
         coordinates: Coordinates = Coordinates(latitude_in_degrees=50.78, longitude_in_degrees=6.08),
         azimuth: float = 180.0,
         tilt: float = 30.0,
-        area_m2: float = 1.5,
+        area_m2: Sizable[float] = AUTO,
         eta_0: float = 0.78,
         a_1_w_m2_k: float = 3.2,  # W/(m2*K)
         a_2_w_m2_k: float = 0.015,  # W/(m2*K2)
         old_solar_pump: bool = False,
         source_weight: int = 1,
     ) -> "SolarThermalSystemConfig":
-        """Gets a default SolarThermalSystem."""
+        """Gets a default SolarThermalSystem.
+
+        The collector area is left to the field's sizing law unless the caller names one:
+        the returned config then carries AUTO and has to be resolved against a
+        ``SizingContext`` that knows how many apartments the building holds. A caller that
+        passes a number keeps that number, as an explicit value always beats a law.
+        """
         if component_id is None:
             component_id = ComponentID(name="SolarThermalSystem")
         return SolarThermalSystemConfig(
@@ -137,48 +149,6 @@ class SolarThermalSystemConfig(ConfigBase):
             lifetime_in_years=None,
             maintenance_costs_in_euro_per_year=None,
             subsidy_as_percentage_of_investment_costs=None,
-            source_weight=source_weight,
-        )
-
-    @classmethod
-    def get_default_solar_thermal_system_manually_calculated_capex(
-        cls,
-        component_id: Optional[ComponentID] = None,
-        coordinates: Coordinates = Coordinates(latitude_in_degrees=50.78, longitude_in_degrees=6.08),
-        azimuth: float = 180.0,
-        tilt: float = 30.0,
-        area_m2: float = 1.5,
-        eta_0: float = 0.78,
-        a_1_w_m2_k: float = 3.2,  # W/(m2*K)
-        a_2_w_m2_k: float = 0.015,  # W/(m2*K2)
-        old_solar_pump: bool = False,
-        source_weight: int = 1,
-    ) -> "SolarThermalSystemConfig":
-        """Gets a default SolarThermalSystem."""
-        if component_id is None:
-            component_id = ComponentID(name="SolarThermalSystem")
-        return SolarThermalSystemConfig(
-            coordinates=coordinates,
-            component_id=component_id,
-            azimuth=azimuth,
-            tilt=tilt,
-            area_m2=area_m2,  # m2
-            # These values are taken from the Excel sheet that can be downloaded from
-            # http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters
-            # Values were determined by changing eta_0, a_1, and a_2 so that the curve
-            # fits with the typical flat plat curve
-            eta_0=eta_0,
-            a_1_w_m2_k=a_1_w_m2_k,  # W/(m2*K)
-            a_2_w_m2_k=a_2_w_m2_k,  # W/(m2*K2)
-            old_solar_pump=old_solar_pump,
-            device_co2_footprint_in_kg=SolarThermalSystemConfig._compute_device_co2_footprint(
-                area_m2
-            ),
-            investment_costs_in_euro=area_m2 * 797,  # Flachkollektoren
-            # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
-            maintenance_costs_in_euro_per_year=100,  # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
-            subsidy_as_percentage_of_investment_costs=0.3,  # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
-            lifetime_in_years=20,  # https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1712
             source_weight=source_weight,
         )
 
@@ -232,6 +202,10 @@ class SolarThermalSystem(Component):
         self.previous_state: SolarThermalSystemState = deepcopy(self.state)
         # Initialized variables
         self.factor: float = 1.0
+        #: The collector area, read once here rather than at every timestep. ``super().__init__``
+        #: has just refused any config still carrying AUTO, so this read is what turns the
+        #: sizable field into the plain float the physics multiplies by.
+        self.area_m2: float = concrete(config.area_m2)
         # Where the sun will be at every timestep, filled in i_prepare_simulation from the cache or
         # from pvlib. Nothing downstream of the sun is stored: see i_prepare_simulation.
         self.solar_position: pd.DataFrame = pd.DataFrame()
@@ -356,7 +330,7 @@ class SolarThermalSystem(Component):
         component_type = loadtypes.ComponentType.SOLAR_THERMAL_SYSTEM
         kpi_tag = KpiTagEnumClass.SOLAR_THERMAL
         unit = loadtypes.Units.SQUARE_METER
-        size_of_energy_system = config.area_m2
+        size_of_energy_system = concrete(config.area_m2)
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
             simulation_parameters=simulation_parameters,
@@ -736,7 +710,7 @@ class SolarThermalSystem(Component):
         )
         collectors_heat = collector_efficiency * total_irradiation["poa_global"]
 
-        thermal_power_output_w = collectors_heat.iloc[0] * self.config.area_m2
+        thermal_power_output_w = collectors_heat.iloc[0] * self.area_m2
 
         thermal_energy_output_wh = thermal_power_output_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         required_mass_flow_output_kg_s = thermal_power_output_w / (

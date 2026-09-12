@@ -370,8 +370,10 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
 
     # Solar thermal for DHW
-    my_solar_thermal_system_config = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(
-        area_m2=4 * number_of_apartments,  # 4 m2 per apartment
+    my_solar_thermal_system_config = (
+        solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system().resolve(
+            SizingContext(number_of_apartments=number_of_apartments)
+        )
     )
     my_solar_thermal_system = solar_thermal_system.SolarThermalSystem(
         config=my_solar_thermal_system_config,

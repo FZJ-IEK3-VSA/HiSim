@@ -62,6 +62,17 @@ Thresholds live in `RegressionRules` in `scripts/ci_usage_report.py`:
 - **near the limit**: any job reaching ≥ 85% of the runner's RAM (16 GB on `ubuntu-latest`)
 - **holding a runner idle**: ≥ 5 min jobs using < 35% of the runner's cores
 
+The last of those is the one that caught the full-year golden gate. `golden-year.yml` used to
+wait for `quality`, `tests` and `golden-check` in an ordinary job that polled the runs API, so
+the wait held a runner: 28 idle minutes in a good run, an hour when it timed out, once per pull
+request. With eight pull requests re-running at once, eight idle gates sat on the runners the
+golden matrices were queued behind and the full-year tier stopped running at all. It now waits
+by not running: `workflow_run` fires it when a prerequisite completes, the gate classifies the
+three prerequisites with one API query each (`scripts/ci_prereqs_done.sh`) and exits in seconds
+unless it is the last completion with everything green. Because `workflow_run` runs are absent
+from a pull request's checks list, the result comes back as a `golden-year` commit status on the
+head commit instead. A wait that costs a runner is a bug, not a cost.
+
 Both a proportional and an absolute threshold have to be crossed, and only successful runs
 form a baseline. Shared runners vary by tens of percent for reasons nobody controls, a
 cancelled run says nothing about cost, and a report that flags either is one people stop

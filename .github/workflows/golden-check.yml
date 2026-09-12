@@ -1,7 +1,11 @@
 # Tier 1 of the golden-reference gate: re-runs the short (one-week) pairs on every
 # PR and push to main, comparing KPIs against the committed golden references.
-# The heavier full-year pairs run separately (golden-year.yml), gated on all other
-# CI already being green.
+#
+# The heavier full-year pairs run separately, in golden-year.yml, once all the other
+# CI for the commit is green. This workflow completing is one of the three events
+# that fire that one (`workflow_run`), so renaming this workflow, or its `name:`
+# above, breaks that trigger. Nothing here has to wait for anything: the gate on the
+# other side reads where the three prerequisites stand and decides in seconds.
 
 name: golden-check
 

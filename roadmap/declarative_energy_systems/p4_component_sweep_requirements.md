@@ -109,7 +109,7 @@ Legend: **conv** convert · **del** retired — moved to `obsolete/` under D-16'
 |---|---|---|---|---|---|---|
 | `HeatDistributionControllerConfig` | done | `standard` | delete 2 factories (21 sites); `heating_system` plain default until Q-P1.8 | threshold fact **landed 2026-09-11** (R2.1) | **P** for 3 setups + 8 tests (16 → 18 °C) | D-11 |
 | `HeatDistributionConfig` | done | | nothing left | | | |
-| `SimpleHotWaterStorageConfig` | conv | `buffer` (+ `sizing_option: HotWaterStorageSizingEnum` field, D-10) | `volume_heating_water_storage_in_liter` ← **generator** `maximal_thermal_power_in_watt` × k (20/40/50 l/kW) — today the building load | — | **P** (C11: +10 % on 5 golden sizers, +54 % one ungated, up to +72 % MFH) | D-9, D-10, D-17 |
+| `SimpleHotWaterStorageConfig` | conv | `buffer` (+ `sizing_option: HotWaterStorageSizingEnum` field, D-10) | `volume_heating_water_storage_in_liter` ← **generator** `maximal_thermal_power_in_watt` × k (20/40/50 l/kW) — C11 executed 2026-09-11, the twelve setups pass the generator's power | — | **P** — C11 done (3 twins +10 %, `basic_household_only_heating` +54 %, 8 twins byte-identical); the conversion itself is behaviour-neutral | D-9, D-10, D-17 |
 | `SimpleHotWaterStorageControllerConfig` | del | | | | | D-16 |
 | `SimpleDHWStorageConfig` | conv | `standard` | volume ← number_of_apartments (250 l × max(apts,1)) | — | N | |
 | `SetTemperatureConfig`, `WarmWaterStorageConfig`, `HydrogenStorageConfig` (`configuration.py`), `LoadConfig`, `ElectricityDemandConfig`, `PVConfig` | del/ex | | `HydrogenStorageConfig` **moved** 2026-09-11 into `obsolete/components/configuration_hydrogen.py` with `AdvElectrolyzerConfig` (D-29); the other four left under D-16 | | | D-29 |
@@ -248,6 +248,29 @@ row is struck from the table, which keeps the question and the option chosen nex
   (`gas`, `oil`, `hydrogen_boiler`, `pellets`, `wood_chips`) are re-blessed at **+10 % storage volume**, the
   heat-pump golden setup is unchanged, and `basic_household_only_heating` (**+54 %**, 155.62 → 240.00 l) is added
   to the week gate **in the same commit** — an ungated 54 % change is exactly the one that must not land unwitnessed.
+  **Executed 2026-09-11.** All twelve callers now pass their generator's maximal thermal power, and the parameter
+  keeps its name (`max_thermal_power_in_watt_of_heating_system` — "heating system" always meant the generator) with a
+  docstring that says so and names C11 as the defect. Setup → generator → field: the eight boiler setups
+  (`basic_household_only_heating` [`preset_condensing_gas_12kw`], `household_gas_solar_thermal`, and the
+  `gas` / `gas_solar_thermal` / `hydrogen_boiler` / `oil` / `pellets` / `wood_chips` sizers) read
+  `GenericBoilerConfig.maximal_thermal_power_in_watt` through `concrete()`; the four heat-pump setups
+  (`automatic_default_connections`, `household_heatpump{,_car,_solar_thermal}_building_sizer`) read
+  `MoreAdvancedHeatPumpHPLibConfig.set_thermal_output_power_in_watt`. Every setup already built its generator config
+  before the storage, so nothing was reordered. Measured: only **three** of the boiler sizers moved, not five —
+  `gas`, `gas_solar_thermal` and `hydrogen_boiler` (155.62 → 171.18 l, +10.0 %), because only those three pass
+  `number_of_apartments` into the boiler's `SizingContext` and so earn the 1.1× DHW uplift in
+  `GenericBoilerConfig.scale_thermal_power`. The `oil`, `pellets` and `wood_chips` sizers (and
+  `household_gas_solar_thermal`) resolve their boiler with the load alone although their controllers set
+  `with_domestic_hot_water_preparation=True`, so their generator *is* the load and their buffers are unchanged —
+  a separate sizing defect in those four `SizingContext` calls, not D-9's to fix. `basic_household_only_heating`
+  went 155.62 → **240.00 l** (+54.2 %, its 12 kW nominal boiler), the four heat-pump setups are byte-identical
+  (`get_scaled_advanced_hp_lib` sizes the heat pump at exactly the load). Week-gate deviations measured with
+  `scripts/golden_check.py`: `household_gas_building_sizer` 42 KPIs (buffer standby loss +7.0 %, upfront investment
+  +0.50 %, gas consumption +0.025 %, indoor-temperature deviation below setpoint −10.7 %),
+  `basic_household_only_heating` 39 KPIs (standby loss 7.7 → 10.4 kWh, +35 %; upfront investment +6.5 %; gas
+  +0.16 %), `household_heatpump_building_sizer` **no deviations**. All twelve setups are in the golden gate
+  (`scripts/golden_config.json`) — the bullet's "added to the week gate" clause was already true before this PR, so
+  nothing was added here; the owner re-blesses the affected goldens with the `golden-update` workflow.
 - **D-11** `[answered 2026-09-10]` **(a) convert, record the diff.** The heat-distribution controller's threshold
   becomes the computed one, 16 → 18 °C for the three setups still on the legacy factory
   (`basic_household_only_heating`, `household_gas_solar_thermal`, `automatic_default_connections`); no

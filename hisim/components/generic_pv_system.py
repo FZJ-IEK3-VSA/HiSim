@@ -14,14 +14,10 @@ economic and CO2-footprint figures used in post-processing.
 
 # Generic/Built-in
 import datetime
-import enum
-import os
 from dataclasses import dataclass, field, replace
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-import numpy as np
 import pandas as pd
-import pvlib
 from dataclasses_json import dataclass_json
 
 # Owned
@@ -29,7 +25,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log
 from hisim import utils
-from hisim.caching import atomic_cache_write
+from hisim.caching import CacheClient, CacheEntry, CacheKey
 from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.config import (
     ComponentID,
@@ -41,6 +37,16 @@ from hisim.config import (
     SizingContext,
     concrete,
     sized_field,
+)
+# The module object itself is what the cache key is fingerprinted from: ``CacheKey.for_producer`` walks
+# its import closure and hashes the source of everything in it, so an edit to the calculation changes
+# the key without anyone declaring anything.
+from hisim.components import generic_pv_calculation
+from hisim.components.generic_pv_calculation import (
+    ARTIFACT_KIND,
+    PVLibModuleAndInverterEnum,
+    PvSeriesInputs,
+    PvWeatherSeries,
 )
 from hisim.components.weather import Weather
 from hisim.economics.facts import ComponentCostFacts, CostRelevance
@@ -80,25 +86,10 @@ https://github.com/NREL/SAM/tree/patch/deploy/libraries
 """
 
 
-@enum.unique
-class PVLibModuleAndInverterEnum(str, enum.Enum):
-    """Module and inverter database options.
-
-    Class to determine what pvlib database for phtotovoltaic modules
-    and inverters should be used. Every member carries its own name as its
-    value so that a serialized PV configuration names the database explicitly;
-    the pvlib database keys themselves are hard-coded at the call sites in
-    :meth:`PVSystem.get_modules_from_database` and
-    :meth:`PVSystem.get_inverters_from_database`, so no ordinal is needed.
-
-    https://pvlib-python.readthedocs.io/en/v0.9.0/generated/pvlib.pvsystem.retrieve_sam.html.
-    """
-
-    SANDIA_MODULE_DATABASE = "SANDIA_MODULE_DATABASE"
-    SANDIA_INVERTER_DATABASE = "SANDIA_INVERTER_DATABASE"
-    CEC_MODULE_DATABASE = "CEC_MODULE_DATABASE"
-    CEC_INVERTER_DATABASE = "CEC_INVERTER_DATABASE"
-    ANTON_DRIESSE_INVERTER_DATABASE = "ANTON_DRIESSE_INVERTER_DATABASE"
+# ``PVLibModuleAndInverterEnum`` is imported from the producer module above and re-exported here,
+# because the database choice decides what the calculation computes and is therefore key material:
+# it lives beside the readers it chooses between (``roadmap/cache_service_spec.md`` §12). Every
+# configuration and system setup keeps spelling it ``generic_pv_system.PVLibModuleAndInverterEnum``.
 
 
 @dataclass_json
@@ -140,7 +131,12 @@ class PVSystemConfig(ConfigBase):
     predictive_control: bool
     prediction_horizon: Optional[int]
     #: The weather this system is computed with, as ``WeatherConfig.identity()`` spells it. Sized from
-    #: the weather by the sizing engine, so the cache key (a hash of this config) includes it.
+    #: the weather by the sizing engine. It no longer carries the weather into the cache key: the
+    #: series are keyed by the weather producer's own artifact key, which the DTO of
+    #: ``generic_pv_calculation`` takes as key material and which covers the weather's code and data
+    #: as well as its configuration (``roadmap/cache_service_spec.md`` §3.1). What the field is still
+    #: for is the wire format -- it is a sized field of the declarative schema and a record of which
+    #: weather a scenario was written against -- so it stays until that is changed deliberately.
     #: See ``roadmap/pylpg_flakiness.md`` F7.
     weather_identity: Sizable[str] = sized_field(rule=Size.WEATHER_IDENTITY, value_type=str)
 
@@ -342,7 +338,6 @@ PVSystemConfig.SIZING_CONTRIBUTIONS = (
     FactContribution(facts=("pv_peak_power_in_watt",), compute=_pv_sizing_facts),
 )
 
-
 class PVSystem(cp.Component):
     """Simulates PV Output based on weather data and peak power.
 
@@ -410,17 +405,7 @@ class PVSystem(cp.Component):
         self.my_simulation_parameters = my_simulation_parameters
         self.pvconfig = config
         self.ac_power_ratios_for_all_timesteps_output: List = []
-        self.cache_filepath: str
-        self.modules: Any
-        self.inverter: Any
-        self.inverters: Any
-        self.module: Any
         self.coordinates: Any
-        self.temperature_model_parameters = (
-            pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["pvsyst"]["freestanding"]
-            if self.pvconfig.module_database == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE
-            else pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"]["open_rack_glass_glass"]
-        )
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
         component_name = self.get_component_name()
@@ -736,21 +721,23 @@ class PVSystem(cp.Component):
         """Prepare the component by computing or loading the whole simulation period's PV output.
 
         On a cache hit, the AC power ratios for every timestep are read from the
-        cache CSV. On a cache miss, the yearly weather arrays published by the
-        weather component in this simulation's repository are truncated
-        to the simulated period and fed through one vectorized pvlib run
-        (``simulate_cec`` or ``simulate_sandia``), which is orders of magnitude
-        faster than the per-timestep scalar pvlib calls that were previously
-        made from ``i_simulate``. The result is written to the cache file
-        immediately, so even simulations that are interrupted later still
-        populate the cache. After that, ``i_simulate`` only performs array
-        lookups.
-        """
-        file_exists, self.cache_filepath = utils.get_cache_file(
-            self.config.component_id.name, self.pvconfig, self.my_simulation_parameters
-        )
+        cache CSV. On a cache miss, the producer computes them from the yearly
+        weather arrays the weather component published, in one vectorized pvlib
+        run, and the result is written to the cache file immediately, so even
+        simulations that are interrupted later still populate the cache. After
+        that, ``i_simulate`` only performs array lookups.
 
-        if file_exists:
+        What the entry is filed under changed with the producer
+        (``roadmap/cache_service_spec.md`` §3): the key is built from the
+        calculation's own code and inputs rather than from this component's
+        configuration JSON, and it carries the weather's key by reference, so an
+        edit to either calculation -- or to a weather file, or to a module
+        database -- files the series somewhere else by itself.
+        """
+        calculation_inputs = self.build_calculation_inputs()
+        entry = self.cache_entry(calculation_inputs)
+
+        if entry.exists:
             log.information("Get PV results from cache.")
             # float_precision="round_trip" is what makes a cached run and an uncached one the
             # same run. pandas' default CSV reader uses a fast, inexact float parser and loses
@@ -759,8 +746,8 @@ class PVSystem(cp.Component):
             # "%.17g", 542 with "%.20g", zero with this argument. The loss is in the reader,
             # not the digits on disk, which is why writing more of them does not help.
             self.ac_power_ratios_for_all_timesteps_output = pd.read_csv(
-                self.cache_filepath, sep=",", decimal=".", float_precision="round_trip"
-            )["output_power"].tolist()
+                entry.path, sep=",", decimal=".", float_precision="round_trip"
+            )[generic_pv_calculation.OUTPUT_COLUMN].tolist()
 
             if len(self.ac_power_ratios_for_all_timesteps_output) != self.my_simulation_parameters.timesteps:
                 raise ValueError(
@@ -769,90 +756,11 @@ class PVSystem(cp.Component):
                     f"but got {len(self.ac_power_ratios_for_all_timesteps_output)}"
                 )
         else:
-            # read module from pvlib database online or read from csv files in
-            # hisim/inputs/photovoltaic/data_processed
-            self.module = self.get_modules_from_database(
-                module_database=self.pvconfig.module_database,
-                load_module_data=self.pvconfig.load_module_data,
-                module_name=self.pvconfig.module_name,
-            )
-
-            # read inverter from pvlib database online or read from csv files
-            # in hisim/inputs/photovoltaic/data_processed
-            self.inverter = self.get_inverters_from_database(
-                inverter_database=self.pvconfig.inverter_database,
-                load_module_data=self.pvconfig.load_module_data,
-                inverter_name=self.pvconfig.inverter_name,
-            )
-
-            # The Weather publishes its full-year series into this simulation's repository in its
-            # own i_prepare_simulation. prepare_calculation walks the components in the order the
-            # setup added them, so a Weather added after this component has not published yet and
-            # the lookup below would fail with a bare key name. Say what to do instead.
-            if not self.simulation_repository.entry_exists(Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE):
-                raise KeyError(
-                    "The yearly weather arrays were not found in this simulation's "
-                    "sim repository. Please check in your system setup that the "
-                    "weather component is added to the simulator before the pv "
-                    "system; its i_prepare_simulation publishes these arrays."
-                )
-
-            dni_extra = self.simulation_repository.get_entry(Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE_EXTRA)
-            dni = self.simulation_repository.get_entry(Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE)
-            dhi = self.simulation_repository.get_entry(Weather.YEARLY_DIFFUSE_HORIZONTAL_IRRADIANCE)
-            ghi = self.simulation_repository.get_entry(Weather.YEARLY_GLOBAL_HORIZONTAL_IRRADIANCE)
-            azimuth = self.simulation_repository.get_entry(Weather.YEARLY_AZIMUTH)
-            apparent_zenith = self.simulation_repository.get_entry(Weather.YEARLY_APPARENT_ZENITH)
-            temperature = self.simulation_repository.get_entry(Weather.YEARLY_TEMPERATURE_OUTSIDE)
-            wind_speed = self.simulation_repository.get_entry(Weather.YEARLY_WIND_SPEED)
-
-            # The weather component always publishes arrays covering the whole
-            # year at the simulation's resolution, while the simulation itself
-            # may span only part of it (e.g. one day or one week). Both index
-            # their series by timestep from the same start, so truncating to
-            # the simulated period yields exactly the values the old
-            # per-timestep computation produced.
-            number_of_timesteps = self.my_simulation_parameters.timesteps
-            if len(dni) < number_of_timesteps:
-                raise ValueError(
-                    f"The yearly weather arrays in this simulation's sim repository "
-                    f"hold {len(dni)} values but the simulation needs "
-                    f"{number_of_timesteps}. The arrays do not match the "
-                    f"simulation parameters (wrong resolution or duration)."
-                )
-            dni_extra = dni_extra[:number_of_timesteps]
-            dni = dni[:number_of_timesteps]
-            dhi = dhi[:number_of_timesteps]
-            ghi = ghi[:number_of_timesteps]
-            azimuth = azimuth[:number_of_timesteps]
-            apparent_zenith = apparent_zenith[:number_of_timesteps]
-            temperature = temperature[:number_of_timesteps]
-            wind_speed = wind_speed[:number_of_timesteps]
-
-            if self.pvconfig.module_database == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE:
-                simulate_fct = self.simulate_cec
-            elif self.pvconfig.module_database == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE:
-                simulate_fct = self.simulate_sandia
-            else:
-                raise KeyError(
-                    f"""The module database '{self.pvconfig.module_database}'
-                    is not available."""
-                )
-
-            # one vectorized pvlib run over the entire simulation period
-            ac_power_ratios = simulate_fct(
-                dni_extra=np.asarray(dni_extra, dtype=float),
-                dni=np.asarray(dni, dtype=float),
-                dhi=np.asarray(dhi, dtype=float),
-                ghi=np.asarray(ghi, dtype=float),
-                azimuth=np.asarray(azimuth, dtype=float),
-                apparent_zenith=np.asarray(apparent_zenith, dtype=float),
-                temperature=np.asarray(temperature, dtype=float),
-                wind_speed=np.asarray(wind_speed, dtype=float),
-                surface_azimuth=self.pvconfig.azimuth,
-                surface_tilt=self.pvconfig.tilt,
-            )
-            self.ac_power_ratios_for_all_timesteps_output = list(ac_power_ratios)
+            log.information(f"PV series cache miss: computing it and filing it at {entry.path}")
+            database = generic_pv_calculation.produce_pv_series(calculation_inputs)
+            self.ac_power_ratios_for_all_timesteps_output = database[
+                generic_pv_calculation.OUTPUT_COLUMN
+            ].tolist()
 
             if len(self.ac_power_ratios_for_all_timesteps_output) != self.my_simulation_parameters.timesteps:
                 raise ValueError(
@@ -865,14 +773,166 @@ class PVSystem(cp.Component):
 
             # write the cache right away so that even interrupted simulations
             # profit from the computation on the next run
-            database = pd.DataFrame(
-                {"output_power": self.ac_power_ratios_for_all_timesteps_output},
-                columns=["output_power"],
-            )
-            with atomic_cache_write(
-                self.cache_filepath, utils.build_cache_key_string(self.pvconfig, self.my_simulation_parameters)
-            ) as temporary_cache_filepath:
+            with entry.writing() as temporary_cache_filepath:
                 database.to_csv(temporary_cache_filepath, sep=",", decimal=".", index=False)
+
+    def build_calculation_inputs(self) -> PvSeriesInputs:
+        """Build the DTO the PV producer is a pure function of.
+
+        Everything the calculation depends on is extracted here from the configuration, the
+        simulation parameters and the weather component's publications, and nothing else: the
+        module and inverter databases enter as the hashes of their contents rather than as their
+        paths, and the weather enters as the key of the series it published plus the series
+        themselves as payload, which is how the two keys chain (spec §3.1). What the component
+        keeps to itself -- its name, the array's peak power and the share it was sized with, the
+        predictive-control flag, cost, CO2 and display settings -- is not part of the calculation
+        and therefore not part of its key.
+
+        Returns:
+            PvSeriesInputs: the producer's single argument.
+        """
+        module_database_path = self.database_path(self.pvconfig.module_database)
+        inverter_database_path = self.database_path(self.pvconfig.inverter_database)
+        return PvSeriesInputs(
+            weather_artifact_key=self.weather_artifact_key(),
+            module_database=self.pvconfig.module_database,
+            module_name=self.pvconfig.module_name,
+            inverter_database=self.pvconfig.inverter_database,
+            inverter_name=self.pvconfig.inverter_name,
+            integrate_inverter=self.pvconfig.integrate_inverter,
+            load_module_data=self.pvconfig.load_module_data,
+            module_database_content_hash=generic_pv_calculation.content_hash(module_database_path),
+            inverter_database_content_hash=generic_pv_calculation.content_hash(inverter_database_path),
+            # float() rather than the field as it stands: the geometry is declared as a float, but a
+            # Python setup writing ``tilt=30`` hands over an int, while the same system read from a
+            # YAML file arrives as 30.0. Canonical JSON renders the two differently, so without this
+            # the identical array would be computed twice and filed under two keys.
+            tilt_in_degrees=float(self.pvconfig.tilt),
+            azimuth_in_degrees=float(self.pvconfig.azimuth),
+            number_of_timesteps=self.my_simulation_parameters.timesteps,
+            module_database_path=module_database_path,
+            inverter_database_path=inverter_database_path,
+            weather_series=self.read_weather_series(),
+        )
+
+    def database_path(self, database: PVLibModuleAndInverterEnum) -> Optional[str]:
+        """Return the bundled file a module or inverter database is read from on this machine.
+
+        The mapping from a database to its file is the producer's (it decides what the calculation
+        reads); resolving that file to a path under ``hisim/inputs`` is this component's, because
+        ``HISIMPATH`` is component-layer knowledge a producer may not import.
+
+        Args:
+            database: the module or inverter database the configuration names.
+
+        Returns:
+            Optional[str]: the path, or ``None`` when the parameters are fetched from pvlib online
+                (``load_module_data``) or the database has no bundled file at all -- in which case the
+                producer refuses it, as it always has.
+        """
+        if self.pvconfig.load_module_data:
+            return None
+        file_key = generic_pv_calculation.DATABASE_FILE_KEYS.get(database)
+        if file_key is None:
+            return None
+        return str(utils.HISIMPATH["photovoltaic"][file_key])
+
+    def weather_artifact_key(self) -> str:
+        """Return the identity of the weather series this run computes from.
+
+        The weather component publishes the digest of its series' cache key when it prepares; it is
+        key material here, and it is what makes the PV key change when anything about the weather
+        changes (spec §3.1). Its absence means the same thing the missing yearly arrays mean, and is
+        reported the same way.
+
+        Returns:
+            str: the weather's artifact key.
+
+        Raises:
+            KeyError: if the weather component has not prepared before this one.
+        """
+        if not self.simulation_repository.entry_exists(Weather.SERIES_ARTIFACT_KEY):
+            raise KeyError(
+                "The weather series' artifact key was not found in the sim "
+                "repository. Please check in your system setup that the "
+                "weather component is added to the simulator before the pv "
+                "system; its i_prepare_simulation publishes this key."
+            )
+        return str(self.simulation_repository.get_entry(Weather.SERIES_ARTIFACT_KEY))
+
+    def read_weather_series(self) -> PvWeatherSeries:
+        """Take the weather arrays the producer computes from out of the singleton repository.
+
+        The weather component always publishes arrays covering the whole
+        year at the simulation's resolution, while the simulation itself
+        may span only part of it (e.g. one day or one week). Both index
+        their series by timestep from the same start, so truncating to
+        the simulated period yields exactly the values the old
+        per-timestep computation produced.
+
+        Returns:
+            PvWeatherSeries: the eight series, cut to the simulated period.
+
+        Raises:
+            KeyError: if the weather component has not prepared before this one.
+            ValueError: if the published arrays are shorter than the simulated period.
+        """
+        # The Weather publishes its full-year series into this simulation's repository in its
+        # own i_prepare_simulation. prepare_calculation walks the components in the order the
+        # setup added them, so a Weather added after this component has not published yet and
+        # the lookup below would fail with a bare key name. Say what to do instead.
+        if not self.simulation_repository.entry_exists(Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE):
+            raise KeyError(
+                "The yearly weather arrays were not found in this simulation's "
+                "sim repository. Please check in your system setup that the "
+                "weather component is added to the simulator before the pv "
+                "system; its i_prepare_simulation publishes these arrays."
+            )
+
+        dni_extra = self.simulation_repository.get_entry(Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE_EXTRA)
+        dni = self.simulation_repository.get_entry(Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE)
+        dhi = self.simulation_repository.get_entry(Weather.YEARLY_DIFFUSE_HORIZONTAL_IRRADIANCE)
+        ghi = self.simulation_repository.get_entry(Weather.YEARLY_GLOBAL_HORIZONTAL_IRRADIANCE)
+        azimuth = self.simulation_repository.get_entry(Weather.YEARLY_AZIMUTH)
+        apparent_zenith = self.simulation_repository.get_entry(Weather.YEARLY_APPARENT_ZENITH)
+        temperature = self.simulation_repository.get_entry(Weather.YEARLY_TEMPERATURE_OUTSIDE)
+        wind_speed = self.simulation_repository.get_entry(Weather.YEARLY_WIND_SPEED)
+
+        number_of_timesteps = self.my_simulation_parameters.timesteps
+        if len(dni) < number_of_timesteps:
+            raise ValueError(
+                f"The yearly weather arrays in this simulation's sim repository "
+                f"hold {len(dni)} values but the simulation needs "
+                f"{number_of_timesteps}. The arrays do not match the "
+                f"simulation parameters (wrong resolution or duration)."
+            )
+        return PvWeatherSeries.of(
+            dni_extra=dni_extra[:number_of_timesteps],
+            dni=dni[:number_of_timesteps],
+            dhi=dhi[:number_of_timesteps],
+            ghi=ghi[:number_of_timesteps],
+            azimuth=azimuth[:number_of_timesteps],
+            apparent_zenith=apparent_zenith[:number_of_timesteps],
+            temperature=temperature[:number_of_timesteps],
+            wind_speed=wind_speed[:number_of_timesteps],
+        )
+
+    def cache_entry(self, calculation_inputs: PvSeriesInputs) -> CacheEntry:
+        """Look the produced series up in the cache under the key of the producer that makes it.
+
+        The key is ``sha256(artifact kind : code fingerprint : third-party fingerprint : DTO JSON)``
+        (``roadmap/cache_service_spec.md`` §3). The two fingerprints are read from the producer
+        module's import closure, so an edit to the calculation invalidates the entry by itself, and
+        the DTO carries the weather's own key, so an edit to the weather invalidates it too.
+
+        Args:
+            calculation_inputs: the DTO from :meth:`build_calculation_inputs`.
+
+        Returns:
+            CacheEntry: where the entry is or will be, and whether it is there.
+        """
+        key = CacheKey.for_producer(ARTIFACT_KIND, generic_pv_calculation, calculation_inputs)
+        return CacheClient.from_environment().lookup_producer(key, self.my_simulation_parameters.cache_dir_path)
 
     def interpolate(self, pd_database: Any, year: Any) -> Any:
         """Interpolates."""
@@ -884,449 +944,3 @@ class PVSystem(cp.Component):
         pd_database = pd_database.append(lastday)
         pd_database = pd_database.sort_index()
         return pd_database.resample("1min").asfreq().interpolate(method="linear").tolist()
-
-    def get_modules_from_database(self, module_database: Any, load_module_data: bool, module_name: str) -> Any:
-        """Get modules from pvlib module database."""
-
-        # get modules from pvlib database online
-        # (TODO: test if this works, it has not been fully tested yet)
-        if load_module_data is True:
-            if module_database == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE:
-                modules = pvlib.pvsystem.retrieve_sam(name="SandiaMod")
-            elif module_database == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE:
-                modules = pvlib.pvsystem.retrieve_sam(name="CECMod")
-            else:
-                raise KeyError(
-                    f"""The module database {module_database} is not integrated
-                    in the PV component here."""
-                )
-
-            # choose module from modules database
-            module = modules[module_name]
-
-        # get modules from input data csv files
-        else:
-            if module_database == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE:
-                modules = pd.read_csv(
-                    os.path.join(utils.HISIMPATH["photovoltaic"]["sandia_modules_new"]),
-                )
-
-            elif module_database == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE:
-                modules = pd.read_csv(os.path.join(utils.HISIMPATH["photovoltaic"]["cec_modules"]))
-            else:
-                raise KeyError(
-                    f"""The module database {module_database} is not integrated
-                    in the PV component here."""
-                )
-
-            # choose module from modules database
-            module = modules.loc[modules["Name"] == module_name].copy()
-
-            # transform column object types to numeric types
-            for column in module.columns:
-                if column == "Name":
-                    continue
-                module[column] = pd.to_numeric(module[column], errors="coerce")
-
-            # transform module dataframe to dict
-            if len(module) != 1:
-                raise KeyError(
-                    f"""No module {module_name} found in database
-                    {module_database}."""
-                )
-
-            module = module.to_dict(orient="records")[0]
-
-        return module
-
-    def get_inverters_from_database(
-        self,
-        inverter_database: Any,
-        load_module_data: bool,
-        inverter_name: str,
-    ) -> Any:
-        """Get inverters from pvlib module database."""
-
-        # get inverters from pvlib database online
-        if load_module_data is True:
-            if inverter_database in (
-                PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
-                PVLibModuleAndInverterEnum.CEC_INVERTER_DATABASE,
-            ):
-                # get inverter data (for both sandia and cec inverters the same
-                # database is taken):
-                # see docs: https://pvlib-python.readthedocs.io/en/v0.9.0/generated/pvlib.pvsystem.retrieve_sam.html  # noqa: E501
-                inverters = pvlib.pvsystem.retrieve_sam("CECInverter")
-                inverter = inverters[inverter_name]
-            elif inverter_database == PVLibModuleAndInverterEnum.ANTON_DRIESSE_INVERTER_DATABASE:
-                inverters = pvlib.pvsystem.retrieve_sam("ADRInverter")
-                inverter = inverters[inverter_name]
-            else:
-                raise KeyError(
-                    f"""The inverter database {inverter_database} is not
-                    integrated in the PV component here."""
-                )
-
-        # get inverters from input data csv files
-        else:
-            # this is the old csv file used in hisim
-            if inverter_database == PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE:
-                inverters = pd.read_csv(
-                    os.path.join(utils.HISIMPATH["photovoltaic"]["sandia_inverters"]),
-                    index_col=0,
-                )
-                # choose inverter from inverters database
-                inverter = inverters[inverter_name]
-                # transform to numeric types
-                inverter = pd.to_numeric(inverter, errors="coerce")
-
-            # this would be the new one, but not tested yet
-            elif inverter_database == PVLibModuleAndInverterEnum.CEC_INVERTER_DATABASE:
-                inverters = pd.read_csv(
-                    os.path.join(utils.HISIMPATH["photovoltaic"]["cec_inverters"]),
-                )
-                # choose inverter from inverters database
-                inverter = inverters.loc[inverters["Name"] == inverter_name].copy()
-
-                # transform column object types to numeric types
-                for column in inverter.columns:
-                    if column == "Name":
-                        continue
-                    inverter[column] = pd.to_numeric(inverter[column], errors="coerce")
-
-                # transform inverter dataframe to dict
-                if len(inverter) != 1:
-                    raise KeyError(
-                        f"""No inverter {inverter_name} found in database
-                        {inverter_database}."""
-                    )
-
-                inverter = inverter.to_dict(orient="records")[0]
-
-            else:
-                raise KeyError(
-                    f"""The inverter database {inverter_database} is not
-                    integrated in the PV component here."""
-                )
-
-        return inverter
-
-    def simulate_sandia(
-        self,
-        dni_extra=None,
-        dni=None,
-        dhi=None,
-        ghi=None,
-        azimuth=None,
-        apparent_zenith=None,
-        temperature=None,
-        wind_speed=None,
-        surface_tilt=30.0,
-        surface_azimuth=180.0,
-        albedo=0.2,
-    ):
-        """Simulates with the Sandia PV Array Performance Model, vectorized.
-
-        All weather parameters are numpy arrays covering the whole simulation
-        period; the function is called exactly once per simulation from
-        ``i_prepare_simulation`` and returns the AC power ratio (AC power
-        divided by the module peak load) for every timestep in one array.
-        Night timesteps carry NaN through the pvlib chain (the relative
-        airmass is undefined for zenith angles beyond 90 degrees) and are
-        mapped to a power ratio of 0.0 at the end, exactly like the scalar
-        per-timestep implementation this replaces.
-
-        The implementation is done in accordance with following tutorial:
-        https://github.com/pvlib/pvlib-python/blob/master/docs/tutorials/tmy_to_power.ipynb
-        https://pvlib-python.readthedocs.io/en/stable/reference/generated/pvlib.pvsystem.sapm.html#pvlib.pvsystem.sapm
-
-        Based on the tsib project @[tsib-kotzur] (Check header)
-
-        Parameters
-        ----------
-        surface_tilt: int or float, optional (default:30)
-            Tilt angle of of the array in degree.
-        surface_azimuth: int or float, optional (default:180)
-            Azimuth angle of of the array in degree. 180 degree means south,
-            90 degree east and 270 west.
-        albedo: float, optional (default: 0.2)
-            Reflection coefficient of the surrounding area.
-        apparent_zenith: np.ndarray
-            Apparent zenith per timestep.
-        azimuth: np.ndarray
-            Solar azimuth per timestep.
-        dni: np.ndarray
-            direct normal irradiance per timestep.
-        ghi: np.ndarray
-            global horizontal irradiance per timestep.
-        dhi: np.ndarray
-            direct horizontal irradiance per timestep.
-        dni_extra: np.ndarray
-            direct normal irradiance extra per timestep.
-        temperature: np.ndarray
-            outside temperature per timestep.
-        wind_speed: np.ndarray
-            wind speed per timestep.
-
-        Returns
-        -------
-        ac_power_ratio: np.ndarray
-            AC power ratio per timestep, NaN-free.
-
-        """
-        with np.errstate(invalid="ignore", divide="ignore"):
-            poa_irrad, airmass, aoi = self._calculate_irradiance(
-                dni_extra,
-                dni,
-                dhi,
-                ghi,
-                azimuth,
-                apparent_zenith,
-                surface_tilt,
-                surface_azimuth,
-                albedo,
-            )
-
-            pvtemps = pvlib.temperature.sapm_cell(
-                poa_irrad["poa_global"],
-                temperature,
-                wind_speed,
-                **self.temperature_model_parameters,
-            )
-
-            # calculate effective irradiance on pv module
-            sapm_irr = pvlib.pvsystem.sapm_effective_irradiance(
-                module=self.module,
-                poa_direct=poa_irrad["poa_direct"],
-                poa_diffuse=poa_irrad["poa_diffuse"],
-                airmass_absolute=airmass,
-                aoi=aoi,
-            )
-            # calculate pv performance
-            sapm_out = pvlib.pvsystem.sapm(
-                sapm_irr,
-                module=self.module,
-                temp_cell=pvtemps,
-            )
-            # calculate peak load of single module [W]
-            module_peak_load_in_watt = self.module["Impo"] * self.module["Vmpo"]
-
-            if self.pvconfig.integrate_inverter:
-                # calculate load after inverter
-                inverter_load_in_watt = pvlib.inverter.sandia(
-                    inverter=self.inverter,
-                    v_dc=sapm_out["v_mp"],
-                    p_dc=sapm_out["p_mp"],
-                )
-                # if inverter load is nan, make it zero otherwise ac_power_ratio
-                # will be nan also
-                inverter_load_in_watt = np.where(
-                    np.isnan(inverter_load_in_watt), 0.0, inverter_load_in_watt
-                )
-                ac_power_ratio = inverter_load_in_watt / module_peak_load_in_watt
-            else:
-                # load in [kW/kWp]
-                ac_power_ratio = np.asarray(sapm_out["p_mp"], dtype=float) / module_peak_load_in_watt
-
-        return np.where(np.isnan(ac_power_ratio), 0.0, ac_power_ratio)
-
-    def simulate_cec(
-        self,
-        dni_extra=None,
-        dni=None,
-        dhi=None,
-        ghi=None,
-        azimuth=None,
-        apparent_zenith=None,
-        temperature=None,
-        wind_speed=None,
-        surface_tilt=30.0,
-        surface_azimuth=180.0,
-        albedo=0.2,
-    ):
-        """Simulates a defined PV array using the single-diode model.
-
-        This simulation works with data from the CEC database.
-        The implementation is done in accordance with following tutorial:
-        https://github.com/pvlib/pvlib-python/blob/master/docs/tutorials/tmy_to_power.ipynb
-        https://pvlib-python.readthedocs.io/en/stable/reference/generated/pvlib.pvsystem.sapm.html#pvlib.pvsystem.sapm
-
-
-        Parameters
-        ----------
-        surface_tilt: int or float, optional (default:30)
-            Tilt angle of of the array in degree.
-        surface_azimuth: int or float, optional (default:180)
-            Azimuth angle of of the array in degree. 180 degree means south,
-            90 degree east and 270 west.
-        albedo: float, optional (default: 0.2)
-            Reflection coefficient of the surrounding area.
-        apparent_zenith: np.ndarray
-            Apparent zenith per timestep.
-        azimuth: np.ndarray
-            Solar azimuth per timestep.
-        dni: np.ndarray
-            direct normal irradiance per timestep.
-        ghi: np.ndarray
-            global horizontal irradiance per timestep.
-        dhi: np.ndarray
-            direct horizontal irradiance per timestep.
-        dni_extra: np.ndarray
-            direct normal irradiance extra per timestep.
-        temperature: np.ndarray
-            outside temperature per timestep.
-        wind_speed: np.ndarray
-            wind speed per timestep.
-
-        Returns
-        -------
-        ac_power_ratio: np.ndarray
-            AC power ratio per timestep, NaN-free.
-
-        """
-        with np.errstate(invalid="ignore", divide="ignore"):
-            # Calculate irradiance
-            poa_irrad, _, _ = self._calculate_irradiance(
-                dni_extra,
-                dni,
-                dhi,
-                ghi,
-                azimuth,
-                apparent_zenith,
-                surface_tilt,
-                surface_azimuth,
-                albedo,
-            )
-
-            # Calculate cell temperature
-            pvtemps = pvlib.temperature.pvsyst_cell(
-                poa_irrad["poa_global"],
-                temperature,
-                wind_speed,
-                **self.temperature_model_parameters,
-            )
-
-            # Calculate maximum power point
-            d = {
-                k: self.module[k]
-                for k in [
-                    "alpha_sc",
-                    "a_ref",
-                    "I_L_ref",
-                    "I_o_ref",
-                    "R_sh_ref",
-                    "R_s",
-                    "Adjust",
-                ]
-            }
-
-            # Where the global irradiation is undefined (typically at night,
-            # when the relative airmass and hence the Perez sky-diffuse model
-            # yield NaN), the PV output is zero. Restricting the single-diode
-            # solve to the defined timesteps both reproduces the scalar
-            # behavior (which returned 0.0 for NaN irradiance) and skips the
-            # expensive brentq root search for roughly half of all timesteps.
-            poa_global = np.asarray(poa_irrad["poa_global"], dtype=float)
-            pvtemps = np.asarray(pvtemps, dtype=float)
-            ac_power_ratio = np.zeros(len(poa_global))
-            valid = ~np.isnan(poa_global)
-
-            if np.any(valid):
-                (
-                    photocurrent,
-                    saturation_current,
-                    resistance_series,
-                    resistance_shunt,
-                    n_ns_v_th,
-                ) = pvlib.pvsystem.calcparams_cec(
-                    effective_irradiance=poa_global[valid],
-                    temp_cell=pvtemps[valid],
-                    **d,
-                )
-
-                # The vectorized newton solver is ~60x faster than brentq here
-                # (1 s instead of 58 s for a minutely year) and agrees with it
-                # to below 1e-11 W on a 10 kW system over a full year of
-                # weather data.
-                mp = pvlib.pvsystem.max_power_point(
-                    photocurrent,
-                    saturation_current,
-                    resistance_series,
-                    resistance_shunt,
-                    n_ns_v_th,
-                    d2mutau=0,
-                    NsVbi=np.inf,
-                    method="newton",
-                )
-
-                # Calculate peak load of single module [W]
-                module_peak_load_in_watt = self.module["I_mp_ref"] * self.module["V_mp_ref"]
-
-                if self.pvconfig.integrate_inverter:
-                    # calculate load after inverter
-                    inverter_load_in_watt = pvlib.inverter.sandia(
-                        inverter=self.inverter, v_dc=mp["v_mp"], p_dc=mp["p_mp"]
-                    )
-                    # if inverter load is nan, make it zero otherwise
-                    # ac_power_ratio will be nan also
-                    inverter_load_in_watt = np.where(
-                        np.isnan(inverter_load_in_watt), 0.0, inverter_load_in_watt
-                    )
-                    valid_ac_power_ratio = inverter_load_in_watt / module_peak_load_in_watt
-                else:
-                    # load in [kW/kWp]
-                    valid_ac_power_ratio = np.asarray(mp["p_mp"], dtype=float) / module_peak_load_in_watt
-
-                ac_power_ratio[valid] = np.where(
-                    np.isnan(valid_ac_power_ratio), 0.0, valid_ac_power_ratio
-                )
-
-        return ac_power_ratio
-
-    def _calculate_irradiance(
-        self,
-        dni_extra: Optional[np.ndarray] = None,
-        dni: Optional[np.ndarray] = None,
-        dhi: Optional[np.ndarray] = None,
-        ghi: Optional[np.ndarray] = None,
-        azimuth: Optional[np.ndarray] = None,
-        apparent_zenith: Optional[np.ndarray] = None,
-        surface_tilt: float = 30.0,
-        surface_azimuth: float = 180.0,
-        albedo: float = 0.2,
-    ) -> Tuple[Dict[str, Any], np.ndarray, np.ndarray]:
-        """Calculate the plane-of-array irradiance for all timesteps at once.
-
-        Takes the whole-year solar position and irradiance arrays and returns
-        the plane-of-array irradiance components (as a mapping with the keys
-        ``poa_global``, ``poa_direct`` and ``poa_diffuse``), the relative
-        airmass, and the angle of incidence, each as an array over all
-        timesteps. At night the relative airmass — and consequently the Perez
-        sky-diffuse model and the global plane-of-array irradiance — is NaN;
-        the callers translate those timesteps into zero power output.
-        """
-        dni = np.asarray(dni, dtype=np.float64)
-
-        # calculate airmass
-        airmass = pvlib.atmosphere.get_relative_airmass(apparent_zenith)
-
-        # calculate diffuse irradiance
-        poa_sky_diffuse = pvlib.irradiance.perez(
-            surface_tilt,
-            surface_azimuth,
-            dhi,
-            dni,
-            dni_extra,
-            apparent_zenith,
-            azimuth,
-            airmass,
-        )
-
-        # calculate ground diffuse with specified albedo
-        poa_ground_diffuse = pvlib.irradiance.get_ground_diffuse(surface_tilt, ghi, albedo=albedo)
-        # calculate angle of incidence
-        aoi = pvlib.irradiance.aoi(surface_tilt, surface_azimuth, apparent_zenith, azimuth)
-        # calculate plane of array irradiance
-        poa_irrad = pvlib.irradiance.poa_components(aoi, dni, poa_sky_diffuse, poa_ground_diffuse)
-
-        return poa_irrad, airmass, aoi

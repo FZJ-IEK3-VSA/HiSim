@@ -14,7 +14,7 @@ and as non-modulating on_off controller (which is used especially for pellet and
 # Owned
 import importlib
 from dataclasses import dataclass
-from typing import Any, ClassVar, List, Optional, Tuple
+from typing import ClassVar, List, Optional, Tuple
 from enum import Enum, unique
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -1125,120 +1125,6 @@ class GenericBoilerControllerConfig(ConfigBase):
             is_modulating=False,
             minimum_runtime_in_seconds=0,
             minimum_resting_time_in_seconds=0,
-        )
-
-    @classmethod
-    def get_default_modulating_generic_boiler_controller_config(
-        cls,
-        maximal_thermal_power_in_watt: Sizable[float],
-        minimal_thermal_power_in_watt: Sizable[float],
-        component_id: Optional[ComponentID] = None,
-        secondary_mode: bool = False,
-        with_domestic_hot_water_preparation: bool = False,
-        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
-    ) -> Any:
-        """Gets a default Generic Boiler Controller, for example for gas and oil boilers."""
-        if component_id is None:
-            component_id = ComponentID(name="ModulatingBoilerController")
-        return GenericBoilerControllerConfig(
-            component_id=component_id,
-            is_modulating=True,
-            # get min and max thermal power from Generic Boiler config
-            minimal_thermal_power_in_watt=concrete(minimal_thermal_power_in_watt),
-            maximal_thermal_power_in_watt=concrete(maximal_thermal_power_in_watt),
-            set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
-            minimum_runtime_in_seconds=1800,
-            minimum_resting_time_in_seconds=1800,
-            secondary_mode=secondary_mode,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
-            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-            hysteresis_water_temperature_offset=10,
-        )
-
-    @classmethod
-    def get_default_on_off_generic_boiler_controller_config(
-        cls,
-        maximal_thermal_power_in_watt: Sizable[float],
-        minimal_thermal_power_in_watt: Sizable[float],
-        with_domestic_hot_water_preparation: bool = False,
-        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Gets a default Generic Boiler Controller.
-
-        The power band is usually read off a resolved boiler config, whose fields are typed
-        as sizable; the values must be concrete by the time a controller is built, and
-        ``concrete`` asserts exactly that instead of a cast at every call site.
-        """
-        if component_id is None:
-            component_id = ComponentID(name="OnOffBoilerController")
-        return GenericBoilerControllerConfig(
-            component_id=component_id,
-            is_modulating=False,
-            # get min and max thermal power from Generic Boiler config
-            minimal_thermal_power_in_watt=concrete(minimal_thermal_power_in_watt),
-            maximal_thermal_power_in_watt=concrete(maximal_thermal_power_in_watt),
-            set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
-            minimum_resting_time_in_seconds=0,
-            minimum_runtime_in_seconds=0,
-            secondary_mode=False,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
-            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-            hysteresis_water_temperature_offset=10,
-        )
-
-    @classmethod
-    def get_default_pellet_controller_config(
-        cls,
-        maximal_thermal_power_in_watt: Sizable[float],
-        minimal_thermal_power_in_watt: Sizable[float],
-        with_domestic_hot_water_preparation: bool = False,
-        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Gets a default controller for pellet boiler."""
-        if component_id is None:
-            component_id = ComponentID(name="PelletBoilerController")
-        return GenericBoilerControllerConfig(
-            component_id=component_id,
-            is_modulating=False,
-            # get min and max thermal power from Generic Boiler config
-            minimal_thermal_power_in_watt=concrete(minimal_thermal_power_in_watt),
-            maximal_thermal_power_in_watt=concrete(maximal_thermal_power_in_watt),
-            set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
-            minimum_resting_time_in_seconds=15 * 60,
-            minimum_runtime_in_seconds=30 * 60,
-            secondary_mode=False,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
-            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-            hysteresis_water_temperature_offset=10,
-        )
-
-    @classmethod
-    def get_default_wood_chip_controller_config(
-        cls,
-        maximal_thermal_power_in_watt: Sizable[float],
-        minimal_thermal_power_in_watt: Sizable[float],
-        with_domestic_hot_water_preparation: bool = False,
-        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Gets a default controller for wood chip boiler."""
-        if component_id is None:
-            component_id = ComponentID(name="WoodChipBoilerController")
-        return GenericBoilerControllerConfig(
-            component_id=component_id,
-            is_modulating=False,
-            # get min and max thermal power from Generic Boiler config
-            minimal_thermal_power_in_watt=concrete(minimal_thermal_power_in_watt),
-            maximal_thermal_power_in_watt=concrete(maximal_thermal_power_in_watt),
-            set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
-            minimum_resting_time_in_seconds=30 * 60,
-            minimum_runtime_in_seconds=60 * 60,
-            secondary_mode=False,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
-            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-            hysteresis_water_temperature_offset=10,
         )
 
 

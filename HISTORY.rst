@@ -37,3 +37,10 @@ History
   produces the processed series now. The component's own names
   (``Weather``, ``WeatherConfig``, ``LocationEnum``, ``WeatherDataSourceEnum``, ``get_coordinates`` and
   ``calculate_direct_normal_irradiance_in_watt_per_square_meter``) resolve from the package as before.
+* The energy management system's dynamic dispatch ports are named ``<prefix><source weight>``
+  instead of ``<prefix>Output<N>``, so a port's name no longer depends on how many unrelated
+  ports were declared before it.
+* An energy management system grows a dispatch port only for a device the run actually has and
+  actually measures; the phantom targets absent devices used to get are gone.
+* Both changes rename result columns: postprocessing that reads a dispatch column by its old
+  ``...Output<N>`` name, and stored reference results holding those names, have to be updated.

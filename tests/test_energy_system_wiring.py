@@ -212,20 +212,21 @@ def test_a_feed_grows_a_derived_input_on_the_aggregator(tmp_path: Path) -> None:
 
 
 @pytest.mark.base
-def test_a_dispatch_block_adopts_a_signal_the_aggregator_already_publishes(tmp_path: Path) -> None:
-    """Catches a second control output being grown beside the one the aggregator already has.
+def test_a_dispatch_block_grows_exactly_one_target_port(tmp_path: Path) -> None:
+    """Catches a second control output existing beside the one the feed describes.
 
     An aggregator finds the output it steers a participant through by tags and weight, never by
     name, so two outputs carrying the same tags at the same weight are not a name collision that
     anything would refuse — they are one extra entry in the list the aggregator zips against its
     participants, and every participant after it is steered through somebody else's port. The
-    energy management system publishes a residents' target from its own constructor, so a feed
-    describing that participant has to adopt it rather than ask for a second one; if it did not,
-    the household would run with the battery ranked last and never charged.
+    energy management system used to publish a residents' target from its own constructor, which
+    a feed describing that participant had to take over rather than ask for a second one; it
+    publishes nothing before resolution any more (F-1), so the feed's own port is the only one
+    there is.
 
-    The dispatch block is still required — the channel dispatches to every participant on it — so
-    what the test pins is that the block is *served* by the existing port and that the resolved
-    tags are the ones the runtime lookup searches for.
+    What the test pins is that invariant from both ends: the port is the one the derived template
+    names, and the aggregator's own tag-and-weight lookup — the one the dispatch uses at run time
+    — returns it and nothing else.
     """
     entries = (
         Systems.OCCUPANCY
@@ -243,30 +244,25 @@ def test_a_dispatch_block_adopts_a_signal_the_aggregator_already_publishes(tmp_p
 
     wired = Systems.build(entries, tmp_path)
 
-    ems = wired.component_of("ems")
+    ems = cast(DynamicComponent, wired.component_of("ems"))
     assert "ElectricalPowerConsumptionFromoccupancy" in {port.field_name for port in ems.inputs}
-    assert "DispatchForoccupancy_ElectricalPowerConsumption" not in {
-        port.field_name for port in ems.outputs
-    }
     resolved = wired.resolved_feeds[0][1][0]
     assert resolved.dispatch is not None
     assert lt.InandOutputType.ELECTRICITY_TARGET in resolved.dispatch.tags
     assert lt.ComponentType.RESIDENTS in resolved.dispatch.tags
+    assert resolved.dispatch_output_name == "DispatchForoccupancy_ElectricalPowerConsumption"
     served = [
         entry
-        for entry in cast(DynamicComponent, ems).my_component_outputs
+        for entry in ems.my_component_outputs
         if entry.source_weight == 1
         and lt.InandOutputType.ELECTRICITY_TARGET in entry.source_tags
         and lt.ComponentType.RESIDENTS in entry.source_tags
     ]
-    assert len(served) == 1, "the aggregator must publish exactly one signal per participant"
-    # The adopted port is exactly the one the runtime's tag-and-weight lookup finds — the
-    # cross-check that matters. Its numeric suffix is an internal output counter, so the name is
-    # pinned by its stable prefix rather than by the counter's current value.
-    assert resolved.adopted_dispatch_output == served[0].source_output_field_name
-    assert resolved.adopted_dispatch_output is not None
-    assert resolved.adopted_dispatch_output.startswith("ElectricityToOrFromGridOfUtspLpgConnector_")
-    assert resolved.created_dispatch_output_name is None
+    assert [entry.source_output_field_name for entry in served] == [resolved.dispatch_output_name]
+    found = ems.get_all_dynamic_outputs(
+        tags=[lt.ComponentType.RESIDENTS, lt.InandOutputType.ELECTRICITY_TARGET], weight_counter=1
+    )
+    assert [port.field_name for port in found] == [resolved.dispatch_output_name]
 
 
 @pytest.mark.base

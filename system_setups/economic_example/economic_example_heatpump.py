@@ -233,9 +233,10 @@ def attach_tariff_provider(my_sim, params: SimulationParameters) -> TariffProvid
     price outputs are *published*, not consumed: no component in this setup takes a price input, and
     since the component sweep retired `controller_mpc` and `generic_price_signal` to `obsolete/`
     (decision D-16, 2026-09-10) no component in the library does either — this provider is now the
-    library's only price source, and the 24 h forecast it publishes to the `SingletonSimRepository`
-    waits for the controller that will read it. The prices are therefore in the results frame for a
-    reader and for any controller wired to them, and the README says so.
+    library's only price source. It also published a 24 h forecast to the process-global
+    `SingletonSimRepository`; that publication was deleted with the rest of the repository's dead
+    keys on 2026-09-12, having outlived its only reader. The prices are therefore in the results
+    frame for a reader and for any controller wired to them, and the README says so.
 
     Args:
         my_sim: The `Simulator` returned by `initialize_from_python`, already wired.

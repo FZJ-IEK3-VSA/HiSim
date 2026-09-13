@@ -43,7 +43,6 @@ from hisim.simulator import Simulator
 from scripts.p3_parity_check import (
     DeclaredPortRenamings,
     ParityChecker,
-    ParitySide,
     ParityWindows,
     Report,
     RunOutcome,
@@ -189,13 +188,11 @@ class Rig:
         from hisim.hisim_main import initialize_from_python  # noqa: PLC0415
 
         legacy_parameters = ParityWindows.build(cls.WINDOW, work / "python", work / "python-cache")
-        ParitySide.reset_singletons()
         legacy = cls.resolved_wiring(
             initialize_from_python(str(cls.SETUPS / f"{cls.CANARY}.py"), legacy_parameters, None)
         )
 
         declared_parameters = ParityWindows.build(cls.WINDOW, work / "declarative", work / "declarative-cache")
-        ParitySide.reset_singletons()
         declarative = cls.resolved_wiring(
             build_energy_system(cls.ENERGY_SYSTEMS / f"{cls.CANARY}.energy_system.yaml", declared_parameters).simulator
         )

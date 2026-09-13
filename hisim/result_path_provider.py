@@ -7,6 +7,10 @@ A run is configured once via :meth:`ResultPathProviderSingleton.configure` (or t
 selects a sensible default directory layout, and individual artifacts (csv files, plots, KPIs,
 reports, ...) are addressed through the typed :class:`ArtifactCategory` enum so callers no longer
 hand-join path strings.
+
+The thread-safe :class:`SingletonMeta` metaclass that makes the provider a singleton lives here
+too, for want of another user: it came from ``hisim.sim_repository_singleton`` when that module
+was deleted on 2026-09-12.
 """
 
 # clean
@@ -16,9 +20,8 @@ import re
 import datetime
 import enum
 from pathlib import Path
-from typing import Optional, Union
-
-from hisim.sim_repository_singleton import SingletonMeta
+from threading import Lock
+from typing import Any, Dict, Optional, Union
 
 
 class RunMode(enum.Enum):
@@ -86,6 +89,52 @@ class ArtifactCategory(enum.Enum):
     REPORTS = "reports"
     LOGS = "logs"
     CACHE = "cache"
+
+
+# https://refactoring.guru/design-patterns/singleton/python/example#example-1
+class SingletonMeta(type):
+
+    """A metaclass for a thread-safe implementation of Singleton.
+
+    Its one user is :class:`ResultPathProviderSingleton` below, which is a legitimate
+    singleton: a run has exactly one result directory, and every writer has to agree on
+    it. The metaclass lived in ``hisim.sim_repository_singleton`` until that module -- the
+    process-global component repository -- was retired on 2026-09-12, and it moved here
+    with its last user rather than becoming a module of its own.
+    """
+
+    _instances: Dict[Any, Any] = {}
+
+    _lock: Lock = Lock()
+    # We now have a lock object that will be used to synchronize threads during first access to the Singleton.
+
+    def __call__(cls, *args, **kwargs):
+        """Possible changes to the value of the `__init__` argument do not affect the returned instance."""
+        # Fast path, EAFP single lookup: once the singleton has been created the instance
+        # already exists, so one ``cls._instances[cls]`` access returns it without taking
+        # the lock. The earlier form probed the dict twice (``cls not in cls._instances``
+        # then ``cls._instances[cls]``), recomputing ``hash(cls)`` and re-probing the slot
+        # each time; ``try``/``except`` with no exception raised is near-zero cost in
+        # CPython, so this halves the per-call dict work. The ``KeyError`` branch is taken
+        # exactly once per class -- the same as plain double-checked locking -- because
+        # ``super().__call__()`` always returns a real instance (never ``None``).
+        try:
+            return cls._instances[cls]
+        except KeyError:
+            # Now, imagine that the program has just been launched. Since there's no
+            # Singleton instance yet, multiple threads can simultaneously reach this
+            # point almost at the same time. The first of them will acquire the lock
+            # and proceed further, while the rest will wait here.
+            with cls._lock:
+                # The first thread to acquire the lock, reaches this conditional,
+                # goes inside and creates the Singleton instance. Once it leaves the
+                # lock block, a thread that might have been waiting for the lock
+                # release may then enter this section. But since the Singleton field
+                # is already initialized, the thread won't create a new object.
+                if cls not in cls._instances:
+                    instance = super().__call__(*args, **kwargs)
+                    cls._instances[cls] = instance
+                return cls._instances[cls]
 
 
 class ResultPathProviderSingleton(metaclass=SingletonMeta):

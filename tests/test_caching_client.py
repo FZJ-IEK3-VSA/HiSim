@@ -256,7 +256,6 @@ def test_importing_the_cache_package_imports_no_component_or_simulation_module()
         "hisim.simulator",
         "hisim.simulationparameters",
         "hisim.sim_repository",
-        "hisim.sim_repository_singleton",
         "hisim.utils",
         "hisim.loadtypes",
     )

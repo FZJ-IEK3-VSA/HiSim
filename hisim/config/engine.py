@@ -1,9 +1,9 @@
 """The sizing-fact engine: cross-component sizing resolved to a fixed point over configs.
 
 Cross-component sizing dependencies nest deeply (building → HDS controller → HDS;
-building → boiler → boiler controller), and the incumbent mechanism — the global
-``SingletonSimRepository`` with untyped enum-keyed entries and silent fallbacks — has
-already rotted in production. This engine is its typed, hard-erroring successor, in three
+building → boiler → boiler controller), and the mechanism this one replaces — the global
+``SingletonSimRepository`` with untyped enum-keyed entries and silent fallbacks, emptied and
+deleted on 2026-09-12 — had already rotted in production. This engine is its typed, hard-erroring successor, in three
 phases: **registration** reads every config's inputs from its laws' ``facts_read`` and
 its outputs from the :class:`~hisim.config.contributions.FactContribution` declarations
 on its class; **validation** rejects a fact nobody provides before anything is computed;

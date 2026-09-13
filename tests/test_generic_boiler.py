@@ -1,7 +1,9 @@
 """Test for generic pv system."""
 
+import pathlib
 from typing import Any, Dict, Optional
 import pytest
+import yaml
 from hisim import loadtypes as lt
 from hisim import simulator as sim
 from hisim.components import generic_boiler
@@ -85,12 +87,19 @@ def given_default_testee(
     config = GenericBoilerControllerConfig.preset_on_off("OnOffBoilerController").resolve(
         SizingContext(maximal_thermal_power_in_watt=2500, minimal_thermal_power_in_watt=1000)
     )
-    config.with_domestic_hot_water_preparation = True
     config.minimum_runtime_in_seconds = config_overwrite.get(
         "minimum_runtime_in_seconds", 0
     )
     config.minimum_resting_time_in_seconds = config_overwrite.get(
         "minimum_resting_time_in_seconds", 0
+    )
+    config.with_domestic_hot_water_preparation = config_overwrite.get(
+        "with_domestic_hot_water_preparation",
+        config.with_domestic_hot_water_preparation,
+    )
+    config.set_heating_threshold_outside_temperature_in_celsius = config_overwrite.get(
+        "set_heating_threshold_outside_temperature_in_celsius",
+        config.set_heating_threshold_outside_temperature_in_celsius,
     )
     config.hysteresis_water_temperature_offset = 0
     testee = GenericBoilerController(
@@ -257,3 +266,90 @@ def test_district_heating_has_no_heating_value_and_no_fuel_density() -> None:
     assert facts["heating_value_of_fuel_in_kwh_per_liter"] is None
     assert facts["fuel_density_in_kg_per_m3"] is None
     assert facts["energy_carrier"] is lt.LoadTypes.DISTRICTHEATING
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ["preset_name", "expected_is_modulating", "expected_runtime", "expected_resting"],
+    [
+        ("preset_modulating", True, 1800, 1800),
+        ("preset_on_off", False, 0, 0),
+    ],
+)
+def test_controller_presets_reproduce_the_factories_they_replaced(
+    preset_name: str,
+    expected_is_modulating: bool,
+    expected_runtime: float,
+    expected_resting: float,
+) -> None:
+    """The two presets still resolve to the literals the four deleted factories wrote.
+
+    Failure mode caught: a preset default drifting from the factory it replaced. The
+    ``get_default_modulating_…`` / ``get_default_on_off_…`` factories are gone with no shim,
+    so nothing else in the repository states what a boiler controller is supposed to start
+    from; a silent edit to a field default here would move eleven call sites at once.
+    The power band is AUTO in both presets and arrives from the boiler through the
+    ``SizingContext``, the same two numbers the factories took as their first arguments.
+    """
+    preset = getattr(GenericBoilerControllerConfig, preset_name)("X")
+    config = preset.resolve(
+        SizingContext(
+            maximal_thermal_power_in_watt=2500, minimal_thermal_power_in_watt=1000
+        )
+    )
+
+    assert config.component_id.name == "X"
+    assert config.is_modulating is expected_is_modulating
+    assert config.minimum_runtime_in_seconds == expected_runtime
+    assert config.minimum_resting_time_in_seconds == expected_resting
+    assert config.set_temperature_difference_for_full_power == 5.0
+    assert config.hysteresis_water_temperature_offset == 10.0
+    assert config.set_heating_threshold_outside_temperature_in_celsius == 16.0
+    assert config.secondary_mode is False
+    assert config.with_domestic_hot_water_preparation is False
+    assert config.maximal_thermal_power_in_watt == 2500
+    assert config.minimal_thermal_power_in_watt == 1000
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ["twin_file_name", "controller_key", "expected_runtime", "expected_resting"],
+    [
+        (
+            "household_pellets_building_sizer.energy_system.yaml",
+            "PelletBoilerController",
+            1800.0,
+            900.0,
+        ),
+        (
+            "household_wood_chips_building_sizer.energy_system.yaml",
+            "WoodChipBoilerController",
+            3600.0,
+            1800.0,
+        ),
+    ],
+)
+def test_solid_fuel_setups_keep_the_timings_of_their_deleted_factories(
+    twin_file_name: str,
+    controller_key: str,
+    expected_runtime: float,
+    expected_resting: float,
+) -> None:
+    """Pellet and wood chip boilers still cycle on the timings their own factories carried.
+
+    Failure mode caught: a solid-fuel override dropped from a setup. ``get_default_pellet_…``
+    set 30 and 15 minutes and ``get_default_wood_chip_…`` 60 and 30; both are now plain field
+    overrides on ``preset_on_off``, and an override is far easier to lose than a factory name.
+    The recorded twin is read rather than the setup because the energy-system freshness gate
+    ties the two together, so pinning the twin pins the setup that recorded it.
+    """
+    twin_path = (
+        pathlib.Path(__file__).resolve().parents[1] / "energy_systems" / twin_file_name
+    )
+    twin = yaml.safe_load(twin_path.read_text(encoding="utf-8"))
+
+    controller = twin["components"][controller_key]
+    assert controller["class"] == "hisim.components.generic_boiler.GenericBoilerController"
+    assert controller["preset"] == "on_off"
+    assert controller["config"]["minimum_runtime_in_seconds"] == expected_runtime
+    assert controller["config"]["minimum_resting_time_in_seconds"] == expected_resting

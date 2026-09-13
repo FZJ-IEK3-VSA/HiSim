@@ -1290,7 +1290,7 @@ class TestDeviceEnergyFlows:
 #: class *name* — which is what keeps `hisim.economics` free of component imports — is checked
 #: against the classes those names refer to.
 _ENERGY_BALANCE_MODULES = {
-    "PVSystem": "generic_pv_system",
+    "PVSystem": "generic_pv_system.pv_system",
     "Battery": "advanced_battery_bslib",
     "MoreAdvancedHeatPumpHPLib": "more_advanced_heat_pump_hplib",
     "GenericHeatPump": "generic_heat_pump",

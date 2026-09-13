@@ -212,7 +212,7 @@ def test_house(
     # Build Gas Meter
     my_heating_meter = heating_meter.HeatingMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=heating_meter.HeatingMeterConfig.get_heating_meter_default_config(),
+        config=heating_meter.HeatingMeterConfig.preset_standard("HeatingMeter"),
     )
 
     # =========================================================================================================================================================

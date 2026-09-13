@@ -11,7 +11,7 @@ from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim.component import ComponentInput, OpexCostDataClass
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ComponentID, ConfigBase, DisplayConfig, preset
 from hisim.config.channels import DispatchRule, DynamicConnectionChannel
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
@@ -38,8 +38,9 @@ __status__ = ""
 class HeatingMeterConfig(ConfigBase):
     """Configuration dataclass for the HeatingMeter component.
 
-    Holds the building name and component name used to instantiate
-    a HeatingMeter.
+    Holds the component identity and nothing else: a heat meter sums watt-hours, so there is
+    no device, no carrier and no constant to configure. The named default is
+    :meth:`preset_standard`, which takes the instance name.
     """
 
     @classmethod
@@ -49,17 +50,23 @@ class HeatingMeterConfig(ConfigBase):
 
     component_id: ComponentID
 
+    @preset
     @classmethod
-    def get_heating_meter_default_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "HeatingMeterConfig":
-        """Gets a default HeatingMeter config."""
-        if component_id is None:
-            component_id = ComponentID(name="HeatingMeter")
-        return HeatingMeterConfig(
-            component_id=component_id,
-        )
+    def preset_standard(cls, name: str) -> "HeatingMeterConfig":
+        """The heat meter of a household, which has nothing to configure but its own identity.
+
+        The only preset the class has, and the whole configuration: the component identity is
+        this class's single field, because a heat meter sums watt-hours and neither prices a
+        fuel nor owns a device. It reproduces the deleted ``get_heating_meter_default_config``
+        factory exactly.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            HeatingMeterConfig: The preset configuration.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class HeatingMeter(DynamicComponent):

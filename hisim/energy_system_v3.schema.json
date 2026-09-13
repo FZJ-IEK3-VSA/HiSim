@@ -139,6 +139,7 @@
             "hisim.components.generic_pv_system.PVSystem",
             "hisim.components.heat_distribution_system.HeatDistribution",
             "hisim.components.heat_distribution_system.HeatDistributionController",
+            "hisim.components.heating_meter.HeatingMeter",
             "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
             "hisim.components.weather.Weather"
           ],
@@ -1838,6 +1839,43 @@
                     "set_cooling_temperature_in_celsius",
                     "set_heating_temperature_in_celsius"
                   ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.heating_meter.HeatingMeter"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {}
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
                 }
               }
             }

@@ -12,7 +12,10 @@ from typing import Optional
 import pytest
 import numpy as np
 import pandas as pd
+import hisim.component as cp
 import hisim.simulator as sim
+from hisim import json_generator
+from hisim.config.channels import ResolvedDispatch, ResolvedDynamicConnection
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
@@ -556,7 +559,7 @@ def test_two_target_outputs_of_one_name_are_refused() -> None:
     add_the_battery_target()
     assert manager.outputs[-1].field_name == "LoadingPowerInputForBattery_6"
 
-    with pytest.raises(ValueError, match="already publishes a dynamic output"):
+    with pytest.raises(ValueError, match="LoadingPowerInputForBattery_6"):
         add_the_battery_target()
 
 
@@ -590,3 +593,209 @@ def test_the_kpi_block_finds_a_dispatch_port_that_is_not_named_after_a_class() -
     assert kpi_entries[0].name_of_source_component == "UtspLpgConnector"
     assert kpi_entries[0].unit == "kWh"
     assert kpi_entries[0].value == pytest.approx(0.5)
+
+
+def _heat_pump(
+    name: str, with_domestic_hot_water_preparation: bool = False
+) -> more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib:
+    """Builds a heat pump, the cheapest participant the energy manager steers by default.
+
+    Args:
+        name: The instance name, which is also what the simulator knows the component by.
+        with_domestic_hot_water_preparation: Whether the device prepares domestic hot water. A
+            device that does not publishes no DHW electrical power, which is the configuration
+            the manager must not grow a DHW target for.
+
+    Returns:
+        The heat pump.
+    """
+    config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_default_generic_advanced_hp_lib(
+        component_id=ComponentID(name=name)
+    )
+    config.with_domestic_hot_water_preparation = with_domestic_hot_water_preparation
+    heat_pump: more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib = (
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
+            my_simulation_parameters=SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 15),
+            config=config,
+        )
+    )
+    return heat_pump
+
+
+def _simulator(result_directory: str) -> sim.Simulator:
+    """Builds a simulator that writes nothing but its own directory.
+
+    Args:
+        result_directory: A directory of the test's own, used as both module and result directory.
+
+    Returns:
+        The simulator.
+    """
+    simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 15)
+    simulation_parameters.result_directory = result_directory
+    my_sim: sim.Simulator = sim.Simulator(
+        module_directory=result_directory,
+        module_filename="household_for_test_grown_ports",
+        my_simulation_parameters=simulation_parameters,
+    )
+    my_sim.set_simulation_parameters(simulation_parameters)
+    return my_sim
+
+
+@pytest.mark.base
+def test_a_port_grown_while_wiring_becomes_a_result_column(tmp_path) -> None:
+    """Catches a grown dispatch port that never reaches the values vector it is written into.
+
+    The port is created after the component was registered, so nothing but the wiring pass gives
+    it a global index; a port left without one would silently write into index 0 or off the end
+    of the vector. This drives the whole seam — the simulator's automatic connection, the
+    wrapper's registration of what grew, and the sizing that follows — rather than the component
+    method alone.
+    """
+    my_sim = _simulator(str(tmp_path))
+    my_sim.add_component(_heat_pump("HeatPump"))
+    my_sim.add_component(_energy_manager(), connect_automatically=True)
+
+    my_sim.prepare_calculation()
+
+    grown = [
+        output
+        for output in my_sim.all_outputs
+        if output.field_name == "ElectricityToOrFromGridOfSHMoreAdvancedHeatPumpHPLib_2"
+    ]
+    assert len(grown) == 1
+    assert [output.global_index for output in my_sim.all_outputs] == list(range(len(my_sim.all_outputs)))
+    values = cp.SingleTimeStepValues(len(my_sim.all_outputs))
+    values.set_output_value(grown[0], 42.0)
+    assert values.values[grown[0].global_index] == 42.0
+
+
+@pytest.mark.base
+def test_two_instances_of_one_steered_class_are_refused_by_name(tmp_path) -> None:
+    """Catches the two-instance case being absorbed instead of refused, or refused mutely.
+
+    A default connection names its target after the participant's class and the one weight that
+    class is dispatched on, so two instances of one class ask for one port. That is refused, and
+    the refusal has to say what happened and where to go instead: hand wiring with a weight per
+    instance, or the declarative energy-system format, which gives every feed its own weight.
+    """
+    my_sim = _simulator(str(tmp_path))
+    my_sim.add_component(_heat_pump("HeatPumpA"))
+    my_sim.add_component(_heat_pump("HeatPumpB"))
+    my_sim.add_component(_energy_manager(), connect_automatically=True)
+
+    with pytest.raises(ValueError, match="ElectricityToOrFromGridOfSHMoreAdvancedHeatPumpHPLib_2") as refusal:
+        my_sim.prepare_calculation()
+
+    message = str(refusal.value)
+    assert "Two components of the class 'MoreAdvancedHeatPumpHPLib'" in message
+    assert "its own source weight" in message
+    assert "declarative energy-system format" in message
+
+
+@pytest.mark.base
+def test_a_device_that_publishes_no_dhw_power_grows_no_dhw_target() -> None:
+    """Catches a dispatch port grown for a flow the device does not have.
+
+    A heat pump that prepares no domestic hot water publishes no DHW electrical power, which is
+    why that feed is allowed to stay unconnected. Wiring it anyway gives the run a measurement
+    that reads zero forever and a target column nobody steers — the phantom ports F-1 removed,
+    back one flow at a time. Both halves have to go together: the manager ranks every feed it
+    has and pairs each with a target of the same weight, so a feed without its target would make
+    the ranking refuse the run at the first timestep.
+    """
+    without_dhw = _energy_manager()
+    heat_pump = _heat_pump("HeatPump")
+    assert "ElectricalInputPowerDHW" not in [output.field_name for output in heat_pump.outputs]
+
+    without_dhw.connect_with_dynamic_connections_list(without_dhw.get_dynamic_default_connections(heat_pump))
+
+    assert [
+        output.field_name for output in without_dhw.outputs if "ElectricityToOrFromGridOf" in output.field_name
+    ] == ["ElectricityToOrFromGridOfSHMoreAdvancedHeatPumpHPLib_2"]
+    assert [entry.source_component_field_name for entry in without_dhw.my_component_inputs] == [
+        "ElectricalInputPowerSH"
+    ]
+
+    with_dhw = _energy_manager()
+    dhw_heat_pump = _heat_pump("HeatPump", with_domestic_hot_water_preparation=True)
+
+    with_dhw.connect_with_dynamic_connections_list(with_dhw.get_dynamic_default_connections(dhw_heat_pump))
+
+    assert [entry.source_component_field_name for entry in with_dhw.my_component_inputs] == [
+        "ElectricalInputPowerSH",
+        "ElectricalInputPowerDHW",
+    ]
+    assert [
+        output.field_name for output in with_dhw.outputs if "ElectricityToOrFromGridOf" in output.field_name
+    ] == [
+        "ElectricityToOrFromGridOfSHMoreAdvancedHeatPumpHPLib_2",
+        "ElectricityToOrFromGridOfDHWMoreAdvancedHeatPumpHPLib_3",
+    ]
+
+
+def _resolved_feed_of(heat_pump: more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib) -> ResolvedDynamicConnection:
+    """Builds the resolved feed an energy-system file produces for a steered participant.
+
+    Args:
+        heat_pump: The participant the feed measures.
+
+    Returns:
+        A feed whose dispatch block names no target input, so its port is named by the
+        ``DispatchFor`` template.
+    """
+    return ResolvedDynamicConnection(
+        source_name=heat_pump.component_name,
+        source_component=heat_pump,
+        source_output=more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH,
+        source_port=heat_pump.outputs[0],
+        target_name="L2EMSElectricityController",
+        component_type=lt.ComponentType.HEAT_PUMP_BUILDING,
+        flow_tags=(lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,),
+        weight=2,
+        channel=controller_l2_energy_management_system.L2GenericEnergyManagementSystem.get_channel(
+            controller_l2_energy_management_system.L2GenericEnergyManagementSystem.CONSUMPTION_CONTROLLED_CHANNEL
+        ),
+        origin="a test's feed",
+        dispatch=ResolvedDispatch(
+            target_input=None,
+            tags=(lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_TARGET),
+        ),
+    )
+
+
+@pytest.mark.base
+def test_the_scenario_json_writes_the_targets_a_setup_made_and_no_others() -> None:
+    """Catches the scenario JSON writing a port twice, losing one, or writing a garbled name.
+
+    The file is the legacy path's own: the JSON executor applies the same default connections
+    when it rebuilds the component, so a target grown from one must not be written down, while
+    every target the setup added by hand must be — under the prefix it was added with. Both
+    answers are read off the port's own bookkeeping now, which is also why a port named by the
+    declarative format's templates, having no prefix at all, is refused by name instead of
+    written as whatever the arithmetic made of it.
+    """
+    manager = _energy_manager()
+    manager.add_component_output(
+        source_output_name="LoadingPowerInputForBattery_",
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+        source_weight=6,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for Battery Control. ",
+    )
+    heat_pump = _heat_pump("HeatPump")
+    manager.connect_with_dynamic_connections_list(manager.get_dynamic_default_connections(heat_pump))
+
+    written, _, _ = json_generator.convert_component_to_json(manager.config, manager)
+
+    assert [(out["source_output_name"], out["source_weight"]) for out in written.outputs] == [
+        ("LoadingPowerInputForBattery_", 6)
+    ]
+
+    declarative_manager = _energy_manager()
+    dispatch_output = declarative_manager.add_resolved_dispatch_output(_resolved_feed_of(heat_pump))
+    assert dispatch_output.field_name == "DispatchForHeatPump_ElectricalInputPowerSH"
+
+    with pytest.raises(ValueError, match=dispatch_output.field_name):
+        json_generator.convert_component_to_json(declarative_manager.config, declarative_manager)

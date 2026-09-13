@@ -110,7 +110,9 @@ Deploying
 ---------
 
 A reminder for the maintainers on how to deploy.
-Make sure all your changes are committed (including an entry in HISTORY.rst).
+Make sure all your changes are committed. Do not add an entry to HISTORY.rst in a
+pull request: the release history is assembled at release time, and per-branch entries
+only cause merge conflicts.
 Then run::
 
 $ bump2version patch # possible: major / minor / patch

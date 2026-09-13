@@ -457,6 +457,39 @@ def test_the_produced_series_are_the_ones_they_have_always_been(tmp_path: pathli
         assert sum(series) == pytest.approx(annual_sum, rel=1e-12), attribute
 
 
+@pytest.mark.base
+def test_the_daily_average_is_one_block_mean_per_day_with_the_boundaries_it_has_always_had() -> None:
+    """A block's mean, broadcast over its timesteps, and the boundary a timestep late.
+
+    The average is taken over blocks of one day, but the loop that computed it advanced its start
+    index one timestep after the boundary, so the timestep at ``k * timesteps_per_day`` belongs to the
+    block before it and the last block averages whatever is left of a short series. That is what every
+    golden reference in the repository was computed with, so it is what the vectorised version has to
+    reproduce -- here on a hand-checked series of ten six-hour timesteps rather than on a year.
+
+    Catches: a rewrite that starts each block one timestep early (every golden KPI that depends on the
+    outside temperature moves), that drops the partial last block, or that re-centres the window.
+    """
+    six_hourly = [0.0, 0.0, 0.0, 4.0, 10.0, 10.0, 10.0, 10.0, 20.0, 20.0]
+
+    averages = calculation.calculate_daily_average_outside_temperature(six_hourly, 6 * 3600)
+
+    assert averages == [1.0, 1.0, 1.0, 1.0, 1.0, 10.0, 10.0, 10.0, 10.0, 20.0]
+    assert calculation.calculate_daily_average_outside_temperature([], 3600) == []
+
+
+@pytest.mark.base
+def test_a_timestep_longer_than_a_day_is_refused() -> None:
+    """A timestep of two days leaves no block to average, and says so instead of returning NaN.
+
+    ``int(24 * 3600 / seconds_per_timestep)`` is zero for any timestep longer than a day, and the loop
+    this replaces then averaged empty slices: a series of NaN, which the building would have simulated
+    with and reported.
+    """
+    with pytest.raises(ValueError, match="86400"):
+        calculation.calculate_daily_average_outside_temperature([1.0, 2.0], 2 * 86400)
+
+
 def _prepared_weather(
     cache_directory: pathlib.Path, parameters: Optional[SimulationParameters] = None
 ) -> weather.Weather:

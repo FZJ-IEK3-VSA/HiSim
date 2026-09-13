@@ -165,6 +165,7 @@ class PilotWireFormat:
         "UtspLpgConnectorConfig": ("standard",),
         "ElectricityMeterConfig": ("standard",),
         "PVSystemConfig": ("rooftop",),
+        "BatteryConfig": ("standard",),
         "CarConfig": (),
     }
 
@@ -182,6 +183,7 @@ class PilotWireFormat:
         "UtspLpgConnectorConfig": ("for_household",),
         "ElectricityMeterConfig": (),
         "PVSystemConfig": (),
+        "BatteryConfig": (),
         "CarConfig": ("for_household",),
     }
 
@@ -217,6 +219,7 @@ class PilotWireFormat:
             "set_cooling_temperature_in_celsius",
         ),
         "PVSystemConfig": ("pv_peak_power_in_watt",),
+        "BatteryConfig": (),
         "WeatherConfig": ("weather_identity",),
         "UtspLpgConnectorConfig": ("occupancy_identity",),
         "ElectricityMeterConfig": (),
@@ -269,6 +272,7 @@ def test_the_scan_finds_the_converted_classes(scan):
         "UtspLpgConnectorConfig",
         "ElectricityMeterConfig",
         "PVSystemConfig",
+        "BatteryConfig",
     } <= names
 
 
@@ -475,6 +479,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     invalidates every scenario file and every result column already written against the old
     spelling.
     """
+    from hisim.components.advanced_battery_bslib import BatteryConfig
     from hisim.components.building import BuildingConfig
     from hisim.components.controller_l2_energy_management_system import EMSConfig
     from hisim.components.electricity_meter import ElectricityMeterConfig
@@ -499,6 +504,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "WeatherConfig": WeatherConfig,
         "UtspLpgConnectorConfig": UtspLpgConnectorConfig,
         "ElectricityMeterConfig": ElectricityMeterConfig,
+        "BatteryConfig": BatteryConfig,
         "CarConfig": CarConfig,
     }
     for class_name, expected in PilotWireFormat.PRESET_NAMES.items():

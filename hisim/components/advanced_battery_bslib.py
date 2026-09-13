@@ -3,8 +3,8 @@
 # clean
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
-from typing import List, Tuple, Optional
-from dataclasses import dataclass, field
+from typing import ClassVar, List, Tuple, Optional
+from dataclasses import dataclass
 from bslib import bslib as bsl
 from dataclasses_json import dataclass_json
 
@@ -19,7 +19,17 @@ from hisim.component import (
     OpexCostDataClass,
     CapexCostDataClass,
 )
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import (
+    ComponentID,
+    ConfigBase,
+    DisplayConfig,
+    Sizable,
+    Size,
+    SizingLaw,
+    concrete,
+    preset,
+    sized_field,
+)
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.economics.facts import ComponentCostFacts, CostRelevance
 from hisim.economics.uncertainty import UncertainValue
@@ -42,12 +52,33 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class BatteryConfig(ConfigBase):
-    """Battery Configuration."""
+    """Battery Configuration.
+
+    The named default battery is :meth:`preset_standard`, and both of its power numbers are
+    sizable: the preset leaves them ``AUTO`` and ``.resolve(ctx)`` derives them from the peak
+    power of the PV array the battery is installed beside, which is what the deleted
+    ``get_scaled_battery`` factory did with a value the setup copied across by hand. An author
+    who knows the device pins the two fields instead, which is what the deleted
+    ``get_default_config`` factory was for.
+    """
 
     @classmethod
     def get_main_classname(cls):
         """Return the full class name of the base class."""
         return Battery.get_full_classname()
+
+    #: Sizing law of the battery's capacity: one kilowatt hour of storage per kilowatt peak of
+    #: PV, rounded to two decimals. Named as a ClassVar so the field declaration reads as one
+    #: line and the rule of thumb is written down in one place.
+    #: See https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
+    CAPACITY_LAW: ClassVar[SizingLaw] = (Size.PV_PEAK_POWER_IN_WATT * 1e-3).rounded(2)
+
+    #: Sizing law of the charging and discharging power: a C-rate of 0.5 (half the capacity per
+    #: hour) on the capacity the law above gives, which is the array's peak power in watt times
+    #: 0.5. It reads the fact rather than the sibling capacity field on purpose: the capacity is
+    #: rounded to two decimals before it is stored, and inverting that rounding into the inverter
+    #: power would move the number by about a watt on a fleet-sized array.
+    INVERTER_POWER_LAW: ClassVar[SizingLaw] = (Size.PV_PEAK_POWER_IN_WATT * 0.5).rounded(2)
 
     #: structured identity (name, building, unit) of the component
     component_id: ComponentID
@@ -55,10 +86,6 @@ class BatteryConfig(ConfigBase):
     source_weight: int
     #: name of battery to search in database (bslib)
     system_id: str
-    #: charging and discharging power in Watt
-    custom_pv_inverter_power_generic_in_watt: float
-    #: battery capacity in kWh; marked as the capacity field for the contract test (§9.4)
-    custom_battery_capacity_generic_in_kilowatt_hour: float = field(metadata={"capacity": True})
     #: amount of energy used to charge the battery
     charge_in_kwh: float
     #: amount of energy discharged from the battery
@@ -75,6 +102,53 @@ class BatteryConfig(ConfigBase):
     subsidy_as_percentage_of_investment_costs: Optional[float]
     #: lifetime of battery in full cycles
     lifetime_in_cycles: float
+    #: charging and discharging power in Watt. Sizable: left ``AUTO`` it is computed by
+    #: :data:`INVERTER_POWER_LAW` from the PV peak power the array contributes. It is declared
+    #: here rather than beside the other device properties because a field with a default may
+    #: not precede one without.
+    custom_pv_inverter_power_generic_in_watt: Sizable[float] = sized_field(rule=INVERTER_POWER_LAW)
+    #: battery capacity in kWh. Sizable: left ``AUTO`` it is computed by :data:`CAPACITY_LAW`
+    #: from the same fact. Marked as the capacity field for the cost-facts contract test
+    #: (``cost_spec.md`` §9.4).
+    custom_battery_capacity_generic_in_kilowatt_hour: Sizable[float] = sized_field(
+        rule=CAPACITY_LAW, metadata={"capacity": True}
+    )
+
+    @preset
+    @classmethod
+    def preset_standard(cls, name: str) -> "BatteryConfig":
+        """The fleet's home battery, scaled to the PV array it is installed beside.
+
+        A single ``SG1`` lithium-ion system from the bslib database, first in the energy
+        management hierarchy, starting empty and rated for five thousand full cycles. What it
+        does not fix is how big the device is: ``custom_battery_capacity_generic_in_kilowatt_hour``
+        and ``custom_pv_inverter_power_generic_in_watt`` stay ``AUTO`` so that
+        :data:`CAPACITY_LAW` and :data:`INVERTER_POWER_LAW` derive them from the array's peak
+        power, and an author who knows the device pins the two fields instead. Capex fields stay
+        ``None`` so post-processing looks them up in the device database, exactly as the deleted
+        factories did.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            BatteryConfig: The preset configuration, with both power numbers unsized.
+        """
+        return cls(
+            component_id=ComponentID(name=name),
+            source_weight=1,
+            system_id="SG1",
+            charge_in_kwh=0,
+            discharge_in_kwh=0,
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
+            # estimated value, source: https://pv-held.de/wie-lange-haelt-batteriespeicher-photovoltaik/
+            lifetime_in_cycles=5e3,
+        )
 
     @classmethod
     def get_default_config(cls, component_id: Optional[ComponentID] = None, name: str = "Battery") -> "BatteryConfig":
@@ -185,9 +259,11 @@ class Battery(Component):
 
         self.system_id = self.battery_config.system_id
 
-        self.custom_pv_inverter_power_generic_in_watt = self.battery_config.custom_pv_inverter_power_generic_in_watt
+        self.custom_pv_inverter_power_generic_in_watt = concrete(
+            self.battery_config.custom_pv_inverter_power_generic_in_watt
+        )
 
-        self.custom_battery_capacity_generic_in_kilowatt_hour = (
+        self.custom_battery_capacity_generic_in_kilowatt_hour = concrete(
             self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
         )
 
@@ -331,7 +407,7 @@ class Battery(Component):
         # Todo: Think about better approximation for costs of battery aging
 
         virtual_number_of_full_charge_cycles = (
-            config.charge_in_kwh / config.custom_battery_capacity_generic_in_kilowatt_hour
+            config.charge_in_kwh / concrete(config.custom_battery_capacity_generic_in_kilowatt_hour)
         )
         # virtual_number_of_full_discharge_cycles = self.battery_config.discharge_in_kwh / self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
 
@@ -349,7 +425,7 @@ class Battery(Component):
         component_type = ComponentType.BATTERY
         kpi_tag = KpiTagEnumClass.BATTERY
         unit = Units.KWH
-        size_of_energy_system = config.custom_battery_capacity_generic_in_kilowatt_hour * 1e-3
+        size_of_energy_system = concrete(config.custom_battery_capacity_generic_in_kilowatt_hour) * 1e-3
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
         simulation_parameters=simulation_parameters,
@@ -402,7 +478,7 @@ class Battery(Component):
         config = self.battery_config
         return ComponentCostFacts(
             asset_class=ComponentType.BATTERY,
-            size=config.custom_battery_capacity_generic_in_kilowatt_hour,
+            size=concrete(config.custom_battery_capacity_generic_in_kilowatt_hour),
             size_unit=Units.KWH,
             kpi_tag=KpiTagEnumClass.BATTERY,
             investment_cost_override_in_euro=(

@@ -12,7 +12,7 @@ temperature forecast and the yearly arrays the PV system reads.
 # clean
 import datetime
 import math
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Mapping, Optional
 
 import pandas as pd
 
@@ -34,7 +34,6 @@ from hisim.components.weather.config import WeatherConfig
 from hisim.config import DisplayConfig
 from hisim.component import Component, ComponentOutput, SingleTimeStepValues, OpexCostDataClass, CapexCostDataClass
 from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
 from hisim.economics.facts import CostRelevance
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
@@ -60,6 +59,10 @@ class Weather(Component):
     """Provide thermal and solar conditions of local weather."""
 
     cost_relevance = CostRelevance.FREE_OF_COST
+
+    # The weather is not a device: there is nothing to buy, nothing to run and no indicator of its own
+    # to report. See Component.MODELS_NO_DEVICE, which answers the cost and KPI hooks for it.
+    MODELS_NO_DEVICE: ClassVar[bool] = True
 
     # Inputs
     # None
@@ -101,6 +104,25 @@ class Weather(Component):
     YEARLY_APPARENT_ZENITH: str = "weather_yearly_apparent_zenith_in_degrees"
     YEARLY_WIND_SPEED: str = "weather_yearly_wind_speed_in_meter_per_second"
     # The pressure list is in hectopascal; the per-timestep output converts it to pascal.
+
+    #: Which of this component's per-timestep lists each column of the produced frame fills.
+    #: :data:`hisim.components.weather.calculation.PRODUCED_COLUMNS` is the schema of that frame, on a
+    #: cache hit as much as on a fresh computation, and this mapping names every one of those columns
+    #: exactly once -- ``tests/test_weather.py`` asserts the two agree, so a column added to the
+    #: producer without a reader here is a test failure rather than a ``KeyError`` mid-run.
+    LIST_ATTRIBUTE_PER_COLUMN: ClassVar[Mapping[str, str]] = {
+        "DNI": "dni_list",
+        "DHI": "dhi_list",
+        "GHI": "ghi_list",
+        "t_out": "temperature_list",
+        "altitude": "altitude_list",
+        "azimuth": "azimuth_list",
+        "apparent_zenith": "apparent_zenith_list",
+        "Wspd": "wind_speed_list",
+        "Pressure": "pressure_list",
+        "DNIextra": "dniextra_list",
+        "t_out_daily_average": "daily_average_outside_temperature_list_in_celsius",
+    }
 
     @utils.measure_execution_time
     def __init__(
@@ -235,7 +257,6 @@ class Weather(Component):
         self.ghi_list: List[float]
         self.apparent_zenith_list: List[float]
         self.dhi_list: List[float]
-        self.dry_bulb_list: List[float]
         self.daily_average_outside_temperature_list_in_celsius: List[float]
 
     def write_to_report(self):
@@ -308,12 +329,14 @@ class Weather(Component):
             weather_series = pd.read_csv(
                 entry.path, sep=",", decimal=".", encoding="cp1252", float_precision="round_trip"
             )
+            origin = str(entry.path)
         else:
             log.information(f"Weather series cache miss: computing it and filing it at {entry.path}")
             weather_series = produce_weather_series(calculation_inputs)
             with entry.writing() as temporary_cache_filepath:
                 weather_series.to_csv(temporary_cache_filepath)
-        self.read_series(weather_series)
+            origin = "the weather producer"
+        self.read_series(weather_series, origin)
 
         # Publish the full-year weather series into this simulation's repository, unconditionally.
         # The PV system needs the whole year rather than the current timestep: it runs one
@@ -379,7 +402,7 @@ class Weather(Component):
         (``roadmap/cache_service_spec.md`` §3). The two fingerprints are read from the producer
         module's import closure, so an edit to the calculation invalidates the entry by itself -- the
         thing the weather cache did not do when #628 fixed the direct normal irradiance and CI, running
-        on a restored cache, reported all 24 golden pairs unchanged.
+        on a restored cache, reported every one of the golden pairs of the day -- 24 of them -- unchanged.
 
         Its digest is also what :attr:`SERIES_ARTIFACT_KEY` publishes, so a downstream producer's key
         inherits everything this one stands for.
@@ -403,30 +426,35 @@ class Weather(Component):
         """
         return CacheClient.from_environment().lookup_producer(key, self.my_simulation_parameters.cache_dir_path)
 
-    def read_series(self, weather_series: pd.DataFrame) -> None:
+    def read_series(self, weather_series: pd.DataFrame, origin: str) -> None:
         """Take the component's per-timestep lists out of the produced frame.
 
-        The same reading serves a cache hit and a fresh computation, so the two cannot drift apart.
+        The frame has one schema -- :attr:`LIST_ATTRIBUTE_PER_COLUMN`, which is the producer's
+        :data:`~hisim.components.weather.calculation.PRODUCED_COLUMNS` -- and the same reading serves a
+        cache hit and a fresh computation, so the two cannot drift apart.
+
+        A column that is not there is refused rather than filled in. An entry filed under a producer
+        key was written by that producer and carries every column it produces; a frame that lacks one
+        is a foreign or truncated file, and reading it as zeros would put a fabricated series (the
+        pressure the PV system reads, say) into a run that reports its results as measurements.
 
         Args:
             weather_series: the frame from the cache or from the producer.
+            origin: where the frame came from -- the cache entry's path, or the producer -- so that a
+                missing column names the file to look at.
+
+        Raises:
+            KeyError: if the frame lacks a column the component reads.
         """
-        self.temperature_list = weather_series["t_out"].tolist()
-        self.daily_average_outside_temperature_list_in_celsius = weather_series["t_out_daily_average"].tolist()
-        self.dry_bulb_list = weather_series["DryBulb"].tolist()
-        self.dhi_list = weather_series["DHI"].tolist()
-        self.dni_list = weather_series["DNI"].tolist()
-        self.dniextra_list = weather_series["DNIextra"].tolist()
-        self.ghi_list = weather_series["GHI"].tolist()
-        self.altitude_list = weather_series["altitude"].tolist()
-        self.azimuth_list = weather_series["azimuth"].tolist()
-        self.apparent_zenith_list = weather_series["apparent_zenith"].tolist()
-        self.wind_speed_list = weather_series["Wspd"].tolist()
-        try:
-            self.pressure_list = weather_series["Pressure"].tolist()
-        except KeyError:
-            log.warning("Weather key 'Pressure' not found in cache; falling back to zeros.")
-            self.pressure_list = [0] * len(self.wind_speed_list)
+        for column, attribute in self.LIST_ATTRIBUTE_PER_COLUMN.items():
+            if column not in weather_series.columns:
+                raise KeyError(
+                    f"The weather series from {origin} has no column {column!r}, which the component "
+                    f"reads into {attribute}. A frame filed under this producer's key carries every "
+                    f"column the producer writes, so this one was not written by it; delete it and let "
+                    f"the run recompute the series. Columns found: {sorted(weather_series.columns)}."
+                )
+            setattr(self, attribute, weather_series[column].tolist())
 
     def calc_sun_position(self, latitude_deg, longitude_deg, year, hoy):
         """Calculates the Sun Position for a specific hour and location.
@@ -508,10 +536,13 @@ class Weather(Component):
         capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
         return capex_cost_data_class
 
-    def get_component_kpi_entries(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
-    ) -> List[KpiEntry]:
-        """Calculates KPIs for the respective component and return all KPI entries as list."""
-        return []
+
+# The public name of this class is the package, not the submodule. ``get_full_classname`` and the
+# energy-system recorder derive a component's class path from ``__module__``, and 33 recorded twins plus
+# the generated JSON schema spell the weather ``hisim.components.weather.Weather``. The pin lives here,
+# beside the class, rather than in the package ``__init__``: the facade is lazy, so it has not
+# necessarily run when someone imports this module directly, and the class must carry its public name
+# however it was reached. Its one cost is that ``inspect.getsourcelines(Weather)`` no longer finds the
+# class body (the code-overview generator already handles that case); imports, pickling, ``describe``
+# and the JSON class resolution are unaffected.
+Weather.__module__ = "hisim.components.weather"

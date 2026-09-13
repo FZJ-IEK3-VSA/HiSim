@@ -7,10 +7,13 @@ its own configuration.
 
 :class:`WeatherDataSourceEnum` is not here but in :mod:`hisim.components.weather.calculation`, and this
 module imports it from there. It names the reader, so it is key material for the cached weather series,
-and the producer must be able to import it without importing this module: ``hisim.config``, which every
-configuration needs, reaches ``hisim.component``, the post-processing and the repository through its
-deliberate lazy imports, and the producer layering rule of ``roadmap/cache_service_spec.md`` §12 bans all
-three from a producer's import closure.
+and the producer must be able to import it without importing this module. The reason is what the import
+closure costs: a configuration module has to import ``hisim.config``, and a closure is computed by
+reading source, so the lazy imports inside ``hisim.config``'s function bodies count as much as the ones
+at the top of a file. ``ImportClosure.of(hisim.config)`` is 45 modules, ``hisim.component``, the
+post-processing and the repository among them -- all of that would be hashed into every weather cache
+key (``roadmap/cache_service_spec.md`` §3) and would throw the cached series away on edits that cannot
+change a number in them. The layering rule of §12 names those three modules for the same reason.
 """
 
 # clean

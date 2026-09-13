@@ -3,16 +3,18 @@
 Covers full-year DNI output sanity checks, enum-vs-string location
 configuration consistency, direct-filepath configuration including
 validation that a data source is required when a direct filepath is given,
-and the cached-file pressure-column fallback in ``i_prepare_simulation``.
+and the one schema the component reads a produced frame under.
 """
+import importlib
 import pathlib
+import pickle
 
 import pandas as pd
 import pytest
 from hisim import sim_repository
 from hisim import component
 from hisim.components import weather
-from hisim.components.weather import weather as weather_module
+from hisim.components.weather import calculation
 from hisim.simulationparameters import SimulationParameters
 from hisim.config import DisplayConfig
 from tests import functions_for_testing as fft
@@ -109,32 +111,16 @@ def test_weather_config_with_direct_filepath_without_data_source(tmp_path: pathl
         )
 
 
-# Columns that ``Weather.read_series`` reads before the optional "Pressure" column.
-_CACHE_COLUMNS = [
-    "t_out",
-    "t_out_daily_average",
-    "DryBulb",
-    "DHI",
-    "DNI",
-    "DNIextra",
-    "GHI",
-    "altitude",
-    "azimuth",
-    "apparent_zenith",
-    "Wspd",
-]
-
-
 def _build_weather_with_cache(
     tmp_path: pathlib.Path,
-    include_pressure: bool = True,
+    omitted_column: str = "",
 ) -> weather.Weather:
     """Build a Weather component whose cache file has already been written.
 
     Writes a small cache CSV into *tmp_path* so that
     ``i_prepare_simulation`` takes the cached-file branch instead of
-    re-processing the raw weather data.  When *include_pressure* is ``True``
-    a ``Pressure`` column is added; otherwise it is omitted.
+    re-processing the raw weather data.  The frame carries every column the
+    producer produces, except *omitted_column* when one is named.
 
     The entry goes in through the cache entry's own ``writing`` rather than
     straight to the path, because a lookup only counts an entry as present when
@@ -161,9 +147,7 @@ def _build_weather_with_cache(
     entry = my_weather.cache_entry(
         my_weather.series_cache_key(my_weather.build_calculation_inputs(location_dict))
     )
-    columns = list(_CACHE_COLUMNS)
-    if include_pressure:
-        columns.append("Pressure")
+    columns = [column for column in calculation.PRODUCED_COLUMNS if column != omitted_column]
     data = {col: [float(i) * 10 for i in range(5)] for col in columns}
     with entry.writing() as temporary_cache_filepath:
         pd.DataFrame(data).to_csv(temporary_cache_filepath, index=False)
@@ -171,19 +155,70 @@ def _build_weather_with_cache(
 
 
 @pytest.mark.base
-def test_weather_cache_pressure_missing_falls_back_to_zeros(
+def test_the_package_answers_to_every_name_it_publishes_and_to_no_other() -> None:
+    """The lazy facade resolves each public name, from the module it says, and refuses the rest.
+
+    The package imports none of its submodules at import time (PEP 562), so that importing the
+    producer does not drag the component and the post-processing in with it. The names still have to
+    resolve -- ``from hisim.components.weather import Weather``, ``importlib.import_module`` plus
+    ``getattr`` on a recorded class path, ``describe``, pickling -- and a name that is not published
+    has to fail like a missing module attribute rather than silently.
+    """
+    published = getattr(weather, "_MODULE_PER_NAME")
+    assert sorted(weather.__all__) == sorted(published)
+    for name, module_name in published.items():
+        resolved = getattr(weather, name)
+        assert resolved is getattr(importlib.import_module(module_name), name), name
+
+    with pytest.raises(AttributeError, match="produce_weather_series"):
+        getattr(weather, "produce_weather_series")
+
+
+@pytest.mark.base
+def test_the_component_class_carries_the_package_as_its_public_name() -> None:
+    """``Weather.__module__`` is the package, however the class was reached.
+
+    33 recorded twins and the generated JSON schema spell the weather
+    ``hisim.components.weather.Weather``, and both ``get_full_classname`` and the recorder read
+    ``__module__`` to say so. The pin sits beside the class rather than in the lazy facade, because a
+    direct import of the submodule does not run the facade.
+    """
+    from hisim.components.weather.weather import Weather as DirectlyImported  # pylint: disable=import-outside-toplevel
+
+    assert DirectlyImported.__module__ == "hisim.components.weather"
+    assert DirectlyImported.get_full_classname() == "hisim.components.weather.Weather"
+    assert pickle.loads(pickle.dumps(DirectlyImported)) is DirectlyImported
+
+
+@pytest.mark.base
+def test_the_component_reads_exactly_the_columns_the_producer_writes() -> None:
+    """The frame has one schema, and both ends of it are the same list.
+
+    ``Weather.LIST_ATTRIBUTE_PER_COLUMN`` is what the component reads; ``PRODUCED_COLUMNS`` is what the
+    producer writes. A column in one and not the other is either a series nothing reads or a read that
+    fails mid-run, and both used to be possible because the reader spelled its columns out one literal
+    at a time.
+    """
+    assert set(weather.Weather.LIST_ATTRIBUTE_PER_COLUMN) == set(calculation.PRODUCED_COLUMNS)
+    assert len(set(weather.Weather.LIST_ATTRIBUTE_PER_COLUMN.values())) == len(calculation.PRODUCED_COLUMNS)
+
+
+@pytest.mark.base
+def test_weather_cache_missing_column_is_refused(
     tmp_path: pathlib.Path,
 ) -> None:
-    """A cached weather file without a 'Pressure' column falls back to zeros.
+    """A cached frame that lacks a produced column stops the run and says which file to look at.
 
-    This exercises the ``KeyError`` fallback in the cached-file branch of
-    ``i_prepare_simulation``: when the column is absent pandas raises
-    ``KeyError``, which is caught and replaced with a zero array.
+    An entry filed under the producer's key was written by that producer and carries every column it
+    writes, so a frame without one was not written by it. Reading it anyway -- the pressure used to be
+    filled in with zeros and a warning -- puts a fabricated series into a run whose results are then
+    reported as if they had been computed.
     """
-    my_weather = _build_weather_with_cache(tmp_path, include_pressure=False)
-    my_weather.i_prepare_simulation()
-    assert my_weather.pressure_list == [0] * 5
-    assert len(my_weather.pressure_list) == len(my_weather.wind_speed_list)
+    my_weather = _build_weather_with_cache(tmp_path, omitted_column="Pressure")
+
+    with pytest.raises(KeyError, match="Pressure") as refusal:
+        my_weather.i_prepare_simulation()
+    assert str(tmp_path) in str(refusal.value)
 
 
 @pytest.mark.base
@@ -191,44 +226,9 @@ def test_weather_cache_pressure_present_read_from_cache(
     tmp_path: pathlib.Path,
 ) -> None:
     """A cached weather file with a 'Pressure' column reads the cached values."""
-    my_weather = _build_weather_with_cache(tmp_path, include_pressure=True)
+    my_weather = _build_weather_with_cache(tmp_path)
     my_weather.i_prepare_simulation()
     assert my_weather.pressure_list == pytest.approx([0.0, 10.0, 20.0, 30.0, 40.0])
-
-
-@pytest.mark.base
-def test_weather_cache_pressure_non_keyerror_propagates(
-    tmp_path: pathlib.Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A non-``KeyError`` while reading 'Pressure' from cache must propagate.
-
-    Before narrowing the ``except`` clause to ``KeyError``, any exception
-    (e.g. a corrupted cache, dtype problem) was silently swallowed and
-    replaced with a zero array.  This test verifies that a ``ValueError``
-    now propagates instead of being masked.
-    """
-    my_weather = _build_weather_with_cache(tmp_path, include_pressure=True)
-
-    original_read_csv = weather_module.pd.read_csv
-
-    class _PressureCorruptDataFrame(pd.DataFrame):
-        """DataFrame whose ``'Pressure'`` access raises ``ValueError``."""
-
-        _metadata = pd.DataFrame._metadata  # pylint: disable=protected-access
-
-        def __getitem__(self, key: object) -> pd.Series:  # type: ignore[override]
-            if key == "Pressure":
-                raise ValueError("simulated cache corruption")
-            return super().__getitem__(key)
-
-    def fake_read_csv(*args: object, **kwargs: object) -> _PressureCorruptDataFrame:
-        df = original_read_csv(*args, **kwargs)
-        return _PressureCorruptDataFrame(df)
-
-    monkeypatch.setattr(weather_module.pd, "read_csv", fake_read_csv)
-    with pytest.raises(ValueError, match="simulated cache corruption"):
-        my_weather.i_prepare_simulation()
 
 
 @pytest.mark.base

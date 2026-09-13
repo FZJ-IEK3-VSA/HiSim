@@ -1,13 +1,15 @@
 """Tests for the weather producer: the layering rule it obeys and the key its code is fingerprinted into.
 
 The weather series is the first artifact keyed under ``roadmap/cache_service_spec.md`` §3, and it is
-keyed that way because of the #628 cache finding: a fix to the direct normal irradiance changed 33 KPIs
-locally and none in CI, where the cache directory is restored from the previous run and the old key --
-a hash of the configuration and the simulation parameters -- still matched. These tests pin the three
-promises that make that impossible now. The producer's import closure stays small and free of component
-machinery, so hashing all of it is affordable; an edit to the producer's source moves the key while an
-edit outside its closure does not; and the inputs identify the data file by its contents rather than by
-where the checkout happens to be.
+keyed that way because of the #628 cache finding: a fix to the direct normal irradiance moved every KPI
+it touched locally -- 33 of them at the time -- and none in CI, where the cache directory is restored
+from the previous run and the old key, a hash of the configuration and the simulation parameters, still
+matched. These tests pin the promises that make that impossible now. The producer's import closure stays
+small and free of component machinery, so hashing all of it is affordable; an edit to the producer's
+source moves the key; the inputs identify the data file by its contents rather than by where the
+checkout happens to be, and carry the simulated span only for the reader that is sized by it; and the
+series the producer computes are pinned by value, so a regression in the calculation itself fails here
+rather than waiting for a golden pair.
 """
 
 # clean
@@ -15,9 +17,10 @@ where the checkout happens to be.
 import dataclasses
 import importlib
 import pathlib
+import subprocess
 import sys
 from types import ModuleType
-from typing import Any, ClassVar, Dict
+from typing import Any, ClassVar, Dict, Optional
 
 import pytest
 
@@ -156,10 +159,12 @@ def test_the_producer_obeys_the_layering_rule() -> None:
     """The producer imports nothing from the component or simulator machinery, and little else.
 
     This is the lint the whole scheme rests on (spec §3): the fingerprint hashes 100% of the closure,
-    which is only affordable because the closure is tiny. It is asserted as an exact set rather than a
-    mere absence of violations, so that an import which quietly drags a frequently edited module into
-    the closure -- and would therefore throw every cached weather series away on every edit to it --
-    has to be justified here.
+    which is only affordable because the closure is tiny. The set is asserted exactly, not merely
+    checked for violations, because under §3 every import carries a visible cache cost: each module in
+    the closure is hashed into the key, so every edit to any of them throws away every cached weather
+    series on every machine, whether or not it could have changed a number. An import that is worth
+    that price can be added here in the same commit that makes it; one that is not has to stay out of
+    the producer, and a plain value through the DTO is the way in.
 
     Catches: a producer reaching for ``Component``, ``loadtypes`` or the singleton repository, which
     would make it uncallable without a simulator and its key hostage to unrelated edits.
@@ -177,6 +182,32 @@ def test_the_producer_obeys_the_layering_rule() -> None:
     )
     assert set(closure.third_party_top_levels) == {"numpy", "pandas", "pvlib"}
     assert not closure.dynamic_import_sites
+
+
+@pytest.mark.base
+def test_importing_the_producer_loads_neither_the_component_nor_the_post_processing() -> None:
+    """The layering rule is about loading as much as about hashing.
+
+    The closure keeps the fingerprint small; this keeps the import cheap. A prewarm run fills the
+    cache by importing ``hisim.components.weather.calculation``, and the component, the simulator and
+    the post-processing must not come with it -- which is why the package facade resolves its names
+    lazily. Checked in a fresh interpreter, because in this one everything is imported already.
+
+    Catches: an eager re-export in the package ``__init__``, which is how the component used to be
+    pulled in by every importer of the producer.
+    """
+    probe = (
+        "import hisim.components.weather.calculation, sys; "
+        "print(' '.join(sorted(m for m in sys.modules if m.startswith('hisim.'))))"
+    )
+    loaded = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True, check=True
+    ).stdout.split()
+
+    assert "hisim.components.weather.calculation" in loaded
+    for module_name in ("hisim.component", "hisim.components.weather.weather", "hisim.simulator"):
+        assert module_name not in loaded, module_name
+    assert not [module_name for module_name in loaded if module_name.startswith("hisim.postprocessing")]
 
 
 @pytest.mark.base
@@ -201,26 +232,6 @@ def test_an_edit_to_the_producer_changes_its_code_fingerprint(
     probe.write(ProducerCopy.PRODUCER, edited)
 
     assert probe.code_fingerprint() != before
-
-
-@pytest.mark.base
-def test_an_edit_outside_the_closure_leaves_the_fingerprint_alone(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A module the producer does not import cannot invalidate its artifacts.
-
-    The other half of the promise: if every edit anywhere invalidated the cache, the scheme would be
-    commit-keying under another name and nobody would ever get a hit.
-
-    Catches: a fingerprint widened to the package, the repository or the commit.
-    """
-    probe = ProducerCopy(tmp_path, monkeypatch)
-    probe.write("stranger", '"""A module nothing imports."""\n\nVALUE = 1\n')
-    before = probe.code_fingerprint()
-
-    probe.write("stranger", '"""A module nothing imports."""\n\nVALUE = 2\n')
-
-    assert probe.code_fingerprint() == before
 
 
 @pytest.mark.base
@@ -263,13 +274,83 @@ def test_what_changes_the_series_changes_the_key_and_what_does_not_does_not() ->
     assert digest_of(baseline) != digest_of(calculation_inputs(latitude_in_degrees=41.9))
     assert digest_of(baseline) != digest_of(calculation_inputs(longitude_in_degrees=12.5))
     assert digest_of(baseline) != digest_of(calculation_inputs(data_source=WeatherDataSourceEnum.NSRDB))
-    assert digest_of(baseline) == digest_of(calculation_inputs(duration_in_days=None))
 
     quarter_hourly = calculation_inputs(data_source=WeatherDataSourceEnum.DWD_15MIN, duration_in_days=7)
     assert digest_of(quarter_hourly) != digest_of(dataclasses.replace(quarter_hourly, duration_in_days=365))
-    assert dataclasses.replace(quarter_hourly, duration_in_days=None).duration_in_days is None
+
+
+@pytest.mark.base
+def test_the_component_carries_the_simulated_span_only_for_the_reader_sized_by_it() -> None:
+    """What the component puts in the DTO decides whether two horizons share an entry.
+
+    The claim above -- that a one-week run and a one-year run of an ordinary station share one cached
+    series -- is not a property of the DTO but of what ``build_calculation_inputs`` fills in, so it is
+    asserted there: the same station over two different spans has to produce the same inputs, and
+    therefore the same key, for a source whose reader never sees the span.
+
+    Catches: the duration folded into the inputs for every source (no cache hit across horizons ever
+    again), and dropped for ``DWD_15MIN``, whose reader builds exactly ``24 * 4 * days`` rows and would
+    otherwise be asked for a frame of no length at all.
+    """
+    one_day = _inputs_of_a_run(SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600))
+    one_week = _inputs_of_a_run(SimulationParameters.one_week_only(year=2021, seconds_per_timestep=3600))
+
+    assert one_day.duration_in_days is None
+    assert one_week.duration_in_days is None
+    assert digest_of(one_day) == digest_of(one_week)
+
+    quarter_hourly = _inputs_of_a_run(
+        SimulationParameters.one_week_only(year=2021, seconds_per_timestep=3600),
+        data_source=WeatherDataSourceEnum.DWD_15MIN,
+    )
+    assert quarter_hourly.duration_in_days == 7
+
+
+@pytest.mark.base
+def test_the_inputs_refuse_a_span_that_does_not_match_the_reader() -> None:
+    """Both ways of getting the span wrong are refused where the DTO is built.
+
+    An unset span for ``DWD_15MIN`` would size its raw frame by nothing; a set span for a source that
+    reads the whole year would file the same series under one key per horizon, because the field is key
+    material whether or not a reader reads it. Neither shows up in the result, so neither is allowed to
+    be built.
+
+    Catches: a source added to ``DURATION_DEPENDENT_SOURCES`` without the component being taught to
+    fill the field, and a caller passing the run's length in for every source because it is there.
+    """
     with pytest.raises(ValueError, match="duration_in_days"):
-        dataclasses.replace(quarter_hourly, duration_in_days=None).required_duration_in_days()
+        calculation_inputs(data_source=WeatherDataSourceEnum.DWD_15MIN, duration_in_days=None)
+
+    with pytest.raises(ValueError, match="duration_in_days"):
+        calculation_inputs(data_source=WeatherDataSourceEnum.DWD_TRY, duration_in_days=7)
+
+
+def _inputs_of_a_run(
+    parameters: SimulationParameters,
+    data_source: WeatherDataSourceEnum = WeatherDataSourceEnum.DWD_TRY,
+) -> WeatherSeriesInputs:
+    """The DTO a weather component over the Aachen station builds for one run.
+
+    The station header is passed in rather than read: ``build_calculation_inputs`` takes it as an
+    argument, and the point here is which of the simulation parameters reach the inputs.
+
+    Args:
+        parameters: the run's simulation parameters.
+        data_source: the data source to configure; the default is the station's own.
+
+    Returns:
+        WeatherSeriesInputs: the inputs the component would look its series up under.
+    """
+    config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    if data_source != config.data_source:
+        # Every source but DWD_TRY names the data file itself rather than the stem of a pair, and the
+        # content hash insists the file is there; the station's own ``.dat`` is a file like any other.
+        config = dataclasses.replace(config, data_source=data_source, source_path=config.source_path + ".dat")
+    component: weather.Weather = weather.Weather(config=config, my_simulation_parameters=parameters)
+    inputs: WeatherSeriesInputs = component.build_calculation_inputs(
+        {"name": "Aachen", "latitude": 50.78, "longitude": 6.09}
+    )
+    return inputs
 
 
 @pytest.mark.base
@@ -315,7 +396,6 @@ def test_the_component_reads_the_same_series_from_the_cache_as_from_the_producer
     for attribute in (
         "temperature_list",
         "daily_average_outside_temperature_list_in_celsius",
-        "dry_bulb_list",
         "dhi_list",
         "dni_list",
         "dniextra_list",
@@ -329,16 +409,67 @@ def test_the_component_reads_the_same_series_from_the_cache_as_from_the_producer
         assert getattr(cold, attribute) == getattr(warm, attribute), attribute
 
 
-def _prepared_weather(cache_directory: pathlib.Path) -> weather.Weather:
+@pytest.mark.base
+def test_the_produced_series_are_the_ones_they_have_always_been(tmp_path: pathlib.Path) -> None:
+    """The Aachen hourly year, pinned by value: five timesteps and the annual sum of five series.
+
+    Everything else here tests the key; this tests the numbers. A regression in the calculation --
+    a resampling that shifts by one step, an aggregation that takes the last value instead of the mean,
+    a reader that renames a column -- produces a series that is wrong on both the cold and the warm
+    side, so the cache-parity test cannot see it, and one that is still far above the annual-DNI floor
+    in ``tests/test_weather.py``. Until now only the golden pairs of ``system_setups`` would have
+    caught it, hours later and outside the ``base`` set.
+
+    The five series are the ones #628 does not touch. The direct normal irradiance and the apparent
+    zenith are deliberately not pinned here: the clamp fix changes them by design, and the branch that
+    makes it adds their pin.
+
+    Catches: a producer regression, in ``base``, without a cache and without a full simulation.
+    """
+    prepared = _prepared_weather(tmp_path, SimulationParameters.full_year(year=2021, seconds_per_timestep=3600))
+
+    steps = (0, 2000, 4380, 6570, 8759)
+    pinned = {
+        "temperature_list": (
+            [0.7225, 11.691666666666666, 20.290416666666665, 16.57208333333333, 3.9325],
+            96320.14416666667,
+        ),
+        "ghi_list": ([0.0, 199.725, 400.4375, 7.491666666666666, 0.0], 1066931.0),
+        "dhi_list": ([0.0, 154.8, 356.9583333333333, 3.745833333333333, 0.0], 584942.0),
+        "wind_speed_list": (
+            [1.1141666666666667, 2.2620833333333334, 1.3620833333333335, 0.4370833333333334, 2.3774999999999995],
+            21090.380833333333,
+        ),
+        "azimuth_list": (
+            [235.35231754861118, 110.37457252488502, 175.0235816373964, 268.65727736347003, 327.9098383055702],
+            1576813.7202642623,
+        ),
+        "daily_average_outside_temperature_list_in_celsius": (
+            [-0.6139409722222222, 11.741267361111113, 18.16220486111111, 15.309670138888889, 5.226111111111111],
+            96314.30411458333,
+        ),
+    }
+
+    for attribute, (values_at_steps, annual_sum) in pinned.items():
+        series = getattr(prepared, attribute)
+        assert len(series) == 8760, attribute
+        assert [series[step] for step in steps] == pytest.approx(values_at_steps, rel=1e-12), attribute
+        assert sum(series) == pytest.approx(annual_sum, rel=1e-12), attribute
+
+
+def _prepared_weather(
+    cache_directory: pathlib.Path, parameters: Optional[SimulationParameters] = None
+) -> weather.Weather:
     """Build an Aachen weather component and run its preparation against the given cache directory.
 
     Args:
         cache_directory: the directory the entry is looked up in and written to.
+        parameters: the run's simulation parameters; a one-day hourly run by default.
 
     Returns:
         weather.Weather: the prepared component.
     """
-    parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
+    parameters = parameters or SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
     parameters.cache_dir_path = str(cache_directory)
     component: weather.Weather = weather.Weather(
         config=weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN),

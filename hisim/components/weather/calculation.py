@@ -1,6 +1,6 @@
 """Produces the processed weather series that :mod:`hisim.components.weather` simulates from.
 
-What this module produces is one artifact: the full-year frame of twelve columns -- irradiances, air
+What this module produces is one artifact: the full-year frame of eleven columns -- irradiances, air
 temperature, sun position, wind speed, pressure -- read from a weather data file, interpolated to one
 minute, aggregated to the simulation's timestep and handed back as a :class:`pandas.DataFrame`. It is the
 first producer under ``roadmap/cache_service_spec.md`` (§3, §12), which is why it is a module of its own
@@ -10,7 +10,8 @@ The reason is the #628 cache finding. A fix to
 :func:`calculate_direct_normal_irradiance_in_watt_per_square_meter` changed 33 KPIs locally and not a
 single one in CI: the processed frame, the corrected DNI included, was cached under
 ``sha256(config JSON + simulation-parameter key)``, CI restores the cache directory from the previous
-run, and a key that says nothing about the code kept serving the old numbers to all 24 golden pairs. The
+run, and a key that says nothing about the code kept serving the old numbers to every golden pair of the
+day -- 24 of them then. The
 answer the spec chose is not a version constant an author has to remember to bump but a key that carries
 a fingerprint of the producer's own source and of its import closure, so that any edit to the code that
 computes the frame changes the key by itself. That only works if the closure is small, which is what the
@@ -126,10 +127,6 @@ class WeatherSourceFiles:
     #: be part of the hash rather than silently skipped.
     ABSENT: ClassVar[str] = "absent"
 
-    #: How much of a file is read at a time. Weather files are a few hundred kilobytes today, but a
-    #: chunked read costs nothing and keeps a large one from being held in memory twice.
-    BLOCK_SIZE: ClassVar[int] = 1 << 20
-
     @classmethod
     def candidates(cls, data_source: WeatherDataSourceEnum, source_path: str) -> Tuple[Tuple[str, str], ...]:
         """Return the ``(suffix, path)`` pairs the readers of this data source may open.
@@ -174,7 +171,8 @@ class WeatherSourceFiles:
             digest.update(b"\0")
             if os.path.isfile(path):
                 found = True
-                cls._update_with_file(digest, path)
+                with open(path, "rb") as data_file:
+                    digest.update(data_file.read())
             else:
                 digest.update(cls.ABSENT.encode("utf-8"))
             digest.update(b"\0")
@@ -185,18 +183,6 @@ class WeatherSourceFiles:
                 f"exists; looked for: {candidates}."
             )
         return digest.hexdigest()
-
-    @classmethod
-    def _update_with_file(cls, digest: "hashlib._Hash", path: str) -> None:
-        """Feed one file's bytes into a running digest.
-
-        Args:
-            digest: the digest to update.
-            path: the file to read.
-        """
-        with open(path, "rb") as data_file:
-            for block in iter(lambda: data_file.read(cls.BLOCK_SIZE), b""):
-                digest.update(block)
 
 
 @dataclass(frozen=True)
@@ -245,18 +231,46 @@ class WeatherSeriesInputs:
         {WeatherDataSourceEnum.DWD_15MIN}
     )
 
+    def __post_init__(self) -> None:
+        """Refuse inputs whose span does not match what the data source's reader reads.
+
+        The field is key material for every source, but only the readers of
+        :attr:`DURATION_DEPENDENT_SOURCES` size their frame by it. Both ways of getting that wrong are
+        silent: an unset span for a source that needs it computes a shorter frame than the run (or
+        stops far downstream), and a set span for a source that ignores it files the same series under
+        one key per horizon, so a one-week run never reuses the full year's entry. Neither is visible
+        in the result, which is why it is refused here, where the DTO is built.
+
+        Raises:
+            ValueError: if ``duration_in_days`` is unset for a source whose reader is sized by it, or
+                set for one whose reader is not.
+        """
+        sized_by_the_span = self.data_source in self.DURATION_DEPENDENT_SOURCES
+        if sized_by_the_span and self.duration_in_days is None:
+            raise ValueError(
+                f"The weather data source {self.data_source.value} sizes its raw frame by the simulated "
+                "span, but duration_in_days is not set in the calculation inputs."
+            )
+        if not sized_by_the_span and self.duration_in_days is not None:
+            raise ValueError(
+                f"The weather data source {self.data_source.value} produces the whole year whatever the "
+                f"run's span, but duration_in_days is set to {self.duration_in_days} in the calculation "
+                "inputs. It is key material, so a value no reader reads would file the same series under "
+                "one key per horizon; leave it at None for this source."
+            )
+
     def required_duration_in_days(self) -> int:
-        """Return :attr:`duration_in_days` for a source that needs it, refusing ``None``.
+        """Return :attr:`duration_in_days` for a source whose reader is sized by it.
+
+        :meth:`__post_init__` has already refused an unset span for such a source, so this narrows the
+        optional field rather than checking it a second time.
 
         Returns:
             int: the simulated span in whole days.
 
         Raises:
-            ValueError: if the field is unset although this data source's reader is sized by it. The
-                component fills the field for exactly the sources in
-                :attr:`DURATION_DEPENDENT_SOURCES`; an unset value means a source was added to that set
-                without the component being taught to fill it, and computing a silently shorter frame
-                would be worse than stopping.
+            ValueError: if the field is unset although this data source's reader is sized by it, which
+                the invariant above makes unreachable.
         """
         if self.duration_in_days is None:
             raise ValueError(
@@ -290,7 +304,6 @@ PRODUCED_COLUMNS: Tuple[str, ...] = (
     "altitude",
     "azimuth",
     "apparent_zenith",
-    "DryBulb",
     "Wspd",
     "Pressure",
     "DNIextra",
@@ -340,9 +353,6 @@ def produce_weather_series(inputs: WeatherSeriesInputs) -> pd.DataFrame:
         per_timestep["altitude"],
         per_timestep["azimuth"],
         per_timestep["apparent_zenith"],
-        # The dry-bulb temperature is the same series as the air temperature; it is written as its own
-        # column because readers of the cached frame have always found it there.
-        temperature_list,
         per_timestep["Wspd"],
         per_timestep["Pressure"],
         per_timestep["DNIextra"],
@@ -529,6 +539,28 @@ def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Dict[s
     return {"name": location_name, "latitude": lat, "longitude": lon}
 
 
+def read_station_coordinates(filepath: str) -> Tuple[Any, Any]:
+    """Read a station's own coordinates from the second row of its data file.
+
+    The ten-minutely and quarter-hourly DWD exports and the ERA5 one share a header: the first row
+    names the columns and the second carries the station's metadata under those names.
+
+    Args:
+        filepath: the data file.
+
+    Returns:
+        Tuple[Any, Any]: longitude and latitude in degrees, as the file spells them.
+    """
+    location = pd.read_csv(  # type: ignore
+        filepath,
+        nrows=1,
+        skiprows=1,
+        header=None,
+        names=pd.read_csv(filepath, nrows=1).columns,
+    )
+    return location["longitude"][0], location["latitude"][0]
+
+
 def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads the DWD Test Reference Year (TRY) data.
 
@@ -640,15 +672,7 @@ def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
         pd.DataFrame: the ten-minutely raw frame.
     """
     # get location
-    location = pd.read_csv(  # type: ignore
-        filepath,
-        nrows=1,
-        skiprows=1,
-        header=None,
-        names=pd.read_csv(filepath, nrows=1).columns,
-    )
-    longitude_in_degrees = location["longitude"][0]
-    latitude_in_degrees = location["latitude"][0]
+    longitude_in_degrees, latitude_in_degrees = read_station_coordinates(filepath)
 
     # get data
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
@@ -688,15 +712,7 @@ def read_dwd_15min_data(filepath: str, year: int, duration_in_days: int) -> pd.D
         pd.DataFrame: the quarter-hourly raw frame.
     """
     # get location
-    location = pd.read_csv(  # type: ignore
-        filepath,
-        nrows=1,
-        skiprows=1,
-        header=None,
-        names=pd.read_csv(filepath, nrows=1).columns,
-    )
-    longitude_in_degrees = location["longitude"][0]
-    latitude_in_degrees = location["latitude"][0]
+    longitude_in_degrees, latitude_in_degrees = read_station_coordinates(filepath)
 
     # get data
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
@@ -742,15 +758,7 @@ def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
         pd.DataFrame: the hourly raw frame.
     """
     # get location
-    location = pd.read_csv(  # type: ignore
-        filepath,
-        nrows=1,
-        skiprows=1,
-        header=None,
-        names=pd.read_csv(filepath, nrows=1).columns,
-    )
-    longitude_in_degrees = location["longitude"][0]
-    latitude_in_degrees = location["latitude"][0]
+    longitude_in_degrees, latitude_in_degrees = read_station_coordinates(filepath)
 
     # get data
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])

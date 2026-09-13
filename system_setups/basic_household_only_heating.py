@@ -135,11 +135,12 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         config=my_gas_heater_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-    my_gas_heater_controller_config = (
-        generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-            minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt,
-            with_domestic_hot_water_preparation=False,
+    my_gas_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.preset_modulating(
+        "ModulatingBoilerController"
+    ).resolve(
+        SizingContext(
+            minimal_thermal_power_in_watt=concrete(my_gas_heater_config.minimal_thermal_power_in_watt),
+            maximal_thermal_power_in_watt=concrete(my_gas_heater_config.maximal_thermal_power_in_watt),
         )
     )
     my_gas_heater_controller = generic_boiler.GenericBoilerController(

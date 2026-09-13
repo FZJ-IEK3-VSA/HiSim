@@ -335,11 +335,21 @@ def setup_function(
 
     # Build Wood Chip Heater Controller
     # Wood chip boiler cannot modulate and it has long run/idle times, so use specific config
-    my_wood_chip_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_wood_chip_controller_config(
-        minimal_thermal_power_in_watt=my_wood_chip_heater_config.minimal_thermal_power_in_watt,
-        maximal_thermal_power_in_watt=my_wood_chip_heater_config.maximal_thermal_power_in_watt,
-        with_domestic_hot_water_preparation=True,
-        set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
+    my_wood_chip_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.preset_on_off(
+        "WoodChipBoilerController"
+    ).resolve(
+        SizingContext(
+            minimal_thermal_power_in_watt=concrete(my_wood_chip_heater_config.minimal_thermal_power_in_watt),
+            maximal_thermal_power_in_watt=concrete(my_wood_chip_heater_config.maximal_thermal_power_in_watt),
+        )
+    )
+    # A wood chip burner is an on/off boiler with the longest times of all: 60 minutes of runtime
+    # and 30 of rest, the two numbers its own deleted factory carried.
+    my_wood_chip_heater_controller_config.minimum_runtime_in_seconds = 60 * 60
+    my_wood_chip_heater_controller_config.minimum_resting_time_in_seconds = 30 * 60
+    my_wood_chip_heater_controller_config.with_domestic_hot_water_preparation = True
+    my_wood_chip_heater_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
+        my_hds_controller_information.set_heating_threshold_temperature_in_celsius
     )
     my_wood_chip_heater_controller = generic_boiler.GenericBoilerController(
         my_simulation_parameters=my_simulation_parameters,

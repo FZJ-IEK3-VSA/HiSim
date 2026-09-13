@@ -82,9 +82,10 @@ def given_default_testee(
     simulationparameters = sim.SimulationParameters.full_year(
         year=2021, seconds_per_timestep=60
     )
-    config = GenericBoilerControllerConfig.get_default_on_off_generic_boiler_controller_config(
-        maximal_thermal_power_in_watt=2500, minimal_thermal_power_in_watt=1000, with_domestic_hot_water_preparation=True
+    config = GenericBoilerControllerConfig.preset_on_off("OnOffBoilerController").resolve(
+        SizingContext(maximal_thermal_power_in_watt=2500, minimal_thermal_power_in_watt=1000)
     )
+    config.with_domestic_hot_water_preparation = True
     config.minimum_runtime_in_seconds = config_overwrite.get(
         "minimum_runtime_in_seconds", 0
     )

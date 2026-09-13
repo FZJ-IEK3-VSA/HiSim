@@ -6,17 +6,10 @@ description: Shows a single household with only heating.
 components:
   ModulatingBoilerController:
     class: hisim.components.generic_boiler.GenericBoilerController
+    preset: modulating
     config:
-      is_modulating: true
-      set_heating_threshold_outside_temperature_in_celsius: 16.0
       minimal_thermal_power_in_watt: 1000.0
       maximal_thermal_power_in_watt: 12000.0
-      set_temperature_difference_for_full_power: 5.0
-      minimum_runtime_in_seconds: 1800.0
-      minimum_resting_time_in_seconds: 1800.0
-      with_domestic_hot_water_preparation: false
-      secondary_mode: false
-      hysteresis_water_temperature_offset: 10.0
     inputs:
       - Weather
       - HeatDistributionController

@@ -91,7 +91,7 @@ def test_lifecycle_cost_engine_runs_in_shadow_mode() -> None:
     # The weather config is built first because the PV and building configs copy its identity
     # (weather_identity) and the sizing kernel refuses a config that still carries an unresolved
     # field, exactly as the shipped system setups do it.
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather_config = weather.WeatherConfig.preset_standard("Weather")
     my_weather = weather.Weather(
         config=my_weather_config,
         my_simulation_parameters=my_simulation_parameters,

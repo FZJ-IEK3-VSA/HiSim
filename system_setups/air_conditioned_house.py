@@ -97,7 +97,7 @@ def setup_function(
     ]
     # The weather config is created first: the building config copies its identity (weather_identity)
     # and must have it before the building is built. The weather component is still added below.
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.SEVILLE)
+    my_weather_config = weather.WeatherConfig.for_location("Weather", weather.LocationEnum.SEVILLE)
 
     my_building_config = building.BuildingConfig(
         component_id=ComponentID(name="Building"),

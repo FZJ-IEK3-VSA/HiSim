@@ -89,7 +89,7 @@ def test_house(
     heating_reference_temperature_in_celsius: float = -7.0
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather_config = weather.WeatherConfig.preset_standard("Weather")
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build PV

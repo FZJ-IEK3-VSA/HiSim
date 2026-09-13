@@ -236,9 +236,7 @@ def test_household_run_publishes_the_weather_series_into_the_run_repository(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
+    my_weather_config = weather.WeatherConfig.preset_standard("Weather")
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )

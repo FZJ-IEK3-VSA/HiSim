@@ -26,7 +26,7 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import PurePath
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
 from dataclasses_json import dataclass_json
 
@@ -383,70 +383,6 @@ class WeatherConfig(ConfigBase):
         from hisim.components.weather.weather import Weather  # pylint: disable=import-outside-toplevel  # avoids config->component import cycle
 
         return Weather.get_full_classname()  # type: ignore[no-any-return]
-
-    @classmethod
-    def get_default(
-        cls,
-        location_entry: Union[LocationEnum, str],
-        name: str = "Weather",
-        component_id: Optional[ComponentID] = None,
-        weather_direct_filepath: Optional[str] = None,
-        weather_direct_data_source: Optional[WeatherDataSourceEnum] = None,
-    ) -> "WeatherConfig":
-        """Gets the default configuration for a given location."""
-
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        enum_entry = None
-        # If location_entry is enum entry, use it directly
-        if isinstance(location_entry, LocationEnum):
-            enum_entry = location_entry
-
-        # Read location_entry from enum
-        elif isinstance(location_entry, str):
-            enum_entry = getattr(LocationEnum, location_entry.strip(), None)
-
-        if enum_entry is not None:
-            location = enum_entry.value[0]
-            path = os.path.join(
-            utils.get_input_directory(),
-            "weather",
-            enum_entry.value[1],
-            enum_entry.value[2],
-            enum_entry.value[3],
-            )
-            data_source = enum_entry.value[4]
-
-        # Use direct filepath
-        else:
-            if weather_direct_filepath is None:
-                raise ValueError(
-                    f"Location '{location_entry}' not found in Weather LocationEnum and no weather_direct_filepath was provided."
-                )
-            if not os.path.isfile(weather_direct_filepath):
-                raise ValueError(
-                    f"Weather data file not found: {weather_direct_filepath}")
-            if weather_direct_data_source is None:
-                raise ValueError(
-                    f"No data source (data type) provided for weather_direct_filepath {weather_direct_filepath}."
-                )
-            if weather_direct_filepath.lower().endswith(".dat"):
-                weather_direct_filepath = weather_direct_filepath[:-4]
-            elif weather_direct_filepath.lower().endswith(".csv"):
-                weather_direct_filepath = weather_direct_filepath[:-4]
-
-            location = str(location_entry)
-            path = weather_direct_filepath
-            data_source = weather_direct_data_source
-
-        config = WeatherConfig(
-            component_id=component_id,
-            location=location,
-            source_path=path,
-            data_source=data_source,
-            predictive_control=False,
-        )
-        return config
 
     def identity(self) -> str:
         """Return a short string that says which weather this configuration reads: station, data set, file.

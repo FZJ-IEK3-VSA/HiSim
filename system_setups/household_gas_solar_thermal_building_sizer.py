@@ -182,7 +182,7 @@ def setup_function(
     # The weather config is created first: the building and PV configs copy its identity
     # (weather_identity) and must have it before those components are built. The weather
     # component itself is still added further down, so the simulator's component order is unchanged.
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
+    my_weather_config = weather.WeatherConfig.for_location("Weather", weather.LocationEnum[weather_location])
 
     my_building_config = building.BuildingConfig.preset_standard("Building")
     my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius

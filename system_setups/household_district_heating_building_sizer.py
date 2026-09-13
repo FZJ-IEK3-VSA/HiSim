@@ -224,11 +224,20 @@ def setup_function(
     # The weather config is created first: the building and PV configs copy its identity
     # (weather_identity) and must have it before those components are built. The weather
     # component itself is still added further down, so the simulator's component order is unchanged.
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather_location,
-        weather_direct_filepath=weather_filepath,
-        weather_direct_data_source=weather_datasource,
-    )
+    # A catalogue station wins when the archetype names one; the archetype's weather file is
+    # the fallback, for a climate LocationEnum does not carry.
+    weather_station = getattr(weather.LocationEnum, weather_location.strip(), None)
+    if weather_station is not None:
+        my_weather_config = weather.WeatherConfig.for_location("Weather", weather_station)
+    elif weather_filepath is not None and weather_datasource is not None:
+        my_weather_config = weather.WeatherConfig.for_data_file(
+            "Weather", weather_filepath, weather_datasource
+        )
+    else:
+        raise ValueError(
+            f"Weather location '{weather_location}' is no station of LocationEnum, and the "
+            "archetype names no weather file with its data source to read instead."
+        )
 
     my_building_config = building.BuildingConfig.preset_standard("Building")
     my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
@@ -292,7 +301,6 @@ def setup_function(
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    # my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_weather)

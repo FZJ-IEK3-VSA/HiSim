@@ -1,9 +1,8 @@
 """Tests for the Weather component and WeatherConfig.
 
-Covers full-year DNI output sanity checks, enum-vs-string location
-configuration consistency, direct-filepath configuration including
-validation that a data source is required when a direct filepath is given,
-and the one schema the component reads a produced frame under.
+Covers a full-year DNI sanity check on the component, the two named constructors of the
+configuration -- the catalogue station and the data file, which have to agree about a station
+reached both ways -- and the one schema the component reads a produced frame under.
 """
 import dataclasses
 import importlib
@@ -35,9 +34,7 @@ def test_weather() -> None:
         year=2021, seconds_per_timestep=60
     )
     repo: sim_repository.SimRepository = sim_repository.SimRepository()
-    my_weather_config: weather.WeatherConfig = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
+    my_weather_config: weather.WeatherConfig = weather.WeatherConfig.preset_standard("Weather")
     my_weather: weather.Weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=mysim
     )
@@ -74,51 +71,6 @@ def test_weather() -> None:
     assert annual_dni_kwh_per_m2 > 950  # kWh/m^2/year
 
 
-def test_weather_config_enum_vs_string_consistency() -> None:
-    """Test consistency of enum vs. string configuration setup."""
-    my_weather_config_enum: weather.WeatherConfig = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
-
-    my_weather_config_string: weather.WeatherConfig = weather.WeatherConfig.get_default(
-        location_entry="AACHEN"
-    )
-
-    assert my_weather_config_enum.location == my_weather_config_string.location
-    assert my_weather_config_enum.data_source == my_weather_config_string.data_source
-    assert isinstance(my_weather_config_enum.source_path, str)
-    assert len(my_weather_config_enum.source_path) > 0
-    assert my_weather_config_enum.source_path == my_weather_config_string.source_path
-
-
-def test_weather_config_with_direct_filepath(tmp_path: pathlib.Path) -> None:
-    """Test weather config with direct filepath and direct data source."""
-    weather_file: pathlib.Path = tmp_path / "weather.csv"
-    weather_file.write_text("dummy weather data", encoding="utf-8")
-
-    my_weather_config: weather.WeatherConfig = weather.WeatherConfig.get_default(
-        location_entry="CUSTOM_LOCATION",
-        weather_direct_filepath=str(weather_file),
-        weather_direct_data_source=weather.WeatherDataSourceEnum.DWD_10MIN
-    )
-
-    assert my_weather_config.location == "CUSTOM_LOCATION"
-    assert my_weather_config.source_path == str(weather_file)[:-4]
-    assert my_weather_config.data_source == weather.WeatherDataSourceEnum.DWD_10MIN
-
-
-def test_weather_config_with_direct_filepath_without_data_source(tmp_path: pathlib.Path) -> None:
-    """Test weather config fails for direct filepath without data source."""
-    weather_file: pathlib.Path = tmp_path / "weather.csv"
-    weather_file.write_text("dummy weather data", encoding="utf-8")
-
-    with pytest.raises(ValueError):
-        weather.WeatherConfig.get_default(
-            location_entry="CUSTOM_LOCATION",
-            weather_direct_filepath=str(weather_file)
-        )
-
-
 def _build_weather_with_cache(
     tmp_path: pathlib.Path,
     omitted_column: str = "",
@@ -141,9 +93,7 @@ def _build_weather_with_cache(
     """
     mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
     mysim.cache_dir_path = str(tmp_path)
-    my_config: weather.WeatherConfig = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
+    my_config: weather.WeatherConfig = weather.WeatherConfig.preset_standard("Weather")
     my_weather: weather.Weather = weather.Weather(
         config=my_config, my_simulation_parameters=mysim
     )
@@ -251,9 +201,7 @@ def test_weather_default_display_config_is_not_shared() -> None:
     mysim: SimulationParameters = SimulationParameters.one_day_only(
         year=2021, seconds_per_timestep=3600
     )
-    my_config: weather.WeatherConfig = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
+    my_config: weather.WeatherConfig = weather.WeatherConfig.preset_standard("Weather")
     first: weather.Weather = weather.Weather(
         config=my_config, my_simulation_parameters=mysim
     )

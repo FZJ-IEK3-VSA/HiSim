@@ -53,9 +53,7 @@ def test_building_scalability() -> None:
     # Set Residence
     # The weather config comes first because the building config copies its identity (weather_identity);
     # the weather component itself is added further down, as before.
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
+    my_weather_config = weather.WeatherConfig.preset_standard("Weather")
 
     my_residence_config = (
         building.BuildingConfig.preset_standard("Building")

@@ -27,7 +27,7 @@ from hisim import log
 from hisim import utils
 from hisim.caching import CacheClient, CacheEntry, CacheKey
 from hisim.component import OpexCostDataClass, CapexCostDataClass
-from hisim.config import DisplayConfig
+from hisim.config import DisplayConfig, concrete
 # The module object itself is what the cache key is fingerprinted from: ``CacheKey.for_producer`` walks
 # its import closure and hashes the source of everything in it, so an edit to the calculation changes
 # the key without anyone declaring anything.
@@ -250,7 +250,7 @@ class PVSystem(cp.Component):
         component_type = lt.ComponentType.PV
         kpi_tag = KpiTagEnumClass.ROOFTOP_PV
         unit = lt.Units.KILOWATT
-        size_of_energy_system = config.power_in_watt * 1e-3
+        size_of_energy_system = concrete(config.power_in_watt) * 1e-3
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
             simulation_parameters=simulation_parameters,
@@ -285,7 +285,7 @@ class PVSystem(cp.Component):
         config = self.config
         return ComponentCostFacts(
             asset_class=lt.ComponentType.PV,
-            size=config.power_in_watt * 1e-3,
+            size=concrete(config.power_in_watt) * 1e-3,
             size_unit=lt.Units.KILOWATT,
             kpi_tag=KpiTagEnumClass.ROOFTOP_PV,
             investment_cost_override_in_euro=config.investment_costs_in_euro,

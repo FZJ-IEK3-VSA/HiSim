@@ -376,6 +376,10 @@ version coupling.
    (`hisim/components/weather/calculation.py`, artifact kind `weather_series`, looked up through
    `CacheClient.lookup_producer`); its keys changed once, every other component still keys through
    `utils.build_cache_key_string`.
+   2026-09-12: PV series is the second producer, chained to the weather
+   (`hisim/components/generic_pv_system/calculation.py`, artifact kind `pv_series`): its DTO carries
+   the weather's artifact key as key material and the weather arrays as payload, so the two keys
+   compose Merkle-style (§3.1) and an edit to the weather calculation moves the PV entry too.
 2. **Remote read/write tier** — `remote.py`, `client.py`, settings, circuit breaker; the two
    server endpoints (§2.1) + `/health`; static-token auth; enable on the cluster and in
    RenoVisor first (highest volume, simplest auth).
@@ -442,13 +446,15 @@ Findings that fall out of the survey:
   (525 600 calls for a minutely year). pvlib is natively vectorized over Series; the static
   producer should pass full series, likely turning the miss cost from minutes into seconds —
   which also lowers the stakes of every cache miss.
-- **Producers live in their own modules**, next to their component in the same directory
-  (e.g. `generic_pv_calculation.py` beside `generic_pv_system.py`), mirroring the ongoing
-  `building/` split. Component modules stay at their current paths — the scenario JSONs
-  resolve components by fully-qualified class name via `json_executor.py`, so moving them
-  breaks every `.scenario.json`; if a component is ever moved into a subpackage, a re-export
-  shim keeps the old path importable. This placement also tightens the cache key: the
-  `code_fingerprint` hashes the producer module alone, so edits to component plumbing (KPIs,
+- **Producers live in their own modules**, next to their component in the same directory,
+  mirroring the `building/` split. As of 2026-09-12 that directory is the component's own
+  package: `hisim/components/weather/{weather,config,calculation}.py` and
+  `hisim/components/generic_pv_system/{pv_system,config,calculation}.py`, one component and its
+  helpers per directory. The component's *wire* path stays what it was — the recorded
+  energy-system files and the generated schema name the class
+  `hisim.components.generic_pv_system.PVSystem`, so the package `__init__` re-exports every public
+  name and pins `PVSystem.__module__` to the package. This placement also tightens the cache key:
+  the `code_fingerprint` hashes the producer module alone, so edits to component plumbing (KPIs,
   I/O declarations, docstrings) no longer invalidate cached artifacts.
 - Producer modules obey strict one-way layering, like `hisim/config/`: they may import
   numpy/pandas/pvlib and config dataclasses, never `Component`, the simulator, or the

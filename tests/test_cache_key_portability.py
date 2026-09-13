@@ -6,10 +6,13 @@ between machines. These tests pin what is left of that: the base rule and the co
 fields that decide the result move the key, fields that only place the run do not, and a key built from
 the repository's own data files contains no absolute path.
 
-The weather has left this path entirely. Its series is produced by ``hisim.components.weather.calculation``
-and keyed under the producer scheme of ``roadmap/cache_service_spec.md`` §3, where the data file is
-identified by the hash of its contents and the path is not key material at all;
-``tests/test_weather_producer.py`` pins that.
+The weather and the PV system have left this path entirely. Their series are produced by
+``hisim.components.weather.calculation`` and ``hisim.components.generic_pv_system.calculation`` and keyed
+under the producer scheme of ``roadmap/cache_service_spec.md`` §3, where a data file is identified by the
+hash of its contents and no path is key material at all; ``tests/test_weather_producer.py`` and
+``tests/test_pv_series_producer.py`` pin that. ``PVSystemConfig`` still serves below as a sample of a
+configuration with no override of its own, because the base rule it demonstrates governs every
+configuration that is still keyed this way.
 """
 
 # clean
@@ -75,7 +78,7 @@ def test_the_base_view_clears_the_building_and_nothing_else() -> None:
     """The rule every config had before this change is the rule every config keeps.
 
     Catches: the hook regressing the one normalisation the key always had, which would file the same
-    PV series under a different name per house again.
+    artifact under a different name per house again.
     """
     in_house_a = PVSystemConfig.get_default_pv_system()
     in_house_a.component_id = dataclasses.replace(in_house_a.component_id, building="BUI1")

@@ -100,10 +100,7 @@ components:
       - SimpleHotWaterStorage
   FuelMeter:
     class: hisim.components.fuel_meter.FuelMeter
-    config:
-      fuel_loadtype: PELLETS
-      heating_value_of_fuel_in_kwh_per_liter: 3.25
-      fuel_density_in_kg_per_m3: 650.0
+    preset: standard
     inputs:
       - from: ConventionalPelletBoiler.EnergyDemandDhw
         tags:

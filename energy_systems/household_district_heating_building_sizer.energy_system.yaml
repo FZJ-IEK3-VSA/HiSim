@@ -92,6 +92,7 @@ components:
       - DistrictHeating
   FuelMeter:
     class: hisim.components.fuel_meter.FuelMeter
+    preset: standard
     config:
       fuel_loadtype: DISTRICTHEATING
       heating_value_of_fuel_in_kwh_per_liter: 9.82

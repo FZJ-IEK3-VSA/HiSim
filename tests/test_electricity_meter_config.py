@@ -9,8 +9,6 @@ simulation, no I/O.
 
 # clean
 
-import dataclasses
-
 import pytest
 
 from hisim.components.electricity_meter import (
@@ -18,7 +16,6 @@ from hisim.components.electricity_meter import (
     ElectricityMeterConfig,
     ElectricityMeterState,
 )
-from hisim.config import ComponentID
 
 
 _OPTIONAL_FIELDS: tuple[str, ...] = (
@@ -43,35 +40,17 @@ def _assert_all_optional_fields_are_none(config: ElectricityMeterConfig) -> None
 
 
 @pytest.mark.base
-def test_preset_standard_defaults() -> None:
-    """``preset_standard("ElectricityMeter")`` returns the documented defaults."""
-    config: ElectricityMeterConfig = ElectricityMeterConfig.preset_standard("ElectricityMeter")
-    assert isinstance(config, ElectricityMeterConfig)
-    assert config.component_id.name == "ElectricityMeter"
-    assert config.component_id.building is None
-    _assert_all_optional_fields_are_none(config)
-
-
-@pytest.mark.base
 def test_preset_standard_names_the_instance() -> None:
-    """The preset names the meter it builds; the name is the caller's, not a default."""
+    """The preset passes the caller's name through and leaves everything else unset.
+
+    Pins the whole of ``preset_standard``: the name is the caller's rather than a
+    built-in default, ``building`` stays ``None``, and every optional cost/emission
+    field stays ``None``.
+    """
     config: ElectricityMeterConfig = ElectricityMeterConfig.preset_standard("X")
     assert isinstance(config, ElectricityMeterConfig)
     assert config.component_id.name == "X"
     assert config.component_id.building is None
-    _assert_all_optional_fields_are_none(config)
-
-
-@pytest.mark.base
-def test_a_building_is_an_explicit_override_on_the_preset() -> None:
-    """A meter inside a named building is the preset plus an explicit identity override."""
-    config: ElectricityMeterConfig = dataclasses.replace(
-        ElectricityMeterConfig.preset_standard("MyMeter"),
-        component_id=ComponentID(name="MyMeter", building="HouseA"),
-    )
-    assert isinstance(config, ElectricityMeterConfig)
-    assert config.component_id.name == "MyMeter"
-    assert config.component_id.building == "HouseA"
     _assert_all_optional_fields_are_none(config)
 
 

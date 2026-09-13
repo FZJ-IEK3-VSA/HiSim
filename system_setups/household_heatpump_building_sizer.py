@@ -283,15 +283,19 @@ def setup_function(
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
 
     # Build Heat Distribution Controller
-    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_config_based_on_building_efficiency(
-        set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
-        set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-        heating_system=my_hds_system,
-        specific_heating_load_of_building_in_watt_per_m2=my_building_information.max_thermal_building_demand_in_watt
-        / my_building_information.scaled_conditioned_floor_area_in_m2,
+    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.preset_standard(
+        "HeatDistributionController"
+    ).resolve(
+        SizingContext(
+            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+            set_heating_temperature_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
+            set_cooling_temperature_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
+        )
     )
+    # The emitter is the author's choice, not a property of the building, so it stays a plain field.
+    my_heat_distribution_controller_config.heating_system = my_hds_system
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
         config=my_heat_distribution_controller_config,

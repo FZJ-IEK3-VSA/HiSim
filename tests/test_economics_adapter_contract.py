@@ -138,11 +138,21 @@ class AdapterContractScan:
         ``ConfigBase.get_main_classname`` returns the fully qualified name of the component the
         config configures, which is the only machine-readable link from a component back to its
         config; matching on its last segment finds the config without a naming convention.
+
+        A component that lives in a package rather than a single module — ``generic_pv_system``,
+        whose ``PVSystem`` names the package as its ``__module__`` while ``PVSystemConfig`` is
+        defined in ``generic_pv_system.config`` — keeps its config here: a candidate counts when
+        it is defined in the component's own module *or* in one of that module's submodules, so
+        the split changes where the config is written and not whether this sweep sees it. Classes
+        merely imported from elsewhere are still excluded, which is what the check is for.
         """
         module = importlib.import_module(component_class.__module__)
         configs = []
         for _name, candidate in inspect.getmembers(module, inspect.isclass):
-            if not dataclasses.is_dataclass(candidate) or candidate.__module__ != module.__name__:
+            defined_here = candidate.__module__ == module.__name__ or candidate.__module__.startswith(
+                module.__name__ + "."
+            )
+            if not dataclasses.is_dataclass(candidate) or not defined_here:
                 continue
             getter = getattr(candidate, "get_main_classname", None)
             if getter is None:

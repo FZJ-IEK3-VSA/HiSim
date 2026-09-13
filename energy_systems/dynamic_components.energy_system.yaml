@@ -6,34 +6,17 @@ description: Dynamic Components Module.
 components:
   Battery1:
     class: hisim.components.advanced_battery_bslib.Battery
+    preset: standard
     config:
-      source_weight: 1
-      system_id: SG1
       custom_pv_inverter_power_generic_in_watt: 5.0
       custom_battery_capacity_generic_in_kilowatt_hour: 10.0
-      charge_in_kwh: 0.0
-      discharge_in_kwh: 0.0
-      device_co2_footprint_in_kg: null
-      investment_costs_in_euro: null
-      lifetime_in_years: null
-      maintenance_costs_in_euro_per_year: null
-      subsidy_as_percentage_of_investment_costs: null
-      lifetime_in_cycles: 5000.0
   Battery2:
     class: hisim.components.advanced_battery_bslib.Battery
+    preset: standard
     config:
       source_weight: 2
-      system_id: SG1
       custom_pv_inverter_power_generic_in_watt: 2.5
       custom_battery_capacity_generic_in_kilowatt_hour: 5.0
-      charge_in_kwh: 0.0
-      discharge_in_kwh: 0.0
-      device_co2_footprint_in_kg: null
-      investment_costs_in_euro: null
-      lifetime_in_years: null
-      maintenance_costs_in_euro_per_year: null
-      subsidy_as_percentage_of_investment_costs: null
-      lifetime_in_cycles: 5000.0
   CHP1:
     class: hisim.components.advanced_fuel_cell.CHP
     config:

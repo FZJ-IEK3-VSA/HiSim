@@ -126,6 +126,7 @@
       "properties": {
         "class": {
           "enum": [
+            "hisim.components.advanced_battery_bslib.Battery",
             "hisim.components.building.Building",
             "hisim.components.building.building.Building",
             "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
@@ -163,6 +164,130 @@
         }
       },
       "allOf": [
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.advanced_battery_bslib.Battery"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "source_weight": {
+                    "type": "integer"
+                  },
+                  "system_id": {
+                    "type": "string"
+                  },
+                  "charge_in_kwh": {
+                    "type": "number"
+                  },
+                  "discharge_in_kwh": {
+                    "type": "number"
+                  },
+                  "device_co2_footprint_in_kg": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "investment_costs_in_euro": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lifetime_in_years": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maintenance_costs_in_euro_per_year": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "subsidy_as_percentage_of_investment_costs": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lifetime_in_cycles": {
+                    "type": "number"
+                  },
+                  "custom_pv_inverter_power_generic_in_watt": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "custom_battery_capacity_generic_in_kilowatt_hour": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": [
+                    "pv_peak_power_in_watt"
+                  ]
+                }
+              }
+            }
+          }
+        },
         {
           "if": {
             "properties": {

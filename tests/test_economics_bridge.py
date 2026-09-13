@@ -111,7 +111,7 @@ def test_lifecycle_cost_engine_runs_in_shadow_mode() -> None:
         my_simulation_parameters=my_simulation_parameters,
     )
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
-        config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config(),
+        config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_standard("UTSPConnector"),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_electricity_meter = electricity_meter.ElectricityMeter(

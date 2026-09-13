@@ -6,34 +6,7 @@ description: Air-conditioned household.
 components:
   UTSPConnector:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    config:
-      data_acquisition_mode: USE_PREDEFINED_PROFILE
-      household:
-        Name: CHR01 Couple both at Work
-        Guid:
-          StrVal: 516a33ab-79e1-4221-853b-967fc11cc85a
-      energy_intensity: EnergySaving
-      travel_route_set:
-        Name: Travel Route Set for 10km Commuting Distance
-        Guid:
-          StrVal: ca46be86-9cc7-47b5-9769-abff78ceca7a
-      transportation_device_set:
-        Name: Bus and one 30 km/h Car
-        Guid:
-          StrVal: 6ac74bd0-bacd-4b39-b84a-dc7ae16702c9
-      charging_station_set:
-        Name: Charging At Home with 11 kW
-        Guid:
-          StrVal: 78dae308-24c4-45cc-8bdf-b001d61f45c2
-      profile_with_washing_machine_and_dishwasher: true
-      predictive_control: false
-      result_dir_path: ${utsp_results}
-      cache_dir_path: null
-      name_of_predefined_loadprofile: CHR01 Couple both at Work
-      predefined_loadprofile_filepaths: null
-      guid: ''
-      calculation_index_for_local_lpg: null
-      cars: null
+    preset: standard
   Weather:
     class: hisim.components.weather.Weather
     config:

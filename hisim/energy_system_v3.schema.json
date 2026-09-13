@@ -133,6 +133,7 @@
             "hisim.components.generic_boiler.GenericBoiler",
             "hisim.components.generic_boiler.GenericBoilerController",
             "hisim.components.generic_car.Car",
+            "hisim.components.generic_pv_system.PVSystem",
             "hisim.components.heat_distribution_system.HeatDistribution",
             "hisim.components.heat_distribution_system.HeatDistributionController",
             "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
@@ -1081,6 +1082,177 @@
                 "propertyNames": {
                   "enum": [
                     "occupancy_identity"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.generic_pv_system.PVSystem"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "rooftop"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "time": {
+                    "type": "integer"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "module_name": {
+                    "type": "string"
+                  },
+                  "integrate_inverter": {
+                    "type": "boolean"
+                  },
+                  "inverter_name": {
+                    "type": "string"
+                  },
+                  "module_database": {
+                    "enum": [
+                      "SANDIA_MODULE_DATABASE",
+                      "SANDIA_INVERTER_DATABASE",
+                      "CEC_MODULE_DATABASE",
+                      "CEC_INVERTER_DATABASE",
+                      "ANTON_DRIESSE_INVERTER_DATABASE"
+                    ]
+                  },
+                  "inverter_database": {
+                    "enum": [
+                      "SANDIA_MODULE_DATABASE",
+                      "SANDIA_INVERTER_DATABASE",
+                      "CEC_MODULE_DATABASE",
+                      "CEC_INVERTER_DATABASE",
+                      "ANTON_DRIESSE_INVERTER_DATABASE"
+                    ]
+                  },
+                  "azimuth": {
+                    "type": "number"
+                  },
+                  "tilt": {
+                    "type": "number"
+                  },
+                  "share_of_maximum_pv_potential": {
+                    "type": "number"
+                  },
+                  "load_module_data": {
+                    "type": "boolean"
+                  },
+                  "source_weight": {
+                    "type": "integer"
+                  },
+                  "device_co2_footprint_in_kg": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "investment_costs_in_euro": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lifetime_in_years": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maintenance_costs_in_euro_per_year": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "subsidy_as_percentage_of_investment_costs": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "predictive_control": {
+                    "type": "boolean"
+                  },
+                  "prediction_horizon": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "power_in_watt": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "weather_identity": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": [
+                    "roof_area_in_m2",
+                    "weather_identity"
                   ]
                 }
               }

@@ -125,24 +125,6 @@ class FuelMeterConfig(ConfigBase):
         """
         return cls(component_id=ComponentID(name=name))
 
-    @classmethod
-    def get_fuel_meter_default_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-        fuel_loadtype: lt.LoadTypes = lt.LoadTypes.OIL,
-        heating_value_of_fuel_in_kwh_per_liter: Optional[float] = 9.82,  # configuration.py
-        fuel_density_in_kg_per_m3: Optional[float] = 0.83 * 1e3,  # configuration.py
-    ) -> "FuelMeterConfig":
-        """Gets a default FuelMeter."""
-        if component_id is None:
-            component_id = ComponentID(name="FuelMeter")
-        return FuelMeterConfig(
-            component_id=component_id,
-            fuel_loadtype=fuel_loadtype,
-            heating_value_of_fuel_in_kwh_per_liter=heating_value_of_fuel_in_kwh_per_liter,
-            fuel_density_in_kg_per_m3=fuel_density_in_kg_per_m3
-        )
-
 
 class FuelMeter(DynamicComponent):
     """Fuel meter class."""

@@ -178,8 +178,14 @@ class MeterFixtures:
         """
         return FuelMeter(
             my_simulation_parameters=cls.parameters(),
-            config=FuelMeterConfig.get_fuel_meter_default_config(
-                component_id=ComponentID(name=cls.METER_NAME), fuel_loadtype=fuel
+            config=FuelMeterConfig.preset_standard(cls.METER_NAME).resolve(
+                SizingContext(
+                    energy_carrier=fuel,
+                    # The channel tests never price anything, so the two constants only have to
+                    # be resolved; oil's are used for every carrier.
+                    heating_value_of_fuel_in_kwh_per_liter=9.821666666666667,
+                    fuel_density_in_kg_per_m3=830.0,
+                )
             ),
         )
 

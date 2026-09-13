@@ -175,6 +175,12 @@ pytest-extendedbase:
     - cd tests
     - coverage run --parallel-mode --source=../hisim -m pytest -m "extendedbase" --durations=20 --junitxml=pytest-extendedbase.xml
 
+pytest-extendedbase2:
+  extends: .pytest_template
+  script:
+    - cd tests
+    - coverage run --parallel-mode --source=../hisim -m pytest -m "extendedbase2" --durations=20 --junitxml=pytest-extendedbase2.xml
+
 pytest-buildingtest:
   extends: .pytest_template
   script:
@@ -198,7 +204,7 @@ pytest-others:
   script:
     - cd tests
     - |
-      markers="not base and not buildingtest and not system_setups and not extendedbase"
+      markers="not base and not buildingtest and not system_setups and not extendedbase and not extendedbase2"
       markers="$markers and not utsp and not postprocessingoptions"
       coverage run --parallel-mode --source=../hisim -m pytest \
         -m "$markers" \
@@ -226,6 +232,8 @@ coverage:
     - job: pytest-base
       artifacts: true
     - job: pytest-extendedbase
+      artifacts: true
+    - job: pytest-extendedbase2
       artifacts: true
     - job: pytest-buildingtest
       artifacts: true

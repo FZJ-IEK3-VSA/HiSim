@@ -362,7 +362,8 @@ def test_the_renaming_table_declares_one_meaning_per_legacy_port() -> None:
     assert renaming.rename("ElectricityMeter", "SomethingNobodyDeclared") == "SomethingNobodyDeclared"
 
 
-@pytest.mark.base
+# Runs the `dynamic_components` setup for real, so it belongs to a full-simulation shard.
+@pytest.mark.extendedbase
 def test_the_table_still_spells_the_ports_the_dynamic_components_setup_actually_grows(tmp_path: Path) -> None:
     """Catches a renaming table whose dispatch counter no longer matches the controller's build.
 
@@ -378,8 +379,8 @@ def test_the_table_still_spells_the_ports_the_dynamic_components_setup_actually_
     This is the canary for the counter class of that failure. One setup is enough for it because
     the counter is the controller's: all twelve energy manager setups start their dispatch numbers
     from the same thirteen constructor-declared outputs, so a shift moves this setup's names
-    exactly as it moves every other's. This setup also needs no load profile, so it costs a base
-    test seconds instead of minutes. The per-setup insertion indices of the setups the canary does
+    exactly as it moves every other's. This setup also needs no load profile, so it costs its
+    shard seconds instead of minutes. The per-setup insertion indices of the setups the canary does
     not build are outside its net; those are cross-checked against the recorded scenario files by
     the next test and verified against live builds only by the fleet workflow. The canary asserts
     both halves: that every legacy name the table declares for this setup is a port the Python
@@ -480,7 +481,8 @@ def test_an_indicator_quoting_an_undeclared_port_still_fails_literally() -> None
     }
 
 
-@pytest.mark.base
+# Runs the `dynamic_components` setup for real, so it belongs to a full-simulation shard.
+@pytest.mark.extendedbase
 def test_a_kpi_broken_setup_gets_a_structural_verdict(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Catches a rig that turns a broken KPI layer into an exception instead of a verdict (T-21).
 
@@ -509,7 +511,8 @@ def test_a_kpi_broken_setup_gets_a_structural_verdict(tmp_path: Path, monkeypatc
     assert any("KPI stage unavailable" in note for note in verdict.notes)
 
 
-@pytest.mark.base
+# Runs the `dynamic_components` setup for real, so it belongs to a full-simulation shard.
+@pytest.mark.extendedbase
 def test_an_altered_recorded_file_fails_and_names_what_moved(tmp_path: Path) -> None:
     """Catches a rig that cannot tell a reproduced setup from a changed one (T-20).
 
@@ -535,7 +538,8 @@ def test_an_altered_recorded_file_fails_and_names_what_moved(tmp_path: Path) -> 
     assert Rig.ALTERED_COMPONENT in report
 
 
-@pytest.mark.base
+# Runs the `dynamic_components` setup for real, so it belongs to a full-simulation shard.
+@pytest.mark.extendedbase
 def test_a_structurally_changed_recorded_file_fails_the_wiring_comparison(tmp_path: Path) -> None:
     """Catches a wiring comparison that cannot tell a rewired system from a reproduced one.
 

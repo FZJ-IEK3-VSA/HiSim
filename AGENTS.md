@@ -28,7 +28,8 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
 
 Markers are defined in `pytest.ini`:
 
-- `base` — fast core tests that must pass in any case. **Run these.**
+- `base` — unit-scale tests that must pass in any case: no full simulation of a system setup, a few seconds at most. **Run these.**
+- `extendedbase`, `extendedbase2` — the full-simulation tests, hand-balanced across two shards of roughly equal wall time. Slow. Avoid.
 - `buildingtest` — systematic sweep of the building component. Slow. Avoid.
 - `system_setups` — runs full system setups end to end. Slow. Avoid.
 - `mpc` — model-predictive-control system tests. Slow. Avoid.
@@ -36,7 +37,7 @@ Markers are defined in `pytest.ini`:
 
 Deselect the slow/networked ones explicitly when running a broader-than-base subset, e.g.:
 ```bash
-pytest -m "not buildingtest and not system_setups and not mpc and not utsp" -n 32 -q
+pytest -m "not extendedbase and not extendedbase2 and not buildingtest and not system_setups and not mpc and not utsp" -n 32 -q
 ```
 
 ## Do NOT touch

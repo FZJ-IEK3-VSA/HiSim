@@ -209,7 +209,7 @@ A bare component name such as `- Weather` says: connect this source through the 
 
 Running the tests
 -----------
-`pytest -m base` runs the fast suite. [TESTING.md](TESTING.md) lists what a change has to pass before it counts as done: the lint, `pytest -m "base or buildingtest"` and `python scripts/golden_check.py`, which compares simulation outputs with the golden references within a tolerance — references that a change never regenerates on its own. The test markers, including the slower `system_setups`, `mpc` and `utsp` suites, are declared in `pytest.ini`.
+`pytest -m base` runs the fast suite. [TESTING.md](TESTING.md) lists what a change has to pass before it counts as done: the lint, `pytest -m "base or extendedbase or extendedbase2 or buildingtest"` and `python scripts/golden_check.py`, which compares simulation outputs with the golden references within a tolerance — references that a change never regenerates on its own. The test markers are declared in `pytest.ini`. `base` is unit-scale only — nothing in it simulates a whole system setup — which is what keeps it the fast edit loop; the full-simulation tests live in the two hand-balanced shards `extendedbase` and `extendedbase2`, beside the slower `system_setups`, `mpc` and `utsp` suites.
 
 ## Contributions and Collaborations
 ETHOS.HiSim welcomes any kind of feedback, contributions, and collaborations.

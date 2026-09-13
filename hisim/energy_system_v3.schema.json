@@ -1498,7 +1498,8 @@
                 "maxProperties": 1,
                 "propertyNames": {
                   "enum": [
-                    "for_location"
+                    "for_location",
+                    "for_data_file"
                   ]
                 },
                 "properties": {
@@ -1573,6 +1574,29 @@
                           {
                             "type": "null"
                           }
+                        ]
+                      }
+                    }
+                  },
+                  "for_data_file": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "path",
+                      "data_source"
+                    ],
+                    "properties": {
+                      "path": {
+                        "type": "string"
+                      },
+                      "data_source": {
+                        "enum": [
+                          "DWD_TRY",
+                          "NSRDB",
+                          "NSRDB_15MIN",
+                          "DWD_10MIN",
+                          "ERA5",
+                          "DWD_15MIN"
                         ]
                       }
                     }

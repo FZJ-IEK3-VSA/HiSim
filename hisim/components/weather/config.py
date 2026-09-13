@@ -31,7 +31,7 @@ from typing import Any, Dict, Optional, Union
 from dataclasses_json import dataclass_json
 
 from hisim import utils
-from hisim.components.weather.calculation import WeatherDataSourceEnum
+from hisim.components.weather.calculation import WeatherDataSourceEnum, WeatherSourceFiles
 from hisim.config import ConfigBase, ComponentID, FactContribution, constructor, preset
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
@@ -554,6 +554,67 @@ class WeatherConfig(ConfigBase):
                 utils.get_input_directory(), "weather", directory, subdirectory, file_stem
             ),
             data_source=data_source if data_source is not None else catalogue_source,
+            predictive_control=False,
+        )
+
+    @constructor(note="a weather file this repository does not ship, named by path and reader")
+    @classmethod
+    def for_data_file(
+        cls,
+        name: str,
+        path: str,
+        data_source: WeatherDataSourceEnum,
+    ) -> "WeatherConfig":
+        """Builds the weather of a data file that is not one of the catalogue's shipped sets.
+
+        :meth:`for_location` covers the stations of :class:`LocationEnum` and the time series that
+        come with them. A file obtained anywhere else — a re-export for a country the catalogue does
+        not carry, a measured year, a scenario data set — has no catalogue entry, and minting one per
+        file would turn every path anyone ever reads into a permanent enum member. So here the file
+        *is* the identifier: its path and the reader that understands its format, which are exactly
+        the two things a catalogue entry would otherwise have supplied.
+
+        The file has to exist, and it is named with its extension: a path that is there now but spelt
+        wrong fails at the first timestep with a reader's own error rather than here, where the
+        configuration can still say which file it looked for.
+
+        What is *stored* is not always what was named, because the readers disagree about it.
+        ``DWD_TRY`` and ``NSRDB`` open ``<source_path>.dat`` themselves — and a ``DWD_TRY`` station
+        may have a ``.csv`` beside the ``.dat`` — so for those two the stored path is the stem and a
+        trailing ``.dat`` or ``.csv`` comes off. The four sub-hourly readers (``NSRDB_15MIN``,
+        ``DWD_10MIN``, ``DWD_15MIN``, ``ERA5``) open the stored path as it stands and need the
+        extension kept. Which source does which is written down once, in
+        :attr:`hisim.components.weather.calculation.WeatherSourceFiles.SUFFIXES`, and read from there
+        rather than restated here.
+
+        The ``location`` of the result is the file's own stem. It is a label — it names the region a
+        run is reported under and it goes into :meth:`identity`, hence into the cache keys of every
+        component sized from the weather — and for a file outside the catalogue the only honest label
+        the call carries is the file's name.
+
+        Args:
+            name: Instance name of the component being configured; it becomes its identity.
+            path: The weather file as it lies on this machine, extension included.
+            data_source: The reader that understands the file's format.
+
+        Returns:
+            A configuration reading that file.
+
+        Raises:
+            ValueError: If ``path`` names no file.
+        """
+        if not os.path.isfile(path):
+            raise ValueError(f"Weather data file not found: {path}")
+        appended_suffixes = WeatherSourceFiles.SUFFIXES.get(data_source, ())
+        reader_appends_an_extension = any(suffix for suffix in appended_suffixes)
+        source_path = path
+        if reader_appends_an_extension and source_path.lower().endswith((".dat", ".csv")):
+            source_path = source_path[: -len(".dat")]
+        return cls(
+            component_id=ComponentID(name=name),
+            location=os.path.splitext(os.path.basename(path))[0],
+            source_path=source_path,
+            data_source=data_source,
             predictive_control=False,
         )
 

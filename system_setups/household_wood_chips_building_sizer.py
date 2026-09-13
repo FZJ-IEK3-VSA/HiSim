@@ -494,7 +494,7 @@ def setup_function(
 
     # The scenario hash names this run; post-processing reads it off the simulator as the
     # pyam "scenario" column.
-    my_sim.scenario_name = f"{scenario_hash_string}"
+    my_sim.scenario_name = scenario_hash_string
 
     if my_simulation_parameters.result_directory == "":
 

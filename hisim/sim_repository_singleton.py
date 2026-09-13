@@ -17,9 +17,11 @@ key means one thing per simulation and the collision cannot occur.
 uses it legitimately, for a value that really is process-wide.
 
 Migration: new code must not use the singleton repository at all. The retirement is under way and
-`SingletonDictKeyEnum` has no members left: every key was deleted or moved on 2026-09-12, and what
-remains of this module is ``SingletonMeta``, which :mod:`hisim.result_path_provider` borrows. The
-module goes as soon as that metaclass has a home of its own.
+`SingletonDictKeyEnum` has no members left: every key was deleted or moved on 2026-09-12. What the
+module still holds is the deprecated `SingletonSimRepository`, the now empty `SingletonDictKeyEnum`
+— neither of which production code reaches any more — and ``SingletonMeta``, which
+:mod:`hisim.result_path_provider` borrows. The two deprecated classes go with the module, as soon
+as that metaclass has a home of its own.
 
 The Weather's eight full-year series (outside temperature, diffuse horizontal, direct normal,
 direct normal extra and global horizontal irradiance, azimuth, apparent zenith, wind speed), which

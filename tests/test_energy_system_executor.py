@@ -18,6 +18,7 @@ Each test states the failure mode it catches.
 
 # clean
 
+import time
 from pathlib import Path
 from typing import ClassVar
 
@@ -25,10 +26,13 @@ import pytest
 
 from hisim.energy_system.errors import EnergySystemFormatError
 from hisim.energy_system.executor import (
+    EnergySystemExecutor,
     SimulationParametersReader,
     build_energy_system,
     run_energy_system,
 )
+from hisim.energy_system.groups import expand_groups
+from hisim.energy_system.loader import parse_energy_system
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 from tests.test_energy_system_classes import ExpectedFailures
@@ -49,6 +53,14 @@ class Fixtures:
     #: The gas-boiler household: the one mockup whose classes are all converted, and therefore
     #: the one that runs end to end today.
     MINIMAL: ClassVar[Path] = MOCKUPS / "energy_system_mockup_minimal.yaml"
+
+    #: A grouped file: it leaves one decision open, which is what makes the run's name more
+    #: than the file's name.
+    GROUPED: ClassVar[Path] = (
+        Path(__file__).resolve().parent.parent
+        / "energy_systems"
+        / "household_gas_building_sizer.grouped.energy_system.yaml"
+    )
 
     #: One January day at a quarter-hour resolution, asking only for the result table.
     PARAMETERS: ClassVar[Path] = (
@@ -136,16 +148,97 @@ def test_a_declarative_run_carries_the_file_name_and_description_as_run_metadata
 ) -> None:
     """Catches a declarative run losing the name its own file gives it.
 
-    The scenario name is what post-processing writes into the pyam "scenario" column, and the
-    description is what lands in ``scenario.json``. A Python setup has to assemble both by hand,
-    and until the run metadata left the process-global singleton only twelve building-sizer
-    setups ever did, so a declarative run was anonymous. The file states both, so the executor
-    reads them off it.
+    The scenario name is what post-processing writes into the pyam "scenario" column and into
+    ``scenario.json``, and the description is what lands beside it. A Python setup has to
+    assemble both by hand — the twelve building-sizer setups write the scenario name, the
+    Python entry point the description — so before the run metadata left the process-global
+    singleton a declarative run was anonymous. The file states both, so the executor reads
+    them off it.
+
+    Both values are the file's own, written out here rather than compared with the model the
+    executor read them from: an assertion against ``model.description`` would hold no matter
+    what the reader put there, including nothing.
     """
     built = build_energy_system(Fixtures.MINIMAL, Fixtures.parameters(tmp_path))
 
-    assert built.simulator.scenario_name == built.model.name == "Gas boiler household"
-    assert built.simulator.description == built.model.description
+    assert built.simulator.scenario_name == "Gas boiler household"
+    assert built.simulator.description == (
+        "Single-family house with a condensing gas boiler, floor heating and grid electricity."
+    )
+    # The executor normalizes a file without a description to "", so the model's own value is
+    # the same string only through that normalization.
+    assert built.simulator.description == (built.model.description or "")
+
+
+@pytest.mark.base
+def test_two_runs_in_one_process_each_carry_their_own_name_and_description(
+    tmp_path: Path,
+) -> None:
+    """Catches the second run of a process inheriting the first one's name.
+
+    This is the failure the move off the process-global repository was made for: one dictionary
+    held one scenario name for the whole program, so a caller building two systems — a parameter
+    study, a test session, the web tool — published the second under the first one's name. The
+    two systems here are the same mockup under two names, which is the sharpest form of the
+    question: nothing but the metadata differs, so nothing but the metadata can explain a
+    difference in what the two transfer objects carry.
+    """
+    model = parse_energy_system(Fixtures.MINIMAL)
+    names = [
+        ("First household", "The first of two systems built in one process."),
+        ("Second household", "The second of two systems built in one process."),
+    ]
+    transfers = []
+    for index, (name, description) in enumerate(names):
+        parameters = Fixtures.parameters(tmp_path / f"run_{index}")
+        executor = EnergySystemExecutor(
+            model=model.model_copy(update={"name": name, "description": description}),
+            simulation_parameters=parameters,
+            source_directory=str(Fixtures.MINIMAL.parent),
+            source_filename=Fixtures.MINIMAL.stem,
+        )
+        built = executor.build()
+        empty_line = [0.0] * len(built.simulator.all_outputs)
+        transfers.append(
+            built.simulator.prepare_post_processing(
+                all_result_lines=[empty_line] * parameters.timesteps,
+                start_counter=time.perf_counter(),
+            )
+        )
+
+    assert [transfer.scenario_name for transfer in transfers] == ["First household", "Second household"]
+    assert [transfer.description for transfer in transfers] == [
+        "The first of two systems built in one process.",
+        "The second of two systems built in one process.",
+    ]
+
+
+@pytest.mark.base
+def test_a_variant_selection_is_part_of_the_name_the_run_publishes() -> None:
+    """Catches two selections of one grouped file publishing under one scenario name.
+
+    A grouped file describes a family of systems, and a variant is the decision that picks one
+    of them. Naming the run after the file alone would file the battery household and the
+    directly metered one under the same scenario, where a scenario evaluation sums them into
+    one row — silently, because both runs succeed.
+    """
+    model = parse_energy_system(Fixtures.GROUPED)
+    expanded, expansion = expand_groups(model)
+
+    assert model.variants["electricity_management"].selected == "ems_with_battery"
+    assert EnergySystemExecutor.scenario_name_of(expanded, expansion) == (
+        "household_gas_building_sizer [electricity_management=ems_with_battery]"
+    )
+
+
+@pytest.mark.base
+def test_a_file_without_variants_is_named_by_its_name_alone() -> None:
+    """Catches a file that decides nothing growing an empty bracket on its name."""
+    model = parse_energy_system(Fixtures.MINIMAL)
+    expanded, expansion = expand_groups(model)
+
+    assert not expansion.selections
+    assert EnergySystemExecutor.scenario_name_of(expanded, expansion) == "Gas boiler household"
 
 
 @pytest.mark.base

@@ -23,6 +23,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PYTHON_SETUP = str(
     REPO_ROOT / "system_setups" / "household_gas_building_sizer.py"
 )
+#: A setup whose occupancy reads the shipped predefined profile, so that a test of the run's
+#: metadata does not depend on the local load-profile generator running.
+HERMETIC_PYTHON_SETUP = str(
+    REPO_ROOT / "system_setups" / "basic_household.py"
+)
 MODULE_CONFIG = str(
     REPO_ROOT
     / "hisim"
@@ -53,19 +58,23 @@ def test_initialize_from_python_without_optional_arguments():
 def test_the_scenario_name_and_the_description_reach_post_processing(tmp_path):
     """The run's two pieces of metadata travel on the simulator, not through a global.
 
-    The scenario name is written by the setup function — the building-sizer setups hash their
-    configuration into one — and the description by this entry point, from the first line of the
-    setup module's docstring. Post-processing reads both off the transfer object: the scenario
-    name becomes the pyam "scenario" column, the description lands in ``scenario.json``. Until
-    2026-09-12 both went through the process-global ``SingletonSimRepository``, where a second
-    simulation in the same process inherited the first one's name.
+    The description is written by this entry point, from the first line of the setup file, and
+    the scenario name by the setup function — the building-sizer setups hash their configuration
+    into one. ``basic_household`` names no scenario at all, which is the second thing pinned
+    here: a run nobody named is named after its module file, so that its rows do not reach a
+    scenario evaluation anonymous. Post-processing reads both off the transfer object: the
+    scenario name becomes the pyam "scenario" column and the ``name`` of ``scenario.json``, the
+    description the ``description`` beside it.
+
+    Both values are written out rather than compared with the simulator's own attributes, which
+    ``prepare_post_processing`` copies: such a comparison holds whatever the two carry.
     """
     parameters = SimulationParameters.one_day_only(2021, 60)
     parameters.result_directory = str(tmp_path / "results")
-    simulator = hisim_main.initialize_from_python(PYTHON_SETUP, my_simulation_parameters=parameters)
+    simulator = hisim_main.initialize_from_python(HERMETIC_PYTHON_SETUP, my_simulation_parameters=parameters)
 
-    assert simulator.description == "Basic household new system setup."
-    assert simulator.scenario_name, "the setup function named no scenario"
+    assert simulator.description == "Basic household system setup. Shows how to set up a standard system."
+    assert simulator.scenario_name == "", "this setup is the one that names no scenario"
 
     empty_line = numpy.zeros(len(simulator.all_outputs))
     ppdt = simulator.prepare_post_processing(
@@ -73,8 +82,8 @@ def test_the_scenario_name_and_the_description_reach_post_processing(tmp_path):
         start_counter=time.perf_counter(),
     )
 
-    assert ppdt.scenario_name == simulator.scenario_name
-    assert ppdt.description == "Basic household new system setup."
+    assert ppdt.scenario_name == "basic_household"
+    assert ppdt.description == "Basic household system setup. Shows how to set up a standard system."
 
 
 @pytest.mark.base

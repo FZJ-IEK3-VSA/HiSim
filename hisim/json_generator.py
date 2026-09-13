@@ -467,11 +467,24 @@ def remove_automatic_connections(my_sim: "Simulator", scenario: Scenario, unique
     log.information(f"Removed {removed} automatic connections from JSON output.")
 
 
-def write_standalone_scenario_json(module_filename: str, my_sim: "Simulator", desc: str, path: str) -> None:
-    """Write the scenario JSON file based on the components and connections of the simulator."""
+def write_standalone_scenario_json(
+    module_filename: str, my_sim: "Simulator", desc: str, path: str, scenario_name: str = ""
+) -> None:
+    """Write the scenario JSON file based on the components and connections of the simulator.
 
-    # Get prettified name for the scenario from the module filename
-    nice_name = module_filename.replace("_", " ").capitalize()
+    Args:
+        module_filename: Name of the module that ran, used to name the scenario when the run
+            carries no name of its own.
+        my_sim: The simulator whose components and connections are written out.
+        desc: The run's description.
+        path: Where the file goes.
+        scenario_name: The name the run gave itself — the pyam "scenario" column — so that the
+            two artifacts of one run agree on what the run is called; a name prettified from
+            the module filename when the run has none.
+    """
+
+    # The run's own name, or — for a run that never named itself — a prettified module filename
+    nice_name = scenario_name or module_filename.replace("_", " ").capitalize()
 
     scenario = Scenario(
         name=nice_name,

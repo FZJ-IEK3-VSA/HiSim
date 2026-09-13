@@ -81,7 +81,7 @@ Proposed amendment, concretely worded: **(A1)** *A rating-suffixed preset does n
 | Config class (module) | Proposed presets (canonical first) | Replaces factory | AUTO fields | Rule flags / notes |
 |---|---|---|---|---|
 | `EMSConfig` (`controller_l2_energy_management_system.py`) | `optimize_own_consumption` | `get_default_config_ems` | — | Already converted; `strategy` field is commented "more or less obsolete" — the preset name and the field duplicate each other |
-| `ElectricityMeterConfig` (`electricity_meter.py`) | `standard` | `get_electricity_meter_default_config` | — | rule 5 clean; spelling `get_<x>_default_config` |
+| `ElectricityMeterConfig` (`electricity_meter.py`) | `standard` | *(factory deleted 2026-09-12, B1, #728 — only `preset_standard` remains)* | — | rule 5 clean; the deleted factory used the spelling `get_<x>_default_config` |
 | `GasMeterConfig` (`gas_meter.py`) | `gas` | `get_gas_meter_default_config` | — | Parameterised by `gas_loadtype: lt.LoadTypes = GAS`; a second carrier would give `biogas` |
 | `FuelMeterConfig` (`fuel_meter.py`) | `oil`, `pellets`, `wood_chips` | `get_fuel_meter_default_config` | — | One factory, three real carriers via `fuel_loadtype` + heating value; presets replace the parameter (rule 4 gives `oil` singular, `pellets` plural) |
 | `HeatingMeterConfig` (`heating_meter.py`) | `standard` | `get_heating_meter_default_config` | — | rule 5 clean |
@@ -192,7 +192,7 @@ Lookup-shaped classes: an identifier keys an external table (enum, JSON, CSV, li
 | `get_default_config_<variant>` | 14 | `get_default_config_chp`, `get_default_config_fuelcell`, `get_default_config_const_power`, `get_default_config_heat_source_controller_dhw` |
 | `get_scaled_<x>` | 12 | `get_scaled_battery`, `get_scaled_pv_system`, `get_scaled_advanced_hp_lib`, `get_scaled_conventional_pellet_boiler_config` |
 | `get_default_<x>` (no `_config`) | 10 | `get_default_pv_system`, `get_default_thermal_storage`, `get_default_transformer`, `get_default_german_single_family_home` |
-| `get_<x>_default_config` | 5 | `get_electricity_meter_default_config`, `get_gas_meter_default_config`, `get_sumbuilder_default_config` |
+| `get_<x>_default_config` | 4 | `get_gas_meter_default_config`, `get_fuel_meter_default_config`, `get_sumbuilder_default_config` |
 | `config_<x>` | 4 | `config_rsoc` (×2), `config_electrolyzer`, `config_fuel_cell` |
 | `control_<x>` | 2 | `control_electrolyzer`, `control_fuel_cell` |
 | `get_config_<x>` | 1 | `get_config_based_on_building_efficiency` |

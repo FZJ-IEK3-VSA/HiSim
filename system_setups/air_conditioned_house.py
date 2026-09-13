@@ -222,7 +222,7 @@ def setup_function(
     # Every electricity-balance KPI is derived from a meter: without one, the grid exchange is unknown
     # and the self-sufficiency chain in kpi_preparation.py has nothing to work from.
     my_electricity_meter = electricity_meter.ElectricityMeter(
-        config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
+        config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_electricity_meter.add_component_input_and_connect(

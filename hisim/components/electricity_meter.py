@@ -54,25 +54,6 @@ class ElectricityMeterConfig(ConfigBase):
     # subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: Optional[float]
 
-    @classmethod
-    def get_electricity_meter_default_config(
-        cls,
-        name: str = "ElectricityMeter",
-        component_id: Optional[ComponentID] = None,
-    ) -> "ElectricityMeterConfig":
-        """Gets a default ElectricityMeter."""
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        return ElectricityMeterConfig(
-            component_id=component_id,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-        )
-
     @preset
     @classmethod
     def preset_standard(cls, name: str) -> "ElectricityMeterConfig":

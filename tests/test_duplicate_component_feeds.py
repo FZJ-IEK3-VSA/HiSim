@@ -12,13 +12,10 @@ outputs of one source, and one output going to two different components, are bot
 
 # clean
 
-import dataclasses
-
 import pytest
 
 from hisim import loadtypes as lt
 from hisim.component import ComponentInput
-from hisim.config import ComponentID
 from hisim.dynamic_component import DuplicateComponentFeedError
 from hisim.components.electricity_meter import ElectricityMeter, ElectricityMeterConfig
 from hisim.simulationparameters import SimulationParameters
@@ -26,13 +23,9 @@ from hisim.simulationparameters import SimulationParameters
 
 def make_meter(name: str = "ElectricityMeter") -> ElectricityMeter:
     """Build an electricity meter to wire things into."""
-    config = dataclasses.replace(
-        ElectricityMeterConfig.get_electricity_meter_default_config(),
-        component_id=ComponentID(name=name),
-    )
     return ElectricityMeter(
         my_simulation_parameters=SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60),
-        config=config,
+        config=ElectricityMeterConfig.preset_standard(name),
     )
 
 

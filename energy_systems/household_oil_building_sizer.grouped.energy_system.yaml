@@ -183,12 +183,7 @@ variants:
         components:
           ElectricityMeter:
             class: hisim.components.electricity_meter.ElectricityMeter
-            config:
-              device_co2_footprint_in_kg: null
-              investment_costs_in_euro: null
-              lifetime_in_years: null
-              maintenance_costs_in_euro_per_year: null
-              subsidy_as_percentage_of_investment_costs: null
+            preset: standard
             inputs:
               - from: L2EMSElectricityController.TotalElectricityToOrFromGrid
                 tags:
@@ -235,12 +230,7 @@ variants:
         components:
           ElectricityMeter:
             class: hisim.components.electricity_meter.ElectricityMeter
-            config:
-              device_co2_footprint_in_kg: null
-              investment_costs_in_euro: null
-              lifetime_in_years: null
-              maintenance_costs_in_euro_per_year: null
-              subsidy_as_percentage_of_investment_costs: null
+            preset: standard
             inputs:
               - from: PVSystem.ElectricityOutput
                 component_type: PV

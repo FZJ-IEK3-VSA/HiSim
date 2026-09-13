@@ -410,12 +410,12 @@ def setup_function(
     # Build Heating Meter
     # The district-heating class is not converted yet, so nothing in this setup contributes the
     # meter's fuel constants and the setup states them itself, on top of the preset and before
-    # resolving. They are the legacy oil placeholders the deleted factory defaulted to -- a
-    # rounded oil heating value and an oil density, for a carrier that burns neither -- kept
-    # here so this commit changes no number.
+    # resolving. District heat burns nothing, so it has neither a heating value nor a fuel
+    # density: both are None, which is what `GenericBoilerConfig.fuel_constants` returns for
+    # this carrier and what a converted district-heating class will contribute.
     my_fuel_meter_config = fuel_meter.FuelMeterConfig.preset_standard("FuelMeter")
-    my_fuel_meter_config.heating_value_of_fuel_in_kwh_per_liter = 9.82
-    my_fuel_meter_config.fuel_density_in_kg_per_m3 = 0.83 * 1e3
+    my_fuel_meter_config.heating_value_of_fuel_in_kwh_per_liter = None
+    my_fuel_meter_config.fuel_density_in_kg_per_m3 = None
     my_fuel_meter_config = my_fuel_meter_config.resolve(
         SizingContext(energy_carrier=lt.LoadTypes.DISTRICTHEATING)
     )

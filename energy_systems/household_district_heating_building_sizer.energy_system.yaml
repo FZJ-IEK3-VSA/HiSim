@@ -94,9 +94,9 @@ components:
     class: hisim.components.fuel_meter.FuelMeter
     preset: standard
     config:
-      fuel_loadtype: DISTRICTHEATING
-      heating_value_of_fuel_in_kwh_per_liter: 9.82
-      fuel_density_in_kg_per_m3: 830.0
+      fuel_loadtype: DISTRICTHEATING # pinned: no provider of energy_carrier in this system yet
+      heating_value_of_fuel_in_kwh_per_liter: null
+      fuel_density_in_kg_per_m3: null
     inputs:
       - from: DistrictHeating.ThermalOutputDhwEnergy
         tags:

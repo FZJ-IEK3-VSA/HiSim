@@ -142,7 +142,7 @@ class PortRenaming:
     Wiring parity is normally a plain equality of names, and for every static port it stays that
     way. Dynamic ports are the exception: the imperative add-API names an aggregator's dynamic
     input after its insertion order (``Input_<source>_<field>_<n>``) and its dynamic outputs after
-    a running counter (``LoadingPowerInputForBatteryOutput15``), while the declarative path
+    the weight they dispatch on (``LoadingPowerInputForBattery_6``), while the declarative path
     derives both from the frozen templates of the format. The two names denote the same wire, so
     comparing them literally would report a difference where there is none — and dropping the
     comparison would hide a real one. This class makes the translation explicit and reviewable: a

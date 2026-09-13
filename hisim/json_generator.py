@@ -12,7 +12,6 @@ import humps
 # 1st party imports
 from hisim import log
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
 from hisim.config import ConfigBase, ComponentID
 import hisim.component as cp
 import hisim.dynamic_component as dcp
@@ -62,29 +61,6 @@ class Scenario(BaseModel):
     connections: dict[str, Any] | list[Any] | None = None
 
 
-def count_outputs_created_by_constructor(component: L2GenericEnergyManagementSystem) -> int:
-    """Count the outputs the EMS builds for itself, before any system setup adds more.
-
-    The EMS creates dynamic outputs from inside its own ``__init__``, one per
-    ``get_default_connections_from_*`` helper. Those must not be written to the scenario
-    JSON, because the JSON executor instantiates the component the same way and would end
-    up with each of them twice. Outputs a system setup appended afterwards must be written,
-    and they are exactly the ones whose ``OutputN`` index runs past this count.
-
-    The count is measured rather than assumed: a pristine instance of the same class is
-    built from the same config and its outputs are counted. ``Component.__init__`` only
-    populates the instance -- it registers nothing globally -- so the throwaway instance is
-    free of side effects. Hard-coding the number instead silently rotted once already, when
-    retiring the modular DHW heat pump removed one of the EMS helpers and shifted every
-    setup-added output down by one index.
-    """
-    pristine_instance = type(component)(
-        my_simulation_parameters=component.my_simulation_parameters,
-        config=component.ems_config,
-    )
-    return len(pristine_instance.outputs)
-
-
 # Adapted from old json_generator.py
 def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tuple[Component, list[Any], list[Any]]:
     """Converts a component to a JSON-compatible dictionary."""
@@ -104,12 +80,6 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
 
     outs = []
     ins = []
-    # Used by the EMS special case inside the output loop below; see the comment there.
-    number_of_outputs_built_by_constructor = (
-        count_outputs_created_by_constructor(component)
-        if isinstance(component, L2GenericEnergyManagementSystem)
-        else 0
-    )
     for out in component.outputs:
         if isinstance(component, DynamicComponent):
             output_matches = [
@@ -122,30 +92,29 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
                     f"Multiple dynamic outputs found for field '{out.field_name}' in component '{component.component_name}'"
                 )
             if len(output_matches) == 1:
-                match = re.search(r"Output(\d+)$", out.field_name)
-                number = int(match.group(1)) if match else 100
-
-                # Handle special case for EMS: its constructor already builds a batch of
-                # dynamic outputs (one per `get_default_connections_from_*` helper), and the
-                # JSON executor gets those back for free when it instantiates the component.
-                # Re-declaring them here would duplicate them, so only the outputs a system
-                # setup added on top of the constructor's belong in the file. The cut-off is
-                # read off a pristine instance instead of hard-coded, because it shifts
-                # whenever a default-connection helper is added or retired.
-                if isinstance(component, L2GenericEnergyManagementSystem):
-                    if number <= number_of_outputs_built_by_constructor:
-                        continue
-
-                # add_component_output has been used
                 dynamic_output = output_matches[0]
-                # Extract source_output_name from the field_name
-                match = re.match(r"^(.*?)(Output\d+)$", out.field_name)
-                if not match:
-                    raise ValueError(f"Invalid field_name format: {out.field_name}")
-                source_object_name = match.group(1)
+                # A target port the aggregator grows for itself when the executor applies its
+                # default connections is left out; writing it down would create it twice. The
+                # port says so itself -- the bookkeeping entry records that a default connection
+                # grew it -- rather than the writer rebuilding names to recognise it.
+                if dynamic_output.grown_by_a_default_connection:
+                    continue
+
+                # add_component_output has been used, and recorded the prefix it named the port
+                # from; that prefix is what the scenario JSON has to give back to it.
+                source_output_name = dynamic_output.source_output_name_prefix
+                if source_output_name is None:
+                    raise ValueError(
+                        f"The dynamic output '{out.field_name}' of '{component.component_name}' was "
+                        f"not named from a prefix and a weight, so no add_component_output call "
+                        f"describes it and the scenario JSON has nothing to write. Ports named by "
+                        f"the declarative energy-system format's dispatch templates are of that "
+                        f"kind: a run built from an energy-system file is written down by that "
+                        f"format, and the scenario JSON is the legacy path's own file."
+                    )
                 outs.append({
                     "dynamic": True,
-                    "source_output_name": source_object_name,
+                    "source_output_name": source_output_name,
                     "source_tags": dynamic_output.source_tags,
                     "source_load_type": dynamic_output.source_load_type.value,
                     "source_unit": dynamic_output.source_unit.value,

@@ -13,7 +13,6 @@ from typing import Any, List, Tuple, Optional, cast
 from collections import OrderedDict
 from dataclasses_json import dataclass_json
 import pandas as pd
-from hisim import log
 from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
@@ -195,10 +194,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     #: no channel consumes — falls to the latter. That mirrors the ranking code's existing
     #: "is this participant a battery" branch instead of inventing a new tag value for it.
     #:
-    #: One runtime lookup deliberately reads no channel: the ranking code's per-participant
-    #: dispatch-output query, whose first tag is that one participant's component type, so it
-    #: names no fixed tag set — and it reads outputs, for which no channel-key accessor exists.
-    #: A dispatch-side accessor would be a design of its own, not a near-match to force onto
+    #: Two runtime lookups deliberately read no channel: the ranking code's per-participant
+    #: dispatch-output query, and the KPI code asking which participant kind a dispatch output
+    #: steers. Both key on one participant's component type beside
+    #: :attr:`~hisim.loadtypes.InandOutputType.ELECTRICITY_TARGET`, so they name no fixed tag set
+    #: — and both read outputs, for which no channel-key accessor exists. A dispatch-side
+    #: accessor would be a design of its own, not a near-match to force onto
     #: :meth:`~hisim.dynamic_component.DynamicComponent.get_channel_inputs`.
     CHANNELS: Tuple[DynamicConnectionChannel, ...] = (
         DynamicConnectionChannel(
@@ -363,6 +364,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             output_description=f"here a description for {self.ElectricityToBuildingFromDistrictEMSOutput} will follow.",
         )
 
+        # Describing the connections creates no port. Each of these methods returns the feeds one
+        # participant class would bring and, where the controller steers that participant, the
+        # target output it would need; both are grown later, by
+        # connect_with_dynamic_connections_list, and only for a class the system setup built. The
+        # methods used to create their target outputs as a side effect of being asked, which gave
+        # every controller the ports of every device it could ever meet (F-1).
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
         self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
@@ -417,19 +424,15 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.RESIDENTS, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
                 source_weight=1,
+                target_output=dynamic_component.DynamicComponentTargetOutput(
+                    source_output_name=f"ElectricityToOrFromGridOf{occupancy_class_name}_",
+                    source_tags=[
+                        lt.ComponentType.RESIDENTS,
+                        lt.InandOutputType.ELECTRICITY_TARGET,
+                    ],
+                    output_description="Target electricity for Occupancy. ",
+                ),
             )
-        )
-        self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOf{occupancy_class_name}_",
-            source_tags=[
-                lt.ComponentType.RESIDENTS,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_component_class=occupancy_class_name,
-            source_weight=1,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for Occupancy. ",
         )
         return dynamic_connections
 
@@ -456,6 +459,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
                 source_weight=2,
+                target_output=dynamic_component.DynamicComponentTargetOutput(
+                    source_output_name=f"ElectricityToOrFromGridOfSH{more_advanced_heat_pump_class_name}_",
+                    source_tags=[
+                        lt.ComponentType.HEAT_PUMP_BUILDING,
+                        lt.InandOutputType.ELECTRICITY_TARGET,
+                    ],
+                    output_description="Target electricity for Heating Heat Pump. ",
+                ),
             )
         )
         dynamic_connections.append(
@@ -474,31 +485,15 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 # has domestic hot water preparation enabled; allow this mandatory
                 # input to remain unconnected when DHW is deactivated.
                 allow_unconnected_mandatory=True,
+                target_output=dynamic_component.DynamicComponentTargetOutput(
+                    source_output_name=f"ElectricityToOrFromGridOfDHW{more_advanced_heat_pump_class_name}_",
+                    source_tags=[
+                        lt.ComponentType.HEAT_PUMP_DHW,
+                        lt.InandOutputType.ELECTRICITY_TARGET,
+                    ],
+                    output_description="Target electricity for Heating Heat Pump. ",
+                ),
             )
-        )
-        self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOfSH{more_advanced_heat_pump_class_name}_",
-            source_tags=[
-                lt.ComponentType.HEAT_PUMP_BUILDING,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_component_class=more_advanced_heat_pump_class_name,
-            source_weight=2,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for Heating Heat Pump. ",
-        )
-        self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOfDHW{more_advanced_heat_pump_class_name}_",
-            source_tags=[
-                lt.ComponentType.HEAT_PUMP_DHW,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_component_class=more_advanced_heat_pump_class_name,
-            source_weight=3,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for Heating Heat Pump. ",
         )
         return dynamic_connections
 
@@ -523,6 +518,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
                 source_weight=2,
+                target_output=dynamic_component.DynamicComponentTargetOutput(
+                    source_output_name=f"ElectricityToOrFromGridOfSH{electric_heater_class_name}_",
+                    source_tags=[
+                        lt.ComponentType.ELECTRIC_HEATING_SH,
+                        lt.InandOutputType.ELECTRICITY_TARGET,
+                    ],
+                    output_description="Target electricity for electric heater space heating.",
+                ),
             )
         )
         dynamic_connections.append(
@@ -537,32 +540,15 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
                 source_weight=3,
+                target_output=dynamic_component.DynamicComponentTargetOutput(
+                    source_output_name=f"ElectricityToOrFromGridOfDHW{electric_heater_class_name}_",
+                    source_tags=[
+                        lt.ComponentType.ELECTRIC_HEATING_DHW,
+                        lt.InandOutputType.ELECTRICITY_TARGET,
+                    ],
+                    output_description="Target electricity for electric heater domestic hot water.",
+                ),
             )
-        )
-
-        self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOfSH{electric_heater_class_name}_",
-            source_tags=[
-                lt.ComponentType.ELECTRIC_HEATING_SH,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_component_class=electric_heater_class_name,
-            source_weight=2,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for electric heater space heating.",
-        )
-        self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOfDHW{electric_heater_class_name}_",
-            source_tags=[
-                lt.ComponentType.ELECTRIC_HEATING_DHW,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_component_class=electric_heater_class_name,
-            source_weight=3,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for electric heater domestic hot water.",
         )
         return dynamic_connections
 
@@ -610,19 +596,15 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
                 source_weight=4,
+                target_output=dynamic_component.DynamicComponentTargetOutput(
+                    source_output_name=f"ElectricityToOrFromGridOf{solar_thermal_class_name}_",
+                    source_tags=[
+                        lt.ComponentType.SOLAR_THERMAL_SYSTEM,
+                        lt.InandOutputType.ELECTRICITY_TARGET,
+                    ],
+                    output_description="Target electricity for solar thermal domestic hot water.",
+                ),
             )
-        )
-        self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOf{solar_thermal_class_name}_",
-            source_tags=[
-                lt.ComponentType.SOLAR_THERMAL_SYSTEM,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_component_class=solar_thermal_class_name,
-            source_weight=4,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for solar thermal domestic hot water.",
         )
 
         return dynamic_connections
@@ -931,34 +913,41 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         elif self.temperature_residence>self.min_comfortable_temperature_residence and self.temperature_residence<self.max_comfortable_temperature_residence:
         """
 
-    def dispatches_to_component_type(self, field_name: str, component_type: lt.ComponentType) -> bool:
-        """Reports whether one of this controller's outputs is the dispatch target of a given kind.
+    def dispatch_target_component_type(self, field_name: str) -> Optional[lt.ComponentType]:
+        """Reports which kind of participant one of this controller's outputs dispatches to.
 
-        The controller's own monitoring outputs are named after the participant's class, so a KPI
-        can find them by looking for that class name in the field name. A *dispatch* target is
-        different: it is created by whoever wired the participant in, and the two wiring paths name
-        it differently — a Python setup passes a prefix it builds from the class name, while an
-        energy-system file derives ``DispatchTo<instance>_<input>`` from the participant's instance
-        name. Sniffing for a class name therefore finds the target on one path and misses it on the
-        other, which would make the same system report one KPI fewer depending on how it was built.
+        The KPIs below are each the grid share of one participant's dispatch, so they have to be
+        able to tell the dispatch targets apart. A target's *name* cannot do that: it is chosen by
+        whoever wired the participant in, and the two wiring paths choose differently — a Python
+        setup passes a prefix it builds from the source class name, while an energy-system file
+        derives ``DispatchTo<instance>_<input>`` from the participant's instance name. Sniffing for
+        a class name therefore finds the target on one path and misses it on the other, which made
+        the same house report fewer KPIs when it was built from a file than from a setup function.
 
-        What both paths do agree on is the tags the dispatch output carries, because those come
-        from the channel and the participant's component type rather than from any name. Matching
-        on them is what makes this KPI independent of the wiring path.
+        What both paths do agree on is the tags the target carries, because those come from the
+        channel and from the participant's component type rather than from any name — and they
+        are what :meth:`sort_source_weights_and_components` looks these very ports up by when it
+        dispatches to them. Reading the tags is what makes these KPIs independent of the wiring
+        path.
 
         Args:
             field_name: Name of the output being classified.
-            component_type: The participant kind the dispatch would be steering.
 
         Returns:
-            True if that output is this controller's electricity target for such a participant.
+            The component type this output is the electricity target of, or None if the output is
+            not one of this controller's electricity targets at all.
         """
         for dynamic_output in self.my_component_outputs:
             if dynamic_output.source_output_field_name != field_name:
                 continue
             tags = dynamic_output.source_tags
-            return component_type in tags and lt.InandOutputType.ELECTRICITY_TARGET in tags
-        return False
+            if lt.InandOutputType.ELECTRICITY_TARGET not in tags:
+                return None
+            for tag in tags:
+                if isinstance(tag, lt.ComponentType):
+                    return tag
+            return None
+        return None
 
     def get_component_kpi_entries(
         self,
@@ -973,161 +962,70 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         solar_thermal_system_class_name = solar_thermal_system.SolarThermalSystem.get_classname()
         electric_car_charger_class_name = controller_l1_generic_ev_charge.L1Controller.get_classname()
 
+        # What each participant draws from the grid, keyed by the component type its electricity
+        # target carries — the same key the dispatch itself steers by — and not by the class name
+        # one of the two wiring paths happens to spell into the port's name. The value is the KPI's
+        # name and the name of the source component it is reported for.
+        kpi_by_dispatch_target = {
+            lt.ComponentType.HEAT_PUMP_BUILDING: (
+                "Space heating heat pump electricity from grid",
+                more_advanced_heat_pump_class_name,
+            ),
+            lt.ComponentType.HEAT_PUMP_DHW: (
+                "Domestic hot water heat pump electricity from grid",
+                more_advanced_heat_pump_class_name,
+            ),
+            lt.ComponentType.RESIDENTS: (
+                "Residents' electricity consumption from grid",
+                occupancy_class_name,
+            ),
+            lt.ComponentType.ELECTRIC_HEATING_SH: (
+                "Space heating electric heater electricity from grid",
+                electric_heater_class_name,
+            ),
+            lt.ComponentType.ELECTRIC_HEATING_DHW: (
+                "Domestic hot water electric heater electricity from grid",
+                electric_heater_class_name,
+            ),
+            lt.ComponentType.SOLAR_THERMAL_SYSTEM: (
+                "Domestic hot water solar thermal system electricity from grid",
+                solar_thermal_system_class_name,
+            ),
+            lt.ComponentType.CAR_BATTERY: (
+                "Electric car electricity consumption from grid",
+                electric_car_charger_class_name,
+            ),
+        }
+
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.component_name:
+            if output.component_name != self.component_name or output.unit != lt.Units.WATT:
+                continue
+            dispatch_target = self.dispatch_target_component_type(output.field_name)
+            if dispatch_target is None or dispatch_target not in kpi_by_dispatch_target:
+                continue
+            kpi_name, name_of_source_component = kpi_by_dispatch_target[dispatch_target]
 
-                if more_advanced_heat_pump_class_name in output.field_name and output.unit == lt.Units.WATT:
-                    if "SH" in output.field_name:
-                        sh_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
-                            postprocessing_results.iloc[:, index] < 0.0
-                        ]
-                        sh_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
-                            KpiHelperClass.compute_total_energy_from_power_timeseries(
-                                power_timeseries_in_watt=sh_electricity_from_grid_in_watt_series,
-                                time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
-                            )
-                        )
-                        # make kpi entry
-                        sh_heatpump_electricity_from_grid_entry = KpiEntry(
-                            name="Space heating heat pump electricity from grid",
-                            unit="kWh",
-                            value=sh_heatpump_electricity_from_grid_in_kilowatt_hour,
-                            tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
-                            description=self.component_name,
-                            name_of_source_component=more_advanced_heat_pump_class_name,
-                        )
-                        list_of_kpi_entries.append(sh_heatpump_electricity_from_grid_entry)
-
-                    elif "DHW" in output.field_name:
-                        dhw_hp_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
-                            postprocessing_results.iloc[:, index] < 0.0
-                        ]
-                        dhw_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
-                            KpiHelperClass.compute_total_energy_from_power_timeseries(
-                                power_timeseries_in_watt=dhw_hp_electricity_from_grid_in_watt_series,
-                                time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
-                            )
-                        )
-                        dhw_heatpump_electricity_from_grid_entry = KpiEntry(
-                            name="Domestic hot water heat pump electricity from grid",
-                            unit="kWh",
-                            value=dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
-                            tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
-                            description=self.component_name,
-                            name_of_source_component=more_advanced_heat_pump_class_name,
-                        )
-                        list_of_kpi_entries.append(dhw_heatpump_electricity_from_grid_entry)
-                    else:
-                        log.warning(f"No DHW oder SH named in output {output.field_name} of {output.component_name}")
-
-                elif occupancy_class_name in output.field_name and output.unit == lt.Units.WATT:
-                    occupancy_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
-                        postprocessing_results.iloc[:, index] < 0.0
-                    ]
-
-                    occupancy_electricity_from_grid_in_kilowatt_hour = abs(
-                        KpiHelperClass.compute_total_energy_from_power_timeseries(
-                            power_timeseries_in_watt=occupancy_electricity_from_grid_in_watt_series,
-                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
-                        )
-                    )
-                    occupancy_electricity_from_grid_entry = KpiEntry(
-                        name="Residents' electricity consumption from grid",
-                        unit="kWh",
-                        value=occupancy_electricity_from_grid_in_kilowatt_hour,
-                        tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
-                        description=self.component_name,
-                        name_of_source_component=occupancy_class_name,
-                    )
-                    list_of_kpi_entries.append(occupancy_electricity_from_grid_entry)
-
-                elif electric_heater_class_name in output.field_name and output.unit == lt.Units.WATT:
-                    if "SH" in output.field_name:
-                        sh_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
-                            postprocessing_results.iloc[:, index] < 0.0
-                        ]
-                        sh_heater_electricity_from_grid_in_kilowatt_hour = abs(
-                            KpiHelperClass.compute_total_energy_from_power_timeseries(
-                                power_timeseries_in_watt=sh_electricity_from_grid_in_watt_series,
-                                time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
-                            )
-                        )
-                        # make kpi entry
-                        sh_heater_electricity_from_grid_entry = KpiEntry(
-                            name="Space heating electric heater electricity from grid",
-                            unit="kWh",
-                            value=sh_heater_electricity_from_grid_in_kilowatt_hour,
-                            tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
-                            description=self.component_name,
-                            name_of_source_component=electric_heater_class_name,
-                        )
-                        list_of_kpi_entries.append(sh_heater_electricity_from_grid_entry)
-                    elif "DHW" in output.field_name:
-                        dhw_heater_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
-                            postprocessing_results.iloc[:, index] < 0.0
-                        ]
-                        dhw_heater_electricity_from_grid_in_kilowatt_hour = abs(
-                            KpiHelperClass.compute_total_energy_from_power_timeseries(
-                                power_timeseries_in_watt=dhw_heater_electricity_from_grid_in_watt_series,
-                                time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
-                            )
-                        )
-                        dhw_heater_electricity_from_grid_entry = KpiEntry(
-                            name="Domestic hot water electric heater electricity from grid",
-                            unit="kWh",
-                            value=dhw_heater_electricity_from_grid_in_kilowatt_hour,
-                            tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
-                            description=self.component_name,
-                            name_of_source_component=electric_heater_class_name,
-                        )
-                        list_of_kpi_entries.append(dhw_heater_electricity_from_grid_entry)
-                    else:
-                        log.warning(f"No DHW oder SH named in output {output.field_name} of {output.component_name}")
-
-                elif solar_thermal_system_class_name in output.field_name and output.unit == lt.Units.WATT:
-                    dhw_st_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
-                        postprocessing_results.iloc[:, index] < 0.0
-                    ]
-                    dhw_st_electricity_from_grid_in_kilowatt_hour = abs(
-                        KpiHelperClass.compute_total_energy_from_power_timeseries(
-                            power_timeseries_in_watt=dhw_st_electricity_from_grid_in_watt_series,
-                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
-                        )
-                    )
-                    dhw_st_electricity_from_grid_entry = KpiEntry(
-                        name="Domestic hot water solar thermal system electricity from grid",
-                        unit="kWh",
-                        value=dhw_st_electricity_from_grid_in_kilowatt_hour,
-                        tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
-                        description=self.component_name,
-                        name_of_source_component=solar_thermal_system_class_name,
-                    )
-                    list_of_kpi_entries.append(dhw_st_electricity_from_grid_entry)
-
-                elif (
-                    self.dispatches_to_component_type(output.field_name, lt.ComponentType.CAR_BATTERY)
-                    and output.unit == lt.Units.WATT
-                ):
-                    electric_car_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
-                        postprocessing_results.iloc[:, index] < 0.0
-                    ]
-
-                    electric_car_electricity_from_grid_in_kilowatt_hour = abs(
-                        KpiHelperClass.compute_total_energy_from_power_timeseries(
-                            power_timeseries_in_watt=electric_car_electricity_from_grid_in_watt_series,
-                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
-                        )
-                    )
-                    electric_car_electricity_from_grid_entry = KpiEntry(
-                        name="Electric car electricity consumption from grid",
-                        unit="kWh",
-                        value=electric_car_electricity_from_grid_in_kilowatt_hour,
-                        tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
-                        description=self.component_name,
-                        name_of_source_component=electric_car_charger_class_name,
-                    )
-                    list_of_kpi_entries.append(electric_car_electricity_from_grid_entry)
+            # A negative dispatch is what the participant had to take from the grid.
+            electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
+                postprocessing_results.iloc[:, index] < 0.0
+            ]
+            electricity_from_grid_in_kilowatt_hour = abs(
+                KpiHelperClass.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=electricity_from_grid_in_watt_series,
+                    time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
+                )
+            )
+            list_of_kpi_entries.append(
+                KpiEntry(
+                    name=kpi_name,
+                    unit="kWh",
+                    value=electricity_from_grid_in_kilowatt_hour,
+                    tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
+                    description=self.component_name,
+                    name_of_source_component=name_of_source_component,
+                )
+            )
 
         # add all source weights to KPIs
         for index, input_sorted in enumerate(self.inputs_sorted):

@@ -197,6 +197,9 @@ discharging 24.06 → 0.0, grid cost 59.83 → 62.09 €, **62 of 108 KPIs moved
 Fixed by making a dispatch block ask the aggregator for a *signal* at `(tags, weight)` rather than for a
 port: it adopts the port the aggregator already publishes and grows a derived one only when there is none.
 New guard `EF-2B` (ambiguous dispatch signal), following the `EF-25` precedent.
+*(2026-09-12: adoption is gone with the constructor-published ports it existed for — see P4 F-1. A file's
+dispatch block always grows its own port, and a signal an aggregator somehow still publishes is refused by
+the same `EF-2B` instead of taken over.)*
 
 **A diagnosis that was wrong, recorded because the wrong version is instructive.** The first reading blamed
 the recorder for writing `dispatch: {}` on a feed whose dispatch output nothing reads, and concluded the

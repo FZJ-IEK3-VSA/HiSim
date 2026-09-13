@@ -265,7 +265,10 @@ def setup_function(
     my_sim.add_component(my_building, connect_automatically=True)
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    # Mode, households and cache directory stay explicit fields rather than for_household()
+    # arguments: the constructor also clears name_of_predefined_loadprofile once the generator
+    # computes the household, and that name is part of the recorded occupancy identity.
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_standard("UTSPConnector")
     my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_LOCAL_LPG
     my_occupancy_config.household = lpg_households
     my_occupancy_config.cache_dir_path = cache_dir_path_utsp

@@ -87,7 +87,7 @@ def test_house(
     )
     # Build Occupancy
     my_occupancy_config = (
-        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_standard("UTSPConnector")
     )
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters

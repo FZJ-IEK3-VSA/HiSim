@@ -27,7 +27,7 @@ all lpg household profiles and do calculation with it.
 
 #     # Build occupancy
 #     my_occupancy_config = (
-#         loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+#         loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_standard("UTSPConnector")
 #     )
 
 #     my_occupancy_config.cache_dir_path = cache_dir_path

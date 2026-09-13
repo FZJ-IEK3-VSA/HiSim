@@ -119,7 +119,7 @@ def test_the_occupancy_identity_says_more_than_the_household_name() -> None:
     nowhere); the profile filepath routes to different files in predefined-profile mode. Both change
     what the run produces, so both must move the identity.
     """
-    baseline = UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    baseline = UtspLpgConnectorConfig.preset_standard("UTSPConnector")
     with_other_guid = dataclasses.replace(baseline, guid="another-request")
     with_other_file = dataclasses.replace(baseline, predefined_loadprofile_filepaths="/data/special_profile.csv")
 
@@ -153,7 +153,7 @@ def test_a_pv_key_moves_when_the_weather_does_and_a_building_key_too() -> None:
 @pytest.mark.base
 def test_a_car_key_moves_when_the_occupancy_does() -> None:
     """Changing the occupancy changes the car key."""
-    baseline = UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    baseline = UtspLpgConnectorConfig.preset_standard("UTSPConnector")
     other = dataclasses.replace(baseline, guid="another-seed")
     car = CarConfig.for_household(name="Car", household_name="CHR01", car_name="Small_Car")
 
@@ -193,7 +193,7 @@ def test_the_engine_binds_the_occupancy_identity_from_the_contribution() -> None
     """
     from hisim.config.engine import resolve_all  # pylint: disable=import-outside-toplevel
 
-    occupancy = UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    occupancy = UtspLpgConnectorConfig.preset_standard("UTSPConnector")
     car = CarConfig.for_household(name="Car", household_name="CHR01", car_name="Small_Car")
     assert car.occupancy_identity is AUTO
 

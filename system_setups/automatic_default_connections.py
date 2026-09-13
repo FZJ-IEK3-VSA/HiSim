@@ -76,7 +76,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_standard("UTSPConnector")
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )

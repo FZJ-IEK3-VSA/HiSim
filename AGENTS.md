@@ -12,14 +12,15 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
 
 ## Pull requests and merging
 
+- Push a branch as soon as its work is built and verified, and open its pull request at once. Nothing stays on one machine — a crash loses nothing, and the review bots start while the next branch is being written.
+- All open pull requests form one linear stack, whether or not they depend on each other. A new PR targets the head branch of the current stack top, never `main` directly; `main` is the target only when the stack is empty.
+- The stack order is the merge order. Nobody reorders it.
+- Only the bottom PR targets `main`, so only it has CI: the workflows run for pull requests against `main`. Every other PR gets its one CI run when its turn comes and it is retargeted.
 - Never add an entry to `HISTORY.rst` in a pull request. The history is assembled at release; `CONTRIBUTING.rst` says the same.
-- Every pull request gets exactly one CI run per version of its head, and the owner merges by hand at roughly one PR per half hour. The cost to avoid is fan-out: a merge that triggers a rebase and a rerun on every other open PR.
-- Independent work goes on a sibling branch off `main`, never stacked. Stack only on a real dependency — the child's code needs the parent's.
-- A stacked PR targets its parent branch, so it gets no CI until its turn: the workflows run only for pull requests against `main`.
-- After a merge, touch nothing else. No rebase, no push of other open PRs, unless GitHub reports an actual conflict on one. A PR whose CI ran against a slightly older `main` is still mergeable.
-- When a parent merges, handle only the next PR in the stack: rebase it onto main (`git rebase --onto origin/main <old parent head> <branch>`), push once, let its one CI run finish, merge. The rebase at its turn is not optional — `main` receives the parent as a squash, and a child cut before the parent's late fix commits would silently revert them on merge.
+- After a merge, touch nothing except the next PR in the stack. No rebase, no push of any other open PR, unless GitHub reports an actual conflict on one.
+- Handling that next PR: rebase it onto main (`git rebase --onto origin/main <old parent head> <branch>`), push once, let its one CI run finish, merge. The rebase is not optional — `main` received the parent as a squash, and a child cut before the parent's late fix commits would silently revert them on merge.
 - Delete the merged PR's head branch from the merge screen's own button, immediately. GitHub then retargets the child PR to `main`. Deleting the branch later, from the branches page, closes the child PR instead — it cannot be reopened, and a new PR has to be created.
-- Review fixes land as new commits on the PR branch, never by amending a pushed commit. Fix commits on a parent are what make the rebase above necessary for its children.
+- Review fixes land as new commits on the PR branch, never by amending a pushed commit. A fix commit on a parent is what makes the child's rebase necessary.
 - Test only what changed: the targeted pytest files, and the CI lint invocations on the changed files. Never the full suite in a fix loop.
 
 ## Test commands

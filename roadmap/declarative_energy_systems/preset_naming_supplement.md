@@ -3,7 +3,7 @@
 **Date:** 2026-08-25 · **Status:** survey for P1 Q-P1.9 (`roadmap/declarative_energy_systems/p1_sizing_kernel_requirements.md` §11)
 **Scope:** every config class under `hisim/components/` (incl. `hisim/components/building/`).
 
-**Method and counts.** Enumerated all 65 modules in `hisim/components/` plus `hisim/components/building/{config,building,information,window}.py`; grepped `^class .*Config`, then every `get_default_*` / `get_scaled_*` / `get_config_*` / `config_*` / `control_*` / `read_config` classmethod and read the signature and the constructed-field block of each with `sed`. Cross-checked actual usage with `grep -o '\.get_[a-z_]*('` over `system_setups/*.py` (25 setups) and `tests/*.py` to fix the canonical preset per class (rule 3). Found **88 config classes**, **103 factory classmethods** in **79 distinct spellings** (plus 9 `read_config` static readers), of which **12** are `get_scaled_*`, **19** are a bare `get_default_config`, and **17** config classes have **no factory at all**. 10 classes are lookup-shaped (an identifier keys a JSON/CSV/enum table) rather than variant-shaped.
+**Method and counts.** Enumerated all 65 modules in `hisim/components/` plus `hisim/components/building/{config,building,information,window}.py`; grepped `^class .*Config`, then every `get_default_*` / `get_scaled_*` / `get_config_*` / `config_*` / `control_*` / `read_config` classmethod and read the signature and the constructed-field block of each with `sed`. Cross-checked actual usage with `grep -o '\.get_[a-z_]*('` over `system_setups/*.py` (25 setups) and `tests/*.py` to fix the canonical preset per class (rule 3). Found **88 config classes**, **103 factory classmethods** in **79 distinct spellings** (plus 9 `read_config` static readers), of which **12** are `get_scaled_*`, **19** are a bare `get_default_config`, and **17** config classes have **no factory at all**. Those totals stand at **98** classmethods in **71 spellings** today; the difference is the factories the rows below record as deleted. 10 classes are lookup-shaped (an identifier keys a JSON/CSV/enum table) rather than variant-shaped.
 
 ## Verdict on the convention
 
@@ -32,7 +32,7 @@ Proposed amendment, concretely worded: **(A1)** *A rating-suffixed preset does n
 
 | Config class (module) | Proposed presets (canonical first) | Replaces factory | AUTO fields | Rule flags / notes |
 |---|---|---|---|---|
-| `GenericBoilerControllerConfig` (`generic_boiler.py`) | `modulating`, `on_off`, `pellets`, `wood_chips` | `get_default_modulating_generic_boiler_controller_config`, `get_default_on_off_generic_boiler_controller_config`, `get_default_pellet_controller_config`, `get_default_wood_chip_controller_config` | `maximal_thermal_power_in_watt`, `minimal_thermal_power_in_watt` | Mixed axes: two control laws + two fuels (§conflict 2). Canonical `modulating` (6 setup uses) |
+| `GenericBoilerControllerConfig` (`generic_boiler.py`) | `modulating`, `on_off` | *(all four deleted 2026-09-12, B1, #729 — only `preset_modulating` and `preset_on_off` remain)* | `maximal_thermal_power_in_watt`, `minimal_thermal_power_in_watt` | Mixed axes resolved against §conflict 2: the two control laws became the two presets, the two fuels did **not**. `pellets` and `wood_chips` were never minted — the fuel moves only `minimum_runtime_in_seconds` and `minimum_resting_time_in_seconds`, which the two fuel setups now write at the call site on top of `on_off`. Canonical `modulating` (8 of the 11 sites) |
 | `DistrictHeatingControllerConfig` (`generic_district_heating.py`) | `standard` | `get_default_district_heating_controller_config` | — | flags `with_domestic_hot_water_preparation`, `parallel_space_heating_and_dhw_option` → A2 |
 | `ElectricHeatingControllerConfig` (`generic_electric_heating.py`) | `standard` | `get_default_electric_heating_controller_config`, `get_electric_heating_config_based_on_building_efficiency` | `specific_heating_load_of_building_in_watt_per_m2`-derived fields | Second factory is the *sizable* form of the first, not a variant (§conflict 3) |
 | `HeatPumpHplibControllerL1Config` (`advanced_heat_pump_hplib.py`) | `standard` | `get_default_generic_heat_pump_controller_config` | `heat_distribution_system_type` | `mode: int = 2` is a magic number, not a variant — keep as field |
@@ -52,7 +52,7 @@ Proposed amendment, concretely worded: **(A1)** *A rating-suffixed preset does n
 | Config class (module) | Proposed presets (canonical first) | Replaces factory | AUTO fields | Rule flags / notes |
 |---|---|---|---|---|
 | `HeatDistributionConfig` (`heat_distribution_system.py`) | `standard` | `get_default_heat_distribution_config` | `water_mass_flow_rate_in_kg_per_second`, `absolute_conditioned_floor_area_in_m2`, `heating_system` | Already `standard` on `config_presets`; rule 5 clean |
-| `HeatDistributionControllerConfig` (`heat_distribution_system.py`) | `standard` | `get_default_heat_distribution_controller_config`, `get_config_based_on_building_efficiency` | `heating_load_of_building_in_watt`, `set_heating_temperature_for_building_in_celsius`, `set_cooling_temperature_for_building_in_celsius`, `heating_system` | Two factories = unsized/sized pair (§conflict 3); `heating_system` law is the Q-P1.8 case |
+| `HeatDistributionControllerConfig` (`heat_distribution_system.py`) | `standard` | *(both deleted — `get_default_heat_distribution_controller_config` on 2026-09-11 with D-11, `get_config_based_on_building_efficiency` on 2026-09-12, B1, #730 — only `preset_standard` remains)* | `heating_load_of_building_in_watt`, `set_heating_temperature_for_building_in_celsius`, `set_cooling_temperature_for_building_in_celsius`, `heating_system` | The unsized/sized pair of §conflict 3 collapsed into one preset plus `resolve(SizingContext(…))`: the sized factory's step table is the class's `HEATING_THRESHOLD_LAW`; `heating_system` law is still the Q-P1.8 case |
 | `SetTemperatureConfig` (`dual_circuit_system.py`) | `standard` | *(none)* | — | Plain dataclass, not a `ConfigBase`, not a component config — held by `DiverterValve`. Needs one preset or exemption |
 
 ## Storages
@@ -108,7 +108,7 @@ Proposed amendment, concretely worded: **(A1)** *A rating-suffixed preset does n
 
 | Config class (module) | Proposed presets (canonical first) | Replaces factory | AUTO fields | Rule flags / notes |
 |---|---|---|---|---|
-| `UtspLpgConnectorConfig` (`loadprofilegenerator_utsp_connector.py`) | `standard` + constructor | `get_default_utsp_connector_config` | — | Q-P1.6 decision; `household`, `travel_route_set`, `transportation_device_set`, `charging_station_set` are all LPG `JsonReference` identifier spaces |
+| `UtspLpgConnectorConfig` (`loadprofilegenerator_utsp_connector.py`) | `standard` + constructor | *(factory deleted 2026-09-12, B1, #731 — `preset_standard` and `for_household` remain)* | — | Q-P1.6 decision; `household`, `travel_route_set`, `transportation_device_set`, `charging_station_set` are all LPG `JsonReference` identifier spaces |
 | `WeatherConfig` (`weather.py`) | `standard` + constructor | `get_default` | — | Q-P1.6 decision; `LocationEnum` has dozens of members. `get_default` is the only bare `get_default` spelling in the repo |
 | `BuildingConfig` (`building/config.py`) | `standard` + constructor | `get_default_german_single_family_home` | `absolute_conditioned_floor_area_in_m2`, `number_of_apartments`, `max_thermal_building_demand_in_watt` and the 5 `*_u_value_*`/`*_area_in_m2` pairs | The `config_presets` branch ships `german_single_family_home`, which contradicts the Q-P1.6 refinement (§conflict 8) |
 | `CSVLoaderConfig` (`csvloader.py`) | `standard` + constructor | *(none)* | — | No factory; every field (`csv_filename`, `column`, `loadtype`, `unit`) is caller data — a `for_csv_file(...)` constructor, not a preset (§conflict 9) |
@@ -183,11 +183,11 @@ Lookup-shaped classes: an identifier keys an external table (enum, JSON, CSV, li
 
 ## Legacy spelling inventory
 
-103 factory classmethods (excluding `get_default_connections_*`, `get_cost_capex`, `get_component_kpi_entries`) in **79 distinct spellings**:
+**98** factory classmethods (excluding `get_default_connections_*`, `get_cost_capex`, `get_component_kpi_entries`) in **71 distinct spellings** — 103 in 79 at the 2026-08-25 survey; the counts below are kept current as factories are deleted:
 
 | Pattern | Count | Examples |
 |---|---|---|
-| `get_default_<x>_config` | 34 | `get_default_condensing_gas_boiler_config`, `get_default_heat_distribution_config`, `get_default_simplehotwaterstorage_config` |
+| `get_default_<x>_config` | 28 | `get_default_condensing_gas_boiler_config`, `get_default_heat_distribution_config`, `get_default_simplehotwaterstorage_config` |
 | `get_default_config` (bare) | 19 | `advanced_battery_bslib`, `generic_pv_system`, `configuration` (×2), `generic_electrolyzer_and_h2_storage` (×2) |
 | `get_default_config_<variant>` | 14 | `get_default_config_chp`, `get_default_config_fuelcell`, `get_default_config_const_power`, `get_default_config_heat_source_controller_dhw` |
 | `get_scaled_<x>` | 12 | `get_scaled_battery`, `get_scaled_pv_system`, `get_scaled_advanced_hp_lib`, `get_scaled_conventional_pellet_boiler_config` |
@@ -195,7 +195,7 @@ Lookup-shaped classes: an identifier keys an external table (enum, JSON, CSV, li
 | `get_<x>_default_config` | 4 | `get_gas_meter_default_config`, `get_fuel_meter_default_config`, `get_sumbuilder_default_config` |
 | `config_<x>` | 4 | `config_rsoc` (×2), `config_electrolyzer`, `config_fuel_cell` |
 | `control_<x>` | 2 | `control_electrolyzer`, `control_fuel_cell` |
-| `get_config_<x>` | 1 | `get_config_based_on_building_efficiency` |
+| `get_config_<x>` | 0 | *(was `get_config_based_on_building_efficiency`, deleted 2026-09-12)* |
 | `get_default` (bare) | 1 | `WeatherConfig.get_default` |
 | `from_<x>` | 1 | `RsocConfig.from_rsoc_name` |
 | unclassifiable | 3 | `get_solar_thermal_system_controller_config`, `get_electric_heating_config_based_on_building_efficiency`, `get_air_conditioner_config_from_database` |

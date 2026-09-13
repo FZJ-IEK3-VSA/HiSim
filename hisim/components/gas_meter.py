@@ -115,26 +115,6 @@ class GasMeterConfig(ConfigBase):
             subsidy_as_percentage_of_investment_costs=None,
         )
 
-    @classmethod
-    def get_gas_meter_default_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-        gas_loadtype: lt.LoadTypes = lt.LoadTypes.GAS
-    ) -> "GasMeterConfig":
-        """Gets a default GasMeter."""
-        if component_id is None:
-            component_id = ComponentID(name="GasMeter")
-        return GasMeterConfig(
-            component_id=component_id,
-            gas_loadtype=gas_loadtype,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-        )
-
 
 class GasMeter(DynamicComponent):
     """Gas meter class.

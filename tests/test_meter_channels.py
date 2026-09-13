@@ -32,7 +32,7 @@ from hisim.component import Component, ComponentOutput, SingleTimeStepValues
 from hisim.components.fuel_meter import FuelMeter, FuelMeterConfig
 from hisim.components.gas_meter import GasMeter, GasMeterConfig
 from hisim.components.heating_meter import HeatingMeter
-from hisim.config import ComponentID, ConfigBase, DisplayConfig
+from hisim.config import ComponentID, ConfigBase, DisplayConfig, SizingContext
 from hisim.config.channels import PortTypeCompatibility
 from hisim.energy_system.channel_matching import ChannelMatcher
 from hisim.energy_system.channels import FeedRequest
@@ -195,8 +195,8 @@ class MeterFixtures:
         """
         return GasMeter(
             my_simulation_parameters=cls.parameters(),
-            config=GasMeterConfig.get_gas_meter_default_config(
-                component_id=ComponentID(name=cls.METER_NAME), gas_loadtype=gas
+            config=GasMeterConfig.preset_standard(cls.METER_NAME).resolve(
+                SizingContext(energy_carrier=gas)
             ),
         )
 

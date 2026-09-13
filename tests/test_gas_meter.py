@@ -200,7 +200,9 @@ def test_house(
     )
 
     # Build Gas Meter
-    my_gas_meter_config = gas_meter.GasMeterConfig.get_gas_meter_default_config()
+    my_gas_meter_config = gas_meter.GasMeterConfig.preset_standard("GasMeter").resolve(
+        SizingContext(energy_carrier=my_gas_heater_config.energy_carrier)
+    )
     my_gas_meter = gas_meter.GasMeter(
         my_simulation_parameters=my_simulation_parameters,
         config=my_gas_meter_config,

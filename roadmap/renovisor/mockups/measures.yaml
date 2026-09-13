@@ -1,0 +1,397 @@
+# measures.yaml
+# Generated from spreadsheet and adapted manually.
+#
+# Conventions:
+# - display_name is unique and serves as the identifier.
+# - category and subcategory use natural language.
+# - value_type is inferred from the spreadsheet structure.
+# - Comments mark places where information appears incomplete or ambiguous.
+#
+# ---------------------------------------------------------------------------
+# CHECKED IN VERBATIM as received on 2026-09-13, so that
+# `roadmap/renovisor/measures_v2_requirements.md` has a fixed text to be about.
+# It is the RenoVisor side's document, not HiSim's: do not edit it here. When a
+# newer revision arrives, replace this file wholesale and re-check the counts in
+# §4 of the requirements document.
+#
+# Two files this one refers to are NOT in this repository and were not available
+# when the requirements document was written: `dependencies.yaml` (which measures
+# may follow which state) and the revision of `openapi.yaml` these comments cite
+# — the copy beside this directory is v0.3.0-draft of 2026-08-27 and predates
+# `worst_window_glazing_panes`, `hvo_heating`, the snake_case
+# `heat_distribution_system` values and the `ventilation_system` block.
+# ---------------------------------------------------------------------------
+
+measures:
+
+  - display_name: external insulation
+    category: building envelope measures
+    subcategory: wall insulation
+    options:
+      - name: material
+        access_level: Everyone
+        value_type: enum
+        values: [EPS, XPS]
+
+      - name: thickness_in_mm
+        access_level: Experts
+        value_type: integer
+
+  - display_name: internal dry lining insulation
+    category: building envelope measures
+    subcategory: wall insulation
+    options:
+      - name: material
+        access_level: Everyone
+        value_type: enum
+        values:
+          - Thermal Laminate drylining board
+          - Mineral wool
+
+      - name: thickness_in_mm
+        access_level: Experts
+        value_type: integer
+
+  - display_name: add internal dry lining
+    category: building envelope measures
+    subcategory: fabric measures
+    options:
+
+  - display_name: cavity wall insulation
+    category: building envelope measures
+    subcategory: wall insulation
+    options:
+      - name: thickness_in_mm
+        access_level: Experts
+        value_type: integer
+
+  - display_name: window replacement
+    category: building envelope measures
+    subcategory: openings
+    options:
+      # Panes of glass in the new window, so it is directly comparable with the
+      # building's worst_window_glazing_panes. Single glazing is not offered: it is
+      # not something anyone installs today.
+      - name: glazing_panes
+        access_level: Everyone
+        value_type: integer
+        values: [2, 3]
+
+  - display_name: outside shading
+    category: building envelope measures
+    subcategory: openings
+    options: []
+
+  - display_name: door replacement
+    category: building envelope measures
+    subcategory: openings
+    options:
+      # Same scale as the window option, with 0 for a solid door: many doors carry no
+      # glass at all, and counting its panes as zero keeps numeric rules honest — a
+      # rule asking for at least 2 panes then excludes a solid door rather than
+      # silently skipping it, as a separate "is it glazed" flag would.
+      - name: glazing_panes
+        access_level: Everyone
+        value_type: integer
+        values: [0, 2, 3]
+
+  # This insulates the ceiling of the basement, good if basement not heated.
+  - display_name: basement ceiling insulation
+    category: building envelope measures
+    subcategory: floor insulation
+    options:
+      - name: material
+        access_level: Everyone
+        value_type: enum
+        values: [EPS Foam, Mineral Wool]
+
+      - name: thickness_in_mm
+        access_level: Experts
+        value_type: integer
+
+  - display_name: basement internal insulation
+    category: building envelope measures
+    subcategory: floor insulation
+    options:
+
+  # Always might require damp proof course
+  - display_name: basement external insulation
+    category: building envelope measures
+    subcategory: floor insulation
+    options:
+      - name: material
+        access_level: Everyone
+        value_type: enum
+        values: [EPS Foam, Mineral Wool]
+
+      - name: thickness_in_mm
+        access_level: Experts
+        value_type: integer
+
+  # This is for a solid concrete slab floor (Bodenplatte): Heated room, concrete slab, ground.
+  - display_name: solid ground floor insulation
+    category: building envelope measures
+    subcategory: floor insulation
+    options:
+      - name: material
+        access_level: Everyone
+        value_type: enum
+        values: [Liquid Insulation, EPS Foam]
+
+      - name: thickness_in_mm
+        access_level: Experts
+        value_type: integer
+
+  # This is for timber suspended floors: Heated room, timber floor, ventilated crawl space, ground.
+  - display_name: suspended ground floor insulation
+    category: building envelope measures
+    subcategory: floor insulation
+    options:
+      - name: material
+        access_level: Everyone
+        value_type: enum
+        values: [EPS Foam, Mineral Wool]
+
+      - name: thickness_in_mm
+        access_level: Experts
+        value_type: integer
+
+      # No values list: `boolean` already fixes the domain, as `integer` does above.
+      # Spelling them out would also mislead — YAML reads `yes`/`no` as the strings
+      # "yes"/"no", while an actual boolean canonicalises to "true"/"false", so the two
+      # spellings would never match each other.
+      - name: air barrier
+        access_level: Experts
+        value_type: boolean
+
+  - display_name: warm roof insulation
+    category: building envelope measures
+    subcategory: roof insulation
+    options:
+      - name: material
+        access_level: Everyone
+        value_type: enum
+        values: [PIR, mineral wool, glass wool, wood fiber]
+
+      - name: thickness_in_mm
+        access_level: Experts
+        value_type: integer
+
+  - display_name: rafter insulation
+    category: building envelope measures
+    subcategory: roof insulation
+    options:
+      - name: material
+        access_level: Everyone
+        value_type: enum
+        values: [open cell spray foam, PIR, glass wool, wood fiber]
+
+      - name: thickness_in_mm
+        access_level: Experts
+        value_type: integer
+
+  - display_name: rolled out attic insulation
+    category: building envelope measures
+    subcategory: roof insulation
+    options:
+      - name: material
+        access_level: Everyone
+        value_type: enum
+        values: [mineral wool, glass wool, wood fiber]
+
+      - name: thickness_in_mm
+        access_level: Experts
+        value_type: integer
+
+  - display_name: top floor ceiling insulation
+    category: building envelope measures
+    subcategory: roof insulation
+    options:
+
+  - display_name: ventilation system
+    category: ventilation system
+    subcategory: ventilation
+    options:
+      # The unit the building ends up with — the same vocabulary as
+      # `energy_system_config.ventilation_system.system` in openapi.yaml, for the reason
+      # given on `heating installation` above. The prose labels this list used to carry
+      # ("Demand controlled ventilation with humidity sensors and central fan (DCD)") are
+      # the descriptions in that schema field, not separate values.
+      - name: type of system
+        access_level: Everyone
+        value_type: enum
+        values:
+          - MechanicalExtract
+          - DemandControlledExtract
+          - MechanicalVentilationWithHeatRecovery
+
+# attic hatch sealing, services penetrations, window sealing
+  - display_name: shallow air tightness measures
+    category: ventilation system
+    subcategory: ventilation
+    options:
+
+  - display_name: heating system
+    category: heating system
+    subcategory: heat generator
+    options:
+      # The heat generator the building ends up with — the same vocabulary as
+      # `energy_system_config.heating_system.system` in openapi.yaml, for the reason
+      # given on `heating installation` above: an installed generator becomes a stage-0
+      # `heating system` carrying its type here.
+      #
+      # No solar thermal entry here, deliberately. `gas_solar_thermal` and
+      # `heat_pump_solar_thermal` used to be values in this list and were removed: each
+      # named a generator *plus* a collector, which made the collector expressible two
+      # ways and only alongside two of the eleven generators. A collector is its own
+      # `solar thermal system` measure below, and combines with any generator.
+      #
+      # This list is therefore wider than the set anyone would *recommend* today: it
+      # includes the fossil generators a building may already have, which are valid
+      # existing states but poor outcomes. Which of them may be newly installed is a
+      # question for dependencies.yaml, not for this list — a measure catalogue that
+      # cannot name a building's current boiler cannot express replacing it.
+      - name: type of system
+        access_level: Everyone
+        value_type: enum
+        values:
+          - heat_pump
+          - hybrid_heat_pump
+          - electric_heating
+          - biomass_heating
+          - pellet_heating
+          - woodchip_heating
+          - district_heating
+          - hvo_heating
+          - hydrogen_heating
+          - gas_heating
+          - oil_heating
+
+  - display_name: heating installation
+    category: heating system
+    subcategory: heat distribution system
+    options:
+      # The emitter the building ends up with. These are exactly the values
+      # `energy_system_config.heating_system.heat_distribution_system` may take in
+      # openapi.yaml, and that is not a coincidence: an installed distribution system
+      # becomes a stage-0 `heating installation` carrying its type as this option, so a
+      # value the inventory cannot express would be an outcome no building could start
+      # from. `surface_heating` covers underfloor, wall and ceiling circuits alike.
+      - name: type of system
+        access_level: Everyone
+        value_type: enum
+        values:
+          - surface_heating
+          - low_temperature_radiator
+          - conventional_radiator
+
+  - display_name: air conditioners
+    category: heating system
+    subcategory: a/c
+    options:
+      # Was "3-15 kW" as a single string. The unit now lives in the option name and the
+      # value is a plain number; the 3-15 kW span was a product range, not a constraint.
+      - name: power_in_watt
+        access_level: Everyone
+        value_type: integer
+
+  - display_name: hot water system
+    category: heating system
+    subcategory: domestic hot water
+    options:
+      - name: supply
+        access_level: Everyone
+        value_type: enum
+        values:
+          - Heat pump
+          - Direct electric
+
+  - display_name: temperature control system
+    category: heating system
+    subcategory: heating control system
+    options:
+      - name: type of system
+        access_level: Everyone
+        value_type: enum
+        values:
+          - traditional thermostats
+          - smart heating control system
+
+  - display_name: replace white appliances
+    category: appliances
+    subcategory: electric appliances
+    options: []
+
+  - display_name: install new led lights
+    category: appliances
+    subcategory: electric appliances
+    options: []
+
+  - display_name: photovoltaic system
+    category: appliances
+    subcategory: renewable energy systems
+    options:
+      - name: size in percent of roof area
+        access_level: Everyone
+        value_type: integer
+
+  - display_name: battery system
+    category: appliances
+    subcategory: renewable energy systems
+    options:
+      - name: days to cover
+        access_level: Everyone
+        value_type: integer
+
+  - display_name: solar thermal system
+    category: appliances
+    subcategory: renewable energy systems
+    options:
+      # What the collector feeds. This is the distinction that decides whether the
+      # measure interacts with the heating system at all: a dhw-only collector is by far
+      # the common case and touches nothing about space heating, while one that also
+      # feeds the heating circuit does. `used_for_space_heating` / `used_for_dhw` in
+      # openapi.yaml are the two booleans this enumerates, minus the both-false case,
+      # which would be a collector heating nothing.
+      #
+      # Sized in openapi.yaml by `collector_area_in_m2` rather than here: unlike the PV
+      # measure's roof-area percentage, collector area is set by the hot-water demand,
+      # not by how much roof is free.
+      - name: supplies
+        access_level: Everyone
+        value_type: enum
+        values:
+          - dhw_only
+          - space_heating_only
+          - dhw_and_space_heating
+
+  - display_name: electric vehicle
+    category: appliances
+    subcategory: electric transportation
+    options:
+      - name: number
+        access_level: Everyone
+        value_type: integer
+
+  - display_name: change room temperature
+    category: behaviour measures
+    subcategory: comfort changes
+    options:
+      - name: new room temperature
+        access_level: Everyone
+        value_type: integer
+
+  - display_name: diy sealing of air leaks
+    category: behaviour measures
+    subcategory: diy measures
+    options: []
+
+  - display_name: thermocover for the windows
+    category: behaviour measures
+    subcategory: diy measures
+    options: []
+
+  - display_name: optimize behaviour for self-consumption of PV
+    category: behaviour measures
+    subcategory: behaviour changes
+    options: []

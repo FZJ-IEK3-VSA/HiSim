@@ -1,0 +1,951 @@
+openapi: 3.1.0
+
+info:
+  title: RenoVisor API
+  version: 0.3.0-draft
+  description: |
+    Co-owned contract between the frontend and backend teams. This is a draft
+    PROPOSAL for sign-off, not a finished spec.
+
+    ## Auth (v0.3)
+
+    This is a calculation service over non-PII, content-addressed inputs, so it
+    is PUBLIC by default: home-inventory lookups and creation, package
+    registration, package sets, and all calculation reads need no token, which
+    is what lets anonymous users explore. A JWT MAY still be sent and used where
+    useful (e.g. logging), but it is only REQUIRED on user-scoped account
+    endpoints such as DELETE /users/me. Changed from v0.2, where bearerAuth was
+    required globally.
+
+    ## Async model (v0.2)
+
+    Calculation results are a deterministic function of content-addressed
+    inputs: virtually, every result already exists, some just take longer to
+    materialise. So results are READ with GET, not triggered with POST:
+
+      - GET a result URL. If it is not ready you get 202 with a status
+        (queued or running). Poll the same URL.
+      - When finished you get 200 with the result. Because the input is
+        content-addressed, a finished result never changes and may be cached
+        indefinitely (Cache-Control: public, max-age=31536000, immutable).
+      - A GET lazily starts the computation on first call. The backend MUST
+        coalesce concurrent/duplicate GETs for the same hash into one job, so a
+        refresh or a link scanner cannot multiply compute.
+
+    The frontend never manages jobs; there is no /jobs endpoint. Status lives
+    on the result resource. Status vocabulary: queued, running, finished,
+    refused, failed. Errors use RFC 7807.
+
+    Response envelopes carry NO id: hi_id and pkg_id are already in the URL.
+    Finished RESULT bodies remain self-identifying (home_inventory_id,
+    package_id), because the frontend's staleness and comparison logic depends
+    on them.
+
+    ## Two-part contract
+
+    Every schema carries an `x-contract-status` tag:
+      - STABLE ENVELOPE: endpoint shapes, the status model, the error format,
+        auth, IDs, naming. Changes need sign-off from both teams.
+      - PROVISIONAL PAYLOAD: calculation result contents (kpis, costs, measures,
+        package, ...) and the home inventory field set. Owned by the backend,
+        will change as the models mature. Shapes here are placeholders.
+
+    ## Open decisions for this PR
+      - Whether `refused`/`failed` stay 200-with-status (as drafted) or map to
+        422 / 500.
+      - Whether a package hash covers only its blocks or also the `hi_id`.
+        Either is fine, but the rule MUST be identical for package-set packages
+        and user-registered packages, or dedup and comparability break.
+      - Retry-After cadence for pending responses.
+
+    ## Conventions
+      - snake_case, lowercase, for JSON fields and URL segments
+      - No trailing slashes
+      - Dates ISO 8601 (e.g. 2026-09-15T14:30:00Z)
+      - Currency always EUR; monetary fields carry an _euro suffix
+      - Units carried in field names (_mm, _kwh, _m2, _kw, _c)
+      - A /v1 prefix will be added via the server URL once stable
+
+    ## Changes since 0.1
+      - packageset / fast-estimate / detailed-simulation: POST -> GET
+      - Removed POST bodies from the calculation endpoints
+      - Removed GET /jobs/{job_id}
+      - Added POST /homeinventories/{hi_id}/packages to register a
+        user-defined package and mint its content-hash pkg_id
+      - Replaced Job/JobAccepted with CalculationStatus on the result resource
+      - Home inventories: immutable, no PATCH (resolves a contradiction in the
+        source spec document)
+
+servers:
+  - url: https://api.renovisor.example
+    description: Placeholder. Replace with the real base URL (and add /v1 later).
+
+# Public by default (see "Auth" in the description above). Individual
+# operations opt INTO auth with their own `security` block; currently only
+# DELETE /users/me does.
+security: []
+
+tags:
+  - name: landing-page
+  - name: home-inventories
+  - name: packages
+  - name: calculations
+  - name: materials
+  - name: account
+
+paths:
+  /:
+    get:
+      tags: [landing-page]
+      summary: Show the landing page
+      responses:
+        '200':
+          description: OK
+          content:
+            text/html:
+              schema: { $ref: '#/components/schemas/LandingPage' }
+  /homeinventories:
+    post:
+      tags: [home-inventories]
+      summary: Create a home inventory from full building data
+      description: Returns the content hash as the ID. Identical data returns the same ID (deduplication).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HomeInventoryInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HomeInventory' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    get:
+      tags: [home-inventories]
+      summary: List all home inventories for the current user
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/HomeInventory' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /homeinventories/{hash}:
+    parameters:
+      - $ref: '#/components/parameters/Hash'
+    get:
+      tags: [home-inventories]
+      summary: Load a home inventory (immutable, cacheable forever)
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HomeInventory' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [home-inventories]
+      summary: Delete a home inventory
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /homeinventories/from-ber:
+    post:
+      tags: [home-inventories]
+      summary: Create a home inventory from a BER number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ber]
+              properties:
+                ber: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HomeInventory' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /homeinventories/from-mprn:
+    post:
+      tags: [home-inventories]
+      summary: Create a home inventory from an MPRN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mprn]
+              properties:
+                mprn: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HomeInventory' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /homeinventories/from-address:
+    post:
+      tags: [home-inventories]
+      summary: Create a home inventory from an address
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address]
+              properties:
+                address: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HomeInventory' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /homeinventories/from-certificate:
+    post:
+      tags: [home-inventories]
+      summary: Create a home inventory from an uploaded certificate (PDF)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HomeInventory' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /homeinventories/{hi_id}/packageset:
+    parameters:
+      - $ref: '#/components/parameters/HiId'
+    get:
+      tags: [calculations]
+      summary: Read (and lazily start) the package set for a home inventory
+      description: |
+        Pure function of the home inventory, so no request body. Returns 100+
+        packages once finished; the frontend picks three to display. Poll this
+        same URL until status is terminal.
+      responses:
+        '200': { $ref: '#/components/responses/CalcTerminal' }
+        '202': { $ref: '#/components/responses/CalcPending' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /homeinventories/{hi_id}/packages:
+    parameters:
+      - $ref: '#/components/parameters/HiId'
+    post:
+      tags: [packages]
+      summary: Register a user-defined package, returning its content-hash id
+      description: |
+        Used for fine-tuning. The body is the complete set of adjustable blocks,
+        with no reference to any base package: a package's identity is a pure
+        function of its own contents. Submitting identical blocks returns the
+        same pkg_id (deduplication). The hash MUST be computed the same way as
+        for package-set packages, so an equal package collapses to the same id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PackageDefinition' }
+      responses:
+        '201':
+          description: Registered
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PackageRegistered' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /homeinventories/{hi_id}/packages/{pkg_id}/fast-estimate:
+    parameters:
+      - $ref: '#/components/parameters/HiId'
+      - $ref: '#/components/parameters/PkgId'
+    get:
+      tags: [calculations]
+      summary: Read (and lazily start) the fast estimate for a package
+      description: No body. The package is already stored under pkg_id. Poll until terminal.
+      responses:
+        '200': { $ref: '#/components/responses/CalcTerminal' }
+        '202': { $ref: '#/components/responses/CalcPending' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /homeinventories/{hi_id}/packages/{pkg_id}/detailed-simulation:
+    parameters:
+      - $ref: '#/components/parameters/HiId'
+      - $ref: '#/components/parameters/PkgId'
+    get:
+      tags: [calculations]
+      summary: Read (and lazily start) the detailed simulation for a package
+      description: No body. The package is already stored under pkg_id. Poll until terminal.
+      responses:
+        '200': { $ref: '#/components/responses/CalcTerminal' }
+        '202': { $ref: '#/components/responses/CalcPending' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /homeinventories/{hi_id}/packages/{pkg_id}/report.pdf:
+    parameters:
+      - $ref: '#/components/parameters/HiId'
+      - $ref: '#/components/parameters/PkgId'
+    get:
+      tags: [calculations]
+      summary: Download a PDF report for a package
+      responses:
+        '200':
+          description: OK
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /materials:
+    get:
+      tags: [materials]
+      summary: Full materials catalog (cacheable with ETag)
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Material' }
+
+  /materials/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [materials]
+      summary: Single material detail
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Material' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /users/me:
+    delete:
+      tags: [account]
+      summary: Delete all backend data for the current user (GDPR cascade)
+      description: Called by the frontend after deleting the Supabase user record.
+      security:
+        - bearerAuth: []
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase-issued user JWT. The backend validates it and reads user_id from it.
+
+  parameters:
+    Hash:
+      name: hash
+      in: path
+      required: true
+      description: Content hash of the home inventory.
+      schema: { type: string }
+    HiId:
+      name: hi_id
+      in: path
+      required: true
+      schema: { type: string }
+    PkgId:
+      name: pkg_id
+      in: path
+      required: true
+      schema: { type: string }
+
+  responses:
+    CalcPending:
+      description: |
+        Still computing (status queued or running). Not cacheable
+        (Cache-Control: no-store). May carry Retry-After.
+      headers:
+        Retry-After: { schema: { type: string } }
+        Cache-Control: { schema: { type: string } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/CalculationStatus' }
+    CalcTerminal:
+      description: |
+        Terminal state (status finished, refused, or failed). A finished result
+        is immutable and may be cached indefinitely
+        (Cache-Control: public, max-age=31536000, immutable).
+      headers:
+        Cache-Control: { schema: { type: string } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/CalculationStatus' }
+    Unauthorized:
+      description: Missing or invalid token
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+    Forbidden:
+      description: Valid token, wrong user
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+    ValidationError:
+      description: Structured field-level validation error
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+
+  schemas:
+
+    # ---------- STABLE ENVELOPE ----------
+
+    ProblemDetails:
+      x-contract-status: stable
+      description: RFC 7807 Problem Details.
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+    CalculationState:
+      x-contract-status: stable
+      type: string
+      enum: [queued, running, finished, refused, failed]
+
+    CalculationStatus:
+      x-contract-status: stable
+      description: |
+        Status of a calculation, read from its result URL. The envelope is
+        stable; the `result` CONTENTS are provisional and depend on the
+        endpoint (PackagesetResult for packageset, Package for the per-package
+        calculations). No id is included: it is already in the URL.
+      type: object
+      required: [status]
+      properties:
+        status: { $ref: '#/components/schemas/CalculationState' }
+        result:
+          description: Present only when status is "finished".
+          oneOf:
+            - $ref: '#/components/schemas/PackagesetResult'
+            - $ref: '#/components/schemas/Package'
+        reason:
+          type: string
+          description: Present only when status is "refused" or "failed".
+
+    PackageRegistered:
+      x-contract-status: stable
+      description: Result of registering a user-defined package.
+      type: object
+      required: [pkg_id]
+      properties:
+        pkg_id:
+          type: string
+          description: Content hash of the package definition.
+
+    Material:
+      x-contract-status: stable
+      description: Fields the frontend caches. Backend holds pricing internally.
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        category: { type: string }
+        image_url: { type: string, format: uri }
+
+    HomeInventory:
+      x-contract-status: stable
+      description: HomeInventoryInput plus its content-hash id. Immutable.
+      allOf:
+        - type: object
+          required: [id]
+          properties:
+            id:
+              type: string
+              description: Content hash of the canonicalised input.
+        - $ref: '#/components/schemas/HomeInventoryInput'
+
+    LandingPage:
+      x-contract-status: stable
+      description: HTML landing page
+      type: string
+      example: |
+        <!DOCTYPE html>
+        <html lang="de">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>RenoVisor API</title>
+            <style>
+                * { box-sizing: border-box; margin: 0; padding: 0; }
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                    background-color: #0f172a;
+                    color: #f8fafc;
+                    height: 100vh;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    overflow: hidden;
+                }
+                .container {
+                    text-align: center;
+                    padding: 2rem;
+                }
+                h1 {
+                    font-size: 2.5rem;
+                    font-weight: 700;
+                    letter-spacing: -0.05em;
+                    margin-bottom: 1rem;
+                    background: linear-gradient(to right, #38bdf8, #818cf8);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                }
+                p {
+                    font-size: 1.25rem;
+                    color: #94a3b8;
+                    font-weight: 400;
+                }
+                .code-accent {
+                    font-family: monospace;
+                    background-color: #1e293b;
+                    padding: 0.2rem 0.5rem;
+                    border-radius: 0.25rem;
+                    border: 1px solid #334155;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>RenoVisor API</h1>
+                <p><span class="code-accent">There is nothing here.</span></p>
+                <p><span class="code-accent">Use the API endpoints.</span></p>
+            </div>
+        </body>
+        </html>
+
+
+    # ---------- PROVISIONAL PAYLOAD (backend-owned, will change) ----------
+    HomeInventoryInput:
+      x-contract-status: provisional
+      description: Editable building data. Exact field set is an open item.
+      type: object
+
+      properties:
+
+        location:
+          type: object
+          description: |
+            Where the building is. Selects the climate/weather file, the
+            location-derived heating reference temperature, and the country
+            prefix of the TABULA building_code. (snake_cased from Noah's Fable RenoVisor
+            calc-contract's camelCase location block.)
+          properties:
+            country_code: { type: string, examples: [IE], description: "ISO 3166-1 alpha-2 country code. Drives climate/weather selection and the country prefix of the TABULA building_code." }
+            region: { type: string, examples: [Dublin], description: "Optional. Refines the weather file / climate zone within the country." }
+            eircode_or_postcode: { type: string, examples: ["D14 AB12"], description: "Optional. Finer localisation (future: address lookup)." }
+
+        building_config:
+          type: object
+          properties:
+
+            general:
+              type: object
+              properties:
+                tabula_building_type: { type: string, examples: [SFH], description: "Possible values: SFH, TH, MFH, AB"  }
+                building_heat_capacity_class: { type: string, examples: [medium], description: "Thermal-mass class of the building fabric. Possible values: very light, light, medium, heavy, very heavy" }
+                construction_year: { type: integer, examples: [1988] }
+                conditioned_floor_area_m2: { type: number, examples: [157] }
+                number_of_apartments: { type: integer, examples: [1] }
+                set_heating_temperature_in_celsius: { type: number, examples: [20.0] }
+                set_cooling_temperature_in_celsius: { type: number, examples: [25.0] }
+                retrofit_status: { type: string, enum: [unrenovated, usual_refurb, advanced_refurb], examples: [unrenovated], description: "Envelope refurbishment level. Maps to the TABULA building_code variant suffix: unrenovated -> .001 (existing/unrefurbished), usual_refurb -> .002 (usual refurbishment), advanced_refurb -> .003 (advanced refurbishment)." }
+                max_thermal_building_demand_in_watt: { type: number, nullable: true }
+
+            envelope_details:
+              type: object
+              properties:
+                floor_u_value_in_watt_per_m2_per_kelvin: { type: number, nullable: true }
+                floor_area_in_m2: { type: number, nullable: true }
+                facade_u_value_in_watt_per_m2_per_kelvin: { type: number, nullable: true }
+                facade_area_in_m2: { type: number, nullable: true }
+                roof_u_value_in_watt_per_m2_per_kelvin: { type: number, nullable: true }
+                roof_area_in_m2: { type: number, nullable: true }
+                window_u_value_in_watt_per_m2_per_kelvin: { type: number, nullable: true }
+                window_area_in_m2: { type: number, nullable: true }
+                door_u_value_in_watt_per_m2_per_kelvin: { type: number, nullable: true }
+                door_area_in_m2: { type: number, nullable: true }
+
+        occupancy_config:
+          type: object
+          properties:
+            residents_count: { type: integer, examples: [2] }
+            residents_type: {type: array, items: {type: string}, examples: [["adult", "adult"]], description: "Possible values: adult, kid" }
+            residents_employment_status: { type: array, items: {type: string}, examples: [["full_time", "full_time"]], description: "Possible values: full_time, half_time, unemployed, education, retired" }
+            travel_route_set: { type: string, nullable: true, examples: ["Travel Route Set for 10km Commuting Distance"], description: "Optional. Commuting-distance profile; resolved backend-side to a fixed HiSim travel-route-set reference (name + GUID). Possible values: Travel Route Set for 05km / 10km / 15km / 20km / 25km / 30km Commuting Distance" }
+
+
+        energy_system_config:
+          type: object
+          properties:
+
+            heating_system:
+              type: object
+              properties:
+                system: { type: string, examples: [OilHeating], description: "Possible values: HeatPump, ElectricHeating, OilHeating, GasHeating, PelletHeating, WoodChipHeating, DistrictHeating, HydrogenHeating, GasSolarThermal, HeatPumpSolarThermal" }
+                heatpump_flow_temperature_in_celsius: { type: number, nullable: true, examples: [52], description: "Heat-pump design flow temperature. ONLY applicable when system is HeatPump or HeatPumpSolarThermal; leave null/omit for every other system." }
+                power_in_watt: { type: number, nullable: true }
+                installation_year: { type: integer, nullable: true, examples: [2004], description: "Optional. Year the system was installed; lets the backend estimate age-based efficiency/condition." }
+                with_dhw_preparation: { type: boolean, examples: [true] }
+                heat_distribution_system: { type: string, examples: [Conventional Radiator], description: "Possible values: Conventional Radiator, Floorheating, Low Temperature Radiator" }
+
+            water_storage:
+              type: object
+              properties:
+                hot_water_storage:
+                  type: object
+                  properties:
+                    volume_in_liters: {type: number, examples: [500]}
+                    installation_year: { type: integer, nullable: true, examples: [2004], description: "Optional. Year the storage was installed; lets the backend estimate age-based condition." }
+                domestic_hot_water_storage:
+                  type: object
+                  properties:
+                    volume_in_liters: {type: number, examples: [250]}
+                    installation_year: { type: integer, nullable: true, examples: [2004], description: "Optional. Year the storage was installed; lets the backend estimate age-based condition." }
+
+            photovoltaics:
+              type: object
+              properties:
+                power_in_watt: { type: number, examples: [5000] }
+                azimuth_in_degree: { type: number, examples: [180] }
+                tilt_in_degree: { type: number, examples: [35] }
+                installation_year: { type: integer, nullable: true, examples: [2015], description: "Optional. Year the array was installed; lets the backend estimate age-based degradation." }
+                remaining_performance_in_percent: { type: number, nullable: true, examples: [92], description: "Expert option. Current output as a percent of nameplate after degradation (100 = as-new); the PV equivalent of battery state-of-health. Overrides an age-based estimate when given." }
+
+            battery_storage:
+              type: object
+              properties:
+                capacity_in_kwh: { type: number, examples: [10] }
+                power_in_watt: { type: number, nullable: true }
+                installation_year: { type: integer, nullable: true, examples: [2020], description: "Optional. Year the battery was installed; lets the backend estimate age-based capacity fade." }
+                state_of_health_in_percent: { type: number, nullable: true, examples: [90], description: "Expert option. Current usable capacity as a percent of rated capacity (100 = as-new). Overrides an age-based estimate when given." }
+
+            solar_thermal_system:
+              type: object
+              properties:
+                collector_area_in_m2: { type: number, examples: [8] }
+                azimuth_in_degree: { type: number, examples: [180] }
+                tilt_in_degree: { type: number, examples: [35] }
+                used_for_space_heating: { type: boolean, examples: [true] }
+                used_for_dhw: { type: boolean, examples: [true] }
+                installation_year: { type: integer, nullable: true, examples: [2015], description: "Optional. Year the collector was installed; lets the backend estimate age-based condition." }
+
+            vehicles:
+              type: object
+              description: |
+                Household vehicles, split by drivetrain so the two never share a
+                field set. Each list holds 0..n cars, and an entry
+                only carries the fields that apply to its own drivetrain.
+              properties:
+
+                electric_vehicles:
+                  type: array
+                  description: Battery-electric cars (0..n).
+                  items:
+                    type: object
+                    properties:
+                      model: { type: string, examples: ["EV_1"] }
+                      consumption_in_kwh_per_km: { type: number, nullable: true, examples: [0.15] }
+                      battery_capacity_in_kwh: { type: number, nullable: true, examples: [60] }
+                      construction_year: { type: integer, nullable: true, examples: [2020], description: "Optional. Year the vehicle was manufactured; lets the backend estimate age-based condition." }
+                      charging_location: { type: string, nullable: true, examples: ["home", "work", "mixed"] }
+
+                fossil_vehicles:
+                  type: array
+                  description: Combustion cars (0..n).
+                  items:
+                    type: object
+                    properties:
+                      fuel_source: { type: string, examples: [diesel], description: "What the vehicle runs on. Possible values: gasoline, diesel" }
+                      model: { type: string, examples: ["ICE_1"] }
+                      consumption_in_liter_per_km: { type: number, nullable: true, examples: [0.06] }
+                      construction_year: { type: integer, nullable: true, examples: [2014], description: "Optional. Year the vehicle was manufactured; lets the backend estimate age-based condition." }
+
+        condition_assessment:
+          type: object
+          description: |
+            Self-reported current condition of the individual building elements
+            and energy systems, collected on the scheduling page. Helps answer the
+            question: *does this component still have life
+            left in it, or is it due for replacement now?*
+
+            Every field is optional — an omitted component means "not assessed",
+            and the backend can fall back to an age-based estimate from the
+            matching `installation_year` / `construction_year`.
+          properties:
+
+            building_elements:
+              type: object
+              description: Condition of the envelope, one entry per element.
+              properties:
+                external_facade: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Outer skin: render, cladding, paintwork and any existing external wall insulation." }
+                exterior_walls: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "The load-bearing wall construction behind the facade (cracks, damp, masonry condition)." }
+                interior_walls: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Internal partition walls and surfaces." }
+                floors: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Floor construction against ground or unheated basement, including any existing insulation." }
+                attic_ceiling: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Ceiling of the top storey, if living space. Omit if attic is not livable." }
+                attic_roof: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Roof structure at rafter level: rafters, purlins, sarking." }
+                roof_covering: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "The roof surface itself: tiles/slates, underlay, flashings, gutters." }
+                windows: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Glazing and frames across the dwelling." }
+                house_door: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Main entrance door (and other external doors)." }
+
+            energy_systems:
+              type: object
+              description: |
+                Condition of the installed technical systems. Field names mirror
+                the blocks under `energy_system_config`; specify only what is
+                actually installed.
+              properties:
+                heating_system: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }] }
+                heat_distribution_system: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Radiators / underfloor circuit and pipework." }
+                hot_water_storage: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Heating buffer store." }
+                domestic_hot_water_storage: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Domestic hot-water cylinder." }
+                photovoltaics: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }] }
+                battery_storage: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }] }
+                solar_thermal_system: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }] }
+                ventilation_system: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Mechanical ventilation / MVHR unit. Omit when the dwelling is naturally ventilated." }
+                air_conditioning_system: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Air conditioning system, omit if not available." }
+
+        selected_grant_schemes:
+          type: array
+          description: |
+            Opt-in grant calculation selections. Framed as user choices, not
+            personal attributes (e.g. "Select enhanced rate for first-time
+            buyers"). Part of the content hash.
+          items:
+            $ref: '#/components/schemas/GrantScheme'
+          examples:
+            - [enhanced_rate_first_time_buyer, warmer_homes_scheme]
+            
+
+    ComponentCondition:
+      x-contract-status: provisional
+      description: |
+        Current condition of one building element or energy system, as reported
+        by the user. Drives *when* a component needs replacing: `bad` means it
+        is at the end of its service life and should be scheduled now, `medium`
+        means it is serviceable but a candidate for bundling into a nearby
+        phase, `good` means no replacement is due on condition grounds.
+      type: string
+      enum:
+        - good
+        - medium
+        - bad
+      examples: [medium]
+
+    GrantScheme:
+      x-contract-status: provisional
+      description: |
+        Country-specific grant calculation selection. These are opt-in choices
+        presented in the frontend as selections, not stored as personal
+        attributes. Ireland-first; enum will grow per country.
+      type: string
+      enum:
+        - enhanced_rate_first_time_buyer
+        - enhanced_rate_social_welfare
+        - warmer_homes_scheme
+
+    PackageDefinition:
+      x-contract-status: provisional
+      description: |
+        The complete set of user-adjustable blocks that define a package. No
+        base_package_id: identity is a pure function of these contents. This is
+        the POST body for registering a package; the same blocks also appear
+        inside a computed Package.
+      type: object
+      properties:
+        measures:
+          type: array
+          items: { $ref: '#/components/schemas/Measure' }
+        grants: { $ref: '#/components/schemas/Grants' }
+        schedule: { $ref: '#/components/schemas/Schedule' }
+        financing: { $ref: '#/components/schemas/Financing' }
+
+    Measure:
+      x-contract-status: superseded
+      description: |
+        SUPERSEDED — the authoritative schema is the discriminated union in
+        `mockups/measures.schema.yaml` (agreed in review), which replaces this
+        draft's flat shape: `thickness_mm` and `capacity_kw` gave way to
+        authoritative resulting values in the inventory's unit convention (its
+        footer F7/F8), and `alternatives` was removed (F1). The mockup is
+        pasted over this stub when the schemas are merged; kept as a stub so
+        the `$ref`s in this file stay resolvable until then.
+      type: object
+      required: [measure_id, type]
+      properties:
+        measure_id: { type: string }
+        type: { type: string, examples: [insulate] }
+
+    Grants:
+      x-contract-status: provisional
+      description: Country-specific eligibility structure is an open item.
+      type: object
+      properties:
+        selected_scheme: { type: string }
+        eligibility_criteria: { type: object, additionalProperties: true }
+
+    Schedule:
+      x-contract-status: superseded
+      description: |
+        SUPERSEDED — replaced by the `Schedule` of `mockups/measures.schema.yaml`,
+        whose phases reference `measure_id`s; the drafted `phase_order` strings
+        named nothing (mockup footer F2).
+      type: object
+      properties:
+        preferred_start: { type: string, examples: ['2026-09'] }
+
+    Financing:
+      x-contract-status: provisional
+      type: object
+      properties:
+        loan_term_years: { type: integer }
+        own_contribution_euro: { type: number }
+
+    Range:
+      x-contract-status: provisional
+      type: object
+      required: [low, normal, high]
+      properties:
+        low: { type: number }
+        normal: { type: number }
+        high: { type: number }
+
+    Kpis:
+      x-contract-status: provisional
+      type: object
+      properties:
+        energy_demand_kwh: { type: number }
+        energy_label: { type: string }
+        self_sufficiency_in_percent: {type: string}
+        emissions_kg_co2: { type: number }
+        disruption_days_by_level:
+          type: object
+          description: |
+            How long the renovation spends at each disruption level, in whole
+            days; anything shorter than a day is not modelled. 0 means the level
+            does not occur at all. If a level is absent or null, it is not known;
+            no estimate was made.
+          properties:
+            none: { type: integer, minimum: 0, nullable: true, examples: [6], description: "No invasive work - full use of property during renovations. Work stays outside the dwelling, or on plant that interrupts no room." }
+            minor: { type: integer, minimum: 0, nullable: true, examples: [12], description: "Minor internal works - dust and materials affecting use of some rooms during renovation. Every room stays usable." }
+            moderate: { type: integer, minimum: 0, nullable: true, examples: [5], description: "Moderate internal works - some rooms are not suitable for use at times during renovations. The dwelling as a whole stays habitable." }
+            major: { type: integer, minimum: 0, nullable: true, examples: [0], description: "Major internal works, whole property is not suitable for use during renovations. Alternative accommodation is needed." }
+          examples:
+            - { none: 6, minor: 12, moderate: 5, major: 0 }
+            - { none: 6, minor: 12 }
+        indoor_air_quality: { type: string, examples: ["high"], description: "Possible values are: high, medium, low"}
+        thermal_insulation_effect: { type: integer, examples: [3], description: "Possible values are: 1 (low),2,3,4,5 (high)"}
+        summer_heat_protection: { type: integer, examples: [3], description: "Possible values are: 1 (low),2,3,4,5 (high)"}
+        comfort:
+          type: object
+          properties:
+            heating: { type: string, examples: ["high"], description: "Possible values are: high, medium, low"}
+            cooling: { type: string, examples: ["high"], description: "Possible values are: high, medium, low"}
+
+    Costs:
+      x-contract-status: provisional
+      type: object
+      properties:
+        investment_costs_euro: { $ref: '#/components/schemas/Range' }
+        energy_costs_euro: { $ref: '#/components/schemas/Range' }
+        maintenance_costs_euro: { $ref: '#/components/schemas/Range' }
+        grant_euro: { $ref: '#/components/schemas/Range' }
+        monthly_net_cost_20y_euro: { $ref: '#/components/schemas/Range' }
+        monthly_net_cost_10y_euro: { $ref: '#/components/schemas/Range' }
+        payback_period_in_years: { $ref: '#/components/schemas/Range' }
+        net_present_value_in_euro: { $ref: '#/components/schemas/Range' }
+        property_value_increase_in_percent:  { $ref: '#/components/schemas/Range' }
+
+    Package:
+      x-contract-status: provisional
+      description: A computed package. Self-identifying via package_id and home_inventory_id.
+      type: object
+      required: [package_id, home_inventory_id]
+      properties:
+        package_id: { type: string }
+        package_name: { type: string }
+        home_inventory_id: { type: string }
+        measures:
+          type: array
+          items: { $ref: '#/components/schemas/Measure' }
+        grants: { $ref: '#/components/schemas/Grants' }
+        schedule: { $ref: '#/components/schemas/Schedule' }
+        financing: { $ref: '#/components/schemas/Financing' }
+        kpis: { $ref: '#/components/schemas/Kpis' }
+        costs: { $ref: '#/components/schemas/Costs' }
+
+    PackagesetResult:
+      x-contract-status: provisional
+      type: object
+      required: [home_inventory_id, packages]
+      properties:
+        home_inventory_id: { type: string }
+        packages:
+          type: array
+          items: { $ref: '#/components/schemas/Package' }

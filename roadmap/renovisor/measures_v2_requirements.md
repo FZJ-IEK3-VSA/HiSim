@@ -198,7 +198,7 @@ the TABULA `b_Transmission` value. That is fine for a slab or a basement ceiling
 checked for a suspended floor over a ventilated crawl space.
 
 **Recommendation.** Make the derivation a checked-in data table with a source per row, not
-code (§7.2, L2). If the contract later carries a U-value directly, it overrides the table row.
+code (§7.2, the materials table). If the contract later carries a U-value directly, it overrides the table.
 
 ### 5.2 PV and battery arrive as relative sizes
 
@@ -255,7 +255,7 @@ decision (§8.2, N5).
 
 The mapping of the catalogue's measures onto the five thermal elements is the same folding
 `measures.schema.yaml` note F5 did for the nine survey elements. It should become a checked-in
-table (§7.2, L1) instead of a footnote.
+the measure registry (§7.2) instead of a footnote.
 
 ### 5.4 One base file per heat generator is enough
 
@@ -343,207 +343,187 @@ variant is the inventory plus one package of stage ≥ 1 measures (§8.1, M9).
 
 ## 7. The measure→HiSim mapping
 
-This is the data structure the translation layer reads. It is the first thing to build (§10).
+This is the code the translation layer runs to turn a package into inventory changes and then
+into base-file overrides. It is plain Python, in three layers. The only YAML it reads is
+RenoVisor's own catalogue, and the only data files it owns are physics constants. An earlier
+draft of this section proposed the mapping itself as YAML tables with an interpreter; §7.4 says
+why that was dropped.
 
-### 7.1 Requirements on the structure
+### 7.1 What it has to do
 
-1. **Effects are of different kinds.** A measure may set a U-value, set an inventory field,
-   select a variant option, enable a group, choose the base file, or do nothing.
-2. **Some values must be derived.** Material + thickness → U-value; glazing panes → U-value;
-   percent of roof → watts; days → kWh.
-3. **Experts options need defaults.** 11 options are absent from most requests. Each needs a
-   default and a source.
-4. **Contributions on one element add up** (§5.3). The structure must hold what each measure
-   adds, and resolve once.
-5. **Every row must produce a translation-report status** (`requirements.md` R7).
-6. **Two vocabularies change underneath.** The catalogue is RenoVisor's file and will be
-   revised. HiSim's config field names change with every P4 batch until they freeze at P5
-   (`requirements.md` C9). The structure must survive both without a rewrite.
+1. **Apply six kinds of effect.** Set a U-value, set an inventory field, select a variant
+   option, enable a group, choose the base file, or do nothing.
+2. **Derive some values.** Material + thickness → U-value; glazing panes → U-value; percent of
+   roof → watts; days → kWh.
+3. **Default the Experts options.** 11 options are absent from most requests; each needs a
+   default with a source.
+4. **Add up contributions on one element** (§5.3): hold what each measure adds, resolve once.
+5. **Report every measure** (`requirements.md` R7): `used`, `approximated`, `defaulted`,
+   `ignored`, with the rule that produced the number.
+6. **Survive two moving vocabularies.** RenoVisor revises the catalogue; HiSim renames config
+   fields on every P4 batch until they freeze at P5 (`requirements.md` C9).
 
-### 7.2 Shape: three tables
+### 7.2 Shape: three layers
 
 ```
-measure + option values
+package (measure ids + option values)
    │
-   ├─ L1  measure_effects.yaml     one entry per measure: what it does, how each option is read
-   ├─ L2  envelope_materials.yaml  material → conductivity, default thicknesses
-   │      glazing_u_values.yaml    panes → U-value
-   ├─ compose per element (§7.3)
+   ├─ measures.py    one function per catalogue measure → effects on the INVENTORY
+   ├─ materials.py   conductivities, default thicknesses, glazing U-values (data, with sources)
+   ├─ compose        accumulate per element, resolve once            (§7.3)
    ▼
-post-measure HomeInventoryInput     (in the inventory's own units)
+post-measure HomeInventoryInput          in the inventory's own units
    │
-   ├─ L3  inventory_bindings.yaml  inventory path → component + config field in the base file
+   ├─ bindings.py    inventory path → (component, config field, value map) in the base file
    ▼
 config overrides · variant selections · group flags
 ```
 
-**Rule: L1 and L2 never name a HiSim component or config field.** Measures write the
-*inventory*. L3 alone maps inventory paths to HiSim names. A P4 rename then touches one L3 row,
-not 33 measure entries. L3 is needed anyway: it is the mapping table `requirements.md` Q3
-(recommendation b, "the contract is a façade") calls for, and the base-file parametrisation
-uses it with or without measures.
+**The rule that matters: the measure layer never names a HiSim component or config field.**
+Measures write the *inventory*; `bindings.py` alone maps inventory paths to HiSim names. A P4
+rename then changes one binding, not 33 measure functions. The bindings table is needed
+anyway — it is the façade `requirements.md` Q3 (recommendation b) asks for, and base-file
+parametrisation uses it with or without measures.
 
-The three tables have different owners and change at different rates: L1 when the catalogue
-changes, L2 when the physics data is re-sourced, L3 on every P4 batch.
+**`measures.py`** — a registry keyed by the catalogue's measure id (its `display_name` until
+N1 gives it a real id), one small function each:
 
-#### L1 — `measure_effects.yaml`
+```python
+class MeasureRegistry:
+    """Maps every catalogue measure to the function that applies it."""
 
-One entry per catalogue measure. Keyed by a slug; joined to the catalogue on `display_name`
-until the catalogue has ids (N1).
+    @staticmethod
+    def external_insulation(options: Options, out: Effects) -> None:
+        material = Materials.by_alias(options.enum("material"))
+        thickness_mm = options.integer("thickness_in_mm", default=140,
+                                       source="SEAI external wall insulation guidance, 2024")
+        out.add_thermal_resistance(Element.FACADE, material, thickness_mm)
 
-```yaml
-version: 1
-catalogue: mockups/measures.yaml
-catalogue_sha256: "…"          # detects a catalogue revision nobody re-checked
+    @staticmethod
+    def window_replacement(options: Options, out: Effects) -> None:
+        panes = options.integer("glazing_panes")
+        out.set_u_value(Element.WINDOW, Glazing.u_value_for_panes(panes))
 
-measures:
+    @staticmethod
+    def photovoltaic_system(options: Options, out: Effects) -> None:
+        share = options.integer("size in percent of roof area") / 100
+        out.set_inventory_field("energy_system_config.photovoltaics.power_in_watt",
+                                law=Laws.PV_POWER_FROM_ROOF_SHARE, argument=share,
+                                report=Report.APPROXIMATED)
+        out.enable_group("photovoltaics")
 
-  external_insulation:
-    display_name: external insulation
-    element: facade
-    effect: add_thermal_resistance
-    options:
-      material:        { kind: lookup, table: envelope_materials }
-      thickness_in_mm:
-        kind: literal
-        unit: mm
-        default: 140
-        default_source: "SEAI external wall insulation guidance, 2024"
-    report: used
+    @staticmethod
+    def solar_thermal_system(options: Options, out: Effects) -> None:
+        out.select_variant("solar_thermal", options.enum("supplies"))
 
-  window_replacement:
-    display_name: window replacement
-    element: window
-    effect: set_u_value
-    options:
-      glazing_panes:   { kind: lookup, table: glazing_u_values }
-    report: used
+    @staticmethod
+    def install_new_led_lights(options: Options, out: Effects) -> None:
+        out.no_effect(reason=Reason.NO_APPLIANCE_SUBMODEL)
 
-  photovoltaic_system:
-    display_name: photovoltaic system
-    effect: set_inventory_field
-    writes: energy_system_config.photovoltaics.power_in_watt
-    options:
-      size in percent of roof area: { kind: law, law: pv_power_from_roof_share }
-    also: { enable_group: photovoltaics }
-    report: approximated
-
-  solar_thermal_system:
-    display_name: solar thermal system
-    effect: select_variant
-    variant: solar_thermal
-    options:
-      supplies:
-        kind: enum_to_option
-        map:
-          dhw_only:              dhw_only
-          space_heating_only:    space_heating
-          dhw_and_space_heating: dhw_and_space_heating
-    report: used
-
-  change_room_temperature:
-    display_name: change room temperature
-    effect: set_inventory_field
-    writes: building_config.general.set_heating_temperature_in_celsius
-    options:
-      new room temperature: { kind: literal, unit: degree_celsius }
-    report: used
-    # L3 maps this one inventory field to both HiSim fields (§4.1)
-
-  install_new_led_lights:
-    display_name: install new led lights
-    effect: none
-    reason: no_appliance_submodel     # a code from the errors.json catalogue (R13.2.2)
-    report: ignored
+    BY_ID: ClassVar[Mapping[str, Callable[[Options, Effects], None]]] = {
+        "external insulation": external_insulation,
+        "window replacement": window_replacement,
+        # ... one entry per catalogue measure, 33 in all
+    }
 ```
 
-#### L2 — physics tables
+`Options` reads the request's option values, applies the Experts defaults, and records a
+`defaulted` report line for each default used (M7). `Effects` is the accumulator of §7.3.
 
-```yaml
-# envelope_materials.yaml
-materials:
-  eps:
-    aliases: [EPS, "EPS Foam"]
-    lambda_in_watt_per_m_per_kelvin: 0.038
-    source: "EN ISO 10456, tabulated design value"
-  mineral_wool:
-    aliases: ["Mineral wool", "Mineral Wool", "mineral wool"]
-    lambda_in_watt_per_m_per_kelvin: 0.035
-    source: "…"
+**`materials.py`** — the physics constants, each with a source. Whether this is a Python table
+or a small JSON/CSV file is a matter of repository style, not principle; HiSim keeps its other
+curated tables as data files (`cost_database/`, `subsidy_catalog/`, the TABULA CSV), so a data
+file is the consistent choice. An `aliases` list per material absorbs the catalogue's twelve
+spellings of nine materials (N2).
+
+**`bindings.py`** — inventory path → one or more HiSim targets:
+
+```python
+class Bindings:
+    """Maps inventory fields to the base-file fields they set."""
+
+    BY_PATH: ClassVar[Mapping[str, Tuple[Binding, ...]]] = {
+        "building_config.envelope_details.roof_u_value_in_watt_per_m2_per_kelvin": (
+            Binding(component="building", field="roof_u_value_in_watt_per_m2_per_kelvin"),
+        ),
+        "building_config.general.set_heating_temperature_in_celsius": (
+            Binding(component="building", field="set_heating_temperature_in_celsius"),
+            Binding(component="hds_controller", field="set_heating_temperature_for_building_in_celsius"),
+        ),
+        "energy_system_config.photovoltaics.power_in_watt": (
+            Binding(component="pv", field="power_in_watt", requires_group="photovoltaics"),
+        ),
+        "energy_system_config.heating_system.heat_distribution_system": (
+            Binding(component="hds_controller", field="heating_system",
+                    value_map={"surface_heating": "FLOORHEATING",
+                               "low_temperature_radiator": "LOW_TEMPERATURE_RADIATOR",
+                               "conventional_radiator": "RADIATOR"}),   # enums by member name
+        ),
+    }
 ```
 
-The `aliases` list absorbs the catalogue's twelve spellings of nine materials (N2) without
-waiting for the frontend to fix them.
+One inventory field may bind to several HiSim fields; the room temperature needs two (§4.1).
 
-`glazing_u_values.yaml`: `glazing_panes` → U-value, per country, from building regulations.
+### 7.3 Effects and composition
 
-#### L3 — `inventory_bindings.yaml`
+The effect types are a closed set of small frozen dataclasses. mypy checks that a measure
+function only produces these; an `assert_never` in the resolver checks that every type is
+handled.
 
-```yaml
-building_config.envelope_details.roof_u_value_in_watt_per_m2_per_kelvin:
-  - { component: building, config: roof_u_value_in_watt_per_m2_per_kelvin }
-
-building_config.general.set_heating_temperature_in_celsius:
-  - { component: building,       config: set_heating_temperature_in_celsius }
-  - { component: hds_controller, config: set_heating_temperature_for_building_in_celsius }
-
-energy_system_config.photovoltaics.power_in_watt:
-  - { component: pv, config: power_in_watt, requires_group: photovoltaics }
-
-energy_system_config.heating_system.heat_distribution_system:
-  - component: hds_controller
-    config: heating_system
-    value_map:                          # enum values are written by member name
-      surface_heating:          FLOORHEATING
-      low_temperature_radiator: LOW_TEMPERATURE_RADIATOR
-      conventional_radiator:    RADIATOR
-```
-
-One inventory field may bind to several HiSim fields (the room temperature) — the list form
-handles that.
-
-### 7.3 Effect kinds
-
-Closed set, discriminated on `effect`. An unknown kind is an error.
-
-| `effect` | Payload | Result |
+| Effect | Payload | Resolves to |
 |---|---|---|
-| `add_thermal_resistance` | element, material, thickness | a ΔR contribution to the element |
-| `set_u_value` | element, U-value | the element's new U-value |
-| `set_inventory_field` | inventory path, value or law | one inventory write |
-| `select_variant` | variant name, option name | `variants.<name>.selected` |
-| `enable_group` | group name | `groups.<name>.enabled: true` |
-| `select_base_file` | generator | which of the 11 base files |
-| `none` | reason code | no change; a translation-report line |
+| `AddThermalResistance` | element, material, thickness | a ΔR contribution to the element |
+| `SetUValue` | element, U-value | the element's new baseline U-value |
+| `SetInventoryField` | path, value or (law, argument) | one inventory write |
+| `SelectVariant` | variant, option | `variants.<name>.selected` |
+| `EnableGroup` | group | `groups.<name>.enabled: true` |
+| `SelectBaseFile` | generator | which of the 11 base files |
+| `NoEffect` | reason code | no change; a translation-report line |
 
-Resolution order within one element: apply all `set_u_value` first (replacement sets the
-baseline), then add all `add_thermal_resistance` contributions, then write the element's U-value
-once. The intermediate state is `element → (baseline U, list of ΔR)`, not `element → U`. A
-structure that stores a final U per element while measures are still being applied reproduces
-the bug in §5.3 and shows no symptom.
+The accumulator holds `element → (baseline U, list of ΔR)` until every measure has run. Then,
+per element: apply the `SetUValue` baseline if any, add every ΔR, write the U-value once. This
+is the fix for §5.3. A structure that stores a final U per element while measures are still
+being applied loses layers silently.
 
-### 7.4 Alternatives considered
+### 7.4 Why plain Python and not a YAML mapping with an interpreter
 
-| Shape | Why not |
+An earlier draft proposed the measure→effect mapping as YAML (`effect: add_thermal_resistance`,
+`kind: lookup | law | literal`, `value_map`, …) read by an interpreter. It was dropped:
+
+| Argument for YAML | Why it does not hold here |
 |---|---|
-| A Python function per measure | Conductivities and default thicknesses end up as literals in code. No domain reviewer will read them, and no check can compare them to the catalogue. Formula in code, data in tables. |
-| One flat table `(measure, option, value) → change` | Cannot hold different effect kinds, two-stage derivations, or an Experts default with a source. |
-| Annotate the base files with the measure that writes each line | Eleven copies of the mapping that drift apart. Keep such annotations as comments; do not make them the source. |
-| Add `x-writes` to `measures.yaml`, as `measures.schema.yaml` did | `measures.yaml` is RenoVisor's file and is replaced wholesale on every revision. HiSim's mapping must live in HiSim's file, keyed to theirs. |
+| Readable by a domain expert who does not read Python | The reviewers are HiSim developers. A dict of conductivities reads the same in either language. |
+| A P4 rename touches one row instead of 33 | True, but that comes from the layering (§7.2), which Python has too. |
+| CI checks catch catalogue drift and renames | The checks are needed either way (§7.5). Python gets several of them from mypy at edit time; the YAML version re-implements type checking as runtime validation. |
+| Data with a source per row | A dataclass field `source: str` is the same. |
+| A language-neutral file the C# service could read | Nothing in the contract asks for it; the translation report already says per request what was simulated. A JSON export of the registry can be generated if that ever changes. |
 
-### 7.5 Checks (CI)
+What it would have cost: a small DSL and its interpreter, documented and tested, that has to
+grow the moment a measure needs something the vocabulary lacks — which is how the previous
+`Measure` model broke when the catalogue changed. `law: pv_power_from_roof_share` would have
+been a string naming a Python function, invisible to mypy. One function per measure handles
+the odd case in three lines.
 
-1. Every measure in `measures.yaml` has exactly one L1 entry, and vice versa.
-2. Every option name and every enum value in the catalogue is handled by L1.
-3. Every material string in the catalogue resolves to exactly one L2 material via `aliases`.
-4. Every Experts option has a `default` and a `default_source`.
-5. Every inventory path L1 writes exists in `HomeInventoryInput` (`requirements.md` AC4.3).
-6. Every L3 binding resolves in every base file it applies to: the component exists, and its
-   config class has the field.
-7. Every variant and group L1 names exists in every base file it can be selected with.
+### 7.5 Checks
 
-Checks 1, 2, 6 and 7 turn "the catalogue changed" and "a component was renamed" into a failing
+mypy covers the effect types and the registry's signatures. Tests add what mypy cannot see:
+
+1. **Bijection with the catalogue.** Every `display_name` in `mockups/measures.yaml` is a key
+   in `MeasureRegistry.BY_ID`, and vice versa. A catalogue revision that adds a measure fails
+   the build.
+2. **Every option and enum value is handled.** For each measure, every option name and every
+   enum value the catalogue lists is accepted by the function (call it with each value; an
+   unknown value must raise). This catches `hvo_heating` appearing in the generator list.
+3. **Every material spelling resolves** to exactly one material via the alias table.
+4. **Every inventory path the measures write exists in `HomeInventoryInput`**
+   (`requirements.md` AC4.3) — checked against the OpenAPI schema.
+5. **Every binding resolves in every base file it applies to**: the component exists and its
+   config class has the field; every variant and group named exists. This is what catches a P4
+   rename.
+
+Checks 1, 2 and 5 turn "the catalogue changed" and "a component was renamed" into a failing
 build instead of silent drift.
+
 
 ## 8. Requirements
 
@@ -551,7 +531,7 @@ build instead of silent drift.
 
 ### 8.1 On HiSim (M)
 
-**M1 — U-value derivation is a checked-in table.** `[proposed; §5.1, §7.2 L2]`
+**M1 — U-value derivation is a checked-in table.** `[proposed; §5.1, §7.2]`
 (measure, material, thickness) → U-value and glazing panes → U-value are data files with a
 source per row. Every measure that offers `thickness_in_mm` has a default thickness. If the
 contract later supplies a U-value, it overrides the table.
@@ -574,11 +554,12 @@ inputs. Both are reported as `approximated` with the law's name.
 
 **M5 — Units are converted before the inventory is written.** `[proposed; §5.2]`
 The post-measure `HomeInventoryInput` is in the inventory's own units. No percent or day-count
-reaches L3.
+reaches the bindings.
 
-**M6 — The mapping is data in the three-table shape of §7.** `[proposed; §7]`
-L1 and L2 name no HiSim component or config field. L3 alone does. The seven checks of §7.5 run
-in CI.
+**M6 — The mapping is plain Python in the three-layer shape of §7.** `[proposed; §7]`
+A registry of one function per catalogue measure writes the inventory; a bindings table maps
+inventory paths to HiSim fields; neither the registry nor the materials table names a HiSim
+component or config field. The five tests of §7.5 run in CI.
 
 **M7 — Every Experts option has a default with a source, and omitting it is reported.**
 `[proposed; §4]` 11 options. Each default appears in the translation report as `defaulted`.
@@ -598,7 +579,7 @@ to accept it.
 **M11 — `change room temperature` writes both set-point fields.** `[proposed; §4.1]`
 `BuildingConfig.set_heating_temperature_in_celsius` and
 `HeatDistributionControllerConfig.set_heating_temperature_for_building_in_celsius`. This is an
-L3 binding with two targets.
+binding with two targets.
 
 **M12 — `hvo_heating` is a `generic_boiler` preset, not a P4 item.** `[proposed; §4.1]`
 Add an HVO fuel (emission factor, price) and a preset. Decide what `biomass_heating` maps to.
@@ -700,8 +681,10 @@ invented factor. Check (c) before committing further.
 
 0. **Fetch the current `openapi.yaml` and `dependencies.yaml`.** Everything that names an
    inventory field is provisional until then.
-1. **L1 and the checks** (§7.2, §7.5). Data plus tests, no simulation. Makes §4.1 executable.
-2. **L2 and the composition module** (M1, M2, M5). Pure, unit-tested. Covers 15 measures.
+1. **The measure registry and its tests** (§7.2, §7.5). No simulation. Makes §4.1 executable:
+   every measure either produces effects or a `NoEffect` with a reason.
+2. **The materials table and the composition step** (M1, M2, M5). Pure, unit-tested. Covers 15
+   measures.
 3. **The three `BuildingConfig` fields** (M3). Own PR; golden suites prove nothing changed.
 4. **`hvo_heating` preset and the `biomass_heating` decision** (M12). Small.
 5. **Base files for the five boiler generators**, without PV, battery, EMS or storages — what
@@ -721,5 +704,6 @@ requests.
 **Variant** — the energy-system format's exclusive switch: named options, each with its own
 components and wiring, one live.
 **Group** — the format's on/off switch for a set of components.
-**Effect** — one of the seven things a measure does (§7.3).
-**L1 / L2 / L3** — the three mapping tables (§7.2).
+**Effect** — one of the seven effect types a measure produces (§7.3).
+**Registry / bindings** — the two code layers of the mapping (§7.2): measure functions that write the
+inventory, and the table that maps inventory paths to base-file fields.

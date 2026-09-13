@@ -9,23 +9,38 @@ CRUD contract directly and hermetically, with no simulation setup required.
 The dynamic-entry dict is pre-seeded in ``__init__`` with an empty sub-dict for
 every member of :class:`lt.ComponentType`, so any real enum member (here
 ``ComponentType.PV``) is a valid key without extra setup.
+
+The last test in the file is the exception: a small Weather/occupancy/Building household, run
+end to end, that shows the same repository doing its real job -- carrying the Weather's full-year
+series from the component that computes them to the components that read them.
 """
 
 # clean
 
-from typing import Any
+from pathlib import Path
+from typing import Any, Optional
 
 import pytest
 from pytest import MarkDecorator
 
+import hisim.simulator as sim
 from hisim import loadtypes as lt
+from hisim import utils
+from hisim.components import building
+from hisim.components import loadprofilegenerator_utsp_connector
+from hisim.components import weather
 from hisim.sim_repository import SimRepository
+from hisim.simulator import SimulationParameters
 
 pytestmark: MarkDecorator = pytest.mark.base
 
 # A representative ComponentType member. ``__init__`` pre-populates an empty
 # sub-dict for every ComponentType member, so PV needs no extra setup.
 _CT: lt.ComponentType = lt.ComponentType.PV
+
+# A module path the end-to-end test hands the Simulator so it can name its result directory;
+# no such file is imported, only its directory and stem are used.
+PATH: str = "../system_setups/household_for_test_sim_repository.py"
 
 
 # --------------------------------------------------------------------------- #
@@ -175,3 +190,142 @@ def test_clear_on_fresh_empty_repo_does_not_raise() -> None:
     repo.clear()
     assert hasattr(repo, "entries") is False
     assert hasattr(repo, "dynamic_entries") is False
+
+
+# --------------------------------------------------------------------------- #
+# The repository in a real run
+# --------------------------------------------------------------------------- #
+@utils.measure_execution_time
+def test_household_run_publishes_the_weather_series_into_the_run_repository(
+    my_simulation_parameters: Optional[SimulationParameters] = None,
+) -> None:  # noqa: too-many-statements
+    """Check that a real run exchanges its whole-year series through the run's own repository.
+
+    The CRUD tests above drive :class:`SimRepository` directly; this one drives it the way a
+    simulation does. A Weather/occupancy/Building household publishes the Weather's full-year
+    series into the repository the ``Simulator`` owns, under the key names the ``Weather`` class
+    exposes, and that is where the PV system reads them. Nothing here is process-global: the
+    repository belongs to this ``Simulator`` and is cleared when its run ends.
+    """
+
+    # =========================================================================================================================================================
+    # System Parameters
+
+    # Set Simulation Parameters
+    year = 2021
+    seconds_per_timestep = 60 * 60
+
+    # =========================================================================================================================================================
+    # Build Components
+
+    # Build Simulation Parameters
+    if my_simulation_parameters is None:
+        my_simulation_parameters = SimulationParameters.one_day_only(
+            year=year, seconds_per_timestep=seconds_per_timestep
+        )
+
+    # this part is copied from hisim_main
+    path_to_be_added = str(Path(PATH).resolve().parent)
+    # Build Simulator
+
+    my_sim: sim.Simulator = sim.Simulator(
+        module_directory=path_to_be_added,
+        my_simulation_parameters=my_simulation_parameters,
+        module_filename="household_for_test_sim_repository",
+    )
+    my_sim.set_simulation_parameters(my_simulation_parameters)
+
+    # Build Weather
+    my_weather_config = weather.WeatherConfig.get_default(
+        location_entry=weather.LocationEnum.AACHEN
+    )
+    my_weather = weather.Weather(
+        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
+    )
+    # Build Building
+    my_building_config = building.BuildingConfig.preset_standard("Building")
+    my_building_config.weather_identity = my_weather_config.identity()
+    my_building = building.Building(
+        config=my_building_config, my_simulation_parameters=my_simulation_parameters
+    )
+    # Build Occupancy
+    my_occupancy_config = (
+        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    )
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
+    )
+
+    # =========================================================================================================================================================
+    # Connect Components
+
+    # Building
+    my_building.connect_input(
+        my_building.Altitude, my_weather.component_name, my_weather.Altitude
+    )
+    my_building.connect_input(
+        my_building.Azimuth, my_weather.component_name, my_weather.Azimuth
+    )
+    my_building.connect_input(
+        my_building.DirectNormalIrradiance,
+        my_weather.component_name,
+        my_weather.DirectNormalIrradiance,
+    )
+    my_building.connect_input(
+        my_building.DiffuseHorizontalIrradiance,
+        my_weather.component_name,
+        my_weather.DiffuseHorizontalIrradiance,
+    )
+    my_building.connect_input(
+        my_building.GlobalHorizontalIrradiance,
+        my_weather.component_name,
+        my_weather.GlobalHorizontalIrradiance,
+    )
+    my_building.connect_input(
+        my_building.DirectNormalIrradianceExtra,
+        my_weather.component_name,
+        my_weather.DirectNormalIrradianceExtra,
+    )
+    my_building.connect_input(
+        my_building.ApparentZenith, my_weather.component_name, my_weather.ApparentZenith
+    )
+    my_building.connect_input(
+        my_building.TemperatureOutside,
+        my_weather.component_name,
+        my_weather.TemperatureOutside,
+    )
+    my_building.connect_input(
+        my_building.HeatingByResidents,
+        my_occupancy.component_name,
+        my_occupancy.HeatingByResidents,
+    )
+
+    my_building.connect_input(
+        my_building.HeatingByDevices,
+        my_occupancy.component_name,
+        my_occupancy.HeatingByDevices,
+    )
+
+    # =========================================================================================================================================================
+    # Add Components to Simulator and run all timesteps
+
+    my_sim.add_component(my_weather)
+    my_sim.add_component(my_occupancy)
+    my_sim.add_component(my_building)
+
+    # Prepare the components explicitly first, so the per-simulation repository can be inspected:
+    # ``run_all_timesteps`` prepares them again and then clears the repository at the end of the
+    # run, which drops the very entries under test.
+    my_sim.prepare_calculation()
+    published = dict(my_sim.simulation_repository.entries)
+
+    my_sim.run_all_timesteps()
+
+    # The Weather publishes its eight full-year series into the repository the Simulator owns,
+    # which is where the PV system reads them. Two are asserted by name: indexing the key proves
+    # it is there, and a non-empty series proves the Weather genuinely pushed its computed values
+    # through rather than registering an empty entry. The count is the eight series plus the
+    # weather location the report region is read from.
+    assert len(published[weather.Weather.YEARLY_TEMPERATURE_OUTSIDE]) > 0
+    assert len(published[weather.Weather.YEARLY_AZIMUTH]) > 0
+    assert len(published) >= 9

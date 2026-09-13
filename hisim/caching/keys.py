@@ -385,7 +385,6 @@ class ProducerLayering:
         "hisim.dynamic_component",
         "hisim.simulator",
         "hisim.sim_repository",
-        "hisim.sim_repository_singleton",
         "hisim.postprocessing",
     )
 

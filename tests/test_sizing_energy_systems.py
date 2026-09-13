@@ -162,8 +162,8 @@ def simulation_for_one_timestep(
     )
 
     # Set Battery
-    my_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
-        total_pv_power_in_watt_peak=concrete(my_pv_config.power_in_watt)
+    my_battery_config = advanced_battery_bslib.BatteryConfig.preset_standard("Battery").resolve(
+        SizingContext(pv_peak_power_in_watt=concrete(my_pv_config.power_in_watt))
     )
 
     # Set DHW Storage

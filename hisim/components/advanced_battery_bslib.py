@@ -150,64 +150,6 @@ class BatteryConfig(ConfigBase):
             lifetime_in_cycles=5e3,
         )
 
-    @classmethod
-    def get_default_config(cls, component_id: Optional[ComponentID] = None, name: str = "Battery") -> "BatteryConfig":
-        """Returns default configuration of battery."""
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        custom_battery_capacity_generic_in_kilowatt_hour = (
-            10  # size/capacity of battery should be approx. the same as default pv power
-        )
-        config = BatteryConfig(
-            component_id=component_id,
-            # https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
-            custom_battery_capacity_generic_in_kilowatt_hour=round(custom_battery_capacity_generic_in_kilowatt_hour, 2),
-            custom_pv_inverter_power_generic_in_watt=round(10 * 0.5 * 1e3, 2),  # c-rate is 0.5C (0.5/h) here
-            source_weight=1,
-            system_id="SG1",
-            charge_in_kwh=0,
-            discharge_in_kwh=0,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            lifetime_in_cycles=5e3,  # estimated value , source: https://pv-held.de/wie-lange-haelt-batteriespeicher-photovoltaik/
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None
-        )
-        return config
-
-    @classmethod
-    def get_scaled_battery(
-        cls, total_pv_power_in_watt_peak: float, component_id: Optional[ComponentID] = None, name: str = "Battery"
-    ) -> "BatteryConfig":
-        """Returns scaled configuration of battery according to pv power."""
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        custom_battery_capacity_generic_in_kilowatt_hour = (
-            total_pv_power_in_watt_peak * 1e-3
-        )  # size/capacity of battery should be approx. the same as default pv power
-        c_rate = 0.5  # 0.5C corresponds to 0.5/h for fully charging or discharging
-        config = BatteryConfig(
-            component_id=component_id,
-            # https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
-            custom_battery_capacity_generic_in_kilowatt_hour=round(custom_battery_capacity_generic_in_kilowatt_hour, 2),
-            custom_pv_inverter_power_generic_in_watt=round(custom_battery_capacity_generic_in_kilowatt_hour * c_rate * 1e3, 2),
-            source_weight=1,
-            system_id="SG1",
-            charge_in_kwh=0,
-            discharge_in_kwh=0,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            lifetime_in_cycles=5e3,  # todo set correct values
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None
-        )
-
-        return config
-
 
 class Battery(Component):
     """Battery class.

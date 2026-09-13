@@ -61,37 +61,6 @@ class Scenario(BaseModel):
     connections: dict[str, Any] | list[Any] | None = None
 
 
-def is_grown_by_a_default_connection(component: DynamicComponent, field_name: str) -> bool:
-    """Says whether an aggregator grew this dispatch output from one of its default connections.
-
-    Such an output must not be written to the scenario JSON: the JSON executor applies the same
-    default connections when it builds the component, so a written one would be created twice.
-    Only the targets a system setup added by hand belong in the file.
-
-    The question is asked of the declarations rather than of a counter over the outputs. Until
-    F-1 an aggregator grew every default connection's target port in its constructor and named
-    ports by their position, so "the setup's own outputs" could be spelled as "the ones past the
-    constructor's count" -- a cut-off that moved whenever a default connection was added or
-    retired. Now a target port is grown only for a participant the run has, and named after the
-    prefix and weight its declaration carries, which is exactly what is matched here.
-
-    Args:
-        component: The aggregator being written down.
-        field_name: The name of one of its dynamic outputs.
-
-    Returns:
-        True if one of the component's default connections declares that port.
-    """
-    for connections in component.dynamic_default_connections.values():
-        for connection in connections:
-            target_output = connection.target_output
-            if target_output is None:
-                continue
-            if target_output.source_output_name + str(connection.source_weight) == field_name:
-                return True
-    return False
-
-
 # Adapted from old json_generator.py
 def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tuple[Component, list[Any], list[Any]]:
     """Converts a component to a JSON-compatible dictionary."""
@@ -123,16 +92,26 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
                     f"Multiple dynamic outputs found for field '{out.field_name}' in component '{component.component_name}'"
                 )
             if len(output_matches) == 1:
+                dynamic_output = output_matches[0]
                 # A target port the aggregator grows for itself when the executor applies its
-                # default connections is left out; writing it down would create it twice.
-                if is_grown_by_a_default_connection(component, out.field_name):
+                # default connections is left out; writing it down would create it twice. The
+                # port says so itself -- the bookkeeping entry records that a default connection
+                # grew it -- rather than the writer rebuilding names to recognise it.
+                if dynamic_output.grown_by_a_default_connection:
                     continue
 
-                # add_component_output has been used. Its name is the prefix the caller passed
-                # plus the source weight, so the prefix is what remains when the weight is cut
-                # off the end again.
-                dynamic_output = output_matches[0]
-                source_output_name = out.field_name[: -len(str(dynamic_output.source_weight))]
+                # add_component_output has been used, and recorded the prefix it named the port
+                # from; that prefix is what the scenario JSON has to give back to it.
+                source_output_name = dynamic_output.source_output_name_prefix
+                if source_output_name is None:
+                    raise ValueError(
+                        f"The dynamic output '{out.field_name}' of '{component.component_name}' was "
+                        f"not named from a prefix and a weight, so no add_component_output call "
+                        f"describes it and the scenario JSON has nothing to write. Ports named by "
+                        f"the declarative energy-system format's dispatch templates are of that "
+                        f"kind: a run built from an energy-system file is written down by that "
+                        f"format, and the scenario JSON is the legacy path's own file."
+                    )
                 outs.append({
                     "dynamic": True,
                     "source_output_name": source_output_name,

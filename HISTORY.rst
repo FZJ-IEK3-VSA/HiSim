@@ -25,3 +25,10 @@ History
   and the file's ``description`` in ``scenario.json``. A Python run that never names itself is
   named after its module file instead of publishing an empty scenario.
 * ``hisim.components.controller_l1_chp`` is gone; the L1 CHP controller lives in ``hisim.components.generic_chp`` (import it from the package).
+* The energy management system's dynamic dispatch ports are named ``<prefix><source weight>``
+  instead of ``<prefix>Output<N>``, so a port's name no longer depends on how many unrelated
+  ports were declared before it.
+* An energy management system grows a dispatch port only for a device the run actually has and
+  actually measures; the phantom targets absent devices used to get are gone.
+* Both changes rename result columns: postprocessing that reads a dispatch column by its old
+  ``...Output<N>`` name, and stored reference results holding those names, have to be updated.

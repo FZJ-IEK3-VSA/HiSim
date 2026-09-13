@@ -166,6 +166,7 @@ class PilotWireFormat:
         "ElectricityMeterConfig": ("standard",),
         "PVSystemConfig": ("rooftop",),
         "BatteryConfig": ("standard",),
+        "GasMeterConfig": ("standard",),
         "CarConfig": (),
     }
 
@@ -184,6 +185,7 @@ class PilotWireFormat:
         "ElectricityMeterConfig": (),
         "PVSystemConfig": (),
         "BatteryConfig": (),
+        "GasMeterConfig": (),
         "CarConfig": ("for_household",),
     }
 
@@ -220,6 +222,7 @@ class PilotWireFormat:
         ),
         "PVSystemConfig": ("pv_peak_power_in_watt",),
         "BatteryConfig": (),
+        "GasMeterConfig": (),
         "WeatherConfig": ("weather_identity",),
         "UtspLpgConnectorConfig": ("occupancy_identity",),
         "ElectricityMeterConfig": (),
@@ -273,6 +276,7 @@ def test_the_scan_finds_the_converted_classes(scan):
         "ElectricityMeterConfig",
         "PVSystemConfig",
         "BatteryConfig",
+        "GasMeterConfig",
     } <= names
 
 
@@ -483,6 +487,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     from hisim.components.building import BuildingConfig
     from hisim.components.controller_l2_energy_management_system import EMSConfig
     from hisim.components.electricity_meter import ElectricityMeterConfig
+    from hisim.components.gas_meter import GasMeterConfig
     from hisim.components.generic_boiler import GenericBoilerConfig, GenericBoilerControllerConfig
     from hisim.components.generic_car import CarConfig
     from hisim.components.heat_distribution_system import (
@@ -505,6 +510,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "UtspLpgConnectorConfig": UtspLpgConnectorConfig,
         "ElectricityMeterConfig": ElectricityMeterConfig,
         "BatteryConfig": BatteryConfig,
+        "GasMeterConfig": GasMeterConfig,
         "CarConfig": CarConfig,
     }
     for class_name, expected in PilotWireFormat.PRESET_NAMES.items():

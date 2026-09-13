@@ -98,6 +98,9 @@ class AdapterContractScan:
         "PVSystemConfig.weather_identity": (
             "Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center"
         ),
+        # The array the rooftop law builds on the fleet's archetype roof of 168.9 m2; the
+        # extractor reads it as the capacity it prices.
+        "PVSystemConfig.power_in_watt": 22272.28,
         "HeatDistributionConfig.heating_system": HeatDistributionSystemType.RADIATOR,
         "HeatDistributionConfig.water_mass_flow_rate_in_kg_per_second": 0.5,
         "HeatDistributionConfig.absolute_conditioned_floor_area_in_m2": 120.0,

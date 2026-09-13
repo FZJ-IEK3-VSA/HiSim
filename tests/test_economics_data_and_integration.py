@@ -15,6 +15,7 @@ import types
 from typing import Dict, Tuple
 
 import pytest
+from hisim.config import SizingContext
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.adapter import FactsExtractors
 from hisim.economics.database import CostDatabase
@@ -29,18 +30,49 @@ pytestmark = pytest.mark.base
 # staging area (#604), and its `get_cost_facts` adoption went with the module. The fleet's hplib
 # heat pump is MoreAdvancedHeatPumpHPLib, which declares PRICED and is priced through the adapter
 # table rather than the hook, so it has no declaration for this test to check.
-# The last element of each row is what the builder is called with: a legacy factory takes
-# nothing, a preset takes the instance name of the component it configures.
+# The last two elements of each row are what the builder is called with -- a legacy factory takes
+# nothing, a preset takes the instance name of the component it configures -- and the sizing facts
+# the configuration is then resolved against, empty when it has no sizable field. A preset leaves
+# the capacity field at AUTO on purpose, so the facts are what turn it into the number the cost
+# declaration is read from.
 ADOPTED_COMPONENTS = [
-    ("hisim.components.generic_pv_system", "PVSystem", "PVSystemConfig", "get_default_pv_system", "config", ()),
+    ("hisim.components.generic_pv_system", "PVSystem", "PVSystemConfig", "preset_rooftop", "config", ("PVSystem",),
+     {"roof_area_in_m2": 168.9, "weather_identity": "Aachen"}),
     ("hisim.components.advanced_battery_bslib", "Battery", "BatteryConfig", "get_default_config", "battery_config",
-     ()),
+     (), {}),
     ("hisim.components.electricity_meter", "ElectricityMeter", "ElectricityMeterConfig",
-     "preset_standard", "config", ("ElectricityMeter",)),
+     "preset_standard", "config", ("ElectricityMeter",), {}),
 ]
 
 
-def _facts_from_default_config(module_name, class_name, config_class_name, default_factory, config_attr, builder_args):
+def _build_config(module, config_class_name, default_factory, builder_args, sizing_facts):
+    """Builds one adopted component's default configuration, sized if it has sizable fields.
+
+    A preset may leave its capacity field at AUTO for a law to compute, and the cost declaration
+    reads that field, so the configuration has to be resolved before it says anything about size.
+    The facts come from the row rather than from a building, because this test is about the
+    declaration and not about where the roof area comes from.
+
+    Args:
+        module: The already-imported component module.
+        config_class_name: The configuration class to build.
+        default_factory: The preset or legacy factory that builds it.
+        builder_args: What that builder is called with.
+        sizing_facts: The sizing facts to resolve against; empty for a class with no sizable field.
+
+    Returns:
+        The configuration, resolved where it needed resolving.
+    """
+    config_class = getattr(module, config_class_name)
+    config = getattr(config_class, default_factory)(*builder_args)
+    if sizing_facts:
+        config = config.resolve(SizingContext(**sizing_facts))
+    return config
+
+
+def _facts_from_default_config(
+    module_name, class_name, config_class_name, default_factory, config_attr, builder_args, sizing_facts
+):
     """Builds a component's cost facts from its own default config, without constructing it.
 
     `get_cost_facts` reads only the config, so a `SimpleNamespace` carrying that config under both
@@ -56,7 +88,7 @@ def _facts_from_default_config(module_name, class_name, config_class_name, defau
 
     module = importlib.import_module(module_name)
     component_class = getattr(module, class_name)
-    config = getattr(getattr(module, config_class_name), default_factory)(*builder_args)
+    config = _build_config(module, config_class_name, default_factory, builder_args, sizing_facts)
     dummy = types.SimpleNamespace(**{config_attr: config, "config": config})
     return component_class, config, component_class.get_cost_facts(dummy)
 
@@ -93,11 +125,11 @@ class TestCostFactsContract:
         """
         import importlib
 
-        module_name, class_name, config_class_name, default_factory, config_attr, builder_args = spec
+        module_name, class_name, config_class_name, default_factory, config_attr, builder_args, facts = spec
         module = importlib.import_module(module_name)
         component_class = getattr(module, class_name)
         config_class = getattr(module, config_class_name)
-        config = getattr(config_class, default_factory)(*builder_args)
+        config = _build_config(module, config_class_name, default_factory, builder_args, facts)
         capacity_fields = [
             data_field.name for data_field in dataclasses.fields(config_class) if data_field.metadata.get("capacity")
         ]

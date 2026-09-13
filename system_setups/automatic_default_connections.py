@@ -85,10 +85,12 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-        rooftop_area_in_m2=my_building_information.roof_area_in_m2
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem").resolve(
+        SizingContext(
+            roof_area_in_m2=my_building_information.roof_area_in_m2,
+            weather_identity=my_weather_config.identity(),
+        )
     )
-    my_photovoltaic_system_config.weather_identity = my_weather_config.identity()
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,

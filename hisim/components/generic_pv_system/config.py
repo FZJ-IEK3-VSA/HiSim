@@ -2,8 +2,8 @@
 
 Part of the ``hisim.components.generic_pv_system`` package split (see the package ``__init__`` for the
 layout). Holds :class:`PVSystemConfig`, its ``rooftop`` preset, the law that sizes an array to
-the roof it stands on, the two legacy factories the preset and the law replace, and the sizing
-fact ``pv_peak_power_in_watt`` that the battery and the charging station are read off.
+the roof it stands on and the sizing fact ``pv_peak_power_in_watt`` that the battery and the
+charging station are read off.
 
 :class:`PVLibModuleAndInverterEnum` is not here but in
 :mod:`hisim.components.generic_pv_system.calculation`, and this module imports it from there. It names
@@ -20,7 +20,7 @@ all three from a producer's import closure.
 # (the only backward edge is a runtime-local import of PVSystem inside get_main_classname;
 # module import order is acyclic)
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, Optional, Tuple
 
 from dataclasses_json import dataclass_json
@@ -56,7 +56,7 @@ def _rooftop_power_in_watt(ctx: SizingContext, own: OwnFields) -> float:
     """Computes a rooftop array's power from the roof it stands on and the module it is built of.
 
     The law behind the ``power_in_watt`` field of :class:`PVSystemConfig`. It is the rooftop
-    sizing the ``get_scaled_pv_system`` factory performs setup-side, moved to the field that
+    sizing the deleted ``get_scaled_pv_system`` factory performed, moved to the field that
     carries the result: usable roof area times the module's power per square metre, times the
     share of that maximum the author wants installed. The arithmetic and the module table stay
     in :meth:`PVSystemConfig.size_pv_system`, which this function only feeds, so there is one
@@ -103,9 +103,9 @@ class PVSystemConfig(ConfigBase):
 
     The named default array is :meth:`preset_rooftop`, and ``power_in_watt`` is sizable: the
     preset leaves it ``AUTO`` and ``.resolve(ctx)`` computes it from the roof the array stands
-    on, which is what the ``get_scaled_pv_system`` factory below does setup-side. An author who
-    knows the array's power pins the field instead, which is what ``get_default_pv_system`` is
-    for. Both factories are the call sites' previous spelling and go with them.
+    on, which is what the deleted ``get_scaled_pv_system`` factory did setup-side. An author who
+    knows the array's power pins the field instead, which is what the deleted
+    ``get_default_pv_system`` factory was for.
     """
 
     @classmethod
@@ -197,7 +197,7 @@ class PVSystemConfig(ConfigBase):
     #: The named default array is declared below as a ``preset_*`` classmethod (preset names are
     #: wire format: scenario files reference them, so renames are breaking changes). It leaves
     #: ``power_in_watt`` at ``AUTO`` for the resolver to size from the roof, which is what the
-    #: ``get_scaled_pv_system`` factory does; capex fields stay ``None`` throughout so
+    #: deleted ``get_scaled_pv_system`` factory did; capex fields stay ``None`` throughout so
     #: postprocessing looks them up from the device database, exactly as the factories did.
 
     @preset
@@ -239,108 +239,6 @@ class PVSystemConfig(ConfigBase):
             subsidy_as_percentage_of_investment_costs=None,
             predictive_control=False,
             prediction_horizon=None,
-        )
-
-    @classmethod
-    def get_default_pv_system(
-        cls,
-        name: str = "PVSystem",
-        maximum_power_in_watt: float = 10e3,
-        source_weight: int = 0,
-        share_of_maximum_pv_potential: float = 1.0,
-        location: str = "Aachen",
-        component_id: Optional[ComponentID] = None,
-        module_name: str = "Trina Solar TSM-435NE09RC.05",
-        module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE,  # noqa: E501
-        inverter_name: str = "Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]",
-        inverter_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.CEC_INVERTER_DATABASE,  # noqa: E501
-    ) -> "PVSystemConfig":
-        """Gets a default PV system.
-
-        Legacy factory, replaced by :meth:`preset_rooftop` with ``power_in_watt`` pinned; it goes
-        with its call sites.
-
-        ``maximum_power_in_watt`` is the array's maximum; the share is applied to it here, exactly
-        once, and the ``power_in_watt`` field of the returned config is the result. A *record*
-        therefore carries a result beside its provenance, so it is rebuilt from its fields and
-        never replayed through this factory, which would apply the share a second time.
-        """
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        power_in_watt = maximum_power_in_watt * share_of_maximum_pv_potential
-        return PVSystemConfig(
-            time=2019,
-            power_in_watt=power_in_watt,
-            load_module_data=False,
-            integrate_inverter=True,
-            module_database=module_database,
-            inverter_database=inverter_database,
-            module_name=module_name,
-            inverter_name=inverter_name,
-            component_id=component_id,
-            azimuth=180,
-            tilt=30,
-            share_of_maximum_pv_potential=share_of_maximum_pv_potential,
-            source_weight=source_weight,
-            location=location,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-            predictive_control=False,
-            prediction_horizon=None,
-        )
-
-    @classmethod
-    def get_scaled_pv_system(
-        cls,
-        rooftop_area_in_m2: float,
-        name: str = "PVSystem",
-        share_of_maximum_pv_potential: float = 1.0,
-        module_name: str = "Trina Solar TSM-435NE09RC.05",
-        module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE,  # noqa: E501
-        inverter_name: str = "Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]",
-        inverter_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.CEC_INVERTER_DATABASE,
-        location: str = "Aachen",
-        component_id: Optional[ComponentID] = None,
-        load_module_data: bool = False,
-    ) -> "PVSystemConfig":
-        """Gets a default PV system with scaling according to rooftop area.
-
-        Legacy factory, replaced by :meth:`preset_rooftop` resolved against a context carrying
-        ``roof_area_in_m2``; it goes with its call sites.
-
-        The share of the maximum potential is applied exactly once, by ``size_pv_system``, which is why it
-        is not passed on to ``get_default_pv_system`` (that would multiply the power by it a second time).
-        It is instead stamped onto the finished config afterwards, so the returned configuration records
-        the share that was really applied rather than the 1.0 default of ``get_default_pv_system``.
-        """
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        total_pv_power_in_watt = cls.size_pv_system(
-            rooftop_area_in_m2=rooftop_area_in_m2,
-            share_of_maximum_pv_potential=share_of_maximum_pv_potential,
-            module_name=module_name,
-            module_database=module_database,
-        )
-        config = PVSystemConfig.get_default_pv_system(
-            component_id=component_id,
-            location=location,
-            maximum_power_in_watt=total_pv_power_in_watt,
-            module_name=module_name,
-            module_database=module_database,
-            inverter_name=inverter_name,
-            inverter_database=inverter_database,
-        )
-        # Stamped after the fact, not passed in above: the power already carries the share.
-        # Through ``replace`` rather than by assignment, so that the share meets the range check
-        # in ``__post_init__`` on this path too.
-        return replace(
-            config,
-            share_of_maximum_pv_potential=share_of_maximum_pv_potential,
-            load_module_data=load_module_data,
         )
 
     @classmethod

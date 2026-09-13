@@ -80,9 +80,9 @@ def test_the_base_view_clears_the_building_and_nothing_else() -> None:
     Catches: the hook regressing the one normalisation the key always had, which would file the same
     artifact under a different name per house again.
     """
-    in_house_a = PVSystemConfig.get_default_pv_system()
+    in_house_a = PVSystemConfig.preset_rooftop("PVSystem")
     in_house_a.component_id = dataclasses.replace(in_house_a.component_id, building="BUI1")
-    in_house_b = PVSystemConfig.get_default_pv_system()
+    in_house_b = PVSystemConfig.preset_rooftop("PVSystem")
     in_house_b.component_id = dataclasses.replace(in_house_b.component_id, building="BUI2")
 
     assert Keys.of(in_house_a) == Keys.of(in_house_b)

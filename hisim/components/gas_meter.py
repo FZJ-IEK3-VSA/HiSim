@@ -50,7 +50,6 @@ class GasMeterConfig(ConfigBase):
         return str(GasMeter.get_full_classname())
 
     component_id: ComponentID
-    total_energy_from_grid_in_kwh: float
     gas_loadtype: lt.LoadTypes
     #: CO2 footprint of investment in kg
     device_co2_footprint_in_kg: Optional[float]
@@ -74,7 +73,6 @@ class GasMeterConfig(ConfigBase):
             component_id = ComponentID(name="GasMeter")
         return GasMeterConfig(
             component_id=component_id,
-            total_energy_from_grid_in_kwh=0.0,
             gas_loadtype=gas_loadtype,
             # capex and device emissions are calculated in get_cost_capex function by default
             device_co2_footprint_in_kg=None,
@@ -441,7 +439,11 @@ class GasMeter(DynamicComponent):
             opex_energy_cost_in_euro=opex_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            total_consumption_in_kwh=self.config.total_energy_from_grid_in_kwh,
+            # The meter's own consumption KPI is reported by get_component_kpi_entries below.
+            # This field has always carried a zero: it used to read a configuration field that
+            # nothing ever wrote the running total back into, and the zero is kept here so that
+            # removing that field changes no reported number.
+            total_consumption_in_kwh=0.0,
             loadtype=self.config.gas_loadtype,
             kpi_tag=KpiTagEnumClass.GAS_METER
         )

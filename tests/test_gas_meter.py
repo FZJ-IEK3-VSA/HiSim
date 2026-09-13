@@ -10,6 +10,7 @@ import pytest
 import numpy as np
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
+from hisim import loadtypes as lt
 from hisim.config import SizingContext, concrete
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
@@ -276,8 +277,6 @@ def test_the_preset_copies_the_carrier_from_the_generator_beside_it() -> None:
     same context the setups build, which is what the deleted factory's ``gas_loadtype``
     argument used to carry.
     """
-    from hisim import loadtypes as lt
-
     for carrier in (lt.LoadTypes.GAS, lt.LoadTypes.GREEN_HYDROGEN):
         resolved = gas_meter.GasMeterConfig.preset_standard("GasMeter").resolve(
             SizingContext(energy_carrier=carrier)
@@ -295,8 +294,6 @@ def test_a_pinned_carrier_survives_a_context_that_names_another() -> None:
     the meter then has to be told what it measures. Writing the field is how that is said, and
     a written value is never overwritten by a law.
     """
-    from hisim import loadtypes as lt
-
     pinned = dataclasses.replace(
         gas_meter.GasMeterConfig.preset_standard("GasMeter"), gas_loadtype=lt.LoadTypes.GREEN_HYDROGEN
     )
@@ -304,3 +301,32 @@ def test_a_pinned_carrier_survives_a_context_that_names_another() -> None:
     resolved = pinned.resolve(SizingContext(energy_carrier=lt.LoadTypes.GAS))
 
     assert resolved.gas_loadtype is lt.LoadTypes.GREEN_HYDROGEN
+
+
+@pytest.mark.base
+def test_the_opex_record_reports_the_gas_the_meter_actually_measured() -> None:
+    """Catches the meter's operational-cost record going back to reporting a constant zero.
+
+    ``get_cost_opex`` computes the metered kilowatt hours into a local and used to hand a
+    configuration field on to the record instead, which nothing ever wrote the running total
+    into -- so the operational-costs table showed ``0.0`` kWh for a meter whose own costs and
+    emissions on the same row were computed from the real sum. The consumption on the record
+    has to be that same sum.
+    """
+    import pandas as pd
+    from hisim.components.gas_meter import GasMeter
+
+    meter = GasMeter(
+        my_simulation_parameters=SimulationParameters.one_day_only(2021, 900),
+        config=gas_meter.GasMeterConfig.preset_standard("GasMeter").resolve(
+            SizingContext(energy_carrier=lt.LoadTypes.GAS)
+        ),
+    )
+    outputs = [meter.gas_from_grid_channel]
+    # One column per output, in watt hours: 4 000 Wh in every one of the day's 96 steps.
+    results = pd.DataFrame({0: [4_000.0] * 96})
+
+    opex = meter.get_cost_opex(all_outputs=outputs, postprocessing_results=results)
+
+    assert opex.total_consumption_in_kwh == pytest.approx(384.0)
+    assert opex.opex_energy_cost_in_euro > 0.0

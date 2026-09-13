@@ -476,11 +476,7 @@ class GasMeter(DynamicComponent):
             opex_energy_cost_in_euro=opex_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            # The meter's own consumption KPI is reported by get_component_kpi_entries below.
-            # This field has always carried a zero: it used to read a configuration field that
-            # nothing ever wrote the running total back into, and the zero is kept here so that
-            # removing that field changes no reported number.
-            total_consumption_in_kwh=0.0,
+            total_consumption_in_kwh=total_energy_from_grid_in_kwh,
             loadtype=self.gas_loadtype,
             kpi_tag=KpiTagEnumClass.GAS_METER
         )

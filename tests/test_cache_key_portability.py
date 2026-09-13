@@ -2,16 +2,19 @@
 
 Two caches used to hash machine-specific paths -- the LoadProfileGenerator connector its
 ``result_dir_path``, the weather its absolute ``source_path`` -- so their entries could never be shared
-between machines. These tests pin the two overrides and the base rule: fields that decide the result
-move the key, fields that only place the run do not, and a key built from the repository's own data
-files contains no absolute path.
+between machines. These tests pin what is left of that: the base rule and the connector's override --
+fields that decide the result move the key, fields that only place the run do not, and a key built from
+the repository's own data files contains no absolute path.
+
+The weather has left this path entirely. Its series is produced by ``hisim.components.weather.calculation``
+and keyed under the producer scheme of ``roadmap/cache_service_spec.md`` §3, where the data file is
+identified by the hash of its contents and the path is not key material at all;
+``tests/test_weather_producer.py`` pins that.
 """
 
 # clean
 
 import dataclasses
-import os
-import pathlib
 import re
 from typing import Any
 
@@ -21,7 +24,6 @@ from utspclient.helpers.lpgdata import EnergyIntensityType
 from hisim import utils
 from hisim.components.generic_pv_system import PVSystemConfig
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnectorConfig
-from hisim.components.weather import LocationEnum, WeatherConfig
 from hisim.config import ComponentID
 from hisim.simulationparameters import SimulationParameters
 
@@ -141,80 +143,33 @@ def test_what_decides_the_occupancy_profile_still_moves_its_key() -> None:
 
 
 @pytest.mark.base
-def test_the_same_weather_file_under_two_checkouts_has_one_key(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A catalogue file is spelled relative to the inputs directory, so the checkout's location drops out.
-
-    Catches: the weather key naming the machine, which made the entry every other component depends on
-    private to whoever computed it.
-    """
-    here = WeatherConfig.get_default(location_entry=LocationEnum.AACHEN)
-    relative = os.path.relpath(here.source_path, utils.get_input_directory())
-    other_checkout = tmp_path / "other" / "hisim" / "inputs"
-    there = dataclasses.replace(here, source_path=str(other_checkout / relative))
-
-    key_here = Keys.of(here)
-    monkeypatch.setattr(utils, "get_input_directory", lambda: str(other_checkout))
-    key_there = Keys.of(there)
-
-    assert key_here == key_there
-    assert not Keys.absolute_paths_in(key_here), Keys.absolute_paths_in(key_here)
-    assert relative.replace(os.sep, "/") in key_here, "the relative spelling must be what the key carries"
-
-
-@pytest.mark.base
-def test_a_different_weather_file_has_a_different_key() -> None:
-    """Making the path portable must not make two files look alike.
-
-    Catches: a view that drops the path altogether, so a custom weather file collides with the
-    catalogue entry of the same station; and one that keeps only the file name, so two custom files
-    that share a name in different directories collide with each other.
-    """
-    aachen = WeatherConfig.get_default(location_entry=LocationEnum.AACHEN)
-    seville = WeatherConfig.get_default(location_entry=LocationEnum.SEVILLE)
-    custom = dataclasses.replace(aachen, source_path="/data/measured/my_station_2021")
-    same_name_elsewhere = dataclasses.replace(aachen, source_path="/data/other_lab/my_station_2021")
-
-    assert Keys.of(aachen) != Keys.of(seville)
-    assert Keys.of(aachen) != Keys.of(custom)
-    assert Keys.of(custom) != Keys.of(same_name_elsewhere)
-    assert '"source_path": "/data/measured/my_station_2021"' in Keys.of(custom), (
-        "a file outside the inputs directory keeps its absolute path"
-    )
-
-
-@pytest.mark.base
 def test_the_base_rule_survives_an_override() -> None:
     """The building is cleared for a config with its own hook, not only for one without.
 
-    Catches: a hook design that lets a subclass bypass the base rule, so the weather or occupancy key
-    becomes house-specific again.
+    Catches: a hook design that lets a subclass bypass the base rule, so the occupancy key becomes
+    house-specific again.
     """
-    weather = WeatherConfig.get_default(location_entry=LocationEnum.AACHEN)
-    occupancy = UtspLpgConnectorConfig.get_default_utsp_connector_config()
-    for in_house_a in (weather, occupancy):
-        in_house_b = dataclasses.replace(
-            in_house_a, component_id=dataclasses.replace(in_house_a.component_id, building="BUI2")
-        )
-        in_house_a.component_id = dataclasses.replace(in_house_a.component_id, building="BUI1")
+    in_house_a = UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    in_house_b = dataclasses.replace(
+        in_house_a, component_id=dataclasses.replace(in_house_a.component_id, building="BUI2")
+    )
+    in_house_a.component_id = dataclasses.replace(in_house_a.component_id, building="BUI1")
 
-        assert Keys.of(in_house_a) == Keys.of(in_house_b), type(in_house_a).__name__
-        assert '"building": null' in Keys.of(in_house_a), type(in_house_a).__name__
+    assert Keys.of(in_house_a) == Keys.of(in_house_b), type(in_house_a).__name__
+    assert '"building": null' in Keys.of(in_house_a), type(in_house_a).__name__
 
 
 @pytest.mark.base
 def test_the_view_never_touches_the_live_configuration() -> None:
     """The component reads its real paths after the key is built; the view must be a copy.
 
-    Catches: an override that assigns into ``self``, which would send the weather reader to a
+    Catches: an override that assigns into ``self``, which would send the connector's writer to a
     relative path it cannot open.
     """
-    weather = WeatherConfig.get_default(location_entry=LocationEnum.AACHEN)
     occupancy = UtspLpgConnectorConfig.get_default_utsp_connector_config()
-    source_before, result_dir_before = weather.source_path, occupancy.result_dir_path
+    result_dir_before = occupancy.result_dir_path
 
-    Keys.of(weather)
     Keys.of(occupancy)
 
-    assert weather.source_path == source_before
     assert occupancy.result_dir_path == result_dir_before
-    assert isinstance(weather.component_id, ComponentID)
+    assert isinstance(occupancy.component_id, ComponentID)

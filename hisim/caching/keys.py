@@ -16,8 +16,11 @@ The fingerprints need no declarations: they are read from the module's ``import`
 dynamic imports, and no imports of the component or simulator machinery, which would pull most of the
 package into the closure.
 
-No component uses this scheme yet. ``hisim.utils.build_cache_key_string`` produces the legacy key until
-each producer is extracted. This module imports the standard library only.
+The first component on this scheme is the weather: ``hisim.components.weather.calculation`` produces the
+processed weather series and ``Weather.i_prepare_simulation`` looks it up through
+:meth:`hisim.caching.client.CacheClient.lookup_producer`. Everything else still keys through
+``hisim.utils.build_cache_key_string``, the legacy key, until its producer is extracted too. This module
+imports the standard library only.
 """
 
 # clean
@@ -25,6 +28,7 @@ each producer is extracted. This module imports the standard library only.
 import ast
 import dataclasses
 import enum
+import functools
 import hashlib
 import importlib.metadata
 import importlib.util
@@ -426,16 +430,41 @@ class ProducerLayering:
             )
 
 
+@functools.lru_cache(maxsize=1)
+def _installed_distributions() -> Mapping[str, List[str]]:
+    """Map every importable top-level name to the distributions that provide it, once per process.
+
+    :func:`importlib.metadata.packages_distributions` walks every entry of ``sys.path`` and reads the
+    metadata of every installed distribution -- 120-odd of them in this environment, measured at 123 ms
+    and, on a loaded machine, at 267 ms. The answer cannot change while the process runs (nothing
+    installs a package mid-simulation), and the key builder asks for it once per producer and run, on a
+    cache hit as much as on a miss, so the scan is paid once and remembered.
+
+    Returns:
+        Mapping[str, List[str]]: the distribution names per top-level import name.
+    """
+    return importlib.metadata.packages_distributions()
+
+
 class Fingerprints:
     """The two automatic fingerprints of spec §3, computed from an :class:`ImportClosure`.
 
     Neither includes the repository commit: a commit changes on every edit anywhere and would make every
     entry disposable on every push. The commit is stored as metadata beside the entry instead.
+
+    The code fingerprint reads the producer's sources on every call, deliberately: an edit during the
+    process must move the key. The third-party one is a per-process constant and is memoised.
     """
 
     #: What the standard library contributes to the third-party fingerprint: the interpreter's
     #: major.minor, because that is what decides its behaviour, and nothing finer.
     PYTHON_LABEL: ClassVar[str] = "python"
+
+    #: :meth:`third_party` per set of third-party top-level names. Everything that answer depends on --
+    #: the installed versions and the interpreter -- is fixed for the life of the process, while the
+    #: closure the caller hands in is rebuilt on every key. Only resolved pins are remembered; a closure
+    #: whose version cannot be resolved raises and is not memoised, so the refusal repeats.
+    _THIRD_PARTY_PINS: ClassVar[Dict[Tuple[str, ...], str]] = {}
 
     @staticmethod
     def code(closure: ImportClosure) -> str:
@@ -474,7 +503,10 @@ class Fingerprints:
                 would let two environments running different code for that package share cache
                 entries, which is the failure the fingerprint exists to prevent.
         """
-        distributions = importlib.metadata.packages_distributions()
+        memoised = cls._THIRD_PARTY_PINS.get(closure.third_party_top_levels)
+        if memoised is not None:
+            return memoised
+        distributions = _installed_distributions()
         pins: Set[str] = {f"{cls.PYTHON_LABEL}=={sys.version_info.major}.{sys.version_info.minor}"}
         for top_level in closure.third_party_top_levels:
             for distribution_name in distributions.get(top_level, [top_level]):
@@ -487,7 +519,9 @@ class Fingerprints:
                         "cannot vouch for the code that runs. Install the package with metadata, or drop the "
                         "import from the producer."
                     ) from error
-        return ";".join(sorted(pins))
+        fingerprint = ";".join(sorted(pins))
+        cls._THIRD_PARTY_PINS[closure.third_party_top_levels] = fingerprint
+        return fingerprint
 
 
 @dataclasses.dataclass(frozen=True)

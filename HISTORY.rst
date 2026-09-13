@@ -25,3 +25,15 @@ History
   and the file's ``description`` in ``scenario.json``. A Python run that never names itself is
   named after its module file instead of publishing an empty scenario.
 * ``hisim.components.controller_l1_chp`` is gone; the L1 CHP controller lives in ``hisim.components.generic_chp`` (import it from the package).
+* The weather series is produced by ``hisim.components.weather.calculation`` and cached under a key
+  that carries a fingerprint of that module's own source, so an edit to the calculation can no longer
+  be served from an entry written before it.
+* Breaking, for importers of the reader functions: the seven readers of the old
+  ``hisim/components/weather.py`` are no longer importable from ``hisim.components.weather``. Six of
+  them -- ``read_dwd_try_data``, ``read_nsrdb_data``, ``read_nsrdb_15min_data``,
+  ``read_dwd_10min_data``, ``read_dwd_15min_data`` and ``read_era5_data`` -- live in
+  ``hisim.components.weather.calculation`` and can be imported from there; the seventh,
+  ``read_test_reference_year_data``, is gone, and ``produce_weather_series`` of that module is what
+  produces the processed series now. The component's own names
+  (``Weather``, ``WeatherConfig``, ``LocationEnum``, ``WeatherDataSourceEnum``, ``get_coordinates`` and
+  ``calculate_direct_normal_irradiance_in_watt_per_square_meter``) resolve from the package as before.

@@ -46,7 +46,11 @@ SIMULATION_PARAMS_OBJECT = SimulationParameters.one_day_only(2021, 60)
 # ---------------------------------------------------------------------------
 # initialize_from_python
 # ---------------------------------------------------------------------------
-@pytest.mark.base
+# The five initialize_from_python tests below each build a whole system setup through the
+# entry point, load profile and all: minutes, not the seconds `base` promises. They sit in
+# `extendedbase2` together because they share the LoadProfileGenerator cache warm-up; the two
+# argument-validation tests further down touch none of that and stay `base`. See pytest.ini.
+@pytest.mark.extendedbase2
 def test_initialize_from_python_without_optional_arguments():
     """Initialize from python with only python module."""
     simulator = hisim_main.initialize_from_python(PYTHON_SETUP)
@@ -54,7 +58,9 @@ def test_initialize_from_python_without_optional_arguments():
     assert simulator is not None
 
 
-@pytest.mark.base
+# Builds the whole basic household through the entry point like its neighbours, so it shares
+# their shard even though it never runs a timestep; see pytest.ini.
+@pytest.mark.extendedbase2
 def test_the_scenario_name_and_the_description_reach_post_processing(tmp_path):
     """The run's two pieces of metadata travel on the simulator, not through a global.
 
@@ -86,7 +92,7 @@ def test_the_scenario_name_and_the_description_reach_post_processing(tmp_path):
     assert ppdt.description == "Basic household system setup. Shows how to set up a standard system."
 
 
-@pytest.mark.base
+@pytest.mark.extendedbase2
 def test_initialize_from_python_with_module_config():
     """Initialize from python with python module and module config."""
     simulator = hisim_main.initialize_from_python(
@@ -97,7 +103,7 @@ def test_initialize_from_python_with_module_config():
     assert simulator is not None
 
 
-@pytest.mark.base
+@pytest.mark.extendedbase2
 def test_initialize_from_python_with_simulation_parameters():
     """Initialize from python with python module and simulation parameters object."""
     simulator = hisim_main.initialize_from_python(
@@ -108,7 +114,7 @@ def test_initialize_from_python_with_simulation_parameters():
     assert simulator.get_simulation_parameters() is SIMULATION_PARAMS_OBJECT
 
 
-@pytest.mark.base
+@pytest.mark.extendedbase2
 def test_initialize_from_python_with_simulation_parameters_json():
     """Initialize from python with python module and simulation parameters json."""
     simulator = hisim_main.initialize_from_python(
@@ -122,7 +128,7 @@ def test_initialize_from_python_with_simulation_parameters_json():
     assert simulation_parameters.end_date is not None
 
 
-@pytest.mark.base
+@pytest.mark.extendedbase2
 def test_initialize_from_python_with_all_inputs():
     """Initialize from python with all input arguments."""
     simulator = hisim_main.initialize_from_python(

@@ -18,7 +18,9 @@ from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
-@pytest.mark.base
+# Builds a LoadProfileGenerator occupancy connector and a full year of weather before it
+# simulates, so it is a full-simulation test, not a unit-scale one; see pytest.ini.
+@pytest.mark.extendedbase
 @utils.measure_execution_time
 def test_building() -> None:
     """Verify the building thermal model cools at a bounded rate without heating.

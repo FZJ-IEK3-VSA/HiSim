@@ -23,6 +23,15 @@ How the run is driven:
   declares. The profiles are stored in the golden alongside the outputs, so a golden that
   goes red because somebody edited an input profile shows that in its own diff instead of
   looking like a physics change.
+* The solar part of that day reaches the component through a hand-built ``SimRepository``
+  rather than through the value array: the gains through the windows are produced up front
+  for the whole day from the full series a ``Weather`` component publishes (the solar-gains
+  producer, ``hisim/components/building/solar_gains.py``), so the harness publishes the same
+  six synthetic vectors it writes into the value array, under the keys the ``Weather`` uses,
+  plus an artifact key naming them. ``SyntheticDayProfiles.published_weather_series`` derives
+  those six from ``input_vectors`` so the two cannot drift apart; the irradiance and sun-angle
+  channels stay wired and stay in the golden, although the component no longer reads its gains
+  from them.
 * The per-timestep protocol mirrors ``Simulator.process_one_timestep``: ``i_save_state``,
   then ``i_restore_state`` and ``i_simulate``. At one mid-run timestep the restore and
   re-simulate step is performed a second time and the outputs are required to be bit-for-bit
@@ -34,11 +43,12 @@ How the run is driven:
   configuration never takes. Between them the day covers heating, free float, overheating
   with a cooling demand, and an open-window indoor-air override.
 
-The solar-gain disk cache is deliberately neutralized: ``utils.get_cache_file`` is patched
-to report "no cache" and to point at a temporary directory. Otherwise the first run would
-write a cache keyed by config and simulation parameters, and a later run -- of this test or
-of any other test sharing that key -- would read solar gains through a different code path,
-which would make this snapshot depend on execution order.
+The solar-gain cache is redirected into a temporary directory for this module
+(``HISIM_CACHE_DIR``), so that neither run writes into the working tree. It is a redirect
+rather than a neutralization: under the producer key scheme a hit is the same series as a
+miss by construction, because the key covers the producer's code, its libraries and every one
+of its inputs -- so a second run in the same working tree reading the entry the first one
+wrote is no longer a way for the snapshot to depend on execution order.
 
 Regeneration: run with ``HISIM_REGENERATE_BUILDING_GOLDENS=1``, e.g.::
 
@@ -53,14 +63,15 @@ request and, during the cleanup, may only be justified by a metadata change.
 
 import dataclasses
 import math
-from typing import Any, ClassVar, Dict, List, Optional, Tuple
+from typing import Any, ClassVar, Dict, List, Tuple
 
 import pytest
 
 from hisim import component as cp
-from hisim import utils
+from hisim.caching import CacheSettings
 from hisim.config import ComponentID
 from hisim.components.building import Building, BuildingConfig
+from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
 from tests import building_golden_support as golden_support
 from tests import functions_for_testing as fft
@@ -233,6 +244,25 @@ class SyntheticDayProfiles:
             ],
         }
 
+    @classmethod
+    def published_weather_series(cls) -> Dict[str, List[float]]:
+        """Return the six weather series the solar-gains producer reads, keyed as the Weather publishes them.
+
+        Derived from :meth:`input_vectors` rather than recomputed, so that the day the component
+        computes its gains from is by construction the day the value array carries and the golden
+        records. The mapping from channel to weather key is stated here for the same reason the
+        channel mapping is stated above: it must be the harness's word, not a guess.
+        """
+        vectors = cls.input_vectors()
+        return {
+            Weather.YEARLY_AZIMUTH: vectors["azimuth_channel"],
+            Weather.YEARLY_APPARENT_ZENITH: vectors["apparent_zenith_channel"],
+            Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE: vectors["direct_normal_irradiance_channel"],
+            Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE_EXTRA: vectors["direct_normal_irradiance_extra_channel"],
+            Weather.YEARLY_DIFFUSE_HORIZONTAL_IRRADIANCE: vectors["direct_horizontal_irradiance_channel"],
+            Weather.YEARLY_GLOBAL_HORIZONTAL_IRRADIANCE: vectors["global_horizontal_irradiance_channel"],
+        }
+
 
 @dataclasses.dataclass
 class OneDaySimulationResult:
@@ -281,6 +311,9 @@ class OneDaySnapshot:
     SCALED_VARIANT_SET_COOLING_TEMPERATURE_IN_CELSIUS: float = 20.0
     #: Name given to the synthetic source outputs feeding the component's inputs.
     SYNTHETIC_SOURCE_NAME: str = "SyntheticInputs"
+    #: What this harness publishes instead of a weather series digest. It identifies the synthetic
+    #: day in the solar-gains cache key, which is the only thing an artifact key has to do.
+    SYNTHETIC_WEATHER_ARTIFACT_KEY: str = "synthetic-one-day-profiles"
 
     @classmethod
     def variant_names(cls) -> List[str]:
@@ -329,6 +362,23 @@ class OneDaySnapshot:
         )
 
     @classmethod
+    def repository_with_synthetic_weather(cls) -> cp.SimRepository:
+        """Return a fresh repository holding the synthetic day as a ``Weather`` would publish it.
+
+        The component produces its whole solar-gain series before the first timestep, from the six
+        full-length series a weather component publishes and from the artifact key that says which
+        series they are. There is no weather component here, so the harness plays its part: the same
+        vectors it feeds into the value array, and a key naming this synthetic day rather than a real
+        weather digest -- which is all the cache needs it to be, since it only has to distinguish
+        these inputs from any other.
+        """
+        repository = cp.SimRepository()
+        repository.set_entry(Weather.SERIES_ARTIFACT_KEY, cls.SYNTHETIC_WEATHER_ARTIFACT_KEY)
+        for key, series in SyntheticDayProfiles.published_weather_series().items():
+            repository.set_entry(key, series)
+        return repository
+
+    @classmethod
     def wire_synthetic_inputs(cls, building: Building) -> Dict[str, cp.ComponentOutput]:
         """Create one synthetic source output per input channel and connect them.
 
@@ -366,6 +416,7 @@ class OneDaySnapshot:
             config=cls.config_for(variant_name),
             my_simulation_parameters=cls.simulation_parameters(),
         )
+        building.set_sim_repo(cls.repository_with_synthetic_weather())
         source_outputs = cls.wire_synthetic_inputs(building)
         input_vectors = SyntheticDayProfiles.input_vectors()
 
@@ -535,45 +586,34 @@ class OneDaySnapshot:
         return "\n".join(report_lines)
 
 
-@pytest.fixture(name="neutralized_solar_gain_cache", scope="module")
-def fixture_neutralized_solar_gain_cache(tmp_path_factory):
-    """Make the component's solar-gain disk cache inert for this module.
+@pytest.fixture(name="redirected_solar_gain_cache", scope="module")
+def fixture_redirected_solar_gain_cache(tmp_path_factory):
+    """Send the component's solar-gain cache into a temporary directory for this module.
 
-    ``Building`` asks ``utils.get_cache_file`` whether a cached solar-gain series for its
-    config and simulation parameters already exists, reads it if so, and writes it at the
-    end of a full run otherwise. Left alone, that turns the snapshot into an
-    order-dependent test: the second run in a working tree would take the reading path, and
-    a cache written by some other test with the same key would supply foreign values. The
-    patch reports "no cache" and redirects the write into a temporary directory, so every
-    run computes its gains and no file lands in the working tree.
+    ``Building`` produces its gains series through the cache client, which files the entry in
+    ``SimulationParameters.cache_dir_path`` -- inside the working tree -- unless the environment
+    redirects it. Redirecting keeps the tree clean without making the cache inert: under the
+    producer key scheme (``roadmap/cache_service_spec.md`` §3) an entry is named after the
+    producer's code, its libraries and every one of its inputs, so reading one back is the same
+    series as computing it, and no other test can write an entry this one would read.
     """
     cache_directory = tmp_path_factory.mktemp("building_one_day_solar_cache")
 
-    def cache_file_without_reuse(
-        component_key: str,
-        parameter_class: Any,
-        my_simulation_parameters: SimulationParameters,
-        cache_dir_path: Optional[str] = None,
-    ) -> Tuple[bool, str]:
-        """Report that no cache exists and point the write at a temporary directory."""
-        del parameter_class, my_simulation_parameters, cache_dir_path
-        return False, str(cache_directory / f"{component_key}_solar_gains.csv")
-
     patcher = pytest.MonkeyPatch()
-    patcher.setattr(utils, "get_cache_file", cache_file_without_reuse)
+    patcher.setenv(CacheSettings.Variables.DIRECTORY, str(cache_directory))
     yield
     patcher.undo()
 
 
 @pytest.fixture(name="one_day_simulation_results", scope="module")
-def fixture_one_day_simulation_results(neutralized_solar_gain_cache) -> Dict[str, OneDaySimulationResult]:
+def fixture_one_day_simulation_results(redirected_solar_gain_cache) -> Dict[str, OneDaySimulationResult]:
     """Run both configuration variants through the synthetic day exactly once.
 
     Both runs take a fraction of a second, but they are shared across the comparison tests
     anyway so that a failure report can distinguish "the outputs drifted" from "the state
     handling broke" without simulating twice for each.
     """
-    del neutralized_solar_gain_cache
+    del redirected_solar_gain_cache
     return {variant_name: OneDaySnapshot.run(variant_name) for variant_name in OneDaySnapshot.variant_names()}
 
 

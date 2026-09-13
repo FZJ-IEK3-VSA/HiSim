@@ -29,7 +29,6 @@ from hisim.components import (
 )
 from hisim.components.lpg_car_information import GenericCarInformation
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.loadtypes import HeatingSystems, ComponentType
@@ -604,10 +603,9 @@ def setup_function(
             f"{car_surplus_charging}_{my_config.energy_system_config_.use_battery_and_ems}"  # "default_config"
         )
 
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-        entry=f"{scenario_hash_string}",
-    )
+    # The scenario hash names this run; post-processing reads it off the simulator as the
+    # pyam "scenario" column.
+    my_sim.scenario_name = scenario_hash_string
 
     if my_simulation_parameters.result_directory == "":
 

@@ -187,7 +187,25 @@ def _prepare_case(
     end_date: datetime.datetime,
     seconds_per_timestep: int,
     test_name_prefix: str,
+    scenario_name: str = "",
+    description: str = "",
 ) -> PreparedPostProcessingCase:
+    """Run one system setup once, so that several option tests can post-process its results.
+
+    Args:
+        setup_module_name: Module under ``system_setups`` whose ``setup_function`` builds
+            the run.
+        start_date: First moment of the simulated period.
+        end_date: Moment the simulated period ends.
+        seconds_per_timestep: Resolution of the run.
+        test_name_prefix: Prefix of the result directory this run owns.
+        scenario_name: The name the run gives itself, as a setup function would set it; the
+            simulator falls back to the module file name when it is empty.
+        description: The run's one-line description, as the Python entry point would set it.
+
+    Returns:
+        The finished run and the transfer object over its results.
+    """
     simulation_parameters = SimulationParameters(
         start_date=start_date,
         end_date=end_date,
@@ -200,6 +218,8 @@ def _prepare_case(
         module_filename=setup_module_name,
         my_simulation_parameters=simulation_parameters,
     )
+    simulator.scenario_name = scenario_name
+    simulator.description = description
     setup_module = importlib.import_module(f"system_setups.{setup_module_name}")
     setup_module.setup_function(simulator, simulation_parameters)
 
@@ -278,6 +298,8 @@ def _clone_ppdt(
         module_filename=case.ppdt.module_filename,
         module_config=case.ppdt.module_config,
         execution_time_in_s=case.ppdt.execution_time_in_s,
+        scenario_name=case.ppdt.scenario_name,
+        description=case.ppdt.description,
         results_monthly=case.ppdt.results_monthly,
         results_hourly=case.ppdt.results_hourly,
         results_cumulative=case.ppdt.results_cumulative,

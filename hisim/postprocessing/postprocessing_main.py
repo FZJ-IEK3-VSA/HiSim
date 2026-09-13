@@ -61,7 +61,6 @@ from hisim.component import ComponentOutput
 from hisim.components.weather import Weather
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 if TYPE_CHECKING:
     from hisim.postprocessing import reportgenerator
@@ -161,7 +160,6 @@ class PostProcessor:
         self.scenario: str = ""
         self.region: str = ""
         self.year: int = 2021
-        self.description: str = ""
 
     def set_results_directory(self, dirname: Optional[str] = None) -> None:
         """Sets the results directory."""
@@ -1018,11 +1016,7 @@ class PostProcessor:
 
         # Set meta info
         self.model = f"HiSim_{ppdt.module_filename}"
-        self.scenario = (
-            SingletonSimRepository().get_entry(SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
-            if SingletonSimRepository().entry_exists(SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
-            else ""
-        )
+        self.scenario = ppdt.scenario_name
         self.region = region_of(ppdt)
         self.year = ppdt.simulation_parameters.year
 
@@ -1096,19 +1090,10 @@ class PostProcessor:
         self.model = "".join(["HiSim_", ppdt.module_filename])
 
         # set pyam scenario name
-        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME):
-            self.scenario = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
-        else:
-            self.scenario = ""
+        self.scenario = ppdt.scenario_name
 
         # set region
         self.region = region_of(ppdt)
-
-        # set description
-        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.DESCRIPTION):
-            self.description = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.DESCRIPTION)
-        else:
-            self.description = ""
 
         # set year or timeseries
         self.year = ppdt.simulation_parameters.year
@@ -1126,11 +1111,22 @@ class PostProcessor:
         write_standalone_simulation_json(my_sim, path=os.path.join(result_data_folder_for_scenario_evaluation, "simulation.json"))
 
         # Here, the my_sim could maybe be replaced by an altered ppdt
-        write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=self.description,
-                                       path=os.path.join(result_data_folder_for_scenario_evaluation, "scenario.json"))
+        write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=ppdt.description,
+                                       path=os.path.join(result_data_folder_for_scenario_evaluation, "scenario.json"),
+                                       scenario_name=ppdt.scenario_name)
 
     def write_component_configurations_to_json(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:
-        """Collect all component configurations and write into JSON file in result directory."""
+        """Collect all component configurations and write into JSON file in result directory.
+
+        The run's name and description are read off the transfer object here rather than off
+        ``self``, because this option is selected independently of the scenario-evaluation one:
+        a run asking only for the component configurations would otherwise write an anonymous,
+        undescribed ``scenario.json``, the two attributes still holding their empty defaults.
+
+        Args:
+            ppdt: The finished run, for its results directory and its metadata.
+            my_sim: The simulator whose components and connections are written out.
+        """
 
         write_standalone_simulation_json = _load_attribute(
             "hisim.json_generator",
@@ -1144,10 +1140,10 @@ class PostProcessor:
             ppdt.simulation_parameters.result_directory,
             "simulation.json",
         ))
-        write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=self.description, path=os.path.join(
+        write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=ppdt.description, path=os.path.join(
             ppdt.simulation_parameters.result_directory,
             "scenario.json",
-        ))
+        ), scenario_name=ppdt.scenario_name)
 
     def write_kpis_in_dict(
         self,

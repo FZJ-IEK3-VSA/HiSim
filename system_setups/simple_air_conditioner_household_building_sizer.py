@@ -20,7 +20,6 @@ from hisim.components import weather
 from hisim.components import building
 from hisim.components import simple_air_conditioner
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.building_sizer_utils.interface_configs.modular_household_config import (
     read_in_configs,
@@ -178,10 +177,9 @@ def setup_function(
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
         further_result_folder_description = "default_config"
 
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-        entry=f"{scenario_hash_string}",
-    )
+    # The scenario hash names this run; post-processing reads it off the simulator as the
+    # pyam "scenario" column.
+    my_sim.scenario_name = scenario_hash_string
 
     if my_simulation_parameters.result_directory == "":
         ResultPathProviderSingleton().set_important_result_path_information(

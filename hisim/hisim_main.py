@@ -17,7 +17,6 @@ try:
     import hisim.simulator as sim
     from hisim import log
     from hisim.simulationparameters import SimulationParameters
-    from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 except ModuleNotFoundError:
     raise ModuleNotFoundError(
         "Could not import HiSim modules. "
@@ -98,9 +97,9 @@ def initialize_from_python(
     """Initialize the simulator from a Python household configuration file.
 
     Resolves *path_to_module* to an absolute ``.py`` file, adds parent
-    directories to ``sys.path``, records the first-line description in the
-    singleton sim repository, imports the module, and calls its
-    ``setup_function`` to wire the component graph.
+    directories to ``sys.path``, imports the module, calls its
+    ``setup_function`` to wire the component graph, and records the
+    first-line description on the simulator it returns.
 
     Args:
         path_to_module: Path (with or without ``.py`` suffix) to the setup
@@ -162,9 +161,7 @@ def initialize_from_python(
     else:
         sim_params = None
 
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{get_description_from_py(path_obj)}"
-    )
+    description = get_description_from_py(path_obj)
 
     # Make setup function executable
     targetmodule = importlib.import_module(module_filename)
@@ -180,6 +177,10 @@ def initialize_from_python(
         # written for easy post-processing and debugging.
         force_log_connections=True,
     )
+    # The run's description is the setup file's first line — a docstring or a comment, the
+    # triple quotes stripped; post-processing writes it into scenario.json. It travels on the
+    # simulator, so a second simulator built in the same process keeps its own.
+    my_sim.description = description
 
     # Build method
     model_init_method = getattr(targetmodule, function_in_module)

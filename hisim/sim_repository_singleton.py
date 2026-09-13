@@ -17,16 +17,23 @@ key means one thing per simulation and the collision cannot occur.
 uses it legitimately, for a value that really is process-wide.
 
 Migration: new code must not use the singleton repository at all. The retirement is under way and
-`SingletonDictKeyEnum` is down to two members, ``RESULT_SCENARIO_NAME`` and ``DESCRIPTION``, written
-by the building-sizer setups and ``hisim_main`` and read by postprocessing. They become attributes of
-the run rather than repository entries -- they describe the run, so they belong with it. When that
-lands, this module keeps only ``SingletonMeta``.
+`SingletonDictKeyEnum` has no members left: every key was deleted or moved on 2026-09-12. What the
+module still holds is the deprecated `SingletonSimRepository`, the now empty `SingletonDictKeyEnum`
+— neither of which production code reaches any more — and ``SingletonMeta``, which
+:mod:`hisim.result_path_provider` borrows. The two deprecated classes go with the module, as soon
+as that metaclass has a home of its own.
 
-Everything else was deleted or moved on 2026-09-12: the Weather's eight full-year series (outside
-temperature, diffuse horizontal, direct normal, direct normal extra and global horizontal
-irradiance, azimuth, apparent zenith, wind speed), which the PV system reads at prepare time, travel
-through the per-simulation :class:`hisim.sim_repository.SimRepository` under ``Weather.YEARLY_*``;
-nothing read the rest.
+The Weather's eight full-year series (outside temperature, diffuse horizontal, direct normal,
+direct normal extra and global horizontal irradiance, azimuth, apparent zenith, wind speed), which
+the PV system reads at prepare time, travel through the per-simulation
+:class:`hisim.sim_repository.SimRepository` under ``Weather.YEARLY_*``. Two of the keys were never
+component data at all but metadata about the run, and they became plain attributes of the run's
+:class:`hisim.simulator.Simulator`: the scenario name (``RESULT_SCENARIO_NAME``, set by the
+building-sizer setups, now ``Simulator.scenario_name``) and the run description (``DESCRIPTION``,
+set by ``hisim_main`` from the setup module's docstring, now ``Simulator.description``). Both travel
+to post-processing on the
+:class:`~hisim.postprocessing.postprocessing_datatransfer.PostProcessingDataTransfer`, so a second
+simulation in the same process no longer inherits the first one's name. Nothing read the rest.
 """
 # clean
 import enum
@@ -201,7 +208,8 @@ class SingletonDictKeyEnum(enum.Enum):
     # WATERMASSFLOWRATEOFHEATGENERATOR went with them (R2.4).
     # 6 was LOCATION, written by the Weather at construction time and read back as the
     # report region; postprocessing now reads the Weather component's own config instead.
-    RESULT_SCENARIO_NAME = 7
+    # 7 was RESULT_SCENARIO_NAME, written by twelve building-sizer setups and read by
+    # postprocessing as the pyam "scenario" column; it is now Simulator.scenario_name.
     # 8 to 13 were the six 5R1C thermal-model values the Building wrote at build time --
     # THERMALTRANSMISSIONCOEFFICIENTGLAZING, THERMALTRANSMISSIONSURFACEINDOORAIR,
     # THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM, THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS,
@@ -230,4 +238,5 @@ class SingletonDictKeyEnum(enum.Enum):
     # horizontal, direct normal, direct normal extra and global horizontal irradiance, azimuth,
     # apparent zenith, wind speed) the Weather published for the PV system. Since 2026-09-12
     # they travel through the per-simulation SimRepository, keyed by Weather.YEARLY_*.
-    DESCRIPTION = 47
+    # 47 was DESCRIPTION, written by hisim_main from the setup module's docstring and read
+    # by postprocessing into scenario.json; it is now Simulator.description.

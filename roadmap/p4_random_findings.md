@@ -1,6 +1,6 @@
 # P4 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-12 (8 findings)
+**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-13 (9 findings)
 **Context:** things that surfaced while working through
 `roadmap/declarative_energy_systems/p4_component_sweep_requirements.md` — the component sweep, decisions
 D-1 … D-32 — and were **not** what the work set out to do. Kept separately so the requirements stay about
@@ -374,6 +374,114 @@ lists them.
 
 *Logged 2026-09-12 while landing the zenith clamp (#628). The finding is what the producer work was written
 for, so it is filed here fixed rather than open.*
+
+### F-9 — a declarative run asked for a scenario JSON dies after the simulation, parsing a port name only the legacy path ever wrote **[verified]**
+
+Found on 2026-09-13 while going through what the post-processing options do to a run started from an
+energy-system file. A declarative run whose simulation parameters carry
+`WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON` simulates all the way to the end and then raises in
+post-processing:
+
+```
+$ HISIM_CACHE_DIR=<scratch>/cache hisim energy-system run \
+      energy_systems/gas_boiler_household.energy_system.yaml \
+      <scratch>/one_day_15min_scenario_eval.simulation.yaml
+IFO:Simulation took 0.39s.
+IFO:Writing component configurations for scenario evaluation to JSON file.
+...
+  File "hisim/postprocessing/postprocessing_main.py", line 1114, in write_config_data_for_scenario_evaluation
+    write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=ppdt.description,
+  File "hisim/json_generator.py", line 466, in write_standalone_scenario_json
+    add_component_to_scenario(scenario=scenario, config=component.my_component.config, component=component.my_component)
+  File "hisim/json_generator.py", line 225, in add_component_to_scenario
+    component_entry, ins, outs = convert_component_to_json(config, component)
+  File "hisim/json_generator.py", line 150, in convert_component_to_json
+    raise ValueError(f"Label does not match expected format: {inp.field_name}")
+ValueError: Label does not match expected format: ElectricalPowerConsumptionFromoccupancy
+```
+
+The simulation-parameters file is `energy_systems/one_day_15min.simulation.yaml` with the option added to
+its `post_processing_options` list beside `EXPORT_TO_CSV`; the unmodified file, one January day at 900 s,
+finishes the same system and writes its results. The option is the whole difference, and the exception is
+raised after `Simulation took …`, so nothing the timesteps did is implicated.
+
+Two options reach the generator, and neither is the one whose name reads closest to it.
+`WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON` calls `write_config_data_for_scenario_evaluation`
+(`postprocessing_main.py:476-478`) and `WRITE_COMPONENT_CONFIGS_TO_JSON` calls
+`write_component_configurations_to_json` (`:472-474`); both call `write_standalone_simulation_json` and
+`write_standalone_scenario_json` out of `hisim/json_generator.py`, and the second option was verified to
+fail on the same file with the same message. `PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION` does not touch the
+generator at all — `prepare_results_for_scenario_evaluation` writes the resampled result CSVs, and the
+option appears inside `write_config_data_for_scenario_evaluation` only to pick the subdirectory the JSONs
+go into.
+
+**Mechanism.** For every dynamic input of a `DynamicComponent`, `convert_component_to_json` has to write
+down which component the input reads — and it recovers that name out of the port's own name
+(`json_generator.py:147-150`):
+
+```python
+pattern = rf"^Input_(.*?)_{re.escape(source_component_field_name)}_\d+$"
+match = re.match(pattern, inp.field_name)
+if not match:
+    raise ValueError(f"Label does not match expected format: {inp.field_name}")
+```
+
+The format it insists on is the legacy one. `add_component_input_and_connect` names its port
+`f"Input_{source_object_name}_{source_component_output}_{num_inputs}"` (`dynamic_component.py:626`), so the
+source name is the middle field of a three-field label and the regex reads it back out of the middle. The
+declarative path names the same port from a template instead —
+`AGGREGATOR_INPUT_TEMPLATE = "{source_output}From{source_name}"` (`hisim/config/channels.py:306`), applied in
+`add_resolved_dynamic_input` (`dynamic_component.py:499`) — so the meter's port is called
+`ElectricalPowerConsumptionFromoccupancy`, and a pattern anchored on `Input_` matches nothing whatsoever.
+
+`From` is not a spelling the parser knows, and the lowercase `occupancy` is not what defeats it. That name is
+lowercase because a component key in an energy-system file is an instance name its author chooses and
+`gas_boiler_household.energy_system.yaml` writes `occupancy:`; a CamelCase key fails in exactly the same
+place, verified — `basic_household.energy_system.yaml`, whose keys are `UTSPConnector`, `PVSystem`,
+`HeatPump`, dies on `ElectricityOutputFromHeatPump`. What the message names is simply the first port of the
+first dynamic component the writer reached, so it differs per file and none of the names in it is the cause.
+
+Python-mode runs of the same setup pass, verified rather than inferred: `system_setups/basic_household.py`,
+built through `initialize_from_python` with one January day at 900 s and the same option set, runs to
+`Finished postprocessing`, and the `scenario.json` it writes carries
+`"source_object_name": "PVSystem"`, `"UTSPConnector"` and `"HeatPump"` — three names the regex pulled out of
+three `Input_…_…_N` labels. Nothing about the option is broken; it has simply never been handed a label of
+any other shape.
+
+The name being parsed for is on the port already, on both paths. `Component.connect_input` records
+`src_object_name` on the input it wires (`component.py:427`); the legacy path reaches it through
+`add_component_input_and_connect`, and the declarative path through `wiring_checks.py:130-134`, which passes
+`src_object_name=wire.source_runtime_name`. Built from the gas-boiler file, the meter's one dynamic port
+reports `field_name='ElectricalPowerConsumptionFromoccupancy'`, `src_object_name='occupancy'`,
+`src_field_name='ElectricalPowerConsumption'`. The fact the regex reconstructs is sitting beside the name it
+reconstructs it from.
+
+**Blast radius.** Every declarative run that asks for either JSON-writing option, whatever the file: the
+crash is in the writer, not in any one system's wiring, and it needs only one dynamic component with one
+resolved feed — which every energy-system file with an aggregator has. The eleven building-sizer setups set
+`PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION` rather than the failing option, so the recorded twins and the
+golden runs do not go through this; what it costs is a declarative run configured the way
+`tests/test_system_setups_basic_household_with_all_resultfiles.py` configures a Python-mode one. The writer
+itself is the legacy JSON mode's own format, and the *output* half of the same function already knows it:
+`json_generator.py:107-117` refuses a dynamic output that was not named from a prefix and a weight with a
+message saying in as many words that "a run built from an energy-system file is written down by that format,
+and the scenario JSON is the legacy path's own file". The input half discovers the same thing by regex
+failure, one loop later, with a message that names a port.
+
+*Cost of not finding it: a run that is only ever going to fail is allowed to simulate first, and then fails
+with a message about a label format — naming neither the option that asked for the file nor the fact that the
+file belongs to the other execution mode.*
+
+**Where it stands.** Not fixed; this entry logs it. Two candidate fixes, and which one is right is a question
+about how long the scenario JSON is meant to live, so it is the owner's:
+
+- **Parse nothing.** Read `inp.src_object_name`, which the wiring already set to the source component's real
+  name on both paths, instead of matching a regex against the port's name. The writer would stop caring how a
+  port is named, and legacy runs would produce the same JSON they produce now, since the label's middle field
+  and `src_object_name` are set from the same argument.
+- **Retire the label parsing along with the writer's claim on declarative runs.** Refuse the declarative input
+  the way `:107-117` already refuses the declarative output, and refuse it before the first timestep rather
+  than after the last, so the run fails with an explanation and no wasted simulation.
 
 
 ---

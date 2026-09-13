@@ -1314,7 +1314,7 @@ _ENERGY_BALANCE_MODULES = {
     "HydrogenStorage": "generic_electrolyzer_and_h2_storage",
     "FuelCell": "generic_fuel_cell",
     "CHP": "advanced_fuel_cell",
-    "SimpleCHP": "generic_chp",
+    "SimpleCHP": "generic_chp.chp",
 }
 
 #: Unit values the energy collector can convert, i.e. the ones that make an electricity output
@@ -1331,7 +1331,8 @@ def _declared_electricity_outputs(module_name: str, class_name: str):
     call in the class body's `__init__`, so the syntax tree is the faithful source.
 
     Args:
-        module_name: The `hisim.components` submodule holding the class.
+        module_name: The `hisim.components` submodule holding the class, dotted when it sits
+            inside a component package (``generic_chp.chp``).
         class_name: The class whose declarations to collect.
 
     Returns:
@@ -1342,8 +1343,8 @@ def _declared_electricity_outputs(module_name: str, class_name: str):
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "hisim",
         "components",
-        f"{module_name}.py",
-    )
+        *module_name.split("."),
+    ) + ".py"
     with open(path, encoding="utf-8") as file:
         source = file.read()
     tree = ast.parse(source, filename=path)
@@ -1369,6 +1370,32 @@ def _declared_electricity_outputs(module_name: str, class_name: str):
                 if isinstance(argument, ast.Attribute):
                     declared[argument.attr] = unit.group(1) if unit else ""
     return declared
+
+
+def _component_source_files(directory: str):
+    """Every source file under `hisim/components`, package submodules included.
+
+    A component is sometimes a file (``electricity_meter.py``) and sometimes a directory
+    (``building/``, ``generic_chp/``), so a scan of the top-level ``*.py`` files sees only half
+    the tree. `os.walk` sees all of it, and the dotted name it yields is the one
+    `_declared_electricity_outputs` turns back into a path. A package's ``__init__.py`` is named
+    ``<package>.__init__`` for that reason: it is the spelling that round-trips, and a class
+    defined in an ``__init__`` is as real as any other.
+
+    Args:
+        directory: The ``hisim/components`` directory.
+
+    Yields:
+        ``(dotted module name, absolute path)`` for every ``.py`` file, in a stable order.
+    """
+    for parent, directory_names, file_names in os.walk(directory):
+        directory_names[:] = sorted(name for name in directory_names if name != "__pycache__")
+        relative_parent = os.path.relpath(parent, directory)
+        for file_name in sorted(file_names):
+            if not file_name.endswith(".py"):
+                continue
+            parts = [] if relative_parent == "." else relative_parent.split(os.sep)
+            yield ".".join(parts + [file_name[:-3]]), os.path.join(parent, file_name)
 
 
 class TestTheEnergyBalanceTableMatchesTheRealClasses:
@@ -1420,16 +1447,18 @@ class TestTheEnergyBalanceTableMatchesTheRealClasses:
         two agree: a class that would be refused mid-run is a class this test names now, with the
         file it lives in, which is the difference between a maintainer adding a row and a user
         seeing an aborted simulation.
+
+        The walk descends into component packages (`building/`, `generic_chp/`), because a
+        component that is a directory is still a component: a scan of the top-level `*.py` files
+        alone would quietly exempt every class inside one, which is the opposite of total.
         """
         directory = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "hisim", "components"
         )
         missing = []
-        for file_name in sorted(os.listdir(directory)):
-            if not file_name.endswith(".py"):
-                continue
-            module_name = file_name[:-3]
-            with open(os.path.join(directory, file_name), encoding="utf-8") as file:
+        for module_name, path in _component_source_files(directory):
+            file_name = os.path.relpath(path, directory)
+            with open(path, encoding="utf-8") as file:
                 tree = ast.parse(file.read(), filename=file_name)
             for node in ast.walk(tree):
                 if not isinstance(node, ast.ClassDef):

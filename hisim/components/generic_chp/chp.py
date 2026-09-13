@@ -14,19 +14,10 @@ from typing import Optional, ClassVar, List
 from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.components import controller_l1_chp
+from hisim.components.generic_chp import controller
 from hisim.simulationparameters import SimulationParameters
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.economics.facts import CostRelevance
-
-__authors__ = "Frank Burkrad, Maximilian Hillen"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = ""
-__version__ = ""
-__maintainer__ = "Johanna Ganglbauer"
-__email__ = "johanna.ganglbauer@4wardenergy.at"
-__status__ = "development"
 
 
 @dataclass_json
@@ -126,7 +117,7 @@ class SimpleCHP(cp.Component):
     """Simulates CHP operation with constant electical and thermal power as well as constant fuel consumption.
 
     Components to connect to:
-    (1) CHP or fuel cell controller (controller_l1_chp)
+    (1) CHP or fuel cell controller (hisim.components.generic_chp.controller)
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -277,17 +268,17 @@ class SimpleCHP(cp.Component):
     ) -> List[cp.ComponentConnection]:
         """Sets default connections of the controller in the Fuel Cell / CHP."""
 
-        controller_classname = controller_l1_chp.L1CHPController.get_classname()
+        controller_classname = controller.L1CHPController.get_classname()
         return [
             cp.ComponentConnection(
                 SimpleCHP.CHPControllerOnOffSignal,
                 controller_classname,
-                controller_l1_chp.L1CHPController.CHPControllerOnOffSignal,
+                controller.L1CHPController.CHPControllerOnOffSignal,
             ),
             cp.ComponentConnection(
                 SimpleCHP.CHPControllerHeatingModeSignal,
                 controller_classname,
-                controller_l1_chp.L1CHPController.CHPControllerHeatingModeSignal,
+                controller.L1CHPController.CHPControllerHeatingModeSignal,
             ),
         ]
 

@@ -1,6 +1,6 @@
 """Tests for the generic CHP system and CHPConfig factory methods.
 
-Covers integration of ``generic_chp.SimpleCHP`` with ``controller_l1_chp.L1CHPController``
+Covers integration of ``generic_chp.SimpleCHP`` with ``generic_chp.L1CHPController``
 under various demand/hydrogen scenarios, plus unit checks of ``CHPConfig``
 default-config builders and ``GenericCHPState.clone``.
 
@@ -21,10 +21,7 @@ from tests import functions_for_testing as fft
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.components import (
-    generic_chp,
-    controller_l1_chp,
-)
+from hisim.components import generic_chp
 from hisim.simulationparameters import SimulationParameters
 from hisim.config import ComponentID
 
@@ -70,9 +67,9 @@ def test_chp_system() -> None:
     my_chp = generic_chp.SimpleCHP(my_simulation_parameters=my_simulation_parameters, config=chp_config)
 
     # configure chp controller
-    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_fuel_cell_with_buffer()
+    chp_controller_config = generic_chp.L1CHPControllerConfig.get_default_config_fuel_cell_with_buffer()
     chp_controller_config.electricity_threshold = chp_config.p_el / 2
-    my_chp_controller = controller_l1_chp.L1CHPController(
+    my_chp_controller = generic_chp.L1CHPController(
         my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
     )
 
@@ -251,8 +248,8 @@ def test_chp_heats_the_water_to_the_dhw_maximum_in_summer() -> None:
     chp_config = generic_chp.CHPConfig.get_default_config_chp(thermal_power=thermal_power)
     my_chp = generic_chp.SimpleCHP(my_simulation_parameters=my_simulation_parameters, config=chp_config)
 
-    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_chp()
-    my_chp_controller = controller_l1_chp.L1CHPController(
+    chp_controller_config = generic_chp.L1CHPControllerConfig.get_default_config_chp()
+    my_chp_controller = generic_chp.L1CHPController(
         my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
     )
 
@@ -462,7 +459,7 @@ def test_chp_controller_default_thresholds() -> None:
     Every expectation is a literal. Checking one factory against another would pass just as
     happily if both of them drifted, which is the change this is meant to catch.
     """
-    config_class = controller_l1_chp.L1CHPControllerConfig
+    config_class = generic_chp.L1CHPControllerConfig
     expected: dict[str, dict[str, object]] = {
         "chp": {
             "component_name": "CHPController",
@@ -535,7 +532,7 @@ def test_chp_controller_config_refuses_a_heating_band_of_zero_width() -> None:
     position inside the band divided by the band's width, so a band of zero width would raise
     only in the middle of a simulation, if at all.
     """
-    config = controller_l1_chp.L1CHPControllerConfig.get_default_config_chp()
+    config = generic_chp.L1CHPControllerConfig.get_default_config_chp()
 
     with pytest.raises(ValueError, match="t_min_heating_in_celsius"):
         dataclasses.replace(config, t_min_heating_in_celsius=config.t_max_heating_in_celsius)
@@ -549,7 +546,7 @@ def test_chp_controller_config_refuses_an_inverted_dhw_band() -> None:
     level, so the controller would quietly serve the fuller vessel and the run would look like a
     working simulation of a differently configured house.
     """
-    config = controller_l1_chp.L1CHPControllerConfig.get_default_config_chp()
+    config = generic_chp.L1CHPControllerConfig.get_default_config_chp()
 
     with pytest.raises(ValueError, match="t_min_dhw_in_celsius"):
         dataclasses.replace(config, t_min_dhw_in_celsius=config.t_max_dhw_in_celsius + 1)

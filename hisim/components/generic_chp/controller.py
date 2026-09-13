@@ -22,14 +22,6 @@ from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.economics.facts import CostRelevance
 
-__authors__ = "edited Johanna Ganglbauer"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = "MIT"
-__version__ = "0.1"
-__maintainer__ = "Vitor Hugo Bellotto Zago"
-__email__ = "vitor.zago@rwth-aachen.de"
-__status__ = "development"
 
 #: Julian day of the simulation year on which the heating season begins.
 _DAY_OF_HEATING_SEASON_BEGIN = 270

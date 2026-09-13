@@ -24,3 +24,4 @@ History
   the option every variant selected appended, as ``Household gas + solar [collector=large]`` —
   and the file's ``description`` in ``scenario.json``. A Python run that never names itself is
   named after its module file instead of publishing an empty scenario.
+* ``hisim.components.controller_l1_chp`` is gone; the L1 CHP controller lives in ``hisim.components.generic_chp`` (import it from the package).

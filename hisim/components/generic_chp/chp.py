@@ -19,15 +19,6 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.economics.facts import CostRelevance
 
-__authors__ = "Frank Burkrad, Maximilian Hillen"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = ""
-__version__ = ""
-__maintainer__ = "Johanna Ganglbauer"
-__email__ = "johanna.ganglbauer@4wardenergy.at"
-__status__ = "development"
-
 
 @dataclass_json
 @dataclass

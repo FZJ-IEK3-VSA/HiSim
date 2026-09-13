@@ -174,11 +174,11 @@ To write a component of your own, copy `hisim/components/example_template.py`: i
 
 List of `Component` Children
 -----------
-These classes inherit from `Component` (`component.py`) and live in the `hisim/components` directory. Grouped by what they do:
+These classes inherit from `Component` (`component.py`) and live in the `hisim/components` directory. One component and its helpers are one directory, so an entry below may name a package (`building/`, `generic_chp/`) rather than a single file. Grouped by what they do:
 
 - Building and weather: `Building` (`building/building.py`), `Weather` (`weather.py`)
 - Occupancy: `UtspLpgConnector` (`loadprofilegenerator_utsp_connector.py`), which takes the residents' profiles from the LoadProfileGenerator through the UTSP, from a local LoadProfileGenerator or from a shipped profile
-- Generation: `PVSystem` (`generic_pv_system.py`), `SimpleCHP` (`generic_chp.py`)
+- Generation: `PVSystem` (`generic_pv_system.py`), `SimpleCHP` (`generic_chp/chp.py`)
 - Heat supply: `GenericHeatPump` (`generic_heat_pump.py`) and `MoreAdvancedHeatPumpHPLib` (`more_advanced_heat_pump_hplib.py`), `GenericBoiler` for gas, oil, pellets, wood chips and hydrogen (`generic_boiler.py`), `DistrictHeating` (`generic_district_heating.py`), `ElectricHeating` (`generic_electric_heating.py`), `SolarThermalSystem` (`solar_thermal_system.py`)
 - Storages: `SimpleWaterStorage` for hot water and buffer tanks (`simple_water_storage.py`), `Battery` (`advanced_battery_bslib.py`), `HydrogenStorage` (`generic_electrolyzer_and_h2_storage.py`)
 - Mobility: `Car` (`generic_car.py`), `L1Controller` for charging the car's battery (`controller_l1_generic_ev_charge.py`)

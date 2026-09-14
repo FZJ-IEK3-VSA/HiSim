@@ -520,7 +520,7 @@ recorder reads that object's neighbour (`preset_provenance`) but not the record 
 deviation block". The P3 glossary meanwhile promised the recorded sizer file as "the P5 consumer
 input", which a pinned file cannot be.
 
-Decided as A-P3.1 (`p3_recording_requirements.md` §11): the recorder writes `AUTO` for a
-law-computed field whose facts have a declared provider in the recorded system, with a comment
-carrying the run's value and the law; assigned fields stay concrete; a twin whose `AUTO` fields do
-not resolve to the run's values fails the recording. Implemented on `twins_resize`.
+Decided as A-P3.1 (`p3_recording_requirements.md` §11): the recorder leaves a
+law-computed field unwritten when its facts have a declared provider in the recorded system, so the
+preset's `AUTO` stands; assigned fields stay concrete, a pinned law field says why; a twin whose
+left-to-the-preset fields do not resolve to the run's values fails the recording. Implemented on `twins_resize`.

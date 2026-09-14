@@ -71,7 +71,7 @@ The external representation is fixed by P2 (mockups + `energy_systems/gas_boiler
 - R2.1 Every component the simulator holds after `prepare_calculation()` + `connect_all_components()` appears once, keyed by its runtime `component_name`, in registration order; `class` is the component's importable path.
 - R2.2 A config built by a `@preset`/`@constructor` method (provenance present) is written as `preset:`/`constructor:` plus the sparse `config` diff against a fresh build of that preset; a config without provenance is written as a complete `config` block with the same codec as the P2 realized record (`${var}` paths, enums by name, `component_id` omitted). Rejected: guessing a preset by value-matching (an inference, E1). Recording does not wait for P4 (Q-P3.1): at the start of P3 the 9 converted classes take the first branch and the other 32 the second, so the first recorded files are long and each P4 batch shortens them by re-recording alone — the recorder needs no change per batch.
 - R2.3 Every wire is written at the consumer: a source whose wires equal exactly the target's default connections for that source becomes a bare `inputs` item; every other wire an explicit `{input, from}`; aggregator feeds `{from, tags, weight}` with `dispatch` where a dispatch output was created; nothing is written at the source.
-- R2.4 A recorded file contains no `AUTO`, no `sizing_sources`, no `groups` (Q-P3.3 may add one exception) and no comments except the P2 header line and a generated-by line naming the setup module, the simulation-parameters file and the recorder version. **Amended 2026-09-14 (A-P3.1):** a recorded file *does* contain `AUTO`, on exactly the fields a law computed and for which the recorded system declares a provider, each with a comment carrying the value the run produced and the law; see §11.
+- R2.4 A recorded file contains no `AUTO`, no `sizing_sources`, no `groups` (Q-P3.3 may add one exception) and no comments except the P2 header line and a generated-by line naming the setup module, the simulation-parameters file and the recorder version. **Amended 2026-09-14 (A-P3.1):** a recorded file leaves a law-computed field unwritten when the recorded system declares a provider for what the law reads, so the preset's own `AUTO` stands and the field re-sizes; a pinned line says in a comment why it is pinned; see §11.
 - R2.5 Canonical style (P2 R11): `dump(load(recorded)) == recorded`.
 
 ### R3 — Parity `[given; epic E7]`
@@ -297,18 +297,23 @@ be reused for another without deleting every sized line by hand — while the gl
 the recorded sizer file "the P5 consumer input". A base file that cannot re-size is not a base file.
 
 **Decision.** The twin is an authored energy-system file. For a stamped configuration the recorder
-writes a field as `AUTO` when (a) the field appears in the run's `sizing_record` — a law computed
-it, the setup did not assign it — and (b) every fact that law reads has at least one component in
-the recorded system whose class declares it in `SIZING_CONTRIBUTIONS`. Each such line carries a
-comment with the value the run produced, the law, and the fact's provider:
-`power_in_watt: AUTO  # sized 22272.28 by _rooftop_power_in_watt <- Building.roof_area_in_m2`.
-A field the setup assigned stays a concrete override. A field whose provider is not yet converted
-stays concrete with a comment saying which fact has no provider — and flips to `AUTO` on the
-re-record that follows the provider's conversion, which is what "each P4 batch shortens the twins"
-should always have meant. Unconverted classes stay full literal blocks.
+**leaves a field unwritten** when (a) the field appears in the run's `sizing_record` — a law
+computed it, the setup did not assign it — and (b) every fact that law reads has exactly one
+component in the recorded system whose class declares it in `SIZING_CONTRIBUTIONS`. The preset's
+own `AUTO` then stands, and the twin says what was chosen, not what was derived: `preset: rooftop`
+already means "size the array from the roof". The value the run produced is not repeated in the
+twin — the realized record every run writes carries it, per field with its law and provider.
+*(Revised 2026-09-14 in review of #745: the first implementation wrote an explicit
+`power_in_watt: AUTO # sized 22272.28 by …` line for every such field; 180 lines restating the
+preset's defaults to annotate them, dropped.)* A field the setup assigned stays a concrete
+override. A field whose provider is not yet converted stays concrete **with a comment saying which
+fact has no provider** — and is dropped on the re-record that follows the provider's conversion,
+which is what "each P4 batch shortens the twins" should always have meant. A field the preset
+sizes with a law of its own stays concrete likewise, since re-opening it would hand it to the class
+law. Unconverted classes stay full literal blocks.
 
 **The check.** After writing a twin the recorder resolves it through the executor and compares
-every `AUTO` field's resolved value with the run's `sizing_record` value. A difference **fails the
+every field it left to the preset with the run's `sizing_record` value. A difference **fails the
 recording**, naming the field and both numbers: it means the laws and the declared facts do not
 reproduce the context the setup built by hand — the defect class the DHW conversion met in
 `household_gas_solar_thermal`, where the setup passed the archetype's dwelling count while its
@@ -347,4 +352,4 @@ concrete") and the glossary entries *recorded file* and *base file*. Logged as F
 
 ## 12. Glossary
 
-See the epic. P3-specific: **recorded file** — a v3 energy-system file produced by observing a `setup_function` run; since A-P3.1 an *authored* file: law-computed fields with a declared provider are `AUTO` (each commented with the run's value), assigned fields concrete, no `sizing_sources`/`groups`/`variants`; **twin** — the generated file paired with a Python setup (v1: `*.scenario.json`; v3: `*.energy_system.yaml`); **freshness** — a CI check that regenerates a twin and fails on any diff; **base file** — the recorded file of one heating-system sizer with class-default module configuration, the P5 consumer input — usable as one only since A-P3.1, when recorded files started to re-size; **KPI parity** — equality of every entry of `all_kpis.json` within `rel_tol = 1e-9`, the golden oracle; **probe list** — the authored set of module configurations a setup is recorded under, the configuration axis of both the grouping table (R10) and the parity rig (R11); **parity rig** — the temporary, hand-dispatched workflow that runs a setup both ways in one container and compares them exactly, removed when P3 ends.
+See the epic. P3-specific: **recorded file** — a v3 energy-system file produced by observing a `setup_function` run; since A-P3.1 an *authored* file: law-computed fields with a declared provider are left to the preset, assigned fields concrete (a pinned law field says why), no `sizing_sources`/`groups`/`variants`; **twin** — the generated file paired with a Python setup (v1: `*.scenario.json`; v3: `*.energy_system.yaml`); **freshness** — a CI check that regenerates a twin and fails on any diff; **base file** — the recorded file of one heating-system sizer with class-default module configuration, the P5 consumer input — usable as one only since A-P3.1, when recorded files started to re-size; **KPI parity** — equality of every entry of `all_kpis.json` within `rel_tol = 1e-9`, the golden oracle; **probe list** — the authored set of module configurations a setup is recorded under, the configuration axis of both the grouping table (R10) and the parity rig (R11); **parity rig** — the temporary, hand-dispatched workflow that runs a setup both ways in one container and compares them exactly, removed when P3 ends.

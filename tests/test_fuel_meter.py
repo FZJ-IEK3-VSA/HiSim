@@ -357,4 +357,4 @@ def test_the_two_fuel_constants_may_legitimately_be_none() -> None:
     assert config.fuel_loadtype is lt.LoadTypes.DISTRICTHEATING
     assert config.heating_value_of_fuel_in_kwh_per_liter is None
     assert config.fuel_density_in_kg_per_m3 is None
-    assert auto_fields(config) == ()
+    assert not auto_fields(config)

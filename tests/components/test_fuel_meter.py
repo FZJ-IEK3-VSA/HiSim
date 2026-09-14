@@ -79,7 +79,7 @@ def test_the_preset_resolves_against_the_generators_fuel_facts() -> None:
     assert config.fuel_loadtype == lt.LoadTypes.PELLETS
     assert config.heating_value_of_fuel_in_kwh_per_liter == 3.25
     assert config.fuel_density_in_kg_per_m3 == 650.0
-    assert auto_fields(config) == ()
+    assert not auto_fields(config)
 
 
 def test_a_meter_built_for_one_carrier_can_be_named_per_building() -> None:

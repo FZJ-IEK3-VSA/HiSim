@@ -281,57 +281,6 @@ class SimpleDHWStorageConfig(ConfigBase):
             subsidy_as_percentage_of_investment_costs=None,
         )
 
-    @classmethod
-    def get_default_simpledhwstorage_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "SimpleDHWStorageConfig":
-        """Get a default simplehotwaterstorage config."""
-        if component_id is None:
-            component_id = ComponentID(name="DHWStorage")
-        volume_heating_water_storage_in_liter: float = 250
-
-        config = SimpleDHWStorageConfig(
-            component_id=component_id,
-            volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
-            heat_transfer_coefficient_in_watt_per_m2_per_kelvin=0.36,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-        )
-        return config
-
-    @classmethod
-    def get_scaled_dhw_storage(
-        cls,
-        number_of_apartments: int = 1,
-        default_volume_in_liter: float = 250.0,
-        name: str = "DHWStorage",
-        component_id: Optional[ComponentID] = None,
-    ) -> "SimpleDHWStorageConfig":
-        """Gets a default storage with scaling according to number of apartments."""
-
-        # if the used heating system is a heat pump use formular
-
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        volume = default_volume_in_liter * max(number_of_apartments, 1)
-        config = SimpleDHWStorageConfig(
-            component_id=component_id,
-            volume_heating_water_storage_in_liter=volume,
-            heat_transfer_coefficient_in_watt_per_m2_per_kelvin=0.36,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-        )
-        return config
-
 
 @dataclass
 class SimpleWaterStorageState:

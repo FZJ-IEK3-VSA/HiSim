@@ -168,8 +168,8 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         )
 
     # DHW storage configs
-    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
-        number_of_apartments=my_building_information.number_of_apartments
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(
+        SizingContext(number_of_apartments=my_building_information.number_of_apartments)
     )
 
     my_dhw_storage = simple_water_storage.SimpleDHWStorage(

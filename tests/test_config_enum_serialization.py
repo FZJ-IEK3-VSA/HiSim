@@ -72,8 +72,8 @@ class ConfigEnumSerializationCases:
             generic_boiler.GenericBoilerConfig.preset_condensing_gas_12kw("CondensingGasBoiler")
         ),
         "GenericOilBoilerConfig": lambda: generic_boiler.GenericBoilerConfig.preset_oil_12kw("ConventionalOilBoiler"),
-        "SimpleHotWaterStorageConfig": (
-            simple_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config
+        "SimpleHotWaterStorageConfig": lambda: (
+            simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer("SimpleHotWaterStorage")
         ),
         "MoreAdvancedHeatPumpHPLibConfig": (
             more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_default_generic_advanced_hp_lib

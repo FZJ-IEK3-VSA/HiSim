@@ -240,7 +240,9 @@ def _buffer_sized_at(
     Returns:
         SimpleHotWaterStorageConfig: The resolved configuration.
     """
-    config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer("SimpleHotWaterStorage")
+    config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer(
+        "SimpleHotWaterStorage"
+    )
     config.sizing_option = sizing_option
     return config.resolve(SizingContext(maximal_thermal_power_in_watt=power_in_watt))
 
@@ -322,7 +324,9 @@ def test_the_buffer_preset_pins_the_vessel_and_leaves_the_volume_open() -> None:
     source, which is what gives the component its four heat-generator inputs, and that the
     generator is of no particular kind. What it does not state is how large the vessel is.
     """
-    config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer("SimpleHotWaterStorage")
+    config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer(
+        "SimpleHotWaterStorage"
+    )
 
     assert config.component_id == ComponentID(name="SimpleHotWaterStorage")
     assert config.heat_transfer_coefficient_in_watt_per_m2_per_kelvin == 2.0

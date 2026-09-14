@@ -71,7 +71,7 @@ components:
 
   hds_controller:
     class: hisim.components.heat_distribution_system.HeatDistributionController
-    preset: standard                        # reads heating_load_in_watt — one provider, nothing to write
+    preset: building_derived                # reads heating_load_in_watt — one provider, nothing to write
     inputs:
       - weather
       - building
@@ -79,7 +79,7 @@ components:
 
   hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
-    preset: standard                        # reads water_mass_flow_rate_in_kg_per_second <- hds_controller
+    preset: building_derived                # reads water_mass_flow_rate_in_kg_per_second <- hds_controller
     inputs:
       - building
       - hds_controller
@@ -154,13 +154,13 @@ groups:
     components:
       pv_south:
         class: hisim.components.generic_pv_system.PVSystem
-        preset: standard                    # power_in_watt AUTO <- building.conditioned_floor_area_in_m2
+        preset: rooftop                     # power_in_watt AUTO <- building.roof_area_in_m2
         config: {azimuth: 180, tilt: 30}
         inputs:
           - weather
       pv_east:
         class: hisim.components.generic_pv_system.PVSystem
-        preset: standard
+        preset: rooftop
         config:
           azimuth: 90
           tilt: 30

@@ -21,15 +21,15 @@ components:
 
   weather:
     class: hisim.components.weather.Weather
-    preset: standard                        # lookup class: one preset (Aachen), else `constructor: {for_location: …}`
+    preset: aachen                          # lookup class: one preset (Aachen), else `constructor: {for_location: …}`
 
   occupancy:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    preset: standard                        # CHR01 couple both at work
+    preset: couple_both_at_work             # CHR01 couple both at work
 
   building:
     class: hisim.components.building.Building
-    preset: standard                        # German SFH; RenoVisor instead writes
+    preset: german_single_family_home       # German SFH; RenoVisor instead writes
                                             # constructor: {for_tabula_code: {building_code: …}}
     inputs:
       - weather
@@ -38,14 +38,14 @@ components:
 
   hds_controller:
     class: hisim.components.heat_distribution_system.HeatDistributionController
-    preset: standard
+    preset: building_derived
     inputs:
       - weather
       - building
 
   hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
-    preset: standard
+    preset: building_derived
     config:
       position_hot_water_storage_in_system: NO_STORAGE_MASS_FLOW_FIX   # no buffer in this house
     inputs:

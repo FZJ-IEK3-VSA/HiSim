@@ -18,6 +18,7 @@ from hisim.components import (
 
 from hisim import log
 from hisim import utils
+from hisim.config import SizingContext, concrete
 
 
 @pytest.mark.buildingtest
@@ -143,8 +144,10 @@ def simulation_for_one_timestep(
     _log_building_properties(my_residence_config, my_residence_information)
 
     # Set PV
-    my_pv_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-        rooftop_area_in_m2=my_residence_information.roof_area_in_m2
+    # No weather component in this sweep, so the weather identity -- which only enters the cache
+    # key -- is a stand-in; the roof area is the fact under test.
+    my_pv_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem").resolve(
+        SizingContext(roof_area_in_m2=my_residence_information.roof_area_in_m2, weather_identity="Aachen")
     )
 
     # Set hplib
@@ -160,7 +163,7 @@ def simulation_for_one_timestep(
 
     # Set Battery
     my_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
-        total_pv_power_in_watt_peak=my_pv_config.power_in_watt
+        total_pv_power_in_watt_peak=concrete(my_pv_config.power_in_watt)
     )
 
     # Set DHW Storage
@@ -169,7 +172,7 @@ def simulation_for_one_timestep(
     )
 
     # Energy system sizes
-    pv_power_in_watt = my_pv_config.power_in_watt
+    pv_power_in_watt = concrete(my_pv_config.power_in_watt)
     hplib_thermal_power_in_watt = my_hplib_config.set_thermal_output_power_in_watt
     simple_hot_water_storage_size_in_liter = (
         my_simple_hot_water_storage_config.volume_heating_water_storage_in_liter

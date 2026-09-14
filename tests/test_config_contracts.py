@@ -164,6 +164,7 @@ class PilotWireFormat:
         "WeatherConfig": ("standard",),
         "UtspLpgConnectorConfig": ("standard",),
         "ElectricityMeterConfig": ("standard",),
+        "PVSystemConfig": ("rooftop",),
         "CarConfig": (),
     }
 
@@ -180,6 +181,7 @@ class PilotWireFormat:
         "WeatherConfig": ("for_location", "for_data_file"),
         "UtspLpgConnectorConfig": ("for_household",),
         "ElectricityMeterConfig": (),
+        "PVSystemConfig": (),
         "CarConfig": ("for_household",),
     }
 
@@ -188,11 +190,8 @@ class PilotWireFormat:
     #: ``CarConfig`` is the first and so far only one: a preset takes nothing but the instance
     #: name, and a car cannot be configured without naming the household and the car whose
     #: LoadProfileGenerator driving profile it drives by, so every one of its builders has to
-    #: be a constructor (D-23, 2026-08-31). ``PVSystemConfig`` is the second, and for now a
-    #: different reason: it is not converted yet and enters the scan only as a fact provider
-    #: (R2.1), so it still ships the legacy ``get_default_pv_system`` factory. Batch B2 gives
-    #: it the ``rooftop`` preset and takes it off this list.
-    CLASSES_WITHOUT_PRESETS: Tuple[str, ...] = ("CarConfig", "PVSystemConfig")
+    #: be a constructor (D-23, 2026-08-31).
+    CLASSES_WITHOUT_PRESETS: Tuple[str, ...] = ("CarConfig",)
 
     #: Config class name → the facts it contributes, in declaration order.
     FACT_NAMES: Dict[str, Tuple[str, ...]] = {
@@ -269,6 +268,7 @@ def test_the_scan_finds_the_converted_classes(scan):
         "WeatherConfig",
         "UtspLpgConnectorConfig",
         "ElectricityMeterConfig",
+        "PVSystemConfig",
     } <= names
 
 

@@ -24,7 +24,6 @@ components:
       inverter_name: ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_
       module_database: SANDIA_MODULE_DATABASE
       inverter_database: SANDIA_INVERTER_DATABASE
-      power_in_watt: 4000.0
       azimuth: 180.0
       tilt: 30.0
       share_of_maximum_pv_potential: 1.0
@@ -37,6 +36,7 @@ components:
       subsidy_as_percentage_of_investment_costs: 0.0
       predictive_control: false
       prediction_horizon: null
+      power_in_watt: 4000.0
       weather_identity: Seville/NSRDB/weather/NSRDB/Seville/Seville
     inputs:
       - Weather

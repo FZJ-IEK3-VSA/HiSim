@@ -6,7 +6,7 @@ from typing import Optional
 
 # import hisim.components.random_numbers
 from hisim.simulator import SimulationParameters, Simulator
-from hisim.config import ComponentID
+from hisim.config import ComponentID, SizingContext
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import advanced_battery_bslib
 from hisim.components import weather
@@ -98,8 +98,13 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     my_weather_config = weather.WeatherConfig.preset_standard("Weather")
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
 
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
-    my_photovoltaic_system_config.weather_identity = my_weather_config.identity()
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
+    # A demo array with no building to size it from, so the power is stated here rather than
+    # derived: the 10 kW this setup has always run is now written down where it is used (D-13).
+    my_photovoltaic_system_config.power_in_watt = 10000.0
+    my_photovoltaic_system_config = my_photovoltaic_system_config.resolve(
+        SizingContext(weather_identity=my_weather_config.identity())
+    )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         my_simulation_parameters=my_simulation_parameters,
         config=my_photovoltaic_system_config,

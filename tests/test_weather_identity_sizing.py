@@ -141,7 +141,8 @@ def test_a_pv_key_moves_when_the_weather_does_and_a_building_key_too() -> None:
     aachen = WeatherConfig.preset_standard("Weather").identity()
     seville = WeatherConfig.for_location("Weather", LocationEnum.SEVILLE).identity()
 
-    pv = PVSystemConfig.get_default_pv_system()
+    pv = PVSystemConfig.preset_rooftop("PVSystem")
+    pv.power_in_watt = 10000.0
     building = BuildingConfig.preset_standard("Building")
 
     assert Keys.of(Keys.sized_from(pv, weather_identity=aachen)) != Keys.of(Keys.sized_from(pv, weather_identity=seville))

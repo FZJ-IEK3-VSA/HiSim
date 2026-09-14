@@ -20,6 +20,7 @@ from hisim.components import (
     idealized_electric_heater,
 )
 from hisim import utils, loadtypes
+from hisim.config import SizingContext
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
 from hisim import log
@@ -54,11 +55,9 @@ def _build_system(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
     # Build PV
-    my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_scaled_pv_system(share_of_maximum_pv_potential=1, rooftop_area_in_m2=120)
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem").resolve(
+        SizingContext(roof_area_in_m2=120, weather_identity=my_weather_config.identity())
     )
-
-    my_photovoltaic_system_config.weather_identity = my_weather_config.identity()
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,

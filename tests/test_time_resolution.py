@@ -14,7 +14,7 @@ import pandas as pd
 import pytest
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
-from hisim.config import SizingContext
+from hisim.config import SizingContext, concrete
 from hisim import utils
 from hisim import log
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -378,12 +378,14 @@ def run_cluster_house(
     my_sim.add_component(my_weather)
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-        rooftop_area_in_m2=my_building_information.roof_area_in_m2,
-        share_of_maximum_pv_potential=1,
-        location=weather_location,
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
+    my_photovoltaic_system_config.location = weather_location
+    my_photovoltaic_system_config = my_photovoltaic_system_config.resolve(
+        SizingContext(
+            roof_area_in_m2=my_building_information.roof_area_in_m2,
+            weather_identity=my_weather_config.identity(),
+        )
     )
-    my_photovoltaic_system_config.weather_identity = my_weather_config.identity()
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config, my_simulation_parameters=my_simulation_parameters,
     )
@@ -523,7 +525,7 @@ def run_cluster_house(
 
     # Build Battery
     my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
-        total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
+        total_pv_power_in_watt_peak=concrete(my_photovoltaic_system_config.power_in_watt)
     )
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config,

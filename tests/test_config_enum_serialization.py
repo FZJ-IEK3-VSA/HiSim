@@ -67,7 +67,7 @@ class ConfigEnumSerializationCases:
     #: Config classes owning at least one enum-typed field, with a default factory.
     CONFIG_FACTORIES: Dict[str, Any] = {
         "WeatherConfig": lambda: weather.WeatherConfig.preset_standard("Weather"),
-        "PVSystemConfig": generic_pv_system.PVSystemConfig.get_default_pv_system,
+        "PVSystemConfig": lambda: generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem"),
         "GenericBoilerConfig": lambda: (
             generic_boiler.GenericBoilerConfig.preset_condensing_gas_12kw("CondensingGasBoiler")
         ),

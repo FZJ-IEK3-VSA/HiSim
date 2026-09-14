@@ -272,23 +272,23 @@ def setup_function(
     my_sim.add_component(my_weather)
 
     # Build PV
-    if pv_power_in_watt is None:
-        my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-            rooftop_area_in_m2=my_building_information.roof_area_in_m2,
-            share_of_maximum_pv_potential=share_of_maximum_pv_potential,
-            location=weather_location,
-        )
-    else:
-        my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system(
-            maximum_power_in_watt=pv_power_in_watt,
-            share_of_maximum_pv_potential=share_of_maximum_pv_potential,
-            location=weather_location,
-        )
-
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
+    # Orientation, site and share are the archetype's, not the preset's, so they are set on top
+    # of it; the share has to be set before resolving, because the rooftop law reads it.
+    my_photovoltaic_system_config.location = weather_location
+    my_photovoltaic_system_config.share_of_maximum_pv_potential = share_of_maximum_pv_potential
     my_photovoltaic_system_config.azimuth = azimuth
     my_photovoltaic_system_config.tilt = tilt
-
-    my_photovoltaic_system_config.weather_identity = my_weather_config.identity()
+    if pv_power_in_watt is not None:
+        # The archetype states the array's capacity, so the roof law is not asked: the share is
+        # applied to that capacity instead, exactly once, and the field holds the result.
+        my_photovoltaic_system_config.power_in_watt = pv_power_in_watt * share_of_maximum_pv_potential
+    my_photovoltaic_system_config = my_photovoltaic_system_config.resolve(
+        SizingContext(
+            roof_area_in_m2=my_building_information.roof_area_in_m2,
+            weather_identity=my_weather_config.identity(),
+        )
+    )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -425,7 +425,7 @@ def setup_function(
 
         # Build Battery
         my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
-            total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
+            total_pv_power_in_watt_peak=concrete(my_photovoltaic_system_config.power_in_watt)
         )
         my_advanced_battery = advanced_battery_bslib.Battery(
             my_simulation_parameters=my_simulation_parameters,

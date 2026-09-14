@@ -34,19 +34,19 @@ components:
     preset: rooftop
     config:
       location: AACHEN
-      power_in_watt: 22272.28
-      weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
+      power_in_watt: AUTO # sized 22272.28 by _rooftop_power_in_watt <- Building.roof_area_in_m2
+      weather_identity: AUTO # sized Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center by Size.WEATHER_IDENTITY <- Weather.weather_identity
     inputs:
       - Weather
   HeatDistributionController:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: standard
     config:
-      set_heating_threshold_outside_temperature_in_celsius: 18.0
-      heating_reference_temperature_in_celsius: -7.0
-      set_heating_temperature_for_building_in_celsius: 20.0
-      set_cooling_temperature_for_building_in_celsius: 25.0
-      heating_load_of_building_in_watt: 7780.75
+      set_heating_threshold_outside_temperature_in_celsius: AUTO # sized 18.0 by HeatDistributionControllerConfig.<lambda> <- Building.heating_load_in_watt, Building.conditioned_floor_area_in_m2
+      heating_reference_temperature_in_celsius: AUTO # sized -7.0 by Size.HEATING_REFERENCE_TEMPERATURE_IN_CELSIUS <- Building.heating_reference_temperature_in_celsius
+      set_heating_temperature_for_building_in_celsius: AUTO # sized 20.0 by Size.SET_HEATING_TEMPERATURE_IN_CELSIUS <- Building.set_heating_temperature_in_celsius
+      set_cooling_temperature_for_building_in_celsius: AUTO # sized 25.0 by Size.SET_COOLING_TEMPERATURE_IN_CELSIUS <- Building.set_cooling_temperature_in_celsius
+      heating_load_of_building_in_watt: AUTO # sized 7780.75 by Size.HEATING_LOAD_IN_WATT.rounded(2) <- Building.heating_load_in_watt
     inputs:
       - L2EMSElectricityController
       - Weather
@@ -55,8 +55,8 @@ components:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas
     config:
-      minimal_thermal_power_in_watt: 0.0
-      maximal_thermal_power_in_watt: 8558.827420000001
+      minimal_thermal_power_in_watt: AUTO # sized 0.0 by 0.0
+      maximal_thermal_power_in_watt: AUTO # sized 8558.827420000001 by GenericBoilerConfig.<lambda> <- Building.heating_load_in_watt, Building.number_of_apartments
     inputs:
       - ModulatingBoilerController
       - DHWStorage
@@ -66,8 +66,8 @@ components:
     preset: modulating
     config:
       set_heating_threshold_outside_temperature_in_celsius: 18.0
-      minimal_thermal_power_in_watt: 0.0
-      maximal_thermal_power_in_watt: 8558.827420000001
+      minimal_thermal_power_in_watt: AUTO # sized 0.0 by Size.MINIMAL_THERMAL_POWER_IN_WATT <- CondensingGasBoiler.minimal_thermal_power_in_watt
+      maximal_thermal_power_in_watt: AUTO # sized 8558.827420000001 by Size.MAXIMAL_THERMAL_POWER_IN_WATT <- CondensingGasBoiler.maximal_thermal_power_in_watt
       with_domestic_hot_water_preparation: true
     inputs:
       - Weather
@@ -93,9 +93,9 @@ components:
     class: hisim.components.heat_distribution_system.HeatDistribution
     preset: standard
     config:
-      heating_system: FLOORHEATING
-      water_mass_flow_rate_in_kg_per_second: 0.27
-      absolute_conditioned_floor_area_in_m2: 121.2
+      heating_system: AUTO # sized FLOORHEATING by Size.HEAT_DISTRIBUTION_SYSTEM_TYPE <- HeatDistributionController.heat_distribution_system_type
+      water_mass_flow_rate_in_kg_per_second: AUTO # sized 0.27 by Size.WATER_MASS_FLOW_RATE_IN_KG_PER_SECOND.rounded(2) <- HeatDistributionController.water_mass_flow_rate_in_kg_per_second
+      absolute_conditioned_floor_area_in_m2: AUTO # sized 121.2 by Size.CONDITIONED_FLOOR_AREA_IN_M2 <- Building.conditioned_floor_area_in_m2
     inputs:
       - Building
       - HeatDistributionController
@@ -185,8 +185,8 @@ variants:
             class: hisim.components.advanced_battery_bslib.Battery
             preset: standard
             config:
-              custom_pv_inverter_power_generic_in_watt: 11136.14
-              custom_battery_capacity_generic_in_kilowatt_hour: 22.27
+              custom_pv_inverter_power_generic_in_watt: AUTO # sized 11136.14 by 0.5 * Size.PV_PEAK_POWER_IN_WATT.rounded(2) <- PVSystem.pv_peak_power_in_watt
+              custom_battery_capacity_generic_in_kilowatt_hour: AUTO # sized 22.27 by 0.001 * Size.PV_PEAK_POWER_IN_WATT.rounded(2) <- PVSystem.pv_peak_power_in_watt
           L2EMSElectricityController:
             class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
             preset: optimize_own_consumption

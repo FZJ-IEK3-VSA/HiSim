@@ -33,8 +33,8 @@ components:
     preset: rooftop
     config:
       location: AACHEN
-      power_in_watt: 22272.28
-      weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
+      power_in_watt: AUTO # sized 22272.28 by _rooftop_power_in_watt <- Building.roof_area_in_m2
+      weather_identity: AUTO # sized Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center by Size.WEATHER_IDENTITY <- Weather.weather_identity
     inputs:
       - Weather
   ElectricHeatingController:
@@ -88,8 +88,8 @@ components:
     class: hisim.components.advanced_battery_bslib.Battery
     preset: standard
     config:
-      custom_pv_inverter_power_generic_in_watt: 11136.14
-      custom_battery_capacity_generic_in_kilowatt_hour: 22.27
+      custom_pv_inverter_power_generic_in_watt: AUTO # sized 11136.14 by 0.5 * Size.PV_PEAK_POWER_IN_WATT.rounded(2) <- PVSystem.pv_peak_power_in_watt
+      custom_battery_capacity_generic_in_kilowatt_hour: AUTO # sized 22.27 by 0.001 * Size.PV_PEAK_POWER_IN_WATT.rounded(2) <- PVSystem.pv_peak_power_in_watt
   L2EMSElectricityController:
     class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     preset: optimize_own_consumption

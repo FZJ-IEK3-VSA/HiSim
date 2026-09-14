@@ -21,10 +21,21 @@ Three stages, in this order, and separate on purpose:
       :mod:`~hisim.energy_system.recording.parameters`, which decides whether the run's parameters
       are already described by a file beside it or need one of their own.
 
-What a recording never contains is as much of the definition as what it does. No ``AUTO``, because
-a recording states what ran; no ``sizing_sources``, because where a number came from is not
-observable; no ``groups`` and no ``variants``, because which parts of a household belong together
-is a judgement a person makes and not something one run can be asked about.
+What a recording never contains is as much of the definition as what it does. No
+``sizing_sources``, because which provider answered a fact is a decision the binding rule makes for
+itself; no ``groups`` and no ``variants``, because which parts of a household belong together is a
+judgement a person makes and not something one run can be asked about.
+
+It also leaves fields out (A-P3.1). A twin is an authored file, not a transcript: a field a law
+computed, and whose facts the recorded system itself declares a provider for, is written nowhere
+at all, so the preset's own ``AUTO`` stands and the file re-sizes for a different building instead
+of reproducing one archetype. ``preset: rooftop`` already says the array is sized from the roof,
+and a line restating that in order to annotate it is not written; the run's value lives in the
+realized record, which states it per field with its law and its provider. A field the setup
+assigned stays a number, and so does one whose fact has no provider in this system yet — that line
+keeps a comment saying which, and it disappears on the re-record that follows that provider's
+conversion. Every omission is then held to its word: the session resolves the file it just wrote
+and fails the recording if a field comes back as anything but the number the run produced.
 
 That judgement has a second pass of its own, and it is built from the same three stages run several
 times over. :mod:`~hisim.energy_system.recording.probes` reads the authored list of module
@@ -52,7 +63,11 @@ stay possible without importing HiSim's component tree, and a recorder necessari
 
 from hisim.energy_system.recording.builder import EnergySystemBuilder, PortablePathGuard, build
 from hisim.energy_system.recording.child_recorder import ChildRecorder
-from hisim.energy_system.recording.configs import EntryConfigWriter
+from hisim.energy_system.recording.configs import (
+    EntryConfigWriter,
+    FactProviders,
+    SizedFieldDecision,
+)
 from hisim.energy_system.recording.inputs import InputItemWriter
 from hisim.energy_system.recording.names import RecordedNames
 from hisim.energy_system.recording.parameters import (
@@ -113,6 +128,7 @@ __all__ = [
     "ComponentRow",
     "ConfigurationSelection",
     "EnergySystemBuilder",
+    "FactProviders",
     "FleetCensus",
     "GroupedSetup",
     "GroupedSystemBuilder",
@@ -157,6 +173,7 @@ __all__ = [
     "RecordedSystem",
     "RecordingResult",
     "RecordingSession",
+    "SizedFieldDecision",
     "build",
     "normalise_parameters",
     "observe",

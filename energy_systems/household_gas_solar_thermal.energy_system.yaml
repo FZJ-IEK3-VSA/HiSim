@@ -22,10 +22,6 @@ components:
   HeatDistributionSystem:
     class: hisim.components.heat_distribution_system.HeatDistribution
     preset: standard
-    config:
-      heating_system: FLOORHEATING
-      water_mass_flow_rate_in_kg_per_second: 0.27
-      absolute_conditioned_floor_area_in_m2: 121.2
     inputs:
       - Building
       - HeatDistributionController
@@ -33,12 +29,6 @@ components:
   HeatDistributionController:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: standard
-    config:
-      set_heating_threshold_outside_temperature_in_celsius: 18.0
-      heating_reference_temperature_in_celsius: -7.0
-      set_heating_temperature_for_building_in_celsius: 20.0
-      set_cooling_temperature_for_building_in_celsius: 25.0
-      heating_load_of_building_in_watt: 7780.75
     inputs:
       - Weather
       - Building
@@ -90,9 +80,6 @@ components:
   CondensingGasBoiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas
-    config:
-      minimal_thermal_power_in_watt: 0.0
-      maximal_thermal_power_in_watt: 8558.827420000001
     inputs:
       - ModulatingBoilerController
       - DHWStorage
@@ -101,8 +88,6 @@ components:
     class: hisim.components.generic_boiler.GenericBoilerController
     preset: modulating
     config:
-      minimal_thermal_power_in_watt: 0.0
-      maximal_thermal_power_in_watt: 8558.827420000001
       with_domestic_hot_water_preparation: true
     inputs:
       - Weather

@@ -5,13 +5,21 @@ plain data in, returns a model out, touches no runtime object and writes no text
 interesting therefore has a test that needs neither a simulator nor a filesystem, which is the
 reason the stage exists separately at all.
 
-What it produces is deliberately narrow. A recording states what one run built, so it carries no
-``AUTO``, no ``sizing_sources``, no ``groups`` and no ``variants``: the first would make the file
-size itself again instead of reproducing the run, the second is a claim about provenance that no
-observation can make, and the last two are judgements about which parts of a household belong
-together, which is a person's decision and not an inference from a single run. What is left is a
-flat list of components in registration order, each stating its class, its configuration and where
-its inputs come from.
+What it produces is deliberately narrow. It carries no ``sizing_sources``, no ``groups`` and no
+``variants``: the first is a claim about provenance that no observation can make, and the last two
+are judgements about which parts of a household belong together, which is a person's decision and
+not an inference from a single run. What is left is a flat list of components in registration
+order, each stating its class, its configuration and where its inputs come from.
+
+It also carries fewer lines than the run had values (A-P3.1). A twin is an authored energy-system
+file rather than a transcript of one run: a field a law computed, and for which this system
+declares a provider, is left out of its entry's ``config`` block entirely, so the preset's own
+``AUTO`` answers it and the same file re-sizes for a different building instead of repeating one
+archetype's numbers. ``preset: rooftop`` already says the array is sized from the roof, so a line
+saying it again is not written. Which fields those are is decided in
+:mod:`~hisim.energy_system.recording.configs`; this module builds the provider lookup that decision
+needs, renders the pinned decisions as the file's comments and hands the omitted ones to the
+session, which checks them.
 
 The two guards that live here are about portability rather than shape. An absolute filesystem path
 that survived symbolisation is refused rather than written, because it would make the file
@@ -23,7 +31,7 @@ would then differ for a reason nobody could see in the diff.
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Dict, Mapping, Optional
+from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 
 from hisim.energy_system.errors import (
     EnergySystemErrorId,
@@ -33,7 +41,11 @@ from hisim.energy_system.errors import (
 from hisim.energy_system.model import ComponentEntry, EnergySystemFile
 from hisim.energy_system.path_resolver import PathResolver
 from hisim.energy_system.record import ConfigBlockWriter, assert_no_sentinels
-from hisim.energy_system.recording.configs import EntryConfigWriter
+from hisim.energy_system.recording.configs import (
+    EntryConfigWriter,
+    FactProviders,
+    SizedFieldDecision,
+)
 from hisim.energy_system.recording.inputs import InputItemWriter
 from hisim.energy_system.recording.names import RecordedNames
 from hisim.energy_system.recording.observe import ObservedComponent, RecordedSystem
@@ -113,6 +125,11 @@ class EnergySystemBuilder:
     against the same path resolver and reads the same wiring, which is what makes the result a
     function of the observation alone.
 
+    It also owns the two by-products of the sizing decision, and they are by-products of *this*
+    object rather than of the model because the model has nowhere to put them: :attr:`notes`, the
+    comment each pinned configuration line carries, which the emitter attaches, and :attr:`checks`,
+    the omitted fields whose claim the session verifies by resolving the file it just wrote.
+
     Nothing is sorted and nothing is looked up in a set on the way out: components are written in
     registration order, an entry's keys in the order the format declares them, and a configuration's
     fields in declaration order. That is not tidiness but requirement: a freshness check re-records
@@ -132,8 +149,12 @@ class EnergySystemBuilder:
                 machine's default registry when omitted.
         """
         self.recorded = recorded
-        self.configs = EntryConfigWriter(ConfigBlockWriter(path_resolver or PathResolver.default()))
+        self.configs = EntryConfigWriter(
+            ConfigBlockWriter(path_resolver or PathResolver.default()),
+            FactProviders.of(recorded.components),
+        )
         self.inputs = InputItemWriter(recorded)
+        self.decisions: List[SizedFieldDecision] = []
 
     def build(self, name: str, description: Optional[str] = None) -> EnergySystemFile:
         """Builds the whole file.
@@ -148,10 +169,11 @@ class EnergySystemBuilder:
         Raises:
             EnergySystemRecordingError: ``EF-R1`` for an unwritable name, ``EF-R2`` for a qualified
                 identity, ``EF-R3`` for an unportable path and ``EF-R4`` for a vanished preset.
-            EnergySystemRecordError: ``EF-60`` if a value still asks to be sized, which a component
-                that was constructed at all cannot produce and which is therefore a broken promise
-                rather than a bad setup.
+            EnergySystemRecordError: ``EF-60`` if any value still asks to be sized, which a
+                component that was constructed at all cannot produce and which is therefore a
+                broken promise rather than a bad setup.
         """
+        self.decisions = []
         components: Dict[str, ComponentEntry] = {}
         for observed in self.recorded.components:
             key = RecordedNames.check_component_name(observed.name, self.recorded.setup)
@@ -165,6 +187,33 @@ class EnergySystemBuilder:
         assert_no_sentinels(recorded)
         return recorded
 
+    @property
+    def notes(self) -> Dict[str, Dict[str, str]]:
+        """The trailing comment every pinned configuration line carries, by component and field.
+
+        A field the recorder left to the preset has no line to annotate, so it contributes nothing
+        here; only a value that stayed concrete gets its ``pinned: …`` sentence.
+
+        Returns:
+            One mapping per component that has at least one pinned field; empty for a recording in
+            which every computed field was left to its preset.
+        """
+        rendered: Dict[str, Dict[str, str]] = {}
+        for decision in self.decisions:
+            comment = decision.comment()
+            if comment is not None:
+                rendered.setdefault(decision.component, {})[decision.field] = comment
+        return rendered
+
+    @property
+    def checks(self) -> Tuple[SizedFieldDecision, ...]:
+        """The omitted fields whose claim the written file has to make good on.
+
+        Returns:
+            One decision per field left to its preset, in the order the entries were built.
+        """
+        return tuple(decision for decision in self.decisions if decision.auto)
+
     def entry(self, observed: ObservedComponent) -> ComponentEntry:
         """Builds the entry of one component: what it is, how it is configured, what feeds it.
 
@@ -172,20 +221,22 @@ class EnergySystemBuilder:
             observed: The observed component.
 
         Returns:
-            Its entry, carrying no sizing sources at all — a recording states values, and where a
-            value came from is not something one run can be asked about.
+            Its entry, carrying no sizing sources at all — which provider answers a fact is a
+            decision the binding rule makes for itself, and a file that wrote it down would stop
+            following the system it is put into.
 
         Raises:
             EnergySystemRecordingError: ``EF-R2``, ``EF-R3`` or ``EF-R4`` for this component.
         """
         RecordedNames.check_identity(observed.name, observed.config, self.recorded.setup)
-        fields = self.configs.fields(observed.name, observed.config, self.recorded.setup)
-        block = fields.get(EntryConfigWriter.CONFIG_KEY) or {}
+        written = self.configs.fields(observed.name, observed.config, self.recorded.setup)
+        self.decisions.extend(written.decisions)
+        block = written.members.get(EntryConfigWriter.CONFIG_KEY) or {}
         PortablePathGuard.check(block, observed.name, self.recorded.setup)
         return ComponentEntry(
             name=observed.name,
             class_path=observed.class_path,
-            preset=fields.get(EntryConfigWriter.PRESET_KEY),
+            preset=written.members.get(EntryConfigWriter.PRESET_KEY),
             config=block,
             inputs=self.inputs.items(observed),
         )

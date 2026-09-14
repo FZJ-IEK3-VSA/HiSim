@@ -15,7 +15,6 @@ components:
     preset: rooftop
     config:
       power_in_watt: 10000.0
-      weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
     inputs:
       - Weather
   ElectricityMeter:

@@ -6,6 +6,17 @@ it, produced by running the setup and writing down what it built. This script is
 them, and with ``--check`` it is what proves they are still what the setups build — the freshness
 job runs exactly that and fails on any difference, so a setup can never change without its twin.
 
+A twin is an authored file rather than a transcript (A-P3.1): a field a sizing law computed, whose
+facts the recorded system itself declares a provider for, is left out of the twin's ``config``
+block altogether, so the preset's own ``AUTO`` answers it and the file re-sizes for another
+building instead of repeating one archetype's numbers. The value that run produced is in the
+realized record beside the results, not restated here. A field the setup assigned stays a number,
+and so does one whose fact has no provider in this system yet — that line says so and disappears
+on the re-record that follows the provider's conversion, which is why a batch of conversions
+shortens the twins. Every omission is checked before the recording is accepted: the child resolves
+the file it just wrote and fails if a field comes back as anything but the number the Python run
+produced.
+
 There is no skip list, deliberately. A setup that cannot be recorded is a defect in the setup or a
 gap in the format, not an exception to be carried in a list nobody revisits; the run collects
 every failure so one broken setup does not hide the next, and then exits non-zero naming all of

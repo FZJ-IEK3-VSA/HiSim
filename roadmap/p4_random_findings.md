@@ -506,3 +506,21 @@ why the golden check reproduced the failure correctly while the regenerator quie
 
 *A second occurrence on a different branch, three days apart, on the same script. The fix is one line of
 `env` in the subprocess call.*
+
+### F-14 — the recorder had the provenance to write `AUTO` and wrote the number instead, so no twin could be reused **[verified, decided]**
+
+Found on 2026-09-14 while reviewing the battery conversion (#740). Every recorded twin pins the
+values its laws computed — `power_in_watt: 22272.28`, `custom_battery_capacity_generic_in_kilowatt_hour: 22.27`
+— so a twin describes one archetype's numbers and re-sizes nothing when reused for another
+building. P3 chose that shape (R2.4) because "whether a value was sized or hand-copied is not
+recoverable from a run" (`p3_recording_requirements.md` §5e). That stopped being true with P4:
+`resolve_config` attaches a `sizing_record` to every resolved configuration, per field, and the
+recorder reads that object's neighbour (`preset_provenance`) but not the record itself;
+`recording/configs.py:unresolved` then states outright that a sized field "always lands in the
+deviation block". The P3 glossary meanwhile promised the recorded sizer file as "the P5 consumer
+input", which a pinned file cannot be.
+
+Decided as A-P3.1 (`p3_recording_requirements.md` §11): the recorder leaves a
+law-computed field unwritten when its facts have a declared provider in the recorded system, so the
+preset's `AUTO` stands; assigned fields stay concrete, a pinned law field says why; a twin whose
+left-to-the-preset fields do not resolve to the run's values fails the recording. Implemented on `twins_resize`.

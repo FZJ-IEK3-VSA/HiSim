@@ -33,19 +33,11 @@ components:
     preset: rooftop
     config:
       location: AACHEN
-      power_in_watt: 22272.28
-      weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
     inputs:
       - Weather
   HeatDistributionController:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: standard
-    config:
-      set_heating_threshold_outside_temperature_in_celsius: 18.0
-      heating_reference_temperature_in_celsius: -7.0
-      set_heating_temperature_for_building_in_celsius: 20.0
-      set_cooling_temperature_for_building_in_celsius: 25.0
-      heating_load_of_building_in_watt: 7780.75
     inputs:
       - L2EMSElectricityController
       - Weather
@@ -53,9 +45,6 @@ components:
   ConventionalPelletBoiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: pellets
-    config:
-      minimal_thermal_power_in_watt: 713.2356183333334
-      maximal_thermal_power_in_watt: 8558.827420000001
     inputs:
       - PelletBoilerController
       - DHWStorage
@@ -65,8 +54,6 @@ components:
     preset: on_off
     config:
       set_heating_threshold_outside_temperature_in_celsius: 18.0
-      minimal_thermal_power_in_watt: 713.2356183333334
-      maximal_thermal_power_in_watt: 8558.827420000001
       minimum_runtime_in_seconds: 1800.0
       minimum_resting_time_in_seconds: 900.0
       with_domestic_hot_water_preparation: true
@@ -106,10 +93,6 @@ components:
   HeatDistributionSystem:
     class: hisim.components.heat_distribution_system.HeatDistribution
     preset: standard
-    config:
-      heating_system: FLOORHEATING
-      water_mass_flow_rate_in_kg_per_second: 0.27
-      absolute_conditioned_floor_area_in_m2: 121.2
     inputs:
       - Building
       - HeatDistributionController
@@ -140,9 +123,6 @@ components:
   Battery:
     class: hisim.components.advanced_battery_bslib.Battery
     preset: standard
-    config:
-      custom_pv_inverter_power_generic_in_watt: 11136.14
-      custom_battery_capacity_generic_in_kilowatt_hour: 22.27
   L2EMSElectricityController:
     class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     preset: optimize_own_consumption

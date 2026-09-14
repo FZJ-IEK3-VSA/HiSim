@@ -1,10 +1,13 @@
 """Reading a live, wired simulator into the plain data a recorded file is built from.
 
 The recorder never parses Python. It runs the setup, lets the simulator resolve every default
-connection, and then *looks* at what is there — which is why group membership, the preset a
-still-unconverted class was built from and the question of whether a number was sized or typed can
-never be recovered: none of them survives into the objects. What does survive is everything a file
-needs, and this module collects exactly that and nothing else.
+connection, and then *looks* at what is there — which is why group membership and the preset a
+still-unconverted class was built from can never be recovered: neither survives into the objects.
+Whether a number was sized or typed *does* survive, on a converted class: resolving a configuration
+attaches its ``sizing_record``, and the observation hands the live configuration on with that
+attribute intact, which is what lets the builder leave a field out where a law can produce the
+number again. What survives is everything a file needs, and this module collects exactly that and nothing
+else.
 
 Observation is strictly read-only, and that is a property worth stating rather than assuming. The
 same simulator is normally run afterwards, in the same process, so an observation that touched a

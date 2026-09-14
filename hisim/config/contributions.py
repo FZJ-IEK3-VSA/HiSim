@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Any, Callable, ClassVar, Mapping, Tuple
+from typing import Any, Callable, ClassVar, List, Mapping, Tuple
 
 from hisim.config.context import SizingContext
 from hisim.config.laws import SizingError
@@ -64,3 +64,36 @@ class FactContribution:
                 f"FactContribution declares unknown fact(s) {unknown}; every fact must be "
                 "a SizingContext field (add the field and its Size term first)."
             )
+
+
+def declared_facts_of(config_class: type) -> Tuple[str, ...]:
+    """Lists the sizing facts one config class declares it computes, in declaration order.
+
+    Three places need this answer and used to derive it three times: the engine's provider table
+    (``SizingFactEngine.register``), the machine-readable class description
+    (``hisim.config.introspection``) and the recorder's per-system provider lookup
+    (``hisim.energy_system.recording.configs.FactProviders``). One of them collected the names in a
+    list and the others in a set, so a class declaring the same fact in two contributions counted
+    twice in one and once in the others. Deriving it once removes that disagreement.
+
+    Duplicates are collapsed — two contributions may legitimately name the same fact — and the
+    declaration order is kept, because that order is what an author reads in the source and what a
+    recorded file has to reproduce byte for byte on every machine.
+
+    Example: a class declaring ``FactContribution(facts=("roof_area_in_m2", "number_of_apartments"))``
+    and ``FactContribution(facts=("roof_area_in_m2",))`` yields
+    ``("roof_area_in_m2", "number_of_apartments")``.
+
+    Args:
+        config_class: The configuration class to read; a class with no declarations answers with
+            an empty tuple rather than raising, since not declaring anything is the normal case.
+
+    Returns:
+        The declared fact names, deduplicated, in declaration order.
+    """
+    ordered: List[str] = []
+    for contribution in getattr(config_class, FactContribution.CLASS_ATTRIBUTE, ()) or ():
+        for fact in contribution.facts:
+            if fact not in ordered:
+                ordered.append(fact)
+    return tuple(ordered)

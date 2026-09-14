@@ -41,7 +41,7 @@ from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Set, 
 from hisim import log
 from hisim.config import sizing
 from hisim.config.context import SizingContext
-from hisim.config.contributions import FactContribution
+from hisim.config.contributions import FactContribution, declared_facts_of
 from hisim.config.laws import Cardinality, ConfigSizingError, SizingError, SizingLaw
 from hisim.config.report import (
     ContributionRecord,
@@ -180,9 +180,8 @@ class SizingFactEngine:
                 )
             seen[name] = type(config).__name__
             contributions = tuple(getattr(type(config), FactContribution.CLASS_ATTRIBUTE, ()))
-            for contribution in contributions:
-                for fact in contribution.facts:
-                    self._providers.setdefault(fact, set()).add(name)
+            for fact in declared_facts_of(type(config)):
+                self._providers.setdefault(fact, set()).add(name)
             nodes.append(_Node(
                 name=name,
                 config=config,

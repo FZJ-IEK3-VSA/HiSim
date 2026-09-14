@@ -21,15 +21,30 @@ Each test states the failure mode it catches.
 from __future__ import annotations
 
 import dataclasses
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Tuple
 
 import pytest
 import yaml
+from dataclasses_json import dataclass_json
 
 from hisim.cli import ExitCodes, main
-from hisim.config import ComponentID, ConfigBase, preset_provenance
+from hisim.config import (
+    ComponentID,
+    ConfigBase,
+    FactContribution,
+    Self,
+    Sizable,
+    Size,
+    SizingContext,
+    preset,
+    preset_provenance,
+    sized_field,
+)
 from hisim.energy_system.errors import EnergySystemRecordingError
+from hisim.energy_system.path_resolver import PathResolver
+from hisim.energy_system.record import ConfigBlockWriter
 from hisim.energy_system.executor import (
     SimulationParametersReader,
     build_energy_system,
@@ -41,6 +56,8 @@ from hisim.energy_system.model import AggregatorFeed, DefaultInputs, ExplicitWir
 from hisim.energy_system.parity import ResolvedWire, WiringSnapshot
 from hisim.energy_system.record import assert_no_sentinels
 from hisim.energy_system.recording import (
+    EntryConfigWriter,
+    FactProviders,
     InputItemWriter,
     ObservedComponent,
     ObservedDispatch,
@@ -50,6 +67,7 @@ from hisim.energy_system.recording import (
     PortablePathGuard,
     RecordedSystem,
     RecordingResult,
+    SizedFieldDecision,
     build,
     observe,
     record_setup,
@@ -384,10 +402,15 @@ def test_a_recording_states_values_and_claims_nothing_else(
 ) -> None:
     """Catches a recording growing an intent it cannot have observed.
 
-    A sentinel would make the file size itself again instead of reproducing the run; a sizing source
-    would claim a provenance no observation can see; a group or a variant would claim that some
-    parts of the household belong together, which is a person's judgement. All four are absent by
-    construction, and this is where that construction is checked rather than assumed.
+    A sentinel would be a value that escaped a configuration unresolved; a sizing source would claim
+    a provenance no observation can see; a group or a variant would claim that some parts of the
+    household belong together, which is a person's judgement. All are absent by construction, and
+    this is where that construction is checked rather than assumed.
+
+    A field a law computed and this system can compute again is not a sentinel in the file either
+    (A-P3.1, revised in review of #745): the recorder writes no line for it at all and the preset it
+    came from carries the ``AUTO``, so the blanket refusal that guarded the twins before that
+    decision still guards them unchanged.
     """
     result = recordings[setup]
 
@@ -508,14 +531,19 @@ def test_a_recorded_file_is_written_in_the_one_canonical_style(
     """Catches the recorder writing a file the format's own writer would write differently.
 
     The rule of this format is that re-emitting a file reproduces it, and a generated file has no
-    excuse for being the exception. It holds of the body: the two comment lines above it name what
-    produced the file, and no YAML writer emits comments.
+    excuse for being the exception. It holds of the body, up to the trailing comments a twin's
+    pinned lines carry: those are a rendering of the sizing record and nothing reads them back, so a
+    line reproduces when it equals the canonical one or is the canonical one with a comment
+    appended.
     """
     result = recordings[setup]
     header, body = RecordedFileWriter.split(result.text)
+    canonical = dump_energy_system(load_energy_system(result.path))
 
     assert header.count("\n") == 2
-    assert dump_energy_system(load_energy_system(result.path)) == body
+    assert len(body.splitlines()) == len(canonical.splitlines())
+    for written, expected in zip(body.splitlines(), canonical.splitlines()):
+        assert written == expected or written.startswith(f"{expected} #"), written
 
 
 @pytest.mark.base
@@ -753,3 +781,452 @@ def test_the_command_line_records_a_setup_and_defaults_to_the_shipped_directory(
     assert written.exists()
     assert str(written) in capsys.readouterr().out
     assert RecordingSession.default_output_directory(Fixtures.SETUPS / "any.py") == Fixtures.ENERGY_SYSTEMS
+
+
+@dataclass_json
+@dataclass
+class _RoofConfig(ConfigBase):
+    """A fixture provider: it declares the roof area the array beside it is sized from.
+
+    It exists so that the recorder's provider lookup has something to find. The number itself is
+    beside the point; what the tests turn on is whether this component is in the recorded system
+    or not, which is exactly the question A-P3.1 makes the ``AUTO`` decision depend on.
+    """
+
+    component_id: ComponentID
+    roof_area_in_m2: float = 100.0
+
+    @classmethod
+    def get_main_classname(cls) -> str:
+        """Returns a dummy classname, as the ConfigBase contract requires."""
+        return "tests.test_energy_system_recording._RoofConfig"
+
+
+_RoofConfig.SIZING_CONTRIBUTIONS = (
+    FactContribution(
+        facts=("roof_area_in_m2",),
+        compute=lambda config, ctx: {"roof_area_in_m2": config.roof_area_in_m2},
+    ),
+)
+
+
+@dataclass_json
+@dataclass
+class _ArrayConfig(ConfigBase):
+    """A fixture consumer with a preset, one plain field and one field a law computes.
+
+    The three shapes the recorder has to tell apart all live on this one class: the preset's own
+    value for ``label``, the law's value for ``power_in_watt``, and whatever a setup assigns on top
+    of either.
+    """
+
+    component_id: ComponentID
+    label: str = "array"
+    power_in_watt: Sizable[float] = sized_field(rule=2.0 * Size.ROOF_AREA_IN_M2)
+
+    @classmethod
+    def get_main_classname(cls) -> str:
+        """Returns a dummy classname, as the ConfigBase contract requires."""
+        return "tests.test_energy_system_recording._ArrayConfig"
+
+    @preset
+    @classmethod
+    def preset_rooftop(cls, name: str) -> "_ArrayConfig":
+        """The array as the fixture's preset builds it, with its power left to the law.
+
+        Args:
+            name: The instance name, which becomes the configuration's identity.
+
+        Returns:
+            The unresolved configuration.
+        """
+        return cls(component_id=ComponentID(name=name))
+
+
+@dataclass_json
+@dataclass
+class _BoilerConfig(ConfigBase):
+    """A fixture consumer whose preset overrides the class law on one of its two sized fields.
+
+    This is the pellet boiler in miniature: the class sizes the minimum at a flat zero, and the
+    ``pellets`` preset replaces that rule with a twelfth of the sibling maximum. It exists so that
+    the recorder's judgement about a preset-owned law can be tested without the real boiler's
+    fifteen other fields.
+    """
+
+    component_id: ComponentID
+    maximal_thermal_power_in_watt: Sizable[float] = sized_field(rule=10.0 * Size.ROOF_AREA_IN_M2)
+    minimal_thermal_power_in_watt: Sizable[float] = sized_field(rule=0.0)
+
+    @classmethod
+    def get_main_classname(cls) -> str:
+        """Returns a dummy classname, as the ConfigBase contract requires."""
+        return "tests.test_energy_system_recording._BoilerConfig"
+
+    @preset
+    @classmethod
+    def preset_pellets(cls, name: str) -> "_BoilerConfig":
+        """The boiler with the preset's own modulation law on its minimal power.
+
+        Args:
+            name: The instance name, which becomes the configuration's identity.
+
+        Returns:
+            The unresolved configuration, whose minimal power holds a law object rather than a
+            number.
+        """
+        return cls(
+            component_id=ComponentID(name=name),
+            minimal_thermal_power_in_watt=Self("maximal_thermal_power_in_watt") * (1 / 12),
+        )
+
+
+class Sized:
+    """The smallest recorded system in which one field is computed from another component's fact.
+
+    Every test of the ``AUTO`` decision needs the same three things — a resolved consumer, a set of
+    components that either does or does not declare the fact its law read, and the writer that puts
+    the two together — and building them per test would hide the one line each test is about.
+    """
+
+    #: Name of the component whose configuration is written.
+    ARRAY: ClassVar[str] = "Array"
+
+    #: Name of the component declaring the fact the array's law reads.
+    ROOF: ClassVar[str] = "Roof"
+
+    #: Name of the component whose preset sizes one field with a law of its own.
+    BOILER: ClassVar[str] = "Boiler"
+
+    #: The roof area the fixture sizes against, and the law's factor over it.
+    AREA: ClassVar[float] = 100.0
+
+    #: What the law therefore produces, stated here so a test can name it without recomputing it.
+    POWER: ClassVar[float] = 200.0
+
+    @classmethod
+    def array(cls) -> Any:
+        """Builds the array's configuration through its preset and resolves it.
+
+        Returns:
+            The resolved configuration, carrying its preset stamp and its sizing record.
+        """
+        return _ArrayConfig.preset_rooftop(cls.ARRAY).resolve(SizingContext(roof_area_in_m2=cls.AREA))
+
+    @classmethod
+    def observed(cls, name: str, config: Any) -> ObservedComponent:
+        """Wraps one configuration as the observation the recorder reads.
+
+        Args:
+            name: The component's runtime name.
+            config: Its configuration.
+
+        Returns:
+            The observed component.
+        """
+        return ObservedComponent(
+            name=name,
+            class_path=f"tests.{name}",
+            class_name=name,
+            config=config,
+            connect_automatically=False,
+            default_connections={},
+        )
+
+    @classmethod
+    def writer(cls, *components: ObservedComponent) -> Any:
+        """Builds the entry writer over a recorded system consisting of the given components.
+
+        Args:
+            components: The observed components of the system, in registration order.
+
+        Returns:
+            The writer, carrying the provider lookup those components produce.
+        """
+        return EntryConfigWriter(
+            ConfigBlockWriter(PathResolver.default()), FactProviders.of(components)
+        )
+
+    @classmethod
+    def written(cls, config: Any, *others: ObservedComponent) -> Any:
+        """Writes the array's entry in a system that also holds the given other components.
+
+        Args:
+            config: The array's configuration.
+            others: The rest of the system, which is what decides whether the fact has a provider.
+
+        Returns:
+            The entry configuration: the members written and the decisions behind them.
+        """
+        array = cls.observed(cls.ARRAY, config)
+        writer = cls.writer(array, *others)
+        return writer.fields(cls.ARRAY, config, "tests/synthetic.py")
+
+
+@pytest.mark.base
+def test_a_computed_field_whose_facts_have_a_provider_is_left_to_the_preset() -> None:
+    """Catches the recorder writing down a value its own preset would produce again.
+
+    A twin that states 200.0 reproduces one roof and can be reused for no other, which is what
+    A-P3.1 changed; and a twin that states ``AUTO`` there restates what ``preset: rooftop`` already
+    means, which is what its revision dropped. With the fact's provider in the system the field gets
+    no line: the preset's own sentinel answers it and the file computes a different number for a
+    different building. The decision survives all the same, because the session still holds the
+    written file to the value the run produced.
+    """
+    written = Sized.written(Sized.array(), Sized.observed(Sized.ROOF, _RoofConfig(ComponentID(name=Sized.ROOF))))
+
+    assert "power_in_watt" not in written.members.get(EntryConfigWriter.CONFIG_KEY, {})
+    decision = written.decisions[0]
+    assert decision.auto
+    assert decision.comment() is None
+    assert decision.value == Sized.POWER
+    assert decision.sources == (f"{Sized.ROOF}.roof_area_in_m2",)
+
+
+@pytest.mark.base
+def test_a_field_left_to_the_preset_leaves_the_entry_with_nothing_but_its_preset() -> None:
+    """Catches an empty ``config`` block surviving into the file once its one line is dropped.
+
+    The array deviates from its preset in exactly one field and that field is now omitted, so the
+    entry has nothing left to say but which preset it came from. A ``config: {}`` written beside it
+    would be the same noise the revision of A-P3.1 removed, one level up.
+    """
+    written = Sized.written(Sized.array(), Sized.observed(Sized.ROOF, _RoofConfig(ComponentID(name=Sized.ROOF))))
+
+    assert written.members == {EntryConfigWriter.PRESET_KEY: "rooftop"}
+
+
+@pytest.mark.base
+def test_a_field_the_preset_sized_with_its_own_law_is_left_out_and_keeps_that_law() -> None:
+    """Catches the recorder pinning a number that omission would have reproduced anyway.
+
+    While the recorder wrote an explicit ``AUTO`` this field had to stay concrete, because the bare
+    word replaces whatever the preset put in the field with the *class* law — a twelfth of the
+    maximum would have become the class default of zero. Omission does the opposite: the preset
+    builds the field holding its own ``SizingLaw`` and the resolver evaluates that object, so the
+    line is not only unnecessary but the one thing that could lose the preset's rule. Both halves
+    are asserted here — the recorder leaves no line, and rebuilding the preset the way the executor
+    does reproduces the run's number rather than the class law's zero.
+    """
+    context = SizingContext(roof_area_in_m2=Sized.AREA)
+    resolved = _BoilerConfig.preset_pellets(Sized.BOILER).resolve(context)
+    boiler = Sized.observed(Sized.BOILER, resolved)
+    roof = Sized.observed(Sized.ROOF, _RoofConfig(ComponentID(name=Sized.ROOF)))
+
+    written = Sized.writer(boiler, roof).fields(Sized.BOILER, resolved, "tests/synthetic.py")
+
+    assert written.members == {EntryConfigWriter.PRESET_KEY: "pellets"}
+    minimal = next(d for d in written.decisions if d.field == "minimal_thermal_power_in_watt")
+    assert minimal.auto
+    assert minimal.comment() is None
+    assert minimal.value == Sized.AREA * 10.0 / 12
+    rebuilt = _BoilerConfig.preset_pellets(Sized.BOILER).resolve(context)
+    assert rebuilt.minimal_thermal_power_in_watt == minimal.value
+
+
+@pytest.mark.base
+def test_a_computed_field_whose_fact_nobody_provides_stays_a_number_and_says_why() -> None:
+    """Catches a twin writing ``AUTO`` for a value the file could not possibly compute again.
+
+    While a provider class is unconverted its fact has nobody to answer it, so leaving the field to
+    the preset's sentinel would make the file refuse to load rather than make it reusable. The
+    number stays, and the comment names the missing fact so that the line is visibly waiting for a
+    conversion rather than silently pinned for ever — a pinned line is the one kind of annotated
+    line a twin still writes.
+    """
+    written = Sized.written(Sized.array())
+
+    assert written.members[EntryConfigWriter.CONFIG_KEY]["power_in_watt"] == Sized.POWER
+    assert written.decisions[0].comment() == "pinned: no provider of roof_area_in_m2 in this system yet"
+    assert not written.decisions[0].auto
+
+
+@pytest.mark.base
+def test_a_field_the_setup_assigned_after_resolving_stays_a_plain_override() -> None:
+    """Catches an authored value being handed back to a law that would overwrite it.
+
+    A field can be in the sizing record and still not be the law's: a setup that assigns it after
+    resolving has decided the value itself. Writing ``AUTO`` there would silently replace the
+    author's number with the law's on the next run, which is the one way this decision could change
+    what a twin means.
+    """
+    config = Sized.array()
+    config.power_in_watt = 999.0
+
+    written = Sized.written(config, Sized.observed(Sized.ROOF, _RoofConfig(ComponentID(name=Sized.ROOF))))
+
+    assert written.members[EntryConfigWriter.CONFIG_KEY]["power_in_watt"] == 999.0
+    assert written.decisions == ()
+
+
+@pytest.mark.base
+def test_an_unstamped_configuration_is_written_out_in_full_with_no_sizing_decision() -> None:
+    """Catches the sizing decision leaking into the branch that has no preset to deviate from.
+
+    A class with no preset is written as a complete literal block, and nothing about it is decided:
+    the entry names no preset an omitted field could fall back on, so a missing line in it would be
+    a value the file cannot rebuild. Unconverted classes therefore stay exactly as they were.
+    """
+    roof = _RoofConfig(ComponentID(name=Sized.ROOF))
+    written = Sized.writer(Sized.observed(Sized.ROOF, roof)).fields(Sized.ROOF, roof, "tests/synthetic.py")
+
+    assert EntryConfigWriter.PRESET_KEY not in written.members
+    assert written.members[EntryConfigWriter.CONFIG_KEY]["roof_area_in_m2"] == Sized.AREA
+    assert written.decisions == ()
+
+
+@pytest.mark.base
+def test_a_recorded_auto_field_that_resolves_to_another_number_fails_the_recording(tmp_path: Path) -> None:
+    """Catches the twin's central claim being made without being checked.
+
+    Leaving a field to its preset asserts that the laws and the declared contributions reproduce the
+    context the setup built by hand. When they do not — a fact bound to a provider that says
+    something else, an archetype value that never reached the contributing component — the file
+    quietly simulates a different system. Pinning the number instead would make the two agree by refusing to compare
+    them, so the recording fails and names both.
+    """
+    config = Sized.array()
+    decision = SizedFieldDecision(Sized.ARRAY, "power_in_watt", "2.0 * Size.ROOF_AREA_IN_M2", 4321.0)
+    session = RecordingSession(Fixtures.SETUPS / "basic_household.py", tmp_path)
+
+    with pytest.raises(EnergySystemRecordingError) as failure:
+        session.check_resizing(Rebuilt([(Sized.ARRAY, config)]), (decision,))
+
+    assert failure.value.error_id.value == "EF-R13"
+    message = str(failure.value)
+    assert "Array.power_in_watt" in message
+    assert "4321.0" in message and str(Sized.POWER) in message
+    assert "2.0 * Size.ROOF_AREA_IN_M2" in message
+
+
+@pytest.mark.base
+def test_a_check_against_a_component_the_file_does_not_hold_fails_instead_of_passing() -> None:
+    """Catches the resizing check comparing a run's value against a component that is not there.
+
+    The lookup used to fall back to ``None``, which is a value an optional sized field really can
+    hold: a decision whose law computed nothing then agreed with a system that contained neither
+    the component nor the field, and the twin's central claim was never tested for exactly the
+    fields whose value was hardest to reproduce. It is its own refusal now, and a separate code,
+    because the finding is not "the laws compute another number" but "the file is not what the
+    recorder thought it wrote".
+    """
+    decision = SizedFieldDecision(Sized.ARRAY, "power_in_watt", "2.0 * Size.ROOF_AREA_IN_M2", None)
+    session = RecordingSession(Fixtures.SETUPS / "basic_household.py", Fixtures.ENERGY_SYSTEMS)
+
+    with pytest.raises(EnergySystemRecordingError) as failure:
+        session.check_resizing(Rebuilt([("Roof", _RoofConfig(ComponentID(name="Roof")))]), (decision,))
+
+    assert failure.value.error_id.value == "EF-R14"
+    assert Sized.ARRAY in str(failure.value)
+
+
+@pytest.mark.base
+def test_a_check_against_a_field_the_rebuilt_class_does_not_have_fails_instead_of_passing() -> None:
+    """Catches the same fall-back one level in: the component is there, the field is not.
+
+    ``getattr(config, field, None)`` made a renamed or deleted field indistinguishable from a field
+    holding ``None``, and reported "resolves it to None" for every other value, which points a
+    reader at the law rather than at the missing field. The absence is now named as such.
+    """
+    decision = SizedFieldDecision(Sized.ARRAY, "gone_in_watt", "2.0 * Size.ROOF_AREA_IN_M2", None)
+    session = RecordingSession(Fixtures.SETUPS / "basic_household.py", Fixtures.ENERGY_SYSTEMS)
+
+    with pytest.raises(EnergySystemRecordingError) as failure:
+        session.check_resizing(Rebuilt([(Sized.ARRAY, Sized.array())]), (decision,))
+
+    assert failure.value.error_id.value == "EF-R14"
+    assert "gone_in_watt" in str(failure.value)
+
+
+@pytest.mark.base
+def test_a_fact_two_recorded_components_declare_keeps_the_number_and_names_both() -> None:
+    """Catches a twin becoming ambiguous in the name of becoming reusable.
+
+    Leaving the field out binds it to whichever component answers the fact, and with two of them
+    declaring it a file that says nothing has said nothing about which. A twin writes no
+    ``sizing_sources`` block, so it cannot say; the number therefore stays, and the comment names
+    both providers so a reader can see why the line has not gone the way its neighbours did.
+    """
+    roofs = [
+        Sized.observed(name, _RoofConfig(ComponentID(name=name))) for name in (Sized.ROOF, "OtherRoof")
+    ]
+
+    written = Sized.written(Sized.array(), *roofs)
+
+    assert written.members[EntryConfigWriter.CONFIG_KEY]["power_in_watt"] == Sized.POWER
+    assert written.decisions[0].comment() == (
+        f"pinned: roof_area_in_m2 is declared by {Sized.ROOF}, OtherRoof, "
+        "and a twin writes no sizing_sources"
+    )
+
+
+@pytest.mark.base
+def test_a_recording_that_fails_its_own_check_leaves_nothing_at_the_twins_path(
+    recordings: Dict[str, RecordingResult], tmp_path: Path
+) -> None:
+    """Catches a refused recording leaving a loadable, wrong twin behind for the next reader.
+
+    The file used to be written first and verified second, so an EF-R13 refusal — the one that says
+    the laws do not reproduce the setup's context — left the very file it had just refused sitting
+    at the path everything else trusts, where the next freshness check would compare against it. The
+    text is verified from a staging file beside the target now, and only a verification that passed
+    renames it into place, so a failure leaves the directory exactly as it found it.
+    """
+    recorded = recordings["basic_household"]
+    session = RecordingSession(Fixtures.SETUPS / "basic_household.py", tmp_path)
+    wrong = SizedFieldDecision("Weather", "location", "Size.LOCATION", "Nowhere")
+
+    with pytest.raises(EnergySystemRecordingError) as failure:
+        session.write(recorded.text, str(tmp_path), recorded.parameters.path, (wrong,))
+
+    assert failure.value.error_id.value == "EF-R13"
+    assert not session.path.exists()
+    assert not list(tmp_path.glob("*.yaml"))
+
+
+@dataclass
+class Configured:
+    """The resolved configurations of a rebuilt system, as the executor hands them over.
+
+    It carries the same raising lookup the real ``ConfiguredSystem`` does, because the check under
+    test depends on that behaviour: a component the file does not hold has to raise rather than
+    answer ``None``.
+    """
+
+    configs: List[Tuple[str, Any]]
+
+    def config_of(self, name: str) -> Any:
+        """Returns one component's configuration, as ``ConfiguredSystem.config_of`` does.
+
+        Args:
+            name: The component's name.
+
+        Returns:
+            Its configuration.
+
+        Raises:
+            KeyError: When no component of that name was built.
+        """
+        for component_name, config in self.configs:
+            if component_name == name:
+                return config
+        raise KeyError(name)
+
+
+@dataclass
+class Rebuilt:
+    """The one thing the resizing check reads off a build: its resolved configurations.
+
+    A stand-in rather than a real build, because the check is about comparing two numbers and
+    building a whole energy system to produce the second one would test the executor instead. The
+    real path is exercised by every recording in this module, all of which run the check.
+    """
+
+    def __init__(self, configs: List[Tuple[str, Any]]) -> None:
+        """Stores the configurations under the attribute the check reads.
+
+        Args:
+            configs: The ``(name, configuration)`` pairs of the rebuilt system.
+        """
+        self.configured = Configured(configs)

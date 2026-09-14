@@ -7,9 +7,6 @@ components:
   ModulatingBoilerController:
     class: hisim.components.generic_boiler.GenericBoilerController
     preset: modulating
-    config:
-      minimal_thermal_power_in_watt: 1000.0
-      maximal_thermal_power_in_watt: 12000.0
     inputs:
       - Weather
       - HeatDistributionController
@@ -19,21 +16,13 @@ components:
     preset: standard
     config:
       heating_system: RADIATOR
-      set_heating_threshold_outside_temperature_in_celsius: 18.0
       heating_reference_temperature_in_celsius: -12.2
-      set_heating_temperature_for_building_in_celsius: 20.0
-      set_cooling_temperature_for_building_in_celsius: 25.0
-      heating_load_of_building_in_watt: 7780.75
     inputs:
       - Weather
       - Building
   HeatDistributionSystem:
     class: hisim.components.heat_distribution_system.HeatDistribution
     preset: standard
-    config:
-      heating_system: RADIATOR
-      water_mass_flow_rate_in_kg_per_second: 0.12
-      absolute_conditioned_floor_area_in_m2: 121.2
     inputs:
       - Building
       - HeatDistributionController

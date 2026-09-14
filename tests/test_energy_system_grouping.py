@@ -868,7 +868,9 @@ def test_the_committed_grouped_sizer_realizes_the_committed_twin(stem: str) -> N
     A grouped file's whole claim is that, at its committed switch positions, it is the flat twin
     with structure added. The full per-column proof needs live probe runs, but the baseline half of
     it is a pure file computation: expand the committed grouped file, lay the components out in the
-    twin's own order, and the emitted body must equal the committed twin's body byte for byte.
+    twin's own order, and the emitted body must equal the committed twin's body line for line —
+    up to the trailing comment a twin's sized lines carry, which no writer emits and nothing reads
+    back (A-P3.1). The values themselves, ``AUTO`` included, are compared exactly.
 
     Every setup with a committed grouped file is checked, not only the heat-pump exemplar. The
     parametrization is read off ``energy_systems/`` for that reason: the fleet was grouped setup by
@@ -891,7 +893,11 @@ def test_the_committed_grouped_sizer_realizes_the_committed_twin(stem: str) -> N
     flat = expanded.model_copy(update={"components": ordered, "groups": {}, "variants": {}})
 
     _, twin_body = RecordedFileWriter.split(twin_path.read_text(encoding="utf-8"))
-    assert dump_energy_system(flat) == twin_body
+    realized = dump_energy_system(flat).splitlines()
+    written = twin_body.splitlines()
+    assert len(realized) == len(written)
+    for emitted, expected in zip(realized, written):
+        assert emitted == expected or expected.startswith(f"{emitted} #"), expected
 
 
 @pytest.mark.base

@@ -86,9 +86,12 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Heat Distribution. The controller's facts come from the building, except the design
-    # outside temperature: this setup has always run its heating curve against -12.2 °C while the
-    # building itself is the default -7.0 °C, so that number is passed explicitly and stays as it was.
+    # Build Heat Distribution. Every fact the controller sizes from is the building's own, so that
+    # the context here says exactly what the building contributes. The design outside temperature is
+    # the one number this setup does not take from the building: it has always run its heating curve
+    # against -12.2 °C while the building itself is the default -7.0 °C, and that is an assignment on
+    # top of the sized configuration rather than a different fact, so a recorded twin writes it as
+    # the override it is instead of claiming a law produced it.
     my_heat_distribution_controller_config = (
         heat_distribution_system.HeatDistributionControllerConfig.preset_standard(
             "HeatDistributionController"
@@ -96,7 +99,9 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
             SizingContext(
                 heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
                 conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
-                heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+                heating_reference_temperature_in_celsius=(
+                    my_building_config.heating_reference_temperature_in_celsius
+                ),
                 set_heating_temperature_in_celsius=(
                     my_building_information.set_heating_temperature_for_building_in_celsius
                 ),
@@ -105,6 +110,9 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
                 ),
             )
         )
+    )
+    my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = (
+        heating_reference_temperature_in_celsius
     )
     my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
 

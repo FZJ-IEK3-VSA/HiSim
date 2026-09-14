@@ -7,6 +7,13 @@ far is a failure of the recording, not a file somebody has to fix afterwards, an
 one. Preparing rather than merely building is what lets the check reach the configurations
 themselves, since a component first reads what it was configured with when it prepares.
 
+Since A-P3.1 that step also answers a second question. A twin writes ``AUTO`` on every field a law
+computed and this system declares a provider for, which is a claim: that the laws and the declared
+contributions reproduce the context the setup built by hand. The claim is checked, not trusted —
+every such field of the rebuilt system is compared with the value the Python run produced, and a
+difference fails the recording naming the setup, the component, the field, both numbers and the
+law. Pinning the number instead would hide exactly what a twin exists to prove.
+
 Everything before that step is the pipeline the other modules of this package implement — import
 the setup, let it construct its components, let the simulator resolve the declared defaults,
 observe, build — and this module is the order they run in. The one thing it owns itself is the
@@ -26,12 +33,15 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar, Optional, Tuple
+from typing import Any, ClassVar, Mapping, Optional, Sequence, Tuple
 
+from hisim.config.sizing import _AutoSize
+from hisim.energy_system.comments import render_record
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemRecordingError
-from hisim.energy_system.loader import dump_energy_system
 from hisim.energy_system.model import EnergySystemFile
-from hisim.energy_system.recording.builder import build
+from hisim.energy_system.record import ConfigBlockWriter
+from hisim.energy_system.recording.builder import EnergySystemBuilder
+from hisim.energy_system.recording.configs import SizedFieldDecision
 from hisim.energy_system.recording.observe import RecordedSystem, observe
 from hisim.energy_system.recording.parameters import ParameterFileLibrary, ParameterReference
 from hisim.energy_system.repository import RepositoryLayout
@@ -53,6 +63,11 @@ class RecordingResult:
     the header points at, which is not always the one the caller supplied: the recording follows
     the parameters the setup ended up with, and those may already be described by another file or
     by none at all.
+
+    ``decisions`` is what the recorder concluded about every field a law computed: which became
+    ``AUTO``, which stayed a number and for which of the three reasons. It is the flip count a
+    re-record is reviewed by, and the reason a caller can answer "why is this line still a number"
+    without reading the file.
     """
 
     setup: str
@@ -61,6 +76,7 @@ class RecordingResult:
     text: str
     observed: RecordedSystem
     parameters: ParameterReference
+    decisions: Tuple[SizedFieldDecision, ...] = ()
 
 
 class RecordedFileWriter:
@@ -298,8 +314,9 @@ class RecordingSession:
             EnergySystemRecordingError: ``EF-R1`` … ``EF-R4`` when the observed system cannot be
                 written down, ``EF-R5`` when the written file does not load, validate or build,
                 ``EF-R11`` when an aggregator's control outputs cannot be paired with the feeds
-                they belong to, and ``EF-R12`` when a file the recorder did not write is already
-                at the output path.
+                they belong to, ``EF-R12`` when a file the recorder did not write is already at the
+                output path, and ``EF-R13`` when a field the file leaves to a law does not come
+                back as the number the run produced.
         """
         from hisim.hisim_main import get_description_from_py, initialize_from_python  # noqa: PLC0415
 
@@ -310,9 +327,15 @@ class RecordingSession:
         simulator.connect_all_components()
         observed = observe(simulator, setup=setup_name)
         reference = self.library.reference(simulator.get_simulation_parameters())
-        model = build(observed, self.stem, get_description_from_py(self.module_path) or None)
-        text = self.write(model, setup_name, reference.path)
-        self.verify(len(text), reference.path, simulator.get_simulation_parameters().result_directory)
+        builder = EnergySystemBuilder(observed)
+        model = builder.build(self.stem, get_description_from_py(self.module_path) or None)
+        text = self.write(model, setup_name, reference.path, builder.notes)
+        self.verify(
+            len(text),
+            reference.path,
+            simulator.get_simulation_parameters().result_directory,
+            builder.checks,
+        )
         return RecordingResult(
             setup=setup_name,
             path=self.path,
@@ -320,6 +343,7 @@ class RecordingSession:
             text=text,
             observed=observed,
             parameters=reference,
+            decisions=tuple(builder.decisions),
         )
 
     @property
@@ -333,7 +357,13 @@ class RecordingSession:
         label = f".{self.probe}" if self.probe else ""
         return self.out_dir / f"{self.stem}{label}{RecordedFileWriter.SUFFIX}"
 
-    def write(self, model: EnergySystemFile, setup_name: str, parameters_path: Path) -> str:
+    def write(
+        self,
+        model: EnergySystemFile,
+        setup_name: str,
+        parameters_path: Path,
+        notes: Optional[Mapping[str, Mapping[str, str]]] = None,
+    ) -> str:
         """Writes the header and the canonical body of one recorded file.
 
         A file already at this path is overwritten only when the recorder wrote it: refreshing the
@@ -347,6 +377,8 @@ class RecordingSession:
             setup_name: The setup as the header names it.
             parameters_path: The parameters file the header names, which is the one describing
                 what the setup ended up with rather than the one it was started from.
+            notes: The trailing comment each sized configuration line carries, by component and
+                field. Without them the body is exactly what the canonical writer produces.
 
         Returns:
             The text written.
@@ -360,7 +392,7 @@ class RecordingSession:
         header = RecordedFileWriter.header(
             setup_name, self.relative(parameters_path), self.out_dir, self.probe, self.probes
         )
-        text = header + dump_energy_system(model)
+        text = header + render_record(model, notes=notes)
         self.path.write_text(text, encoding="utf-8")
         return text
 
@@ -390,7 +422,13 @@ class RecordingSession:
             ),
         )
 
-    def verify(self, written: int, parameters_path: Path, result_directory: str) -> None:
+    def verify(
+        self,
+        written: int,
+        parameters_path: Path,
+        result_directory: str,
+        checks: Sequence[SizedFieldDecision] = (),
+    ) -> None:
         """Loads the file back through the executor, builds it and prepares it for a run.
 
         This is the recorder's whole claim, so it is checked on every recording rather than in a
@@ -423,17 +461,21 @@ class RecordingSession:
                 mutations.
             result_directory: Where the verification build may put anything it writes, taken from
                 the run that was just recorded so that a caller's temporary directory is honoured.
+            checks: The fields the file leaves to a law, each carrying the value the Python run
+                produced; every one of them is compared against what the rebuilt system holds.
 
         Raises:
             EnergySystemRecordingError: ``EF-R5`` carrying the refusal verbatim, whether it came
-                from the executor or from a component preparing itself.
+                from the executor or from a component preparing itself, and ``EF-R13`` when a
+                field the file leaves to a law resolves to something else.
         """
         from hisim.energy_system.executor import build_energy_system  # noqa: PLC0415
 
         parameters = self.read_parameters(parameters_path)
         parameters.result_directory = result_directory
         try:
-            build_energy_system(self.path, parameters).simulator.prepare_calculation()
+            built = build_energy_system(self.path, parameters)
+            built.simulator.prepare_calculation()
         except Exception as refusal:  # pylint: disable=broad-except
             raise EnergySystemRecordingError(
                 EnergySystemErrorId.RECORDED_FILE_REJECTED,
@@ -444,6 +486,47 @@ class RecordingSession:
                     "means the setup uses something the format cannot yet express."
                 ),
             ) from refusal
+        self.check_resizing(built, checks)
+
+    def check_resizing(self, built: Any, checks: Sequence[SizedFieldDecision]) -> None:
+        """Holds every ``AUTO`` line of the written file to the number the Python run produced.
+
+        This is the second half of A-P3.1 and the only place the twin's central claim is tested.
+        Writing ``AUTO`` says that the laws, plus the facts the recorded components declare,
+        reproduce the context the setup assembled by hand; a difference means they do not, and the
+        difference is the finding — a fact bound to the wrong provider, a law reading something the
+        setup computed differently, an archetype value that never reached the component that
+        contributes it. Pinning the number on a mismatch would make the twin agree with the setup
+        by refusing to say anything, which is the opposite of what it is for.
+
+        Args:
+            built: The system the written file produced, whose resolved configurations are read.
+            checks: The fields written as ``AUTO``, each with the value the run produced.
+
+        Raises:
+            EnergySystemRecordingError: ``EF-R13`` naming the setup, the component, the field, both
+                values and the law.
+        """
+        resolved = dict(built.configured.configs)
+        for decision in checks:
+            config = resolved.get(decision.component)
+            actual = ConfigBlockWriter.plain(
+                getattr(config, decision.field, None), decision.component, decision.field
+            )
+            if actual == decision.value:
+                continue
+            raise EnergySystemRecordingError(
+                EnergySystemErrorId.RECORDED_AUTO_DIFFERS,
+                f"{self.setup_label}:components.{decision.component}.config.{decision.field}",
+                f"'{decision.component}.{decision.field}' was recorded as "
+                f"'{_AutoSize.WIRE_SPELLING}' because '{decision.law}' computed {decision.value!r} "
+                f"in the Python run, but the recorded file resolves it to {actual!r}.",
+                remedy=(
+                    "The laws and the declared sizing contributions do not reproduce the context "
+                    "the setup built by hand. Fix the law, the contribution or the setup; the twin "
+                    "is not pinned to the run's number, because that would hide the difference."
+                ),
+            )
 
     @property
     def setup_label(self) -> str:

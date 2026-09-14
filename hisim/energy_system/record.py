@@ -340,7 +340,10 @@ def assert_no_sentinels(record: EnergySystemFile) -> None:
     configurations in full, so a preset in it is a breach. A file recorded from a Python setup must
     do the opposite and name the preset a configuration was built from, and it is exactly that
     naming which lets a later conversion shrink the file. What both must satisfy is this: a value
-    still spelled ``AUTO`` would be computed again on the next run instead of reproduced.
+    spelled ``AUTO`` that nobody decided to put there is a value that escaped a configuration
+    unresolved, and it would be computed on the next run instead of reproduced. A recorded twin
+    does write the sentinel deliberately (A-P3.1), so the recorder hands this function its model
+    with those fields removed rather than skipping the check.
 
     Args:
         record: The generated file about to be written.

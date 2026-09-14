@@ -48,15 +48,16 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
-    my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig.get_default_config()
-    my_advanced_battery_config_1.component_id = ComponentID("Battery1")
+    # This setup has no PV array to size a battery from, so neither battery is resolved against a
+    # sizing context: both state their own capacity and inverter power, which is what the two
+    # sizable fields of the preset are left open for.
+    my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig.preset_standard("Battery1")
     my_advanced_battery_config_1.system_id = "SG1"
     my_advanced_battery_config_1.custom_battery_capacity_generic_in_kilowatt_hour = 10.0
     my_advanced_battery_config_1.custom_pv_inverter_power_generic_in_watt = 5.0
     my_advanced_battery_config_1.source_weight = 1
 
-    my_advanced_battery_config_2 = advanced_battery_bslib.BatteryConfig.get_default_config()
-    my_advanced_battery_config_2.component_id = ComponentID("Battery2")
+    my_advanced_battery_config_2 = advanced_battery_bslib.BatteryConfig.preset_standard("Battery2")
     my_advanced_battery_config_2.system_id = "SG1"
     my_advanced_battery_config_2.custom_battery_capacity_generic_in_kilowatt_hour = 5.0
     my_advanced_battery_config_2.custom_pv_inverter_power_generic_in_watt = 2.5

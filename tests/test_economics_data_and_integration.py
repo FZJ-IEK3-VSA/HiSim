@@ -38,8 +38,8 @@ pytestmark = pytest.mark.base
 ADOPTED_COMPONENTS = [
     ("hisim.components.generic_pv_system", "PVSystem", "PVSystemConfig", "preset_rooftop", "config", ("PVSystem",),
      {"roof_area_in_m2": 168.9, "weather_identity": "Aachen"}),
-    ("hisim.components.advanced_battery_bslib", "Battery", "BatteryConfig", "get_default_config", "battery_config",
-     (), {}),
+    ("hisim.components.advanced_battery_bslib", "Battery", "BatteryConfig", "preset_standard", "battery_config",
+     ("Battery",), {"pv_peak_power_in_watt": 10000.0}),
     ("hisim.components.electricity_meter", "ElectricityMeter", "ElectricityMeterConfig",
      "preset_standard", "config", ("ElectricityMeter",), {}),
 ]

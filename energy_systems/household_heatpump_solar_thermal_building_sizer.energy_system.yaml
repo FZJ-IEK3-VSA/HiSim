@@ -167,19 +167,10 @@ components:
         weight: 999
   Battery:
     class: hisim.components.advanced_battery_bslib.Battery
+    preset: standard
     config:
-      source_weight: 1
-      system_id: SG1
       custom_pv_inverter_power_generic_in_watt: 11136.14
       custom_battery_capacity_generic_in_kilowatt_hour: 22.27
-      charge_in_kwh: 0.0
-      discharge_in_kwh: 0.0
-      device_co2_footprint_in_kg: null
-      investment_costs_in_euro: null
-      lifetime_in_years: null
-      maintenance_costs_in_euro_per_year: null
-      subsidy_as_percentage_of_investment_costs: null
-      lifetime_in_cycles: 5000.0
   L2EMSElectricityController:
     class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     preset: optimize_own_consumption

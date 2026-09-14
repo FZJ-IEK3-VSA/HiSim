@@ -36,6 +36,7 @@ from hisim.components.controller_l2_energy_management_system import (
     EMSConfig,
     L2GenericEnergyManagementSystem,
 )
+from hisim.config import SizingContext
 from hisim.energy_system.channels import FeedRequest
 from hisim.energy_system.errors import EnergySystemWiringError
 from hisim.energy_system.executor import build_energy_system, run_energy_system
@@ -279,6 +280,11 @@ class SignalCollisions:
     #: publishes no signal of its own at it and the tests therefore control what is there.
     BATTERY_WEIGHT: ClassVar[int] = 6
 
+    #: The PV peak power the batteries below are sized from. This file's batteries exist to be
+    #: wired, not to store anything in particular, so the array is a round ten kilowatts -- which
+    #: gives the ten-kilowatt-hour battery the deleted `get_default_config` factory used to pin.
+    PV_PEAK_POWER_IN_WATT: ClassVar[float] = 10000.0
+
     @classmethod
     def battery(cls, name: str) -> Battery:
         """Builds one battery participant.
@@ -291,7 +297,9 @@ class SignalCollisions:
         """
         return Battery(
             my_simulation_parameters=SimulationParameters.one_day_only(2021, 900),
-            config=BatteryConfig.get_default_config(name=name),
+            config=BatteryConfig.preset_standard(name).resolve(
+                SizingContext(pv_peak_power_in_watt=cls.PV_PEAK_POWER_IN_WATT)
+            ),
         )
 
     @classmethod

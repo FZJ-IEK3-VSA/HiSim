@@ -307,6 +307,10 @@ class EntryConfigurator:
         checked that, with the parameter list in its message — so the only question left here
         is whether each value fits.
 
+        A path-valued argument is expanded last, for the reason given at
+        :meth:`_expand_argument_path`: the builder consumes it, so the expansion a field gets
+        after the call would come too late for it.
+
         Args:
             builder: The declared builder the entry selected.
             arguments: The arguments the entry passes.
@@ -332,7 +336,36 @@ class EntryConfigurator:
             self.codec.check_argument_shape(
                 annotation, decoded[key], argument_location, entry.name, key
             )
+            decoded[key] = self._expand_argument_path(key, decoded[key])
         return decoded
+
+    def _expand_argument_path(self, parameter: str, value: Any) -> Any:
+        """Turns the portable ``${var}`` spelling of a path-valued argument into a local path.
+
+        A constructor that takes a filesystem location is handed the same kind of string a
+        path *field* holds, and the file spells it the same way: symbolically, because the
+        structural validator refuses an absolute path under a path-valued key wherever it
+        appears, constructor arguments included. The expansion a field gets afterwards is no
+        use to an argument, which has already been consumed by the builder -- and a builder
+        that checks its file is there would have been handed the literal ``${inputs}/...``.
+        So an argument is expanded before the call, by the same resolver and under the same
+        name rule that decides a field.
+
+        Args:
+            parameter: The parameter's name, which is what makes its value a path.
+            value: The decoded argument.
+
+        Returns:
+            The argument, expanded when it is a non-empty path-valued string and unchanged
+            otherwise.
+
+        Raises:
+            EnergySystemFormatError: ``EF-04`` when the string references a variable the
+                resolver does not know.
+        """
+        if not self.is_path_field(parameter) or not isinstance(value, str) or not value:
+            return value
+        return self.resolver.resolve(value)
 
     def _apply_overrides(self, config: Any) -> Any:
         """Writes the entry's sparse ``config`` block onto the configuration it built.

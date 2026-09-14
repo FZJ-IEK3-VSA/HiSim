@@ -30,7 +30,7 @@ def test_solar_thermal_system() -> None:
     )
 
     # Configure weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather_config = weather.WeatherConfig.preset_standard("Weather")
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=mysim)
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
@@ -244,7 +244,7 @@ def test_the_timestep_reads_the_resolved_area() -> None:
     )
 
     my_weather = weather.Weather(
-        config=weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN),
+        config=weather.WeatherConfig.preset_standard("Weather"),
         my_simulation_parameters=mysim,
     )
     my_weather.set_sim_repo(repo)

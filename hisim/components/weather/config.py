@@ -26,12 +26,12 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import PurePath
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
 from dataclasses_json import dataclass_json
 
 from hisim import utils
-from hisim.components.weather.calculation import WeatherDataSourceEnum
+from hisim.components.weather.calculation import WeatherDataSourceEnum, WeatherSourceFiles
 from hisim.config import ConfigBase, ComponentID, FactContribution, constructor, preset
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
@@ -384,70 +384,6 @@ class WeatherConfig(ConfigBase):
 
         return Weather.get_full_classname()  # type: ignore[no-any-return]
 
-    @classmethod
-    def get_default(
-        cls,
-        location_entry: Union[LocationEnum, str],
-        name: str = "Weather",
-        component_id: Optional[ComponentID] = None,
-        weather_direct_filepath: Optional[str] = None,
-        weather_direct_data_source: Optional[WeatherDataSourceEnum] = None,
-    ) -> "WeatherConfig":
-        """Gets the default configuration for a given location."""
-
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        enum_entry = None
-        # If location_entry is enum entry, use it directly
-        if isinstance(location_entry, LocationEnum):
-            enum_entry = location_entry
-
-        # Read location_entry from enum
-        elif isinstance(location_entry, str):
-            enum_entry = getattr(LocationEnum, location_entry.strip(), None)
-
-        if enum_entry is not None:
-            location = enum_entry.value[0]
-            path = os.path.join(
-            utils.get_input_directory(),
-            "weather",
-            enum_entry.value[1],
-            enum_entry.value[2],
-            enum_entry.value[3],
-            )
-            data_source = enum_entry.value[4]
-
-        # Use direct filepath
-        else:
-            if weather_direct_filepath is None:
-                raise ValueError(
-                    f"Location '{location_entry}' not found in Weather LocationEnum and no weather_direct_filepath was provided."
-                )
-            if not os.path.isfile(weather_direct_filepath):
-                raise ValueError(
-                    f"Weather data file not found: {weather_direct_filepath}")
-            if weather_direct_data_source is None:
-                raise ValueError(
-                    f"No data source (data type) provided for weather_direct_filepath {weather_direct_filepath}."
-                )
-            if weather_direct_filepath.lower().endswith(".dat"):
-                weather_direct_filepath = weather_direct_filepath[:-4]
-            elif weather_direct_filepath.lower().endswith(".csv"):
-                weather_direct_filepath = weather_direct_filepath[:-4]
-
-            location = str(location_entry)
-            path = weather_direct_filepath
-            data_source = weather_direct_data_source
-
-        config = WeatherConfig(
-            component_id=component_id,
-            location=location,
-            source_path=path,
-            data_source=data_source,
-            predictive_control=False,
-        )
-        return config
-
     def identity(self) -> str:
         """Return a short string that says which weather this configuration reads: station, data set, file.
 
@@ -554,6 +490,67 @@ class WeatherConfig(ConfigBase):
                 utils.get_input_directory(), "weather", directory, subdirectory, file_stem
             ),
             data_source=data_source if data_source is not None else catalogue_source,
+            predictive_control=False,
+        )
+
+    @constructor(note="a weather file this repository does not ship, named by path and reader")
+    @classmethod
+    def for_data_file(
+        cls,
+        name: str,
+        path: str,
+        data_source: WeatherDataSourceEnum,
+    ) -> "WeatherConfig":
+        """Builds the weather of a data file that is not one of the catalogue's shipped sets.
+
+        :meth:`for_location` covers the stations of :class:`LocationEnum` and the time series that
+        come with them. A file obtained anywhere else — a re-export for a country the catalogue does
+        not carry, a measured year, a scenario data set — has no catalogue entry, and minting one per
+        file would turn every path anyone ever reads into a permanent enum member. So here the file
+        *is* the identifier: its path and the reader that understands its format, which are exactly
+        the two things a catalogue entry would otherwise have supplied.
+
+        The file has to exist, and it is named with its extension: a path that is there now but spelt
+        wrong fails at the first timestep with a reader's own error rather than here, where the
+        configuration can still say which file it looked for.
+
+        What is *stored* is not always what was named, because the readers disagree about it.
+        ``DWD_TRY`` and ``NSRDB`` open ``<source_path>.dat`` themselves — and a ``DWD_TRY`` station
+        may have a ``.csv`` beside the ``.dat`` — so for those two the stored path is the stem and a
+        trailing ``.dat`` or ``.csv`` comes off. The four sub-hourly readers (``NSRDB_15MIN``,
+        ``DWD_10MIN``, ``DWD_15MIN``, ``ERA5``) open the stored path as it stands and need the
+        extension kept. Which source does which is written down once, in
+        :attr:`hisim.components.weather.calculation.WeatherSourceFiles.SUFFIXES`, and read from there
+        rather than restated here.
+
+        The ``location`` of the result is the file's own stem. It is a label — it names the region a
+        run is reported under and it goes into :meth:`identity`, hence into the cache keys of every
+        component sized from the weather — and for a file outside the catalogue the only honest label
+        the call carries is the file's name.
+
+        Args:
+            name: Instance name of the component being configured; it becomes its identity.
+            path: The weather file as it lies on this machine, extension included.
+            data_source: The reader that understands the file's format.
+
+        Returns:
+            A configuration reading that file.
+
+        Raises:
+            ValueError: If ``path`` names no file.
+        """
+        if not os.path.isfile(path):
+            raise ValueError(f"Weather data file not found: {path}")
+        appended_suffixes = WeatherSourceFiles.SUFFIXES.get(data_source, ())
+        reader_appends_an_extension = any(suffix for suffix in appended_suffixes)
+        source_path = path
+        if reader_appends_an_extension and source_path.lower().endswith((".dat", ".csv")):
+            source_path = source_path[: -len(".dat")]
+        return cls(
+            component_id=ComponentID(name=name),
+            location=os.path.splitext(os.path.basename(path))[0],
+            source_path=source_path,
+            data_source=data_source,
             predictive_control=False,
         )
 

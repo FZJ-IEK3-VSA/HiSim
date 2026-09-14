@@ -9,11 +9,7 @@ components:
     preset: standard
   Weather:
     class: hisim.components.weather.Weather
-    config:
-      location: Aachen
-      source_path: ${inputs}/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
-      data_source: DWD_TRY
-      predictive_control: false
+    preset: standard
   PVSystem:
     class: hisim.components.generic_pv_system.PVSystem
     config:

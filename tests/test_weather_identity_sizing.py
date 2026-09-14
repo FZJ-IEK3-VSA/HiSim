@@ -76,7 +76,7 @@ def test_the_weather_identity_names_the_dataset_and_the_file_and_not_the_machine
     entries. The prefix above the inputs directory is a property of the machine and must not appear,
     otherwise a cache could never be shared between machines.
     """
-    aachen = WeatherConfig.get_default(location_entry=LocationEnum.AACHEN)
+    aachen = WeatherConfig.preset_standard("Weather")
 
     identity = aachen.identity()
 
@@ -98,7 +98,7 @@ def test_two_datasets_sharing_a_file_name_get_different_identities(tmp_path: pat
     """
     del tmp_path
     inputs = pathlib.Path(utils.get_input_directory())
-    aachen = WeatherConfig.get_default(location_entry=LocationEnum.AACHEN)
+    aachen = WeatherConfig.preset_standard("Weather")
     family_a = dataclasses.replace(aachen, source_path=str(inputs / "weather" / "family-a" / "station"))
     family_b = dataclasses.replace(aachen, source_path=str(inputs / "weather" / "family-b" / "station"))
 
@@ -138,8 +138,8 @@ def test_a_pv_key_moves_when_the_weather_does_and_a_building_key_too() -> None:
 
     Before F7 the PV key was identical for Aachen and Seville.
     """
-    aachen = WeatherConfig.get_default(location_entry=LocationEnum.AACHEN).identity()
-    seville = WeatherConfig.get_default(location_entry=LocationEnum.SEVILLE).identity()
+    aachen = WeatherConfig.preset_standard("Weather").identity()
+    seville = WeatherConfig.for_location("Weather", LocationEnum.SEVILLE).identity()
 
     pv = PVSystemConfig.get_default_pv_system()
     building = BuildingConfig.preset_standard("Building")

@@ -177,7 +177,7 @@ class PilotWireFormat:
         "HeatDistributionControllerConfig": (),
         "EMSConfig": (),
         "BuildingConfig": ("for_tabula_code",),
-        "WeatherConfig": ("for_location",),
+        "WeatherConfig": ("for_location", "for_data_file"),
         "UtspLpgConnectorConfig": ("for_household",),
         "ElectricityMeterConfig": (),
         "CarConfig": ("for_household",),

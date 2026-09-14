@@ -1,14 +1,15 @@
 """Tests for the Weather component and WeatherConfig.
 
-Covers full-year DNI output sanity checks, enum-vs-string location
-configuration consistency, direct-filepath configuration including
-validation that a data source is required when a direct filepath is given,
-and the one schema the component reads a produced frame under.
+Covers a full-year DNI sanity check on the component, the two named constructors of the
+configuration -- the catalogue station and the data file, which have to agree about a station
+reached both ways -- and the one schema the component reads a produced frame under.
 """
+import dataclasses
 import importlib
 import math
 import pathlib
 import pickle
+from typing import Any, Dict
 
 import pandas as pd
 import pvlib
@@ -17,6 +18,10 @@ from hisim import sim_repository
 from hisim import component
 from hisim.components import weather
 from hisim.components.weather import calculation
+from hisim.energy_system import expand_groups
+from hisim.energy_system.configure import configure_energy_system
+from hisim.energy_system.document import RawDocument
+from hisim.energy_system.loader import EnergySystemReader
 from hisim.simulationparameters import SimulationParameters
 from hisim.config import DisplayConfig
 from tests import functions_for_testing as fft
@@ -29,9 +34,7 @@ def test_weather() -> None:
         year=2021, seconds_per_timestep=60
     )
     repo: sim_repository.SimRepository = sim_repository.SimRepository()
-    my_weather_config: weather.WeatherConfig = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
+    my_weather_config: weather.WeatherConfig = weather.WeatherConfig.preset_standard("Weather")
     my_weather: weather.Weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=mysim
     )
@@ -68,51 +71,6 @@ def test_weather() -> None:
     assert annual_dni_kwh_per_m2 > 950  # kWh/m^2/year
 
 
-def test_weather_config_enum_vs_string_consistency() -> None:
-    """Test consistency of enum vs. string configuration setup."""
-    my_weather_config_enum: weather.WeatherConfig = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
-
-    my_weather_config_string: weather.WeatherConfig = weather.WeatherConfig.get_default(
-        location_entry="AACHEN"
-    )
-
-    assert my_weather_config_enum.location == my_weather_config_string.location
-    assert my_weather_config_enum.data_source == my_weather_config_string.data_source
-    assert isinstance(my_weather_config_enum.source_path, str)
-    assert len(my_weather_config_enum.source_path) > 0
-    assert my_weather_config_enum.source_path == my_weather_config_string.source_path
-
-
-def test_weather_config_with_direct_filepath(tmp_path: pathlib.Path) -> None:
-    """Test weather config with direct filepath and direct data source."""
-    weather_file: pathlib.Path = tmp_path / "weather.csv"
-    weather_file.write_text("dummy weather data", encoding="utf-8")
-
-    my_weather_config: weather.WeatherConfig = weather.WeatherConfig.get_default(
-        location_entry="CUSTOM_LOCATION",
-        weather_direct_filepath=str(weather_file),
-        weather_direct_data_source=weather.WeatherDataSourceEnum.DWD_10MIN
-    )
-
-    assert my_weather_config.location == "CUSTOM_LOCATION"
-    assert my_weather_config.source_path == str(weather_file)[:-4]
-    assert my_weather_config.data_source == weather.WeatherDataSourceEnum.DWD_10MIN
-
-
-def test_weather_config_with_direct_filepath_without_data_source(tmp_path: pathlib.Path) -> None:
-    """Test weather config fails for direct filepath without data source."""
-    weather_file: pathlib.Path = tmp_path / "weather.csv"
-    weather_file.write_text("dummy weather data", encoding="utf-8")
-
-    with pytest.raises(ValueError):
-        weather.WeatherConfig.get_default(
-            location_entry="CUSTOM_LOCATION",
-            weather_direct_filepath=str(weather_file)
-        )
-
-
 def _build_weather_with_cache(
     tmp_path: pathlib.Path,
     omitted_column: str = "",
@@ -135,9 +93,7 @@ def _build_weather_with_cache(
     """
     mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
     mysim.cache_dir_path = str(tmp_path)
-    my_config: weather.WeatherConfig = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
+    my_config: weather.WeatherConfig = weather.WeatherConfig.preset_standard("Weather")
     my_weather: weather.Weather = weather.Weather(
         config=my_config, my_simulation_parameters=mysim
     )
@@ -245,9 +201,7 @@ def test_weather_default_display_config_is_not_shared() -> None:
     mysim: SimulationParameters = SimulationParameters.one_day_only(
         year=2021, seconds_per_timestep=3600
     )
-    my_config: weather.WeatherConfig = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
+    my_config: weather.WeatherConfig = weather.WeatherConfig.preset_standard("Weather")
     first: weather.Weather = weather.Weather(
         config=my_config, my_simulation_parameters=mysim
     )
@@ -325,3 +279,152 @@ def test_a_nan_in_the_horizontal_irradiance_is_reported_with_its_timestep() -> N
     assert "1 of 4 timesteps" in message
     assert "2021-06-21 11:00" in message
     assert "horizontal irradiance is NaN at 1" in message
+
+
+#: The shipped Aachen test reference year, named as a file rather than as a catalogue station.
+#: ``${inputs}`` is the portable spelling every path in an energy-system file uses -- an absolute
+#: one is refused by the structural validator wherever it appears, constructor arguments included.
+WEATHER_FROM_FILE_ENTRY = """  Weather:
+    class: hisim.components.weather.Weather
+    constructor:
+      for_data_file:
+        path: ${inputs}/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center.dat
+        data_source: DWD_TRY
+"""
+
+
+def _origins_of(entries: str) -> Dict[str, Any]:
+    """Configures one inline energy-system file and returns each entry's built configuration.
+
+    The origins rather than the finished configurations, because an origin is exactly what the
+    builder produced, before any override or sized field enters into it -- which is the thing a
+    Python call to the same constructor has to match.
+
+    Args:
+        entries: The body of the ``components`` block, indented by two spaces.
+
+    Returns:
+        Dict[str, Any]: a mapping from component name to the configuration its builder produced.
+    """
+    text = f"schema_version: 3\nname: weather constructors\ncomponents:\n{entries}"
+    model = EnergySystemReader.build(RawDocument.parse_text(text, "inline"), "inline")
+    expanded, _ = expand_groups(model)
+    return dict(configure_energy_system(expanded).origins)
+
+
+def _shipped_aachen_file() -> str:
+    """The ``.dat`` of the catalogue's Aachen station, as it lies in this checkout.
+
+    Returns:
+        str: the absolute path of the file ``LocationEnum.AACHEN`` names the stem of.
+    """
+    return (
+        weather.WeatherConfig.for_location("Weather", weather.LocationEnum.AACHEN).source_path
+        + ".dat"
+    )
+
+
+@pytest.mark.base
+def test_the_same_weather_reached_by_file_and_by_catalogue_differs_only_in_its_label() -> None:
+    """Pointing the file constructor at a shipped station rebuilds that station's configuration.
+
+    The catalogue entry is a path plus a reader, so naming that path and that reader has to give
+    the same configuration -- otherwise the two constructors disagree about what a weather *is*
+    and a data set would read differently depending on which door it came through.
+
+    The one field that does differ is ``location``, and it differs because it has to: the
+    catalogue knows the station is called ``Aachen``, while a bare file knows only its own name.
+    """
+    catalogue = weather.WeatherConfig.for_location("Weather", weather.LocationEnum.AACHEN)
+    from_file = weather.WeatherConfig.for_data_file(
+        "Weather", _shipped_aachen_file(), weather.WeatherDataSourceEnum.DWD_TRY
+    )
+
+    differing = {
+        field.name
+        for field in dataclasses.fields(weather.WeatherConfig)
+        if getattr(catalogue, field.name) != getattr(from_file, field.name)
+    }
+    assert differing == {"location"}
+    assert catalogue.location == "Aachen"
+    assert from_file.location == "aachen_center"
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("extension", [".dat", ".DAT", ".csv", ".CSV"])
+def test_a_reader_that_appends_an_extension_is_given_the_stem(
+    tmp_path: pathlib.Path, extension: str
+) -> None:
+    """The extension the DWD reader appends itself is taken off the path the author wrote.
+
+    ``read_dwd_try_data`` opens ``<source_path>.dat``, so a configuration storing the path with
+    its extension would have the component look for ``aachen_center.dat.dat``. The author still
+    names a file that exists -- anything else is a typo they want to hear about -- so the
+    stripping happens here rather than being pushed onto them.
+    """
+    weather_file = tmp_path / f"station{extension}"
+    weather_file.write_text("dummy weather data", encoding="utf-8")
+
+    config = weather.WeatherConfig.for_data_file(
+        "Weather", str(weather_file), weather.WeatherDataSourceEnum.DWD_TRY
+    )
+
+    assert config.source_path == str(tmp_path / "station")
+    assert config.location == "station"
+
+
+@pytest.mark.base
+def test_a_reader_that_opens_the_path_itself_keeps_the_extension() -> None:
+    """A sub-hourly source names its file, not a stem, so nothing may be taken off it.
+
+    ``WeatherSourceFiles.SUFFIXES`` is what says which of the two a source is: ``DWD_TRY`` and
+    ``NSRDB`` append something to the stored path and the rest open it as it stands. Stripping a
+    ``.csv`` from an ``NSRDB_15MIN`` path leaves a name no file on disk has.
+    """
+    shipped = weather.WeatherConfig.for_location("Weather", weather.LocationEnum.FR).source_path
+
+    config = weather.WeatherConfig.for_data_file(
+        "Weather", shipped, weather.WeatherDataSourceEnum.NSRDB_15MIN
+    )
+
+    assert shipped.endswith(".csv")
+    assert config.source_path == shipped
+    assert calculation.WeatherSourceFiles.SUFFIXES[weather.WeatherDataSourceEnum.NSRDB_15MIN] == ("",)
+
+
+@pytest.mark.base
+def test_a_weather_file_that_is_not_there_is_refused_naming_the_path(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A missing file is a configuration error, reported with the path that was written.
+
+    Deferred to the reader it would surface at the first timestep, after the occupancy profiles
+    and the building have been built, as a ``FileNotFoundError`` over a path the configuration had
+    already stripped an extension off.
+    """
+    missing = tmp_path / "no_such_station.dat"
+
+    with pytest.raises(ValueError, match=str(missing)):
+        weather.WeatherConfig.for_data_file(
+            "Weather", str(missing), weather.WeatherDataSourceEnum.DWD_TRY
+        )
+
+
+@pytest.mark.base
+def test_a_weather_named_as_a_file_in_an_energy_system_file_builds_the_same_configuration() -> None:
+    """Catches the file constructor being callable from Python but not from a file.
+
+    A constructor is part of the file format, so the executor has to decode its arguments -- the
+    reader by enum member name -- and expand the ``${inputs}`` reference of its path *before* the
+    call, since the builder consumes the path and checks that it is there. Without that expansion
+    the entry fails on a path literally spelt ``${inputs}/...``.
+    """
+    origins = _origins_of(WEATHER_FROM_FILE_ENTRY)
+
+    assert origins["Weather"] == weather.WeatherConfig.for_data_file(
+        "Weather", _shipped_aachen_file(), weather.WeatherDataSourceEnum.DWD_TRY
+    )
+    # Hand-derived, so that the constructor is not the only oracle here: the file's own stem as
+    # the label, and the stem of the pair as the stored path.
+    assert origins["Weather"].location == "aachen_center"
+    assert origins["Weather"].source_path.endswith("aachen_center")

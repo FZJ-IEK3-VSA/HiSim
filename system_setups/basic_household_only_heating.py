@@ -65,7 +65,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     # Build Building. The weather config comes first because the building config copies its identity
     # (weather_identity); the weather component itself is added further down.
-    my_weather_config = weather.WeatherConfig.get_default(weather.LocationEnum.AACHEN)
+    my_weather_config = weather.WeatherConfig.preset_standard("Weather")
     my_building_config = building.BuildingConfig.preset_standard("Building")
     my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(

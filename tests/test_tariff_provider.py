@@ -25,8 +25,6 @@ so the data cannot be at fault. The duplication that made this possible was remo
 tariff straggler commit (cost-spec-v2 §2.2); these tests are what keeps it removed.
 """
 
-# clean
-
 import datetime
 
 import pytest

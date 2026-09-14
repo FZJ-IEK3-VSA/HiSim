@@ -15,8 +15,6 @@ promises — that ``seed`` alone decides the series on the default path, and tha
 range written the wrong way round is refused rather than quietly inverted.
 """
 
-# clean
-
 # These tests deliberately exercise the private helper ``RandomNumbers._generate_values``.
 # pylint: disable=protected-access
 

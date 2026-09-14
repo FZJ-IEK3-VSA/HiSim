@@ -13,8 +13,6 @@ closed set of valid values exists — that the set is listed, because a rejectio
 not say what to write instead only moves the guessing to the author.
 """
 
-# clean
-
 from typing import ClassVar
 
 import pytest

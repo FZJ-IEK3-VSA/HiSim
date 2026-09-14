@@ -6,8 +6,6 @@ EN ISO 13790). Holds the ``Building`` component together with its ``BuildingStat
 moved verbatim from the former single-module ``building.py``.
 """
 
-# clean
-
 import importlib
 from typing import Any, List, Optional, Tuple
 

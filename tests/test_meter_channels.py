@@ -19,8 +19,6 @@ signal-collision tests of ``test_energy_system_dispatch`` take, because the arra
 provoke need a participant no shipped energy-system file wires yet.
 """
 
-# clean
-
 from dataclasses import dataclass
 from typing import ClassVar, List, Optional, Tuple
 

@@ -1,5 +1,4 @@
 """ Tests for the basic household system setup. """
-# clean
 import os
 from pathlib import Path
 

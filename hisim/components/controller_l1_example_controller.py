@@ -5,8 +5,6 @@ level-1 controller that toggles a gas heater on/off based on a storage
 fill-level threshold.
 """
 
-# clean
-
 # Generic/Built-in
 
 from dataclasses import dataclass

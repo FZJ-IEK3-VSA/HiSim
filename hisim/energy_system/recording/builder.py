@@ -27,8 +27,6 @@ reproduce on one machine and fail on the next, and the freshness check that re-r
 would then differ for a reason nobody could see in the diff.
 """
 
-# clean
-
 from __future__ import annotations
 
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple

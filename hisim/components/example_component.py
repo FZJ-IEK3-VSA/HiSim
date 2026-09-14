@@ -1,7 +1,5 @@
 """Example Component."""
 
-# clean
-
 # Generic/Built-in
 from typing import List, Optional
 from dataclasses import dataclass

@@ -36,8 +36,6 @@ from the component's world is passed as a plain value through the DTO instead --
 :class:`WeatherDataSourceEnum` lives here and is re-exported by the component.
 """
 
-# clean
-
 import csv
 import datetime
 import hashlib

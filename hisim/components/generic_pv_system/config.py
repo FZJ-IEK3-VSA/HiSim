@@ -14,8 +14,6 @@ deliberate lazy imports, and the producer layering rule of ``roadmap/cache_servi
 all three from a producer's import closure.
 """
 
-# clean
-
 # pylint: disable=cyclic-import
 # (the only backward edge is a runtime-local import of PVSystem inside get_main_classname;
 # module import order is acyclic)

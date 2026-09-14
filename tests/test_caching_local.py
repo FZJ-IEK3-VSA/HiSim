@@ -14,8 +14,6 @@ the name the entry is filed under proves the contents belong to the key, and any
 any missing metadata -- deletes the entry rather than serving it.
 """
 
-# clean
-
 import pathlib
 import threading
 from typing import Any, Callable, ClassVar, List, Optional, Tuple

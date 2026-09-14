@@ -10,8 +10,6 @@ weather + building + AC + controller only — no UTSP/occupancy, PV, battery, EM
 heat pump, heat distribution, DHW storage, or electricity meter.
 """
 
-# clean
-
 import re
 from typing import Optional, Any
 

@@ -24,8 +24,6 @@ exception to the rule: it sits above this package and is treated like any other 
 of the rest of HiSim.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses

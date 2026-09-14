@@ -10,8 +10,6 @@ These tests pin the refusal and, as importantly, pin what it must *not* refuse: 
 outputs of one source, and one output going to two different components, are both ordinary.
 """
 
-# clean
-
 import pytest
 
 from hisim import loadtypes as lt

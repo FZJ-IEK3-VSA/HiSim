@@ -1,6 +1,5 @@
 """ L2 Controller for PtX Buffer Battery operation. """
 
-# clean
 from enum import Enum, unique
 from typing import Any, ClassVar, Dict, List, Optional
 from dataclasses import dataclass

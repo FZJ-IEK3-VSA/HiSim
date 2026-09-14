@@ -5,8 +5,6 @@ it: uncertainty bands, the cash-flow timeline, the provenance ledger and the fac
 components declare. Everything here is verifiable by hand.
 """
 
-# clean
-
 from typing import Any, Dict
 
 import pytest

@@ -15,8 +15,6 @@ component imports. Like every module of the ``hisim.config`` package it imports 
 from the rest of HiSim, which is what lets a component package import it freely.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses

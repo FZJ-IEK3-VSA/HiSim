@@ -37,8 +37,6 @@ it cannot import ``ComponentID`` from :mod:`hisim.config.base`, since that modul
 the sizing machinery — which is why every builder spells the ``ComponentID`` out itself.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses

@@ -18,8 +18,6 @@ be known without importing them. It is therefore never imported by the loader, t
 structural validator, and never re-exported from the package.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses

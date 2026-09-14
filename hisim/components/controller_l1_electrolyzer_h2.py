@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-# clean
 from typing import Any, ClassVar, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json

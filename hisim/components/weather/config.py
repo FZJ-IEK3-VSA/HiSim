@@ -16,8 +16,6 @@ key (``roadmap/cache_service_spec.md`` §3) and would throw the cached series aw
 change a number in them. The layering rule of §12 names those three modules for the same reason.
 """
 
-# clean
-
 # pylint: disable=cyclic-import
 # (the only backward edge is a runtime-local import of Weather inside get_main_classname;
 # module import order is acyclic)

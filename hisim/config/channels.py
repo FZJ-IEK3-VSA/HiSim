@@ -35,8 +35,6 @@ no message about a document could help. Everything a document *can* get wrong ab
 decided by the matcher and reported with its own catalogue identifier.
 """
 
-# clean
-
 from __future__ import annotations
 
 import enum

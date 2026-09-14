@@ -59,7 +59,6 @@ The class-level ``months_abbrev_uppercase`` and ``label_months_lowercase``
 lists supply consistent month labels shared by the bar and single-day charts.
 """
 
-# clean
 from pathlib import Path
 import re
 from typing import Any, Tuple

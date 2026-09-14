@@ -26,8 +26,6 @@ missing, empty or drawn from the wrong figures misleads a reader of a hand-out, 
 corrupt a stored result.
 """
 
-# clean
-
 import contextlib
 import os
 from typing import Callable, Dict, List, Optional, Tuple

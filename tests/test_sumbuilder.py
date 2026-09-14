@@ -1,6 +1,5 @@
 """Tests for the SumBuilder components."""
 
-# clean
 import pytest
 
 from hisim import component as cp

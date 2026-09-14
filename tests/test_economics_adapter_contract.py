@@ -26,8 +26,6 @@ resolved because its module refused to import fails, since an unresolvable key i
 defect these tests exist to find.
 """
 
-# clean
-
 import dataclasses
 import importlib
 import inspect

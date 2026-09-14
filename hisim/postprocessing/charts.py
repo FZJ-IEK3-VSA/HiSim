@@ -1,6 +1,5 @@
 """Contains all the chart classes."""
 
-# clean
 import gc
 from typing import Callable, ClassVar
 import matplotlib as mpl

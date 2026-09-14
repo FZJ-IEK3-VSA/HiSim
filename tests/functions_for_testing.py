@@ -1,5 +1,4 @@
 """Helper functions for testing."""
-# clean
 from typing import Any, ClassVar, Optional, Tuple, Type
 
 import yaml

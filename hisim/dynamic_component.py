@@ -1,5 +1,4 @@
 """ Dynamic components are able to have an arbitrary number of inputs and outputs. """
-# clean
 
 from dataclasses import dataclass
 from typing import ClassVar, List, Union, Dict, Tuple, cast, Optional

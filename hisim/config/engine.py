@@ -30,8 +30,6 @@ also recorded in a :class:`~hisim.config.report.ResolutionReport`, readable as
 ``engine.report`` after a run.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses

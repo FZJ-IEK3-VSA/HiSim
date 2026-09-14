@@ -11,8 +11,6 @@ name has to satisfy, and that the declarative file format enforces the very same
 the very same definition.
 """
 
-# clean
-
 import dataclasses
 from dataclasses import dataclass
 from typing import Optional

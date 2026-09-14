@@ -31,8 +31,6 @@ the block an author can paste. A provider nobody read is not a failure but a war
 legal, occasionally intended, and always worth saying out loud.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses

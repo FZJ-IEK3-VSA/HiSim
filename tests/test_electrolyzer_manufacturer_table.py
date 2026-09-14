@@ -15,8 +15,6 @@ is refused by the name of the field, and the one device the live setup uses stil
 the values the table carries for it.
 """
 
-# clean
-
 import json
 from pathlib import Path
 from typing import Any, Dict

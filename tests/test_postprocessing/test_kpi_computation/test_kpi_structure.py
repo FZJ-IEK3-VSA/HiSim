@@ -7,8 +7,6 @@ deterministic, side-effect-free and depend only on their arguments, so they can
 be tested as pure functions without any simulation setup.
 """
 
-# clean
-
 import pandas as pd
 import pytest
 

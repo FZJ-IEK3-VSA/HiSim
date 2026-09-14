@@ -12,8 +12,6 @@ working pylpg installation, because both make the profile source fail on purpose
 is the connector's reaction to that failure, which is the part that used to be wrong.
 """
 
-# clean
-
 import os
 from typing import Any
 

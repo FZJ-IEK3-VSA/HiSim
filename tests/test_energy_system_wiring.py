@@ -19,8 +19,6 @@ and a meter — so a failure points at the rule under test rather than at a hous
 Each test states the failure mode it catches.
 """
 
-# clean
-
 from pathlib import Path
 from typing import ClassVar, Tuple, cast
 

@@ -18,9 +18,6 @@ determinants into the wrong year-1 bill — isolated from pricing data by the sy
 contracts.
 """
 
-# clean
-
-
 import pytest
 
 from hisim.economics.carriers import EnergyCarrier

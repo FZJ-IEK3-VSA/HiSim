@@ -44,8 +44,6 @@ disclosure titles the renderer slices read, and two spellings of "Terms used her
 of them in one report.
 """
 
-# clean
-
 import html
 import re
 from dataclasses import dataclass

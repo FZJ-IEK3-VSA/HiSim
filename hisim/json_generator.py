@@ -1,5 +1,4 @@
 """ Helper module to generate the JSON configurations. """
-# clean
 from __future__ import annotations
 import dataclasses
 import re

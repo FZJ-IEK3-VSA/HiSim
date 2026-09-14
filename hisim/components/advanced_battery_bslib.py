@@ -1,7 +1,5 @@
 """ Battery implementation built upon the bslib library. It contains a Battery Class together with its Configuration and State. """
 
-# clean
-
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from typing import ClassVar, List, Tuple, Optional
 from dataclasses import dataclass

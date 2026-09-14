@@ -9,8 +9,6 @@ ordering, the cycle error), the many-cardinality hook, and the provenance the re
 leaves behind in ``sizing_record`` and the ``ResolutionReport``.
 """
 
-# clean
-
 import json
 import random
 from dataclasses import dataclass

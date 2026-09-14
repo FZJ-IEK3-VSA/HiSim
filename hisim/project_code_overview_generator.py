@@ -1,5 +1,4 @@
 """ Makes an overview of all the components and collects important information for each module. """
-# clean
 from types import ModuleType
 from typing import List, Optional, Set, TypedDict, Union
 from pathlib import Path as Pathlibpath

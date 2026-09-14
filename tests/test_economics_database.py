@@ -10,8 +10,6 @@ source registry, ``database`` the loader that ties them together. Row types are 
 their canonical module here; ``TestReExportSurface`` pins the deliberate ``database`` re-exports.
 """
 
-# clean
-
 import json
 import os
 import shutil

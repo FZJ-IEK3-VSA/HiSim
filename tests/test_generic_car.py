@@ -13,8 +13,6 @@ household, the car, and whichever of the two causes applied — nothing publishe
 ordering assumption broke) or nothing under this identity (the names are wrong).
 """
 
-# clean
-
 import inspect
 from typing import Any, Dict, List
 

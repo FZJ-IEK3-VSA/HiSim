@@ -1,7 +1,5 @@
 """Module for generating random numbers."""
 
-# clean
-
 # Generic/Built-in
 import random
 from typing import List, ClassVar, Optional

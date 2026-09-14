@@ -17,8 +17,6 @@ were already meaningful strings (``LoadTypes``, ``FluidMediaType``,
 but still covered by the second.
 """
 
-# clean
-
 import dataclasses
 import enum
 import importlib

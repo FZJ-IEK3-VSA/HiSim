@@ -20,8 +20,6 @@ code ever touched.
 Each test states the failure mode it catches.
 """
 
-# clean
-
 from __future__ import annotations
 
 import hashlib

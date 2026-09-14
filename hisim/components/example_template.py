@@ -43,8 +43,6 @@ or a test does the same explicitly with ``config.resolve(SizingContext(...))``.
 
 """
 
-# clean
-
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from copy import deepcopy
 from dataclasses import dataclass

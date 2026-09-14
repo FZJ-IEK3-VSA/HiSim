@@ -14,8 +14,6 @@ delegate to :mod:`hisim.config.sizing`) without closing an import cycle through
 ``hisim/component.py``.
 """
 
-# clean
-
 from __future__ import annotations
 
 import copy

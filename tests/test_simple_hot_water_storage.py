@@ -1,6 +1,5 @@
 """Test for simple hot water storage."""
 
-# clean
 import pytest
 import numpy as np
 from hisim import component as cp

@@ -9,7 +9,6 @@ What is left here is the component around that series -- its outputs, the locati
 temperature forecast and the yearly arrays the PV system reads.
 """
 
-# clean
 import datetime
 import math
 from typing import Any, ClassVar, Dict, List, Mapping, Optional

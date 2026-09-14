@@ -1,6 +1,5 @@
 """Test for the night setback controller."""
 
-# clean
 import pytest
 
 from hisim import component as cp

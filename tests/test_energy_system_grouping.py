@@ -16,8 +16,6 @@ run happens once, by hand, and is committed as ``energy_systems/*.grouping.yaml`
 Each test states the failure mode it catches.
 """
 
-# clean
-
 from __future__ import annotations
 
 import subprocess

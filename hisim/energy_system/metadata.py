@@ -18,8 +18,6 @@ unchanged file, and a clock in it would make every regeneration a diff, which is
 teach readers to ignore the file.
 """
 
-# clean
-
 from __future__ import annotations
 
 import os

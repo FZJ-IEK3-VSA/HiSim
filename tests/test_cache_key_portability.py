@@ -15,8 +15,6 @@ configuration with no override of its own, because the base rule it demonstrates
 configuration that is still keyed this way.
 """
 
-# clean
-
 import dataclasses
 import re
 from typing import Any

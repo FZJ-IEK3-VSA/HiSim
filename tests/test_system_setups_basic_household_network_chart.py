@@ -1,5 +1,4 @@
 """ Tests for the basic household system setup. """
-# clean
 from pathlib import Path
 
 import pytest

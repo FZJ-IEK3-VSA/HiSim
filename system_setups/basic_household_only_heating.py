@@ -1,6 +1,5 @@
 """Shows a single household with only heating."""
 
-# clean
 from typing import Optional, Any
 from hisim.simulator import SimulationParameters
 from hisim.config import SizingContext, concrete

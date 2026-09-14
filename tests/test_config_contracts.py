@@ -11,8 +11,6 @@ dependency, typically) must not silently shrink the scanned set, so the import f
 collected and reported by their own test instead of being swallowed.
 """
 
-# clean
-
 import dataclasses
 import importlib
 import inspect

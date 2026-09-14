@@ -41,8 +41,6 @@ under test — and `FakeFreeOfCostController` is the control that shows the decl
 nothing" answer still costs nothing.
 """
 
-# clean
-
 import ast
 import datetime
 import importlib

@@ -17,8 +17,6 @@ error, and T-20 asks that an altered file fail and that the report name what mov
 Each test states the failure mode it catches.
 """
 
-# clean
-
 from __future__ import annotations
 
 import json

@@ -15,8 +15,6 @@ ones fail only on entries whose classes are not converted yet — the same gap t
 validator pins, seen from the other side.
 """
 
-# clean
-
 from typing import Any, ClassVar, Dict, List, Tuple, cast
 
 import jsonschema

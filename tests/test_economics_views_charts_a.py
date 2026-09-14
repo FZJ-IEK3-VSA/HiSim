@@ -35,8 +35,6 @@ The one deliberate exception to "hand-built" is `TestWorkedExampleActorFlows`, w
 its docstring for why the figures live here rather than in the workbook.
 """
 
-# clean
-
 import dataclasses
 
 import pytest

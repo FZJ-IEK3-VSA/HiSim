@@ -4,8 +4,6 @@ These tests exercise the injectable dataframe seam so the component can be
 constructed and simulated without reading a real CSV file from disk.
 """
 
-# clean
-
 from pathlib import Path
 
 import numpy as np

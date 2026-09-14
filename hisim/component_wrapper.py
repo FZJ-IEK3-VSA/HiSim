@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-# clean
 import hisim.component as cp
 import hisim.loadtypes as lt
 from hisim import log

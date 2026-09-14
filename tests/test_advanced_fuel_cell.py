@@ -1,7 +1,5 @@
 """Test for advanced fuel cell."""
 
-# clean
-
 import dataclasses
 import json
 import math

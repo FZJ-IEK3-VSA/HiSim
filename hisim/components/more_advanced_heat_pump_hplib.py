@@ -12,7 +12,6 @@ preparation on district heating for water/water heatpumps
 
 import hashlib
 
-# clean
 import importlib
 from enum import Enum, unique
 from dataclasses import dataclass

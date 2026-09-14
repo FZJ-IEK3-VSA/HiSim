@@ -27,8 +27,6 @@ other's leftovers. The driver that records the whole fleet is what enforces that
 here does not, so that a test can record without paying for a subprocess.
 """
 
-# clean
-
 from __future__ import annotations
 
 import os

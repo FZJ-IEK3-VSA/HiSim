@@ -10,8 +10,6 @@ an item and a labelled detail, indented consistently, written to a stream the ca
 here decides anything and nothing here reads a file; they are handed the answer and lay it out.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses

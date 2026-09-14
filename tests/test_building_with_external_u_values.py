@@ -3,7 +3,6 @@
 The aim is to compare the calculated heat demand in the building module with the heat demand given by TABULA.
 """
 
-# clean
 import os
 from typing import NamedTuple, Optional, Tuple
 import pytest

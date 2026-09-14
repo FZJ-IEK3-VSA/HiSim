@@ -1,7 +1,5 @@
 """Dynamic Components Module."""
 
-# clean
-
 from typing import Optional
 
 # import hisim.components.random_numbers

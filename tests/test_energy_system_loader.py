@@ -13,8 +13,6 @@ condition is reported, that the message names the offending element, and that it
 alternatives whenever a closed set of them exists.
 """
 
-# clean
-
 from pathlib import Path
 from typing import ClassVar, Tuple
 

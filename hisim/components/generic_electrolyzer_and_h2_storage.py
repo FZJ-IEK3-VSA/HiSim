@@ -1,7 +1,5 @@
 """Generic electrolyzer and h2 storage module."""
 
-# clean
-
 # Owned
 from typing import Optional, List, Any
 from dataclasses import dataclass

@@ -19,8 +19,6 @@ end-of-line comments is the job of the record writer, which builds on the docume
 one produces.
 """
 
-# clean
-
 from __future__ import annotations
 
 from typing import Any, ClassVar, Dict, Type

@@ -10,7 +10,6 @@ The Generic boiler controller can be set as modulating controller (which is ofte
 and as non-modulating on_off controller (which is used especially for pellet and wood chip heating).
 """
 
-# clean
 # Owned
 import importlib
 from dataclasses import dataclass

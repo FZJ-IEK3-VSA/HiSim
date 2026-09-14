@@ -28,8 +28,6 @@ collecting and the writing: nothing here is recomputed and no stage is run twice
 makes the audit a description of the run rather than a second opinion about it.
 """
 
-# clean
-
 from __future__ import annotations
 
 import json

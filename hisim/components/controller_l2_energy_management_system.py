@@ -6,7 +6,6 @@ sends activation/deactivation siganls to components.
 The component with the lowest source weight is activated first.
 """
 
-# clean
 from dataclasses import dataclass
 
 from typing import Any, List, Tuple, Optional, cast

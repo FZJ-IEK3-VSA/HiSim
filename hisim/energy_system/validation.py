@@ -28,8 +28,6 @@ rest of the checks say anything reliable — an unknown component name, for inst
 every other statement about that component meaningless.
 """
 
-# clean
-
 from __future__ import annotations
 
 import re

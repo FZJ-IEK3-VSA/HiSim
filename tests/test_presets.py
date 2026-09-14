@@ -9,8 +9,6 @@ preset name typo and a wrongly typed constructor argument are *static* type erro
 ``hisim/config`` resolves through the kernel without the kernel knowing anything about it.
 """
 
-# clean
-
 import ast
 import dataclasses
 import pathlib

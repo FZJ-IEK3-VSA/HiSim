@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """Controller of EV battery with configuration and state."""
 
-# clean
-
 from typing import List, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json

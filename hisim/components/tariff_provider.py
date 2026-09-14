@@ -26,8 +26,6 @@ arithmetic, the horizon projection of a bill (§8.5), and any notion of who pays
 not implement a control strategy — it only publishes the signals a strategy needs.
 """
 
-# clean
-
 import datetime
 from dataclasses import dataclass
 from typing import Any, List, Optional

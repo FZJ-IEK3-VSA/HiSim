@@ -5,8 +5,6 @@ ComponentOutput, SingleTimeStepValues, ConfigBase, and related classes.
 Each test verifies a specific aspect of the component system.
 """
 
-# clean
-
 from dataclasses import dataclass
 from enum import Enum, unique
 from typing import List

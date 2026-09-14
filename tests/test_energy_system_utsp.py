@@ -22,8 +22,6 @@ whole shipped household, realizes it and reads the realized record back, which i
 re-run takes.
 """
 
-# clean
-
 from pathlib import Path
 from typing import Any, ClassVar
 

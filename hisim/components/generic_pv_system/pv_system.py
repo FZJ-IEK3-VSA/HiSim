@@ -12,8 +12,6 @@ What is left here is the component around that series: its inputs and outputs, t
 cost and KPI declarations and the predictive forecast.
 """
 
-# clean
-
 # Generic/Built-in
 import datetime
 from typing import Any, List, Optional

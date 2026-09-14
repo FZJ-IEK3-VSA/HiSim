@@ -1,7 +1,5 @@
 """Simple System Setup Module."""
 
-# clean
-
 # Generic
 from typing import Optional
 

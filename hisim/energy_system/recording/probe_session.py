@@ -20,8 +20,6 @@ system. One level under the repository root is where ``energy_systems/`` sits, s
 probes are recorded and afterwards removed.
 """
 
-# clean
-
 from __future__ import annotations
 
 import difflib

@@ -1,5 +1,4 @@
 """Test for project code overview generator."""
-# clean
 import logging
 import sys
 from pathlib import Path

@@ -1,6 +1,5 @@
 """ Contains various utility functions and utility classes. """
 
-# clean
 import datetime as dt
 import gc
 import inspect

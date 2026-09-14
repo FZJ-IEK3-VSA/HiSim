@@ -7,7 +7,6 @@ contract of the :class:`LogPrio` enum and the ``LOGGING_DEFAULT_LEVEL``
 module constant. The I/O / state-mutating ``Logger`` methods are intentionally
 not touched here.
 """
-# clean
 
 import pytest
 

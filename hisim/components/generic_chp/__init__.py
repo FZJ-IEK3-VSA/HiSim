@@ -41,8 +41,6 @@ Note on ``SimpleCHP.__module__`` and ``L1CHPController.__module__``:
 
 """
 
-# clean
-
 from hisim.components.generic_chp.chp import CHPConfig, GenericCHPState, SimpleCHP
 from hisim.components.generic_chp.controller import (
     L1CHPController,

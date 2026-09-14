@@ -21,8 +21,6 @@ reference grammar both of them obey lives one module below, in
 :mod:`hisim.energy_system.names`.
 """
 
-# clean
-
 from __future__ import annotations
 
 from typing import Annotated, Any, ClassVar, Dict, Literal, Mapping, Optional, Tuple, Union

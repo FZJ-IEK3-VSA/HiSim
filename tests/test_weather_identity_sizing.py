@@ -8,8 +8,6 @@ it. These tests pin the identity strings, the key sensitivity, the engine bindin
 the refusal to build a component whose identity was never set.
 """
 
-# clean
-
 import dataclasses
 import pathlib
 from typing import Any

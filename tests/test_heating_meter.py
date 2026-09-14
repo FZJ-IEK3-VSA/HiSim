@@ -1,7 +1,5 @@
 """Test for heating meter component."""
 
-# clean
-
 import os
 from pathlib import Path
 import json

@@ -17,8 +17,6 @@ exemplar, a flat twin, a grouped file — all live in one directory and all end 
 Each test states the failure mode it catches.
 """
 
-# clean
-
 from __future__ import annotations
 
 from pathlib import Path

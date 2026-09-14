@@ -15,8 +15,6 @@ end to end, that shows the same repository doing its real job -- carrying the We
 series from the component that computes them to the components that read them.
 """
 
-# clean
-
 from pathlib import Path
 from typing import Any, Optional
 

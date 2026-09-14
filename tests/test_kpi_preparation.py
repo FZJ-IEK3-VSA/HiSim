@@ -9,8 +9,6 @@ branch like "production without any consumption" be exercised in milliseconds.
 Each test states the failure mode it catches.
 """
 
-# clean
-
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -28,8 +28,6 @@ caller tell "this file is wrong" from "these classes are not ready yet" without 
 message.
 """
 
-# clean
-
 from __future__ import annotations
 
 import difflib

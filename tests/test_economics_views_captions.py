@@ -26,8 +26,6 @@ the wrong central value for a scenario, or invent a cause for an inert axis. The
 all three is pinned in `tests/test_economics_sections_d.py`; nothing here asserts on HTML.
 """
 
-# clean
-
 import dataclasses
 from typing import Optional
 

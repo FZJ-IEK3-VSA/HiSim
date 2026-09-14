@@ -50,8 +50,6 @@ on be computed twice (once in the engine, once in a chart) and the two copies ma
 fix is always the same: move the derivation into `views.py` and let presentation read it.
 """
 
-# clean
-
 import ast
 import os
 from dataclasses import dataclass, field

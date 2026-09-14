@@ -20,8 +20,6 @@ the names in the message, because a rejection that does not say which line to ed
 the guessing to the author.
 """
 
-# clean
-
 from typing import AbstractSet, ClassVar, Dict, List, Mapping, Optional, Tuple
 
 import pytest

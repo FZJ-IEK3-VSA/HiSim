@@ -18,8 +18,6 @@ one real build proves what a consumer of a record sees: the selection is resolve
 record carries no variants at all and the audit is the only place it is written down.
 """
 
-# clean
-
 from pathlib import Path
 from typing import List, Tuple
 

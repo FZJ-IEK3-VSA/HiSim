@@ -5,8 +5,6 @@ HiSim :class:`~hisim.component.Component` reads inputs, applies fixed gains,
 and writes outputs each timestep.
 """
 
-# clean
-
 from __future__ import annotations
 
 

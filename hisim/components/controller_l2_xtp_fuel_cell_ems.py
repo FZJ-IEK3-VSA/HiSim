@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-# clean
 from enum import Enum, unique
 import math
 from dataclasses import dataclass

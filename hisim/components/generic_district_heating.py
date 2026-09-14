@@ -5,7 +5,6 @@ This module provides the :class:`DistrictHeating` component and the
 supply to space heating and domestic hot water circuits.
 """
 
-# clean
 # Owned
 # import importlib
 from dataclasses import dataclass

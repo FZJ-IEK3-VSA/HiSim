@@ -1,6 +1,5 @@
 """Electric Heating Module."""
 
-# clean
 # Owned
 from dataclasses import dataclass
 import logging

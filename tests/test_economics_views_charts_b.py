@@ -23,8 +23,6 @@ from a rendering failure (`tests/test_economics_reporting.py`, the goldens) and 
 failure (`tests/test_economics_engine.py`); nothing here asserts on SVG or on matplotlib artists.
 """
 
-# clean
-
 from typing import Dict, cast
 
 import pytest

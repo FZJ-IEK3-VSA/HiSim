@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# clean
 """Night setback controller.
 
 This component provides a temperature offset for the Building component.

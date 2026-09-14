@@ -1,7 +1,5 @@
 """Car Battery implementation built upon the bslib library. It contains a CarBattery Class together with its Configuration and State."""
 
-# clean
-
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 import importlib
 from dataclasses import dataclass

@@ -13,8 +13,6 @@ and the repository's own convention for that is a plain module beside the tests 
 (`tests/functions_for_testing.py`, `tests/building_golden_support.py`).
 """
 
-# clean
-
 import re
 from typing import List, Optional, Tuple
 

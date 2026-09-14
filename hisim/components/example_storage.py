@@ -1,7 +1,5 @@
 """Example Storage."""
 
-# clean
-
 # Generic/Built-in
 import copy
 from typing import Optional

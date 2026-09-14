@@ -21,8 +21,6 @@ import it without the import cycle that keeping :class:`GenericCarInformation` i
 would create the moment the occupancy needed it.
 """
 
-# clean
-
 from __future__ import annotations
 
 from dataclasses import dataclass

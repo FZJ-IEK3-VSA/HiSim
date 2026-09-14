@@ -59,8 +59,6 @@ This subpackage is deliberately not re-exported by :mod:`hisim.energy_system`. R
 stay possible without importing HiSim's component tree, and a recorder necessarily imports it.
 """
 
-# clean
-
 from hisim.energy_system.recording.builder import EnergySystemBuilder, PortablePathGuard, build
 from hisim.energy_system.recording.child_recorder import ChildRecorder
 from hisim.energy_system.recording.configs import (

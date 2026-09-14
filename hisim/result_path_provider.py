@@ -13,7 +13,6 @@ too, for want of another user: it came from ``hisim.sim_repository_singleton`` w
 was deleted on 2026-09-12.
 """
 
-# clean
 import sys
 import os
 import re

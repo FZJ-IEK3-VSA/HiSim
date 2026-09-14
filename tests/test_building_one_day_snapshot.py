@@ -59,8 +59,6 @@ golden is a hard error, never a silent create; the golden's diff is part of the 
 request and, during the cleanup, may only be justified by a metadata change.
 """
 
-# clean
-
 import dataclasses
 import math
 from typing import Any, ClassVar, Dict, List, Tuple

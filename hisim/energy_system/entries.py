@@ -13,8 +13,6 @@ accept. No component class is imported, so nothing is said yet about whether a p
 or a port exists — that is the class-bound stage's business, much later in the lifecycle.
 """
 
-# clean
-
 from __future__ import annotations
 
 from typing import Any, ClassVar, Dict, Mapping, Optional, Sequence, Tuple

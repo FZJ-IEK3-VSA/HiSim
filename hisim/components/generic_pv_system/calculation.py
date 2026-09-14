@@ -43,8 +43,6 @@ spec's survey lists for the PV -- the vectorization win -- already landed; anyth
 separately.
 """
 
-# clean
-
 import hashlib
 import os
 from dataclasses import dataclass, field

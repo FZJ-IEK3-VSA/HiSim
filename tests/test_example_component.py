@@ -1,6 +1,5 @@
 """Test for the Example Component."""
 
-# clean
 from pathlib import Path
 
 import pytest

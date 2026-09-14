@@ -12,8 +12,6 @@ The tests construct an :class:`ElectricHeating` instance and call
 matching :class:`pandas.DataFrame`, avoiding the cost of a full simulation.
 """
 
-# clean
-
 from typing import List
 
 import pandas as pd

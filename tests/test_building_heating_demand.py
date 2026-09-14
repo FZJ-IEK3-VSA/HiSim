@@ -2,7 +2,6 @@
 
 The aim is to compare the calculated heat demand in the building module with the heat demand given by TABULA.
 """
-# clean
 from pathlib import Path
 from typing import Optional
 import pytest

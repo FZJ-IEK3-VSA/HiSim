@@ -25,8 +25,6 @@ so the question "would the aggregator find two answers?" is asked here in exactl
 be asked at run time.
 """
 
-# clean
-
 from __future__ import annotations
 
 from dataclasses import dataclass

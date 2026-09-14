@@ -8,8 +8,6 @@ module's physics, so the contribution is declared here and assigned onto the con
 on import.
 """
 
-# clean
-
 from dataclasses import dataclass
 from typing import ClassVar, Dict, Iterable, List, Optional, Tuple
 

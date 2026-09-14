@@ -23,10 +23,6 @@ components:
   HeatDistributionSystem:
     class: hisim.components.heat_distribution_system.HeatDistribution
     preset: standard
-    config:
-      heating_system: AUTO # sized FLOORHEATING by Size.HEAT_DISTRIBUTION_SYSTEM_TYPE <- HeatDistributionController.heat_distribution_system_type
-      water_mass_flow_rate_in_kg_per_second: AUTO # sized 0.27 by Size.WATER_MASS_FLOW_RATE_IN_KG_PER_SECOND.rounded(2) <- HeatDistributionController.water_mass_flow_rate_in_kg_per_second
-      absolute_conditioned_floor_area_in_m2: AUTO # sized 121.2 by Size.CONDITIONED_FLOOR_AREA_IN_M2 <- Building.conditioned_floor_area_in_m2
     inputs:
       - Building
       - HeatDistributionController
@@ -34,12 +30,6 @@ components:
   HeatDistributionController:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: standard
-    config:
-      set_heating_threshold_outside_temperature_in_celsius: AUTO # sized 18.0 by HeatDistributionControllerConfig.<lambda> <- Building.heating_load_in_watt, Building.conditioned_floor_area_in_m2
-      heating_reference_temperature_in_celsius: AUTO # sized -7.0 by Size.HEATING_REFERENCE_TEMPERATURE_IN_CELSIUS <- Building.heating_reference_temperature_in_celsius
-      set_heating_temperature_for_building_in_celsius: AUTO # sized 20.0 by Size.SET_HEATING_TEMPERATURE_IN_CELSIUS <- Building.set_heating_temperature_in_celsius
-      set_cooling_temperature_for_building_in_celsius: AUTO # sized 25.0 by Size.SET_COOLING_TEMPERATURE_IN_CELSIUS <- Building.set_cooling_temperature_in_celsius
-      heating_load_of_building_in_watt: AUTO # sized 7780.75 by Size.HEATING_LOAD_IN_WATT.rounded(2) <- Building.heating_load_in_watt
     inputs:
       - Weather
       - Building
@@ -91,9 +81,6 @@ components:
   CondensingGasBoiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas
-    config:
-      minimal_thermal_power_in_watt: AUTO # sized 0.0 by 0.0
-      maximal_thermal_power_in_watt: AUTO # sized 8558.827420000001 by GenericBoilerConfig.<lambda> <- Building.heating_load_in_watt, Building.number_of_apartments
     inputs:
       - ModulatingBoilerController
       - DHWStorage
@@ -102,8 +89,6 @@ components:
     class: hisim.components.generic_boiler.GenericBoilerController
     preset: modulating
     config:
-      minimal_thermal_power_in_watt: AUTO # sized 0.0 by Size.MINIMAL_THERMAL_POWER_IN_WATT <- CondensingGasBoiler.minimal_thermal_power_in_watt
-      maximal_thermal_power_in_watt: AUTO # sized 8558.827420000001 by Size.MAXIMAL_THERMAL_POWER_IN_WATT <- CondensingGasBoiler.maximal_thermal_power_in_watt
       with_domestic_hot_water_preparation: true
     inputs:
       - Weather

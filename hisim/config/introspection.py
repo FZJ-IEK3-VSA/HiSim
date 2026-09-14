@@ -25,7 +25,7 @@ import inspect
 from dataclasses import dataclass
 from typing import Any, ClassVar, Optional, Tuple
 
-from hisim.config.contributions import FactContribution
+from hisim.config.contributions import declared_facts_of
 from hisim.config.laws import Cardinality, SizingLaw
 from hisim.config.presets import canonical_preset, constructors_of, presets_of
 from hisim.config.sizing import auto_fields, field_notes, sizable_fields
@@ -289,16 +289,11 @@ def _describe_law(name: str, law: SizingLaw, note: Optional[str]) -> SizableFiel
 def _describe_facts_provided(config_class: type) -> Tuple[str, ...]:
     """Lists the sizing facts the class declares it computes, in declaration order.
 
-    Duplicates are collapsed (two contributions may legitimately name the same fact) while
-    the declaration order is kept, because that order is what an author reads in the source.
+    Deduplication and ordering live in :func:`~hisim.config.contributions.declared_facts_of`, which
+    the engine's provider table and the recorder's provider lookup read too, so a description can
+    never disagree with the table a run is bound against.
     """
-    contributions = getattr(config_class, FactContribution.CLASS_ATTRIBUTE, ())
-    ordered: list = []
-    for contribution in contributions:
-        for fact in contribution.facts:
-            if fact not in ordered:
-                ordered.append(fact)
-    return tuple(ordered)
+    return declared_facts_of(config_class)
 
 
 def describe_config(config_class: type) -> ConfigDescription:

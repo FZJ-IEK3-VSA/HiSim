@@ -309,8 +309,11 @@ preset's defaults to annotate them, dropped.)* A field the setup assigned stays 
 override. A field whose provider is not yet converted stays concrete **with a comment saying which
 fact has no provider** — and is dropped on the re-record that follows the provider's conversion,
 which is what "each P4 batch shortens the twins" should always have meant. A field the preset
-sizes with a law of its own stays concrete likewise, since re-opening it would hand it to the class
-law. Unconverted classes stay full literal blocks.
+sizes with a law of its own is omitted like any other: omission keeps the preset's law, and only
+the explicit word AUTO would re-open the field to the class law — which is one more reason the twin
+does not write it. A value the setup assigned after resolving that equals the law's output is the
+law's value and is omitted too; a pin is a value that differs from the law's, or one assigned
+before resolving. Unconverted classes stay full literal blocks.
 
 **The check.** After writing a twin the recorder resolves it through the executor and compares
 every field it left to the preset with the run's `sizing_record` value. A difference **fails the

@@ -64,11 +64,9 @@ stay possible without importing HiSim's component tree, and a recorder necessari
 from hisim.energy_system.recording.builder import EnergySystemBuilder, PortablePathGuard, build
 from hisim.energy_system.recording.child_recorder import ChildRecorder
 from hisim.energy_system.recording.configs import (
-    EntryConfiguration,
     EntryConfigWriter,
     FactProviders,
     SizedFieldDecision,
-    TwinComments,
 )
 from hisim.energy_system.recording.inputs import InputItemWriter
 from hisim.energy_system.recording.names import RecordedNames
@@ -130,7 +128,6 @@ __all__ = [
     "ComponentRow",
     "ConfigurationSelection",
     "EnergySystemBuilder",
-    "EntryConfiguration",
     "FactProviders",
     "FleetCensus",
     "GroupedSetup",
@@ -177,7 +174,6 @@ __all__ = [
     "RecordingResult",
     "RecordingSession",
     "SizedFieldDecision",
-    "TwinComments",
     "build",
     "normalise_parameters",
     "observe",

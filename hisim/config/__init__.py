@@ -102,7 +102,7 @@ from hisim.config.sizing import (
     sized_field,
 )
 from hisim.config.report import ResolutionReport
-from hisim.config.contributions import FactContribution
+from hisim.config.contributions import FactContribution, declared_facts_of
 from hisim.config.engine import SizingFactEngine, resolve_all
 from hisim.config.channels import (
     ChannelDeclarationError,
@@ -140,6 +140,7 @@ __all__ = [
     "DisplayConfig",
     "DynamicConnectionChannel",
     "FactContribution",
+    "declared_facts_of",
     "FieldInfo",
     "Many",
     "NameSyntax",

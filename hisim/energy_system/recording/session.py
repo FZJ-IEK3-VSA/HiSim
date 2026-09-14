@@ -64,10 +64,12 @@ class RecordingResult:
     the parameters the setup ended up with, and those may already be described by another file or
     by none at all.
 
-    ``decisions`` is what the recorder concluded about every field a law computed: which was left
-    to its preset, which stayed a number and for which of the two reasons. It is the flip count a
-    re-record is reviewed by, and the reason a caller can answer "why is this line still a number"
-    without reading the file.
+    ``decisions`` is what the recorder concluded about the law-computed fields that reached the
+    file: which was left to its preset, which stayed a number and for which of the two reasons. It
+    does not cover every field a law computed — a field the setup assigned again after resolving is
+    a plain override and no decision is made about it, and a field the preset already states never
+    reaches the deviation block. It is the flip count a re-record is reviewed by, and the reason a
+    caller can answer "why is this line still a number" without reading the file.
     """
 
     setup: str
@@ -315,8 +317,11 @@ class RecordingSession:
                 written down, ``EF-R5`` when the written file does not load, validate or build,
                 ``EF-R11`` when an aggregator's control outputs cannot be paired with the feeds
                 they belong to, ``EF-R12`` when a file the recorder did not write is already at the
-                output path, and ``EF-R13`` when a field the file leaves to a law does not come
-                back as the number the run produced.
+                output path, ``EF-R13`` when a field the file leaves to a law does not come back as
+                the number the run produced, and ``EF-R14`` when the rebuilt system has no such
+                component or the component no such field. Every one of these leaves the output path
+                as it was: the text is verified from a staging file beside it and only then renamed
+                into place.
         """
         from hisim.hisim_main import get_description_from_py, initialize_from_python  # noqa: PLC0415
 
@@ -329,13 +334,8 @@ class RecordingSession:
         reference = self.library.reference(simulator.get_simulation_parameters())
         builder = EnergySystemBuilder(observed)
         model = builder.build(self.stem, get_description_from_py(self.module_path) or None)
-        text = self.write(model, setup_name, reference.path, builder.notes)
-        self.verify(
-            len(text),
-            reference.path,
-            simulator.get_simulation_parameters().result_directory,
-            builder.checks,
-        )
+        text = self.render(model, setup_name, reference.path, builder.notes)
+        self.write(text, simulator.get_simulation_parameters().result_directory, reference.path, builder.checks)
         return RecordingResult(
             setup=setup_name,
             path=self.path,
@@ -357,20 +357,37 @@ class RecordingSession:
         label = f".{self.probe}" if self.probe else ""
         return self.out_dir / f"{self.stem}{label}{RecordedFileWriter.SUFFIX}"
 
-    def write(
+    #: Suffix of the file a recording is verified from before it is renamed onto :attr:`path`. It
+    #: sits in the output directory rather than a temporary one, because a rename is only atomic
+    #: within a filesystem and the schema reference a header carries is written relative to that
+    #: directory. It ends in ``.yaml`` because the loader refuses anything else, and it deliberately
+    #: does *not* end in ``.energy_system.yaml``, so that the globs which enumerate a directory of
+    #: twins cannot see a recording that is still being checked.
+    STAGING_SUFFIX: ClassVar[str] = ".recording-check.yaml"
+
+    @property
+    def staging_path(self) -> Path:
+        """Where the text sits while it is being verified.
+
+        Returns:
+            The output directory's ``<setup stem><probe label>.recording-check.yaml``, beside
+            :attr:`path` and never equal to it.
+        """
+        label = f".{self.probe}" if self.probe else ""
+        return self.out_dir / f"{self.stem}{label}{self.STAGING_SUFFIX}"
+
+    def render(
         self,
         model: EnergySystemFile,
         setup_name: str,
         parameters_path: Path,
         notes: Optional[Mapping[str, Mapping[str, str]]] = None,
     ) -> str:
-        """Writes the header and the canonical body of one recorded file.
+        """Builds the text of one recorded file: its header and its canonical body.
 
-        A file already at this path is overwritten only when the recorder wrote it: refreshing the
-        fleet re-records every twin over its predecessor, and that has to keep working. A file
-        without the recorder's header line is somebody's own energy system that happens to share
-        the setup's stem, and writing over it would destroy work no re-recording can bring back, so
-        it is refused instead.
+        Nothing is written here. Rendering and writing are separate because the text has to be
+        verified before it may land at the path a reader trusts, and the verification needs the
+        text.
 
         Args:
             model: The model to emit.
@@ -381,20 +398,59 @@ class RecordingSession:
                 field. Without them the body is exactly what the canonical writer produces.
 
         Returns:
-            The text written.
-
-        Raises:
-            EnergySystemRecordingError: ``EF-R12`` naming the path when a file that the recorder
-                did not produce sits where this recording would go.
+            The complete text, header included.
         """
-        self.refuse_to_overwrite_a_hand_authored_file()
-        self.out_dir.mkdir(parents=True, exist_ok=True)
         header = RecordedFileWriter.header(
             setup_name, self.relative(parameters_path), self.out_dir, self.probe, self.probes
         )
-        text = header + render_record(model, notes=notes)
-        self.path.write_text(text, encoding="utf-8")
-        return text
+        return header + render_record(model, notes=notes)
+
+    def write(
+        self,
+        text: str,
+        result_directory: str,
+        parameters_path: Path,
+        checks: Sequence[SizedFieldDecision] = (),
+    ) -> None:
+        """Verifies one rendered recording and only then lets it land at :attr:`path`.
+
+        The order is the point. A file that does not build, or whose sized fields come back as
+        other numbers, used to be written first and refused afterwards, which left a loadable and
+        wrong twin on disk for the next reader — or for the next ``--check``, which would then
+        compare against it. Now the text goes to a staging file beside the target, the whole
+        verification runs against *that* path, and only a verification that passed renames it into
+        place. A failure removes the staging file, so the output path is exactly what it was before
+        the recording started, whether that is the previous twin or nothing at all.
+
+        A file already at the target is overwritten only when the recorder wrote it: refreshing the
+        fleet re-records every twin over its predecessor, and that has to keep working. A file
+        without the recorder's header line is somebody's own energy system that happens to share
+        the setup's stem, and writing over it would destroy work no re-recording can bring back, so
+        it is refused before anything is staged.
+
+        Args:
+            text: The rendered file, as :meth:`render` produced it.
+            result_directory: Where the verification build may put anything it writes.
+            parameters_path: The parameters file the recording references, read fresh for the
+                verification build.
+            checks: The fields the file leaves to a law, each carrying the value the run produced.
+
+        Raises:
+            EnergySystemRecordingError: ``EF-R12`` when a file the recorder did not produce sits
+                where this recording would go, ``EF-R5`` when the staged file does not build, and
+                ``EF-R13``/``EF-R14`` when a field it left to a law does not come back as the
+                number the run produced.
+        """
+        self.refuse_to_overwrite_a_hand_authored_file()
+        self.out_dir.mkdir(parents=True, exist_ok=True)
+        staged = self.staging_path
+        staged.write_text(text, encoding="utf-8")
+        try:
+            self.verify(len(text), staged, parameters_path, result_directory, checks)
+        except BaseException:
+            staged.unlink(missing_ok=True)
+            raise
+        os.replace(staged, self.path)
 
     def refuse_to_overwrite_a_hand_authored_file(self) -> None:
         """Stops the recording when the target path holds a file the recorder did not write.
@@ -425,6 +481,7 @@ class RecordingSession:
     def verify(
         self,
         written: int,
+        staged: Path,
         parameters_path: Path,
         result_directory: str,
         checks: Sequence[SizedFieldDecision] = (),
@@ -454,8 +511,10 @@ class RecordingSession:
         two runs to answer.
 
         Args:
-            written: Length of the file just written, quoted in the message so that a failure says
+            written: Length of the rendered file, quoted in the message so that a failure says
                 whether anything was produced at all.
+            staged: Where that text currently sits — a file beside the target, not the target
+                itself, so that a refusal leaves the output path untouched.
             parameters_path: The parameters file the recording references, read fresh so that the
                 verification proves the *pair* builds rather than inheriting the Python run's
                 mutations.
@@ -466,15 +525,16 @@ class RecordingSession:
 
         Raises:
             EnergySystemRecordingError: ``EF-R5`` carrying the refusal verbatim, whether it came
-                from the executor or from a component preparing itself, and ``EF-R13`` when a
-                field the file leaves to a law resolves to something else.
+                from the executor or from a component preparing itself, ``EF-R13`` when a field the
+                file leaves to a law resolves to something else, and ``EF-R14`` when the rebuilt
+                system has no such component or the component no such field.
         """
         from hisim.energy_system.executor import build_energy_system  # noqa: PLC0415
 
         parameters = self.read_parameters(parameters_path)
         parameters.result_directory = result_directory
         try:
-            built = build_energy_system(self.path, parameters)
+            built = build_energy_system(staged, parameters)
             built.simulator.prepare_calculation()
         except Exception as refusal:  # pylint: disable=broad-except
             raise EnergySystemRecordingError(
@@ -482,8 +542,9 @@ class RecordingSession:
                 f"{self.setup_label}:{self.path}",
                 f"the {written}-byte file recorded from '{self.setup_label}' does not build: {refusal}",
                 remedy=(
-                    "The file is left in place for inspection. A recording that does not build "
-                    "means the setup uses something the format cannot yet express."
+                    "Nothing was written to the twin's path; the text is in the recording's own "
+                    "message. A recording that does not build means the setup uses something the "
+                    "format cannot yet express."
                 ),
             ) from refusal
         self.check_resizing(built, checks)
@@ -499,19 +560,40 @@ class RecordingSession:
         contributes it. Pinning the number on a mismatch would make the twin agree with the setup
         by refusing to say anything, which is the opposite of what it is for.
 
+        A missing component and a missing field are their own failure, not a mismatch against
+        ``None``. Both lookups used to fall back to ``None``, which let a decision whose run value
+        happened to be ``None`` — an optional sized field that computed nothing — pass while the
+        rebuilt system contained neither the component nor the field, and made every other such
+        case report "resolves it to None" as though a law had produced it. They are refused as
+        ``EF-R14`` instead, a separate code rather than a reused ``EF-R13`` because the finding is
+        different in kind: not "the laws compute another number" but "the file does not describe
+        what the recorder thought it wrote".
+
         Args:
             built: The system the written file produced, whose resolved configurations are read.
             checks: The fields the block omitted, each with the value the run produced.
 
         Raises:
             EnergySystemRecordingError: ``EF-R13`` naming the setup, the component, the field, both
-                values and the law.
+                values and the law; ``EF-R14`` when the rebuilt system holds no component of that
+                name, or that component's configuration no such field.
         """
-        resolved = dict(built.configured.configs)
         for decision in checks:
-            config = resolved.get(decision.component)
+            config = self.rebuilt_config(built, decision)
+            if not hasattr(config, decision.field):
+                raise EnergySystemRecordingError(
+                    EnergySystemErrorId.RECORDED_FIELD_MISSING,
+                    f"{self.setup_label}:components.{decision.component}.config.{decision.field}",
+                    f"'{decision.component}' was rebuilt as {type(config).__name__}, which has no "
+                    f"field '{decision.field}' — the field '{decision.law}' computed in the Python "
+                    "run, and which the twin therefore left to a law.",
+                    remedy=(
+                        "The recorded class and the class the run used disagree about their "
+                        "fields. Re-record after the rename, or fix the class the file names."
+                    ),
+                )
             actual = ConfigBlockWriter.plain(
-                getattr(config, decision.field, None), decision.component, decision.field
+                getattr(config, decision.field), decision.component, decision.field
             )
             if actual == decision.value:
                 continue
@@ -527,6 +609,41 @@ class RecordingSession:
                     "is not pinned to the run's number, because that would hide the difference."
                 ),
             )
+
+    def rebuilt_config(self, built: Any, decision: SizedFieldDecision) -> Any:
+        """Finds one decided component's configuration in the rebuilt system, or refuses.
+
+        The lookup raises rather than answering ``None`` because ``None`` is a value a field may
+        legitimately hold, and a comparison against it would turn a component that is not in the
+        file at all into a silent pass.
+
+        Args:
+            built: The system the staged file produced.
+            decision: The decision naming the component to find.
+
+        Returns:
+            That component's resolved configuration.
+
+        Raises:
+            EnergySystemRecordingError: ``EF-R14`` naming the setup, the component and the names
+                the rebuilt system does hold.
+        """
+        try:
+            return built.configured.config_of(decision.component)
+        except KeyError as missing:
+            raise EnergySystemRecordingError(
+                EnergySystemErrorId.RECORDED_FIELD_MISSING,
+                f"{self.setup_label}:components.{decision.component}",
+                f"the recorded file does not rebuild a component named '{decision.component}', "
+                f"whose '{decision.field}' the twin left to '{decision.law}'.",
+                alternatives=[name for name, _config in built.configured.configs],
+                alternatives_label="components",
+                offending_value=decision.component,
+                remedy=(
+                    "A component the recorder decided about has to be in the file it wrote. This "
+                    "is a defect in the recorder, not in the setup."
+                ),
+            ) from missing
 
     @property
     def setup_label(self) -> str:

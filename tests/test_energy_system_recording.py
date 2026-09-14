@@ -1100,11 +1100,118 @@ def test_a_recorded_auto_field_that_resolves_to_another_number_fails_the_recordi
     assert "2.0 * Size.ROOF_AREA_IN_M2" in message
 
 
+@pytest.mark.base
+def test_a_check_against_a_component_the_file_does_not_hold_fails_instead_of_passing() -> None:
+    """Catches the resizing check comparing a run's value against a component that is not there.
+
+    The lookup used to fall back to ``None``, which is a value an optional sized field really can
+    hold: a decision whose law computed nothing then agreed with a system that contained neither
+    the component nor the field, and the twin's central claim was never tested for exactly the
+    fields whose value was hardest to reproduce. It is its own refusal now, and a separate code,
+    because the finding is not "the laws compute another number" but "the file is not what the
+    recorder thought it wrote".
+    """
+    decision = SizedFieldDecision(Sized.ARRAY, "power_in_watt", "2.0 * Size.ROOF_AREA_IN_M2", None)
+    session = RecordingSession(Fixtures.SETUPS / "basic_household.py", Fixtures.ENERGY_SYSTEMS)
+
+    with pytest.raises(EnergySystemRecordingError) as failure:
+        session.check_resizing(Rebuilt([("Roof", _RoofConfig(ComponentID(name="Roof")))]), (decision,))
+
+    assert failure.value.error_id.value == "EF-R14"
+    assert Sized.ARRAY in str(failure.value)
+
+
+@pytest.mark.base
+def test_a_check_against_a_field_the_rebuilt_class_does_not_have_fails_instead_of_passing() -> None:
+    """Catches the same fall-back one level in: the component is there, the field is not.
+
+    ``getattr(config, field, None)`` made a renamed or deleted field indistinguishable from a field
+    holding ``None``, and reported "resolves it to None" for every other value, which points a
+    reader at the law rather than at the missing field. The absence is now named as such.
+    """
+    decision = SizedFieldDecision(Sized.ARRAY, "gone_in_watt", "2.0 * Size.ROOF_AREA_IN_M2", None)
+    session = RecordingSession(Fixtures.SETUPS / "basic_household.py", Fixtures.ENERGY_SYSTEMS)
+
+    with pytest.raises(EnergySystemRecordingError) as failure:
+        session.check_resizing(Rebuilt([(Sized.ARRAY, Sized.array())]), (decision,))
+
+    assert failure.value.error_id.value == "EF-R14"
+    assert "gone_in_watt" in str(failure.value)
+
+
+@pytest.mark.base
+def test_a_fact_two_recorded_components_declare_keeps_the_number_and_names_both() -> None:
+    """Catches a twin becoming ambiguous in the name of becoming reusable.
+
+    Leaving the field out binds it to whichever component answers the fact, and with two of them
+    declaring it a file that says nothing has said nothing about which. A twin writes no
+    ``sizing_sources`` block, so it cannot say; the number therefore stays, and the comment names
+    both providers so a reader can see why the line has not gone the way its neighbours did.
+    """
+    roofs = [
+        Sized.observed(name, _RoofConfig(ComponentID(name=name))) for name in (Sized.ROOF, "OtherRoof")
+    ]
+
+    written = Sized.written(Sized.array(), *roofs)
+
+    assert written.members[EntryConfigWriter.CONFIG_KEY]["power_in_watt"] == Sized.POWER
+    assert written.decisions[0].comment() == (
+        f"pinned: roof_area_in_m2 is declared by {Sized.ROOF}, OtherRoof, "
+        "and a twin writes no sizing_sources"
+    )
+
+
+@pytest.mark.base
+def test_a_recording_that_fails_its_own_check_leaves_nothing_at_the_twins_path(
+    recordings: Dict[str, RecordingResult], tmp_path: Path
+) -> None:
+    """Catches a refused recording leaving a loadable, wrong twin behind for the next reader.
+
+    The file used to be written first and verified second, so an EF-R13 refusal — the one that says
+    the laws do not reproduce the setup's context — left the very file it had just refused sitting
+    at the path everything else trusts, where the next freshness check would compare against it. The
+    text is verified from a staging file beside the target now, and only a verification that passed
+    renames it into place, so a failure leaves the directory exactly as it found it.
+    """
+    recorded = recordings["basic_household"]
+    session = RecordingSession(Fixtures.SETUPS / "basic_household.py", tmp_path)
+    wrong = SizedFieldDecision("Weather", "location", "Size.LOCATION", "Nowhere")
+
+    with pytest.raises(EnergySystemRecordingError) as failure:
+        session.write(recorded.text, str(tmp_path), recorded.parameters.path, (wrong,))
+
+    assert failure.value.error_id.value == "EF-R13"
+    assert not session.path.exists()
+    assert not list(tmp_path.glob("*.yaml"))
+
+
 @dataclass
 class Configured:
-    """The resolved configurations of a rebuilt system, as the executor hands them over."""
+    """The resolved configurations of a rebuilt system, as the executor hands them over.
+
+    It carries the same raising lookup the real ``ConfiguredSystem`` does, because the check under
+    test depends on that behaviour: a component the file does not hold has to raise rather than
+    answer ``None``.
+    """
 
     configs: List[Tuple[str, Any]]
+
+    def config_of(self, name: str) -> Any:
+        """Returns one component's configuration, as ``ConfiguredSystem.config_of`` does.
+
+        Args:
+            name: The component's name.
+
+        Returns:
+            Its configuration.
+
+        Raises:
+            KeyError: When no component of that name was built.
+        """
+        for component_name, config in self.configs:
+            if component_name == name:
+                return config
+        raise KeyError(name)
 
 
 @dataclass

@@ -145,6 +145,7 @@ class EnergySystemErrorId(enum.Enum):
     RECORDED_DISPATCH_AMBIGUOUS = "EF-R11"
     RECORDED_WOULD_OVERWRITE = "EF-R12"
     RECORDED_AUTO_DIFFERS = "EF-R13"
+    RECORDED_FIELD_MISSING = "EF-R14"
 
 
 class EnergySystemError(Exception):
@@ -404,9 +405,11 @@ class EnergySystemRecordingError(EnergySystemCatalogueError):
     participant and the twin would still load. And a recording that would overwrite a file the
     recorder did not produce is refused (``EF-R12``) instead of writing, because a hand-authored
     energy-system file is nobody's regenerable artifact and destroying one is not a recording.
-    A third guards the twin's own claim: a field written as ``AUTO`` promises that the file
-    computes the number the run produced, and a rebuilt file that computes another one is refused
-    (``EF-R13``) rather than pinned, because the difference is the finding.
+    Two more guard the twin's own claim: a field the twin leaves to its preset promises that the
+    file computes the number the run produced, and a rebuilt file that computes another one is
+    refused (``EF-R13``) rather than pinned, because the difference is the finding — while a
+    rebuilt file that holds no such component, or no such field on it, is refused as ``EF-R14``,
+    since comparing against a missing value would let exactly the fields with no value pass.
 
     The distinction from :class:`EnergySystemRecordError` matters to a caller. That class means the
     machinery broke its promise about a record it wrote; this one means the input it was asked to

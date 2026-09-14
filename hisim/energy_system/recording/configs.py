@@ -46,7 +46,7 @@ import dataclasses
 from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, Iterable, List, Mapping, Optional, Tuple
 
-from hisim.config import AUTO, ConfigBuilder, FactContribution, SizingLaw, preset_provenance, presets_of
+from hisim.config import AUTO, ConfigBuilder, SizingLaw, declared_facts_of, preset_provenance, presets_of
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemRecordingError
 from hisim.energy_system.record import ConfigBlockWriter
 
@@ -79,18 +79,19 @@ class FactProviders:
         """Reads the declarations off the configuration classes of one observed system.
 
         Args:
-            components: The observed components, in registration order; each is asked for the
-                ``SIZING_CONTRIBUTIONS`` of its configuration's class.
+            components: The observed components, in registration order; each configuration class
+                is asked for its declared facts through
+                :func:`~hisim.config.contributions.declared_facts_of`, the one derivation the
+                sizing engine's own provider table uses, so a class declaring a fact in two
+                contributions counts once here exactly as it does there.
 
         Returns:
             The lookup for that system.
         """
         found: Dict[str, List[str]] = {}
         for component in components:
-            declared = getattr(type(component.config), FactContribution.CLASS_ATTRIBUTE, ()) or ()
-            for contribution in declared:
-                for fact in contribution.facts:
-                    found.setdefault(fact, []).append(component.name)
+            for fact in declared_facts_of(type(component.config)):
+                found.setdefault(fact, []).append(component.name)
         return cls({fact: tuple(names) for fact, names in found.items()})
 
     def of_fact(self, fact: str) -> Tuple[str, ...]:
@@ -334,6 +335,14 @@ class EntryConfigWriter:
         record names but whose current value is no longer the one the law produced was assigned by
         the setup after resolving, so it is not a computed field at all and keeps its number
         without a comment.
+
+        The comparison is of values, so a post-resolve assignment that *equals* what the law
+        produced is treated as the law's: the value is the law's value, and a file that recomputes
+        it lands on the same number. That is deliberate rather than a gap. A setup writing a pin
+        means one of two things, and both survive it — a pin that is meant to differ from the law
+        does differ, and is written out; a pin that is meant to hold whatever the author typed is
+        assigned *before* ``resolve()``, where the sizing record never names the field at all
+        because the law was never run over it.
 
         Args:
             name: The component's runtime name.

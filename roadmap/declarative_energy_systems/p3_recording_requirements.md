@@ -32,7 +32,7 @@ Today a system exists twice: as Python and as a generated v1 `*.scenario.json` (
 - Wiring: 16 setups rely on `connect_automatically=True`/`connect_only_predefined_connections`; 12 use explicit `connect_input`; 13 use aggregator feeds (`add_component_input(s)_and_connect`) and 12 a dispatch back-channel (`add_component_output` + `connect_dynamic_input`). Every one of these has an `inputs` spelling in v3 (§1, final table).
 - Python-only behaviour the format cannot carry (inventory final table): simulation-parameter mutation in 23 setups (post-processing options in 14, `logging_level`/`cache_dir_path`/`year` in 11, `country` in 1); result-path and singleton side effects in 12; setup-time external reads (module config 13, CSV 1, live DWD fetch 2, cluster-path probes 11); one cache wipe; **one setup generating 3·N components from occupancy data** (`household_heatpump_car_building_sizer.py`); the PV/battery/EMS fork in 11 sizers; wiring conditional on a *constructed* component's data in 4 (`my_heatpump.parameters["Group"]`); 5 residual arithmetic expressions outside the sizing kernel.
 - **Recording hooks exist.** After `prepare_calculation()` + `connect_all_components()`, every `ComponentInput` carries `src_object_name`/`src_field_name` regardless of logging; `ComponentWrapper.connect_automatically` is kept; `DynamicComponent.my_component_inputs/outputs` hold tags, weights and dispatch outputs; `@preset` stamps `preset_provenance` on the configs it builds, read by nothing yet (§5). The v1 recorder already solves "list `inputs: - weather` or explicit wires?" (`json_generator.remove_automatic_connections`) and the path re-symbolisation cases (UTSP results, weather `source_path`, `Car.household_name`).
-- **Not recoverable from a run:** group membership, the original preset name for the 32 unconverted classes, and whether a value was sized or hand-copied (§5e). Recorded files therefore carry concrete numbers and no `sizing_sources` — exactly the shape of a P2 realized record.
+- **Not recoverable from a run:** group membership, the original preset name for the 32 unconverted classes, and whether a value was sized or hand-copied (§5e). Recorded files therefore carry concrete numbers and no `sizing_sources` — exactly the shape of a P2 realized record. **Amended 2026-09-14 (A-P3.1):** sized-or-hand-copied *is* recoverable for a converted class — `resolve_config` attaches a per-field `sizing_record` — and the recorder now uses it; see §11.
 - **Golden suites.** `golden_references/` + `scripts/golden_check.py`: 8 building-sizer setups × {one week, full year} at 60 s, `all_kpis.json` flattened, numeric `rel_tol = 1e-9`, never CSVs or plots. `golden-json-check.yml` (blocking) runs the same 8 as v1 JSON against the same references — the precedent for P3's claim. The 4 remaining sizers (both solar-thermal, car, simple air conditioner) and all 11 non-sizer setups have **no numeric gate**; their tests assert `finished.flag`/file existence only (§4).
 - **Port-naming divergence.** Legacy aggregator inputs are named `Input_<source>_<field>_<n>`; the declarative path names them from `aggregator_input_name`/`dispatch_output_name`. Result *columns* of aggregator ports differ between a Python run and its recorded twin even when every value is identical (§5c). KPIs do not depend on column names.
 
@@ -71,12 +71,12 @@ The external representation is fixed by P2 (mockups + `energy_systems/gas_boiler
 - R2.1 Every component the simulator holds after `prepare_calculation()` + `connect_all_components()` appears once, keyed by its runtime `component_name`, in registration order; `class` is the component's importable path.
 - R2.2 A config built by a `@preset`/`@constructor` method (provenance present) is written as `preset:`/`constructor:` plus the sparse `config` diff against a fresh build of that preset; a config without provenance is written as a complete `config` block with the same codec as the P2 realized record (`${var}` paths, enums by name, `component_id` omitted). Rejected: guessing a preset by value-matching (an inference, E1). Recording does not wait for P4 (Q-P3.1): at the start of P3 the 9 converted classes take the first branch and the other 32 the second, so the first recorded files are long and each P4 batch shortens them by re-recording alone — the recorder needs no change per batch.
 - R2.3 Every wire is written at the consumer: a source whose wires equal exactly the target's default connections for that source becomes a bare `inputs` item; every other wire an explicit `{input, from}`; aggregator feeds `{from, tags, weight}` with `dispatch` where a dispatch output was created; nothing is written at the source.
-- R2.4 A recorded file contains no `AUTO`, no `sizing_sources`, no `groups` (Q-P3.3 may add one exception) and no comments except the P2 header line and a generated-by line naming the setup module, the simulation-parameters file and the recorder version.
+- R2.4 A recorded file contains no `AUTO`, no `sizing_sources`, no `groups` (Q-P3.3 may add one exception) and no comments except the P2 header line and a generated-by line naming the setup module, the simulation-parameters file and the recorder version. **Amended 2026-09-14 (A-P3.1):** a recorded file *does* contain `AUTO`, on exactly the fields a law computed and for which the recorded system declares a provider, each with a comment carrying the value the run produced and the law; see §11.
 - R2.5 Canonical style (P2 R11): `dump(load(recorded)) == recorded`.
 
 ### R3 — Parity `[given; epic E7]`
 - R3.1 `[proposed]` For each of the 8 golden setups, running the recorded file with the golden parameter sets passes `scripts/golden_check.py` against the existing `golden_references/` unchanged (rel 1e-9 on every KPI). The oracle is the KPI set, as for `golden-json-check.yml` — see Q-P3.2.
-- R3.2 `[proposed]` For every in-scope setup the recorded file's own realized record re-executes bit-for-bit (P2 R8.1 applied to the recording).
+- R3.2 `[proposed]` For every in-scope setup the recorded file's own realized record re-executes bit-for-bit (P2 R8.1 applied to the recording). **Amended 2026-09-14 (A-P3.1):** two halves — the recorded file re-sizes to the setup's values exactly (checked at record time, field by field), and its realized record re-executes bit-for-bit.
 - R3.3 `[proposed]` For every in-scope setup, component count, per-component input count and the set of `(target, input, source, output)` wires equal those of the Python run (the count check `tests/test_json_configs.py` makes today, tightened to the wire set).
 
 ### R4 — Freshness `[proposed; from scenario-json-freshness.yml]`
@@ -286,6 +286,49 @@ extension of the golden gate and it blesses nothing.
 
 ## 11. Open Questions and Decisions
 
+### A-P3.1 — Recorded files re-size; they are authored files, not records `[decided 2026-09-14, owner]`
+
+**What was wrong.** Q-P3.1 and R2.4 made the twins *realized-style* — every value concrete, no `AUTO` —
+because on 2026-08-28 nothing could tell a sized value from a hand-copied one. P4 changed that: a
+resolved configuration carries a `sizing_record` naming, per field, the law that computed it, the
+facts it read and the value. The recorder had that information and flattened it to a number
+(`recording/configs.py:unresolved`). The result was 22 twins that reproduce one archetype and cannot
+be reused for another without deleting every sized line by hand — while the glossary still called
+the recorded sizer file "the P5 consumer input". A base file that cannot re-size is not a base file.
+
+**Decision.** The twin is an authored energy-system file. For a stamped configuration the recorder
+writes a field as `AUTO` when (a) the field appears in the run's `sizing_record` — a law computed
+it, the setup did not assign it — and (b) every fact that law reads has at least one component in
+the recorded system whose class declares it in `SIZING_CONTRIBUTIONS`. Each such line carries a
+comment with the value the run produced, the law, and the fact's provider:
+`power_in_watt: AUTO  # sized 22272.28 by _rooftop_power_in_watt <- Building.roof_area_in_m2`.
+A field the setup assigned stays a concrete override. A field whose provider is not yet converted
+stays concrete with a comment saying which fact has no provider — and flips to `AUTO` on the
+re-record that follows the provider's conversion, which is what "each P4 batch shortens the twins"
+should always have meant. Unconverted classes stay full literal blocks.
+
+**The check.** After writing a twin the recorder resolves it through the executor and compares
+every `AUTO` field's resolved value with the run's `sizing_record` value. A difference **fails the
+recording**, naming the field and both numbers: it means the laws and the declared facts do not
+reproduce the context the setup built by hand — the defect class the DHW conversion met in
+`household_gas_solar_thermal`, where the setup passed the archetype's dwelling count while its
+Building said something else. Pinning the value instead would hide exactly what a twin exists to
+prove. The realized record of a twin run still re-executes bit-for-bit (R3.2, second half).
+
+**What does not change.** Golden KPIs: a twin resolves to the numbers it used to pin. The parity
+rig: with `AUTO` twins its Python-versus-file comparison proves that laws plus contributions
+reproduce the hand-built contexts, instead of comparing a run with a copy of itself. `groups`,
+`variants` and `sizing_sources` are still not recorded (R2.4's other clauses stand).
+
+**Rejected.** A structured value per field — `{value, source, comment, auto}` — was considered: it
+would put every scalar behind a four-key mapping and duplicate what already exists once each (the
+law's `note=` on the class, the value in the realized record, the auto bit in the `AUTO` spelling).
+One bit per field is what was missing, and the format already spells it.
+
+**Amends** §5e "not recoverable", R2.4, R3.2, C-P3.5, AC-P3.3, AC-P3.5, UC-P3.1 ("every number
+concrete") and the glossary entries *recorded file* and *base file*. Logged as F-14 in
+`roadmap/p4_random_findings.md`.
+
 **Answered**
 
 | ID | Question | Blocks | Status |
@@ -304,4 +347,4 @@ extension of the golden gate and it blesses nothing.
 
 ## 12. Glossary
 
-See the epic. P3-specific: **recorded file** — a v3 energy-system file produced by observing a `setup_function` run, realized-style (concrete values, no `AUTO`/`sizing_sources`); **twin** — the generated file paired with a Python setup (v1: `*.scenario.json`; v3: `*.energy_system.yaml`); **freshness** — a CI check that regenerates a twin and fails on any diff; **base file** — the recorded file of one heating-system sizer with class-default module configuration, the P5 consumer input; **KPI parity** — equality of every entry of `all_kpis.json` within `rel_tol = 1e-9`, the golden oracle; **probe list** — the authored set of module configurations a setup is recorded under, the configuration axis of both the grouping table (R10) and the parity rig (R11); **parity rig** — the temporary, hand-dispatched workflow that runs a setup both ways in one container and compares them exactly, removed when P3 ends.
+See the epic. P3-specific: **recorded file** — a v3 energy-system file produced by observing a `setup_function` run; since A-P3.1 an *authored* file: law-computed fields with a declared provider are `AUTO` (each commented with the run's value), assigned fields concrete, no `sizing_sources`/`groups`/`variants`; **twin** — the generated file paired with a Python setup (v1: `*.scenario.json`; v3: `*.energy_system.yaml`); **freshness** — a CI check that regenerates a twin and fails on any diff; **base file** — the recorded file of one heating-system sizer with class-default module configuration, the P5 consumer input — usable as one only since A-P3.1, when recorded files started to re-size; **KPI parity** — equality of every entry of `all_kpis.json` within `rel_tol = 1e-9`, the golden oracle; **probe list** — the authored set of module configurations a setup is recorded under, the configuration axis of both the grouping table (R10) and the parity rig (R11); **parity rig** — the temporary, hand-dispatched workflow that runs a setup both ways in one container and compares them exactly, removed when P3 ends.

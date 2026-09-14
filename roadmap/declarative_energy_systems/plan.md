@@ -148,6 +148,7 @@ declared; call sites moved; regenerated fixtures; golden parity.
 - [ ] B6 Occupancy, weather (`for_location` pattern), building presets (`german_multi_family_home`)
 - [ ] B7 Mobility and remaining: cars, chargers, smart devices, H₂ chain, air conditioners, solar thermal
 - [ ] B8 Examples and templates; `example_template.py` shows the preset/law pattern; delete the nine legacy plain dataclasses in `configuration.py` instead of converting them (supplement conflict 10)
+- [ ] R1.2 — the sixteen converted classes brought to the R1.1 shape in one sweep (defaults, `MAIN_CLASS`, tables as data, inline contributions, plain docstrings); twins and goldens byte-identical *(decided 2026-09-14; after the B2/B3 stack merges, before B4 is written in the old shape)*
 - [ ] `describe` output and generated docs reviewed for every converted class (R13)
 
 ## P5 — Consumer integration (outline; document later)

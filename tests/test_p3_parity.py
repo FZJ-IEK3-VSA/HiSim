@@ -24,7 +24,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
-from typing import ClassVar, Optional, Set, Tuple
+from typing import ClassVar, FrozenSet, Mapping, NamedTuple, Optional, Set, Tuple
 
 import pandas as pd
 import pytest
@@ -54,6 +54,30 @@ from scripts.p3_parity_check import (
 )
 from scripts.p3_parity_check import main as parity_main
 from scripts.p3_parity_matrix import MatrixPaths, build_matrix
+
+
+class CanaryBuild(NamedTuple):
+    """What one canary build of a setup yields: both wirings, and each side's aggregator ports.
+
+    The two snapshots answer the claim the rig makes fleet-wide — that translating one path's
+    wiring through the table produces the other's. The two port sets answer the half no snapshot
+    can: a snapshot records wires and unconnected inputs, so a port nothing reads leaves no trace
+    in it, and the participant dispatch outputs are exactly that kind of port. Nothing consumes
+    them; they exist so that the electricity the energy manager grants each controlled load
+    reaches the result file. So they are read straight off the built aggregator instead.
+    """
+
+    #: The Python setup's wiring.
+    legacy: WiringSnapshot
+
+    #: The recorded twin's wiring.
+    declarative: WiringSnapshot
+
+    #: Every port name the aggregator carries in the Python build, inputs and outputs together.
+    legacy_ports: FrozenSet[str]
+
+    #: The same for the declarative build.
+    declarative_ports: FrozenSet[str]
 
 
 class Rig:
@@ -95,13 +119,14 @@ class Rig:
     #: it — so the failure the test asserts comes from the wiring comparison, not from a crash.
     RENAMED_COMPONENT: ClassVar[str] = "RenamedTransformerAndRectifier"
 
-    #: The setup the staleness canary drives. It is the only in-scope setup that steers several
-    #: participants through one energy manager and needs no load profile from the LoadProfileGenerator,
-    #: so it exercises the counter-numbered dispatch names at a cost a base test can carry.
+    #: The setup the first staleness canary drives. It steers four participants through one energy
+    #: manager on four different weights and needs no load profile from the LoadProfileGenerator,
+    #: so it exercises the weight-numbered dispatch names at a fraction of a sizer's build cost.
     CANARY: ClassVar[str] = "dynamic_components"
 
-    #: The aggregator whose port names the canary checks. Every EMS setup grows its dispatch names
-    #: through this one component, which is why one setup can stand in for all of them.
+    #: The aggregator whose port names both canaries check. Every EMS setup grows its dispatch
+    #: names through this one component, but not the same ones: which ports a manager grows depends
+    #: on which participants the setup gives it, which is why one setup cannot stand in for all.
     CANARY_AGGREGATOR: ClassVar[str] = "L2EMSElectricityController"
 
     #: Every legacy port the canary setup's energy manager grows, as the table declares them. The
@@ -120,6 +145,29 @@ class Rig:
         "ElectricityTarget3",
         "ElectricityTarget4",
     )
+
+    #: The setups the participant canary drives, and the legacy dispatch port each of them grows
+    #: for a controlled load it steers. The canary above cannot vouch for these: ``dynamic_components``
+    #: steers batteries and fuel cells, whose dispatch another component reads, and it has no
+    #: occupancy, heat pump, resistive heater or solar-thermal collector at all — so the six
+    #: participant rows of the table went unbuilt by any test and stale for the whole fleet at once
+    #: when F-1 changed how they are named. These two sizers grow all six between them: the
+    #: heat-pump-plus-solar-thermal house has the occupancy, both heat pump draws and the collector
+    #: pump; the electric-heating house has the occupancy and both resistive draws, and it is the
+    #: only setup in the fleet that grows those two.
+    PARTICIPANT_CANARIES: ClassVar[Mapping[str, Tuple[str, ...]]] = {
+        "household_heatpump_solar_thermal_building_sizer": (
+            "ElectricityToOrFromGridOfUtspLpgConnector_1",
+            "ElectricityToOrFromGridOfSHMoreAdvancedHeatPumpHPLib_2",
+            "ElectricityToOrFromGridOfDHWMoreAdvancedHeatPumpHPLib_3",
+            "ElectricityToOrFromGridOfSolarThermalSystem_4",
+        ),
+        "household_electric_heating_building_sizer": (
+            "ElectricityToOrFromGridOfUtspLpgConnector_1",
+            "ElectricityToOrFromGridOfSHElectricHeating_2",
+            "ElectricityToOrFromGridOfDHWElectricHeating_3",
+        ),
+    }
 
     @classmethod
     def triple(cls, work: Path, energy_system: Optional[Path] = None) -> TripleInputs:
@@ -171,8 +219,36 @@ class Rig:
         return WiringSnapshot.from_simulator(simulator)
 
     @classmethod
-    def canary_wiring(cls, work: Path) -> Tuple[WiringSnapshot, WiringSnapshot]:
-        """Builds the canary setup both ways, far enough to name every port, and snapshots each.
+    def aggregator_ports(cls, simulator: Simulator) -> FrozenSet[str]:
+        """Every port the canary aggregator carries in one built system, inputs and outputs alike.
+
+        Read off the component rather than off its wiring snapshot, because a dispatch output
+        nothing reads appears in no wire and in no unconnected input, so a snapshot cannot see it.
+
+        Args:
+            simulator: A simulator whose components have been registered and wired.
+
+        Returns:
+            The field names of the aggregator's inputs and outputs, in one set.
+
+        Raises:
+            AssertionError: If the built system has no component of that name, which would
+                otherwise let an empty set satisfy every membership assertion made against it.
+        """
+        found = [
+            wrapper.my_component
+            for wrapper in simulator.wrapped_components
+            if wrapper.my_component.component_name == cls.CANARY_AGGREGATOR
+        ]
+        assert found, f"the built system has no '{cls.CANARY_AGGREGATOR}', so it can name no dispatch port"
+        aggregator = found[0]
+        return frozenset(
+            [port.field_name for port in aggregator.inputs] + [port.field_name for port in aggregator.outputs]
+        )
+
+    @classmethod
+    def canary_wiring(cls, work: Path, stem: Optional[str] = None) -> CanaryBuild:
+        """Builds one canary setup both ways, far enough to name every port, and reads both.
 
         Both builds are given their own result and cache directory under the test's temporary
         directory, for the same reason the rig gives each side of a triple its own: a shared cache
@@ -180,23 +256,30 @@ class Rig:
 
         Args:
             work: Where the two builds may write; a test's own temporary directory.
+            stem: The setup to build, defaulting to :attr:`CANARY`.
 
         Returns:
-            The Python setup's wiring and the recorded twin's wiring, in that order.
+            Both wirings and both aggregator port sets.
         """
         from hisim.energy_system.executor import build_energy_system  # noqa: PLC0415
         from hisim.hisim_main import initialize_from_python  # noqa: PLC0415
 
+        setup = stem or cls.CANARY
         legacy_parameters = ParityWindows.build(cls.WINDOW, work / "python", work / "python-cache")
-        legacy = cls.resolved_wiring(
-            initialize_from_python(str(cls.SETUPS / f"{cls.CANARY}.py"), legacy_parameters, None)
-        )
+        legacy_simulator = initialize_from_python(str(cls.SETUPS / f"{setup}.py"), legacy_parameters, None)
+        legacy = cls.resolved_wiring(legacy_simulator)
 
         declared_parameters = ParityWindows.build(cls.WINDOW, work / "declarative", work / "declarative-cache")
-        declarative = cls.resolved_wiring(
-            build_energy_system(cls.ENERGY_SYSTEMS / f"{cls.CANARY}.energy_system.yaml", declared_parameters).simulator
+        declarative_simulator = build_energy_system(
+            cls.ENERGY_SYSTEMS / f"{setup}.energy_system.yaml", declared_parameters
+        ).simulator
+        declarative = cls.resolved_wiring(declarative_simulator)
+        return CanaryBuild(
+            legacy=legacy,
+            declarative=declarative,
+            legacy_ports=cls.aggregator_ports(legacy_simulator),
+            declarative_ports=cls.aggregator_ports(declarative_simulator),
         )
-        return legacy, declarative
 
     @classmethod
     def twin_port_spellings(cls) -> Set[Tuple[str, str]]:
@@ -207,8 +290,10 @@ class Rig:
         blocks are the fleet's own statement of which participant feeds which aggregator. A feed's
         port names are not written out there — the format derives them from frozen templates — so
         this applies the very templates the resolver applies: ``<output>From<source>`` for the
-        input an aggregator grows, and ``DispatchTo<source>_<input>`` for the dispatch output of a
-        feed that names a target input. That yields the fleet's declarative port names without
+        input an aggregator grows, ``DispatchTo<source>_<input>`` for the dispatch output of a feed
+        that names a target input, and ``DispatchFor<source>_<output>`` for the dispatch output of
+        one that names none — the signal an aggregator publishes for the result file rather than
+        for another component to read. That yields the fleet's declarative port names without
         building a single setup, which is what lets a base test cross-check the whole table in
         milliseconds.
 
@@ -239,10 +324,15 @@ class Rig:
                 spellings.add((name, ResolvedDynamicConnection.AGGREGATOR_INPUT_TEMPLATE.format(
                     source_output=output, source_name=source)))
                 dispatch = feed.get("dispatch")
-                target_input = dispatch.get("target_input") if isinstance(dispatch, dict) else None
+                if not isinstance(dispatch, dict):
+                    continue
+                target_input = dispatch.get("target_input")
                 if isinstance(target_input, str):
                     spellings.add((name, ResolvedDynamicConnection.DISPATCH_OUTPUT_TEMPLATE.format(
                         source_name=source, target_input=target_input)))
+                    continue
+                spellings.add((name, ResolvedDynamicConnection.RECORDED_DISPATCH_OUTPUT_TEMPLATE.format(
+                    source_name=source, source_output=output)))
 
         def walk(node: object) -> None:
             if isinstance(node, dict):
@@ -389,20 +479,69 @@ def test_the_table_still_spells_the_ports_the_dynamic_components_setup_actually_
     nobody grows any more can never be exercised again — and that translating the Python wiring
     through the table yields precisely the twin's wiring, which is the claim the rig makes
     fleet-wide.
+
+    What this setup cannot vouch for are the participant targets, the dispatch outputs nothing
+    reads; it grows none, and the test below builds two sizers that do.
     """
-    legacy, declarative = Rig.canary_wiring(tmp_path)
-    grown = (
-        {wire.target_input for wire in legacy.wires if wire.target_component == Rig.CANARY_AGGREGATOR}
-        | {wire.source_output for wire in legacy.wires if wire.source_component == Rig.CANARY_AGGREGATOR}
-        | {port for component, port in legacy.unconnected_inputs if component == Rig.CANARY_AGGREGATOR}
-    )
+    build = Rig.canary_wiring(tmp_path)
     declared = DeclaredPortRenamings.pairs()
 
     for port in Rig.CANARY_LEGACY_PORTS:
-        assert port in grown, f"'{Rig.CANARY}' no longer grows '{port}', so the table declares a name nobody uses"
+        assert port in build.legacy_ports, (
+            f"'{Rig.CANARY}' no longer grows '{port}', so the table declares a name nobody uses"
+        )
         assert (Rig.CANARY_AGGREGATOR, port) in declared, f"the table stopped declaring '{port}'"
 
-    diff = WiringParityHarness.compare(DeclaredPortRenamings.port_renaming().apply_to(legacy), declarative)
+    diff = WiringParityHarness.compare(
+        DeclaredPortRenamings.port_renaming().apply_to(build.legacy), build.declarative
+    )
+    assert diff.is_identical(), diff.describe()
+
+
+# Builds two building sizers for real, load profile and all, so it belongs to a full-simulation
+# shard; neither is simulated, only built far enough to name its ports.
+@pytest.mark.extendedbase
+@pytest.mark.parametrize("stem", sorted(Rig.PARTICIPANT_CANARIES))
+def test_the_table_still_spells_the_participant_targets_the_ems_sizers_actually_grow(
+    stem: str, tmp_path: Path
+) -> None:
+    """Catches a table missing, or misspelling, a row for a dispatch output nothing reads.
+
+    An energy manager grows two kinds of dispatch output. One steers a participant that reads it —
+    the battery's loading power, the car's charge target — and the other is published for the
+    result file alone: the electricity the manager granted the occupancy, each heat pump draw, each
+    resistive heater draw, the solar-thermal pump. Nothing consumes the second kind, so it appears
+    in no wire, and a wiring comparison passes whatever the two paths call it. Only the result
+    comparison sees it, and it sees it as a whole column.
+
+    That is why the ``dynamic_components`` canary above missed the failure F-1 caused here. Its
+    four targets are all of the first kind, and it has none of these four participants; when F-1
+    stopped the manager publishing a target port per participant class from its constructor — which
+    had made both paths spell these ports identically, because both got them from the same
+    constructor — nothing in the table said what the two paths now call them instead, and all
+    eleven EMS sizers failed the result comparison on names alone while every test stayed green.
+
+    The two sizers parametrised here grow all six participant rows between them, and the assertion
+    covers both halves of each against a live build: the legacy name is a port the Python build's
+    manager really has, the declarative name is a port the twin's build really has, and translating
+    one wiring through the table yields the other.
+    """
+    build = Rig.canary_wiring(tmp_path, stem)
+    declared = DeclaredPortRenamings.pairs()
+
+    for port in Rig.PARTICIPANT_CANARIES[stem]:
+        assert port in build.legacy_ports, (
+            f"'{stem}' no longer grows '{port}', so the table declares a name nobody uses"
+        )
+        key = (Rig.CANARY_AGGREGATOR, port)
+        assert key in declared, f"the table stopped declaring '{port}', so its column fails literally again"
+        assert declared[key] in build.declarative_ports, (
+            f"the table claims '{port}' is '{declared[key]}', but the twin of '{stem}' grows no such port"
+        )
+
+    diff = WiringParityHarness.compare(
+        DeclaredPortRenamings.port_renaming().apply_to(build.legacy), build.declarative
+    )
     assert diff.is_identical(), diff.describe()
 
 

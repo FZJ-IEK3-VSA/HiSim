@@ -6,13 +6,13 @@ description: Dynamic Components Module.
 components:
   Battery1:
     class: hisim.components.advanced_battery_bslib.Battery
-    preset: standard
+    preset: sized_to_pv
     config:
       custom_pv_inverter_power_generic_in_watt: 5.0
       custom_battery_capacity_generic_in_kilowatt_hour: 10.0
   Battery2:
     class: hisim.components.advanced_battery_bslib.Battery
-    preset: standard
+    preset: sized_to_pv
     config:
       source_weight: 2
       custom_pv_inverter_power_generic_in_watt: 2.5
@@ -103,10 +103,10 @@ components:
         weight: 999
   Weather:
     class: hisim.components.weather.Weather
-    preset: standard
+    preset: aachen
   UTSPConnector:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    preset: standard
+    preset: couple_both_at_work
   PVSystem:
     class: hisim.components.generic_pv_system.PVSystem
     preset: rooftop

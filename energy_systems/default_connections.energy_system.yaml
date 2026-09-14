@@ -6,13 +6,13 @@ description: Default Connections Module.
 components:
   UTSPConnector:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    preset: standard
+    preset: couple_both_at_work
   Weather:
     class: hisim.components.weather.Weather
-    preset: standard
+    preset: aachen
   Building:
     class: hisim.components.building.building.Building
-    preset: standard
+    preset: german_single_family_home
     config:
       weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
     inputs:

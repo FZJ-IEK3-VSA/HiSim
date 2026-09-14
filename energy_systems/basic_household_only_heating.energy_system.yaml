@@ -13,7 +13,7 @@ components:
       - SimpleHotWaterStorage
   HeatDistributionController:
     class: hisim.components.heat_distribution_system.HeatDistributionController
-    preset: standard
+    preset: building_derived
     config:
       heating_system: RADIATOR
       heating_reference_temperature_in_celsius: -12.2
@@ -22,7 +22,7 @@ components:
       - Building
   HeatDistributionSystem:
     class: hisim.components.heat_distribution_system.HeatDistribution
-    preset: standard
+    preset: building_derived
     inputs:
       - Building
       - HeatDistributionController
@@ -43,7 +43,7 @@ components:
       - SimpleHotWaterStorage
   Building:
     class: hisim.components.building.building.Building
-    preset: standard
+    preset: german_single_family_home
     config:
       weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
     inputs:
@@ -51,10 +51,10 @@ components:
       - UTSPConnector
   Weather:
     class: hisim.components.weather.Weather
-    preset: standard
+    preset: aachen
   UTSPConnector:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    preset: standard
+    preset: couple_both_at_work
   ElectricityMeter:
     class: hisim.components.electricity_meter.ElectricityMeter
     preset: standard

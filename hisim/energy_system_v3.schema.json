@@ -186,7 +186,7 @@
             "properties": {
               "preset": {
                 "enum": [
-                  "standard"
+                  "sized_to_pv"
                 ]
               },
               "constructor": false,
@@ -311,7 +311,7 @@
             "properties": {
               "preset": {
                 "enum": [
-                  "standard"
+                  "german_single_family_home"
                 ]
               },
               "constructor": {
@@ -1630,7 +1630,7 @@
             "properties": {
               "preset": {
                 "enum": [
-                  "standard"
+                  "building_derived"
                 ]
               },
               "constructor": false,
@@ -1763,7 +1763,7 @@
             "properties": {
               "preset": {
                 "enum": [
-                  "standard"
+                  "building_derived"
                 ]
               },
               "constructor": false,
@@ -1900,7 +1900,7 @@
             "properties": {
               "preset": {
                 "enum": [
-                  "standard"
+                  "couple_both_at_work"
                 ]
               },
               "constructor": {
@@ -2274,7 +2274,7 @@
             "properties": {
               "preset": {
                 "enum": [
-                  "standard"
+                  "aachen"
                 ]
               },
               "constructor": {

@@ -6,7 +6,7 @@ description: Simple air-conditioner household building-sizer system setup.
 components:
   Building:
     class: hisim.components.building.building.Building
-    preset: standard
+    preset: german_single_family_home
     config:
       number_of_apartments: 1.0
       enable_opening_windows: true

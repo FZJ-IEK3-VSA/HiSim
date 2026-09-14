@@ -335,7 +335,8 @@ variants:
 #  R2 consumer-side `inputs`; bare = defaults; explicit wire; aggregator feeds (R2.3)
 #  R3 preset + sparse config; concrete override of a sized field (pv_east);
 #     constructor form for the three lookup-parameterised classes (weather,
-#     occupancy, building) — the alternative to `preset: standard`
+#     occupancy, building) — the alternative to their reference presets
+#     (`aachen`, `couple_both_at_work`, `german_single_family_home`)
 #  R4.3 bare names everywhere except where two providers exist
 #  R4.4 scalar vs list source; class aggregates; no `all`; no math
 #  R5  not needed (Q1); R6 separate simulation file; R7 hard errors quoted

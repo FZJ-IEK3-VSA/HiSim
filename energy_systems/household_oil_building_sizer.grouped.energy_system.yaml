@@ -69,16 +69,7 @@ components:
       - ConventionalOilBoiler
   SimpleHotWaterStorage:
     class: hisim.components.simple_water_storage.SimpleHotWaterStorage
-    config:
-      volume_heating_water_storage_in_liter: 171.18
-      heat_transfer_coefficient_in_watt_per_m2_per_kelvin: 2.0
-      heat_exchanger_is_present: true
-      position_hot_water_storage_in_system: PARALLEL_TO_HEAT_SOURCE
-      device_co2_footprint_in_kg: null
-      investment_costs_in_euro: null
-      lifetime_in_years: null
-      maintenance_costs_in_euro_per_year: null
-      subsidy_as_percentage_of_investment_costs: null
+    preset: buffer
     inputs:
       - HeatDistributionSystem
       - ConventionalOilBoiler

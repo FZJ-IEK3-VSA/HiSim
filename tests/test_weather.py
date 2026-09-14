@@ -34,7 +34,7 @@ def test_weather() -> None:
         year=2021, seconds_per_timestep=60
     )
     repo: sim_repository.SimRepository = sim_repository.SimRepository()
-    my_weather_config: weather.WeatherConfig = weather.WeatherConfig.preset_standard("Weather")
+    my_weather_config: weather.WeatherConfig = weather.WeatherConfig.preset_aachen("Weather")
     my_weather: weather.Weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=mysim
     )
@@ -93,7 +93,7 @@ def _build_weather_with_cache(
     """
     mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
     mysim.cache_dir_path = str(tmp_path)
-    my_config: weather.WeatherConfig = weather.WeatherConfig.preset_standard("Weather")
+    my_config: weather.WeatherConfig = weather.WeatherConfig.preset_aachen("Weather")
     my_weather: weather.Weather = weather.Weather(
         config=my_config, my_simulation_parameters=mysim
     )
@@ -201,7 +201,7 @@ def test_weather_default_display_config_is_not_shared() -> None:
     mysim: SimulationParameters = SimulationParameters.one_day_only(
         year=2021, seconds_per_timestep=3600
     )
-    my_config: weather.WeatherConfig = weather.WeatherConfig.preset_standard("Weather")
+    my_config: weather.WeatherConfig = weather.WeatherConfig.preset_aachen("Weather")
     first: weather.Weather = weather.Weather(
         config=my_config, my_simulation_parameters=mysim
     )

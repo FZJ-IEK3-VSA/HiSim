@@ -121,11 +121,11 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     hds_name = "HeatDistributionSystem"
 
     # ===================================================================================================================
-    my_building_config = building.BuildingConfig.preset_standard("Building")
+    my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_information = building.BuildingInformation(config=my_building_config)
 
     # Build Heat Distribution System
-    my_hds_controller_config = heat_distribution_system.HeatDistributionControllerConfig.preset_standard(
+    my_hds_controller_config = heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
         "HeatDistributionController"
     ).resolve(
         SizingContext(
@@ -292,7 +292,7 @@ def test_get_cost_capex_raises_on_unknown_heating_system() -> None:
     offending value.
     """
     invalid_heating_system = "NOT_A_HEATING_SYSTEM"  # not a HeatDistributionSystemType member
-    config = heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem")
+    config = heat_distribution_system.HeatDistributionConfig.preset_building_derived("HeatDistributionSystem")
     config.water_mass_flow_rate_in_kg_per_second = 0.1
     config.absolute_conditioned_floor_area_in_m2 = 100.0
     config.heating_system = invalid_heating_system  # type: ignore[assignment]  # intentionally invalid
@@ -316,8 +316,8 @@ def test_the_heating_threshold_is_computed_from_the_building_it_serves() -> None
     are pinned through the context as well, so the law is tested where the setups meet it
     rather than only as a bare function.
     """
-    default_building = building.BuildingConfig.preset_standard("Building")
-    resolved = heat_distribution_system.HeatDistributionControllerConfig.preset_standard(
+    default_building = building.BuildingConfig.preset_german_single_family_home("Building")
+    resolved = heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
         "HeatDistributionController"
     ).resolve(SizingContext.for_building(default_building))
 
@@ -341,7 +341,7 @@ def test_the_heating_threshold_is_computed_from_the_building_it_serves() -> None
             set_heating_temperature_in_celsius=20.0,
             set_cooling_temperature_in_celsius=25.0,
         )
-        banded = heat_distribution_system.HeatDistributionControllerConfig.preset_standard(
+        banded = heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
             "HeatDistributionController"
         ).resolve(context)
         assert banded.set_heating_threshold_outside_temperature_in_celsius == expected_threshold_in_celsius, (

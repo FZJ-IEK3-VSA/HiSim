@@ -92,7 +92,7 @@ def test_lifecycle_cost_engine_runs_in_shadow_mode() -> None:
     # The weather config is built first because the PV and building configs copy its identity
     # (weather_identity) and the sizing kernel refuses a config that still carries an unresolved
     # field, exactly as the shipped system setups do it.
-    my_weather_config = weather.WeatherConfig.preset_standard("Weather")
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
     my_weather = weather.Weather(
         config=my_weather_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -104,14 +104,14 @@ def test_lifecycle_cost_engine_runs_in_shadow_mode() -> None:
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-    my_building_config = building.BuildingConfig.preset_standard("Building")
+    my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(
         config=my_building_config,
         my_simulation_parameters=my_simulation_parameters,
     )
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
-        config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_standard("UTSPConnector"),
+        config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector"),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_electricity_meter = electricity_meter.ElectricityMeter(

@@ -236,19 +236,19 @@ def test_household_run_publishes_the_weather_series_into_the_run_repository(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.preset_standard("Weather")
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
     # Build Building
-    my_building_config = building.BuildingConfig.preset_standard("Building")
+    my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
     # Build Occupancy
     my_occupancy_config = (
-        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_standard("UTSPConnector")
+        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     )
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters

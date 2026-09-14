@@ -100,7 +100,7 @@ class Systems:
     #: fact binds without a source line and the fixtures stay about the relation they were written for.
     WEATHER: ClassVar[str] = """  weather:
     class: hisim.components.weather.Weather
-    preset: standard
+    preset: aachen
 """
 
     @classmethod
@@ -139,7 +139,7 @@ class Systems:
         Returns:
             The entry text, indented for a ``components`` block.
         """
-        return f"  {name}:\n    class: hisim.components.building.Building\n    preset: standard\n"
+        return f"  {name}:\n    class: hisim.components.building.Building\n    preset: german_single_family_home\n"
 
 
 @dataclass_json
@@ -403,7 +403,7 @@ def test_a_source_naming_a_component_that_does_not_provide_the_fact_is_refused()
             + Systems.building("building")
             + """  hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
-    preset: standard
+    preset: building_derived
     config:
       heating_system: FLOORHEATING
       water_mass_flow_rate_in_kg_per_second: 0.5
@@ -507,7 +507,7 @@ def test_an_enum_typed_field_written_in_a_file_holds_the_member_afterwards() -> 
     system = Systems.configure(
         """  hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
-    preset: standard
+    preset: building_derived
     config:
       heating_system: FLOORHEATING
       water_mass_flow_rate_in_kg_per_second: 0.5
@@ -671,7 +671,7 @@ def test_an_unknown_enum_member_is_refused_and_the_members_are_listed() -> None:
         Systems.configure(
             """  hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
-    preset: standard
+    preset: building_derived
     config:
       heating_system: FLOOR_HEATING
       water_mass_flow_rate_in_kg_per_second: 0.5

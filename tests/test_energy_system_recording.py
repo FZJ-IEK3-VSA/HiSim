@@ -461,7 +461,7 @@ def test_a_preset_the_setup_did_not_touch_is_written_as_the_preset_plus_what_it_
     """
     entry = recordings["basic_household"].model.all_components()["Building"]
 
-    assert entry.preset == "standard"
+    assert entry.preset == "german_single_family_home"
     assert set(entry.config) == {"weather_identity"}
 
 

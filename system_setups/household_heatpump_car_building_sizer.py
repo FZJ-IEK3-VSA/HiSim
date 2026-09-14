@@ -197,7 +197,7 @@ def setup_function(
     # component itself is still added further down, so the simulator's component order is unchanged.
     my_weather_config = weather.WeatherConfig.for_location("Weather", weather.LocationEnum[weather_location])
 
-    my_building_config = building.BuildingConfig.preset_standard("Building")
+    my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
     my_building_config.max_thermal_building_demand_in_watt = max_thermal_building_demand_in_watt
     my_building_config.set_heating_temperature_in_celsius = building_set_heating_temperature_in_celsius
@@ -234,7 +234,7 @@ def setup_function(
     # Mode, households and cache directory stay explicit fields rather than for_household()
     # arguments: the constructor also clears name_of_predefined_loadprofile once the generator
     # computes the household, and that name is part of the recorded occupancy identity.
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_standard("UTSPConnector")
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_LOCAL_LPG
     my_occupancy_config.household = lpg_households
     my_occupancy_config.cache_dir_path = cache_dir_path_utsp
@@ -289,7 +289,7 @@ def setup_function(
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
 
     # Build Heat Distribution Controller
-    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.preset_standard(
+    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
         "HeatDistributionController"
     ).resolve(
         SizingContext(
@@ -391,7 +391,7 @@ def setup_function(
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(
+        heat_distribution_system.HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").resolve(
             SizingContext(
                 water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                 conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
@@ -491,7 +491,7 @@ def setup_function(
         )
 
         # Build Battery
-        my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.preset_standard("Battery").resolve(
+        my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
             SizingContext(pv_peak_power_in_watt=concrete(my_photovoltaic_system_config.power_in_watt))
         )
         my_advanced_battery = advanced_battery_bslib.Battery(

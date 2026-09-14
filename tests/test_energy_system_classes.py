@@ -50,7 +50,7 @@ class Systems:
     #: since it provides the facts a boiler reads.
     BUILDING: ClassVar[str] = """  building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
 """
 
     @classmethod
@@ -173,7 +173,7 @@ def test_a_file_of_converted_classes_binds_without_complaint() -> None:
     preset: condensing_gas
   hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
-    preset: standard
+    preset: building_derived
   ems:
     class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     preset: optimize_own_consumption

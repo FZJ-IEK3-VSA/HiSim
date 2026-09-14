@@ -53,10 +53,10 @@ def test_building_scalability() -> None:
     # Set Residence
     # The weather config comes first because the building config copies its identity (weather_identity);
     # the weather component itself is added further down, as before.
-    my_weather_config = weather.WeatherConfig.preset_standard("Weather")
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
 
     my_residence_config = (
-        building.BuildingConfig.preset_standard("Building")
+        building.BuildingConfig.preset_german_single_family_home("Building")
     )
     my_residence_config.absolute_conditioned_floor_area_in_m2 = (
         absolute_conditioned_floor_area_in_m2
@@ -72,7 +72,7 @@ def test_building_scalability() -> None:
     log.information(my_residence_config.building_code)
 
     # Set Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_standard("UTSPConnector")
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )

@@ -64,7 +64,7 @@ name: variant rule under test
 components:
   building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
 """
 
     #: One converted class, written out wherever a document needs a second component: once

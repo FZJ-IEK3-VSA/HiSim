@@ -27,7 +27,7 @@ from hisim.config import ComponentID, ConfigBase, Sizable, Size, constructor, pr
 class BuildingConfig(ConfigBase):
     """Configuration of the Building class.
 
-    The named default variant is :meth:`preset_standard`, which replaced the former
+    The named default variant is :meth:`preset_german_single_family_home`, which replaced the former
     ``get_default_german_single_family_home`` factory, and any other building comes from
     :meth:`for_tabula_code`. The building is the *source* of the
     sizing facts every other component sizes against (see :attr:`SIZING_CONTRIBUTIONS`) and
@@ -93,7 +93,7 @@ class BuildingConfig(ConfigBase):
 
     @preset(note="TABULA/EPISCOPE German single-family reference house")
     @classmethod
-    def preset_standard(cls, name: str) -> "BuildingConfig":
+    def preset_german_single_family_home(cls, name: str) -> "BuildingConfig":
         """The German single-family reference house, the repo's default building."""
         return cls.for_tabula_code(
             name,

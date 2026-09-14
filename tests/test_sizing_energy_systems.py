@@ -133,7 +133,7 @@ def simulation_for_one_timestep(
 
     # Set Residence
     my_residence_config = (
-        building.BuildingConfig.preset_standard("Building")
+        building.BuildingConfig.preset_german_single_family_home("Building")
     )
     my_residence_config.absolute_conditioned_floor_area_in_m2 = (
         absolute_conditioned_floor_area_in_m2
@@ -169,7 +169,7 @@ def simulation_for_one_timestep(
     )
 
     # Set Battery
-    my_battery_config = advanced_battery_bslib.BatteryConfig.preset_standard("Battery").resolve(
+    my_battery_config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
         SizingContext(pv_peak_power_in_watt=concrete(my_pv_config.power_in_watt))
     )
 

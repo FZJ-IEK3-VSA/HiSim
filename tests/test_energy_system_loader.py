@@ -304,7 +304,7 @@ name: x
 components:
   weather:
     class: hisim.components.weather.Weather
-    preset: standard
+    preset: aachen
   boiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas

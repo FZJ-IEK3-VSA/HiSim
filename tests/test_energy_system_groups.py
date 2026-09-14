@@ -81,14 +81,14 @@ components:
         - other.heating_load_in_watt
   other:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
 groups:
   extra:
     enabled: {enabled}
     components:
       provider:
         class: hisim.components.building.Building
-        preset: standard
+        preset: german_single_family_home
 """
 
     @classmethod
@@ -295,7 +295,7 @@ groups:
     components:
       provider:
         class: hisim.components.building.Building
-        preset: standard
+        preset: german_single_family_home
 """
     )
     expanded, record = expand_groups(model)
@@ -328,7 +328,7 @@ groups:
     components:
       provider:
         class: hisim.components.building.Building
-        preset: standard
+        preset: german_single_family_home
 """
     )
     with pytest.raises(EnergySystemFormatError) as raised:

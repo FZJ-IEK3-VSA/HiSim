@@ -65,8 +65,8 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     # Build Building. The weather config comes first because the building config copies its identity
     # (weather_identity); the weather component itself is added further down.
-    my_weather_config = weather.WeatherConfig.preset_standard("Weather")
-    my_building_config = building.BuildingConfig.preset_standard("Building")
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
+    my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(
         config=my_building_config,
@@ -75,7 +75,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_building_information = my_building.my_building_information
 
     # Build occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_standard("UTSPConnector")
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -93,7 +93,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # top of the sized configuration rather than a different fact, so a recorded twin writes it as
     # the override it is instead of claiming a law produced it.
     my_heat_distribution_controller_config = (
-        heat_distribution_system.HeatDistributionControllerConfig.preset_standard(
+        heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
             "HeatDistributionController"
         ).resolve(
             SizingContext(
@@ -124,7 +124,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         config=my_heat_distribution_controller_config
     )
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(
+        heat_distribution_system.HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").resolve(
             SizingContext(
                 water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                 conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,

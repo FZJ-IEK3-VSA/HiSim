@@ -28,7 +28,7 @@ __status__ = "development"
 #: the ``capacity`` sizing law below; the other half is the floor area of the building the
 #: component sits in. The number, and the law it forms, are where the literal
 #: ``45 * 121.2`` that this config used to carry came from: 121.2 m² is the conditioned
-#: floor area of the default TABULA building (``BuildingConfig.preset_standard``,
+#: floor area of the default TABULA building (``BuildingConfig.preset_german_single_family_home``,
 #: ``DE.N.SFH.05.Gen.ReEx.001.002``), so the law reproduces the old value exactly for that
 #: building and scales with any other one.
 SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2: float = 45.0

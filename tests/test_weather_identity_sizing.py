@@ -76,7 +76,7 @@ def test_the_weather_identity_names_the_dataset_and_the_file_and_not_the_machine
     entries. The prefix above the inputs directory is a property of the machine and must not appear,
     otherwise a cache could never be shared between machines.
     """
-    aachen = WeatherConfig.preset_standard("Weather")
+    aachen = WeatherConfig.preset_aachen("Weather")
 
     identity = aachen.identity()
 
@@ -98,7 +98,7 @@ def test_two_datasets_sharing_a_file_name_get_different_identities(tmp_path: pat
     """
     del tmp_path
     inputs = pathlib.Path(utils.get_input_directory())
-    aachen = WeatherConfig.preset_standard("Weather")
+    aachen = WeatherConfig.preset_aachen("Weather")
     family_a = dataclasses.replace(aachen, source_path=str(inputs / "weather" / "family-a" / "station"))
     family_b = dataclasses.replace(aachen, source_path=str(inputs / "weather" / "family-b" / "station"))
 
@@ -119,7 +119,7 @@ def test_the_occupancy_identity_says_more_than_the_household_name() -> None:
     nowhere); the profile filepath routes to different files in predefined-profile mode. Both change
     what the run produces, so both must move the identity.
     """
-    baseline = UtspLpgConnectorConfig.preset_standard("UTSPConnector")
+    baseline = UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     with_other_guid = dataclasses.replace(baseline, guid="another-request")
     with_other_file = dataclasses.replace(baseline, predefined_loadprofile_filepaths="/data/special_profile.csv")
 
@@ -138,12 +138,12 @@ def test_a_pv_key_moves_when_the_weather_does_and_a_building_key_too() -> None:
 
     Before F7 the PV key was identical for Aachen and Seville.
     """
-    aachen = WeatherConfig.preset_standard("Weather").identity()
+    aachen = WeatherConfig.preset_aachen("Weather").identity()
     seville = WeatherConfig.for_location("Weather", LocationEnum.SEVILLE).identity()
 
     pv = PVSystemConfig.preset_rooftop("PVSystem")
     pv.power_in_watt = 10000.0
-    building = BuildingConfig.preset_standard("Building")
+    building = BuildingConfig.preset_german_single_family_home("Building")
 
     assert Keys.of(Keys.sized_from(pv, weather_identity=aachen)) != Keys.of(Keys.sized_from(pv, weather_identity=seville))
     assert Keys.of(Keys.sized_from(building, weather_identity=aachen)) != Keys.of(
@@ -154,7 +154,7 @@ def test_a_pv_key_moves_when_the_weather_does_and_a_building_key_too() -> None:
 @pytest.mark.base
 def test_a_car_key_moves_when_the_occupancy_does() -> None:
     """Changing the occupancy changes the car key."""
-    baseline = UtspLpgConnectorConfig.preset_standard("UTSPConnector")
+    baseline = UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     other = dataclasses.replace(baseline, guid="another-seed")
     car = CarConfig.for_household(name="Car", household_name="CHR01", car_name="Small_Car")
 
@@ -194,7 +194,7 @@ def test_the_engine_binds_the_occupancy_identity_from_the_contribution() -> None
     """
     from hisim.config.engine import resolve_all  # pylint: disable=import-outside-toplevel
 
-    occupancy = UtspLpgConnectorConfig.preset_standard("UTSPConnector")
+    occupancy = UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     car = CarConfig.for_household(name="Car", household_name="CHR01", car_name="Small_Car")
     assert car.occupancy_identity is AUTO
 
@@ -217,11 +217,11 @@ def test_a_vacuous_identity_is_refused_like_auto() -> None:
 
     with pytest.warns(RuntimeWarning, match="weather_identity"):
         nulled = BuildingConfig.from_dict(
-            {**json.loads(BuildingConfig.preset_standard("B").to_json()), "weather_identity": None}
+            {**json.loads(BuildingConfig.preset_german_single_family_home("B").to_json()), "weather_identity": None}
         )
     assert "weather_identity" in nulled.auto_fields()
 
-    emptied = BuildingConfig.preset_standard("B2")
+    emptied = BuildingConfig.preset_german_single_family_home("B2")
     emptied.weather_identity = ""
     with pytest.raises(ConfigSizingError, match="weather_identity"):
         Building(config=emptied, my_simulation_parameters=Keys.PARAMETERS)
@@ -235,7 +235,7 @@ def test_a_building_cannot_be_built_without_knowing_its_weather() -> None:
     """
     from hisim.components.building.building import Building  # pylint: disable=import-outside-toplevel
 
-    config = BuildingConfig.preset_standard("Building")
+    config = BuildingConfig.preset_german_single_family_home("Building")
     assert config.weather_identity is AUTO
 
     with pytest.raises(ConfigSizingError, match="weather_identity"):

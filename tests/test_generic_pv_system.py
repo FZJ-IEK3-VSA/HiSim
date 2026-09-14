@@ -45,7 +45,7 @@ def _run_pv_at_timestep_655(
     # Weather: 6 outputs
     # PVS:  1 output
 
-    my_weather_config = weather.WeatherConfig.preset_standard("Weather")
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=mysim
     )
@@ -155,7 +155,7 @@ def test_photovoltaic_cache_roundtrip(tmp_path) -> None:
     my_sim_params.cache_dir_path = str(tmp_path)
 
     repo = sim_repository.SimRepository()
-    my_weather_config = weather.WeatherConfig.preset_standard("Weather")
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_sim_params
     )

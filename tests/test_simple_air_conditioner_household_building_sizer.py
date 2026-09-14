@@ -68,7 +68,7 @@ def test_building_simulates_without_occupancy_connections() -> None:
     repo = cp.SimRepository()
 
     # Weather
-    my_weather_config = weather.WeatherConfig.preset_standard("Weather")
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -76,7 +76,7 @@ def test_building_simulates_without_occupancy_connections() -> None:
     my_weather.i_prepare_simulation()
 
     # Building — default German single-family home, no occupancy component
-    my_building_config = building.BuildingConfig.preset_standard("Building")
+    my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
@@ -244,7 +244,7 @@ def test_recorded_twin_structure() -> None:
     assert named[0] in components["Building"]["inputs"]
 
     # Building config sanity: the preset it was recorded under, plus what the setup changed
-    assert components["Building"]["preset"] == "standard"
+    assert components["Building"]["preset"] == "german_single_family_home"
     assert components["Building"]["config"]["number_of_apartments"] == 1.0
 
     # SimpleAirConditioner config sanity

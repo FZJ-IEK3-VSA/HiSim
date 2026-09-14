@@ -255,26 +255,26 @@ description: The minimal household with its meter in a group of its own.
 components:
   weather:
     class: hisim.components.weather.Weather
-    preset: standard
+    preset: aachen
   occupancy:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    preset: standard
+    preset: couple_both_at_work
   building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
     inputs:
       - weather
       - occupancy
       - hds
   hds_controller:
     class: hisim.components.heat_distribution_system.HeatDistributionController
-    preset: standard
+    preset: building_derived
     inputs:
       - weather
       - building
   hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
-    preset: standard
+    preset: building_derived
     config:
       position_hot_water_storage_in_system: NO_STORAGE_MASS_FLOW_FIX
     inputs:

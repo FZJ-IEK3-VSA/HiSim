@@ -60,13 +60,13 @@ class Systems:
     #: A weather station, which needs nothing and provides the building's mandatory inputs.
     WEATHER: ClassVar[str] = """  weather:
     class: hisim.components.weather.Weather
-    preset: standard
+    preset: aachen
 """
 
     #: A second weather station, for the one rule that needs two sources of the same port.
     OTHER_WEATHER: ClassVar[str] = """  other_weather:
     class: hisim.components.weather.Weather
-    preset: standard
+    preset: aachen
 """
 
     #: A building taking the weather through its declared defaults. Its remaining inputs — the
@@ -74,7 +74,7 @@ class Systems:
     #: pair is a complete, wireable system on its own.
     BUILDING: ClassVar[str] = """  building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
     inputs:
       - weather
 """
@@ -83,7 +83,7 @@ class Systems:
     #: participant.
     OCCUPANCY: ClassVar[str] = """  occupancy:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    preset: standard
+    preset: couple_both_at_work
 """
 
     @classmethod
@@ -168,7 +168,7 @@ def test_an_explicit_wire_connects_exactly_the_two_ports_it_names(tmp_path: Path
         + Systems.BUILDING
         + """  hds_controller:
     class: hisim.components.heat_distribution_system.HeatDistributionController
-    preset: standard
+    preset: building_derived
     inputs:
       - building
       - input: DailyAverageOutsideTemperature
@@ -276,7 +276,7 @@ def test_a_bare_item_whose_consumer_declares_no_defaults_is_rejected(tmp_path: P
         Systems.WEATHER
         + """  building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
     inputs:
       - weather
       - meter
@@ -303,7 +303,7 @@ def test_a_wire_naming_an_output_the_source_does_not_have_is_rejected(tmp_path: 
         Systems.WEATHER
         + """  building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
     inputs:
       - input: TemperatureOutside
         from: weather.TemperatureOutsid
@@ -329,7 +329,7 @@ def test_a_wire_naming_an_input_the_consumer_does_not_have_is_rejected(tmp_path:
         Systems.WEATHER
         + """  building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
     inputs:
       - input: TemperatureOutsideAir
         from: weather.TemperatureOutside
@@ -356,7 +356,7 @@ def test_a_wire_whose_ends_carry_different_quantities_is_rejected(tmp_path: Path
         Systems.WEATHER
         + """  building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
     inputs:
       - input: Altitude
         from: weather.TemperatureOutside
@@ -384,7 +384,7 @@ def test_an_input_fed_by_two_sources_is_rejected(tmp_path: Path) -> None:
         + Systems.OTHER_WEATHER
         + """  building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
     sizing_sources:
       weather_identity: weather.weather_identity
     inputs:
@@ -416,7 +416,7 @@ def test_a_mandatory_input_nothing_feeds_is_rejected(tmp_path: Path) -> None:
         + Systems.BUILDING
         + """  hds_controller:
     class: hisim.components.heat_distribution_system.HeatDistributionController
-    preset: standard
+    preset: building_derived
     inputs:
       - building
 """
@@ -442,7 +442,7 @@ def test_a_feed_addressed_at_a_component_that_aggregates_nothing_is_rejected(tmp
         + Systems.OCCUPANCY
         + """  building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
     inputs:
       - weather
       - from: occupancy.ElectricalPowerConsumption
@@ -583,7 +583,7 @@ def test_a_component_whose_constructor_refuses_its_configuration_is_rejected(tmp
     """
     entries = """  occupancy:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    preset: standard
+    preset: couple_both_at_work
     config:
       name_of_predefined_loadprofile: NoSuchHousehold
 """
@@ -608,7 +608,7 @@ def test_a_derived_port_name_colliding_with_an_existing_one_is_rejected() -> Non
     parameters = SimulationParameters.one_day_only(2021, 900)
     occupancy = UtspLpgConnector(
         my_simulation_parameters=parameters,
-        config=UtspLpgConnectorConfig.preset_standard("occupancy"),
+        config=UtspLpgConnectorConfig.preset_couple_both_at_work("occupancy"),
     )
     meter = ElectricityMeter(
         my_simulation_parameters=parameters,

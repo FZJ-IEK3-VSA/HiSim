@@ -341,7 +341,7 @@ def _inputs_of_a_run(
     Returns:
         WeatherSeriesInputs: the inputs the component would look its series up under.
     """
-    config = weather.WeatherConfig.preset_standard("Weather")
+    config = weather.WeatherConfig.preset_aachen("Weather")
     if data_source != config.data_source:
         # Every source but DWD_TRY names the data file itself rather than the stem of a pair, and the
         # content hash insists the file is there; the station's own ``.dat`` is a file like any other.
@@ -505,7 +505,7 @@ def _prepared_weather(
     parameters = parameters or SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
     parameters.cache_dir_path = str(cache_directory)
     component: weather.Weather = weather.Weather(
-        config=weather.WeatherConfig.preset_standard("Weather"),
+        config=weather.WeatherConfig.preset_aachen("Weather"),
         my_simulation_parameters=parameters,
     )
     component.set_sim_repo(sim_repository.SimRepository())

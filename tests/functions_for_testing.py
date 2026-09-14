@@ -13,7 +13,7 @@ from hisim.energy_system.record import ConfigBlockWriter
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 
-#: Conditioned floor area of the default TABULA building (``BuildingConfig.preset_standard``,
+#: Conditioned floor area of the default TABULA building (``BuildingConfig.preset_german_single_family_home``,
 #: building code ``DE.N.SFH.05.Gen.ReEx.001.002``) in m². The two example components size
 #: fields from this fact, and the tests below resolve their configs against exactly this
 #: value, which is what keeps their numbers identical to the literals the modules used to

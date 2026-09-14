@@ -161,10 +161,10 @@ def test_the_pilot_chain_resolves_without_any_sources_mapping():
         HeatDistributionSystemType,
     )
 
-    building = BuildingConfig.preset_standard("Building")
+    building = BuildingConfig.preset_german_single_family_home("Building")
     heating_load = SizingContext.for_building(building).heating_load_in_watt
-    controller = HeatDistributionControllerConfig.preset_standard("HeatDistributionController")
-    hds = HeatDistributionConfig.preset_standard("HeatDistributionSystem")
+    controller = HeatDistributionControllerConfig.preset_building_derived("HeatDistributionController")
+    hds = HeatDistributionConfig.preset_building_derived("HeatDistributionSystem")
     boiler = GenericBoilerConfig.preset_condensing_gas("CondensingGasBoiler")
     # The chain has no weather, and the building now records which weather it is computed against, so
     # that one fact is seeded: the seed is the surrounding system, and here the system is the test.

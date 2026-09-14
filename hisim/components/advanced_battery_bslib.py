@@ -54,7 +54,7 @@ __status__ = "development"
 class BatteryConfig(ConfigBase):
     """Battery Configuration.
 
-    The named default battery is :meth:`preset_standard`, and both of its power numbers are
+    The named default battery is :meth:`preset_sized_to_pv`, and both of its power numbers are
     sizable: the preset leaves them ``AUTO`` and ``.resolve(ctx)`` derives them from the peak
     power of the PV array the battery is installed beside, which is what the deleted
     ``get_scaled_battery`` factory did with a value the setup copied across by hand. An author
@@ -116,7 +116,7 @@ class BatteryConfig(ConfigBase):
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "BatteryConfig":
+    def preset_sized_to_pv(cls, name: str) -> "BatteryConfig":
         """The fleet's home battery, scaled to the PV array it is installed beside.
 
         A single ``SG1`` lithium-ion system from the bslib database, first in the energy

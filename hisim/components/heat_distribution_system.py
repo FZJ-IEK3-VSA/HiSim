@@ -119,7 +119,7 @@ class HeatDistributionConfig(ConfigBase):
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "HeatDistributionConfig":
+    def preset_building_derived(cls, name: str) -> "HeatDistributionConfig":
         """The one heat distribution system, sized entirely to the building it serves."""
         return cls(component_id=ComponentID(name=name))
 
@@ -902,7 +902,7 @@ class HeatDistributionControllerConfig(ConfigBase):
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "HeatDistributionControllerConfig":
+    def preset_building_derived(cls, name: str) -> "HeatDistributionControllerConfig":
         """The one heat distribution controller, derived entirely from the building it serves.
 
         Everything this controller needs is a property of the building — its heating load, its

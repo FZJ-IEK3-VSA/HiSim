@@ -7,12 +7,13 @@ far is a failure of the recording, not a file somebody has to fix afterwards, an
 one. Preparing rather than merely building is what lets the check reach the configurations
 themselves, since a component first reads what it was configured with when it prepares.
 
-Since A-P3.1 that step also answers a second question. A twin writes ``AUTO`` on every field a law
-computed and this system declares a provider for, which is a claim: that the laws and the declared
-contributions reproduce the context the setup built by hand. The claim is checked, not trusted —
-every such field of the rebuilt system is compared with the value the Python run produced, and a
-difference fails the recording naming the setup, the component, the field, both numbers and the
-law. Pinning the number instead would hide exactly what a twin exists to prove.
+Since A-P3.1 that step also answers a second question. A twin leaves out every field a law
+computed and this system declares a provider for, so the preset's own ``AUTO`` answers it — which
+is a claim: that the laws and the declared contributions reproduce the context the setup built by
+hand. The claim is checked, not trusted — every such field of the rebuilt system is compared with
+the value the Python run produced, and a difference fails the recording naming the setup, the
+component, the field, both numbers and the law. Pinning the number instead would hide exactly what
+a twin exists to prove.
 
 Everything before that step is the pipeline the other modules of this package implement — import
 the setup, let it construct its components, let the simulator resolve the declared defaults,
@@ -35,7 +36,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar, Mapping, Optional, Sequence, Tuple
 
-from hisim.config.sizing import _AutoSize
 from hisim.energy_system.comments import render_record
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemRecordingError
 from hisim.energy_system.model import EnergySystemFile
@@ -64,8 +64,8 @@ class RecordingResult:
     the parameters the setup ended up with, and those may already be described by another file or
     by none at all.
 
-    ``decisions`` is what the recorder concluded about every field a law computed: which became
-    ``AUTO``, which stayed a number and for which of the three reasons. It is the flip count a
+    ``decisions`` is what the recorder concluded about every field a law computed: which was left
+    to its preset, which stayed a number and for which of the two reasons. It is the flip count a
     re-record is reviewed by, and the reason a caller can answer "why is this line still a number"
     without reading the file.
     """
@@ -377,7 +377,7 @@ class RecordingSession:
             setup_name: The setup as the header names it.
             parameters_path: The parameters file the header names, which is the one describing
                 what the setup ended up with rather than the one it was started from.
-            notes: The trailing comment each sized configuration line carries, by component and
+            notes: The trailing comment each pinned configuration line carries, by component and
                 field. Without them the body is exactly what the canonical writer produces.
 
         Returns:
@@ -489,10 +489,10 @@ class RecordingSession:
         self.check_resizing(built, checks)
 
     def check_resizing(self, built: Any, checks: Sequence[SizedFieldDecision]) -> None:
-        """Holds every ``AUTO`` line of the written file to the number the Python run produced.
+        """Holds every field the written file left to its preset to the number the run produced.
 
         This is the second half of A-P3.1 and the only place the twin's central claim is tested.
-        Writing ``AUTO`` says that the laws, plus the facts the recorded components declare,
+        Leaving a field out says that the laws, plus the facts the recorded components declare,
         reproduce the context the setup assembled by hand; a difference means they do not, and the
         difference is the finding — a fact bound to the wrong provider, a law reading something the
         setup computed differently, an archetype value that never reached the component that
@@ -501,7 +501,7 @@ class RecordingSession:
 
         Args:
             built: The system the written file produced, whose resolved configurations are read.
-            checks: The fields written as ``AUTO``, each with the value the run produced.
+            checks: The fields the block omitted, each with the value the run produced.
 
         Raises:
             EnergySystemRecordingError: ``EF-R13`` naming the setup, the component, the field, both
@@ -518,9 +518,9 @@ class RecordingSession:
             raise EnergySystemRecordingError(
                 EnergySystemErrorId.RECORDED_AUTO_DIFFERS,
                 f"{self.setup_label}:components.{decision.component}.config.{decision.field}",
-                f"'{decision.component}.{decision.field}' was recorded as "
-                f"'{_AutoSize.WIRE_SPELLING}' because '{decision.law}' computed {decision.value!r} "
-                f"in the Python run, but the recorded file resolves it to {actual!r}.",
+                f"'{decision.component}.{decision.field}' was left to its preset because "
+                f"'{decision.law}' computed {decision.value!r} in the Python run, but the "
+                f"recorded file resolves it to {actual!r}.",
                 remedy=(
                     "The laws and the declared sizing contributions do not reproduce the context "
                     "the setup built by hand. Fix the law, the contribution or the setup; the twin "

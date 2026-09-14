@@ -11,13 +11,15 @@ are judgements about which parts of a household belong together, which is a pers
 not an inference from a single run. What is left is a flat list of components in registration
 order, each stating its class, its configuration and where its inputs come from.
 
-It does carry ``AUTO``, on exactly the fields a law computed and for which this system declares a
-provider (A-P3.1). A twin is an authored energy-system file rather than a transcript of one run:
-a field the file can compute again is written as the sentinel, with the run's value, the law and
-the provider in a trailing comment, so that the same file re-sizes for a different building
-instead of repeating one archetype's numbers. Which fields those are is decided in
-:mod:`~hisim.energy_system.recording.configs`; this module builds the provider lookup that
-decision needs, renders the decisions as the file's comments and refuses any other sentinel.
+It also carries fewer lines than the run had values (A-P3.1). A twin is an authored energy-system
+file rather than a transcript of one run: a field a law computed, and for which this system
+declares a provider, is left out of its entry's ``config`` block entirely, so the preset's own
+``AUTO`` answers it and the same file re-sizes for a different building instead of repeating one
+archetype's numbers. ``preset: rooftop`` already says the array is sized from the roof, so a line
+saying it again is not written. Which fields those are is decided in
+:mod:`~hisim.energy_system.recording.configs`; this module builds the provider lookup that decision
+needs, renders the pinned decisions as the file's comments and hands the omitted ones to the
+session, which checks them.
 
 The two guards that live here are about portability rather than shape. An absolute filesystem path
 that survived symbolisation is refused rather than written, because it would make the file
@@ -125,8 +127,8 @@ class EnergySystemBuilder:
 
     It also owns the two by-products of the sizing decision, and they are by-products of *this*
     object rather than of the model because the model has nowhere to put them: :attr:`notes`, the
-    comment each configuration line carries, which the emitter attaches, and :attr:`checks`, the
-    ``AUTO`` fields whose claim the session verifies by resolving the file it just wrote.
+    comment each pinned configuration line carries, which the emitter attaches, and :attr:`checks`,
+    the omitted fields whose claim the session verifies by resolving the file it just wrote.
 
     Nothing is sorted and nothing is looked up in a set on the way out: components are written in
     registration order, an entry's keys in the order the format declares them, and a configuration's
@@ -167,9 +169,9 @@ class EnergySystemBuilder:
         Raises:
             EnergySystemRecordingError: ``EF-R1`` for an unwritable name, ``EF-R2`` for a qualified
                 identity, ``EF-R3`` for an unportable path and ``EF-R4`` for a vanished preset.
-            EnergySystemRecordError: ``EF-60`` if a value asks to be sized that the recorder did
-                not deliberately write as ``AUTO``, which a component that was constructed at all
-                cannot produce and which is therefore a broken promise rather than a bad setup.
+            EnergySystemRecordError: ``EF-60`` if any value still asks to be sized, which a
+                component that was constructed at all cannot produce and which is therefore a
+                broken promise rather than a bad setup.
         """
         self.decisions = []
         components: Dict[str, ComponentEntry] = {}
@@ -182,64 +184,33 @@ class EnergySystemBuilder:
             description=description,
             components=components,
         )
-        self.assert_every_sentinel_was_decided(recorded)
+        assert_no_sentinels(recorded)
         return recorded
-
-    def assert_every_sentinel_was_decided(self, recorded: EnergySystemFile) -> None:
-        """Refuses an ``AUTO`` the sizing decision did not put into the file.
-
-        The recorder writes the sentinel on purpose now, so the blanket refusal that used to guard
-        the file would refuse its own output. What still has to hold is the narrower rule it stood
-        for: every ``AUTO`` in a twin is one the recorder decided on and can name a law and a
-        provider for, and any other one is a value that escaped a configuration unresolved. The
-        check is the same walk over the same model with the decided fields taken out first, so the
-        two cannot come to disagree about what a sentinel looks like.
-
-        Args:
-            recorded: The finished model, before it is emitted.
-
-        Raises:
-            EnergySystemRecordError: ``EF-60`` naming the entry and the field.
-        """
-        decided = {(decision.component, decision.field) for decision in self.decisions if decision.auto}
-        assert_no_sentinels(
-            recorded.model_copy(
-                update={
-                    "components": {
-                        name: entry.model_copy(
-                            update={
-                                "config": {
-                                    key: value
-                                    for key, value in entry.config.items()
-                                    if (name, key) not in decided
-                                }
-                            }
-                        )
-                        for name, entry in recorded.components.items()
-                    }
-                }
-            )
-        )
 
     @property
     def notes(self) -> Dict[str, Dict[str, str]]:
-        """The trailing comment every decided configuration line carries, by component and field.
+        """The trailing comment every pinned configuration line carries, by component and field.
+
+        A field the recorder left to the preset has no line to annotate, so it contributes nothing
+        here; only a value that stayed concrete gets its ``pinned: …`` sentence.
 
         Returns:
-            One mapping per component that has at least one decided field; empty for a recording
-            in which no law computed anything.
+            One mapping per component that has at least one pinned field; empty for a recording in
+            which every computed field was left to its preset.
         """
         rendered: Dict[str, Dict[str, str]] = {}
         for decision in self.decisions:
-            rendered.setdefault(decision.component, {})[decision.field] = decision.comment()
+            comment = decision.comment()
+            if comment is not None:
+                rendered.setdefault(decision.component, {})[decision.field] = comment
         return rendered
 
     @property
     def checks(self) -> Tuple[SizedFieldDecision, ...]:
-        """The ``AUTO`` fields whose claim the written file has to make good on.
+        """The omitted fields whose claim the written file has to make good on.
 
         Returns:
-            One decision per field written as the sentinel, in the order the entries were built.
+            One decision per field left to its preset, in the order the entries were built.
         """
         return tuple(decision for decision in self.decisions if decision.auto)
 

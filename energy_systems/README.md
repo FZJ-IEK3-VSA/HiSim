@@ -97,38 +97,47 @@ are judgements about intent, and one run cannot be asked about intent.
 
 A twin is an **authored** energy-system file, not a transcript of one run. Where a sizing law
 computed a value and the recorded system itself contains a component that contributes the facts
-that law reads, the twin writes `AUTO` and puts the run's own number, the law and the provider in
-the margin:
+that law reads, the twin **writes no line for that field at all** — the preset's own `AUTO` already
+answers it:
 
 ```yaml
   PVSystem:
     class: hisim.components.generic_pv_system.PVSystem
     preset: rooftop
-    config:
-      power_in_watt: AUTO # sized 22272.28 by _rooftop_power_in_watt <- Building.roof_area_in_m2
 ```
 
-Such a line re-sizes: point the same file at a different building and the array follows it. That is
-what makes a recorded sizer usable as somebody else's base file rather than as one archetype's
-frozen numbers.
+`preset: rooftop` is what says the array is sized from the roof, so a `power_in_watt:` line
+restating that default in order to annotate it would add nothing a loader or a reader needs. The
+entry re-sizes: point the same file at a different building and the array follows it. That is what
+makes a recorded sizer usable as somebody else's base file rather than as one archetype's frozen
+numbers.
 
-A line that still states a number states it for one of two reasons, and says which. Either the
+The number that run produced is not lost, it just lives where it belongs: in the **realized
+record** every run writes beside its results (`realized.energy_system.yaml`), which states every
+field concretely with the law that computed it and the component that answered each fact in the
+margin. `hisim energy-system facts <file>` prints the same thing for a file without running it.
+
+A line that *does* state a number states it for one of two reasons, and says which. Either the
 setup assigned the value itself, in which case it is an override like any other and carries no
 comment; or a law computed it from a fact that nothing in this system provides yet — the class that
 would contribute it has not been converted — and the line reads
-`# pinned: no provider of <fact> in this system yet`. Those flip to `AUTO` by themselves on the
+`# pinned: no provider of <fact> in this system yet`. Those lines disappear by themselves on the
 re-record that follows that class's conversion, so the twins get shorter as the conversion
-proceeds. Two rarer pins name their own reason: a fact several components in the system declare
-(the file would be ambiguous, and a twin writes no `sizing_sources`), and a field whose preset
-pinned a law of its own (`AUTO` would re-open it to the *class* law, which is a different rule).
+proceeds. One rarer pin names its own reason: a fact several components in the system declare, so
+the file would be ambiguous and a twin writes no `sizing_sources`.
+
+A field whose *preset* pinned a law of its own — the pellet boiler's minimal power, a twelfth of
+its maximum instead of the class default of zero — needs no pin. Leaving the line out is exactly
+what keeps that law: the preset builds the field holding its own rule and the resolver evaluates
+it, whereas a written-out `AUTO` would replace it with the class rule.
 
 Before the command returns, the file it wrote is loaded back through the executor, built and
 prepared, so a twin that does not work is reported as a failed recording rather than left behind.
-The same step checks every `AUTO` line: the field is compared with the value the Python run
-produced, and a difference **fails the recording**, naming the setup, the component, the field,
-both numbers and the law. A mismatch means the laws and the declared contributions do not reproduce
-the context the setup built by hand, which is a finding about the setup or the component — the
-recorder never pins the number to make it go away.
+The same step checks every field the twin left to a preset: the resolved value is compared with the
+value the Python run produced, and a difference **fails the recording**, naming the setup, the
+component, the field, both numbers and the law. A mismatch means the laws and the declared
+contributions do not reproduce the context the setup built by hand, which is a finding about the
+setup or the component — the recorder never pins the number to make it go away.
 
 Recording is deterministic: the same setup and the same parameters produce the same bytes on any
 machine. A twin is therefore regenerated rather than edited — change the setup, re-record, and read

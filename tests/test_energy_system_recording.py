@@ -34,6 +34,7 @@ from hisim.config import (
     ComponentID,
     ConfigBase,
     FactContribution,
+    Self,
     Sizable,
     Size,
     SizingContext,
@@ -401,52 +402,25 @@ def test_a_recording_states_values_and_claims_nothing_else(
 ) -> None:
     """Catches a recording growing an intent it cannot have observed.
 
-    A sizing source would claim a provenance no observation can see; a group or a variant would
-    claim that some parts of the household belong together, which is a person's judgement. Both are
-    absent by construction, and this is where that construction is checked rather than assumed.
+    A sentinel would be a value that escaped a configuration unresolved; a sizing source would claim
+    a provenance no observation can see; a group or a variant would claim that some parts of the
+    household belong together, which is a person's judgement. All are absent by construction, and
+    this is where that construction is checked rather than assumed.
 
-    ``AUTO`` is the one thing a recording may now say (A-P3.1), and only where the sizing decision
-    put it: a sentinel anywhere else is a value that escaped a configuration unresolved, which is
-    what the blanket refusal used to catch and what the narrowed one still has to. The model is
-    therefore checked with the decided fields removed, which is exactly the file the old rule
-    described.
+    A field a law computed and this system can compute again is not a sentinel in the file either
+    (A-P3.1, revised in review of #745): the recorder writes no line for it at all and the preset it
+    came from carries the ``AUTO``, so the blanket refusal that guarded the twins before that
+    decision still guards them unchanged.
     """
     result = recordings[setup]
-    decided = {(decision.component, decision.field) for decision in result.decisions if decision.auto}
 
-    assert_no_sentinels(without(result.model, decided))
+    assert_no_sentinels(result.model)
     assert result.model.groups == {}
     assert "variants" not in result.text
     for name, entry in result.model.all_components().items():
         assert entry.sizing_sources == {}, name
         assert entry.constructor is None, name
         assert entry.preset is not None or entry.config, name
-
-
-def without(model: Any, fields: set) -> Any:
-    """Returns the same model with the named configuration fields dropped from their entries.
-
-    Args:
-        model: The recorded model.
-        fields: ``(component, field)`` pairs to remove.
-
-    Returns:
-        A copy without those keys.
-    """
-    return model.model_copy(
-        update={
-            "components": {
-                name: entry.model_copy(
-                    update={
-                        "config": {
-                            key: value for key, value in entry.config.items() if (name, key) not in fields
-                        }
-                    }
-                )
-                for name, entry in model.components.items()
-            }
-        }
-    )
 
 
 @pytest.mark.base
@@ -557,9 +531,10 @@ def test_a_recorded_file_is_written_in_the_one_canonical_style(
     """Catches the recorder writing a file the format's own writer would write differently.
 
     The rule of this format is that re-emitting a file reproduces it, and a generated file has no
-    excuse for being the exception. It holds of the body, up to the trailing comments a twin's sized
-    lines carry: those are a rendering of the sizing record and nothing reads them back, so a line
-    reproduces when it equals the canonical one or is the canonical one with a comment appended.
+    excuse for being the exception. It holds of the body, up to the trailing comments a twin's
+    pinned lines carry: those are a rendering of the sizing record and nothing reads them back, so a
+    line reproduces when it equals the canonical one or is the canonical one with a comment
+    appended.
     """
     result = recordings[setup]
     header, body = RecordedFileWriter.split(result.text)
@@ -868,6 +843,44 @@ class _ArrayConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
+@dataclass_json
+@dataclass
+class _BoilerConfig(ConfigBase):
+    """A fixture consumer whose preset overrides the class law on one of its two sized fields.
+
+    This is the pellet boiler in miniature: the class sizes the minimum at a flat zero, and the
+    ``pellets`` preset replaces that rule with a twelfth of the sibling maximum. It exists so that
+    the recorder's judgement about a preset-owned law can be tested without the real boiler's
+    fifteen other fields.
+    """
+
+    component_id: ComponentID
+    maximal_thermal_power_in_watt: Sizable[float] = sized_field(rule=10.0 * Size.ROOF_AREA_IN_M2)
+    minimal_thermal_power_in_watt: Sizable[float] = sized_field(rule=0.0)
+
+    @classmethod
+    def get_main_classname(cls) -> str:
+        """Returns a dummy classname, as the ConfigBase contract requires."""
+        return "tests.test_energy_system_recording._BoilerConfig"
+
+    @preset
+    @classmethod
+    def preset_pellets(cls, name: str) -> "_BoilerConfig":
+        """The boiler with the preset's own modulation law on its minimal power.
+
+        Args:
+            name: The instance name, which becomes the configuration's identity.
+
+        Returns:
+            The unresolved configuration, whose minimal power holds a law object rather than a
+            number.
+        """
+        return cls(
+            component_id=ComponentID(name=name),
+            minimal_thermal_power_in_watt=Self("maximal_thermal_power_in_watt") * (1 / 12),
+        )
+
+
 class Sized:
     """The smallest recorded system in which one field is computed from another component's fact.
 
@@ -881,6 +894,9 @@ class Sized:
 
     #: Name of the component declaring the fact the array's law reads.
     ROOF: ClassVar[str] = "Roof"
+
+    #: Name of the component whose preset sizes one field with a law of its own.
+    BOILER: ClassVar[str] = "Boiler"
 
     #: The roof area the fixture sizes against, and the law's factor over it.
     AREA: ClassVar[float] = 100.0
@@ -948,51 +964,82 @@ class Sized:
 
 
 @pytest.mark.base
-def test_a_computed_field_whose_facts_have_a_provider_is_written_as_auto() -> None:
-    """Catches the recorder flattening a law's result to the number it happened to produce.
+def test_a_computed_field_whose_facts_have_a_provider_is_left_to_the_preset() -> None:
+    """Catches the recorder writing down a value its own preset would produce again.
 
     A twin that states 200.0 reproduces one roof and can be reused for no other, which is what
-    A-P3.1 changed: with the fact's provider in the system, the file says ``AUTO`` and computes the
-    number again — a different one for a different building. The comment is not decoration either:
-    it is the only place the value this run produced survives.
+    A-P3.1 changed; and a twin that states ``AUTO`` there restates what ``preset: rooftop`` already
+    means, which is what its revision dropped. With the fact's provider in the system the field gets
+    no line: the preset's own sentinel answers it and the file computes a different number for a
+    different building. The decision survives all the same, because the session still holds the
+    written file to the value the run produced.
     """
     written = Sized.written(Sized.array(), Sized.observed(Sized.ROOF, _RoofConfig(ComponentID(name=Sized.ROOF))))
 
-    assert written.members[EntryConfigWriter.CONFIG_KEY]["power_in_watt"] == "AUTO"
+    assert "power_in_watt" not in written.members.get(EntryConfigWriter.CONFIG_KEY, {})
     decision = written.decisions[0]
     assert decision.auto
+    assert decision.comment() is None
     assert decision.value == Sized.POWER
     assert decision.sources == (f"{Sized.ROOF}.roof_area_in_m2",)
 
 
 @pytest.mark.base
-def test_the_comment_of_a_sized_line_names_the_value_the_law_and_the_provider() -> None:
-    """Catches the one line a reader of a twin actually reads drifting out of shape.
+def test_a_field_left_to_the_preset_leaves_the_entry_with_nothing_but_its_preset() -> None:
+    """Catches an empty ``config`` block surviving into the file once its one line is dropped.
 
-    The format is fixed by A-P3.1 and by the freshness job at once: it has to say what the run
-    produced, which law produced it and which component answered the fact, and it has to say it the
-    same way on every machine, because the fleet is re-recorded and compared byte for byte.
+    The array deviates from its preset in exactly one field and that field is now omitted, so the
+    entry has nothing left to say but which preset it came from. A ``config: {}`` written beside it
+    would be the same noise the revision of A-P3.1 removed, one level up.
     """
     written = Sized.written(Sized.array(), Sized.observed(Sized.ROOF, _RoofConfig(ComponentID(name=Sized.ROOF))))
 
-    assert written.decisions[0].comment() == (
-        f"sized {Sized.POWER} by 2.0 * Size.ROOF_AREA_IN_M2 <- {Sized.ROOF}.roof_area_in_m2"
-    )
+    assert written.members == {EntryConfigWriter.PRESET_KEY: "rooftop"}
+
+
+@pytest.mark.base
+def test_a_field_the_preset_sized_with_its_own_law_is_left_out_and_keeps_that_law() -> None:
+    """Catches the recorder pinning a number that omission would have reproduced anyway.
+
+    While the recorder wrote an explicit ``AUTO`` this field had to stay concrete, because the bare
+    word replaces whatever the preset put in the field with the *class* law — a twelfth of the
+    maximum would have become the class default of zero. Omission does the opposite: the preset
+    builds the field holding its own ``SizingLaw`` and the resolver evaluates that object, so the
+    line is not only unnecessary but the one thing that could lose the preset's rule. Both halves
+    are asserted here — the recorder leaves no line, and rebuilding the preset the way the executor
+    does reproduces the run's number rather than the class law's zero.
+    """
+    context = SizingContext(roof_area_in_m2=Sized.AREA)
+    resolved = _BoilerConfig.preset_pellets(Sized.BOILER).resolve(context)
+    boiler = Sized.observed(Sized.BOILER, resolved)
+    roof = Sized.observed(Sized.ROOF, _RoofConfig(ComponentID(name=Sized.ROOF)))
+
+    written = Sized.writer(boiler, roof).fields(Sized.BOILER, resolved, "tests/synthetic.py")
+
+    assert written.members == {EntryConfigWriter.PRESET_KEY: "pellets"}
+    minimal = next(d for d in written.decisions if d.field == "minimal_thermal_power_in_watt")
+    assert minimal.auto
+    assert minimal.comment() is None
+    assert minimal.value == Sized.AREA * 10.0 / 12
+    rebuilt = _BoilerConfig.preset_pellets(Sized.BOILER).resolve(context)
+    assert rebuilt.minimal_thermal_power_in_watt == minimal.value
 
 
 @pytest.mark.base
 def test_a_computed_field_whose_fact_nobody_provides_stays_a_number_and_says_why() -> None:
     """Catches a twin writing ``AUTO`` for a value the file could not possibly compute again.
 
-    While a provider class is unconverted its fact has nobody to answer it, so the sentinel would
-    make the file refuse to load rather than make it reusable. The number stays, and the comment
-    names the missing fact so that the line is visibly waiting for a conversion rather than
-    silently pinned for ever.
+    While a provider class is unconverted its fact has nobody to answer it, so leaving the field to
+    the preset's sentinel would make the file refuse to load rather than make it reusable. The
+    number stays, and the comment names the missing fact so that the line is visibly waiting for a
+    conversion rather than silently pinned for ever — a pinned line is the one kind of annotated
+    line a twin still writes.
     """
     written = Sized.written(Sized.array())
 
     assert written.members[EntryConfigWriter.CONFIG_KEY]["power_in_watt"] == Sized.POWER
     assert written.decisions[0].comment() == "pinned: no provider of roof_area_in_m2 in this system yet"
+    assert not written.decisions[0].auto
 
 
 @pytest.mark.base
@@ -1018,8 +1065,8 @@ def test_an_unstamped_configuration_is_written_out_in_full_with_no_sizing_decisi
     """Catches the sizing decision leaking into the branch that has no preset to deviate from.
 
     A class with no preset is written as a complete literal block, and nothing about it is decided:
-    the entry names no preset a sentinel could be resolved against, so an ``AUTO`` in it would be a
-    value the file cannot rebuild. Unconverted classes therefore stay exactly as they were.
+    the entry names no preset an omitted field could fall back on, so a missing line in it would be
+    a value the file cannot rebuild. Unconverted classes therefore stay exactly as they were.
     """
     roof = _RoofConfig(ComponentID(name=Sized.ROOF))
     written = Sized.writer(Sized.observed(Sized.ROOF, roof)).fields(Sized.ROOF, roof, "tests/synthetic.py")
@@ -1033,10 +1080,10 @@ def test_an_unstamped_configuration_is_written_out_in_full_with_no_sizing_decisi
 def test_a_recorded_auto_field_that_resolves_to_another_number_fails_the_recording(tmp_path: Path) -> None:
     """Catches the twin's central claim being made without being checked.
 
-    ``AUTO`` asserts that the laws and the declared contributions reproduce the context the setup
-    built by hand. When they do not — a fact bound to a provider that says something else, an
-    archetype value that never reached the contributing component — the file quietly simulates a
-    different system. Pinning the number instead would make the two agree by refusing to compare
+    Leaving a field to its preset asserts that the laws and the declared contributions reproduce the
+    context the setup built by hand. When they do not — a fact bound to a provider that says
+    something else, an archetype value that never reached the contributing component — the file
+    quietly simulates a different system. Pinning the number instead would make the two agree by refusing to compare
     them, so the recording fails and names both.
     """
     config = Sized.array()

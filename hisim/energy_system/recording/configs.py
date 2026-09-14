@@ -9,21 +9,27 @@ against every preset of the class would be an inference the format's first princ
 Inside a stamped entry a second judgement is made, field by field, and it is the one that makes a
 twin reusable (A-P3.1). A resolved configuration carries a ``sizing_record`` naming, per field, the
 law that computed it, the facts that law read and the value it produced, so the recorder can tell a
-number a law computed from a number the setup typed. A computed field is written as the bare word
-``AUTO`` — with the run's value, the law and the fact's provider in a trailing comment — whenever
-the recorded system itself declares a provider for every fact that law reads, because then the file
-recomputes the same number instead of repeating it, and it recomputes a *different* number for a
-different building, which is what a base file has to do. A field the setup assigned stays the
-concrete override it always was, and a computed field whose fact nothing in this system provides
-yet stays concrete too, with a comment naming the missing fact; it flips on the re-record that
-follows that provider's conversion.
+number a law computed from a number the setup typed. A computed field is **left out of the block
+altogether** whenever the recorded system itself declares a provider for every fact that law reads:
+the preset's own ``AUTO`` then stands, the file recomputes the number instead of repeating it, and
+it recomputes a *different* number for a different building, which is what a base file has to do.
+No line is written for such a field — ``preset: rooftop`` already says the array is sized from the
+roof, and a line restating the preset's default in order to annotate it says nothing the loader or
+a reader needs; the value that run produced lives in the realized record, per field with its law
+and its provider. A field the setup assigned stays the concrete override it always was, and a
+computed field whose fact nothing in this system provides yet stays concrete too, with a comment
+naming the missing fact; it disappears on the re-record that follows that provider's conversion.
 
-Two cases the decision did not name are pinned for a reason the comment states. A fact that several
-recorded components declare cannot be written as ``AUTO`` while a twin writes no ``sizing_sources``
-block, because the file would then be ambiguous rather than reusable. And a field whose *preset*
-pinned a law of its own — the pellet boiler's "a twelfth of the maximum" — cannot be written as
-``AUTO`` either, because ``AUTO`` re-opens the field to the *class* law and would compute a
-different number.
+One case the decision did not name is pinned for a reason the comment states: a fact that several
+recorded components declare cannot be left to the preset while a twin writes no ``sizing_sources``
+block, because the file would then be ambiguous rather than reusable. A pinned line is real data,
+so it keeps both its number and the comment saying why the number is there.
+
+A field whose *preset* pinned a law of its own — the pellet boiler's "a twelfth of the maximum" —
+needs no pin and gets none. Omission leaves the field holding the ``SizingLaw`` the preset put
+there, and the resolver evaluates that object in preference to the class rule; only the bare word
+``AUTO``, written into the file, would replace it with the class law. Leaving the line out is
+therefore what preserves the preset's law, not what loses it.
 
 Both branches encode through the record writer of :mod:`hisim.energy_system.record`, so the
 portable ``${var}`` spelling of a path, the enum-by-name rule and the omission of the identity are
@@ -41,7 +47,6 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from hisim.config import AUTO, ConfigBuilder, FactContribution, SizingLaw, preset_provenance, presets_of
-from hisim.config.sizing import _AutoSize
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemRecordingError
 from hisim.energy_system.record import ConfigBlockWriter
 
@@ -103,28 +108,25 @@ class FactProviders:
 class TwinComments:
     """The wording of every comment a recorded twin carries, in one place.
 
-    A twin's comments are a small vocabulary — a field was sized and here is what it came to, or a
-    field is pinned and here is why — and collecting the phrasings on one class is what stops that
+    A twin's comments are one sentence with two endings — this number is pinned, and here is which
+    of the two reasons pinned it — and collecting the phrasings on one class is what stops that
     vocabulary from growing a synonym per call site. Nothing reads them back: they are a rendering
     of the ``sizing_record``, and stripping every one of them changes nothing about what the file
     does.
+
+    A field the file re-sizes has no comment because it has no line: it is omitted from the block
+    and the preset's own ``AUTO`` stands (A-P3.1, revised in review of #745). Only a pinned line is
+    annotated, and only because that line is real data whose reason a reader cannot otherwise see.
 
     Every phrase is one line and depends on nothing but the observation, because the freshness job
     re-records the fleet and compares bytes.
     """
 
-    #: Comment on an ``AUTO`` line whose law read at least one fact.
-    SIZED_FROM: ClassVar[str] = "sized {value} by {law} <- {sources}"
-
-    #: Comment on an ``AUTO`` line whose law read nothing at all — a constant rule, whose value is
-    #: the same in every system and therefore needs no provider.
-    SIZED: ClassVar[str] = "sized {value} by {law}"
-
     #: How a pinned line opens; the reason follows.
     PINNED: ClassVar[str] = "pinned: {reason}"
 
-    #: Reason for a value a law computed from a fact this system has no provider for yet. It flips
-    #: to ``AUTO`` on the re-record that follows that provider's conversion.
+    #: Reason for a value a law computed from a fact this system has no provider for yet. The line
+    #: disappears on the re-record that follows that provider's conversion.
     NO_PROVIDER: ClassVar[str] = "no provider of {fact} in this system yet"
 
     #: Reason for a value a law computed from a fact several recorded components declare. Naming
@@ -132,25 +134,8 @@ class TwinComments:
     #: stays until a twin may carry a ``sizing_sources`` block.
     SEVERAL_PROVIDERS: ClassVar[str] = "{fact} is declared by {providers}, and a twin writes no sizing_sources"
 
-    #: Reason for a value the entry's own preset computed with a law of its own. ``AUTO`` re-opens
-    #: a field to the *class* law, which is a different law and would produce a different number.
-    PRESET_LAW: ClassVar[str] = "the preset's own law {law} computed it, which AUTO would replace with the class law"
-
-    #: Separator between the sources of one sized value, and between several providers of one fact.
+    #: Separator between the several providers of one fact.
     SEPARATOR: ClassVar[str] = ", "
-
-    @classmethod
-    def value(cls, value: Any) -> str:
-        """Renders one value the way a comment quotes it.
-
-        Args:
-            value: The plain value the run produced.
-
-        Returns:
-            The shortest unambiguous rendering: a number as Python spells it, which is the
-            spelling that round-trips a float, and everything else as its plain string.
-        """
-        return str(value)
 
 
 @dataclass(frozen=True)
@@ -158,12 +143,20 @@ class SizedFieldDecision:
     """What the recorder decided about one field a law computed, and why.
 
     One of these is produced for every entry of a stamped configuration's ``sizing_record`` that
-    reaches the recorded block. It is both the comment the line carries and the check the session
-    makes afterwards: an ``AUTO`` line claims the file recomputes :attr:`value`, and that claim is
-    verified by resolving the written file rather than trusted.
+    reaches the recorded block, and it carries the two outcomes the block itself no longer shows.
+    A field left to the preset writes no line at all, so this object is the only place the run's
+    :attr:`value` and the :attr:`sources` that made the omission safe are still stated, and it is
+    what the session holds the written file to: omitting the field claims the file recomputes
+    :attr:`value`, and that claim is verified by resolving the file rather than trusted.
 
-    ``reason`` is what separates the two outcomes. ``None`` means the field was written as ``AUTO``;
-    anything else is the sentence explaining why the number stayed, rendered after ``pinned:``.
+    ``reason`` is what separates the two outcomes. ``None`` means the field was left out of the
+    block for the preset's own ``AUTO`` to answer; anything else is the sentence explaining why the
+    number stayed, rendered after ``pinned:`` on the line that kept it.
+
+    Example: the PV array's ``power_in_watt``, computed by the rooftop law from the building's roof
+    area, produces ``SizedFieldDecision("PVSystem", "power_in_watt", "_rooftop_power_in_watt",
+    22272.28, ("Building.roof_area_in_m2",))`` — no ``reason``, hence no line in the twin and one
+    entry in the session's check list.
     """
 
     component: str
@@ -175,28 +168,24 @@ class SizedFieldDecision:
 
     @property
     def auto(self) -> bool:
-        """Whether the field was written as the ``AUTO`` sentinel rather than as its number.
+        """Whether the field was left to the preset's ``AUTO`` rather than written as its number.
 
         Returns:
-            ``True`` for a field the file re-sizes, ``False`` for a pinned one.
+            ``True`` for a field the file re-sizes, which the block therefore omits; ``False`` for
+            a pinned one, which the block states with a comment.
         """
         return self.reason is None
 
-    def comment(self) -> str:
-        """Builds the trailing comment the field's line carries.
+    def comment(self) -> Optional[str]:
+        """Builds the trailing comment the field's line carries, when it has a line at all.
 
         Returns:
-            One line: what the run produced, the law and the fact's provider for an ``AUTO``
-            field; the reason it stayed concrete for a pinned one.
+            The reason the number stayed, rendered after ``pinned:``, for a pinned field; ``None``
+            for a field left to the preset, which the twin does not write and so cannot annotate.
         """
-        if not self.auto:
-            return TwinComments.PINNED.format(reason=self.reason)
-        rendered = TwinComments.value(self.value)
-        if not self.sources:
-            return TwinComments.SIZED.format(value=rendered, law=self.law)
-        return TwinComments.SIZED_FROM.format(
-            value=rendered, law=self.law, sources=TwinComments.SEPARATOR.join(self.sources)
-        )
+        if self.auto:
+            return None
+        return TwinComments.PINNED.format(reason=self.reason)
 
 
 @dataclass(frozen=True)
@@ -204,8 +193,9 @@ class EntryConfiguration:
     """The configuration half of one entry, and what the recorder decided about its sized fields.
 
     The two travel together because they are one judgement seen from two sides: ``members`` is what
-    the file says, ``decisions`` is why it says it. The builder splices the first into the entry,
-    renders the second as the entry's comments and hands the ``AUTO`` ones on to the session, which
+    the file says, ``decisions`` is why it says it — including, for a field left to the preset, why
+    ``members`` says nothing at all. The builder splices the first into the entry, renders the
+    pinned decisions as the entry's comments and hands the omitted ones on to the session, which
     resolves the written file and holds every one of them to the value the run produced.
     """
 
@@ -220,8 +210,8 @@ class EntryConfigWriter:
     component. Keeping it an object rather than a set of functions is what lets every entry of one
     recording share one resolver, which matters because two entries symbolising the same directory
     against two different registries would produce a file that is portable in one half and not in
-    the other. It shares the fact lookup for the same reason: whether a field may be written as
-    ``AUTO`` is a question about the whole recorded system, and every entry has to answer it the
+    the other. It shares the fact lookup for the same reason: whether a field may be left to the
+    preset is a question about the whole recorded system, and every entry has to answer it the
     same way.
 
     The class deliberately knows nothing about the rest of an entry. It returns the two keys it
@@ -245,8 +235,8 @@ class EntryConfigWriter:
             writer: The record's block writer, carrying the path resolver every block is
                 symbolised against.
             providers: Which component of the recorded system declares which sizing fact; an empty
-                lookup when omitted, under which no field reading a fact can be written as
-                ``AUTO`` because nothing in the system would answer its law.
+                lookup when omitted, under which no field reading a fact can be left to the
+                preset, because nothing in the system would answer its law.
         """
         self.writer = writer
         self.providers = providers if providers is not None else FactProviders({})
@@ -289,10 +279,11 @@ class EntryConfigWriter:
         path that symbolises to the same reference count as unchanged, which is the property that
         keeps a recorded diff readable.
 
-        Every line the diff produces is then put to :meth:`decide`, which replaces the number by
-        ``AUTO`` wherever the file can compute it again. A field the diff did not produce is never
-        reached: the preset already states it, and a preset's own value is not the recorder's to
-        re-open.
+        Every line the diff produces is then put to :meth:`decide`, and a line the file can
+        compute again is **dropped**: the field is left out of the block so that the preset's own
+        ``AUTO`` answers it, which is what ``preset: rooftop`` already promised. A field the diff
+        did not produce is never reached: the preset already states it, and a preset's own value is
+        not the recorder's to re-open.
 
         Args:
             name: The component's runtime name; the preset builds its identity from it, so the
@@ -304,7 +295,8 @@ class EntryConfigWriter:
 
         Returns:
             The sparse block, in the configuration's own field order, and the per-field decisions;
-            the block is empty when the preset reproduces the configuration exactly.
+            the block is empty when the preset reproduces the configuration exactly, and also when
+            every line the diff produced was a field the preset can size again.
 
         Raises:
             EnergySystemRecordingError: ``EF-R4`` when the class declares no preset of that name.
@@ -328,15 +320,13 @@ class EntryConfigWriter:
         baseline = self.writer.block(name, self.unresolved(fresh))
         current = self.writer.block(name, config)
         block = {key: value for key, value in current.items() if key not in baseline or baseline[key] != value}
-        decisions = self.decide(name, config, fresh, block)
+        decisions = self.decide(name, config, block)
         for decision in decisions:
             if decision.auto:
-                block[decision.field] = _AutoSize.WIRE_SPELLING
+                block.pop(decision.field, None)
         return EntryConfiguration(block, decisions)
 
-    def decide(
-        self, name: str, config: Any, fresh: Any, block: Mapping[str, Any]
-    ) -> Tuple[SizedFieldDecision, ...]:
+    def decide(self, name: str, config: Any, block: Mapping[str, Any]) -> Tuple[SizedFieldDecision, ...]:
         """Decides, field by field, which computed values the file may compute again (A-P3.1).
 
         The run's ``sizing_record`` is the input: it exists only on a configuration a law was
@@ -349,9 +339,7 @@ class EntryConfigWriter:
             name: The component's runtime name.
             config: The live configuration object, whose current value says whether the setup
                 assigned the field again after resolving it.
-            fresh: The freshly built, unresolved preset, whose value says whether the preset pinned
-                a law of its own on the field.
-            block: The sparse block as the diff produced it, before any substitution.
+            block: The sparse block as the diff produced it, before any field is dropped.
 
         Returns:
             One decision per computed field the block states, in resolution order.
@@ -363,32 +351,32 @@ class EntryConfigWriter:
             value = ConfigBlockWriter.plain(entry.value, name, entry.field)
             if ConfigBlockWriter.plain(getattr(config, entry.field, None), name, entry.field) != value:
                 continue
-            decisions.append(self.field_decision(name, entry, value, getattr(fresh, entry.field, None)))
+            decisions.append(self.field_decision(name, entry, value))
         return tuple(decisions)
 
-    def field_decision(self, name: str, entry: Any, value: Any, preset_value: Any) -> SizedFieldDecision:
-        """Decides about one computed field: ``AUTO``, or concrete with the reason it stayed.
+    def field_decision(self, name: str, entry: Any, value: Any) -> SizedFieldDecision:
+        """Decides about one computed field: left to the preset, or concrete with why it stayed.
 
-        Three conditions pin a value, and each produces a sentence rather than silence, because a
-        pinned line in a twin is a statement about the fleet's conversion state and a reader has to
-        be able to tell which of them they are looking at: the preset overrode the class law, a
-        fact has no provider in this system yet, or a fact has more than one.
+        Only the facts decide. Two conditions pin a value, and each produces a sentence rather than
+        silence, because a pinned line in a twin is a statement about the fleet's conversion state
+        and a reader has to be able to tell which of them they are looking at: a fact has no
+        provider in this system yet, or a fact has more than one. The third outcome — the field is
+        left to the preset — produces no line and therefore no sentence.
+
+        Whose law computed the value does not enter into it. ``entry.law`` is the *effective* law,
+        the preset's own where a preset pinned one, and omitting the field is what keeps that law
+        in place: the preset builds the field holding its ``SizingLaw`` object and the resolver
+        prefers it to the class rule. A law the preset pinned reads whatever it reads — the pellet
+        boiler's reads a sibling field and therefore no fact at all — and is judged on that alone.
 
         Args:
             name: The component's runtime name.
             entry: The field's :class:`~hisim.config.SizingRecordEntry`.
             value: The value the run produced, already reduced to plain data.
-            preset_value: What the fresh preset holds in that field, which is a law object exactly
-                when the preset overrode the class's own rule for it.
 
         Returns:
-            The decision, carrying the sources of an ``AUTO`` field or the reason of a pinned one.
+            The decision, carrying the sources of an omitted field or the reason of a pinned one.
         """
-        if isinstance(preset_value, SizingLaw):
-            return SizedFieldDecision(
-                name, entry.field, entry.law, value,
-                reason=TwinComments.PRESET_LAW.format(law=preset_value.describe()),
-            )
         sources: List[str] = []
         for fact in entry.facts_read:
             declaring = self.providers.of_fact(fact)

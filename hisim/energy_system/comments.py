@@ -15,8 +15,8 @@ in generated files — a hand-written energy system carries the author's own com
 comments on a file a person maintains would rot.
 
 The second generated file that needs them is the recorded twin, and it needs a narrower thing: not
-an audit but one line of text per configuration field, saying what a law computed and either what
-it read or why the number stayed. That arrives as the ``notes`` argument, a plain
+an audit but one line of text per pinned configuration field, saying why that number stayed instead
+of being left to the preset's own ``AUTO``. That arrives as the ``notes`` argument, a plain
 component-to-field-to-comment mapping the recorder builds, and it goes through the same attachment
 machinery as an audit's comments so the two cannot come to lay a comment out differently.
 

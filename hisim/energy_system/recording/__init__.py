@@ -26,14 +26,16 @@ What a recording never contains is as much of the definition as what it does. No
 itself; no ``groups`` and no ``variants``, because which parts of a household belong together is a
 judgement a person makes and not something one run can be asked about.
 
-It does contain ``AUTO`` (A-P3.1). A twin is an authored file, not a transcript: a field a law
-computed, and whose facts the recorded system itself declares a provider for, is written as the
-sentinel with the run's value, the law and the provider in a trailing comment, so the file re-sizes
-for a different building instead of reproducing one archetype. A field the setup assigned stays a
-number, and so does one whose fact has no provider in this system yet — the comment says which,
-and the line flips on the re-record that follows that provider's conversion. Every ``AUTO`` is then
-held to its word: the session resolves the file it just wrote and fails the recording if a field
-comes back as anything but the number the run produced.
+It also leaves fields out (A-P3.1). A twin is an authored file, not a transcript: a field a law
+computed, and whose facts the recorded system itself declares a provider for, is written nowhere
+at all, so the preset's own ``AUTO`` stands and the file re-sizes for a different building instead
+of reproducing one archetype. ``preset: rooftop`` already says the array is sized from the roof,
+and a line restating that in order to annotate it is not written; the run's value lives in the
+realized record, which states it per field with its law and its provider. A field the setup
+assigned stays a number, and so does one whose fact has no provider in this system yet — that line
+keeps a comment saying which, and it disappears on the re-record that follows that provider's
+conversion. Every omission is then held to its word: the session resolves the file it just wrote
+and fails the recording if a field comes back as anything but the number the run produced.
 
 That judgement has a second pass of its own, and it is built from the same three stages run several
 times over. :mod:`~hisim.energy_system.recording.probes` reads the authored list of module

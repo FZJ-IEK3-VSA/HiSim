@@ -5,8 +5,8 @@ connection, and then *looks* at what is there — which is why group membership 
 still-unconverted class was built from can never be recovered: neither survives into the objects.
 Whether a number was sized or typed *does* survive, on a converted class: resolving a configuration
 attaches its ``sizing_record``, and the observation hands the live configuration on with that
-attribute intact, which is what lets the builder write ``AUTO`` where a law can produce the number
-again. What survives is everything a file needs, and this module collects exactly that and nothing
+attribute intact, which is what lets the builder leave a field out where a law can produce the
+number again. What survives is everything a file needs, and this module collects exactly that and nothing
 else.
 
 Observation is strictly read-only, and that is a property worth stating rather than assuming. The

@@ -178,7 +178,11 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
     my_gas_meter = gas_meter.GasMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=gas_meter.GasMeterConfig.get_gas_meter_default_config(),
+        # The meter measures what the boiler burns, so the carrier is a fact and not a
+        # second statement of the same thing.
+        config=gas_meter.GasMeterConfig.preset_standard("GasMeter").resolve(
+            SizingContext(energy_carrier=my_gas_heater_config.energy_carrier)
+        ),
     )
 
     # =================================================================================================================================

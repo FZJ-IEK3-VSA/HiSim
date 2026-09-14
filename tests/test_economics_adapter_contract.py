@@ -53,7 +53,7 @@ from hisim.economics.adapter import (
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDataError
 from hisim.economics.facts import ComponentCostFacts, CostRelevance
-from hisim.loadtypes import ComponentType
+from hisim.loadtypes import ComponentType, LoadTypes
 
 
 class AdapterContractScan:
@@ -107,6 +107,9 @@ class AdapterContractScan:
         # whole configuration, so both sizable fields need a value.
         "BatteryConfig.custom_battery_capacity_generic_in_kilowatt_hour": 22.27,
         "BatteryConfig.custom_pv_inverter_power_generic_in_watt": 11136.14,
+        # The carrier a gas meter copies from the boiler beside it. The extractor does not read
+        # it, but the sweep resolves the whole configuration, so the field needs a value.
+        "GasMeterConfig.gas_loadtype": LoadTypes.GAS,
         "HeatDistributionConfig.heating_system": HeatDistributionSystemType.RADIATOR,
         "HeatDistributionConfig.water_mass_flow_rate_in_kg_per_second": 0.5,
         "HeatDistributionConfig.absolute_conditioned_floor_area_in_m2": 120.0,

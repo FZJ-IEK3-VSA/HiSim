@@ -2,6 +2,7 @@
 
 # clean
 
+import dataclasses
 import os
 import json
 from typing import Optional
@@ -9,6 +10,7 @@ import pytest
 import numpy as np
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
+from hisim import loadtypes as lt
 from hisim.config import SizingContext, concrete
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
@@ -199,7 +201,9 @@ def test_house(
     )
 
     # Build Gas Meter
-    my_gas_meter_config = gas_meter.GasMeterConfig.get_gas_meter_default_config()
+    my_gas_meter_config = gas_meter.GasMeterConfig.preset_standard("GasMeter").resolve(
+        SizingContext(energy_carrier=my_gas_heater_config.energy_carrier)
+    )
     my_gas_meter = gas_meter.GasMeter(
         my_simulation_parameters=my_simulation_parameters,
         config=my_gas_meter_config,
@@ -245,13 +249,15 @@ def test_house(
 
     co2_footprint_due_to_gas_use_in_kg = jsondata["Gas Meter"]["CO2 footprint of gas consumption from grid"].get("value")
 
+    # The carrier is a sizable field now, so the log lines read it through ``concrete``.
+    gas_carrier = concrete(my_gas_meter_config.gas_loadtype)
     log.information(
-        f"Total {my_gas_meter_config.gas_loadtype.value} consumption [kWh] {gas_consumption_of_boiler_in_kilowatt_hour}"
+        f"Total {gas_carrier.value} consumption [kWh] {gas_consumption_of_boiler_in_kilowatt_hour}"
     )
 
-    log.information(f"Total {my_gas_meter_config.gas_loadtype.value} consumption measured by gas meter [kWh] {gas_consumption_in_kilowatt_hour}")
-    log.information(f"Opex costs for total {my_gas_meter_config.gas_loadtype.value} consumption [€] {opex_costs_for_gas_in_euro}")
-    log.information(f"CO2 footprint for total {my_gas_meter_config.gas_loadtype.value} consumption [kg] {co2_footprint_due_to_gas_use_in_kg}")
+    log.information(f"Total {gas_carrier.value} consumption measured by gas meter [kWh] {gas_consumption_in_kilowatt_hour}")
+    log.information(f"Opex costs for total {gas_carrier.value} consumption [€] {opex_costs_for_gas_in_euro}")
+    log.information(f"CO2 footprint for total {gas_carrier.value} consumption [kg] {co2_footprint_due_to_gas_use_in_kg}")
 
     # test and compare with relative error of 5%
     np.testing.assert_allclose(
@@ -259,3 +265,68 @@ def test_house(
         gas_consumption_of_boiler_in_kilowatt_hour,
         rtol=0.05,
     )
+
+
+@pytest.mark.base
+def test_the_preset_copies_the_carrier_from_the_generator_beside_it() -> None:
+    """Pins the one law the gas meter has: its carrier is the generator's, never its own choice.
+
+    ``preset_standard`` leaves ``gas_loadtype`` ``AUTO`` and the boiler contributes
+    ``energy_carrier``, so a gas boiler produces a gas meter and a green-hydrogen boiler a
+    green-hydrogen meter with nothing said twice. The two carriers are checked through the
+    same context the setups build, which is what the deleted factory's ``gas_loadtype``
+    argument used to carry.
+    """
+    for carrier in (lt.LoadTypes.GAS, lt.LoadTypes.GREEN_HYDROGEN):
+        resolved = gas_meter.GasMeterConfig.preset_standard("GasMeter").resolve(
+            SizingContext(energy_carrier=carrier)
+        )
+        assert resolved.gas_loadtype is carrier
+        assert resolved.component_id.name == "GasMeter"
+        assert resolved.investment_costs_in_euro is None
+
+
+@pytest.mark.base
+def test_a_pinned_carrier_survives_a_context_that_names_another() -> None:
+    """Pins that the law only fills an open field, so an author can still state the carrier.
+
+    A system whose generator is not converted yet contributes no ``energy_carrier`` fact, and
+    the meter then has to be told what it measures. Writing the field is how that is said, and
+    a written value is never overwritten by a law.
+    """
+    pinned = dataclasses.replace(
+        gas_meter.GasMeterConfig.preset_standard("GasMeter"), gas_loadtype=lt.LoadTypes.GREEN_HYDROGEN
+    )
+
+    resolved = pinned.resolve(SizingContext(energy_carrier=lt.LoadTypes.GAS))
+
+    assert resolved.gas_loadtype is lt.LoadTypes.GREEN_HYDROGEN
+
+
+@pytest.mark.base
+def test_the_opex_record_reports_the_gas_the_meter_actually_measured() -> None:
+    """Catches the meter's operational-cost record going back to reporting a constant zero.
+
+    ``get_cost_opex`` computes the metered kilowatt hours into a local and used to hand a
+    configuration field on to the record instead, which nothing ever wrote the running total
+    into -- so the operational-costs table showed ``0.0`` kWh for a meter whose own costs and
+    emissions on the same row were computed from the real sum. The consumption on the record
+    has to be that same sum.
+    """
+    import pandas as pd
+    from hisim.components.gas_meter import GasMeter
+
+    meter = GasMeter(
+        my_simulation_parameters=SimulationParameters.one_day_only(2021, 900),
+        config=gas_meter.GasMeterConfig.preset_standard("GasMeter").resolve(
+            SizingContext(energy_carrier=lt.LoadTypes.GAS)
+        ),
+    )
+    outputs = [meter.gas_from_grid_channel]
+    # One column per output, in watt hours: 4 000 Wh in every one of the day's 96 steps.
+    results = pd.DataFrame({0: [4_000.0] * 96})
+
+    opex = meter.get_cost_opex(all_outputs=outputs, postprocessing_results=results)
+
+    assert opex.total_consumption_in_kwh == pytest.approx(384.0)
+    assert opex.opex_energy_cost_in_euro > 0.0

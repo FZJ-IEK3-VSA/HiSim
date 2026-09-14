@@ -131,6 +131,7 @@
             "hisim.components.building.building.Building",
             "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
             "hisim.components.electricity_meter.ElectricityMeter",
+            "hisim.components.gas_meter.GasMeter",
             "hisim.components.generic_boiler.GenericBoiler",
             "hisim.components.generic_boiler.GenericBoilerController",
             "hisim.components.generic_car.Car",
@@ -792,6 +793,129 @@
                 "$ref": "#/$defs/sizing_sources",
                 "propertyNames": {
                   "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.gas_meter.GasMeter"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "device_co2_footprint_in_kg": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "investment_costs_in_euro": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lifetime_in_years": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maintenance_costs_in_euro_per_year": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "subsidy_as_percentage_of_investment_costs": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "gas_loadtype": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "ANY",
+                          "ELECTRICITY",
+                          "IRRADIANCE",
+                          "SPEED",
+                          "HEATING",
+                          "COOLING",
+                          "TEMPERATURE",
+                          "PRESSURE",
+                          "TIME",
+                          "PRICE",
+                          "GAS",
+                          "AIR",
+                          "GREEN_HYDROGEN",
+                          "OXYGEN",
+                          "WATER",
+                          "WARM_WATER",
+                          "DIESEL",
+                          "OIL",
+                          "PELLETS",
+                          "WOOD_CHIPS",
+                          "DISTRICTHEATING",
+                          "ON_OFF",
+                          "ACTIVATION"
+                        ]
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": [
+                    "energy_carrier"
+                  ]
                 }
               }
             }

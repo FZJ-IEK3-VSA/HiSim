@@ -169,6 +169,7 @@ class PilotWireFormat:
         "GasMeterConfig": ("standard",),
         "FuelMeterConfig": ("standard",),
         "HeatingMeterConfig": ("standard",),
+        "SimpleDHWStorageConfig": ("standard",),
         "CarConfig": (),
     }
 
@@ -190,6 +191,7 @@ class PilotWireFormat:
         "GasMeterConfig": (),
         "FuelMeterConfig": (),
         "HeatingMeterConfig": (),
+        "SimpleDHWStorageConfig": (),
         "CarConfig": ("for_household",),
     }
 
@@ -229,6 +231,7 @@ class PilotWireFormat:
         "GasMeterConfig": (),
         "FuelMeterConfig": (),
         "HeatingMeterConfig": (),
+        "SimpleDHWStorageConfig": (),
         "WeatherConfig": ("weather_identity",),
         "UtspLpgConnectorConfig": ("occupancy_identity",),
         "ElectricityMeterConfig": (),
@@ -285,6 +288,7 @@ def test_the_scan_finds_the_converted_classes(scan):
         "GasMeterConfig",
         "FuelMeterConfig",
         "HeatingMeterConfig",
+        "SimpleDHWStorageConfig",
     } <= names
 
 
@@ -506,6 +510,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     )
     from hisim.components.generic_pv_system import PVSystemConfig
     from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnectorConfig
+    from hisim.components.simple_water_storage import SimpleDHWStorageConfig
     from hisim.components.weather import WeatherConfig
 
     by_name: Dict[str, Any] = {
@@ -523,6 +528,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "GasMeterConfig": GasMeterConfig,
         "FuelMeterConfig": FuelMeterConfig,
         "HeatingMeterConfig": HeatingMeterConfig,
+        "SimpleDHWStorageConfig": SimpleDHWStorageConfig,
         "CarConfig": CarConfig,
     }
     for class_name, expected in PilotWireFormat.PRESET_NAMES.items():

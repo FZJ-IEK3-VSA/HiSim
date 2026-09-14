@@ -34,6 +34,7 @@ close a cycle.
 from __future__ import annotations
 
 import dataclasses
+import enum
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING, Any, Callable, ClassVar, Dict, Iterable, List, Mapping, Optional, Set, Tuple, TypeVar, Union,
@@ -134,9 +135,20 @@ def _sizable_decoder(value_type: Optional[type]) -> Callable[[Any], Any]:
 
     The field-level decoder *replaces* dataclasses_json's default handling, so for
     enum-typed sizable fields it must also perform the enum coercion the library would
-    otherwise do (config enums decode by value, which equals the member name since the
-    string-valued-enums cutover). ``value_type`` is only needed for those fields;
-    plain-number fields pass values through untouched.
+    otherwise do. It accepts both spellings of a member, the **name** first and the
+    **value** second, because the two are not the same word for every configuration enum:
+    ``HeatDistributionSystemType.RADIATOR`` is ``"RADIATOR"`` either way, but
+    ``LoadTypes.GAS`` is written ``GAS`` and holds ``"Gas"``, and ``LoadTypes.WOOD_CHIPS``
+    holds ``"WoodChips"``. Scenario and energy-system files write the name, while a config
+    the class serialized itself writes the value, and both of them reach this one decoder —
+    on the sparse-override path directly with the word the file wrote, and on the complete-
+    ``config``-block path after the energy-system codec has rewritten names into values for
+    the class deserializer. Accepting both here is what makes the field's wire form mean one
+    thing on every path; it is also the rule the repository-wide contract test
+    ``test_every_enum_typed_sizable_field_in_the_repository_decodes_to_its_member`` asserts.
+
+    ``value_type`` is only needed for fields that need coercion at all; plain-number fields
+    pass values through untouched.
     """
 
     def decode(raw: Any) -> Any:
@@ -147,6 +159,12 @@ def _sizable_decoder(value_type: Optional[type]) -> Callable[[Any], Any]:
         if raw is AUTO or (isinstance(raw, str) and raw == _AutoSize.WIRE_SPELLING):
             return AUTO
         if value_type is not None and raw is not None and not isinstance(raw, value_type):
+            if isinstance(raw, str) and isinstance(value_type, type) and issubclass(value_type, enum.Enum):
+                member = value_type.__members__.get(raw)
+                if member is not None:
+                    return member
+            # Not a member name -- fall through to the by-value coercion, whose own error
+            # names the type and the value, which is what the reporting layers render.
             return value_type(raw)
         return raw
 

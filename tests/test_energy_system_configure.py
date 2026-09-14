@@ -32,6 +32,7 @@ from typing import Any, ClassVar, Iterator, List, Tuple, Type
 import pytest
 from dataclasses_json import dataclass_json
 
+from hisim import loadtypes as lt
 from hisim.component import Coordinates
 from hisim.config import ComponentID, ConfigBase, Many, Self, Sizable, Size, sized_field
 from hisim.config.contributions import FactContribution
@@ -229,6 +230,28 @@ class _ManyReaderConfig(ConfigBase):
     def get_main_classname(cls) -> str:
         """Returns a dummy classname, as the ConfigBase contract requires."""
         return "tests.test_energy_system_configure._ManyReaderConfig"
+
+
+@dataclass_json
+@dataclass
+class _CarrierConfig(ConfigBase):
+    """A configuration with one sizable field typed by an enum that spells its members twice.
+
+    ``LoadTypes`` is a configuration enum whose member names and member values differ — ``GAS``
+    holds ``"Gas"``, ``WOOD_CHIPS`` holds ``"WoodChips"``, ``GREEN_HYDROGEN`` holds
+    ``"Green Hydrogen"`` — which is what makes it the fixture for the two spellings a sizable
+    field's wire form has to accept. No component class is used for it, because the classes that
+    will hold such a field are converted one batch at a time while the rule under test belongs to
+    the field machinery.
+    """
+
+    component_id: ComponentID
+    carrier: Sizable[lt.LoadTypes] = sized_field(rule=Size.ENERGY_CARRIER, value_type=lt.LoadTypes)
+
+    @classmethod
+    def get_main_classname(cls) -> str:
+        """Returns a dummy classname, as the ConfigBase contract requires."""
+        return "tests.test_energy_system_configure._CarrierConfig"
 
 
 def kernel_message(configs: List[Any], sources: Any = None) -> str:
@@ -513,6 +536,71 @@ def test_every_enum_typed_sizable_field_in_the_repository_decodes_to_its_member(
         assert decoder("AUTO") is AUTO
         checked += 1
     assert checked >= 1, "the scan found no enum-typed sizable field at all"
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "written, expected",
+    [
+        ("GAS", lt.LoadTypes.GAS),
+        ("Gas", lt.LoadTypes.GAS),
+        ("GREEN_HYDROGEN", lt.LoadTypes.GREEN_HYDROGEN),
+        ("Green Hydrogen", lt.LoadTypes.GREEN_HYDROGEN),
+        ("WOOD_CHIPS", lt.LoadTypes.WOOD_CHIPS),
+        ("WoodChips", lt.LoadTypes.WOOD_CHIPS),
+    ],
+)
+def test_a_sparse_override_reads_a_sizable_enum_by_member_name_and_by_member_value(
+    written: str, expected: lt.LoadTypes
+) -> None:
+    """Catches a sizable enum field refusing the member name every file writes.
+
+    A *complete* ``config`` block is rewritten into the member's value before the class reads
+    it, so a field whose enum spells name and value alike survives either way and the defect
+    stays hidden. A *sparse* override goes straight to the field's own decoder with the word the
+    file wrote, and that word is the member **name**: ``gas_loadtype: GAS`` on a meter that a
+    preset left ``AUTO``. Every enum converted so far happens to spell its members the same way
+    twice; ``LoadTypes`` does not, and it is the enum the meters are typed by, so a decoder that
+    only coerced by value refused the one spelling the recorded files carry.
+    """
+    codec = ConfigValueCodec(_CarrierConfig)
+
+    decoded = codec.decode("carrier", written, "components.meter.config.carrier", "meter")
+
+    assert decoded is expected
+
+
+@pytest.mark.base
+def test_auto_on_a_sizable_enum_field_survives_the_enum_coercion() -> None:
+    """Catches ``AUTO`` on an enum-typed sizable field being coerced into something else.
+
+    The sentinel travels through the same decoder as a written member, and it has to come back
+    as the sentinel: turned into a member — or into the string ``"AUTO"`` — the field would count
+    as pinned and the law that was supposed to copy the carrier from the generator would never
+    run.
+    """
+    codec = ConfigValueCodec(_CarrierConfig)
+
+    assert codec.decode("carrier", "AUTO", "components.meter.config.carrier", "meter") is AUTO
+
+
+@pytest.mark.base
+def test_a_misspelled_member_on_a_sizable_enum_field_is_refused_with_the_members_listed() -> None:
+    """Catches a wrong carrier reported as a bare coercion failure instead of as the fix.
+
+    Accepting two spellings must not cost the third case its message: a word that is neither a
+    member name nor a member value is refused with the members the enum has, which is the same
+    treatment a plain enum-typed field's misspelling gets.
+    """
+    codec = ConfigValueCodec(_CarrierConfig)
+
+    with pytest.raises(EnergySystemBindingError) as raised:
+        codec.decode("carrier", "GAAS", "components.meter.config.carrier", "meter")
+
+    message = str(raised.value)
+    assert raised.value.error_id is EnergySystemErrorId.UNDECODABLE_VALUE
+    assert "carrier" in message and "GAAS" in message
+    assert "GAS" in message and "GREEN_HYDROGEN" in message
 
 
 @pytest.mark.base

@@ -35,14 +35,7 @@ components:
       - Building
   DHWStorage:
     class: hisim.components.simple_water_storage.SimpleDHWStorage
-    config:
-      volume_heating_water_storage_in_liter: 250.0
-      heat_transfer_coefficient_in_watt_per_m2_per_kelvin: 0.36
-      device_co2_footprint_in_kg: null
-      investment_costs_in_euro: null
-      lifetime_in_years: null
-      maintenance_costs_in_euro_per_year: null
-      subsidy_as_percentage_of_investment_costs: null
+    preset: standard
     inputs:
       - UTSPConnector
       - SolarThermalSystem

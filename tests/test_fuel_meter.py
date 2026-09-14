@@ -16,6 +16,7 @@ import pytest
 import numpy as np
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
+from hisim import loadtypes as lt
 from hisim.config import SizingContext, concrete
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
@@ -206,10 +207,17 @@ def test_house(
     )
 
     # Build Fuel Meter
-    my_fuel_meter_config = fuel_meter.FuelMeterConfig.get_fuel_meter_default_config(
-        fuel_loadtype=my_oil_heater_config.energy_carrier,
-        heating_value_of_fuel_in_kwh_per_liter=my_oil_heater.heating_value_of_fuel_in_kwh_per_liter,
-        fuel_density_in_kg_per_m3=my_oil_heater.fuel_density_in_kg_per_m3,
+    fuel_heating_value_in_kwh_per_liter, fuel_density_in_kg_per_m3 = (
+        generic_boiler.GenericBoilerConfig.fuel_constants(
+            my_oil_heater_config.energy_carrier, my_oil_heater_config.boiler_type
+        )
+    )
+    my_fuel_meter_config = fuel_meter.FuelMeterConfig.preset_standard("FuelMeter").resolve(
+        SizingContext(
+            energy_carrier=my_oil_heater_config.energy_carrier,
+            heating_value_of_fuel_in_kwh_per_liter=fuel_heating_value_in_kwh_per_liter,
+            fuel_density_in_kg_per_m3=fuel_density_in_kg_per_m3,
+        )
     )
     my_fuel_meter = fuel_meter.FuelMeter(
         my_simulation_parameters=my_simulation_parameters,
@@ -261,18 +269,20 @@ def test_house(
         f"OPEX - CO2 Footprint ({my_fuel_meter.component_name})"
     ].get("value")
 
+    # The carrier is a sizable field now, so the log lines read it through ``concrete``.
+    fuel_carrier = concrete(my_fuel_meter_config.fuel_loadtype)
     log.information(
-        f"Total {my_fuel_meter_config.fuel_loadtype.value} consumption [kWh] {oil_consumption_in_kilowatt_hour}"
+        f"Total {fuel_carrier.value} consumption [kWh] {oil_consumption_in_kilowatt_hour}"
     )
 
     log.information(
-        f"Total {my_fuel_meter_config.fuel_loadtype.value} consumption measured by fuel meter [kWh] {heat_consumption_in_kilowatt_hour}"
+        f"Total {fuel_carrier.value} consumption measured by fuel meter [kWh] {heat_consumption_in_kilowatt_hour}"
     )
     log.information(
-        f"Opex costs for total {my_fuel_meter_config.fuel_loadtype.value} consumption [€] {opex_costs_for_heating_in_euro}"
+        f"Opex costs for total {fuel_carrier.value} consumption [€] {opex_costs_for_heating_in_euro}"
     )
     log.information(
-        f"CO2 footprint for total {my_fuel_meter_config.fuel_loadtype.value} consumption [kg] {co2_footprint_due_to_heating_use_in_kg}"
+        f"CO2 footprint for total {fuel_carrier.value} consumption [kg] {co2_footprint_due_to_heating_use_in_kg}"
     )
 
     # test and compare with relative error of 5%
@@ -286,3 +296,65 @@ def test_house(
     # found an entry the qualification had emptied, would otherwise be logged and pass.
     assert co2_footprint_due_to_heating_use_in_kg is not None
     assert co2_footprint_due_to_heating_use_in_kg > 0
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "carrier, expected_heating_value, expected_density",
+    [
+        (lt.LoadTypes.OIL, 9.821666666666667, 830.0),
+        (lt.LoadTypes.PELLETS, 3.25, 650),
+        (lt.LoadTypes.WOOD_CHIPS, 4.333333333333333, 250),
+    ],
+)
+def test_the_preset_copies_carrier_and_fuel_constants_from_the_generator_beside_it(
+    carrier: lt.LoadTypes, expected_heating_value: float, expected_density: float
+) -> None:
+    """Pins the three copy laws against the numbers the boiler derives for each fuel.
+
+    ``preset_standard`` leaves all three fields ``AUTO`` and the boiler contributes
+    ``energy_carrier`` plus the two constants it derives from that carrier and its boiler type,
+    so a pellet boiler produces a pellet meter with the pellet heating value and nothing is
+    stated twice. The expected numbers are the unrounded ones the twins carry -- the deleted
+    factory's 9.82 was a rounded oil value every one of these setups overrode.
+    """
+    heating_value, density = generic_boiler.GenericBoilerConfig.fuel_constants(
+        carrier, generic_boiler.BoilerType.CONVENTIONAL
+    )
+
+    resolved = fuel_meter.FuelMeterConfig.preset_standard("FuelMeter").resolve(
+        SizingContext(
+            energy_carrier=carrier,
+            heating_value_of_fuel_in_kwh_per_liter=heating_value,
+            fuel_density_in_kg_per_m3=density,
+        )
+    )
+
+    assert resolved.fuel_loadtype is carrier
+    assert resolved.heating_value_of_fuel_in_kwh_per_liter == pytest.approx(expected_heating_value)
+    assert resolved.fuel_density_in_kg_per_m3 == pytest.approx(expected_density)
+
+
+@pytest.mark.base
+def test_the_two_fuel_constants_may_legitimately_be_none() -> None:
+    """Pins that a meter for a carrier that burns nothing is a resolved configuration.
+
+    District heat has no heating value and no fuel density, so the two fields are declared
+    ``optional=True``: written as ``None`` they count as resolved and no law runs for them,
+    which is what lets a district-heating meter be built at all. Without the flag a ``None``
+    would read as unresolved and the construction guard would refuse the component.
+    """
+    import dataclasses
+
+    from hisim.config import auto_fields
+
+    config = dataclasses.replace(
+        fuel_meter.FuelMeterConfig.preset_standard("FuelMeter"),
+        heating_value_of_fuel_in_kwh_per_liter=None,
+        fuel_density_in_kg_per_m3=None,
+    ).resolve(SizingContext(energy_carrier=lt.LoadTypes.DISTRICTHEATING))
+
+    assert config.fuel_loadtype is lt.LoadTypes.DISTRICTHEATING
+    assert config.heating_value_of_fuel_in_kwh_per_liter is None
+    assert config.fuel_density_in_kg_per_m3 is None
+    assert not auto_fields(config)

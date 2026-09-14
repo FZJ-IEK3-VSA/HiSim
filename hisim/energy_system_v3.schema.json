@@ -131,6 +131,7 @@
             "hisim.components.building.building.Building",
             "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
             "hisim.components.electricity_meter.ElectricityMeter",
+            "hisim.components.fuel_meter.FuelMeter",
             "hisim.components.gas_meter.GasMeter",
             "hisim.components.generic_boiler.GenericBoiler",
             "hisim.components.generic_boiler.GenericBoilerController",
@@ -793,6 +794,107 @@
                 "$ref": "#/$defs/sizing_sources",
                 "propertyNames": {
                   "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.fuel_meter.FuelMeter"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "fuel_loadtype": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "ANY",
+                          "ELECTRICITY",
+                          "IRRADIANCE",
+                          "SPEED",
+                          "HEATING",
+                          "COOLING",
+                          "TEMPERATURE",
+                          "PRESSURE",
+                          "TIME",
+                          "PRICE",
+                          "GAS",
+                          "AIR",
+                          "GREEN_HYDROGEN",
+                          "OXYGEN",
+                          "WATER",
+                          "WARM_WATER",
+                          "DIESEL",
+                          "OIL",
+                          "PELLETS",
+                          "WOOD_CHIPS",
+                          "DISTRICTHEATING",
+                          "ON_OFF",
+                          "ACTIVATION"
+                        ]
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "heating_value_of_fuel_in_kwh_per_liter": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "fuel_density_in_kg_per_m3": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": [
+                    "energy_carrier",
+                    "fuel_density_in_kg_per_m3",
+                    "heating_value_of_fuel_in_kwh_per_liter"
+                  ]
                 }
               }
             }

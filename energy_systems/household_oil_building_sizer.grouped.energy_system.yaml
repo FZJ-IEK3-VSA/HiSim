@@ -98,10 +98,7 @@ components:
       - SimpleHotWaterStorage
   FuelMeter:
     class: hisim.components.fuel_meter.FuelMeter
-    config:
-      fuel_loadtype: OIL
-      heating_value_of_fuel_in_kwh_per_liter: 9.821666666666667
-      fuel_density_in_kg_per_m3: 830.0
+    preset: standard
     inputs:
       - from: ConventionalOilBoiler.EnergyDemandDhw
         tags:

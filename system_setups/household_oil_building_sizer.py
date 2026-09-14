@@ -421,10 +421,21 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
 
     # Build Heating Meter
-    my_fuel_meter_config = fuel_meter.FuelMeterConfig.get_fuel_meter_default_config(
-        fuel_loadtype=lt.LoadTypes.OIL,
-        heating_value_of_fuel_in_kwh_per_liter=my_oil_heater.heating_value_of_fuel_in_kwh_per_liter,
-        fuel_density_in_kg_per_m3=my_oil_heater.fuel_density_in_kg_per_m3,
+    # The meter accounts what the boiler burns, so the carrier and the two constants the meter
+    # converts kilowatt hours with are facts of the boiler's configuration. They are read off
+    # `fuel_constants`, which is the same source the boiler's own contribution uses, instead of
+    # off the built component as they used to be.
+    fuel_heating_value_in_kwh_per_liter, fuel_density_in_kg_per_m3 = (
+        generic_boiler.GenericBoilerConfig.fuel_constants(
+            my_oil_heater_config.energy_carrier, my_oil_heater_config.boiler_type
+        )
+    )
+    my_fuel_meter_config = fuel_meter.FuelMeterConfig.preset_standard("FuelMeter").resolve(
+        SizingContext(
+            energy_carrier=my_oil_heater_config.energy_carrier,
+            heating_value_of_fuel_in_kwh_per_liter=fuel_heating_value_in_kwh_per_liter,
+            fuel_density_in_kg_per_m3=fuel_density_in_kg_per_m3,
+        )
     )
     my_fuel_meter = fuel_meter.FuelMeter(
         my_simulation_parameters=my_simulation_parameters,

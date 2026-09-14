@@ -110,6 +110,12 @@ class AdapterContractScan:
         # The carrier a gas meter copies from the boiler beside it. The extractor does not read
         # it, but the sweep resolves the whole configuration, so the field needs a value.
         "GasMeterConfig.gas_loadtype": LoadTypes.GAS,
+        # What a fuel meter copies from a conventional oil boiler beside it: the carrier and the
+        # two constants its legacy OPEX report converts kilowatt hours with. The extractor reads
+        # none of them, but the sweep resolves the whole configuration.
+        "FuelMeterConfig.fuel_loadtype": LoadTypes.OIL,
+        "FuelMeterConfig.heating_value_of_fuel_in_kwh_per_liter": 9.821666666666667,
+        "FuelMeterConfig.fuel_density_in_kg_per_m3": 830.0,
         "HeatDistributionConfig.heating_system": HeatDistributionSystemType.RADIATOR,
         "HeatDistributionConfig.water_mass_flow_rate_in_kg_per_second": 0.5,
         "HeatDistributionConfig.absolute_conditioned_floor_area_in_m2": 120.0,

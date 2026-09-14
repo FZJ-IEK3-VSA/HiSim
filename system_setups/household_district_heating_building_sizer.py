@@ -7,9 +7,9 @@ battery storage (optional), and energy management system. Supports building
 sizer workflows for scenario evaluation.
 """
 
-from typing import Optional, Any, Union, List
-import re
 import os
+import re
+from typing import Optional, Any, Union, List
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim.simulator import SimulationParameters
 from hisim.config import SizingContext, concrete
@@ -408,8 +408,16 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
 
     # Build Heating Meter
-    my_fuel_meter_config = fuel_meter.FuelMeterConfig.get_fuel_meter_default_config(
-        fuel_loadtype=lt.LoadTypes.DISTRICTHEATING
+    # The district-heating class is not converted yet, so nothing in this setup contributes the
+    # meter's fuel constants and the setup states them itself, on top of the preset and before
+    # resolving. District heat burns nothing, so it has neither a heating value nor a fuel
+    # density: both are None, which is what `GenericBoilerConfig.fuel_constants` returns for
+    # this carrier and what a converted district-heating class will contribute.
+    my_fuel_meter_config = fuel_meter.FuelMeterConfig.preset_standard("FuelMeter")
+    my_fuel_meter_config.heating_value_of_fuel_in_kwh_per_liter = None
+    my_fuel_meter_config.fuel_density_in_kg_per_m3 = None
+    my_fuel_meter_config = my_fuel_meter_config.resolve(
+        SizingContext(energy_carrier=lt.LoadTypes.DISTRICTHEATING)
     )
     my_fuel_meter = fuel_meter.FuelMeter(
         my_simulation_parameters=my_simulation_parameters,

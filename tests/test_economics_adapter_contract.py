@@ -116,6 +116,9 @@ class AdapterContractScan:
         "FuelMeterConfig.fuel_loadtype": LoadTypes.OIL,
         "FuelMeterConfig.heating_value_of_fuel_in_kwh_per_liter": 9.821666666666667,
         "FuelMeterConfig.fuel_density_in_kg_per_m3": 830.0,
+        # The buffer the volume law gives a 8558.83 W condensing gas boiler at the general
+        # 20 l/kW. The extractor reads it as the litres it prices.
+        "SimpleHotWaterStorageConfig.volume_heating_water_storage_in_liter": 171.18,
         # The vessel the apartment law gives the single apartment of a single-family house.
         # The extractor reads it as the litres it prices.
         "SimpleDHWStorageConfig.volume_heating_water_storage_in_liter": 250.0,

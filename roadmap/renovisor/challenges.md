@@ -385,3 +385,38 @@ Facts the code surfaced that were not visible from the documents. Each names who
 | F8 | The report-line bug: measures writing no line of their own shifted later measures' lines (PV and battery had none). Fixed in step 5, with the test that had hidden it corrected. | Done. |
 | F9 | Two LPG catalogue names cannot be read into a household composition (`CHR06 Jak Jobless`, `CHR20 …`) and `CHR52 Student Flatsharing` reads as one adult; excluded or documented rather than guessed. | Decide whether to widen the phrase rules. |
 | F10 | `PVSystem` is in every recorded file; "no PV" is a pinned `power_in_watt: 0`, which the parametriser drops as stale when a PV measure writes a roof share. Solar-thermal files wire the collector to DHW only, so `DHW_ONLY` is the one supported supply mode — a fact now, not a PROVISIONAL. | Done; `base_files.py` updated. |
+
+## 12. Course correction of 2026-09-15 (evening): the input contract is rewritten, not aligned
+
+**Owner's clarification.** `openapi.yaml` v0.3 is an older draft written before the energy-system
+redesign, against the config object the redesign deletes. It is to be revised and rewritten, not
+aligned in place. The v1 translator's implicit contract (`scripts/hisim_spec.md`) had the right
+philosophy — *the user's raw answers are the input; HiSim derives U-values, materials, climate and
+load profiles* — and the UI has since added fields for requirements that appeared, which v0.3
+reflects. Grants, schedule and financing **are** HiSim's: grants go to the subsidy engine,
+financing to the economic parameters, and the schedule generates one HiSim calculation per stage
+of a multi-year renovation roadmap.
+
+Consequences for the register above:
+
+- The **input HiSim validates becomes its own schema** (`SimulationInput`, name provisional):
+  v1's categorical envelope descriptors as primary fields with per-element U-values as expert
+  overrides that win when present (v1 rule, consistent with Q10); v0.3's requirement-driven
+  additions kept (installation years, water storage, vehicles by drivetrain, condition assessment,
+  cooling set-point, heat-capacity class, residents by type and employment); everything in HiSim
+  spelling (C3). Base-state U-values come from the same composition machinery the measures use:
+  a categorical insulation id is a layer on the TABULA baseline.
+- The **alignment PR** on `hisim-alignment` (contract commit `3fdb70d`, unpushed) is
+  **superseded**: its simulation-input half informs the rewrite, its in-place edits of
+  `HomeInventoryInput` are not the deliverable. Leave the branch unpushed until the rewrite exists;
+  `REQUESTS.md` and the enum generation stay valid.
+- Steps 3–6 stand: registry, effects, bindings, parametriser, `calculate` and the payload are
+  built on paths, and paths change cheaply. New work: a base-state derivation step before the
+  measures, the input schema, a staging layer above `calculate`, financing and grants wiring.
+
+| Id | Decision |
+|---|---|
+| Q29 | **HiSim expands the schedule into stages; the caller runs each stage.** A pure `stages` command writes `stage_k/home_inventory.json` and `package.json` for k = 0..n deterministically (stage k = inventory with the measures of phases 1..k applied); `calculate` stays one calculation, so the C# side schedules and caches per stage (Q10, R13.5 unchanged). |
+| Q30 | **A stage's start year changes the economics only.** Weather stays the fixed Irish dataset; prices escalate to the stage year; devices installed in earlier stages carry their installation year. No ageing of the building state. |
+| Q31 | **The categorical envelope descriptors are defined jointly with the catalogue owners**, so the existing building and the measures share one material vocabulary. The input schema's structure can be drafted now; its value lists for construction, insulation, window and door types wait for that meeting. v1's Irish ids are the starting proposal to bring to it. |
+| — | Grants: `selected_grant_schemes` and the package's `grants` block feed the subsidy engine's eligibility context (needs `subsidy_catalog/IE.json`, step 6b). Financing: `loan_term_years`, `own_contribution_in_euro` become `EconomicParameters` inputs for the monthly-net-cost figures. |

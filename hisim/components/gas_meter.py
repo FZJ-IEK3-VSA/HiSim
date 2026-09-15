@@ -61,7 +61,7 @@ class GasMeterConfig(ConfigBase):
     MAIN_CLASS = "hisim.components.gas_meter.GasMeter"
 
     #: Sizing law of ``gas_loadtype``: the carrier is copied from the generator that feeds
-    #: this meter, which contributes it as the ``energy_carrier`` fact (D-15 (b)). Named as a
+    #: this meter, which contributes it as the ``energy_carrier`` fact. Named as a
     #: ClassVar so the field declaration reads as one line. A gas boiler beside a meter
     #: configured for green hydrogen is what the copy makes unstateable; the meter's own
     #: ``__init__`` still refuses a carrier it cannot account.

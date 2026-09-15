@@ -371,7 +371,7 @@ class WeatherConfig(ConfigBase):
         Example: ``"Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center"``.
         Components whose cached results depend on the weather (PV, building) store this string in their
         own configuration, sized from the weather through the sizing engine, so that their cache keys
-        include which weather they were computed with. See ``roadmap/pylpg_flakiness.md`` F7.
+        include which weather they were computed with.
 
         It is a readable string rather than a hash because it is written into every recorded energy-system
         file. For a file under the repository's inputs directory the path relative to that directory is

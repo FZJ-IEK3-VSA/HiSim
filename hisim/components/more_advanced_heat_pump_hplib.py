@@ -15,7 +15,7 @@ import hashlib
 import importlib
 from enum import Enum, unique
 from dataclasses import dataclass
-from typing import Any, List, Optional, Dict
+from typing import Any, ClassVar, List, Optional, Dict, Tuple
 
 import pandas as pd
 import numpy as np
@@ -32,7 +32,18 @@ from hisim.component import (
     OpexCostDataClass,
     CapexCostDataClass,
 )
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import (
+    ComponentID,
+    ConfigBase,
+    DisplayConfig,
+    FactContribution,
+    Sizable,
+    Size,
+    SizingContext,
+    concrete,
+    preset,
+    sized_field,
+)
 from hisim.components import weather, simple_water_storage, heat_distribution_system
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules, ComponentType
@@ -45,15 +56,6 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.economics.facts import CostRelevance
-
-__authors__ = "Jonas Hoppe"
-__copyright__ = ""
-__credits__ = ["Jonas Hoppe"]
-__license__ = "-"
-__version__ = ""
-__maintainer__ = ""
-__status__ = ""
-
 
 @unique
 class PositionHotWaterStorageInSystemSetup(str, Enum):
@@ -82,40 +84,111 @@ class PositionHotWaterStorageInSystemSetup(str, Enum):
 @dataclass_json
 @dataclass
 class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
-    """MoreAdvancedHeatPumpHPLibConfig."""
+    """Configuration of the MoreAdvancedHeatPumpHPLib class.
 
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return MoreAdvancedHeatPumpHPLib.get_full_classname()
+    An hplib heat pump serving space heating and, optionally, domestic hot water. The
+    named default is :meth:`preset_air_water`, the generic air/water curve fit hplib
+    ships; the two fields that depend on the building — the thermal output power and the
+    heating reference temperature the curve fit is evaluated at — are sizable, so the
+    preset leaves them ``AUTO`` and ``.resolve(ctx)`` copies them from the building's
+    facts. An author who knows the machine pins the fields instead::
+
+        MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump").resolve(
+            SizingContext(heating_load_in_watt=7780.75, heating_reference_temperature_in_celsius=-7.0)
+        )
+
+    ``massflow_nominal_secondary_side_in_kg_per_s`` is deliberately *not* sizable: nothing
+    in the system contributes a nominal massflow, and the 0.333 kg/s the fleet uses is a
+    property of the secondary circuit, not of the building.
+    """
+
+    MAIN_CLASS = "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib"
 
     component_id: ComponentID
-    model: str
-    fluid_primary_side: str
-    group_id: int
-    heating_reference_temperature_in_celsius: float  # before t_in
-    flow_temperature_in_celsius: float  # before t_out_val
-    set_thermal_output_power_in_watt: float  # before p_th_set
-    cycling_mode: bool
-    minimum_running_time_in_seconds: Optional[int]
-    minimum_idle_time_in_seconds: Optional[int]
-    minimum_thermal_output_power_in_watt: float
-    position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup
-    with_domestic_hot_water_preparation: bool
-    passive_cooling_with_brine: bool
-    electrical_input_power_brine_pump_in_watt: Optional[float]
-    massflow_nominal_secondary_side_in_kg_per_s: float
-    specific_heat_capacity_of_primary_fluid: Optional[float]
-    #: CO2 footprint of investment in kg
-    device_co2_footprint_in_kg: Optional[float]
+    #: hplib parameter set to evaluate. ``"Generic"`` is the curve fit hplib derives from the
+    #: whole device database for the given group; a manufacturer's model name picks that one
+    #: machine instead.
+    model: str = "Generic"
+    #: Medium on the primary (source) side: air, brine or water. Together with ``group_id`` it
+    #: says which kind of heat pump the parameters describe.
+    fluid_primary_side: str = "air"
+    #: hplib device group: 1 air/water, 2 brine/water, 3 water/water, 4 air/air.
+    group_id: int = 1
+    #: Flow temperature the curve fit is evaluated at, on the secondary (sink) side.
+    flow_temperature_in_celsius: float = 52.0
+    #: Whether the machine is allowed to cycle, which is what makes the minimum running and
+    #: idle times below take effect.
+    cycling_mode: bool = True
+    minimum_running_time_in_seconds: Optional[int] = 3600
+    minimum_idle_time_in_seconds: Optional[int] = 3600
+    #: Lowest thermal power the machine modulates down to before it has to cycle.
+    minimum_thermal_output_power_in_watt: float = 1800.0
+    #: Where the space-heating buffer vessel sits relative to the machine, which decides
+    #: whether the secondary massflow is the machine's own or the distribution system's.
+    position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup = (
+        PositionHotWaterStorageInSystemSetup.PARALLEL
+    )
+    #: Whether the machine also heats domestic hot water, in which case it prioritises that
+    #: demand over space heating.
+    with_domestic_hot_water_preparation: bool = False
+    #: Whether the brine circuit may cool the building passively, without running the
+    #: compressor. Only meaningful for a brine/water machine.
+    passive_cooling_with_brine: bool = False
+    #: Electrical power the brine pump draws, for a machine with a primary circuit of its own.
+    electrical_input_power_brine_pump_in_watt: Optional[float] = None
+    #: Nominal massflow on the secondary side. A plain field, not a sizable one: no component
+    #: contributes it, and it describes the circuit the machine is plumbed into.
+    massflow_nominal_secondary_side_in_kg_per_s: float = 0.333
+    #: Specific heat capacity of the primary fluid, needed only where that fluid is not air.
+    specific_heat_capacity_of_primary_fluid: Optional[float] = 0.0
+    #: CO2 footprint of investment in kg. Unset throughout the repository, which is what makes
+    #: postprocessing look the machine up in the cost database instead.
+    device_co2_footprint_in_kg: Optional[float] = None
     #: cost for investment in Euro
-    investment_costs_in_euro: Optional[float]
+    investment_costs_in_euro: Optional[float] = None
     #: lifetime in years
-    lifetime_in_years: Optional[float]
+    lifetime_in_years: Optional[float] = None
     # maintenance cost in euro per year
-    maintenance_costs_in_euro_per_year: Optional[float]
+    maintenance_costs_in_euro_per_year: Optional[float] = None
     # subsidies as percentage of investment costs
-    subsidy_as_percentage_of_investment_costs: Optional[float]
+    subsidy_as_percentage_of_investment_costs: Optional[float] = None
+    #: Outside temperature the machine is rated at, ``t_in`` of the hplib curve fit. Sizable:
+    #: left ``AUTO`` it is the building's own heating reference temperature, so the machine is
+    #: rated at the same design condition the heating load was computed for.
+    heating_reference_temperature_in_celsius: Sizable[float] = sized_field(
+        rule=Size.HEATING_REFERENCE_TEMPERATURE_IN_CELSIUS
+    )
+    #: Thermal output power the machine is sized to, ``p_th_set`` of the hplib curve fit.
+    #: Sizable: left ``AUTO`` it is the building's heating load exactly, the machine covering
+    #: the design load with no reserve.
+    set_thermal_output_power_in_watt: Sizable[float] = sized_field(rule=Size.HEATING_LOAD_IN_WATT)
+
+    @staticmethod
+    def sizing_facts(config: "MoreAdvancedHeatPumpHPLibConfig", ctx: SizingContext) -> dict:
+        """Contributes the machine's resolved thermal power for the components around it.
+
+        Runs after the heat pump itself resolved, so the value is the final concrete number
+        whether it came from the law, from a preset constant or from an override. The buffer
+        vessel beside the machine reads it to pick its volume, the same way it reads a
+        boiler's power band.
+
+        Args:
+            config: this heat pump configuration, fully resolved.
+            ctx: the sizing context; unused, the value is this config's own.
+
+        Returns:
+            dict: the one fact named in :attr:`SIZING_CONTRIBUTIONS`.
+        """
+        del ctx
+        return {"maximal_thermal_power_in_watt": concrete(config.set_thermal_output_power_in_watt)}
+
+    #: Sizing facts this config contributes: its resolved thermal output power, under the name
+    #: the heating-generator family shares, so a buffer vessel sizes from a heat pump exactly
+    #: as it sizes from a boiler. With two generators in one scenario each is addressable as
+    #: "<its name>.maximal_thermal_power_in_watt" and a consumer must say which one it means.
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
+        FactContribution(facts=("maximal_thermal_power_in_watt",), compute=sizing_facts),
+    )
 
     @classmethod
     def get_default_generic_advanced_hp_lib(
@@ -135,28 +208,9 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             component_id = ComponentID(name=name)
         return MoreAdvancedHeatPumpHPLibConfig(
             component_id=component_id,
-            model="Generic",
-            fluid_primary_side="air",
-            group_id=1,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            flow_temperature_in_celsius=52,
             set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
-            cycling_mode=True,
-            minimum_running_time_in_seconds=3600,
-            minimum_idle_time_in_seconds=3600,
-            minimum_thermal_output_power_in_watt=1800,
-            position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL,
-            with_domestic_hot_water_preparation=False,
-            passive_cooling_with_brine=False,
-            electrical_input_power_brine_pump_in_watt=None,
             massflow_nominal_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
-            specific_heat_capacity_of_primary_fluid=0,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
         )
 
     @classmethod
@@ -169,36 +223,39 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
         massflow_nominal_secondary_side_in_kg_per_s: float = 0.333,
     ) -> "MoreAdvancedHeatPumpHPLibConfig":
         """Gets a default heat pump with scaling according to heating load of the building."""
-
         if component_id is None:
             component_id = ComponentID(name=name)
-        set_thermal_output_power_in_watt: float = heating_load_of_building_in_watt
-
         return MoreAdvancedHeatPumpHPLibConfig(
             component_id=component_id,
-            model="Generic",
-            fluid_primary_side="air",
-            group_id=1,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            flow_temperature_in_celsius=52,
-            set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
-            cycling_mode=True,
-            minimum_running_time_in_seconds=3600,
-            minimum_idle_time_in_seconds=3600,
-            minimum_thermal_output_power_in_watt=1800,
-            position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL,
-            with_domestic_hot_water_preparation=False,
-            passive_cooling_with_brine=False,
-            electrical_input_power_brine_pump_in_watt=None,
+            set_thermal_output_power_in_watt=heating_load_of_building_in_watt,
             massflow_nominal_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
-            specific_heat_capacity_of_primary_fluid=0,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
         )
+
+    @preset
+    @classmethod
+    def preset_air_water(cls, name: str) -> "MoreAdvancedHeatPumpHPLibConfig":
+        """The fleet's air/water heat pump, scaled to the building it heats.
+
+        The field defaults are that machine: hplib's generic air/water parameter set
+        (``model="Generic"``, ``group_id=1``), cycling with an hour of minimum running and
+        idle time, modulating down to 1800 W, flowing at 52 °C into a buffer vessel parallel
+        to it, and heating space only. What the preset does not fix is how large the machine
+        is and what design condition it is rated at: ``set_thermal_output_power_in_watt`` and
+        ``heating_reference_temperature_in_celsius`` stay ``AUTO`` so that both are copied
+        from the building's facts.
+
+        The default parameters of hplib's air/water fit are documented at
+        https://github.com/FZJ-IEK3-VSA/HPLib/blob/main/HPLib/HPLib.py under ``fit_p_th_ref``.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            MoreAdvancedHeatPumpHPLibConfig: The preset configuration, power and reference
+            temperature unsized.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class MoreAdvancedHeatPumpHPLib(Component):
@@ -292,11 +349,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         self.group_id = config.group_id
 
-        self.t_in = int(config.heating_reference_temperature_in_celsius)
+        self.t_in = int(concrete(config.heating_reference_temperature_in_celsius))
 
         self.t_out_val = int(config.flow_temperature_in_celsius)
 
-        self.p_th_set = int(config.set_thermal_output_power_in_watt)
+        self.p_th_set = int(concrete(config.set_thermal_output_power_in_watt))
 
         self.cycling_mode = config.cycling_mode
 
@@ -1421,7 +1478,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         component_type = ComponentType.HEAT_PUMP
         kpi_tag = KpiTagEnumClass.HEATPUMP_SPACE_HEATING_AND_DOMESTIC_HOT_WATER
         unit = Units.KILOWATT
-        size_of_energy_system = config.set_thermal_output_power_in_watt * 1e-3
+        size_of_energy_system = concrete(config.set_thermal_output_power_in_watt) * 1e-3
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
         simulation_parameters=simulation_parameters,

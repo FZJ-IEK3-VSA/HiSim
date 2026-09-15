@@ -14,11 +14,16 @@ from hisim.components.heat_distribution_system import HeatDistributionSystemType
 from hisim.renovisor import vocabulary
 from hisim.renovisor.vocabulary import (
     DhwSupply,
+    Drivetrain,
+    DwellingType,
     FloorConstruction,
     HeatDistribution,
     HeatGenerator,
     Provenance,
+    PvOrientation,
     RetrofitStatus,
+    RoofForm,
+    SecondaryHeating,
     SolarThermalSupplies,
     TabulaBuildingType,
     TemperatureControl,
@@ -31,9 +36,12 @@ from hisim.renovisor.vocabulary import (
 pytestmark = pytest.mark.base
 
 VOCABULARIES: Tuple[Type[Enum], ...] = (
+    DwellingType,
     HeatGenerator,
+    SecondaryHeating,
     DhwSupply,
     SolarThermalSupplies,
+    PvOrientation,
     VentilationType,
     TemperatureControl,
     RetrofitStatus,
@@ -41,6 +49,8 @@ VOCABULARIES: Tuple[Type[Enum], ...] = (
     ThermalElement,
     FloorConstruction,
     WallConstruction,
+    RoofForm,
+    Drivetrain,
     Provenance,
 )
 

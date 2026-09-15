@@ -38,6 +38,27 @@ VocabularyMember = TypeVar("VocabularyMember", bound=Enum)
 HeatDistribution = HeatDistributionSystemType
 
 
+class DwellingType(str, Enum):
+    """The kind of dwelling the household lives in, as the home form asks for it.
+
+    This is the homeowner's answer, not a HiSim internal: the translation layer derives the TABULA
+    building type from it together with the country, so that no field asks a homeowner for
+    ``SFH`` or ``AB``. ``DETACHED_SFH``, ``SEMI_DETACHED_SFH`` and ``BUNGALOW`` derive ``SFH``,
+    ``TERRACED_SFH`` derives ``TH`` and ``APARTMENT`` derives ``AB``; ``OTHER`` is the escape the
+    form offers and is resolved by the same age-band fallback an unusable TABULA row uses.
+
+    Added for the rewritten input contract, which replaces ``tabula_building_type`` with the
+    question the user can actually answer (challenges §12).
+    """
+
+    DETACHED_SFH = "DETACHED_SFH"
+    SEMI_DETACHED_SFH = "SEMI_DETACHED_SFH"
+    TERRACED_SFH = "TERRACED_SFH"
+    BUNGALOW = "BUNGALOW"
+    APARTMENT = "APARTMENT"
+    OTHER = "OTHER"
+
+
 class HeatGenerator(str, Enum):
     """The device that produces space heat, as the catalogue's ``heating system`` measure names it.
 
@@ -64,14 +85,32 @@ class HeatGenerator(str, Enum):
     OIL_HEATING = "OIL_HEATING"
 
 
+class SecondaryHeating(str, Enum):
+    """A second heat source the dwelling has beside its main generator, as the home form asks.
+
+    ``OPEN_FIREPLACE`` is a chimney fire, ``WOOD_STOVE`` a closed room heater and
+    ``ELECTRIC_HEATER`` a plug-in heater used in one room. None of them is simulated: HiSim models
+    one space-heat generator per energy system, so the value is recorded, reported as
+    ``non_simulation`` and priced by nothing until a second generator exists.
+    """
+
+    OPEN_FIREPLACE = "OPEN_FIREPLACE"
+    WOOD_STOVE = "WOOD_STOVE"
+    ELECTRIC_HEATER = "ELECTRIC_HEATER"
+
+
 class DhwSupply(str, Enum):
     """How domestic hot water is produced, as the ``hot water system`` measure names it.
 
-    ``HEAT_PUMP`` is a hot-water heat pump feeding the domestic hot water storage;
-    ``DIRECT_ELECTRIC`` is an immersion heater. The latter has no HiSim component and is refused
-    (decision Q14).
+    ``FROM_SPACE_HEATING_GENERATOR`` is the common case, in which the boiler or heat pump that
+    heats the rooms also makes the hot water; it replaces the inventory's older boolean
+    ``with_dhw_preparation``, so that the three answers the user can give sit in one field instead
+    of a flag and an enum that could contradict each other. ``HEAT_PUMP`` is a separate hot-water
+    heat pump feeding the domestic hot water storage, and ``DIRECT_ELECTRIC`` is an immersion
+    heater. The last has no HiSim component and is refused (decision Q14).
     """
 
+    FROM_SPACE_HEATING_GENERATOR = "FROM_SPACE_HEATING_GENERATOR"
     HEAT_PUMP = "HEAT_PUMP"
     DIRECT_ELECTRIC = "DIRECT_ELECTRIC"
 
@@ -88,6 +127,22 @@ class SolarThermalSupplies(str, Enum):
     DHW_ONLY = "DHW_ONLY"
     SPACE_HEATING_ONLY = "SPACE_HEATING_ONLY"
     DHW_AND_SPACE_HEATING = "DHW_AND_SPACE_HEATING"
+
+
+class PvOrientation(str, Enum):
+    """The compass orientation of a roof-mounted solar surface, as the home form asks for it.
+
+    The form offers four answers rather than a degree, because a homeowner knows which way the
+    roof faces and not its azimuth; the translation layer turns the member into the azimuth the
+    photovoltaic and solar-thermal components take (``SOUTH`` is 180 degrees). ``EAST_WEST`` is
+    the split array that covers both roof planes and has no single azimuth, which is why it is a
+    member here and not a number.
+    """
+
+    SOUTH = "SOUTH"
+    SOUTH_EAST = "SOUTH_EAST"
+    SOUTH_WEST = "SOUTH_WEST"
+    EAST_WEST = "EAST_WEST"
 
 
 class VentilationType(str, Enum):
@@ -185,6 +240,37 @@ class WallConstruction(str, Enum):
     SOLID = "SOLID"
     CAVITY = "CAVITY"
     TIMBER_FRAME = "TIMBER_FRAME"
+
+
+class RoofForm(str, Enum):
+    """The shape of the main roof, as a survey fact.
+
+    It is an input of the rooftop photovoltaic sizing law, which reads the form together with the
+    roof orientation and falls back to the TABULA roof geometry when neither is stated (decision
+    Q16). ``ROOM_IN_ROOF`` is a pitched roof whose space is inhabited, which the envelope
+    measures treat differently from a cold attic because there is no loft floor to roll insulation
+    out over.
+    """
+
+    PITCHED = "PITCHED"
+    FLAT = "FLAT"
+    ROOM_IN_ROOF = "ROOM_IN_ROOF"
+
+
+class Drivetrain(str, Enum):
+    """What a household vehicle runs on.
+
+    One list of vehicles carries one member each, and the member decides which consumption field
+    of the entry applies: ``ELECTRIC`` cars state a consumption in kilowatt hours per kilometre
+    and are the only ones that reach the electricity simulation, while ``GASOLINE`` and
+    ``DIESEL`` cars state litres per hundred kilometres and contribute fuel cost and emissions to
+    the household baseline so that a switch to an electric car compares against a complete
+    picture.
+    """
+
+    ELECTRIC = "ELECTRIC"
+    GASOLINE = "GASOLINE"
+    DIESEL = "DIESEL"
 
 
 class Provenance(str, Enum):

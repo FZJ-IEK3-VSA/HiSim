@@ -1,6 +1,6 @@
 # P4 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-15 (10 findings)
+**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-15 (11 findings)
 **Context:** things that surfaced while working through
 `roadmap/declarative_energy_systems/p4_component_sweep_requirements.md` — the component sweep, decisions
 D-1 … D-32 — and were **not** what the work set out to do. Kept separately so the requirements stay about
@@ -622,3 +622,14 @@ distinction, the verdict does not), and an opt-in read-only *seed* directory the
 pre-filled from, so a profile that is an input to both sides rather than a result of either can be
 supplied once.
 
+### F-16 — `ElectricHeatingConfig.efficiency` is a field nothing reads **[reported]**
+
+Found on 2026-09-15 while converting the electric heating (B4). The class declares
+`efficiency: float = 1.0`, "electric to thermal power conversion", and the component never reads it:
+`ElectricHeating` sets its electric output equal to the thermal power it delivers and caps both the
+space-heating and the DHW branch at `maximum_electric_power_w` directly. The field is therefore wire
+format for a number that has no effect, and an author who writes `efficiency: 0.9` into an energy-system
+file gets the same run as one who does not. Two honest ways out: delete the field (a resistive heater is
+1.0 by physics, which is why nobody missed it), or make the component honour it, which is a behaviour change
+under R5 with its own diff. Left as is in the conversion, since either changes the wire format or the
+results; the field's docstring says it is not read.

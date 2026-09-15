@@ -57,6 +57,82 @@ Surveyed: **88 config classes** in 65 modules; **9 converted** (none still carry
 ### R1 — Conversion contract per class `[given; epic E6, P1]`
 For every class in §R3 marked *convert*: legacy factories deleted; presets `preset_<name>` / constructors `for_…` per the table; every field the table marks `AUTO` carries a `sized_field` with the quoted law; `SIZING_CONTRIBUTIONS` declares the listed facts; every call site (setups, tests, `hisim/`) moved; fixtures regenerated; the class's recorded files (P3) re-recorded in the same PR. Nothing outside the module changes except call sites and the gates in R2.
 
+### R1.1 — What a converted class looks like `[decided 2026-09-14, owner; review of generic_pv_system/config.py]`
+
+The first sixteen conversions followed the legacy modules' shape, and the result reads badly:
+`generic_pv_system/config.py` spends 342 lines on one dataclass and ten lines of arithmetic, 60 %
+of it prose. The rules below are the shape every conversion from B4 on uses, and the sixteen
+converted classes are brought to it in one sweep (R1.2). None of them changes a value, a preset
+name or a twin: they are how the same class is written down.
+
+1. **Fields carry defaults; a preset states only what distinguishes it.** A field that has one
+   value in every preset and every setup is a default on the field, not an argument every preset
+   repeats. `GenericBoilerConfig` is the precedent: `eff_th_min: float = 0.60`, and
+   `preset_condensing_gas` passes three arguments. The PV's `time`, `integrate_inverter`,
+   `load_module_data`, `source_weight`, `predictive_control`, `prediction_horizon`, the five capex
+   fields and the module and inverter names all have exactly one value anyone uses; with defaults,
+   `preset_rooftop` is `cls(component_id=ComponentID(name=name))`. The recorder is indifferent —
+   it diffs a live configuration against the *built* preset, not against the class.
+   *Consequence of the dataclass rule "a defaulted field may not precede an undefaulted one":*
+   `component_id` and the fields that genuinely vary come first, everything defaulted after,
+   sized fields among them (they default to `AUTO`). `kw_only=True` would lift the rule and allow a
+   shared capex mixin; **rejected for now** (owner, 2026-09-14): the last interpreter migration
+   failed and the dataclass machinery is not to be varied until that is understood, even though
+   `kw_only` itself is available on the 3.11 floor. The five capex fields therefore stay declared
+   per class, with `None` defaults.
+
+2. **`MAIN_CLASS` on `ConfigBase`.** Every config class carries an eight-line
+   `get_main_classname` with a lazy import of its component "to avoid the import cycle" — 56
+   copies under `hisim/components/`. `ConfigBase` gains `MAIN_CLASS: ClassVar[str]`, the dotted
+   path of the component class, and implements `get_main_classname` once (import by path, lazily,
+   at call time). A converted class declares one line:
+   `MAIN_CLASS = "hisim.components.generic_pv_system.pv_system.PVSystem"`.
+
+3. **Tables are data, not branches.** A lookup over a fixed set — the PV's two modules, the
+   buffer's five l/kW figures, a carrier's fuel constants — is a class-scoped `Mapping`
+   (`ClassVar`), keyed by the thing looked up, valued by a small frozen dataclass where a row
+   has more than one number. The refusal for an unknown key lists the keys the table has, built
+   from the table. Named constants likewise: `USABLE_ROOF_FRACTION: ClassVar[float] = 0.6`, with
+   its source on the declaration, not `limiting_factor_for_rooftop = 0.6` inside a method. Reasons:
+   a row is added without finding the right `elif`; `describe` and the RenoVisor translation
+   layer can read what the class accepts; the repository rule "class-scoped constants, no
+   module-level state" is met by construction. `SimpleHotWaterStorageConfig.LITRES_PER_KILOWATT_BY_SIZING_OPTION`
+   is the shape.
+
+4. **Contributions and laws live in the class body.** The `SIZING_CONTRIBUTIONS = ()` placeholder
+   followed by a post-class assignment exists only because the compute function was a
+   module-level `def` naming the class. A `staticmethod`, or a lambda over the `config` argument,
+   needs no class name and is declared where the field it reads is. A function law stays a
+   module-level function when it is long enough to want a docstring; a one-line law is an
+   expression term on the field.
+
+5. **Docstrings say what is, in the repository's plain form** — what the thing is, one example
+   where it matters, a short why, `Args`/`Returns`/`Raises` where they add information. Not in a
+   docstring or comment: what the deleted factory did, which decision or PR introduced the field,
+   cross-references into `roadmap/` (they rot; the roadmap references the code, not the other way),
+   and the import-layering rationale of a package — that goes once into the package `__init__`.
+   A comment on a field says what the field means; its history is in `git log`.
+
+6. **Module header.** The `__authors__ … __status__` block goes (45 modules; git carries
+   authorship and `LICENSE` the licence). The `# clean` marker — a leftover of the first mypy
+   migration that the code-overview generator still counted — is removed from the whole code
+   base in its own PR, generator flag included (owner, 2026-09-14); `obsolete/` keeps its 20
+   copies, being frozen text. A `pylint: disable` carries a one-line reason or none.
+
+Applied to the PV configuration, the same behaviour is about 150 lines instead of 342.
+
+### R1.2 — The sixteen converted classes are brought to R1.1 in one sweep `[proposed]`
+
+One PR, after the B2/B3 stack has merged, covering the classes `PRESET_NAMES` lists on that day
+(`BatteryConfig`, `BuildingConfig`, `ElectricityMeterConfig`, `EMSConfig`, `FuelMeterConfig`,
+`GasMeterConfig`, `GenericBoilerConfig`, `GenericBoilerControllerConfig`, `HeatDistributionConfig`,
+`HeatDistributionControllerConfig`, `HeatingMeterConfig`, `PVSystemConfig`,
+`SimpleDHWStorageConfig`, `SimpleHotWaterStorageConfig`, `UtspLpgConnectorConfig`, `WeatherConfig`)
+plus `ConfigBase.MAIN_CLASS`. Acceptance: every twin byte-identical (`record_all_setups.py --check`),
+every golden pair unchanged in both modes, `describe` output identical except that fields now show
+their defaults, `hisim energy-system schema` unchanged, and the line count of each touched
+configuration module reported before and after.
+
 ### R2 — Gates that touch shared code `[proposed; survey A Gate 0, B Gate B-0, C D-19]`
 Own commits, before the batch that needs them, each golden-neutral:
 - R2.1 Facts added to `SizingContext`/`Size` — **executed 2026-09-11**, D-21 excepted: `set_heating_threshold_outside_temperature_in_celsius` (contributed by `HeatDistributionControllerConfig`), `roof_area_in_m2` (Building; value exists as `BuildingInformation.roof_area_in_m2`), `pv_peak_power_in_watt` (PV, `PVSystemConfig`'s first contribution), plus D-15's three carrier/fuel facts `energy_carrier`, `heating_value_of_fuel_in_kwh_per_liter` and `fuel_density_in_kg_per_m3` (contributed by `GenericBoilerConfig`, decided (b); its `__init__` derivation moved to `GenericBoilerConfig.fuel_constants`, `None` for district heating). Six facts, no reader yet: every one of them draws the "provides X, which no component reads" warning until the batch that consumes it lands, and no recorded twin moved. D-21's `heating_reference_temperature_in_celsius` (contributed by `WeatherConfig`, decided (c)) is **pending its own PR**: it needs a per-station DIN 12831 table, which is a data decision and not a vocabulary one. The `value_type=lt.LoadTypes` codec and the `Many` aggregator D-15 also names stay with the meter batch that needs them.
@@ -616,6 +692,7 @@ The 32 questions below are owner decisions surfaced by the survey, and **all 32 
 | D-14 | ~~`BatteryConfig` rating preset (`standard_5kwh` names a 10 kWh factory)~~ | `[answered 2026-09-10]` **(a)** `standard` only; capacity and inverter power come from the law or the caller | R3, R4 |
 | D-15 | ~~Meters copy carrier and fuel constants from the generator (3 new facts + aggregator) or plain preset fields?~~ | `[answered 2026-09-11]` **(b)** copy laws — survey recommended (a); accepts three `GenericBoilerConfig` facts, a `LoadTypes` codec and the `Many` consistency aggregator, so a group-A class enters the meter group | R3 meters |
 | D-17 | ~~Unify the two `PositionHotWaterStorageInSystemSetup` enums before P5?~~ | `[answered 2026-09-11]` **(b)** leave both — survey recommended (a); both spellings freeze at P5 and a file may state the topology twice | R3, C-P4.5 |
+| D-33 | ~~Field defaults + sparse presets, `MAIN_CLASS`, tables as data, inline contributions, plain docstrings — and `kw_only` with a capex mixin?~~ | `[answered 2026-09-14, owner]` **the first five, yes (R1.1); `kw_only` and the mixin no** — the dataclass machinery is not varied until the failed interpreter migration is understood; revisit after P5 | R1.1, R1.2 |
 | D-24 | ~~`ChargingStationConfig`: `standard` = 3.7 kW, 11 kW, or constructor only?~~ | `[answered 2026-09-11]` **(c)** no `standard`; `for_charging_station_set` only | R3 |
 | D-27 | ~~`operation_mode: str` ×3 → one shared enum, three enums, or strings?~~ | `[answered 2026-09-11]` **(b)** three per-module enums (PTX controller, XTP controller, RSOC battery controller) | C-P4.5 |
 | D-28 | ~~`GenericElectrolyzerConfig`: `standard` + `Self` laws, constructor, or delete?~~ | `[answered 2026-09-11]` **moot by D-29** — the survivor `ElectrolyzerWithStorageConfig` ships preset `standard` with the 2.4 kW factory values; no constructor, nothing derived | R3 |

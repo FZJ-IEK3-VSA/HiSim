@@ -210,6 +210,7 @@ class PilotWireFormat:
         "NightSetbackConfig": ("standard",),
         "generic_chp.CHPConfig": ("gas", "hydrogen"),
         "advanced_fuel_cell.CHPConfig": ("hydrogen",),
+        "L1CHPControllerConfig": ("gas", "hydrogen", "gas_with_buffer", "hydrogen_with_buffer"),
         "IdealizedHeaterConfig": ("standard",),
         "SimpleHeatSourceConfig": (
             "constant_thermal_power",
@@ -257,6 +258,7 @@ class PilotWireFormat:
         "NightSetbackConfig": (),
         "generic_chp.CHPConfig": (),
         "advanced_fuel_cell.CHPConfig": (),
+        "L1CHPControllerConfig": (),
         "IdealizedHeaterConfig": (),
         "SimpleHeatSourceConfig": (),
         "CarConfig": ("for_household",),
@@ -327,6 +329,7 @@ class PilotWireFormat:
         "NightSetbackConfig": (),
         "generic_chp.CHPConfig": (),
         "advanced_fuel_cell.CHPConfig": (),
+        "L1CHPControllerConfig": (),
         "IdealizedHeaterConfig": (),
         "SimpleHeatSourceConfig": (),
     }
@@ -638,6 +641,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     from hisim.components.simple_heat_source import SimpleHeatSourceConfig
     from hisim.components.advanced_fuel_cell import CHPConfig as FuelCellCHPConfig
     from hisim.components.generic_chp.chp import CHPConfig as GenericCHPConfig
+    from hisim.components.generic_chp.controller import L1CHPControllerConfig
     from hisim.components.simple_water_storage import SimpleDHWStorageConfig, SimpleHotWaterStorageConfig
     from hisim.components.night_setback_controller import NightSetbackConfig
     from hisim.components.solar_thermal_system import (
@@ -683,6 +687,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "NightSetbackConfig": NightSetbackConfig,
         "generic_chp.CHPConfig": GenericCHPConfig,
         "advanced_fuel_cell.CHPConfig": FuelCellCHPConfig,
+        "L1CHPControllerConfig": L1CHPControllerConfig,
         "IdealizedHeaterConfig": IdealizedHeaterConfig,
         "SimpleHeatSourceConfig": SimpleHeatSourceConfig,
         "CarConfig": CarConfig,

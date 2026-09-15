@@ -139,6 +139,7 @@
             "hisim.components.generic_boiler.GenericBoiler",
             "hisim.components.generic_boiler.GenericBoilerController",
             "hisim.components.generic_car.Car",
+            "hisim.components.generic_chp.L1CHPController",
             "hisim.components.generic_chp.SimpleCHP",
             "hisim.components.generic_district_heating.DistrictHeating",
             "hisim.components.generic_district_heating.DistrictHeatingController",
@@ -1758,6 +1759,106 @@
                   "enum": [
                     "occupancy_identity"
                   ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.generic_chp.L1CHPController"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "gas",
+                  "hydrogen",
+                  "gas_with_buffer",
+                  "hydrogen_with_buffer"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "use": {
+                    "enum": [
+                      "ANY",
+                      "ELECTRICITY",
+                      "IRRADIANCE",
+                      "SPEED",
+                      "HEATING",
+                      "COOLING",
+                      "TEMPERATURE",
+                      "PRESSURE",
+                      "TIME",
+                      "PRICE",
+                      "GAS",
+                      "AIR",
+                      "GREEN_HYDROGEN",
+                      "OXYGEN",
+                      "WATER",
+                      "WARM_WATER",
+                      "DIESEL",
+                      "OIL",
+                      "PELLETS",
+                      "WOOD_CHIPS",
+                      "DISTRICTHEATING",
+                      "ON_OFF",
+                      "ACTIVATION"
+                    ]
+                  },
+                  "h2_soc_threshold": {
+                    "type": "number"
+                  },
+                  "t_min_dhw_in_celsius": {
+                    "type": "number"
+                  },
+                  "source_weight": {
+                    "type": "integer"
+                  },
+                  "electricity_threshold": {
+                    "type": "number"
+                  },
+                  "t_min_heating_in_celsius": {
+                    "type": "number"
+                  },
+                  "t_max_heating_in_celsius": {
+                    "type": "number"
+                  },
+                  "t_max_dhw_in_celsius": {
+                    "type": "number"
+                  },
+                  "day_of_heating_season_begin": {
+                    "type": "integer"
+                  },
+                  "day_of_heating_season_end": {
+                    "type": "integer"
+                  },
+                  "min_operation_time_in_seconds": {
+                    "type": "integer"
+                  },
+                  "min_idle_time_in_seconds": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
                 }
               }
             }

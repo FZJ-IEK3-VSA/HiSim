@@ -194,7 +194,7 @@ def given_default_testee(
     simulationparameters = sim.SimulationParameters.full_year(
         year=2021, seconds_per_timestep=60
     )
-    config = AirConditionerControllerConfig.get_default_air_conditioner_controller_config()
+    config = AirConditionerControllerConfig.preset_standard("AirConditionerController")
     config.heating_set_temperature_deg_c = 18.0
     config.cooling_set_temperature_deg_c = 26.0
     config.minimum_runtime_s = config_overwrite.get("minimum_runtime_s", 0)

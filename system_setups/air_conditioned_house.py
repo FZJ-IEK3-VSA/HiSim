@@ -208,8 +208,8 @@ def setup_function(
     my_sim.add_component(my_building, connect_automatically=True)
 
     """Air conditioner on-off controller"""
-    my_air_conditioner_controller_config = (
-        air_conditioner.AirConditionerControllerConfig.get_default_air_conditioner_controller_config()
+    my_air_conditioner_controller_config = air_conditioner.AirConditionerControllerConfig.preset_standard(
+        "AirConditionerControllerConfig"
     )
     my_air_conditioner_controller = air_conditioner.AirConditionerController(
         config=my_air_conditioner_controller_config,

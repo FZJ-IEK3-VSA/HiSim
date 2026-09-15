@@ -37,15 +37,6 @@ from hisim import log
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
-__authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = "..."
-__license__ = "MIT"
-__version__ = "0.1"
-__maintainer__ = "Tjarko Tjaden"
-__email__ = "tjarko.tjaden@hs-emden-leer.de"
-__status__ = "development"
-
 
 @dataclass_json
 @dataclass
@@ -54,16 +45,11 @@ class BatteryConfig(ConfigBase):
 
     The named default battery is :meth:`preset_sized_to_pv`, and both of its power numbers are
     sizable: the preset leaves them ``AUTO`` and ``.resolve(ctx)`` derives them from the peak
-    power of the PV array the battery is installed beside, which is what the deleted
-    ``get_scaled_battery`` factory did with a value the setup copied across by hand. An author
-    who knows the device pins the two fields instead, which is what the deleted
-    ``get_default_config`` factory was for.
+    power of the PV array the battery is installed beside. An author who knows the device pins
+    the two fields instead.
     """
 
-    @classmethod
-    def get_main_classname(cls):
-        """Return the full class name of the base class."""
-        return Battery.get_full_classname()
+    MAIN_CLASS = "hisim.components.advanced_battery_bslib.Battery"
 
     #: Sizing law of the battery's capacity: one kilowatt hour of storage per kilowatt peak of
     #: PV, rounded to two decimals. Named as a ClassVar so the field declaration reads as one
@@ -81,33 +67,32 @@ class BatteryConfig(ConfigBase):
     #: structured identity (name, building, unit) of the component
     component_id: ComponentID
     #: priority of the device in hierachy: the higher the number the lower the priority
-    source_weight: int
-    #: name of battery to search in database (bslib)
-    system_id: str
-    #: amount of energy used to charge the battery
-    charge_in_kwh: float
-    #: amount of energy discharged from the battery
-    discharge_in_kwh: float
-    #: CO2 footprint of investment in kg
-    device_co2_footprint_in_kg: Optional[float]
+    source_weight: int = 1
+    #: name of battery to search in database (bslib): SG1 is its generic lithium-ion system
+    system_id: str = "SG1"
+    #: amount of energy used to charge the battery, i.e. the state it starts in
+    charge_in_kwh: float = 0
+    #: amount of energy discharged from the battery, i.e. the state it starts in
+    discharge_in_kwh: float = 0
+    #: CO2 footprint of investment in kg. Unset throughout the repository, which is what makes
+    #: postprocessing look the device up in the cost database instead.
+    device_co2_footprint_in_kg: Optional[float] = None
     #: cost for investment in Euro
-    investment_costs_in_euro: Optional[float]
+    investment_costs_in_euro: Optional[float] = None
     #: lifetime in years
-    lifetime_in_years: Optional[float]
+    lifetime_in_years: Optional[float] = None
     # maintenance cost in euro per year
-    maintenance_costs_in_euro_per_year: Optional[float]
+    maintenance_costs_in_euro_per_year: Optional[float] = None
     # subsidies as percentage of investment costs
-    subsidy_as_percentage_of_investment_costs: Optional[float]
-    #: lifetime of battery in full cycles
-    lifetime_in_cycles: float
+    subsidy_as_percentage_of_investment_costs: Optional[float] = None
+    #: lifetime of battery in full cycles; estimated, see
+    #: https://pv-held.de/wie-lange-haelt-batteriespeicher-photovoltaik/
+    lifetime_in_cycles: float = 5e3
     #: charging and discharging power in Watt. Sizable: left ``AUTO`` it is computed by
-    #: :data:`INVERTER_POWER_LAW` from the PV peak power the array contributes. It is declared
-    #: here rather than beside the other device properties because a field with a default may
-    #: not precede one without.
+    #: :data:`INVERTER_POWER_LAW` from the PV peak power the array contributes.
     custom_pv_inverter_power_generic_in_watt: Sizable[float] = sized_field(rule=INVERTER_POWER_LAW)
     #: battery capacity in kWh. Sizable: left ``AUTO`` it is computed by :data:`CAPACITY_LAW`
-    #: from the same fact. Marked as the capacity field for the cost-facts contract test
-    #: (``cost_spec.md`` §9.4).
+    #: from the same fact. Marked as the capacity field for the cost engine.
     custom_battery_capacity_generic_in_kilowatt_hour: Sizable[float] = sized_field(
         rule=CAPACITY_LAW, metadata={"capacity": True}
     )
@@ -117,14 +102,13 @@ class BatteryConfig(ConfigBase):
     def preset_sized_to_pv(cls, name: str) -> "BatteryConfig":
         """The fleet's home battery, scaled to the PV array it is installed beside.
 
-        A single ``SG1`` lithium-ion system from the bslib database, first in the energy
-        management hierarchy, starting empty and rated for five thousand full cycles. What it
-        does not fix is how big the device is: ``custom_battery_capacity_generic_in_kilowatt_hour``
-        and ``custom_pv_inverter_power_generic_in_watt`` stay ``AUTO`` so that
-        :data:`CAPACITY_LAW` and :data:`INVERTER_POWER_LAW` derive them from the array's peak
-        power, and an author who knows the device pins the two fields instead. Capex fields stay
-        ``None`` so post-processing looks them up in the device database, exactly as the deleted
-        factories did.
+        The field defaults are this battery: a single ``SG1`` lithium-ion system from the bslib
+        database, first in the energy management hierarchy, starting empty and rated for five
+        thousand full cycles. What the preset does not fix is how big the device is:
+        ``custom_battery_capacity_generic_in_kilowatt_hour`` and
+        ``custom_pv_inverter_power_generic_in_watt`` stay ``AUTO`` so that :data:`CAPACITY_LAW`
+        and :data:`INVERTER_POWER_LAW` derive them from the array's peak power, and an author who
+        knows the device pins the two fields instead.
 
         Args:
             name: The instance name, which becomes the configuration's component identity.
@@ -132,21 +116,7 @@ class BatteryConfig(ConfigBase):
         Returns:
             BatteryConfig: The preset configuration, with both power numbers unsized.
         """
-        return cls(
-            component_id=ComponentID(name=name),
-            source_weight=1,
-            system_id="SG1",
-            charge_in_kwh=0,
-            discharge_in_kwh=0,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-            # estimated value, source: https://pv-held.de/wie-lange-haelt-batteriespeicher-photovoltaik/
-            lifetime_in_cycles=5e3,
-        )
+        return cls(component_id=ComponentID(name=name))
 
 
 class Battery(Component):

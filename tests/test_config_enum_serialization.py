@@ -38,6 +38,25 @@ from hisim.components import simple_water_storage
 from hisim.components import weather
 
 
+def _air_water_heat_pump_config() -> more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig:
+    """Builds the air/water heat pump configuration this module round-trips.
+
+    The ``air_water`` preset leaves the machine's rated thermal power and the outside
+    temperature it is rated at to the building's sizing facts. This module serializes a
+    configuration rather than sizing a system, so both are stated here: 8 kW at the German
+    design outside temperature.
+
+    Returns:
+        MoreAdvancedHeatPumpHPLibConfig: A concrete configuration with every enum field set.
+    """
+    config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
+        "MoreAdvancedHeatPumpHPLib"
+    )
+    config.set_thermal_output_power_in_watt = 8000.0
+    config.heating_reference_temperature_in_celsius = -7.0
+    return config
+
+
 class ConfigEnumSerializationCases:
     """Registry of the enums and config classes exercised by this module.
 
@@ -73,9 +92,7 @@ class ConfigEnumSerializationCases:
         "SimpleHotWaterStorageConfig": lambda: (
             simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer("SimpleHotWaterStorage")
         ),
-        "MoreAdvancedHeatPumpHPLibConfig": (
-            more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_default_generic_advanced_hp_lib
-        ),
+        "MoreAdvancedHeatPumpHPLibConfig": _air_water_heat_pump_config,
         "SimpleHeatSourceConfig": simple_heat_source.SimpleHeatSourceConfig.get_default_config_const_power,
         "HeatDistributionConfig": lambda: (
             heat_distribution_system.HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").resolve(

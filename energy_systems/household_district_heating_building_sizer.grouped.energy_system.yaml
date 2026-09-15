@@ -57,13 +57,8 @@ components:
       - DHWStorage
   DistrictHeating:
     class: hisim.components.generic_district_heating.DistrictHeating
+    preset: standard
     config:
-      connected_load_in_w: 7780.752200000001
-      device_co2_footprint_in_kg: null
-      investment_costs_in_euro: null
-      lifetime_in_years: null
-      maintenance_costs_in_euro_per_year: null
-      subsidy_as_percentage_of_investment_costs: null
       with_domestic_hot_water_preparation: true
     inputs:
       - DistrictHeatingController
@@ -88,7 +83,6 @@ components:
     class: hisim.components.fuel_meter.FuelMeter
     preset: standard
     config:
-      fuel_loadtype: DISTRICTHEATING # pinned: no provider of energy_carrier in this system yet
       heating_value_of_fuel_in_kwh_per_liter: null
       fuel_density_in_kg_per_m3: null
     inputs:

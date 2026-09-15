@@ -57,6 +57,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelp
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.economics.facts import CostRelevance
 
+
 @unique
 class PositionHotWaterStorageInSystemSetup(str, Enum):
     """Set Postion of Hot Water Storage in system setup.

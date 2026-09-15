@@ -38,12 +38,10 @@ components:
       - Weather
   ElectricHeatingController:
     class: hisim.components.generic_electric_heating.ElectricHeatingController
+    preset: standard
     config:
-      set_heating_threshold_outside_temperature_in_celsius: 18.0
       with_domestic_hot_water_preparation: true
-      hysteresis_water_temperature_offset: 15.0
       parallel_space_heating_and_dhw_option: true
-      specific_heating_load_of_building_in_watt_per_m2: 64.19762541254126
     inputs:
       - Weather
       - DHWStorage

@@ -1,6 +1,6 @@
 # P4 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-15 (11 findings)
+**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-15 (12 findings)
 **Context:** things that surfaced while working through
 `roadmap/declarative_energy_systems/p4_component_sweep_requirements.md` — the component sweep, decisions
 D-1 … D-32 — and were **not** what the work set out to do. Kept separately so the requirements stay about
@@ -647,3 +647,27 @@ Resolved by listing rather than loosening: `ComponentConfigScan.CATALOGUE_DEVICE
 preset whose digits belong to a device designation, and rule 2 keeps refusing everything else, so a
 number that is a *value* still fails. A second such preset costs one line and a moment's thought
 about whether the device is real — which is the check R4 actually wants.
+
+### F-18 — `describe` renders a per-preset law as plain `AUTO`, so the preset that changes the arithmetic looks identical to the one that does not **[verified]**
+
+Found on 2026-09-15 while converting the generic CHP (B4). A preset may replace a field's law by
+assigning a `SizingLaw` as the field value — the spelling `GenericBoilerConfig.preset_pellets` has
+used since B1 and the one the two CHP presets need, since a gas turbine and a fuel cell derive
+their electricity from their heat by different ratios. `hisim energy-system describe` shows
+nothing of it. Its `presets` section prints each preset's sizable fields as `pinned:` or `AUTO:`,
+and a field holding a law counts as `AUTO`; its `sizable fields` section prints the law declared
+on the field, which is the *other* preset's. The description of `CHPConfig` therefore says
+`p_el … law: 0.66 * Self("p_th")` and lists `hydrogen` with `AUTO: p_el, p_fuel`, so a reader is
+told the fuel cell computes its electricity the gas turbine's way. `GenericBoilerConfig` reads the
+same way for `pellets` and `wood_chips`, whose minimum power law is a twelfth of the maximum where
+the declared law is a constant zero.
+
+Nothing computes wrongly — the resolver evaluates the assigned law, which
+`tests/test_energy_system_configure.py` now pins at the wire level — but `describe` is what an
+author reads before writing a file, and `hisim/config/introspection.py` is what the schema
+exporter and the RenoVisor layer read. The fix is local: `describe_config` already builds each
+preset to classify its fields, so the branch that files a field under `AUTO:` can ask whether the
+built value is a `SizingLaw` and, if it is, print that law's `describe()` beside the preset. Left
+alone here because it changes a shared introspection surface rather than the class under
+conversion, and because the number of classes with per-preset laws is still three.
+

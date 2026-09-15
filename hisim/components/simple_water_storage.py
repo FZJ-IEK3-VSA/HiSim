@@ -127,8 +127,7 @@ class SimpleHotWaterStorageConfig(ConfigBase):
     The space-heating buffer vessel. The named default is :meth:`preset_buffer`, and
     ``volume_heating_water_storage_in_liter`` is sizable: the preset leaves it ``AUTO`` and
     ``.resolve(ctx)`` computes it from the maximal thermal power of the generator the vessel
-    buffers.
-    An author who knows the vessel pins the field instead.
+    buffers. An author who knows the vessel pins the field instead.
 
     ``sizing_option`` says which kind of generator the vessel buffers, and so which
     litres-per-kilowatt figure the volume law applies. It is a field rather than an argument of

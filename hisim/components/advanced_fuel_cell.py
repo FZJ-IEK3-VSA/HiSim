@@ -1,6 +1,5 @@
 """Advanced fuel cell module."""
 
-import os
 from dataclasses import dataclass
 import math
 
@@ -23,7 +22,6 @@ from hisim import loadtypes as lt
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig, PhysicsConfig
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
-from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim.economics.facts import CostRelevance
@@ -110,52 +108,6 @@ class CHPConfig(ConfigBase):
     def preset_hydrogen(cls, name: str) -> "CHPConfig":
         """The 3 kW electric, 4 kW thermal modulating hydrogen fuel cell, on every field default."""
         return cls(component_id=ComponentID(name=name))
-
-
-class CHPConfigAdvanced:
-    """CHP config advanced class."""
-
-    def __init__(self) -> None:
-        """Initialize the class."""
-        # Remark: moved the whole class body into the __init__ function to avoid errors if the file read below
-        # does not exist.
-
-        # system_name = "BlueGEN15"
-        # system_name = "Dachs 0.8"
-        # system_name = "Test_KWK"
-        # system_name = "Dachs G2.9"
-        # system_name = "HOMER"
-        system_name = "BlueGen BG15"
-
-        dataframe = pd.read_excel(
-            os.path.join(utils.HISIMPATH["chp_system"], "mock_up_efficiencies.xlsx"),
-            index_col=0,
-        )
-
-        df_specific = dataframe.loc[str(system_name)]
-
-        if str(df_specific["is_modulating"]) == "Yes":
-            self.is_modulating: bool = True
-            self.p_el_min: float = df_specific["P_el_min"]
-            self.p_th_min: float = df_specific["P_th_min"]
-            self.p_total_min: float = df_specific["P_total_min"]
-            self.eff_el_min: float = df_specific["eff_el_min"]
-            self.eff_th_min: float = df_specific["eff_th_min"]
-
-        elif str(df_specific["is_modulating"]) == "No":
-            self.is_modulating = False
-        else:
-            log.error("Modulation is not defined. Modulation must be 'Yes' or 'No'")
-            raise ValueError
-
-        self.p_el_max: float = df_specific["P_el_max"]
-        self.p_th_max: float = df_specific["P_th_max"]
-        self.p_total_max: float = df_specific["P_total_max"]  # maximum fuel consumption
-        self.eff_el_max: float = df_specific["eff_el_max"]
-        self.eff_th_max: float = df_specific["eff_th_max"]
-        self.mass_flow_max: float = df_specific["mass_flow (dT=20°C)"]
-        self.temperature_max: float = df_specific["temperature_max"]
-        self.delta_temperature: float = 10
 
 
 class CHPState:

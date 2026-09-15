@@ -62,10 +62,14 @@ class ComponentConfigScan:
     #: Rule 2's one sanctioned exception, as ``"<ConfigClass>.<preset>"``: a preset named
     #: after a real catalogue device carries that device's designation, digits and all, and
     #: no rating suffix can spell it. ``vitocal_300_a`` is Viessmann's Vitocal 300-A, the one
-    #: machine the generic heat pump's device database is keyed to in the fleet. Listing the
-    #: exemption here is what keeps rule 2 strict: a number that is a *value* still fails,
-    #: because it will not be in this tuple.
-    CATALOGUE_DEVICE_PRESETS: Tuple[str, ...] = ("GenericHeatPumpConfig.vitocal_300_a",)
+    #: machine the generic heat pump's device database is keyed to in the fleet, and
+    #: ``samsung_ac120`` is Samsung's AC120HBHFKH/SA - AC120HCAFKH/SA out of the smart-devices
+    #: catalogue. Listing the exemption here is what keeps rule 2 strict: a number that is a
+    #: *value* still fails, because it will not be in this tuple.
+    CATALOGUE_DEVICE_PRESETS: Tuple[str, ...] = (
+        "GenericHeatPumpConfig.vitocal_300_a",
+        "AirConditionerConfig.samsung_ac120",
+    )
 
     #: Rule 5 (with amendment A1 of the naming supplement): ``standard`` is reserved for a
     #: class with exactly one defensible preset, and survives a second one only when that
@@ -189,6 +193,8 @@ class PilotWireFormat:
         "ElectricHeatingConfig": ("resistive",),
         "DistrictHeatingConfig": ("standard",),
         "GenericHeatPumpConfig": ("vitocal_300_a",),
+        "AirConditionerConfig": ("samsung_ac120",),
+        "SimpleAirConditionerConfig": ("standard",),
         "IdealizedHeaterConfig": ("standard",),
         "SimpleHeatSourceConfig": (
             "constant_thermal_power",
@@ -222,6 +228,8 @@ class PilotWireFormat:
         "ElectricHeatingConfig": (),
         "DistrictHeatingConfig": (),
         "GenericHeatPumpConfig": ("for_device",),
+        "AirConditionerConfig": ("for_device", "for_building_load"),
+        "SimpleAirConditionerConfig": (),
         "IdealizedHeaterConfig": (),
         "SimpleHeatSourceConfig": (),
         "CarConfig": ("for_household",),
@@ -278,6 +286,8 @@ class PilotWireFormat:
         "ElectricityMeterConfig": (),
         "GenericBoilerControllerConfig": (),
         "GenericHeatPumpConfig": (),
+        "AirConditionerConfig": (),
+        "SimpleAirConditionerConfig": (),
         "IdealizedHeaterConfig": (),
         "SimpleHeatSourceConfig": (),
     }
@@ -562,7 +572,9 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     from hisim.components.generic_car import CarConfig
     from hisim.components.generic_district_heating import DistrictHeatingConfig
     from hisim.components.generic_electric_heating import ElectricHeatingConfig
+    from hisim.components.air_conditioner import AirConditionerConfig
     from hisim.components.generic_heat_pump import GenericHeatPumpConfig
+    from hisim.components.simple_air_conditioner import SimpleAirConditionerConfig
     from hisim.components.heat_distribution_system import (
         HeatDistributionConfig,
         HeatDistributionControllerConfig,
@@ -596,6 +608,8 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "ElectricHeatingConfig": ElectricHeatingConfig,
         "DistrictHeatingConfig": DistrictHeatingConfig,
         "GenericHeatPumpConfig": GenericHeatPumpConfig,
+        "AirConditionerConfig": AirConditionerConfig,
+        "SimpleAirConditionerConfig": SimpleAirConditionerConfig,
         "IdealizedHeaterConfig": IdealizedHeaterConfig,
         "SimpleHeatSourceConfig": SimpleHeatSourceConfig,
         "CarConfig": CarConfig,

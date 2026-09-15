@@ -1,6 +1,5 @@
 """Heating meter module to measure district heating consumption, costs and co2 emission."""
 
-# clean
 from dataclasses import dataclass
 from typing import ClassVar, List, Optional, Tuple
 

@@ -54,8 +54,6 @@ Note on the package layout:
 
 """
 
-# clean
-
 from hisim.components.building.building import Building, BuildingState
 from hisim.components.building.config import BuildingConfig
 from hisim.components.building.information import BuildingInformation

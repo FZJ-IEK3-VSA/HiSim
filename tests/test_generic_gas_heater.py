@@ -1,6 +1,5 @@
 """Test for generic gas heater module."""
 
-# clean
 import pytest
 from hisim import component as cp
 

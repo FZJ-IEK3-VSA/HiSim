@@ -43,7 +43,6 @@ images are embedded at a few fixed sizes, tabular KPI data is rendered with
 generated table of contents and footer page numbers.
 """
 
-# clean
 from pathlib import Path
 import copy
 import time

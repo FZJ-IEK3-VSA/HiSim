@@ -1,5 +1,4 @@
 """ Makes an overview of all the components and collects important information for each module. """
-# clean
 from types import ModuleType
 from typing import List, Optional, Set, TypedDict, Union
 from pathlib import Path as Pathlibpath
@@ -96,7 +95,6 @@ class FileInformation:
     file_name: str = ""
     length: str = ""
     authors: str = ""
-    cleaned: bool = False
     copyright: str = ""
     credits: str = ""
     license: str = ""
@@ -118,7 +116,7 @@ class ToolScriptConfig(TypedDict, total=False):
     """Keyword arguments for :meth:`OverviewGenerator._write_tool_script`.
 
     Typing the per-tool configuration dicts emitted by
-    :meth:`OverviewGenerator.write_clean_files` so that ``**config``
+    :meth:`OverviewGenerator.write_tool_scripts` so that ``**config``
     unpacking is statically checked instead of falling back to ``Any``.
     """
 
@@ -172,7 +170,7 @@ class OverviewGenerator:
         ``components_information.xlsx`` output file, writing all collected
         metadata into a fresh workbook saved as
         ``components_information.xlsx``, and finally emitting the linting tool
-        scripts via :meth:`write_clean_files`.
+        scripts via :meth:`write_tool_scripts`.
 
         Returns:
             None
@@ -199,7 +197,7 @@ class OverviewGenerator:
             row = row + 1
         # import the module and iterate through its attributes
         workbook.save(dest_filename)
-        self.write_clean_files(fis)
+        self.write_tool_scripts(fis)
 
     @staticmethod
     def _write_tool_script(
@@ -209,11 +207,9 @@ class OverviewGenerator:
         use_forward_slashes: bool = False,
         extra_lines: Optional[List[str]] = None,
     ) -> None:
-        """Write a tool-specific script file for cleaned files."""
+        """Write a tool-specific script file listing one command per source file."""
         with open(output_path, "w", encoding="utf8") as fh:
             for myfi in fis:
-                if not myfi.cleaned:
-                    continue
                 relative_name = myfi.file_name.replace("C:\\work\\hisim_github\\HiSim\\", "")
                 path = relative_name.replace("\\", "/") if use_forward_slashes else relative_name
                 fh.write(command_template.format(path=path) + "\n")
@@ -221,19 +217,17 @@ class OverviewGenerator:
                     for line in extra_lines:
                         fh.write(line + "\n")
 
-    def write_clean_files(self, fis: List[FileInformation]) -> None:
-        """Emit linting tool scripts listing only the cleaned files.
+    def write_tool_scripts(self, fis: List[FileInformation]) -> None:
+        """Emit linting tool scripts listing the collected source files.
 
         Writes five script files (``flake8_calls.txt``,
         ``prospector_calls.txt``, ``prospector_mass_call.cmd``,
         ``flake8_mass_call.cmd`` and ``pylint_mass_call.cmd``), each containing
-        one command per file whose :attr:`FileInformation.cleaned` flag is
-        ``True``.
+        one command per collected file.
 
         Args:
             fis (List[FileInformation]): The file information records produced
-                by :meth:`process_one_file`. Only records with ``cleaned`` set
-                to ``True`` are written to the scripts.
+                by :meth:`process_one_file`, one per collected source file.
 
         Returns:
             None
@@ -293,7 +287,6 @@ class OverviewGenerator:
         column = self.add_to_cell(
             column=column, row=row, value=myfi.python_module_loading_possible, worksheet=worksheet1
         )
-        column = self.add_to_cell(column=column, row=row, value=myfi.cleaned, worksheet=worksheet1)
         column = self.add_to_cell(column=column, row=row, value=myfi.authors, worksheet=worksheet1)
         column = self.add_to_cell(column=column, row=row, value=myfi.copyright, worksheet=worksheet1)
         column = self.add_to_cell(column=column, row=row, value=myfi.email, worksheet=worksheet1)
@@ -344,8 +337,7 @@ class OverviewGenerator:
         """Build the :class:`FileInformation` for a single source file.
 
         Creates a :class:`FileInformation` keyed by ``filename``, counts its
-        lines and detects the ``# clean`` tag via
-        :meth:`analyze_file_directly`, loads it as a module via
+        lines via :meth:`analyze_file_directly`, loads it as a module via
         :meth:`try_to_load_module`, and when loading succeeds inspects the
         module's own members with :func:`inspect.getmembers` to populate the
         file's classes, methods, strings, lists, dicts and other members.
@@ -521,10 +513,8 @@ class OverviewGenerator:
     def analyze_file_directly(self, filename: str, myfi: FileInformation) -> None:
         """Analyze a source file without importing it.
 
-        Reads ``filename`` line by line, counts the number of lines, and sets
-        ``myfi.cleaned`` to ``True`` if a line starting with ``# clean`` is
-        found. The line count and cleaned flag are written back onto ``myfi``
-        in place.
+        Reads ``filename`` line by line and counts the number of lines. The
+        line count is written back onto ``myfi`` in place.
 
         Args:
             filename (str): Path to the ``.py`` file to analyze.
@@ -535,12 +525,11 @@ class OverviewGenerator:
         """
         count = 0
         with open(filename, "r", encoding="utf8") as sourcefile:
-            for count, line in enumerate(sourcefile):
-                if line.startswith("# clean"):
-                    print(f"found clean tag {myfi.file_name}")
-                    myfi.cleaned = True
-        if not myfi.cleaned:
-            print(f"no clean tag {myfi.file_name}")
+            # The loop body is empty on purpose: only the index of the last
+            # line is wanted, and iterating the file object counts the lines
+            # without reading the whole file into memory.
+            for count, _line in enumerate(sourcefile):
+                pass
         myfi.lines = count
 
     def collect_files(self) -> List[str]:

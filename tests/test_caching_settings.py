@@ -4,8 +4,6 @@ The first test pins the standalone guarantee of spec §5: with no variables set,
 The others pin how each variable is read and the one validation the settings perform.
 """
 
-# clean
-
 import pytest
 
 from hisim.caching import CacheNetworkMode, CacheSettings, CacheSettingsError

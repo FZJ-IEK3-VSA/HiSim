@@ -1,7 +1,5 @@
 """Basic household new system setup."""
 
-# clean
-
 from typing import Optional, Any, Union, List
 import re
 from pathlib import Path

@@ -6,8 +6,6 @@ on or off. When it runs, it outputs a constant thermal and electrical power sign
 and needs a constant input of hydrogen or natural gas.
 """
 
-# clean
-
 from dataclasses import dataclass
 from typing import Optional, ClassVar, List
 

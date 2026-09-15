@@ -21,8 +21,6 @@ instance attribute — so the observation holds the object itself, and the write
 it as read-only for the same reason this module does.
 """
 
-# clean
-
 from __future__ import annotations
 
 from dataclasses import dataclass

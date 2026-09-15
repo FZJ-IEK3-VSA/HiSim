@@ -6,8 +6,6 @@ dataclass instances / call classmethods and assert field values - no
 simulation, no I/O.
 """
 
-# clean
-
 import json
 
 import pandas as pd

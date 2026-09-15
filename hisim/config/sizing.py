@@ -29,8 +29,6 @@ central AUTO check and ``ConfigBase.resolve``), so any other hisim import here w
 close a cycle.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses

@@ -13,8 +13,6 @@ the misleading ``PowerToThird``/``EnergyToThird``) and the instance attribute
 ``ptx_controller_config`` (replacing ``ptxcontrollerconfig``).
 """
 
-# clean
-
 import dataclasses
 import json
 from typing import Any

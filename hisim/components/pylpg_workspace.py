@@ -21,8 +21,6 @@ those indices out and takes them back. It lives in this module so that the pool 
 :meth:`PylpgWorkspace.default_base_index` share one definition of the environment variable's name.
 """
 
-# clean
-
 import contextlib
 import os
 import pathlib

@@ -15,8 +15,6 @@ Covers three concerns:
     components and the same one manual connection.
 """
 
-# clean
-
 import json
 import os
 from pathlib import Path

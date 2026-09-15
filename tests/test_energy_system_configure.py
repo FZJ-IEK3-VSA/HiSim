@@ -19,8 +19,6 @@ instead of silently degrading every ``EF-4x`` to the catch-all. Each test states
 mode it catches.
 """
 
-# clean
-
 import dataclasses
 import enum
 import importlib

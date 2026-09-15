@@ -11,8 +11,6 @@ it is worse than a crash. The two directions below are the whole rule: a directo
 deliberately is still honoured, and a directory a previous simulator derived for itself is not.
 """
 
-# clean
-
 import os
 
 import pytest

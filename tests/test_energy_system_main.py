@@ -12,8 +12,6 @@ mockup. Two copies of one household is a drift waiting to happen, so the identit
 test rather than a promise in a README.
 """
 
-# clean
-
 import argparse
 from pathlib import Path
 from typing import ClassVar, List

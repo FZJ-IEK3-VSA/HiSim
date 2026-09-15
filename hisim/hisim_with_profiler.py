@@ -1,6 +1,5 @@
 """Profiling harness that runs a HiSim setup under cProfile and writes sorted statistics to disk."""
 
-# clean
 from __future__ import annotations
 
 import cProfile

@@ -22,8 +22,6 @@ a switch whose positions across the columns do not match where the component rea
 early with the row named is worth more than failing late with a diff.
 """
 
-# clean
-
 from __future__ import annotations
 
 from typing import Sequence, Tuple

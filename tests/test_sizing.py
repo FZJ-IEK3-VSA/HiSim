@@ -8,8 +8,6 @@ central ``Component.__init__`` check, and the single-registry invariant between 
 by ``tests/test_presets.py``.
 """
 
-# clean
-
 import copy
 import dataclasses
 import json

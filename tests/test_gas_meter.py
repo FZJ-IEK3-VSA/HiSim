@@ -1,7 +1,5 @@
 """Test for gas meter."""
 
-# clean
-
 import dataclasses
 import os
 import json

@@ -4,8 +4,6 @@ Run a normal house with heatpumps, PV and battery and compare EMS outputs with K
 Investigate total consumption, total grid consumption and grid injection.
 """
 
-# clean
-
 import os
 import json
 from typing import Optional

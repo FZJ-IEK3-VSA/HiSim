@@ -4,7 +4,6 @@ The aim is to make the building module scalable via a factor which is the absolu
 divided by the conditioned floor area given by TABULA.
 The window areas are scaled via the ratio of window area to wall area.
 """
-# clean
 import numpy as np
 import pytest
 from hisim import component

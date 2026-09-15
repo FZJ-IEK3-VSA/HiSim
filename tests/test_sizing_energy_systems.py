@@ -3,7 +3,6 @@
 Depending on building properties like rooftop area, floor area, number of apartments and heating load the energy system components,
 such as pv system, battery, heat pumps, water storage, etc. need to be scaled up.
 """
-# clean
 
 from typing import Dict
 import pytest

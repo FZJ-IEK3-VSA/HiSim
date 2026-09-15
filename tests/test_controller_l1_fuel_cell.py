@@ -6,8 +6,6 @@ cumulative value is an energy (kWh) rather than a raw sum of instantaneous
 power values (kW) that drifts with the simulation resolution.
 """
 
-# clean
-
 from typing import NamedTuple
 
 import pytest

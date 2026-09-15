@@ -23,8 +23,6 @@ dotted paths into the module configuration, and the tool materialises the full c
 document from the class defaults the list names.
 """
 
-# clean
-
 from __future__ import annotations
 
 import importlib

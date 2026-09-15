@@ -3,8 +3,6 @@
 Evaluates diesel or electricity consumption based on driven kilometers and processes Car Location for charging stations.
 """
 
-# clean
-
 import datetime as dt
 from dataclasses import dataclass
 

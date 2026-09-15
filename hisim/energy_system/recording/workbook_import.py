@@ -13,8 +13,6 @@ Every refusal names the sheet and the row, because a spreadsheet with a hundred 
 where "something is wrong with the file" is a useless message.
 """
 
-# clean
-
 from __future__ import annotations
 
 from pathlib import Path

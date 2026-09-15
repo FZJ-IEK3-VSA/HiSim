@@ -9,8 +9,6 @@ Only the local settings are used in this phase. The network mode and the endpoin
 parsed and validated so that a typo fails now, but no connection is opened yet.
 """
 
-# clean
-
 import enum
 import os
 import urllib.parse

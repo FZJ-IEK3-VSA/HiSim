@@ -23,8 +23,6 @@ planner in :mod:`hisim.energy_system.wiring` produces these records, hands the f
 here to be checked, and never needs to know how a check is written.
 """
 
-# clean
-
 from __future__ import annotations
 
 from dataclasses import dataclass

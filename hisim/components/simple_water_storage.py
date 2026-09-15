@@ -1,6 +1,5 @@
 """Simple Water Storage Module for dhw storage and hot water storage for heating."""
 
-# clean
 # Owned
 import importlib
 from dataclasses import dataclass

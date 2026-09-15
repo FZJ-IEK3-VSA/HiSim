@@ -22,8 +22,6 @@ moment a second setup matches it. That is also why the name has to be derived ra
 invented: two runs of the recorder on the same fleet must produce the same file names.
 """
 
-# clean
-
 from __future__ import annotations
 
 import datetime

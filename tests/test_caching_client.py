@@ -5,8 +5,6 @@ filename, directory handling, validation and discarding), and importing the cach
 component, simulator or simulation-parameters module. The second is checked in a fresh interpreter.
 """
 
-# clean
-
 import dataclasses
 import os
 import pathlib

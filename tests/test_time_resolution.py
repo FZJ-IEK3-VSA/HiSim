@@ -3,8 +3,6 @@
 Here we test the cluster household.
 """
 
-# clean
-
 import os
 import shutil
 from math import isclose

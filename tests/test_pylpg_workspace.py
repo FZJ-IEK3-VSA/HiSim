@@ -12,8 +12,6 @@ None of them touch pylpg or start a calculation; they exercise arithmetic and on
 which is why they are ``base`` rather than ``utsp``.
 """
 
-# clean
-
 import pathlib
 from typing import Any, ClassVar, List, Optional
 

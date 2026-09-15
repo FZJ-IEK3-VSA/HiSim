@@ -7,8 +7,6 @@ The helper is a pure, side-effect-free function used by both
 ``opex_calculation`` and ``capex_calculation`` to build summary rows.
 """
 
-# clean
-
 from typing import Dict, Optional
 
 import pytest

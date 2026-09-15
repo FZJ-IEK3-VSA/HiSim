@@ -98,8 +98,6 @@ load_energy_system`` — is the canonical spelling; the submodules are equally i
 for code that prefers the fully-qualified path.
 """
 
-# clean
-
 from hisim.energy_system.errors import (
     EnergySystemBindingError,
     EnergySystemCatalogueError,

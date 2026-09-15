@@ -16,8 +16,6 @@ summarises, the probe runner turns it into a refusal naming the column, and neit
 to the spawn.
 """
 
-# clean
-
 from __future__ import annotations
 
 import os

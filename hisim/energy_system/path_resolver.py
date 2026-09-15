@@ -18,8 +18,6 @@ that the configuration stage of the executor uses when it decodes a config block
 tests can build over temporary directories.
 """
 
-# clean
-
 from __future__ import annotations
 
 import enum

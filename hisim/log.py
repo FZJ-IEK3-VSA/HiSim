@@ -5,7 +5,6 @@
 """ Logging functionality for all of HiSim. """
 from __future__ import annotations
 
-# clean
 from enum import IntEnum
 from pathlib import Path
 

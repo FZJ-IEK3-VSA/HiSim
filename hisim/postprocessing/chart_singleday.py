@@ -1,6 +1,5 @@
 """Charts for a single day."""
 
-# clean
 from typing import Callable, List, Tuple
 from pathlib import Path
 import matplotlib.pyplot as plt

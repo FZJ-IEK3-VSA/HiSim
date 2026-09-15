@@ -15,8 +15,6 @@ useless, and one that never fires makes it pointless.
 Each test states the failure mode it catches.
 """
 
-# clean
-
 from __future__ import annotations
 
 import importlib.util

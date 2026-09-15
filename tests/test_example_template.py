@@ -1,6 +1,5 @@
 """Test for the Example Template."""
 
-# clean
 from pathlib import Path
 
 import pytest

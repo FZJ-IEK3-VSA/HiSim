@@ -10,8 +10,6 @@ the simulator, the simulation parameters or the singleton repository. A test che
 interpreter.
 """
 
-# clean
-
 from hisim.caching.client import CacheClient, CacheEntry
 from hisim.caching.keys import (
     CacheKey,

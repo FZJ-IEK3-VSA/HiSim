@@ -19,8 +19,6 @@ committed: it is regenerated from the probe runs whenever it is wanted, which is
 carries the previous decision forward into it rather than asking for it again.
 """
 
-# clean
-
 from __future__ import annotations
 
 import argparse

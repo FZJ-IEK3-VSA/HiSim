@@ -2,7 +2,6 @@
 
 It iterates over all components in each timestep until convergence and loops over all time steps.
 """
-# clean
 import os
 import datetime
 from typing import List, Tuple, Optional, Dict, Any, Union

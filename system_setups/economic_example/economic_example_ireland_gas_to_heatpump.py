@@ -32,8 +32,6 @@ Like its German sibling this module defines no `setup_function`: it drives the e
 `initialize_from_python` and only supplies the economics on top.
 """
 
-# clean
-
 import json
 import sys
 import time

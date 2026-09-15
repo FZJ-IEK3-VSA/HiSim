@@ -1,7 +1,5 @@
 """Default Connections Module."""
 
-# clean
-
 from typing import Optional
 from hisim.simulator import SimulationParameters, Simulator
 from hisim.components import loadprofilegenerator_utsp_connector

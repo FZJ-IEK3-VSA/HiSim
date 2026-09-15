@@ -62,8 +62,6 @@ canonical spelling; the submodules are equally importable for code that prefers 
 fully-qualified path.
 """
 
-# clean
-
 from hisim.config.base import ComponentID, ConfigBase, DisplayConfig
 from hisim.config.names import NameSyntax
 from hisim.config.presets import (

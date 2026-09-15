@@ -16,8 +16,6 @@ happens once for the whole module and every test after that is an assertion on p
 Each test states the failure mode it catches.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses

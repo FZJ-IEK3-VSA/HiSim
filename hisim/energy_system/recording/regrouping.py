@@ -22,8 +22,6 @@ proves is precisely "everything except these named values". A column with a long
 less than one with none, and the report says how many each has so that nobody has to guess.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses

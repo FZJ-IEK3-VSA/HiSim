@@ -13,8 +13,6 @@ setup twice, and it uses the cheapest setup in the repository for that reason.
 Each test states the failure mode it catches.
 """
 
-# clean
-
 from __future__ import annotations
 
 import datetime

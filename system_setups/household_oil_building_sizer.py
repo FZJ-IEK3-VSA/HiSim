@@ -27,8 +27,6 @@ Sizing and system parameters are read from a
 default oil-household configuration is used instead.
 """
 
-# clean
-
 from typing import Optional, Any, Union, List
 import re
 import os

@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# clean
 
 """ Generic CHP controller with minimal runtime.
 

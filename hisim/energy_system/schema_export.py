@@ -32,8 +32,6 @@ component list is exactly the set of classes an energy-system file can name toda
 as the conversion proceeds.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses

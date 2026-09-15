@@ -12,8 +12,6 @@ file the executor refuses, with the same message. ``schema`` has to produce exac
 file. And ``run`` has to leave a result directory holding the three artifacts every run writes.
 """
 
-# clean
-
 import os
 from pathlib import Path
 from typing import ClassVar

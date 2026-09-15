@@ -19,8 +19,6 @@ sets such a path has to mean the same thing in both — separators, missing-bloc
 or a fix to one caller's path handling silently misses the other.
 """
 
-# clean
-
 from __future__ import annotations
 
 import copy

@@ -40,8 +40,6 @@ the type expected — never a silent pass-through of a wrong type, because a wro
 configuration surfaces as a wrong simulation result rather than as a crash.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses

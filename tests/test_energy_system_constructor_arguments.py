@@ -31,8 +31,6 @@ resolve, since an unresolved parameter type is one the schema cannot state and t
 cannot decode against.
 """
 
-# clean
-
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List
 

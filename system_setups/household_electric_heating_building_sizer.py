@@ -7,8 +7,6 @@ elements, DHW storage, optional battery and EMS, and an electricity meter.
 Configuration is loaded from modular household config files or defaults are used.
 """
 
-# clean
-
 from typing import Optional, Any, Union, List
 import re
 import os

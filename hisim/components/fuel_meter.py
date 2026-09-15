@@ -1,6 +1,5 @@
 """Fuel meter module to measure energy consumption for all fuel types except gas (natural and hydrogen) and electricity."""
 
-# clean
 from dataclasses import dataclass
 from typing import ClassVar, Dict, List, Optional, Tuple
 

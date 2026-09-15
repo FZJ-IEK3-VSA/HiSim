@@ -32,8 +32,6 @@ directly on the bridge's own functions with an empty fleet, which is enough: non
 on what was simulated.
 """
 
-# clean
-
 import datetime
 import json
 import os

@@ -6,8 +6,6 @@ workflow all decide an exit code, and putting the codes in any one of those modu
 other two import it for that alone.
 """
 
-# clean
-
 from __future__ import annotations
 
 

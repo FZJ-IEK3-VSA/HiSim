@@ -1,7 +1,5 @@
 """Test for building module."""
 
-# clean
-
 import datetime
 import time
 import pytest

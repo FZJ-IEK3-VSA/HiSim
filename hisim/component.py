@@ -10,8 +10,6 @@ compatibility alias is left behind on purpose: ``hisim.component`` is the compon
 ``hisim.config`` directly, which makes the layering visible at every call site.
 """
 
-# clean
-
 from __future__ import annotations
 import os
 import dataclasses as dc

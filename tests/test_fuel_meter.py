@@ -6,8 +6,6 @@ oil boiler's consumption within tolerance, and logs the OPEX cost and CO2
 footprint KPI values for inspection.
 """
 
-# clean
-
 import os
 from pathlib import Path
 import json

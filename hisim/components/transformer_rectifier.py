@@ -1,8 +1,6 @@
 """Example Transformer."""
 from __future__ import annotations
 
-# clean
-
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from dataclasses import dataclass
 from typing import Optional, Tuple

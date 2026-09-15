@@ -20,8 +20,6 @@ to admit, and a ``Union[str, Enum]`` refused every string that was not a member 
 letting the free-string half of the union have it.
 """
 
-# clean
-
 import enum
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union

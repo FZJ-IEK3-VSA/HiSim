@@ -23,8 +23,6 @@ sheet, so that the file stays exactly the two sheets the requirement describes a
 accidentally sort a metadata row into the middle of the table.
 """
 
-# clean
-
 from __future__ import annotations
 
 from pathlib import Path

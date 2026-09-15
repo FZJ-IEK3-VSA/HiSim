@@ -12,8 +12,6 @@ They deliberately avoid constructing a :class:`FuelMeter` instance or running a
 simulation, so they are fast and free of external dependencies.
 """
 
-# clean
-
 import dataclasses
 
 import pytest

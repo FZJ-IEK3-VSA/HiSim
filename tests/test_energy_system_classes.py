@@ -17,8 +17,6 @@ silently rot.
 Each test states the failure mode it catches.
 """
 
-# clean
-
 from typing import ClassVar, Dict, Mapping
 
 import pytest

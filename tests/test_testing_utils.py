@@ -1,7 +1,5 @@
 """Unit tests for the helpers in tests/testing_utils.py."""
 
-# clean
-
 from pathlib import Path
 
 import pytest

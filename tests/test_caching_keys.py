@@ -5,8 +5,6 @@ module, a library version -- and must not change for anything else. The closure 
 small package written into a temporary directory, so the tests can edit source and add imports freely.
 """
 
-# clean
-
 import dataclasses
 import enum
 import hashlib

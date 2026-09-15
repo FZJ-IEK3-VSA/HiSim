@@ -1,6 +1,5 @@
 """Green hydrogen electrolyzer."""
 
-# clean
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Optional, Sequence, Tuple
 import difflib

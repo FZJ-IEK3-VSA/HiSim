@@ -20,8 +20,6 @@ written a second time as an explicit item at the participant that reads it. Pair
 therefore done once for the whole system, before any entry is written.
 """
 
-# clean
-
 from __future__ import annotations
 
 from typing import ClassVar, Dict, List, Optional, Sequence, Set, Tuple

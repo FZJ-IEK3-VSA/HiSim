@@ -1,6 +1,5 @@
 """Advanced fuel cell module."""
 
-# clean
 import os
 from dataclasses import dataclass
 import math

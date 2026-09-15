@@ -8,8 +8,6 @@ parameters needed to read a profile and feed it into a simulation as a
 single output channel.
 """
 
-# clean
-
 import warnings
 from pathlib import Path
 from typing import ClassVar, List

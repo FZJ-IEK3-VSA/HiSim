@@ -13,8 +13,6 @@ session is what lets the light parts of the pass — the probe list, the command
 defaults — ask it without importing the recorder and, with it, HiSim's whole component tree.
 """
 
-# clean
-
 from __future__ import annotations
 
 from pathlib import Path

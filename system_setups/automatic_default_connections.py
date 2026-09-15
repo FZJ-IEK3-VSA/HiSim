@@ -1,7 +1,5 @@
 """Household with automatic default connections."""
 
-# clean
-
 from typing import Optional, Any
 from hisim.simulator import SimulationParameters
 from hisim.config import SizingContext

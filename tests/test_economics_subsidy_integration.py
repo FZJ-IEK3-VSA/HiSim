@@ -20,8 +20,6 @@ the sibling file, so if those pass and these do not, the defect is in how the ev
 rule engines together, or in a number losing its provenance on the way to the report (§3.10).
 """
 
-# clean
-
 import dataclasses
 from typing import Any, Dict
 

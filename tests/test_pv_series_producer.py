@@ -13,8 +13,6 @@ component machinery, so hashing all of it is affordable, and an edit to the prod
 its fingerprint with no version constant anywhere.
 """
 
-# clean
-
 import dataclasses
 import importlib
 import pathlib

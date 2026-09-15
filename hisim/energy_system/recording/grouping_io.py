@@ -16,8 +16,6 @@ file, so the committed artefact is the judgement and not the inventory, and a di
 decisions that changed rather than the components that did not.
 """
 
-# clean
-
 from __future__ import annotations
 
 from pathlib import Path

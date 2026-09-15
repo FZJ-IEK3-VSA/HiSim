@@ -27,8 +27,6 @@ Note that envelope economics are dominated by the residual value, by design and 
 (README §3.2b): half a 40-year wall insulation is credited back at the horizon.
 """
 
-# clean
-
 import pytest
 
 from hisim.economics.database import CostDatabase

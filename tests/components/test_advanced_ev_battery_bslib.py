@@ -9,7 +9,6 @@ that previously had no unit tests:
 
 These tests need no simulation parameters, no bslib calls and no I/O.
 """
-# clean
 
 import pytest
 

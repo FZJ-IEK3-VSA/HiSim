@@ -1,7 +1,6 @@
 """Idealized Electric Heater Module."""
 from __future__ import annotations
 
-# clean
 # Owned
 from typing import Optional, List
 from dataclasses import dataclass

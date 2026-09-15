@@ -27,8 +27,6 @@ second time, and the two things that would break the promise are refused: a fiel
 had to size, and a record that came out saying something other than the record it was given.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses

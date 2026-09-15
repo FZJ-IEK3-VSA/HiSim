@@ -16,8 +16,6 @@ often a forgotten input item.
 Each test states the failure mode it catches.
 """
 
-# clean
-
 import time
 from pathlib import Path
 from typing import ClassVar

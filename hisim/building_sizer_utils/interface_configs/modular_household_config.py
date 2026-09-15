@@ -52,8 +52,6 @@ names the path and the reason rather than letting the run simulate a household n
 """
 from __future__ import annotations
 
-# clean
-
 from typing import Any, Optional
 import json
 from dataclasses import dataclass

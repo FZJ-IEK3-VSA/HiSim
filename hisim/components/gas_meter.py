@@ -5,7 +5,6 @@ running totals in GasMeterState, and supplies OPEX/CAPEX and KPI data for the
 post-processing cost and emission computation.
 """
 
-# clean
 from dataclasses import dataclass
 from typing import ClassVar, List, Optional, Tuple
 

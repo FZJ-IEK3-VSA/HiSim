@@ -17,8 +17,6 @@ Every one of them renders itself into plain data. The audit is machine-facing ab
 webtool, a diff, a reviewer's script — so nothing in it is prose that has to be parsed back.
 """
 
-# clean
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field

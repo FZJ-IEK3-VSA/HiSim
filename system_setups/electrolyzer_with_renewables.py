@@ -1,7 +1,5 @@
 """Simple Electrolyzer system setup."""
 
-# clean
-
 # Generic
 from typing import Optional
 

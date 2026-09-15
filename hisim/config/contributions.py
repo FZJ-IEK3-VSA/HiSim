@@ -14,8 +14,6 @@ out of sight. Like every module of the ``hisim.config`` package it imports nothi
 the rest of HiSim.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses

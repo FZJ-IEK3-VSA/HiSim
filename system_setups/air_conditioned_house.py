@@ -1,6 +1,5 @@
 """Air-conditioned household."""
 
-# clean
 from typing import Optional
 
 import pandas as pd

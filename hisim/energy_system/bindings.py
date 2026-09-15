@@ -16,8 +16,6 @@ shared between the validator that rejects a source line for a fact nobody reads 
 surface that lists a class's facts for an author.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses

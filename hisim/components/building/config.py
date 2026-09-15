@@ -8,8 +8,6 @@ physics that computes them, in ``information.py``, which assigns
 ``BuildingConfig.SIZING_CONTRIBUTIONS`` on import.
 """
 
-# clean
-
 # pylint: disable=cyclic-import
 # (the only backward edge is a runtime-local import of Building inside
 # get_main_classname; module import order is acyclic)

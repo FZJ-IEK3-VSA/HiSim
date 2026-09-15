@@ -20,8 +20,6 @@ are diagnostics. It means a diagnostic went blind, so read a failure as "the saf
 hole", not as "the costs are wrong".
 """
 
-# clean
-
 import csv
 import os
 from typing import List, Optional

@@ -23,8 +23,6 @@ generator, so its presence means the caller handed in a generated record rather 
 file, which is a legitimate thing to do but has to be said out loud.
 """
 
-# clean
-
 from __future__ import annotations
 
 import datetime

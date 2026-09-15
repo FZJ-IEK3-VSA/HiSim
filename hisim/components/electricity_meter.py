@@ -1,6 +1,5 @@
 """Electricity meter module should replace the sumbuilder. """
 
-# clean
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 

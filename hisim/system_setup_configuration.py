@@ -4,8 +4,6 @@ Provides the base dataclass for household system-setup configurations,
 supporting JSON loading and default/scaled configuration generation.
 """
 
-# clean
-
 from typing import TYPE_CHECKING, Any, Dict
 import json
 from pathlib import Path

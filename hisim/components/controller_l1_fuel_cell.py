@@ -1,6 +1,5 @@
 """Controller L1 for the fuel cell."""
 
-# clean
 from typing import Optional, List, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json

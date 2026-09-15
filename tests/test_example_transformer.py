@@ -1,6 +1,5 @@
 """Test for the Example Transformer."""
 
-# clean
 import pytest
 from hisim import component as cp
 from hisim.components import example_transformer

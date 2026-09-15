@@ -15,8 +15,6 @@ leading one. The expected values below reflect that verified behaviour rather
 than a one-off leading-only strip.
 """
 
-# clean
-
 from pathlib import Path
 
 import pytest

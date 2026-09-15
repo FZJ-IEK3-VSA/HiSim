@@ -7,8 +7,6 @@ to a dynamic output, so callers can catch this wiring error distinctly.
 
 from __future__ import annotations
 
-# clean
-
 import pytest
 
 from hisim import component as cp

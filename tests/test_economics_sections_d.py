@@ -29,8 +29,6 @@ behind these captions carry their own arithmetic invariants in
 raises there rather than rendering here.
 """
 
-# clean
-
 import re
 
 import pytest

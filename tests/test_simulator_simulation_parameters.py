@@ -14,8 +14,6 @@ the run's configuration without touching a private, so a red test here means eit
 disappeared or it stopped agreeing with the object the simulator actually uses.
 """
 
-# clean
-
 import pytest
 
 from hisim.simulationparameters import SimulationParameters

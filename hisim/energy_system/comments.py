@@ -28,8 +28,6 @@ writer's byte for byte, and a test holds it to that. Everything below — the fo
 quoting rule, the spelling of a null — exists to keep that equality true.
 """
 
-# clean
-
 from __future__ import annotations
 
 import io

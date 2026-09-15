@@ -10,8 +10,6 @@ touch the key. And the window geometry is key material, so two buildings with di
 share a series.
 """
 
-# clean
-
 import importlib
 import pathlib
 import sys

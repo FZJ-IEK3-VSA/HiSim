@@ -1,5 +1,4 @@
 """Test for project code overview generator."""
-# clean
 import logging
 import sys
 from pathlib import Path
@@ -20,7 +19,7 @@ def test_project_code_overview_generator(tmp_path: Path, monkeypatch: pytest.Mon
     information about every Python module and writes the result into an Excel
     workbook named ``components_information.xlsx``. Running it must therefore
     produce a non-empty workbook with the expected ``HiSim Files`` sheet.
-    ``write_clean_files`` additionally emits the flake8/prospector call files
+    ``write_tool_scripts`` additionally emits the flake8/prospector call files
     into the parent of the working directory.
 
     ``run()`` writes its artifacts relative to the current working directory,
@@ -52,7 +51,7 @@ def test_project_code_overview_generator(tmp_path: Path, monkeypatch: pytest.Mon
     assert isinstance(first_module, str)
     assert first_module.endswith(".py")
 
-    # Secondary artifacts written by write_clean_files into the parent dir.
+    # Secondary artifacts written by write_tool_scripts into the parent dir.
     assert (tmp_path / "flake8_calls.txt").exists()
     assert (tmp_path / "prospector_calls.txt").exists()
     assert (tmp_path / "prospector_mass_call.cmd").exists()
@@ -70,7 +69,6 @@ def test_process_one_file_classifies_members_by_type(tmp_path: Path) -> None:
     """
     sample = tmp_path / "test_overview_sample.py"
     sample.write_text(
-        "# clean\n"
         '"""Test module for process_one_file type classification."""\n\n\n'
         "class MyMeta(type):\n"
         '    """Custom metaclass."""\n\n\n'
@@ -142,7 +140,7 @@ def test_process_one_file_warns_on_duplicate_class_names(
     """
     file_a = tmp_path / "sample_a.py"
     file_b = tmp_path / "sample_b.py"
-    content = "# clean\nclass SharedName:\n    pass\n"
+    content = "class SharedName:\n    pass\n"
     file_a.write_text(content, encoding="utf-8")
     file_b.write_text(content, encoding="utf-8")
 
@@ -208,7 +206,6 @@ def test_process_one_file_records_class_without_source_definition(
     """
     module_file = tmp_path / "dynamic_classes.py"
     module_file.write_text(
-        "# clean\n"
         "from collections import namedtuple\n"
         "# No 'class Point:' statement -> inspect cannot locate the source.\n"
         "Point = namedtuple('Point', ['x', 'y'])\n",
@@ -279,7 +276,6 @@ def test_try_to_load_module_catches_base_exception_outcome(
     """
     module_file = tmp_path / "raises_pytest_failed.py"
     module_file.write_text(
-        "# clean\n"
         "import pytest\n"
         "pytest.fail('simulated unimportable module')\n",
         encoding="utf-8",
@@ -324,7 +320,6 @@ def test_try_to_load_module_skips_module_with_unregistered_pytest_mark(
     """
     module_file = tmp_path / "test_array_api.py"
     module_file.write_text(
-        "# clean\n"
         "import pytest\n"
         "pytestmark = pytest.mark.array_api_backends\n",
         encoding="utf-8",

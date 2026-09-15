@@ -7,8 +7,6 @@ This module contains the following classes:
 
 """
 
-# clean
-
 # Generic/Built-in
 import copy
 from typing import List, Any, Optional

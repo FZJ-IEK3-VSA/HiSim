@@ -15,8 +15,6 @@ laws and how configs *resolve* them lives in :mod:`hisim.config.sizing`. Per the
 ``hisim.config`` layering rule this module imports nothing from the rest of HiSim.
 """
 
-# clean
-
 from __future__ import annotations
 
 import enum

@@ -1,7 +1,5 @@
 """Generic fuel cell component modelling hydrogen-to-electricity conversion."""
 
-# clean
-
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from pathlib import Path
 import json

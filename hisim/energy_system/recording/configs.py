@@ -37,8 +37,6 @@ inherited rather than reimplemented, and a recorded block is the same text a rea
 have written for the same configuration.
 """
 
-# clean
-
 from __future__ import annotations
 
 import copy

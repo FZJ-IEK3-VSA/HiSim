@@ -1,5 +1,4 @@
 """ Main module for HiSim: Starts the Simulator. """
-# clean
 import os
 import warnings
 import importlib

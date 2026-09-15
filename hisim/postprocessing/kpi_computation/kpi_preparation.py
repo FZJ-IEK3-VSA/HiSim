@@ -1,5 +1,3 @@
-# clean
-
 """Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and self-sufficiency rate.
 
 KPis for PV-battery systems in houses:

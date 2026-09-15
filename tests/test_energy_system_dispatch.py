@@ -23,8 +23,6 @@ its ports that way today.
 Each test states the failure mode it catches.
 """
 
-# clean
-
 from pathlib import Path
 from typing import ClassVar
 

@@ -13,8 +13,6 @@ the question is what a *first* import pulls in and a test process has long since
 everything.
 """
 
-# clean
-
 import subprocess
 import sys
 from typing import ClassVar, Tuple

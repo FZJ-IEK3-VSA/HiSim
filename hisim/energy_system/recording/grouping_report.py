@@ -19,8 +19,6 @@ outright; a column with several proves everything except those values, and the n
 that nobody has to infer it.
 """
 
-# clean
-
 from __future__ import annotations
 
 import itertools

@@ -1,7 +1,5 @@
 """Module for visualizing the entire system as a flow chart."""
 
-# clean
-
 from collections import defaultdict
 from pathlib import Path
 from typing import List

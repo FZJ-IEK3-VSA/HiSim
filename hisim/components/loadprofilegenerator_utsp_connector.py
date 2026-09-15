@@ -1,7 +1,5 @@
 """Contains a component that uses the UTSP to provide LoadProfileGenerator data."""
 
-# clean
-
 import datetime
 import errno
 import io

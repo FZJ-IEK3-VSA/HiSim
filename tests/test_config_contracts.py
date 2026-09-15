@@ -217,6 +217,8 @@ class PilotWireFormat:
             "constant_temperature",
             "near_surface_brine",
         ),
+        "SumBuilderConfig": ("standard",),
+        "TransformerConfig": ("standard",),
         "CarConfig": (),
     }
 
@@ -261,6 +263,8 @@ class PilotWireFormat:
         "L1CHPControllerConfig": (),
         "IdealizedHeaterConfig": (),
         "SimpleHeatSourceConfig": (),
+        "SumBuilderConfig": (),
+        "TransformerConfig": (),
         "CarConfig": ("for_household",),
     }
 
@@ -332,6 +336,8 @@ class PilotWireFormat:
         "L1CHPControllerConfig": (),
         "IdealizedHeaterConfig": (),
         "SimpleHeatSourceConfig": (),
+        "SumBuilderConfig": (),
+        "TransformerConfig": (),
     }
 
 
@@ -639,6 +645,8 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig,
     )
     from hisim.components.simple_heat_source import SimpleHeatSourceConfig
+    from hisim.components.sumbuilder import SumBuilderConfig
+    from hisim.components.transformer_rectifier import TransformerConfig
     from hisim.components.advanced_fuel_cell import CHPConfig as FuelCellCHPConfig
     from hisim.components.generic_chp.chp import CHPConfig as GenericCHPConfig
     from hisim.components.generic_chp.controller import L1CHPControllerConfig
@@ -690,6 +698,8 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "L1CHPControllerConfig": L1CHPControllerConfig,
         "IdealizedHeaterConfig": IdealizedHeaterConfig,
         "SimpleHeatSourceConfig": SimpleHeatSourceConfig,
+        "SumBuilderConfig": SumBuilderConfig,
+        "TransformerConfig": TransformerConfig,
         "CarConfig": CarConfig,
     }
     for class_name, expected in PilotWireFormat.PRESET_NAMES.items():

@@ -157,14 +157,25 @@ class MappingReport:
         return self._measure_order.index(measure_id)
 
     def has_measure(self, measure_id: str) -> bool:
-        """Return whether a line for *measure_id* has already been recorded.
+        """Return whether a line for *measure_id* has already been recorded, wherever it sits.
 
-        Lets the application add a derived line only where the registry function did not already
-        say something more precise.
+        Lets a caller that does not know a measure's position ask the question anyway; a caller
+        that does know it asks :meth:`has_measure_line`, which cannot be confused by two measures
+        whose lines were recorded out of order.
         """
-        if measure_id not in self._measure_order:
-            return False
-        return f"{self.MEASURE_PATH_PREFIX}[{self._measure_order.index(measure_id)}]" in self._entries
+        return any(entry.measure_id == measure_id for entry in self._entries.values())
+
+    def has_measure_line(self, index: int) -> bool:
+        """Return whether a line has already been recorded for the package entry at *index*.
+
+        Args:
+            index: The measure's position in the package.
+
+        Returns:
+            ``True`` when something -- a registry function, usually -- already said what this
+            entry did, so that a derived line does not overwrite a more precise one.
+        """
+        return f"{self.MEASURE_PATH_PREFIX}[{index}]" in self._entries
 
     def finalize(self, inventory_dict: Dict[str, Any]) -> None:
         """Add an ``IGNORED`` line for every inventory leaf no line covers yet.

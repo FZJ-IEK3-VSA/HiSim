@@ -70,6 +70,10 @@ class Options:
     #: The path segment under which option values sit inside a package entry.
     OPTIONS_SEGMENT: ClassVar[str] = "options"
 
+    #: The brackets a package entry's path carries its position in, e.g. ``package.measures[3]``.
+    INDEX_OPEN: ClassVar[str] = "["
+    INDEX_CLOSE: ClassVar[str] = "]"
+
     def __init__(self, spec: MeasureSpec, supplied: Mapping[str, Any], report: MappingReport, path: str) -> None:
         """Store the spec and the supplied values, and reject keys the measure does not have."""
         self._spec = spec
@@ -115,7 +119,23 @@ class Options:
             note: What the measure did, in one sentence.
             rule: The law, table or formula behind the number, when there is one.
         """
-        self._report.measure(self._spec.measure_id, status, note, rule)
+        self._report.measure(self._spec.measure_id, status, note, rule, index=self.index())
+
+    def index(self) -> int:
+        """Return this package entry's position, read off its own path.
+
+        The position is what the report keys a measure line by, and reading it off the path is
+        what keeps a measure that writes a line and one that does not from ending up at the same
+        position: the path was built from the package order in the first place.
+
+        Returns:
+            The zero-based position, or ``0`` for a path carrying no index, which only a caller
+            constructing an ``Options`` by hand can produce.
+        """
+        head, _, tail = self._path.partition(self.INDEX_OPEN)
+        del head
+        digits = tail.partition(self.INDEX_CLOSE)[0]
+        return int(digits) if digits.isdigit() else 0
 
     def enum(self, option_id: str) -> str:
         """Return one enum option's value in HiSim spelling.

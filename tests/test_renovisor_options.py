@@ -143,12 +143,17 @@ def test_reading_an_option_the_measure_lacks_is_an_unknown_option(catalogue: Cat
 
 
 def test_note_writes_the_measure_level_report_line(catalogue: Catalogue) -> None:
-    """A registry function says what it did through the reader, so the path is built once."""
+    """A registry function says what it did through the reader, so the path is built once.
+
+    The line lands at the entry's *own* position, not at the position this measure happened to be
+    reported at: measures that write no line of their own would otherwise shift every later one,
+    which is how two measures ended up sharing a report line.
+    """
     report = MappingReport()
     options = Options(catalogue.by_id("HEATING_SYSTEM"), {}, report, ENTRY_PATH)
 
     options.note(ReportStatus.APPROXIMATED, "biomass simulated as pellets", rule="Q14")
 
-    line = next(item for item in report.to_list() if item["path"] == "package.measures[0]")
+    line = next(item for item in report.to_list() if item["path"] == ENTRY_PATH)
     assert line["measure_id"] == "HEATING_SYSTEM"
     assert line["rule"] == "Q14"

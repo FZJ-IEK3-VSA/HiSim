@@ -61,6 +61,15 @@ tbody tr.faded{opacity:.3;}
 .grid td,.grid th{border:1px solid var(--line);text-align:center;padding:4px 7px;}
 .grid th.row{text-align:left;font-weight:500;}
 .grid td.mark{font-weight:700;}
+.hunk{margin:10px 0 14px;}
+pre.diff{margin:0;padding:8px 10px;overflow-x:auto;border:1px solid var(--line);
+border-radius:8px;background:var(--panel);
+font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;
+line-height:1.35;}
+pre.diff span{display:block;white-space:pre;}
+pre.diff .add{background:var(--s-simulated-bg);color:var(--s-simulated-fg);}
+pre.diff .del{background:var(--s-refused-bg);color:var(--s-refused-fg);}
+pre.diff .ctx{color:var(--muted);}
 .group-a{outline:2px solid var(--accent);outline-offset:-2px;}
 .group-b{outline:2px dashed var(--accent);outline-offset:-2px;}
 </style>
@@ -1182,7 +1191,218 @@ tbody tr.faded{opacity:.3;}
 </section>
 <section role="tabpanel" id="panel-trace" hidden>
 <h2>Worked example trace</h2>
-<p>Available after step 5 (parametriser): one inventory and one package, followed through the post-measure inventory diff, the parametrised energy-system file diff and the translation report.</p>
+<p class="sub">example_inventory_ie_1988_detached.json plus example_package_gas_to_heat_pump.json, parametrised into <code>household_heatpump_building_sizer.grouped.energy_system.yaml</code>. Nothing here is simulated: the page applies the measures, resolves the sizing laws and writes the file, and stops there.</p>
+<p class="sub">The sizing laws read three <strong>stated</strong> daily demands rather than a loaded occupancy profile, so that this page depends on no cache and no LoadProfileGenerator run: 12 kWh/day household, 25 kWh/day heat pump, 0 kWh/day vehicle. A real calculation computes all three.</p>
+<h3>1. The inventory, before and after the measures</h3>
+<div class="scroll"><table><thead><tr><th>Inventory path</th><th>Before</th><th>After</th><th>Measure</th></tr></thead><tbody>
+<tr><td class="mono">building_config.envelope_details.facade_u_value_in_watt_per_m2_per_kelvin</td><td class="mono">—</td><td class="mono">0.325191</td><td>EXTERNAL_INSULATION</td></tr>
+<tr><td class="mono">building_config.envelope_details.roof_u_value_in_watt_per_m2_per_kelvin</td><td class="mono">—</td><td class="mono">0.15619</td><td>ROLLED_OUT_ATTIC_INSULATION</td></tr>
+<tr><td class="mono">building_config.general.set_heating_temperature_in_celsius</td><td class="mono">20</td><td class="mono">21</td><td>CHANGE_ROOM_TEMPERATURE</td></tr>
+<tr><td class="mono">energy_system_config.heating_system.heat_distribution_system</td><td class="mono">RADIATOR</td><td class="mono">FLOORHEATING</td><td>HEATING_INSTALLATION</td></tr>
+<tr><td class="mono">energy_system_config.heating_system.system</td><td class="mono">GAS_HEATING</td><td class="mono">HEAT_PUMP</td><td>HEATING_SYSTEM</td></tr>
+<tr><td class="mono">energy_system_config.photovoltaics.share_of_maximum_pv_potential</td><td class="mono">—</td><td class="mono">0.4</td><td>PHOTOVOLTAIC_SYSTEM</td></tr>
+</tbody></table></div>
+<h3>The sizing laws that were resolved</h3>
+<div class="scroll"><table><thead><tr><th>Inventory path</th><th>Arithmetic</th></tr></thead><tbody>
+<tr><td class="mono">energy_system_config.battery_storage.capacity_in_kwh</td><td class="mono">BATTERY_FROM_DAYS_TO_COVER: 2 day(s) x (12 household + 25 heat pump + 0 vehicle) kWh/day = 74 kWh</td></tr>
+</tbody></table></div>
+<h3>2. The energy-system file, base to parametrised</h3>
+<p class="sub">Every hunk is annotated with the inventory path, measure or sizing law that asked for it. Requirement R4 permits only these four kinds of change: config values, constructor swaps, variant selections and group flags.</p>
+<div class="hunk">
+<p class="sub"><code>@@ -1,13 +1,26 @@</code> &middot; building_config.general, building_config.envelope_details.door_area_in_m2, building_config.envelope_details.facade_area_in_m2, building_config.envelope_details.facade_u_value_in_watt_per_m2_per_kelvin, building_config.envelope_details.floor_area_in_m2, building_config.envelope_details.roof_area_in_m2, building_config.envelope_details.roof_u_value_in_watt_per_m2_per_kelvin, building_config.envelope_details.window_area_in_m2, building_config.envelope_details.window_u_value_in_watt_per_m2_per_kelvin, building_config.general.set_cooling_temperature_in_celsius, building_config.general.set_heating_temperature_in_celsius</p>
+<pre class="diff">
+<span class="ctx"> schema_version: 3</span>
+<span class="del">-name: household_heatpump_building_sizer</span>
+<span class="del">-description: Basic household new system setup.</span>
+<span class="add">+name: renovisor household_heatpump_building_sizer.grouped</span>
+<span class="add">+description: The recorded household_heatpump_building_sizer.grouped system with this dwelling&#x27;s inventory values and its renovation package written into it by the RenoVisor translation layer.</span>
+<span class="ctx"> components:</span>
+<span class="ctx">   Building:</span>
+<span class="ctx">     class: hisim.components.building.building.Building</span>
+<span class="del">-    preset: german_single_family_home</span>
+<span class="del">-    config:</span>
+<span class="del">-      number_of_apartments: 1.0</span>
+<span class="add">+    constructor:</span>
+<span class="add">+      for_tabula_code:</span>
+<span class="add">+        building_code: IE.N.SFH.07.Gen.ReEx.001.001</span>
+<span class="add">+        absolute_conditioned_floor_area_in_m2: 157</span>
+<span class="add">+        number_of_apartments: 1</span>
+<span class="add">+        building_heat_capacity_class: medium</span>
+<span class="add">+    config:</span>
+<span class="ctx">       enable_opening_windows: true</span>
+<span class="del">-      weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center</span>
+<span class="add">+      door_area_in_m2: 3.6</span>
+<span class="add">+      facade_area_in_m2: 173.0</span>
+<span class="add">+      facade_u_value_in_watt_per_m2_per_kelvin: 0.32519083969465645</span>
+<span class="add">+      floor_area_in_m2: 78.5</span>
+<span class="add">+      roof_area_in_m2: 98.0</span>
+<span class="add">+      roof_u_value_in_watt_per_m2_per_kelvin: 0.15619047619047619</span>
+<span class="add">+      window_area_in_m2: 22.4</span>
+<span class="add">+      window_u_value_in_watt_per_m2_per_kelvin: 4.8</span>
+<span class="add">+      set_cooling_temperature_in_celsius: 25.0</span>
+<span class="add">+      set_heating_temperature_in_celsius: 21</span>
+<span class="ctx">     inputs:</span>
+<span class="ctx">       - Weather</span>
+</pre>
+</div>
+<div class="hunk">
+<p class="sub"><code>@@ -17,13 +30,19 @@</code> &middot; occupancy_config, location.country_code</p>
+<pre class="diff">
+<span class="ctx">   UTSPConnector:</span>
+<span class="ctx">     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector</span>
+<span class="del">-    preset: couple_both_at_work</span>
+<span class="add">+    constructor:</span>
+<span class="add">+      for_household:</span>
+<span class="add">+        household:</span>
+<span class="add">+          Name: CHR01 Couple both at Work</span>
+<span class="add">+          Guid:</span>
+<span class="add">+            StrVal: 516a33ab-79e1-4221-853b-967fc11cc85a</span>
+<span class="add">+        data_acquisition_mode: USE_LOCAL_LPG</span>
+<span class="ctx">     config:</span>
+<span class="ctx">       data_acquisition_mode: USE_LOCAL_LPG</span>
+<span class="ctx">   Weather:</span>
+<span class="ctx">     class: hisim.components.weather.Weather</span>
+<span class="del">-    config:</span>
+<span class="del">-      location: Aachen</span>
+<span class="del">-      source_path: ${inputs}/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center</span>
+<span class="del">-      data_source: DWD_TRY</span>
+<span class="add">+    constructor:</span>
+<span class="add">+      for_location:</span>
+<span class="add">+        location: IE</span>
+<span class="add">+    config:</span>
+<span class="ctx">       predictive_control: false</span>
+<span class="ctx">   PVSystem:</span>
+</pre>
+</div>
+<div class="hunk">
+<p class="sub"><code>@@ -31,5 +50,8 @@</code> &middot; location.country_code, energy_system_config.photovoltaics.azimuth_in_degree, energy_system_config.photovoltaics.share_of_maximum_pv_potential, energy_system_config.photovoltaics.tilt_in_degree</p>
+<pre class="diff">
+<span class="ctx">     preset: rooftop</span>
+<span class="ctx">     config:</span>
+<span class="del">-      location: AACHEN</span>
+<span class="add">+      location: IE</span>
+<span class="add">+      azimuth: 180</span>
+<span class="add">+      share_of_maximum_pv_potential: 0.4</span>
+<span class="add">+      tilt: 35</span>
+<span class="ctx">     inputs:</span>
+<span class="ctx">       - Weather</span>
+</pre>
+</div>
+<div class="hunk">
+<p class="sub"><code>@@ -37,4 +59,8 @@</code> &middot; building_config.general.set_cooling_temperature_in_celsius, building_config.general.set_heating_temperature_in_celsius, energy_system_config.heating_system.heat_distribution_system</p>
+<pre class="diff">
+<span class="ctx">     class: hisim.components.heat_distribution_system.HeatDistributionController</span>
+<span class="ctx">     preset: building_derived</span>
+<span class="add">+    config:</span>
+<span class="add">+      set_cooling_temperature_for_building_in_celsius: 25.0</span>
+<span class="add">+      set_heating_temperature_for_building_in_celsius: 21</span>
+<span class="add">+      heating_system: FLOORHEATING</span>
+<span class="ctx">     inputs:</span>
+<span class="ctx">       - L2EMSElectricityController</span>
+</pre>
+</div>
+<div class="hunk">
+<p class="sub"><code>@@ -101,4 +127,6 @@</code> &middot; energy_system_config.water_storage.domestic_hot_water_storage.volume_in_liters</p>
+<pre class="diff">
+<span class="ctx">     class: hisim.components.simple_water_storage.SimpleDHWStorage</span>
+<span class="ctx">     preset: standard</span>
+<span class="add">+    config:</span>
+<span class="add">+      volume_heating_water_storage_in_liter: 180</span>
+<span class="ctx">     inputs:</span>
+<span class="ctx">       - UTSPConnector</span>
+</pre>
+</div>
+<div class="hunk">
+<p class="sub"><code>@@ -109,5 +137,5 @@</code> &middot; energy_system_config.water_storage.hot_water_storage.volume_in_liters</p>
+<pre class="diff">
+<span class="ctx">     config:</span>
+<span class="ctx">       sizing_option: SIZE_ACCORDING_TO_HEAT_PUMP</span>
+<span class="del">-      volume_heating_water_storage_in_liter: 389.04</span>
+<span class="add">+      volume_heating_water_storage_in_liter: 120</span>
+<span class="ctx">     inputs:</span>
+<span class="ctx">       - HeatDistributionSystem</span>
+</pre>
+</div>
+<div class="hunk">
+<p class="sub"><code>@@ -137,4 +165,6 @@</code> &middot; energy_system_config.battery_storage.capacity_in_kwh, BATTERY_FROM_DAYS_TO_COVER</p>
+<pre class="diff">
+<span class="ctx">             class: hisim.components.advanced_battery_bslib.Battery</span>
+<span class="ctx">             preset: sized_to_pv</span>
+<span class="add">+            config:</span>
+<span class="add">+              custom_battery_capacity_generic_in_kilowatt_hour: 74.0</span>
+<span class="ctx">           L2EMSElectricityController:</span>
+<span class="ctx">             class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem</span>
+</pre>
+</div>
+<h3>3. The translation report</h3>
+<p class="sub">One line per inventory field and per measure, which is what requirement R7 asks of every calculation.</p>
+<div class="scroll"><table><thead><tr><th>Path</th><th>Status</th><th>Note</th><th>Rule</th></tr></thead><tbody>
+<tr><td class="mono">building_config.envelope_details.door_area_in_m2</td><td>USED</td><td>-&gt; Building.door_area_in_m2</td><td class="sub"></td></tr>
+<tr><td class="mono">building_config.envelope_details.door_u_value_in_watt_per_m2_per_kelvin</td><td>IGNORED</td><td>the inventory carries no value for this field</td><td class="sub"></td></tr>
+<tr><td class="mono">building_config.envelope_details.facade_area_in_m2</td><td>USED</td><td>-&gt; Building.facade_area_in_m2</td><td class="sub"></td></tr>
+<tr><td class="mono">building_config.envelope_details.facade_u_value_in_watt_per_m2_per_kelvin</td><td>USED</td><td>-&gt; Building.facade_u_value_in_watt_per_m2_per_kelvin</td><td class="sub"></td></tr>
+<tr><td class="mono">building_config.envelope_details.floor_area_in_m2</td><td>USED</td><td>-&gt; Building.floor_area_in_m2</td><td class="sub"></td></tr>
+<tr><td class="mono">building_config.envelope_details.floor_u_value_in_watt_per_m2_per_kelvin</td><td>IGNORED</td><td>the inventory carries no value for this field</td><td class="sub"></td></tr>
+<tr><td class="mono">building_config.envelope_details.roof_area_in_m2</td><td>USED</td><td>-&gt; Building.roof_area_in_m2</td><td class="sub"></td></tr>
+<tr><td class="mono">building_config.envelope_details.roof_u_value_in_watt_per_m2_per_kelvin</td><td>USED</td><td>-&gt; Building.roof_u_value_in_watt_per_m2_per_kelvin</td><td class="sub"></td></tr>
+<tr><td class="mono">building_config.envelope_details.window_area_in_m2</td><td>USED</td><td>-&gt; Building.window_area_in_m2</td><td class="sub"></td></tr>
+<tr><td class="mono">building_config.envelope_details.window_u_value_in_watt_per_m2_per_kelvin</td><td>USED</td><td>-&gt; Building.window_u_value_in_watt_per_m2_per_kelvin</td><td class="sub"></td></tr>
+<tr><td class="mono">building_config.general.building_heat_capacity_class</td><td>USED</td><td>-&gt; Building.for_tabula_code</td><td class="sub">TABULA archetype IE.N.SFH.07.Gen.ReEx.001.001</td></tr>
+<tr><td class="mono">building_config.general.conditioned_floor_area_m2</td><td>USED</td><td>-&gt; Building.for_tabula_code</td><td class="sub">TABULA archetype IE.N.SFH.07.Gen.ReEx.001.001</td></tr>
+<tr><td class="mono">building_config.general.construction_year</td><td>USED</td><td>-&gt; Building.for_tabula_code</td><td class="sub">TABULA archetype IE.N.SFH.07.Gen.ReEx.001.001</td></tr>
+<tr><td class="mono">building_config.general.max_thermal_building_demand_in_watt</td><td>IGNORED</td><td>the inventory carries no value for this field</td><td class="sub"></td></tr>
+<tr><td class="mono">building_config.general.number_of_apartments</td><td>USED</td><td>-&gt; Building.for_tabula_code</td><td class="sub">TABULA archetype IE.N.SFH.07.Gen.ReEx.001.001</td></tr>
+<tr><td class="mono">building_config.general.retrofit_status</td><td>USED</td><td>-&gt; Building.for_tabula_code</td><td class="sub">TABULA archetype IE.N.SFH.07.Gen.ReEx.001.001</td></tr>
+<tr><td class="mono">building_config.general.set_cooling_temperature_in_celsius</td><td>USED</td><td>-&gt; Building.set_cooling_temperature_in_celsius, HeatDistributionController.set_cooling_temperature_for_building_in_celsius</td><td class="sub"></td></tr>
+<tr><td class="mono">building_config.general.set_heating_temperature_in_celsius</td><td>USED</td><td>-&gt; Building.set_heating_temperature_in_celsius, HeatDistributionController.set_heating_temperature_for_building_in_celsius</td><td class="sub"></td></tr>
+<tr><td class="mono">building_config.general.tabula_building_type</td><td>USED</td><td>-&gt; Building.for_tabula_code</td><td class="sub">TABULA archetype IE.N.SFH.07.Gen.ReEx.001.001</td></tr>
+<tr><td class="mono">energy_system_config.battery_storage.capacity_in_kwh</td><td>APPROXIMATED</td><td>sized to 74</td><td class="sub">BATTERY_FROM_DAYS_TO_COVER: 2 day(s) x (12 household + 25 heat pump + 0 vehicle) kWh/day = 74 kWh</td></tr>
+<tr><td class="mono">energy_system_config.battery_storage.installation_year</td><td>NON_SIMULATION</td><td>an age, which drives the condition assessment and the cost layer, not the physics</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.battery_storage.power_in_watt</td><td>IGNORED</td><td>the battery component has an inverter power, which is not the same number</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.battery_storage.state_of_health_in_percent</td><td>IGNORED</td><td>HiSim has no capacity-fade model</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.heating_system.heat_distribution_system</td><td>USED</td><td>-&gt; HeatDistributionController.heating_system</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.heating_system.heatpump_flow_temperature_in_celsius</td><td>IGNORED</td><td>the inventory carries no value for this field</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.heating_system.installation_year</td><td>NON_SIMULATION</td><td>an age, which drives the condition assessment and the cost layer, not the physics</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.heating_system.power_in_watt</td><td>IGNORED</td><td>superseded by the heating-system measure; it rates the generator that was replaced, and the base file sizes the new one from the building</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.heating_system.system</td><td>USED</td><td>selected the base file household_heatpump_building_sizer.grouped.energy_system.yaml</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.heating_system.with_dhw_preparation</td><td>USED</td><td>-&gt; MoreAdvancedHeatPumpHPLib.with_domestic_hot_water_preparation</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.photovoltaics.azimuth_in_degree</td><td>USED</td><td>-&gt; PVSystem.azimuth</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.photovoltaics.installation_year</td><td>NON_SIMULATION</td><td>an age, which drives the condition assessment and the cost layer, not the physics</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.photovoltaics.power_in_watt</td><td>IGNORED</td><td>superseded by the requested share of the roof; the base file&#x27;s rooftop sizing law computes the array&#x27;s power from it</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.photovoltaics.remaining_performance_in_percent</td><td>IGNORED</td><td>HiSim has no photovoltaic degradation model</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.photovoltaics.share_of_maximum_pv_potential</td><td>USED</td><td>-&gt; PVSystem.share_of_maximum_pv_potential</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.photovoltaics.tilt_in_degree</td><td>USED</td><td>-&gt; PVSystem.tilt</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.vehicles.electric_vehicles</td><td>NON_SIMULATION</td><td>the vehicle count selects the base file (Q18); the per-vehicle fields are step 5</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.vehicles.fossil_vehicles</td><td>NON_SIMULATION</td><td>the vehicle count selects the base file (Q18); the per-vehicle fields are step 5</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.water_storage.domestic_hot_water_storage.installation_year</td><td>NON_SIMULATION</td><td>an age, which drives the condition assessment and the cost layer, not the physics</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.water_storage.domestic_hot_water_storage.volume_in_liters</td><td>USED</td><td>-&gt; DHWStorage.volume_heating_water_storage_in_liter</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.water_storage.hot_water_storage.installation_year</td><td>NON_SIMULATION</td><td>an age, which drives the condition assessment and the cost layer, not the physics</td><td class="sub"></td></tr>
+<tr><td class="mono">energy_system_config.water_storage.hot_water_storage.volume_in_liters</td><td>USED</td><td>-&gt; SimpleHotWaterStorage.volume_heating_water_storage_in_liter</td><td class="sub"></td></tr>
+<tr><td class="mono">location.country_code</td><td>USED</td><td>-&gt; Weather.for_location(location=IE)</td><td class="sub"></td></tr>
+<tr><td class="mono">location.eircode_or_postcode</td><td>IGNORED</td><td>no HiSim input is addressed more finely than the weather station</td><td class="sub"></td></tr>
+<tr><td class="mono">location.region</td><td>IGNORED</td><td>one weather station per country, so a region cannot change the weather</td><td class="sub"></td></tr>
+<tr><td class="mono">occupancy_config.residents_count</td><td>APPROXIMATED</td><td>the dwelling&#x27;s 2 adult(s), 0 child(ren), 2 in work were simulated as the LoadProfileGenerator household &#x27;CHR01 Couple both at Work&#x27; (2 adult(s), 0 child(ren), 2 in work); adults, children and employment all matched exactly</td><td class="sub">A3: nearest household of the LoadProfileGenerator catalogue</td></tr>
+<tr><td class="mono">occupancy_config.residents_employment_status</td><td>APPROXIMATED</td><td>the dwelling&#x27;s 2 adult(s), 0 child(ren), 2 in work were simulated as the LoadProfileGenerator household &#x27;CHR01 Couple both at Work&#x27; (2 adult(s), 0 child(ren), 2 in work); adults, children and employment all matched exactly</td><td class="sub">A3: nearest household of the LoadProfileGenerator catalogue</td></tr>
+<tr><td class="mono">occupancy_config.residents_type</td><td>APPROXIMATED</td><td>the dwelling&#x27;s 2 adult(s), 0 child(ren), 2 in work were simulated as the LoadProfileGenerator household &#x27;CHR01 Couple both at Work&#x27; (2 adult(s), 0 child(ren), 2 in work); adults, children and employment all matched exactly</td><td class="sub">A3: nearest household of the LoadProfileGenerator catalogue</td></tr>
+<tr><td class="mono">occupancy_config.travel_route_set</td><td>DEFAULTED</td><td>the inventory names none; the occupancy constructor&#x27;s own commuting profile is used</td><td class="sub">the LoadProfileGenerator&#x27;s ten-kilometre commuting route set</td></tr>
+<tr><td class="mono">package.measures[0]</td><td>DEFAULTED</td><td>50 mm of polystyrene_eps_rigid_board on the facade</td><td class="sub">Q11 target-driven thickness: the smallest 10 mm step that brings the facade from 0.6 W/m2K (TABULA row IE.N.SFH.07.Gen.ReEx.001.001) to the target 0.35 W/m2K (Building Regulations TGD L Dwellings 2011, Table 5, material alterations) [PROVISIONAL — verify against the current TGD L revision] with lambda = 0.0355 W/mK; no thermal-bridge surcharge</td></tr>
+<tr><td class="mono">package.measures[0].options.material</td><td>USED</td><td>option &#x27;material&#x27; = polystyrene_eps_rigid_board</td><td class="sub"></td></tr>
+<tr><td class="mono">package.measures[0].options.thickness_in_mm</td><td>DEFAULTED</td><td>absent from the request; using 50</td><td class="sub">Q11 target-driven thickness: the smallest 10 mm step that brings the facade from 0.6 W/m2K (TABULA row IE.N.SFH.07.Gen.ReEx.001.001) to the target 0.35 W/m2K (Building Regulations TGD L Dwellings 2011, Table 5, material alterations) [PROVISIONAL — verify against the current TGD L revision] with lambda = 0.0355 W/mK; no thermal-bridge surcharge</td></tr>
+<tr><td class="mono">package.measures[1]</td><td>DEFAULTED</td><td>160 mm of wood_fiber_rigid_board on the roof</td><td class="sub">Q11 target-driven thickness: the smallest 10 mm step that brings the roof from 0.4 W/m2K (TABULA row IE.N.SFH.07.Gen.ReEx.001.001) to the target 0.16 W/m2K (Building Regulations TGD L Dwellings 2011, Table 5, material alterations) [PROVISIONAL — verify against the current TGD L revision] with lambda = 0.041 W/mK; no thermal-bridge surcharge</td></tr>
+<tr><td class="mono">package.measures[1].options.material</td><td>USED</td><td>option &#x27;material&#x27; = wood_fiber_rigid_board</td><td class="sub"></td></tr>
+<tr><td class="mono">package.measures[1].options.thickness_in_mm</td><td>DEFAULTED</td><td>absent from the request; using 160</td><td class="sub">Q11 target-driven thickness: the smallest 10 mm step that brings the roof from 0.4 W/m2K (TABULA row IE.N.SFH.07.Gen.ReEx.001.001) to the target 0.16 W/m2K (Building Regulations TGD L Dwellings 2011, Table 5, material alterations) [PROVISIONAL — verify against the current TGD L revision] with lambda = 0.041 W/mK; no thermal-bridge surcharge</td></tr>
+<tr><td class="mono">package.measures[2]</td><td>USED</td><td>applied with 1 effect(s)</td><td class="sub"></td></tr>
+<tr><td class="mono">package.measures[2].options.type_of_system</td><td>USED</td><td>option &#x27;type of system&#x27; = FLOORHEATING</td><td class="sub"></td></tr>
+<tr><td class="mono">package.measures[3]</td><td>USED</td><td>applied with 1 effect(s)</td><td class="sub"></td></tr>
+<tr><td class="mono">package.measures[3].options.new_room_temperature</td><td>USED</td><td>option &#x27;new room temperature&#x27; = 21</td><td class="sub"></td></tr>
+<tr><td class="mono">package.measures[4]</td><td>USED</td><td>applied with 2 effect(s)</td><td class="sub"></td></tr>
+<tr><td class="mono">package.measures[4].options.type_of_system</td><td>USED</td><td>option &#x27;type of system&#x27; = HEAT_PUMP</td><td class="sub"></td></tr>
+<tr><td class="mono">package.measures[5]</td><td>USED</td><td>40% of the usable roof, as the share the rooftop sizing law takes</td><td class="sub">Q18: the recorded files size the array from this share and the roof geometry</td></tr>
+<tr><td class="mono">package.measures[5].options.size_in_percent_of_roof_area</td><td>USED</td><td>option &#x27;size in percent of roof area&#x27; = 40</td><td class="sub"></td></tr>
+<tr><td class="mono">package.measures[6]</td><td>APPROXIMATED</td><td>a battery covering 2 day(s) of demand</td><td class="sub">BATTERY_FROM_DAYS_TO_COVER: household load plus heat pump plus vehicle, resolved before the simulation</td></tr>
+<tr><td class="mono">package.measures[6].options.days_to_cover</td><td>USED</td><td>option &#x27;days to cover&#x27; = 2</td><td class="sub"></td></tr>
+<tr><td class="mono">selected_grant_schemes</td><td>NON_SIMULATION</td><td>the subsidy layer reads it (Q24); nothing in a simulation does</td><td class="sub"></td></tr>
+</tbody></table></div>
 </section>
 </main>
 <script>

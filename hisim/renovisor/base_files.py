@@ -47,10 +47,13 @@ class BaseFiles:
     as what is present: there is no oil-plus-solar-thermal file, no two-car file, and no file for
     HVO or a hybrid heat pump, so those combinations are refusals rather than approximations.
 
-    PROVISIONAL, to be corrected in step 5 by reading the recorded wiring: which of the three
-    ``supplies`` values the recorded solar-thermal files actually implement
-    (:attr:`SOLAR_THERMAL_SUPPLIES_SUPPORTED` assumes domestic hot water only) and how "no PV" is
-    expressed in a file that always carries a ``PVSystem``.
+    Two things this table used to leave open were read off the recorded wiring in step 5. The two
+    solar-thermal files wire their collector into the ``DHWStorage`` and into nothing else, so
+    :attr:`SOLAR_THERMAL_SUPPLIES_SUPPORTED` is domestic hot water only as a fact rather than as
+    an assumption. And "no photovoltaics" is expressed the way every other device size is: the
+    inventory's ``photovoltaics.power_in_watt`` reaches the array's own sizable ``power_in_watt``,
+    and a recorded value on a sizable field pins it, so a zero there is an array that produces
+    nothing while the entry itself stays in the file.
     """
 
     #: The directory the files live in, relative to the repository root.
@@ -79,8 +82,9 @@ class BaseFiles:
             "household_district_heating_building_sizer.grouped.energy_system.yaml",
     }
 
-    #: Which solar-thermal supplies the recorded files implement. PROVISIONAL: read off the
-    #: recorded wiring in step 5 and correct. The other two values are refusals until then.
+    #: Which solar-thermal supplies the recorded files implement, read off their wiring in step 5:
+    #: both files feed the domestic hot water storage alone. The other two values stay refusals
+    #: until a recorded file wires a collector into the space heating.
     SOLAR_THERMAL_SUPPLIES_SUPPORTED: ClassVar[Tuple[SolarThermalSupplies, ...]] = (SolarThermalSupplies.DHW_ONLY,)
 
     #: The generator a domestic-hot-water heat pump needs the house to have, because no recorded

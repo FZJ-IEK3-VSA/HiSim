@@ -31,16 +31,20 @@ so.
 """
 
 import argparse
+import difflib
 import html
 import itertools
 import json
+import re
 import sys
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple, Type
 
 from hisim.renovisor import TRANSLATOR_VERSION
+from hisim.renovisor.application import ApplicationResult, PackageApplication
+from hisim.energy_system.loader import dump_energy_system, load_energy_system
 from hisim.renovisor.base_files import BaseFileKey, BaseFiles
 from hisim.renovisor.bindings import BindingError, Bindings
 from hisim.renovisor.catalogue import AccessLevel, Catalogue, MeasureSpec, OptionSpec, OptionValueType
@@ -59,9 +63,11 @@ from hisim.renovisor.effects import (
     SetUValue,
 )
 from hisim.renovisor.envelope import EnvelopePaths, ExclusivityTable, RegulatoryTargets
+from hisim.renovisor.laws import LawResolver, StaticDemandEstimator
 from hisim.renovisor.inventory import Inventory
 from hisim.renovisor.materials import InsulationMaterials
 from hisim.renovisor.options import Options
+from hisim.renovisor.parametriser import Edit, Parametriser
 from hisim.renovisor.reasons import ReasonCode
 from hisim.renovisor.registry import MeasureRegistry
 from hisim.renovisor.report import MappingReport, ReportStatus
@@ -324,6 +330,245 @@ class MeasureMap:
         return MapStatus.NO_EFFECT
 
 
+class TraceExample:
+    """The one worked example the trace tab follows from end to end.
+
+    A map of rules is not the same thing as a worked example: the map says what
+    ``EXTERNAL_INSULATION`` does to an inventory path, and only an example says what a particular
+    Irish house actually ends up running. Both are committed files so the trace changes only when
+    something real changes.
+
+    Its three demand figures are **stated, not simulated**. Resolving the battery law needs a
+    household's daily electricity and its heating's daily electricity, and computing those means
+    running the LoadProfileGenerator -- which a documentation page must not depend on. They are
+    round numbers of the right order for this dwelling, and the page says so beside them.
+    """
+
+    #: The dwelling: a detached Irish single-family house of 1988 with a gas boiler, radiators, no
+    #: photovoltaics and no car.
+    INVENTORY_PATH: ClassVar[Path] = (
+        Path(__file__).resolve().parents[2] / "tests" / "renovisor" / "example_inventory_ie_1988_detached.json"
+    )
+
+    #: The package: a deep retrofit that insulates two elements, lays in floor heating, raises the
+    #: room temperature, replaces the boiler by a heat pump and adds photovoltaics and a battery.
+    PACKAGE_PATH: ClassVar[Path] = (
+        Path(__file__).resolve().parents[2] / "tests" / "renovisor" / "example_package_gas_to_heat_pump.json"
+    )
+
+    #: Where the recorded base files live.
+    BASE_FILES_PATH: ClassVar[Path] = Path(__file__).resolve().parents[2] / "energy_systems"
+
+    #: STATED, not simulated: the residents' own electricity, in kWh per day.
+    HOUSEHOLD_IN_KWH_PER_DAY: ClassVar[float] = 12.0
+
+    #: STATED, not simulated: the heat pump's electricity, in kWh per day.
+    HEAT_PUMP_IN_KWH_PER_DAY: ClassVar[float] = 25.0
+
+    #: STATED, not simulated: the vehicles' charging energy, in kWh per day; this dwelling has no
+    #: electric vehicle, and the contract carries no annual mileage yet in any case.
+    VEHICLE_IN_KWH_PER_DAY: ClassVar[float] = 0.0
+
+    @classmethod
+    def inventory(cls) -> Inventory:
+        """Return the example dwelling, loaded fresh so nothing leaks between uses."""
+        return Inventory.from_dict(json.loads(cls.INVENTORY_PATH.read_text(encoding="utf-8")))
+
+    @classmethod
+    def package(cls) -> List[Dict[str, Any]]:
+        """Return the example package's measure list.
+
+        Returns:
+            The list under the document's ``measures`` key, which is the shape decision Q1 fixed.
+        """
+        document = json.loads(cls.PACKAGE_PATH.read_text(encoding="utf-8"))
+        measures: List[Dict[str, Any]] = list(document["measures"])
+        return measures
+
+    @classmethod
+    def estimator(cls, generator: HeatGenerator) -> StaticDemandEstimator:
+        """Return the stated-number estimator the trace's sizing laws read.
+
+        Args:
+            generator: The heat generator the dwelling ends up with, which decides whether the
+                heating term contributes at all.
+        """
+        return StaticDemandEstimator(
+            household_in_kwh_per_day=cls.HOUSEHOLD_IN_KWH_PER_DAY,
+            heat_pump_in_kwh_per_day=cls.HEAT_PUMP_IN_KWH_PER_DAY,
+            vehicle_in_kwh_per_day=cls.VEHICLE_IN_KWH_PER_DAY,
+            generator=generator,
+        )
+
+
+@dataclass(frozen=True)
+class InventoryChange:
+    """One inventory leaf the package changed, before and after, with what changed it.
+
+    Args:
+        path: The dotted inventory path.
+        before: The value the survey carried; ``None`` when the field was absent or null.
+        after: The value the measures left behind.
+        measure_ids: The measures that asked for it, in package order; empty when the change came
+            out of composing several layers rather than out of one measure.
+    """
+
+    path: str
+    before: Any
+    after: Any
+    measure_ids: Tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class DiffHunk:
+    """One hunk of the unified diff between the base file and the parametrised one.
+
+    Args:
+        header: The ``@@`` line, kept so a reader can locate the hunk in the file.
+        lines: The hunk's lines, each with its leading ``+``, ``-`` or space.
+        annotations: What asked for the changes in this hunk -- an inventory path, a measure id or
+            a sizing law -- in the order the edits were made, without repetition.
+    """
+
+    header: str
+    lines: Tuple[str, ...]
+    annotations: Tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class TraceData:
+    """One inventory and one package followed through to a parametrised energy-system file.
+
+    Args:
+        base_file_name: The recorded file the package selected.
+        inventory_changes: Every leaf the measures changed, in path order.
+        hunks: The unified diff from the base file to the parametrised one, annotated.
+        report_lines: The translation report, as :meth:`~hisim.renovisor.report.MappingReport.
+            to_list` returns it.
+        law_rules: The arithmetic of every sizing law that was resolved, by inventory path.
+    """
+
+    base_file_name: str
+    inventory_changes: Tuple[InventoryChange, ...]
+    hunks: Tuple[DiffHunk, ...]
+    report_lines: Tuple[Dict[str, Any], ...]
+    law_rules: Tuple[Tuple[str, str], ...]
+
+
+class TraceDiff:
+    """Turns two YAML documents into annotated hunks.
+
+    The annotation is what makes the diff readable as a translation rather than as a patch: every
+    changed line is looked up in the parametriser's own list of edits, by the component it sits
+    under and the key it writes, so the hunk can say "this line is here because the inventory says
+    ``building_config.envelope_details.roof_u_value_in_watt_per_m2_per_kelvin``".
+    """
+
+    #: How many unchanged lines of context each hunk carries.
+    CONTEXT_LINES: ClassVar[int] = 2
+
+    #: A line that names a component: a bare ``Key:`` at any indentation.
+    COMPONENT_PATTERN: ClassVar[str] = r"^\s*([A-Za-z0-9_]+):\s*$"
+
+    #: A line that writes a value: ``key: value`` at any indentation.
+    FIELD_PATTERN: ClassVar[str] = r"^\s*([A-Za-z0-9_]+):"
+
+    @classmethod
+    def hunks(
+        cls, base_text: str, parametrised_text: str, edits: Sequence[Edit], components: Sequence[str]
+    ) -> Tuple[DiffHunk, ...]:
+        """Return the annotated unified diff between two energy-system documents.
+
+        Args:
+            base_text: The recorded base file.
+            parametrised_text: The file the calculation would run.
+            edits: Every change the parametriser made, with its source.
+            components: The component names of the document, so a bare ``Key:`` line can be told
+                from a nested mapping that happens to look like one.
+
+        Returns:
+            The hunks, in file order.
+        """
+        by_field = cls._edits_by_field(edits)
+        owners = cls._component_of_line(parametrised_text, components)
+        hunks: List[DiffHunk] = []
+        current: List[str] = []
+        header = ""
+        sources: List[str] = []
+        new_line_number = 0
+        for line in difflib.unified_diff(
+            base_text.splitlines(),
+            parametrised_text.splitlines(),
+            fromfile="base",
+            tofile="parametrised",
+            lineterm="",
+            n=cls.CONTEXT_LINES,
+        ):
+            if line.startswith("---") or line.startswith("+++"):
+                continue
+            if line.startswith("@@"):
+                if current:
+                    hunks.append(
+                        DiffHunk(header=header, lines=tuple(current), annotations=tuple(sources))
+                    )
+                header, current, sources = line, [], []
+                new_line_number = cls._new_start(line)
+                continue
+            current.append(line)
+            if not line.startswith("-"):
+                new_line_number += 1
+            if line.startswith("+"):
+                for source in cls._sources_of(line[1:], owners.get(new_line_number - 1, ""), by_field):
+                    if source not in sources:
+                        sources.append(source)
+        if current:
+            hunks.append(DiffHunk(header=header, lines=tuple(current), annotations=tuple(sources)))
+        return tuple(hunks)
+
+    @classmethod
+    def _new_start(cls, header: str) -> int:
+        """Return the first line number of the new file a ``@@`` header names, zero-based."""
+        match = re.search(r"\+(\d+)", header)
+        return int(match.group(1)) - 1 if match is not None else 0
+
+    @classmethod
+    def _edits_by_field(cls, edits: Sequence[Edit]) -> Dict[Tuple[str, str], List[str]]:
+        """Return the sources of every edit, keyed by the component and field it wrote."""
+        found: Dict[Tuple[str, str], List[str]] = {}
+        for edit in edits:
+            segments = edit.location.split(".")
+            if len(segments) < 2:
+                continue
+            key = (segments[1], segments[-1])
+            found.setdefault(key, [])
+            if edit.source not in found[key]:
+                found[key].append(edit.source)
+        return found
+
+    @classmethod
+    def _component_of_line(cls, text: str, components: Sequence[str]) -> Dict[int, str]:
+        """Return, per zero-based line of *text*, which component that line belongs to."""
+        known = set(components)
+        owners: Dict[int, str] = {}
+        current = ""
+        for number, line in enumerate(text.splitlines()):
+            match = re.match(cls.COMPONENT_PATTERN, line)
+            if match is not None and match.group(1) in known:
+                current = match.group(1)
+            owners[number] = current
+        return owners
+
+    @classmethod
+    def _sources_of(
+        cls, line: str, component: str, by_field: Mapping[Tuple[str, str], List[str]]
+    ) -> Tuple[str, ...]:
+        """Return what asked for one added line, by the component and key it writes."""
+        match = re.match(cls.FIELD_PATTERN, line)
+        if match is None:
+            return ()
+        return tuple(by_field.get((component, match.group(1)), ()))
+
+
 @dataclass(frozen=True)
 class MapData:
     """Everything the page is rendered from, collected once.
@@ -332,11 +577,14 @@ class MapData:
         measures: One :class:`MeasureMap` per catalogue measure, in catalogue order.
         contract_commit: The contract commit ``PINNED.yaml`` records for ``openapi.yaml``.
         contract_sha256: Its content hash, from the same record.
+        trace: One worked example followed from the inventory through to the parametrised file,
+            for the trace tab; ``None`` when a caller collected the rules alone.
     """
 
     measures: Tuple[MeasureMap, ...]
     contract_commit: str
     contract_sha256: str
+    trace: Optional[TraceData] = None
 
     @classmethod
     def collect(cls) -> "MapData":
@@ -365,7 +613,81 @@ class MapData:
             measures=measures,
             contract_commit=str(pin["commit"]),
             contract_sha256=str(pin["sha256"]),
+            trace=cls.collect_trace(TraceExample),
         )
+
+    @classmethod
+    def collect_trace(cls, example: Type["TraceExample"]) -> TraceData:
+        """Follow one inventory and one package through to a parametrised energy-system file.
+
+        Nothing is simulated and nothing is cached: the measures are applied, the sizing laws are
+        resolved against the example's stated demands, and the file is written. The only two files
+        it reads are the processed TABULA table and the recorded base file, which is what lets the
+        page be regenerated on a machine with no weather data and no LoadProfileGenerator.
+
+        Args:
+            example: The example to trace, :class:`TraceExample` unless a test hands in another.
+
+        Returns:
+            The :class:`TraceData` the trace tab is rendered from.
+
+        Raises:
+            RefusalError: When the example package cannot be simulated, which would mean the
+                committed example and the committed registry have drifted apart.
+        """
+        pre = example.inventory()
+        application = PackageApplication(Catalogue.load(), MeasureRegistry(), InsulationMaterials.load())
+        result = application.apply(pre, example.package())
+        estimator = example.estimator(result.base_file_key.generator)
+        parametriser = Parametriser(example.BASE_FILES_PATH)
+        parametrised = parametriser.parametrise(result, estimator)
+        base = load_energy_system(example.BASE_FILES_PATH / result.base_file_name)
+        return TraceData(
+            base_file_name=result.base_file_name,
+            inventory_changes=cls._inventory_changes(pre, result),
+            hunks=TraceDiff.hunks(
+                dump_energy_system(base),
+                parametrised.yaml_text,
+                parametrised.edits,
+                tuple(base.declared_components()),
+            ),
+            report_lines=tuple(result.report.to_list()),
+            law_rules=tuple(
+                (path, LawResolver.resolve(law, result.inventory, estimator).rule)
+                for path, law in sorted(result.pending_laws.items())
+            ),
+        )
+
+    @classmethod
+    def _inventory_changes(
+        cls, pre: Inventory, result: ApplicationResult
+    ) -> Tuple[InventoryChange, ...]:
+        """Return every inventory leaf the package changed, in path order.
+
+        Args:
+            pre: The dwelling as it was surveyed.
+            result: What applying the package produced.
+
+        Returns:
+            One :class:`InventoryChange` per changed leaf, each carrying the measures that asked
+            for it.
+        """
+        post = result.inventory
+        by_path: Dict[str, List[str]] = {}
+        for measure_id, paths in sorted(result.paths_by_measure.items()):
+            for path in paths:
+                by_path.setdefault(path, []).append(measure_id)
+        changes = [
+            InventoryChange(
+                path=path,
+                before=pre.get(path),
+                after=post.get(path),
+                measure_ids=tuple(by_path.get(path, ())),
+            )
+            for path in sorted(set(post.leaf_paths()) | set(by_path))
+            if pre.get(path) != post.get(path)
+        ]
+        return tuple(changes)
 
     def statuses(self) -> Dict[MapStatus, Tuple[str, ...]]:
         """Return, per status, the measures whose headline status it is.
@@ -860,6 +1182,15 @@ class MapRenderer:
                 ".grid td,.grid th{border:1px solid var(--line);text-align:center;padding:4px 7px;}",
                 ".grid th.row{text-align:left;font-weight:500;}",
                 ".grid td.mark{font-weight:700;}",
+                ".hunk{margin:10px 0 14px;}",
+                "pre.diff{margin:0;padding:8px 10px;overflow-x:auto;border:1px solid var(--line);",
+                "border-radius:8px;background:var(--panel);",
+                "font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;",
+                "line-height:1.35;}",
+                "pre.diff span{display:block;white-space:pre;}",
+                "pre.diff .add{background:var(--s-simulated-bg);color:var(--s-simulated-fg);}",
+                "pre.diff .del{background:var(--s-refused-bg);color:var(--s-refused-fg);}",
+                "pre.diff .ctx{color:var(--muted);}",
                 ".group-a{outline:2px solid var(--accent);outline-offset:-2px;}",
                 ".group-b{outline:2px dashed var(--accent);outline-offset:-2px;}",
                 "</style>",
@@ -1125,16 +1456,123 @@ class MapRenderer:
         return tuple(missing)
 
     def trace_panel(self) -> List[str]:
-        """Return the trace tab, which is a placeholder until the parametriser exists."""
-        return [
+        """Return the trace tab: the inventory diff, the YAML diff and the report table."""
+        lines = [
             '<section role="tabpanel" id="panel-trace" hidden>',
             "<h2>Worked example trace</h2>",
-            "<p>Available after step 5 (parametriser): one inventory and one package, followed through "
-            "the post-measure inventory diff, the parametrised energy-system file diff and the "
-            "translation report.</p>",
-            "</section>",
-            "</main>",
         ]
+        trace = self._data.trace
+        if trace is None:
+            lines.extend(
+                [
+                    "<p>No trace was collected for this page.</p>",
+                    "</section>",
+                    "</main>",
+                ]
+            )
+            return lines
+        lines.extend(self._trace_intro(trace))
+        lines.extend(self._trace_inventory(trace))
+        lines.extend(self._trace_yaml(trace))
+        lines.extend(self._trace_report(trace))
+        lines.append("</section>")
+        lines.append("</main>")
+        return lines
+
+    def _trace_intro(self, trace: TraceData) -> List[str]:
+        """Return the paragraph naming the example, its base file and its stated numbers."""
+        return [
+            f'<p class="sub">{html.escape(TraceExample.INVENTORY_PATH.name)} plus '
+            f"{html.escape(TraceExample.PACKAGE_PATH.name)}, parametrised into "
+            f"<code>{html.escape(trace.base_file_name)}</code>. Nothing here is simulated: the page "
+            "applies the measures, resolves the sizing laws and writes the file, and stops there.</p>",
+            '<p class="sub">The sizing laws read three <strong>stated</strong> daily demands rather '
+            "than a loaded occupancy profile, so that this page depends on no cache and no "
+            f"LoadProfileGenerator run: {TraceExample.HOUSEHOLD_IN_KWH_PER_DAY:g} kWh/day household, "
+            f"{TraceExample.HEAT_PUMP_IN_KWH_PER_DAY:g} kWh/day heat pump, "
+            f"{TraceExample.VEHICLE_IN_KWH_PER_DAY:g} kWh/day vehicle. A real calculation computes all "
+            "three.</p>",
+        ]
+
+    def _trace_inventory(self, trace: TraceData) -> List[str]:
+        """Return the first pane: every inventory leaf the package changed."""
+        lines = [
+            "<h3>1. The inventory, before and after the measures</h3>",
+            '<div class="scroll"><table><thead><tr>'
+            "<th>Inventory path</th><th>Before</th><th>After</th><th>Measure</th>"
+            "</tr></thead><tbody>",
+        ]
+        for change in trace.inventory_changes:
+            measures = ", ".join(change.measure_ids) or self.EMPTY_GROUP_MARK
+            lines.append(
+                f'<tr><td class="mono">{html.escape(change.path)}</td>'
+                f'<td class="mono">{html.escape(self._value(change.before))}</td>'
+                f'<td class="mono">{html.escape(self._value(change.after))}</td>'
+                f"<td>{html.escape(measures)}</td></tr>"
+            )
+        lines.append("</tbody></table></div>")
+        if trace.law_rules:
+            lines.append("<h3>The sizing laws that were resolved</h3>")
+            lines.append('<div class="scroll"><table><thead><tr>'
+                         "<th>Inventory path</th><th>Arithmetic</th></tr></thead><tbody>")
+            for path, rule in trace.law_rules:
+                lines.append(
+                    f'<tr><td class="mono">{html.escape(path)}</td>'
+                    f'<td class="mono">{html.escape(rule)}</td></tr>'
+                )
+            lines.append("</tbody></table></div>")
+        return lines
+
+    def _trace_yaml(self, trace: TraceData) -> List[str]:
+        """Return the second pane: the base file to parametrised file diff, annotated."""
+        lines = [
+            "<h3>2. The energy-system file, base to parametrised</h3>",
+            '<p class="sub">Every hunk is annotated with the inventory path, measure or sizing law '
+            "that asked for it. Requirement R4 permits only these four kinds of change: config "
+            "values, constructor swaps, variant selections and group flags.</p>",
+        ]
+        for hunk in trace.hunks:
+            annotation = ", ".join(hunk.annotations) or "the document's own name and description"
+            lines.append('<div class="hunk">')
+            lines.append(
+                f'<p class="sub"><code>{html.escape(hunk.header)}</code> &middot; '
+                f"{html.escape(annotation)}</p>"
+            )
+            lines.append('<pre class="diff">')
+            for line in hunk.lines:
+                css = "add" if line.startswith("+") else ("del" if line.startswith("-") else "ctx")
+                lines.append(f'<span class="{css}">{html.escape(line)}</span>')
+            lines.append("</pre>")
+            lines.append("</div>")
+        return lines
+
+    def _trace_report(self, trace: TraceData) -> List[str]:
+        """Return the third pane: the translation report of the example."""
+        lines = [
+            "<h3>3. The translation report</h3>",
+            '<p class="sub">One line per inventory field and per measure, which is what requirement '
+            "R7 asks of every calculation.</p>",
+            '<div class="scroll"><table><thead><tr>'
+            "<th>Path</th><th>Status</th><th>Note</th><th>Rule</th></tr></thead><tbody>",
+        ]
+        for line in trace.report_lines:
+            lines.append(
+                f'<tr><td class="mono">{html.escape(str(line["path"]))}</td>'
+                f'<td>{html.escape(str(line["status"]))}</td>'
+                f'<td>{html.escape(str(line.get("note", "")))}</td>'
+                f'<td class="sub">{html.escape(str(line.get("rule", "")))}</td></tr>'
+            )
+        lines.append("</tbody></table></div>")
+        return lines
+
+    @classmethod
+    def _value(cls, value: Any) -> str:
+        """Return one inventory value as the page shows it."""
+        if value is None:
+            return "—"
+        if isinstance(value, float):
+            return f"{value:.6g}"
+        return str(value)
 
     def script(self) -> str:
         """Return the page's inline script: tab switching, decision filter, row highlighting."""

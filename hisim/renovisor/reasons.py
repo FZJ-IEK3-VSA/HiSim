@@ -9,7 +9,9 @@ not have, a measure named twice);
 *refusal* — the request is well formed but this HiSim cannot simulate it, and the caller must ask
 for something else (a material with no database row, a base file that does not exist);
 *no effect* — the request is simulated as asked, but one measure changed nothing because HiSim has
-no model for it, which the translation report states rather than hiding.
+no model for it, which the translation report states rather than hiding;
+*crash* — the request was accepted and the calculation then failed, which is the third outcome
+requirement R11 insists on telling apart from the other two.
 
 Example::
 
@@ -52,6 +54,7 @@ class ReasonCode(str, Enum):
     CONFLICTING_WRITES = "CONFLICTING_WRITES"
     TOO_MANY_VEHICLES = "TOO_MANY_VEHICLES"
     NO_TABULA_ARCHETYPE = "NO_TABULA_ARCHETYPE"
+    NO_WEATHER_FOR_COUNTRY = "NO_WEATHER_FOR_COUNTRY"
 
     NO_APPLIANCE_SUBMODEL = "NO_APPLIANCE_SUBMODEL"
     NO_INFILTRATION_MODEL = "NO_INFILTRATION_MODEL"
@@ -59,6 +62,8 @@ class ReasonCode(str, Enum):
     NO_VENTILATION_MODEL = "NO_VENTILATION_MODEL"
     NO_CONTROL_SCHEDULE_MODEL = "NO_CONTROL_SCHEDULE_MODEL"
     NO_BEHAVIOUR_MODEL = "NO_BEHAVIOUR_MODEL"
+
+    SIMULATION_FAILED = "SIMULATION_FAILED"
 
     def describe(self) -> str:
         """Return the one-line description of this code for ``errors.json``.
@@ -81,7 +86,8 @@ class ReasonCode(str, Enum):
         Returns:
             :class:`ReasonGroup` — ``VALIDATION`` for a malformed request, ``REFUSAL`` for a
             well-formed request this HiSim cannot simulate, ``NO_EFFECT`` for a measure that was
-            accepted and changed nothing.
+            accepted and changed nothing, ``CRASH`` for a calculation that failed after the
+            request had been accepted.
 
         Raises:
             KeyError: When a member was added without a group.
@@ -93,13 +99,14 @@ class ReasonGroup(str, Enum):
     """The three kinds of outcome a reason code can stand for.
 
     A caller reads the group to decide what to do: fix the request (``VALIDATION``), ask for
-    something else (``REFUSAL``), or accept a result in which one measure did nothing
-    (``NO_EFFECT``).
+    something else (``REFUSAL``), accept a result in which one measure did nothing
+    (``NO_EFFECT``), or retry and report the failure (``CRASH``).
     """
 
     VALIDATION = "VALIDATION"
     REFUSAL = "REFUSAL"
     NO_EFFECT = "NO_EFFECT"
+    CRASH = "CRASH"
 
 
 class ReasonDescriptions:
@@ -130,12 +137,14 @@ class ReasonDescriptions:
         ReasonCode.CONFLICTING_WRITES: "Two measures write different values to the same inventory field.",
         ReasonCode.TOO_MANY_VEHICLES: "No recorded base file carries more than one electric vehicle.",
         ReasonCode.NO_TABULA_ARCHETYPE: "No TABULA archetype exists for this country and building type.",
+        ReasonCode.NO_WEATHER_FOR_COUNTRY: "No weather station of the catalogue is named after this country code.",
         ReasonCode.NO_APPLIANCE_SUBMODEL: "HiSim has no separable appliance or lighting load to change.",
         ReasonCode.NO_INFILTRATION_MODEL: "HiSim has no infiltration or air-tightness model for the MVP.",
         ReasonCode.NO_SHADING_MODEL: "HiSim has no external shading model for the MVP.",
         ReasonCode.NO_VENTILATION_MODEL: "HiSim has no mechanical ventilation model for the MVP.",
         ReasonCode.NO_CONTROL_SCHEDULE_MODEL: "HiSim has no heating control schedule model for the MVP.",
         ReasonCode.NO_BEHAVIOUR_MODEL: "HiSim has no occupant behaviour model to change.",
+        ReasonCode.SIMULATION_FAILED: "The request was accepted and the calculation then failed.",
     }
 
     GROUP_BY_CODE: ClassVar[Dict[ReasonCode, ReasonGroup]] = {
@@ -157,12 +166,14 @@ class ReasonDescriptions:
         ReasonCode.CONFLICTING_WRITES: ReasonGroup.REFUSAL,
         ReasonCode.TOO_MANY_VEHICLES: ReasonGroup.REFUSAL,
         ReasonCode.NO_TABULA_ARCHETYPE: ReasonGroup.REFUSAL,
+        ReasonCode.NO_WEATHER_FOR_COUNTRY: ReasonGroup.REFUSAL,
         ReasonCode.NO_APPLIANCE_SUBMODEL: ReasonGroup.NO_EFFECT,
         ReasonCode.NO_INFILTRATION_MODEL: ReasonGroup.NO_EFFECT,
         ReasonCode.NO_SHADING_MODEL: ReasonGroup.NO_EFFECT,
         ReasonCode.NO_VENTILATION_MODEL: ReasonGroup.NO_EFFECT,
         ReasonCode.NO_CONTROL_SCHEDULE_MODEL: ReasonGroup.NO_EFFECT,
         ReasonCode.NO_BEHAVIOUR_MODEL: ReasonGroup.NO_EFFECT,
+        ReasonCode.SIMULATION_FAILED: ReasonGroup.CRASH,
     }
 
 

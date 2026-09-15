@@ -18,12 +18,20 @@ M2). Every refusal is collected before any is raised, so a caller with three pro
 three at once.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim.renovisor.base_files import BaseFileKey, BaseFiles
 from hisim.renovisor.catalogue import Catalogue
-from hisim.renovisor.effects import Effects, LawRequest, NoEffect, ResolvedEffects
+from hisim.renovisor.effects import (
+    AddThermalResistance,
+    Effects,
+    LawRequest,
+    NoEffect,
+    ResolvedEffects,
+    SetInventoryField,
+    SetUValue,
+)
 from hisim.renovisor.envelope import (
     CurrentUValues,
     EnvelopePaths,
@@ -71,6 +79,14 @@ class ApplicationResult:
         pending_laws: Inventory path -> the sizing law that will produce its value.
         report: The translation report, finalised over the post-measure inventory.
         u_values: The composed U-value per envelope element any measure touched.
+        measure_written_paths: Every inventory path a measure wrote, composed or left to a sizing
+            law, sorted. It is what lets the parametriser of step 5 tell a renovation the base
+            file cannot carry -- which is a refusal -- from a description of the dwelling the base
+            file has no component for, which is merely reported as ignored.
+        paths_by_measure: Which measure asked for which of those paths, by measure id. The trace
+            page of the translation map reads it to link each changed inventory leaf back to the
+            measure that changed it; one path may carry two measures when both insulate the same
+            element.
     """
 
     inventory: Inventory
@@ -81,6 +97,8 @@ class ApplicationResult:
     pending_laws: Mapping[str, LawRequest]
     report: MappingReport
     u_values: Mapping[str, float]
+    measure_written_paths: Tuple[str, ...] = ()
+    paths_by_measure: Mapping[str, Tuple[str, ...]] = field(default_factory=dict)
 
 
 class PackagePaths:
@@ -255,6 +273,8 @@ class PackageApplication:
             pending_laws=dict(resolved.pending_laws),
             report=report,
             u_values=u_values,
+            measure_written_paths=self.written_paths(resolved),
+            paths_by_measure=self._paths_by_measure(entries, effects),
         )
 
     def _read_package(self, package: Sequence[Mapping[str, Any]]) -> Tuple[PackageEntry, ...]:
@@ -409,8 +429,7 @@ class PackageApplication:
     ) -> None:
         """Add a derived report line for every measure whose function wrote none itself."""
         for index, entry in enumerate(entries):
-            report.measure_index(entry.measure_id)
-            if report.has_measure(entry.measure_id):
+            if report.has_measure_line(index):
                 continue
             produced = effects.by_measure(entry.measure_id)
             no_effects = [item for item in produced if isinstance(item, NoEffect)]
@@ -430,6 +449,35 @@ class PackageApplication:
                 f"applied with {len(produced)} effect(s)",
                 index=index,
             )
+
+    @classmethod
+    def _paths_by_measure(
+        cls, entries: Sequence[PackageEntry], effects: Effects
+    ) -> Dict[str, Tuple[str, ...]]:
+        """Return which inventory paths each measure asked for, by measure id.
+
+        A measure asks for a path in two ways: by writing a field outright, and by adding a
+        thermal layer to an envelope element, whose composed U-value then lands on that element's
+        path. Both are collected here so that a reader of the trace page can see which measure is
+        responsible for a changed leaf without re-running anything.
+
+        Args:
+            entries: The package's entries, in order.
+            effects: The accumulator every measure wrote into.
+
+        Returns:
+            Measure id -> the inventory paths it asked for, sorted.
+        """
+        found: Dict[str, Tuple[str, ...]] = {}
+        for entry in entries:
+            paths = set()
+            for effect in effects.by_measure(entry.measure_id):
+                if isinstance(effect, SetInventoryField):
+                    paths.add(effect.path)
+                elif isinstance(effect, (AddThermalResistance, SetUValue)):
+                    paths.add(EnvelopePaths.u_value_path(effect.element))
+            found[entry.measure_id] = tuple(sorted(paths))
+        return found
 
     @classmethod
     def written_paths(cls, resolved: ResolvedEffects) -> Tuple[str, ...]:

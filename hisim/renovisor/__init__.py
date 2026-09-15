@@ -19,9 +19,16 @@ measures, and the insulation-material database.
 :mod:`~hisim.renovisor.application` (applying one package to one inventory). Nothing here runs a
 simulation or opens an energy-system file.
 
-*the run* — the bindings, the parametriser and the ``calculate`` command, which are step 5 of
-``roadmap/renovisor/implementation/``. :mod:`hisim.renovisor.__main__` carries the intended
-interface and refuses to pretend it works.
+*the run* — :mod:`~hisim.renovisor.bindings` (which component of a recorded energy-system file
+owns which inventory leaf), :mod:`~hisim.renovisor.occupancy` (the nearest household of the
+LoadProfileGenerator catalogue), :mod:`~hisim.renovisor.laws` (the sizing laws the measure layer
+leaves pending, and the demand estimates they read), :mod:`~hisim.renovisor.parametriser` (writing
+all of it into one recorded base file, within what requirement R4 permits) and
+:mod:`~hisim.renovisor.calculate` (one input directory in, one output directory out), which
+:mod:`hisim.renovisor.__main__` exposes as a single ``calculate`` command.
+
+*the map* — :mod:`~hisim.renovisor.map` renders the whole translation as one committed HTML page,
+including a worked example traced from the inventory through to the parametrised file.
 
 The layering rule the whole package rests on: the measure layer writes the *inventory* and never
 names a HiSim component or config field, so a HiSim rename changes one binding rather than 33

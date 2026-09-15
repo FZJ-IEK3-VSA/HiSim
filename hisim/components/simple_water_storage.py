@@ -4,7 +4,7 @@
 # Owned
 import importlib
 from dataclasses import dataclass
-from typing import List, Any, Tuple, Optional
+from typing import ClassVar, List, Any, Tuple, Optional
 from enum import Enum, unique
 import numpy as np
 import pandas as pd
@@ -20,7 +20,17 @@ from hisim.component import (
     OpexCostDataClass,
     CapexCostDataClass,
 )
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import (
+    ComponentID,
+    ConfigBase,
+    DisplayConfig,
+    Sizable,
+    Size,
+    SizingLaw,
+    concrete,
+    preset,
+    sized_field,
+)
 from hisim.components.configuration import PhysicsConfig
 from hisim.components import configuration
 from hisim.simulationparameters import SimulationParameters
@@ -197,15 +207,35 @@ class SimpleHotWaterStorageConfig(ConfigBase):
 @dataclass_json
 @dataclass
 class SimpleDHWStorageConfig(ConfigBase):
-    """Configuration of the SimpleHotWaterStorage class."""
+    """Configuration of the SimpleDHWStorage class.
+
+    The domestic-hot-water vessel of a household. The named default is
+    :meth:`preset_standard`, and ``volume_heating_water_storage_in_liter`` is sizable: the
+    preset leaves it ``AUTO`` and ``.resolve(ctx)`` computes it from the number of apartments
+    the building contributes, which is what the deleted ``get_scaled_dhw_storage`` factory did
+    setup-side. An author who knows the vessel pins the field instead, which is what the
+    deleted ``get_default_simpledhwstorage_config`` factory was for.
+    """
 
     @classmethod
     def get_main_classname(cls):
         """Return the full class name of the base class."""
         return SimpleDHWStorage.get_full_classname()
 
+    #: Litres of domestic hot water storage per apartment. The deleted
+    #: ``get_scaled_dhw_storage`` factory carried this as its ``default_volume_in_liter``
+    #: argument and recorded no source for it; every one of its nineteen call sites accepted
+    #: the default, so the number is the fleet's convention rather than a cited standard.
+    VOLUME_PER_APARTMENT_IN_LITER: ClassVar[float] = 250.0
+
+    #: Sizing law of the vessel's volume: :data:`VOLUME_PER_APARTMENT_IN_LITER` for every
+    #: apartment the building has, and for at least one apartment -- the clamp the factory
+    #: wrote as ``max(number_of_apartments, 1)``, so a context reporting zero apartments still
+    #: sizes one household's vessel instead of a storage of no volume. Named as a ClassVar so
+    #: that the field declaration reads as one line.
+    VOLUME_LAW: ClassVar[SizingLaw] = Size.NUMBER_OF_APARTMENTS.at_least(1) * VOLUME_PER_APARTMENT_IN_LITER
+
     component_id: ComponentID
-    volume_heating_water_storage_in_liter: float
     heat_transfer_coefficient_in_watt_per_m2_per_kelvin: float
     #: CO2 footprint of investment in kg
     device_co2_footprint_in_kg: Optional[float]
@@ -217,20 +247,31 @@ class SimpleDHWStorageConfig(ConfigBase):
     maintenance_costs_in_euro_per_year: Optional[float]
     # subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: Optional[float]
+    #: Volume of the vessel. Sizable: left ``AUTO`` it is computed by :data:`VOLUME_LAW` from
+    #: the apartment count the building contributes. It is declared here rather than beside the
+    #: heat transfer coefficient because a field with a default may not precede one without.
+    volume_heating_water_storage_in_liter: Sizable[float] = sized_field(rule=VOLUME_LAW)
 
+    @preset
     @classmethod
-    def get_default_simpledhwstorage_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "SimpleDHWStorageConfig":
-        """Get a default simplehotwaterstorage config."""
-        if component_id is None:
-            component_id = ComponentID(name="DHWStorage")
-        volume_heating_water_storage_in_liter: float = 250
+    def preset_standard(cls, name: str) -> "SimpleDHWStorageConfig":
+        """The fleet's domestic-hot-water vessel, scaled to the building it stands in.
 
-        config = SimpleDHWStorageConfig(
-            component_id=component_id,
-            volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
+        A tank losing 0.36 watt per square metre and kelvin to its surroundings. What it does
+        not fix is how large the tank is: ``volume_heating_water_storage_in_liter`` stays
+        ``AUTO`` so that :data:`VOLUME_LAW` derives it from the building's apartment count, and
+        an author who knows the vessel pins the field instead. Capex fields stay ``None`` so
+        post-processing looks them up in the device database, exactly as the deleted factories
+        did.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            SimpleDHWStorageConfig: The preset configuration, with the volume unsized.
+        """
+        return cls(
+            component_id=ComponentID(name=name),
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=0.36,
             # capex and device emissions are calculated in get_cost_capex function by default
             device_co2_footprint_in_kg=None,
@@ -239,35 +280,6 @@ class SimpleDHWStorageConfig(ConfigBase):
             maintenance_costs_in_euro_per_year=None,
             subsidy_as_percentage_of_investment_costs=None,
         )
-        return config
-
-    @classmethod
-    def get_scaled_dhw_storage(
-        cls,
-        number_of_apartments: int = 1,
-        default_volume_in_liter: float = 250.0,
-        name: str = "DHWStorage",
-        component_id: Optional[ComponentID] = None,
-    ) -> "SimpleDHWStorageConfig":
-        """Gets a default storage with scaling according to number of apartments."""
-
-        # if the used heating system is a heat pump use formular
-
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        volume = default_volume_in_liter * max(number_of_apartments, 1)
-        config = SimpleDHWStorageConfig(
-            component_id=component_id,
-            volume_heating_water_storage_in_liter=volume,
-            heat_transfer_coefficient_in_watt_per_m2_per_kelvin=0.36,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-        )
-        return config
 
 
 @dataclass
@@ -1668,13 +1680,13 @@ class SimpleDHWStorage(SimpleWaterStorage):
         # physical parameters of storage
         self.water_mass_in_storage_in_kg = (
             self.density_water_at_40_degree_celsius_in_kg_per_liter
-            * self.waterstorageconfig.volume_heating_water_storage_in_liter
+            * concrete(self.waterstorageconfig.volume_heating_water_storage_in_liter)
         )
         self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin = (
             self.waterstorageconfig.heat_transfer_coefficient_in_watt_per_m2_per_kelvin
         )
         self.storage_surface_in_m2 = self.calculate_surface_area_of_storage(
-            storage_volume_in_liter=self.waterstorageconfig.volume_heating_water_storage_in_liter,
+            storage_volume_in_liter=concrete(self.waterstorageconfig.volume_heating_water_storage_in_liter),
         )
 
         self.ambient_temperature_in_celsius = 20.0
@@ -1941,7 +1953,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         kpi_tag = KpiTagEnumClass.STORAGE_DOMESTIC_HOT_WATER
         component_type = lt.ComponentType.THERMAL_ENERGY_STORAGE
         unit = lt.Units.LITER
-        size_of_energy_system = config.volume_heating_water_storage_in_liter
+        size_of_energy_system = concrete(config.volume_heating_water_storage_in_liter)
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
         simulation_parameters=simulation_parameters,

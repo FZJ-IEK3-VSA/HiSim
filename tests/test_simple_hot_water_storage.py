@@ -7,7 +7,7 @@ from hisim import component as cp
 from hisim.components import simple_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim.config import ComponentID
+from hisim.config import ComponentID, ConfigSizingError, SizingContext, auto_fields
 from tests import functions_for_testing as fft
 
 
@@ -252,3 +252,70 @@ def test_buffer_volume_follows_the_generator_not_the_building_load() -> None:
         sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER,
     )
     assert sized_from_the_building_load.volume_heating_water_storage_in_liter == 155.62
+
+
+@pytest.mark.base
+def test_the_dhw_preset_sizes_the_vessel_from_the_apartment_count() -> None:
+    """Test that the DHW preset gives every apartment its 250 litres.
+
+    The law is the arithmetic the deleted ``get_scaled_dhw_storage`` factory performed:
+    ``SimpleDHWStorageConfig.VOLUME_PER_APARTMENT_IN_LITER`` per apartment. One apartment is the
+    single-family house every recorded twin of the fleet stands in, and 250.0 l is the volume
+    each of those twins carries; seventeen apartments is the multi-family archetype the building
+    sizer and RenoVisor reach.
+    """
+    single_family_house = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(
+        SizingContext(number_of_apartments=1)
+    )
+    assert single_family_house.volume_heating_water_storage_in_liter == 250.0
+
+    multi_family_house = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(
+        SizingContext(number_of_apartments=17)
+    )
+    assert multi_family_house.volume_heating_water_storage_in_liter == 4250.0
+
+
+@pytest.mark.base
+def test_the_dhw_volume_law_sizes_one_apartment_for_a_building_that_reports_none() -> None:
+    """Test that the clamp of the DHW volume law survives an apartment count of zero.
+
+    The deleted factory wrote the clamp as ``max(number_of_apartments, 1)``, and the law keeps it
+    as ``.at_least(1)``. Without it a building reporting zero apartments would size a vessel of
+    no volume, whose water mass is zero and whose temperature the storage would then divide by.
+    """
+    no_apartments = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(
+        SizingContext(number_of_apartments=0)
+    )
+    assert no_apartments.volume_heating_water_storage_in_liter == 250.0
+
+
+@pytest.mark.base
+def test_the_dhw_preset_pins_the_losses_and_leaves_the_volume_open() -> None:
+    """Test that the DHW preset fixes the vessel's constants and nothing else.
+
+    What the preset states is how much heat the tank loses to its surroundings and that its
+    capex is looked up rather than stated; what it deliberately does not state is how large the
+    tank is. The volume stays unresolved until a sizing context supplies the apartment count.
+    """
+    config = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage")
+
+    assert config.component_id == ComponentID(name="DHWStorage")
+    assert config.heat_transfer_coefficient_in_watt_per_m2_per_kelvin == 0.36
+    assert config.device_co2_footprint_in_kg is None
+    assert config.investment_costs_in_euro is None
+    assert config.lifetime_in_years is None
+    assert config.maintenance_costs_in_euro_per_year is None
+    assert config.subsidy_as_percentage_of_investment_costs is None
+    assert set(auto_fields(config)) == {"volume_heating_water_storage_in_liter"}
+
+
+@pytest.mark.base
+def test_a_dhw_vessel_cannot_be_sized_without_a_building_around_it() -> None:
+    """Test that a context carrying no apartment count is refused, naming the missing fact.
+
+    The vessel has no size of its own: its law reads ``number_of_apartments``, which the building
+    configuration contributes. Resolving against a context without it has to fail loudly rather
+    than leave a storage of unknown volume in the system.
+    """
+    with pytest.raises(ConfigSizingError, match="number_of_apartments"):
+        simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(SizingContext())

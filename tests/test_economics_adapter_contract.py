@@ -116,6 +116,9 @@ class AdapterContractScan:
         "FuelMeterConfig.fuel_loadtype": LoadTypes.OIL,
         "FuelMeterConfig.heating_value_of_fuel_in_kwh_per_liter": 9.821666666666667,
         "FuelMeterConfig.fuel_density_in_kg_per_m3": 830.0,
+        # The vessel the apartment law gives the single apartment of a single-family house.
+        # The extractor reads it as the litres it prices.
+        "SimpleDHWStorageConfig.volume_heating_water_storage_in_liter": 250.0,
         "HeatDistributionConfig.heating_system": HeatDistributionSystemType.RADIATOR,
         "HeatDistributionConfig.water_mass_flow_rate_in_kg_per_second": 0.5,
         "HeatDistributionConfig.absolute_conditioned_floor_area_in_m2": 120.0,

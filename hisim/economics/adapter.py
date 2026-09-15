@@ -228,7 +228,7 @@ class FactsExtractors:
         ),
         "SimpleDHWStorage": lambda config: ComponentCostFacts(
             asset_class=ComponentType.THERMAL_ENERGY_STORAGE,
-            size=config.volume_heating_water_storage_in_liter,
+            size=concrete(config.volume_heating_water_storage_in_liter),
             size_unit=Units.LITER,
             kpi_tag=KpiTagEnumClass.STORAGE_DOMESTIC_HOT_WATER,
         ),

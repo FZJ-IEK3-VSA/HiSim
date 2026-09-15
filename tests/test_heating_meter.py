@@ -180,8 +180,17 @@ def test_house(
     )
 
     # Build Heat Pump Controller for space heating
-    my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
-        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
+    my_heatpump_controller_sh_config = (
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
+            "MoreAdvancedHeatPumpHPLibControllerSH"
+        ).resolve(
+            SizingContext(
+                heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
+                # This controller keeps heating up to 16 °C outside, two kelvin below the threshold
+                # the emitter circuit derives from the building, which is what this test has always run.
+                set_heating_threshold_outside_temperature_in_celsius=16.0,
+            )
+        )
     )
 
     my_heatpump_controller_space_heating = (

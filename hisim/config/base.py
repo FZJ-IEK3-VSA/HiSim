@@ -355,29 +355,23 @@ class ConfigBase:
     def get_main_classname(cls) -> str:
         """Returns the fully qualified name of the component class this configuration configures.
 
-        That name is what a serialized scenario writes as the component's class and what
-        postprocessing reports the component by, so it has to be the same string the rest of
-        HiSim spells the component with. It is derived from :py:attr:`MAIN_CLASS`: the named
-        module is imported here, at call time, and the resolved class is asked for its own
-        module and name. The import is deliberately late — a component module imports its
-        configuration, so a configuration importing its component at module level would close
-        the cycle — and resolving rather than echoing the path is what makes a component whose
-        package re-exports it under a shorter path (``PVSystem``, ``Weather``) come out under
-        the path the rest of HiSim uses.
+        Serialized scenarios and postprocessing spell a component by this string, so it has to be
+        the one the rest of HiSim uses. It is derived from :py:attr:`MAIN_CLASS`: the named module
+        is imported at call time (a component module imports its configuration, so a module-level
+        import here would close the cycle) and the resolved class supplies its own module and
+        name. Resolving instead of echoing the path is what lets a component re-exported under a
+        shorter package path (``PVSystem``, ``Weather``) come out under the path HiSim uses.
 
-        Example: ``PVSystemConfig.MAIN_CLASS`` is
-        ``"hisim.components.generic_pv_system.PVSystem"``, and this returns that same string.
+        Example: ``PVSystemConfig.MAIN_CLASS`` is ``"hisim.components.generic_pv_system.PVSystem"``
+        and this returns that same string.
 
         Returns:
             str: ``<module of the component class>.<name of the component class>``.
 
         Raises:
             NotImplementedError: If the class neither declares ``MAIN_CLASS`` nor overrides this
-                method. The message names the class, because the alternative — a bare
-                "missing definition" — leaves the reader to find out which of the eighty-odd
-                configuration classes was asked.
-            ValueError: If ``MAIN_CLASS`` is not a dotted path, i.e. names no module to import
-                the class from.
+                method; the message names the class.
+            ValueError: If ``MAIN_CLASS`` is not a dotted path and so names no module.
         """
         if not cls.MAIN_CLASS:
             raise NotImplementedError(

@@ -7,10 +7,6 @@ inverter's parameters come from, lives in :mod:`hisim.components.generic_pv_syst
 and is imported from there; the package ``__init__`` explains why.
 """
 
-# pylint: disable=cyclic-import
-# (the only backward edge is the runtime-local import of PVSystem in get_main_classname;
-# module import order is acyclic)
-
 from dataclasses import dataclass
 from typing import ClassVar, Dict, Optional, Tuple
 

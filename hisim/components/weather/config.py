@@ -7,10 +7,6 @@ own configuration. :class:`WeatherDataSourceEnum`, which names the reader, lives
 explains why.
 """
 
-# pylint: disable=cyclic-import
-# (the only backward edge is a runtime-local import of Weather inside get_main_classname;
-# module import order is acyclic)
-
 import os
 from dataclasses import dataclass
 from enum import Enum

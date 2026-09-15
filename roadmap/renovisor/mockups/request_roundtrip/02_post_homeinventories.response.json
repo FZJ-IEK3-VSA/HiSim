@@ -1,0 +1,4 @@
+{
+  "id": "hi_7c1e0b9a4d2f…",
+  "_comment": "HomeInventory = the content hash the backend minted (opaque string) plus the posted HomeInventoryInput verbatim. Identical input returns the same id. Omitted here for brevity; see 01."
+}

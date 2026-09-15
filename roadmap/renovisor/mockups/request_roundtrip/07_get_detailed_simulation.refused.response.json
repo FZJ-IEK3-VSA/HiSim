@@ -1,0 +1,11 @@
+{
+  "status": "refused",
+  "errors": [
+    {
+      "reason": "MATERIAL_NOT_IN_DATABASE",
+      "group": "refusal",
+      "path": "package.measures[1].options.material",
+      "detail": "WARM_ROOF_INSULATION: material 'PIR' has no row in materials.yaml (Q6)"
+    }
+  ]
+}

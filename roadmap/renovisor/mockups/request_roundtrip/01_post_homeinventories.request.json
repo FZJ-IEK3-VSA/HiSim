@@ -1,0 +1,106 @@
+{
+  "location": {
+    "country_code": "IE",
+    "region": "Dublin",
+    "eircode_or_postcode": "D14 AB12"
+  },
+  "building_config": {
+    "general": {
+      "tabula_building_type": "SFH",
+      "building_heat_capacity_class": "medium",
+      "construction_year": 1988,
+      "absolute_conditioned_floor_area_in_m2": 157,
+      "number_of_apartments": 1,
+      "set_heating_temperature_in_celsius": 20.0,
+      "set_cooling_temperature_in_celsius": 25.0,
+      "retrofit_status": "UNRENOVATED",
+      "max_thermal_building_demand_in_watt": null,
+      "floor_construction": "SLAB_ON_GROUND",
+      "wall_construction": "CAVITY",
+      "cavity_width_in_mm": 100,
+      "roof_form": "PITCHED",
+      "roof_orientation_in_degree": 170,
+      "worst_window_glazing_panes": 2
+    },
+    "envelope_details": {
+      "floor_u_value_in_watt_per_m2_per_kelvin": null,
+      "floor_area_in_m2": 78.5,
+      "facade_u_value_in_watt_per_m2_per_kelvin": null,
+      "facade_area_in_m2": 173.0,
+      "roof_u_value_in_watt_per_m2_per_kelvin": null,
+      "roof_area_in_m2": 98.0,
+      "window_u_value_in_watt_per_m2_per_kelvin": 2.8,
+      "window_area_in_m2": 22.4,
+      "door_u_value_in_watt_per_m2_per_kelvin": null,
+      "door_area_in_m2": 3.6
+    }
+  },
+  "occupancy_config": {
+    "residents_count": 3,
+    "residents_type": [
+      "ADULT",
+      "ADULT",
+      "KID"
+    ],
+    "residents_employment_status": [
+      "FULL_TIME",
+      "HALF_TIME",
+      "EDUCATION"
+    ],
+    "travel_route_set": "Travel Route Set for 10km Commuting Distance"
+  },
+  "energy_system_config": {
+    "heating_system": {
+      "system": "GAS_HEATING",
+      "heatpump_flow_temperature_in_celsius": null,
+      "power_in_watt": 18000,
+      "installation_year": 2004,
+      "with_domestic_hot_water_preparation": true,
+      "heat_distribution_system": "RADIATOR",
+      "dhw_supply": null
+    },
+    "water_storage": {
+      "hot_water_storage": {
+        "volume_in_liter": 120,
+        "installation_year": 2004
+      },
+      "domestic_hot_water_storage": {
+        "volume_in_liter": 180,
+        "installation_year": 2004
+      }
+    },
+    "vehicles": {
+      "electric_vehicles": [],
+      "fossil_vehicles": [
+        {
+          "vehicle_id": "ice_1",
+          "fuel_source": "DIESEL",
+          "model": "family estate",
+          "km_per_year": 14000,
+          "consumption_in_liter_per_km": 0.062,
+          "construction_year": 2014
+        }
+      ]
+    }
+  },
+  "condition_assessment": {
+    "building_elements": {
+      "external_facade": "medium",
+      "exterior_walls": "good",
+      "floors": "good",
+      "attic_ceiling": "bad",
+      "roof_covering": "good",
+      "windows": "medium",
+      "house_door": "medium"
+    },
+    "energy_systems": {
+      "heating_system": "bad",
+      "heat_distribution_system": "medium",
+      "hot_water_storage": "medium",
+      "domestic_hot_water_storage": "medium"
+    }
+  },
+  "selected_grant_schemes": [
+    "warmer_homes_scheme"
+  ]
+}

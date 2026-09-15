@@ -1,0 +1,276 @@
+{
+  "status": "finished",
+  "result": {
+    "package_id": "pkg_3a9f52e1c8b0…",
+    "package_name": "Deep retrofit with heat pump",
+    "home_inventory_id": "hi_7c1e0b9a4d2f…",
+    "measures": [
+      {
+        "measure_id": "EXTERNAL_INSULATION",
+        "options": {
+          "material": "polystyrene_eps_rigid_board"
+        }
+      },
+      {
+        "measure_id": "ROLLED_OUT_ATTIC_INSULATION",
+        "options": {
+          "material": "wood_fiber_rigid_board",
+          "thickness_in_mm": 300
+        }
+      },
+      {
+        "measure_id": "HEATING_SYSTEM",
+        "options": {
+          "type_of_system": "HEAT_PUMP"
+        }
+      },
+      {
+        "measure_id": "HEATING_INSTALLATION",
+        "options": {
+          "type_of_system": "FLOORHEATING"
+        }
+      },
+      {
+        "measure_id": "CHANGE_ROOM_TEMPERATURE",
+        "options": {
+          "new_room_temperature": 21
+        }
+      },
+      {
+        "measure_id": "PHOTOVOLTAIC_SYSTEM",
+        "options": {
+          "size_in_percent_of_roof_area": 40
+        }
+      },
+      {
+        "measure_id": "BATTERY_SYSTEM",
+        "options": {
+          "days_to_cover": 2
+        }
+      },
+      {
+        "measure_id": "INSTALL_NEW_LED_LIGHTS",
+        "options": {}
+      }
+    ],
+    "grants": {
+      "selected_scheme": "warmer_homes_scheme",
+      "eligibility_criteria": {}
+    },
+    "schedule": {
+      "preferred_start": "2026-09",
+      "phases": [
+        {
+          "starts_in": "2026-09",
+          "measure_ids": [
+            "ROLLED_OUT_ATTIC_INSULATION",
+            "INSTALL_NEW_LED_LIGHTS"
+          ]
+        },
+        {
+          "starts_in": "2027-03",
+          "measure_ids": [
+            "EXTERNAL_INSULATION",
+            "HEATING_INSTALLATION",
+            "HEATING_SYSTEM",
+            "CHANGE_ROOM_TEMPERATURE"
+          ]
+        },
+        {
+          "starts_in": "2027-09",
+          "measure_ids": [
+            "PHOTOVOLTAIC_SYSTEM",
+            "BATTERY_SYSTEM"
+          ]
+        }
+      ]
+    },
+    "financing": {
+      "loan_term_years": 15,
+      "own_contribution_in_euro": 20000
+    },
+    "calculation_version": {
+      "image_digest": "sha256:0f3c…example"
+    },
+    "weather_basis": {
+      "location": "IE",
+      "station": "Dublin",
+      "dataset": "NSRDB_15MIN",
+      "year": 2019
+    },
+    "period": {
+      "start": "2021-01-01T00:00:00",
+      "end": "2021-01-02T00:00:00",
+      "fraction_of_year": 0.0027378507871321013
+    },
+    "kpis": {
+      "energy_demand_in_kilowatt_hour_per_year": {
+        "value": 6595.427749853963,
+        "provenance": "PARTIAL",
+        "source": "all_kpis.json: 'Purchased energy consumption for simulated period'; delivered energy bought over every carrier (Q22), summed by HiSim from 'Total energy from grid', 'Total gas demand from grid', 'Total energy consumption'; scaled to a year by 1 / 0.00273785",
+        "period": {
+          "start": "2021-01-01T00:00:00",
+          "end": "2021-01-02T00:00:00",
+          "fraction_of_year": 0.0027378507871321013
+        }
+      },
+      "emissions_in_kg_co2_per_year": {
+        "value": 2704.53015,
+        "provenance": "PARTIAL",
+        "source": "all_kpis.json: 'Total CO2 emissions for simulated period'; operational CO2 (Q22), computed with the 'DE' emission factors of hisim/components/configuration.py, which are not the 'IE' grid's: that table has no 'IE' row; scaled to a year by 1 / 0.00273785",
+        "period": {
+          "start": "2021-01-01T00:00:00",
+          "end": "2021-01-02T00:00:00",
+          "fraction_of_year": 0.0027378507871321013
+        }
+      },
+      "self_sufficiency_in_percent": {
+        "value": 40.19120648208106,
+        "provenance": "SIMULATED",
+        "source": "all_kpis.json: 'Self-sufficiency rate of electricity'; a rate, so it is not scaled to a year",
+        "period": {
+          "start": "2021-01-01T00:00:00",
+          "end": "2021-01-02T00:00:00",
+          "fraction_of_year": 0.0027378507871321013
+        }
+      },
+      "embodied_co2_in_kg": {
+        "value": -2223.5421,
+        "provenance": "SIMULATED",
+        "source": "insulation_materials.json co2_footprint_in_kg_per_m3 x layer volume (Q22): FACADE polystyrene_eps_rigid_board 50 mm x 173 m2 (EXTERNAL_INSULATION) = 8.65 m3 x 59.806 kg/m3; ROOF wood_fiber_rigid_board 160 mm x 98 m2 (ROLLED_OUT_ATTIC_INSULATION) = 15.68 m3 x -174.8 kg/m3"
+      },
+      "energy_label": {
+        "value": null,
+        "provenance": "MOCKED",
+        "source": "no BER/DEAP procedure in HiSim; no letter is invented (A12)"
+      },
+      "disruption_days_by_level": {
+        "value": {
+          "none": 6,
+          "minor": 12,
+          "moderate": 5,
+          "major": 0
+        },
+        "provenance": "MOCKED",
+        "source": "openapi.yaml Kpis.disruption_days_by_level examples[0]; A12"
+      },
+      "indoor_air_quality": {
+        "value": "high",
+        "provenance": "MOCKED",
+        "source": "openapi.yaml Kpis.indoor_air_quality examples[0]; A12"
+      },
+      "thermal_insulation_effect": {
+        "value": 3,
+        "provenance": "MOCKED",
+        "source": "openapi.yaml Kpis.thermal_insulation_effect examples[0]; A12"
+      },
+      "summer_heat_protection": {
+        "value": 3,
+        "provenance": "MOCKED",
+        "source": "openapi.yaml Kpis.summer_heat_protection examples[0]; A12"
+      },
+      "comfort": {
+        "heating": {
+          "value": "high",
+          "provenance": "MOCKED",
+          "source": "openapi.yaml Kpis.comfort.heating examples[0]; A12"
+        },
+        "cooling": {
+          "value": "high",
+          "provenance": "MOCKED",
+          "source": "openapi.yaml Kpis.comfort.cooling examples[0]; A12"
+        }
+      }
+    },
+    "costs": {
+      "investment_costs_in_euro": {
+        "value": {
+          "low": 62227.47151762415,
+          "best_estimate": 85084.68838551678,
+          "high": 116117.14282735568
+        },
+        "provenance": "PARTIAL",
+        "source": "devices from the cost engine (Irish device and energy prices are AI estimates (src_ai_estimates) and are not reviewed); envelope material only, from insulation_materials.json investment_cost_in_euro_per_m3; no labour, scaffolding or system parts until the materials database gains its total-cost column (Q8/Q9): FACADE polystyrene_eps_rigid_board 50 mm x 173 m2 (EXTERNAL_INSULATION) = 8.65 m3 x 107-172 EUR/m3 [IE]; ROOF wood_fiber_rigid_board 160 mm x 98 m2 (ROLLED_OUT_ATTIC_INSULATION) = 15.68 m3 x 260-660 EUR/m3 [IE]"
+      },
+      "investment_breakdown": {
+        "devices": {
+          "value": {
+            "low": 57225.12151762415,
+            "best_estimate": 76665.21338551678,
+            "high": 104280.54282735569
+          },
+          "provenance": "PARTIAL",
+          "source": "cash_flow_timeline.csv: year 0 INVESTMENT entries under 'greenfield_gross'; Irish device and energy prices are AI estimates (src_ai_estimates) and are not reviewed"
+        },
+        "envelope_material": {
+          "value": {
+            "low": 5002.349999999999,
+            "best_estimate": 8419.474999999999,
+            "high": 11836.599999999999
+          },
+          "provenance": "PARTIAL",
+          "source": "material only, from insulation_materials.json investment_cost_in_euro_per_m3; no labour, scaffolding or system parts until the materials database gains its total-cost column (Q8/Q9): FACADE polystyrene_eps_rigid_board 50 mm x 173 m2 (EXTERNAL_INSULATION) = 8.65 m3 x 107-172 EUR/m3 [IE]; ROOF wood_fiber_rigid_board 160 mm x 98 m2 (ROLLED_OUT_ATTIC_INSULATION) = 15.68 m3 x 260-660 EUR/m3 [IE]"
+        }
+      },
+      "energy_costs_in_euro_per_year": {
+        "value": {
+          "low": 2227.2740276769578,
+          "best_estimate": 2606.819698956451,
+          "high": 3148.183638747741
+        },
+        "provenance": "PARTIAL",
+        "source": "cash_flow_timeline.csv: year 1 nominal ENERGY_WORKING, ENERGY_STANDING, ENERGY_CO2_PRICE, ENERGY_CAPACITY_CHARGE entries under 'greenfield_gross'; Irish device and energy prices are AI estimates (src_ai_estimates) and are not reviewed"
+      },
+      "maintenance_costs_in_euro_per_year": {
+        "value": {
+          "low": 349.19087298812076,
+          "best_estimate": 871.3692797551676,
+          "high": 2058.5379076471136
+        },
+        "provenance": "PARTIAL",
+        "source": "cash_flow_timeline.csv: year 1 nominal MAINTENANCE entries under 'greenfield_gross'; Irish device and energy prices are AI estimates (src_ai_estimates) and are not reviewed"
+      },
+      "net_present_value_in_euro": {
+        "value": {
+          "low": 101679.68367203034,
+          "best_estimate": 157709.44028461605,
+          "high": 238716.16909982747
+        },
+        "provenance": "PARTIAL",
+        "source": "lifecycle_costs.json: greenfield_gross.total_npv_in_euro over 20 years; Irish device and energy prices are AI estimates (src_ai_estimates) and are not reviewed"
+      },
+      "monthly_net_cost_20y_in_euro": {
+        "value": {
+          "low": 569.5393238533599,
+          "best_estimate": 883.3793019529218,
+          "high": 1337.1230184046976
+        },
+        "provenance": "PARTIAL",
+        "source": "lifecycle_costs.json: greenfield_gross.equivalent_annual_cost_in_euro / 12 over 20 years; Irish device and energy prices are AI estimates (src_ai_estimates) and are not reviewed"
+      },
+      "monthly_net_cost_10y_in_euro": {
+        "value": {
+          "low": 483.8227217035677,
+          "best_estimate": 839.4494600639979,
+          "high": 1326.3934030713017
+        },
+        "provenance": "PARTIAL",
+        "source": "economic_inputs.json re-evaluated over 10 years under 'greenfield_gross': equivalent_annual_cost_in_euro / 12; Irish device and energy prices are AI estimates (src_ai_estimates) and are not reviewed"
+      }
+    },
+    "missing": [
+      {
+        "field": "costs.grant_in_euro",
+        "reason": "no subsidy catalogue for 'IE' (subsidy_catalog/IE.json); the engine's flat shim is not an Irish scheme and is not published as one (Q24, step 6b)"
+      },
+      {
+        "field": "costs.payback_period_in_years",
+        "reason": "needs the base calculation as well; a compare entry point is a later step"
+      },
+      {
+        "field": "costs.property_value_increase_in_percent",
+        "reason": "no model for the value a renovation adds to a property (A13)"
+      }
+    ]
+  }
+}

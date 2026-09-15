@@ -71,6 +71,7 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
         heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
         heat_exchanger_is_present=False,
         position_hot_water_storage_in_system=simple_water_storage.PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE,
+        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM,
         device_co2_footprint_in_kg=100,
         investment_costs_in_euro=volume_heating_water_storage_in_liter * 14.51,
         lifetime_in_years=100,
@@ -222,36 +223,142 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
     )
 
 
+def _buffer_sized_at(
+    power_in_watt: float, sizing_option: "simple_water_storage.HotWaterStorageSizingEnum"
+) -> "simple_water_storage.SimpleHotWaterStorageConfig":
+    """Returns the buffer preset resolved against one generator power and one sizing option.
+
+    Every buffer test below states a power and a kind of generator and reads the volume back,
+    so the three lines that build the preset, set the option on it and resolve it live here
+    once. The option is assigned on the preset instance rather than passed to
+    ``dataclasses.replace``, which would drop the preset's provenance stamp.
+
+    Args:
+        power_in_watt: The generator's maximal thermal power.
+        sizing_option: The kind of generator the vessel buffers.
+
+    Returns:
+        SimpleHotWaterStorageConfig: The resolved configuration.
+    """
+    config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer(
+        "SimpleHotWaterStorage"
+    )
+    config.sizing_option = sizing_option
+    return config.resolve(SizingContext(maximal_thermal_power_in_watt=power_in_watt))
+
+
 @pytest.mark.base
 def test_buffer_volume_follows_the_generator_not_the_building_load() -> None:
     """The buffer volume is litres per kilowatt of the generator, not of the building load.
 
     P4 decision D-9 (plan item C11): every setup used to hand the building's heating load
-    to ``max_thermal_power_in_watt_of_heating_system``, although the litres-per-kilowatt
-    figures are per kilowatt of installed generator power. A condensing gas boiler that
-    also prepares domestic hot water is sized at 1.1x the load
-    (``GenericBoilerConfig.scale_thermal_power``), so for the 7780.75 W load of the
-    standard building it is an 8558.83 W boiler, and its buffer is 171.18 l -- ten percent
-    more than the 155.62 l the load used to produce. This pins that arithmetic.
+    to the sizing argument, although the litres-per-kilowatt figures are per kilowatt of
+    installed generator power. A condensing gas boiler that also prepares domestic hot water
+    is sized at 1.1x the load (``GenericBoilerConfig.scale_thermal_power``), so for the
+    7780.75 W load of the standard building it is an 8558.83 W boiler, and its buffer is
+    171.18 l -- ten percent more than the 155.62 l the load used to produce. This pins that
+    arithmetic, now through the law rather than through the deleted factory.
     """
 
     heating_load_of_building_in_watt = 7780.75
     # 8558.825 W is what GenericBoilerConfig.scale_thermal_power returns for that load and one
     # apartment; tests/test_sizing.py pins the 1.1x law itself.
     maximal_thermal_power_of_the_boiler_in_watt = 8558.825
+    gas_heater = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
 
-    sized_from_the_generator = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=maximal_thermal_power_of_the_boiler_in_watt,
-        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER,
-    )
+    sized_from_the_generator = _buffer_sized_at(maximal_thermal_power_of_the_boiler_in_watt, gas_heater)
     assert sized_from_the_generator.volume_heating_water_storage_in_liter == 171.18
 
     # What the C11 defect produced, kept here as the measured size of the correction.
-    sized_from_the_building_load = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=heating_load_of_building_in_watt,
-        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER,
-    )
+    sized_from_the_building_load = _buffer_sized_at(heating_load_of_building_in_watt, gas_heater)
     assert sized_from_the_building_load.volume_heating_water_storage_in_liter == 155.62
+
+
+@pytest.mark.base
+def test_the_buffer_law_reads_the_sizing_option_beside_it() -> None:
+    """Test that each kind of generator gets its own litres-per-kilowatt figure.
+
+    The five members of ``HotWaterStorageSizingEnum`` select 50, 20, 40, 50 and 20 l/kW, and
+    the law reads the member off the configuration's own ``sizing_option`` field rather than
+    off the context. These are the volumes the fleet's twins carry: 389.04 l for the heat-pump
+    setups on their 7780.75 W heat pump, 342.35 l and 427.94 l for the pellet and wood chip
+    sizers on their 8558.83 W boilers.
+    """
+    heat_pump_power_in_watt = 7780.75
+    boiler_power_in_watt = 8558.825
+    options = simple_water_storage.HotWaterStorageSizingEnum
+
+    assert (
+        _buffer_sized_at(heat_pump_power_in_watt, options.SIZE_ACCORDING_TO_HEAT_PUMP)
+        .volume_heating_water_storage_in_liter
+        == 389.04
+    )
+    assert (
+        _buffer_sized_at(boiler_power_in_watt, options.SIZE_ACCORDING_TO_PELLET_HEATING)
+        .volume_heating_water_storage_in_liter
+        == 342.35
+    )
+    assert (
+        _buffer_sized_at(boiler_power_in_watt, options.SIZE_ACCORDING_TO_WOOD_CHIP_HEATING)
+        .volume_heating_water_storage_in_liter
+        == 427.94
+    )
+    assert (
+        _buffer_sized_at(boiler_power_in_watt, options.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM)
+        .volume_heating_water_storage_in_liter
+        == 171.18
+    )
+    assert (
+        _buffer_sized_at(boiler_power_in_watt, options.SIZE_ACCORDING_TO_GAS_HEATER)
+        .volume_heating_water_storage_in_liter
+        == 171.18
+    )
+
+
+@pytest.mark.base
+def test_the_buffer_preset_pins_the_vessel_and_leaves_the_volume_open() -> None:
+    """Test that the buffer preset fixes the vessel's physics and wiring and nothing else.
+
+    What the preset states is the heat loss coefficient, that a heat exchanger is fitted -- the
+    stratified alternative still causes problems -- that the vessel stands parallel to the heat
+    source, which is what gives the component its four heat-generator inputs, and that the
+    generator is of no particular kind. What it does not state is how large the vessel is.
+    """
+    config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer(
+        "SimpleHotWaterStorage"
+    )
+
+    assert config.component_id == ComponentID(name="SimpleHotWaterStorage")
+    assert config.heat_transfer_coefficient_in_watt_per_m2_per_kelvin == 2.0
+    assert config.heat_exchanger_is_present is True
+    assert (
+        config.position_hot_water_storage_in_system
+        == simple_water_storage.PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE
+    )
+    assert (
+        config.sizing_option
+        == simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM
+    )
+    assert config.device_co2_footprint_in_kg is None
+    assert config.investment_costs_in_euro is None
+    assert config.lifetime_in_years is None
+    assert config.maintenance_costs_in_euro_per_year is None
+    assert config.subsidy_as_percentage_of_investment_costs is None
+    assert set(auto_fields(config)) == {"volume_heating_water_storage_in_liter"}
+
+
+@pytest.mark.base
+def test_a_buffer_cannot_be_sized_without_a_generator_beside_it() -> None:
+    """Test that a context carrying no generator power is refused, naming the missing fact.
+
+    The vessel has no size of its own: its law reads ``maximal_thermal_power_in_watt``, which
+    the heat generator contributes. Resolving against a context without it has to fail loudly
+    rather than leave a buffer of unknown volume in the system.
+    """
+    with pytest.raises(ConfigSizingError, match="maximal_thermal_power_in_watt"):
+        simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer("SimpleHotWaterStorage").resolve(
+            SizingContext()
+        )
 
 
 @pytest.mark.base

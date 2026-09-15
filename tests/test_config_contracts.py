@@ -170,6 +170,7 @@ class PilotWireFormat:
         "FuelMeterConfig": ("standard",),
         "HeatingMeterConfig": ("standard",),
         "SimpleDHWStorageConfig": ("standard",),
+        "SimpleHotWaterStorageConfig": ("buffer",),
         "CarConfig": (),
     }
 
@@ -192,6 +193,7 @@ class PilotWireFormat:
         "FuelMeterConfig": (),
         "HeatingMeterConfig": (),
         "SimpleDHWStorageConfig": (),
+        "SimpleHotWaterStorageConfig": (),
         "CarConfig": ("for_household",),
     }
 
@@ -232,6 +234,7 @@ class PilotWireFormat:
         "FuelMeterConfig": (),
         "HeatingMeterConfig": (),
         "SimpleDHWStorageConfig": (),
+        "SimpleHotWaterStorageConfig": (),
         "WeatherConfig": ("weather_identity",),
         "UtspLpgConnectorConfig": ("occupancy_identity",),
         "ElectricityMeterConfig": (),
@@ -289,6 +292,7 @@ def test_the_scan_finds_the_converted_classes(scan):
         "FuelMeterConfig",
         "HeatingMeterConfig",
         "SimpleDHWStorageConfig",
+        "SimpleHotWaterStorageConfig",
     } <= names
 
 
@@ -510,7 +514,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     )
     from hisim.components.generic_pv_system import PVSystemConfig
     from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnectorConfig
-    from hisim.components.simple_water_storage import SimpleDHWStorageConfig
+    from hisim.components.simple_water_storage import SimpleDHWStorageConfig, SimpleHotWaterStorageConfig
     from hisim.components.weather import WeatherConfig
 
     by_name: Dict[str, Any] = {
@@ -529,6 +533,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "FuelMeterConfig": FuelMeterConfig,
         "HeatingMeterConfig": HeatingMeterConfig,
         "SimpleDHWStorageConfig": SimpleDHWStorageConfig,
+        "SimpleHotWaterStorageConfig": SimpleHotWaterStorageConfig,
         "CarConfig": CarConfig,
     }
     for class_name, expected in PilotWireFormat.PRESET_NAMES.items():

@@ -156,9 +156,16 @@ def simulation_for_one_timestep(
     )
 
     # Set Hot Water Storage
-    my_simple_hot_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=my_hplib_config.set_thermal_output_power_in_watt,
-        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
+    my_simple_hot_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer(
+        "SimpleHotWaterStorage"
+    )
+    # The litres-per-kilowatt figure is per kind of generator, and the volume law reads the field,
+    # so the option is set on the preset before the configuration is resolved.
+    my_simple_hot_water_storage_config.sizing_option = (
+        simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
+    )
+    my_simple_hot_water_storage_config = my_simple_hot_water_storage_config.resolve(
+        SizingContext(maximal_thermal_power_in_watt=my_hplib_config.set_thermal_output_power_in_watt)
     )
 
     # Set Battery

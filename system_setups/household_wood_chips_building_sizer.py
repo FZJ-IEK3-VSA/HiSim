@@ -329,9 +329,6 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
-    # Set sizing option for Hot water Storage
-    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_WOOD_CHIP_HEATING
-
     # Build wood chip heater For Space Heating
     my_wood_chip_heater_config = generic_boiler.GenericBoilerConfig.preset_wood_chips(
         "ConventionalWoodChipBoiler"
@@ -383,9 +380,18 @@ def setup_function(
     my_sim.add_component(my_dhw_storage, connect_automatically=True)
 
     # Build Heat Water Storage; buffer storage is important for wood chip heating, as it cannot modulate
-    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=concrete(my_wood_chip_heater_config.maximal_thermal_power_in_watt),
-        sizing_option=sizing_option,
+    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer(
+        "SimpleHotWaterStorage"
+    )
+    # The litres-per-kilowatt figure is per kind of generator, and the volume law reads the field,
+    # so the option is set on the preset before the configuration is resolved.
+    my_simple_heat_water_storage_config.sizing_option = (
+        simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_WOOD_CHIP_HEATING
+    )
+    my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
+        SizingContext(
+            maximal_thermal_power_in_watt=concrete(my_wood_chip_heater_config.maximal_thermal_power_in_watt)
+        )
     )
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,

@@ -10,7 +10,7 @@ from dataclasses_json import dataclass_json
 # Import modules from HiSim
 import pandas as pd
 
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.component import (
     CapexCostDataClass,
     ComponentInput,
@@ -30,61 +30,45 @@ from hisim.economics.facts import CostRelevance
 @dataclass_json
 @dataclass
 class TransformerConfig(ConfigBase):
-    """Configuration of the Example Transformer.
+    """Configuration of a transformer and rectifier: how much it passes on, and what it is rated for.
 
-    Attributes
-    ----------
-    efficiency : float
-        Conversion efficiency of the transformer/rectifier, expressed as a
-        dimensionless fraction in the range (0, 1] (e.g. ``0.95`` for 95 %).
-        It is applied as a direct multiplicative scalar on the input power,
-        so passing a percentage (e.g. ``95``) would silently scale the output
-        by 100x — which is why the range is validated at construction: a
-        percentage, a negative value or a zero is refused loudly instead of
-        producing plausible but wrong outputs and negative loss indicators.
-    rated_power_in_kilowatt : float
-        Nameplate throughput of the unit in kW. It does not enter the simulation —
-        :meth:`Transformer.i_simulate` converts whatever it is fed — and exists
-        because a transformer and rectifier are priced per kilowatt of rating: it
-        is the only sizing figure :meth:`Transformer.get_cost_capex` can scale by,
-        which is why a non-positive rating is refused at construction.
-    device_co2_footprint_in_kg : Optional[float]
-        CO2 emitted producing the device, in kg, or ``None`` — the default — for
-        the database lookup. The five cost fields are read as a set: postprocessing
-        looks the figures up from the device database for the simulated year and
-        country and scales them by ``rated_power_in_kilowatt`` only while all five
-        are ``None``; all five set are used verbatim instead, for a quoted unit.
-    investment_costs_in_euro : Optional[float]
-        Purchase cost of the device in EUR, or ``None`` for the database lookup.
-    lifetime_in_years : Optional[float]
-        Technical lifetime in years, over which the investment is written off,
-        or ``None`` for the database lookup.
-    maintenance_costs_in_euro_per_year : Optional[float]
-        Yearly maintenance cost in EUR, or ``None`` for the database lookup.
-    subsidy_as_percentage_of_investment_costs : Optional[float]
-        Share of the investment covered by a subsidy, as a fraction, or ``None``
-        for the database lookup.
+    The unit converts an electrical input and loses a fixed share of it on the way::
+
+        TransformerConfig.preset_standard("TransformerAndRectifier")
+
+    builds the 95 %-efficient megawatt-class unit the electrolyzer setup feeds, and a differently
+    rated unit overrides ``rated_power_in_kilowatt`` on top of it. The two figures answer two
+    separate questions: the efficiency is what the simulation multiplies by, the rating is what
+    the investment cost is scaled by.
+
+    The five cost fields are read as a set: postprocessing looks the figures up from the device
+    database for the simulated year and country and scales them by ``rated_power_in_kilowatt``
+    only while all five are ``None``; all five set are used verbatim instead, for a quoted unit.
     """
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the base class."""
-        return str(Transformer.get_full_classname())
+    MAIN_CLASS = "hisim.components.transformer_rectifier.Transformer"
 
-    # parameter_string: str
-    # my_simulation_parameters: SimulationParameters
     component_id: ComponentID
-    efficiency: float  # conversion efficiency as a fraction in (0, 1] (not a percentage)
-    rated_power_in_kilowatt: float  # nameplate throughput in kW; the only figure the capex scales by
-    #: CO2 footprint of investment in kg
+    #: Share of the input the unit passes on, as a dimensionless fraction in (0, 1] -- 0.95 for
+    #: 95 %, never a percentage. It multiplies the input power directly, which is why
+    #: :meth:`__post_init__` refuses anything outside that range.
+    efficiency: float = 0.95
+    #: Nameplate throughput of the unit in kW. It does not enter the simulation --
+    #: :meth:`Transformer.i_simulate` converts whatever it is fed -- and exists because a
+    #: transformer and rectifier are priced per kilowatt of rating: it is the only sizing figure
+    #: :meth:`Transformer.get_cost_capex` can scale by.
+    rated_power_in_kilowatt: float = 1000.0
+    #: CO2 emitted producing the device, in kg, or ``None`` for the database lookup.
     device_co2_footprint_in_kg: Optional[float] = None
-    #: cost for investment in Euro
+    #: Purchase cost of the device in EUR, or ``None`` for the database lookup.
     investment_costs_in_euro: Optional[float] = None
-    #: lifetime in years
+    #: Technical lifetime in years, over which the investment is written off, or ``None`` for
+    #: the database lookup.
     lifetime_in_years: Optional[float] = None
-    #: maintenance cost in euro per year
+    #: Yearly maintenance cost in EUR, or ``None`` for the database lookup.
     maintenance_costs_in_euro_per_year: Optional[float] = None
-    #: subsidies as percentage of investment costs
+    #: Share of the investment covered by a subsidy, as a fraction, or ``None`` for the
+    #: database lookup.
     subsidy_as_percentage_of_investment_costs: Optional[float] = None
 
     def __post_init__(self) -> None:
@@ -112,23 +96,23 @@ class TransformerConfig(ConfigBase):
                 "It is what the investment cost is scaled by, so an unrated unit would be costed as free."
             )
 
+    @preset
     @classmethod
-    def get_default_transformer_config(cls) -> TransformerConfig:
-        """Gets a default ``TransformerConfig`` instance.
+    def preset_standard(cls, name: str) -> TransformerConfig:
+        """A 95 %-efficient unit of the megawatt class, the field defaults.
 
-        The default rating is the megawatt class, because the one setup that uses this component
-        feeds a megawatt-scale electrolyzer; the five cost fields stay ``None`` so that
-        postprocessing looks the figures up from the device database for the simulated year and
-        country rather than freezing them into every caller.
+        The rating is the megawatt class because the one setup that uses this component feeds a
+        megawatt-scale electrolyzer; the five cost fields stay ``None`` so that postprocessing
+        looks the figures up from the device database for the simulated year and country rather
+        than freezing them into every caller.
+
+        Args:
+            name: Instance name of the unit in the simulation.
 
         Returns:
-            TransformerConfig: a 95 %-efficient, 1000 kW unit with unset cost fields.
+            TransformerConfig: the configuration, fully concrete -- the class has no sizable field.
         """
-        return TransformerConfig(
-            component_id=ComponentID(name="GenericTransformerAndRectifier"),
-            efficiency=0.95,
-            rated_power_in_kilowatt=1000.0,
-        )
+        return cls(component_id=ComponentID(name=name))
 
 
 class Transformer(StatelessComponent):

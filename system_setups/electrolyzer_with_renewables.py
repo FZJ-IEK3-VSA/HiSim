@@ -63,7 +63,6 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     # Set transformer and rectifier parameter
     name = "StandardTransformerAndRectifier"
-    efficiency = 0.95  # from literature
     loadtype = lt.LoadTypes.ELECTRICITY
     unit = lt.Units.KILOWATT
 
@@ -103,14 +102,13 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     my_electrolyzer_config = ElectrolyzerConfig.config_electrolyzer(electrolyzer_name)
 
     # Setup the transformer and rectifier unit
+    # The preset's 95 % efficiency is the figure from the literature this setup runs on.
+    my_transformer_config = TransformerConfig.preset_standard(name)
+    # Rated to carry the electrolyzer it feeds, so the two figures are tied on purpose.
+    my_transformer_config.rated_power_in_kilowatt = my_electrolyzer_config.max_load
     my_transformer = Transformer(
         my_simulation_parameters=my_simulation_parameters,
-        config=TransformerConfig(
-            component_id=ComponentID(name=name),
-            efficiency=efficiency,
-            # Rated to carry the electrolyzer it feeds, so the two figures are tied on purpose.
-            rated_power_in_kilowatt=my_electrolyzer_config.max_load,
-        ),
+        config=my_transformer_config,
     )
 
     # Setup the controller

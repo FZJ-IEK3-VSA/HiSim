@@ -3,7 +3,7 @@
 # Owned
 from dataclasses import dataclass
 import logging
-from typing import List, Optional
+from typing import ClassVar, List, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -19,7 +19,18 @@ from hisim.component import (
     OpexCostDataClass,
     CapexCostDataClass,
 )
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import (
+    ComponentID,
+    ConfigBase,
+    DisplayConfig,
+    FactContribution,
+    Sizable,
+    Size,
+    SizingContext,
+    concrete,
+    preset,
+    sized_field,
+)
 from hisim.components.building import Building
 from hisim.components.weather import Weather
 from hisim.components.heat_distribution_system import HeatDistributionControllerConfig
@@ -36,66 +47,97 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.economics.facts import CostRelevance
 
-__authors__ = "Katharina Rieck, Kristina Dabrock"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = ""
-__version__ = ""
-__maintainer__ = "Katharina Rieck"
-__email__ = "k.rieck@fz-juelich.de"
-__status__ = ""
-
 
 @dataclass_json
 @dataclass
 class ElectricHeatingConfig(ConfigBase):
-    """Configuration of the Electric Heating class."""
+    """Configuration of the Electric Heating class.
 
-    @classmethod
-    def get_main_classname(cls):
-        """Return the full class name of the base class."""
-        return ElectricHeating.get_full_classname()
+    Direct electric heating -- a radiator, an electric boiler, a fan heater -- serving space
+    heating and, optionally, domestic hot water. The named default is :meth:`preset_resistive`,
+    and the one field that depends on the building is sizable, so the preset leaves it ``AUTO``
+    and ``.resolve(ctx)`` copies the building's heating load into it. An author who knows the
+    appliance pins the field instead::
+
+        ElectricHeatingConfig.preset_resistive("ElectricHeating").resolve(
+            SizingContext(heating_load_in_watt=7780.75)
+        )
+
+    ``maximum_electric_power_w`` is both the electric and the thermal cap: the component sets its
+    thermal output equal to its electric input, so the heat delivered is limited by this field
+    alone and ``efficiency`` is never read.
+    """
+
+    MAIN_CLASS = "hisim.components.generic_electric_heating.ElectricHeating"
 
     component_id: ComponentID
-    # # Maximum electric power that can be delivered
-    maximum_electric_power_w: float
-    # Efficiency for electric to thermal power conversion
-    efficiency: float
-    #: CO2 footprint of investment in kg
-    device_co2_footprint_in_kg: Optional[float]
+    #: Electric-to-thermal conversion efficiency. Carried for completeness of the appliance's
+    #: description; resistive heating converts all of its input, and no code path reads it.
+    efficiency: float = 1.0
+    #: Whether the appliance also heats domestic hot water, in which case it declares the DHW
+    #: inputs and outputs and prioritises that demand over space heating.
+    with_domestic_hot_water_preparation: bool = False
+    #: CO2 footprint of investment in kg. Unset throughout the repository, which is what makes
+    #: postprocessing look the appliance up in the cost database instead.
+    device_co2_footprint_in_kg: Optional[float] = None
     #: cost for investment in Euro
-    investment_costs_in_euro: Optional[float]
+    investment_costs_in_euro: Optional[float] = None
     #: lifetime in years
-    lifetime_in_years: Optional[float]
+    lifetime_in_years: Optional[float] = None
     # maintenance cost in euro per year
-    maintenance_costs_in_euro_per_year: Optional[float]
+    maintenance_costs_in_euro_per_year: Optional[float] = None
     # subsidies as percentage of investment costs
-    subsidy_as_percentage_of_investment_costs: Optional[float]
-    with_domestic_hot_water_preparation: bool
+    subsidy_as_percentage_of_investment_costs: Optional[float] = None
+    #: Largest electric power the appliance draws, and therefore also the largest thermal power
+    #: it delivers. Sizable: left ``AUTO`` it is the building's heating load exactly, the
+    #: appliance covering the design load with no reserve.
+    maximum_electric_power_w: Sizable[float] = sized_field(rule=Size.HEATING_LOAD_IN_WATT)
 
+    @staticmethod
+    def sizing_facts(config: "ElectricHeatingConfig", ctx: SizingContext) -> dict:
+        """Contributes the appliance's resolved thermal power for the components around it.
+
+        Runs after the appliance itself resolved, so the value is the final concrete number
+        whether it came from the law, from the preset or from an override. The contributed
+        quantity is ``maximum_electric_power_w`` unconverted: resistive heating delivers as much
+        heat as it draws current, and the component caps both space heating and domestic hot
+        water at that one number.
+
+        Args:
+            config: this electric heating configuration, fully resolved.
+            ctx: the sizing context; unused, the value is this config's own.
+
+        Returns:
+            dict: the one fact named in :attr:`SIZING_CONTRIBUTIONS`.
+        """
+        del ctx
+        return {"maximal_thermal_power_in_watt": concrete(config.maximum_electric_power_w)}
+
+    #: Sizing facts this config contributes: its resolved thermal power, under the name the
+    #: heating-generator family shares, so a consumer sizes from electric heating exactly as it
+    #: sizes from a boiler. With two generators in one scenario each is addressable as
+    #: "<its name>.maximal_thermal_power_in_watt" and a consumer must say which one it means.
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
+        FactContribution(facts=("maximal_thermal_power_in_watt",), compute=sizing_facts),
+    )
+
+    @preset
     @classmethod
-    def get_default_electric_heating_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-        with_domestic_hot_water_preparation: bool = False,
-        maximum_electric_power_w: float = 40000,
-    ) -> "ElectricHeatingConfig":
-        """Get a default Electric heating."""
-        if component_id is None:
-            component_id = ComponentID(name="ElectricHeating")
-        config = ElectricHeatingConfig(
-            component_id=component_id,
-            maximum_electric_power_w=maximum_electric_power_w,
-            efficiency=1.0,  # 100% efficiency
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-        )
-        return config
+    def preset_resistive(cls, name: str) -> "ElectricHeatingConfig":
+        """Resistive electric heating, scaled to the building it heats.
+
+        The field defaults are that appliance: every watt drawn becomes a watt of heat, space
+        heating only, and the investment costs left to the cost database. What the preset does
+        not fix is how large the appliance is: ``maximum_electric_power_w`` stays ``AUTO`` so
+        that it is copied from the building's heating load.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            ElectricHeatingConfig: The preset configuration, power unsized.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class ElectricHeating(Component):
@@ -430,15 +472,17 @@ class ElectricHeating(Component):
 
             # Now calculate for space heating
             # Calculate
-            if self.config.maximum_electric_power_w - thermal_power_dhw_delivered_w <= 0:
+            maximum_electric_power_in_watt = concrete(self.config.maximum_electric_power_w)
+            if maximum_electric_power_in_watt - thermal_power_dhw_delivered_w <= 0:
                 raise ValueError(
-                    f"Electric load for DHW {thermal_power_dhw_delivered_w}W is equal or higher than maximal electric load {self.config.maximum_electric_power_w}. "
+                    f"Electric load for DHW {thermal_power_dhw_delivered_w}W is equal or higher "
+                    f"than maximal electric load {maximum_electric_power_in_watt}. "
                 )
             theoretical_thermal_building_in_watt = stsv.get_input_value(self.theoretical_thermal_building_power_channel)
             theoretical_thermal_building_energy_in_watthour = stsv.get_input_value(
                 self.theoretical_thermal_building_energy_channel
             )
-            available_electric_load_in_watt = self.config.maximum_electric_power_w - thermal_power_dhw_delivered_w
+            available_electric_load_in_watt = maximum_electric_power_in_watt - thermal_power_dhw_delivered_w
 
             if theoretical_thermal_building_in_watt >= 0:
                 if theoretical_thermal_building_in_watt > available_electric_load_in_watt:
@@ -503,8 +547,8 @@ class ElectricHeating(Component):
         if delta_temperature_needed_in_celsius > 0:
             # regulate thermal output power based on deltaT needed
             thermal_power_delivered_w = min(
-                self.config.maximum_electric_power_w * delta_temperature_needed_in_celsius / 100.0,
-                self.config.maximum_electric_power_w,
+                concrete(self.config.maximum_electric_power_w) * delta_temperature_needed_in_celsius / 100.0,
+                concrete(self.config.maximum_electric_power_w),
             )
             water_mass_flow_rate_in_kg_per_s = thermal_power_delivered_w / (
                 PhysicsConfig.get_properties_for_energy_carrier(
@@ -603,7 +647,7 @@ class ElectricHeating(Component):
         component_type = ComponentType.ELECTRIC_HEATER
         kpi_tag = KpiTagEnumClass.ELECTRIC_HEATING
         unit = Units.KILOWATT
-        size_of_energy_system = config.maximum_electric_power_w * 1e-3
+        size_of_energy_system = concrete(config.maximum_electric_power_w) * 1e-3
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
             simulation_parameters=simulation_parameters,

@@ -197,6 +197,7 @@ class PilotWireFormat:
         "DistrictHeatingConfig": ("standard",),
         "GenericHeatPumpConfig": ("vitocal_300_a",),
         "GenericHeatPumpControllerConfig": ("standard",),
+        "ElectricHeatingControllerConfig": ("standard",),
         "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig": ("standard",),
         "MoreAdvancedHeatPumpHPLibControllerDHWConfig": ("standard",),
         "DistrictHeatingControllerConfig": ("standard",),
@@ -239,6 +240,7 @@ class PilotWireFormat:
         "DistrictHeatingConfig": (),
         "GenericHeatPumpConfig": ("for_device",),
         "GenericHeatPumpControllerConfig": (),
+        "ElectricHeatingControllerConfig": (),
         "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig": (),
         "MoreAdvancedHeatPumpHPLibControllerDHWConfig": (),
         "DistrictHeatingControllerConfig": (),
@@ -304,6 +306,7 @@ class PilotWireFormat:
         "GenericBoilerControllerConfig": (),
         "GenericHeatPumpConfig": (),
         "GenericHeatPumpControllerConfig": (),
+        "ElectricHeatingControllerConfig": (),
         "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig": (),
         "MoreAdvancedHeatPumpHPLibControllerDHWConfig": (),
         "DistrictHeatingControllerConfig": (),
@@ -598,7 +601,10 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         DistrictHeatingConfig,
         DistrictHeatingControllerConfig,
     )
-    from hisim.components.generic_electric_heating import ElectricHeatingConfig
+    from hisim.components.generic_electric_heating import (
+        ElectricHeatingConfig,
+        ElectricHeatingControllerConfig,
+    )
     from hisim.components.air_conditioner import AirConditionerConfig
     from hisim.components.generic_heat_pump import GenericHeatPumpConfig, GenericHeatPumpControllerConfig
     from hisim.components.simple_air_conditioner import SimpleAirConditionerConfig
@@ -643,6 +649,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "DistrictHeatingConfig": DistrictHeatingConfig,
         "GenericHeatPumpConfig": GenericHeatPumpConfig,
         "GenericHeatPumpControllerConfig": GenericHeatPumpControllerConfig,
+        "ElectricHeatingControllerConfig": ElectricHeatingControllerConfig,
         "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig": (
             MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig
         ),

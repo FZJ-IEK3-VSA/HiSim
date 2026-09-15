@@ -827,10 +827,44 @@ class MeasureRegistry:
         "OPTIMIZE_BEHAVIOUR_FOR_SELF_CONSUMPTION_OF_PV": optimize_behaviour_for_self_consumption_of_pv,
     }
 
+    #: How a measure function's docstring introduces the decision ids that shaped it. Step 3 §0
+    #: requires the line; the translation map of step 4 reads it (decision V2).
+    DECISIONS_PREFIX: ClassVar[str] = "Decisions:"
+
     @classmethod
     def measure_ids(cls) -> Tuple[str, ...]:
         """Return every measure id the registry handles, sorted."""
         return tuple(sorted(cls.BY_ID))
+
+    @classmethod
+    def decisions_for(cls, measure_id: str) -> Tuple[str, ...]:
+        """Return the decision ids the measure's docstring names, in the order it names them.
+
+        Every registry function's docstring ends with a line such as ``Decisions: Q1, Q10, C3``,
+        naming the entries of ``roadmap/renovisor/challenges.md`` §9 that shaped it. The
+        translation map turns those into its decision filter (decision V2), so the line is read
+        here rather than parsed again wherever it is wanted::
+
+            MeasureRegistry.decisions_for("EXTERNAL_INSULATION")   # ('Q1', 'Q10', 'Q11', 'C3')
+
+        Args:
+            measure_id: The catalogue measure id.
+
+        Returns:
+            The ids with their punctuation stripped, or an empty tuple when the docstring carries
+            no such line.
+
+        Raises:
+            KeyError: When no function is registered for *measure_id*.
+        """
+        docstring = cls.BY_ID[measure_id].__doc__ or ""
+        lines = [line.strip() for line in docstring.splitlines() if line.strip()]
+        for line in reversed(lines):
+            if not line.startswith(cls.DECISIONS_PREFIX):
+                continue
+            body = line[len(cls.DECISIONS_PREFIX):].strip().rstrip(".")
+            return tuple(part.strip() for part in body.split(",") if part.strip())
+        return ()
 
     @classmethod
     def function_for(cls, measure_id: str) -> Callable[[Options, Inventory, Effects], None]:

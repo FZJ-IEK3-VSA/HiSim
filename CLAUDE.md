@@ -132,9 +132,12 @@ id derivation), `options.py`, `effects.py` (closed effect set + resolver), `regi
 catalogue measure; never names a HiSim component or field), `envelope.py` (U-value derivation),
 `materials.py` + `materials_import.py` (typed insulation-material table under `data/`), `inventory.py`
 (schema-validated inventory), `base_files.py` (selection over the recorded `*_building_sizer.grouped`
-energy-system files), `application.py` (apply a package), `report.py`, `reasons.py`, `tabula_ie.py`.
-Bindings, parametriser, map generator and the `calculate` entry point follow in steps 4 and 5. Tests:
-`tests/test_renovisor_*.py` (all `base`).
+energy-system files), `application.py` (apply a package), `report.py`, `reasons.py`, `tabula_ie.py`,
+`bindings.py` (which recorded component and field an inventory path reaches; no value maps, decision C3),
+`map.py` (generates the committed `roadmap/renovisor/translation_map.html`; regenerate with
+`python -m hisim.renovisor.map` whenever the catalogue, registry or bindings change, or
+`tests/test_renovisor_map.py` fails). Parametriser and the `calculate` entry point follow in step 5.
+Tests: `tests/test_renovisor_*.py` (all `base`).
 
 ## Adding a new component
 

@@ -31,67 +31,58 @@ from hisim.components import (
 )
 from hisim.economics.facts import CostRelevance
 
-__authors__ = "Maximilian Hillen"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = "MIT"
-__version__ = "0.1"
-__maintainer__ = "Maximilian Hillen"
-__email__ = "maximilian.hillen@rwth-aachen.de"
-__status__ = "development"
-
 
 @dataclass_json
 @dataclass
 class EMSConfig(ConfigBase):
-    """L1 Controller Config."""
+    """L1 Controller Config.
 
-    @classmethod
-    def get_main_classname(cls):
-        """Return the full class name of the base class."""
-        return L2GenericEnergyManagementSystem.get_full_classname()
+    The one surplus-control strategy anything uses is :meth:`preset_optimize_own_consumption`;
+    the fields say how far the controller may push a building's and a storage's set temperatures
+    to place that surplus.
+    """
+
+    MAIN_CLASS = "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem"
 
     component_id: ComponentID
     # control strategy, more or less obsolete because only "optimize_own_consumption" is used at the moment.
-    strategy: str
+    strategy: str = "optimize_own_consumption"
     # limit for peak shaving option, more or less obsolete because only "optimize_own_consumption" is used at the moment.
-    limit_to_shave: float
+    limit_to_shave: float = 0
     # increase building set temperatures for heating when PV surplus is available.
     # Must be smaller than difference of set_heating_temperature and set_cooling_temperature
-    building_indoor_temperature_offset_value: float
+    building_indoor_temperature_offset_value: float = 2
     # increase in dhw buffer set temperatures when PV surplus is available for heating
-    domestic_hot_water_storage_temperature_offset_value: float
+    domestic_hot_water_storage_temperature_offset_value: float = 10
     # increase in SimpleHotWaterStorage set temperatures when PV surplus is available for heating
-    space_heating_water_storage_temperature_offset_value: float
-    #: CO2 footprint of investment in kg
-    device_co2_footprint_in_kg: Optional[float]
+    space_heating_water_storage_temperature_offset_value: float = 10
+    #: CO2 footprint of investment in kg. Unset throughout the repository, which is what makes
+    #: postprocessing look the device up in the cost database instead.
+    device_co2_footprint_in_kg: Optional[float] = None
     #: cost for investment in Euro
-    investment_costs_in_euro: Optional[float]
+    investment_costs_in_euro: Optional[float] = None
     #: lifetime in years
-    lifetime_in_years: Optional[float]
+    lifetime_in_years: Optional[float] = None
     # maintenance cost in euro per year
-    maintenance_costs_in_euro_per_year: Optional[float]
+    maintenance_costs_in_euro_per_year: Optional[float] = None
     # subsidies as percentage of investment costs
-    subsidy_as_percentage_of_investment_costs: Optional[float]
+    subsidy_as_percentage_of_investment_costs: Optional[float] = None
 
     @preset
     @classmethod
     def preset_optimize_own_consumption(cls, name: str) -> "EMSConfig":
-        """The surplus controller that maximises the building's own PV consumption."""
-        return cls(
-            component_id=ComponentID(name=name),
-            strategy="optimize_own_consumption",
-            limit_to_shave=0,
-            building_indoor_temperature_offset_value=2,
-            domestic_hot_water_storage_temperature_offset_value=10,
-            space_heating_water_storage_temperature_offset_value=10,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-        )
+        """The surplus controller that maximises the building's own PV consumption.
+
+        The field defaults are this controller, so the preset adds nothing to them but the
+        component's name.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            EMSConfig: The preset configuration.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class EMSState:

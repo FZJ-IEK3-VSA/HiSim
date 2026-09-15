@@ -33,7 +33,9 @@ def test_heat_source() -> None:
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
     # default config
-    my_heat_source_config = simple_heat_source.SimpleHeatSourceConfig.get_default_config_const_power()
+    my_heat_source_config = simple_heat_source.SimpleHeatSourceConfig.preset_constant_thermal_power(
+        "HeatSourceConstPower"
+    )
 
     my_heat_source = simple_heat_source.SimpleHeatSource(
         config=my_heat_source_config, my_simulation_parameters=my_simulation_parameters
@@ -88,7 +90,7 @@ def test_config_serialization_uses_renamed_field_names() -> None:
     Serialization must always use the new names so newly written configs are
     forward-compatible.
     """
-    config = simple_heat_source.SimpleHeatSourceConfig.get_default_config_const_power()
+    config = simple_heat_source.SimpleHeatSourceConfig.preset_constant_thermal_power("HeatSourceConstPower")
     as_dict = config.to_dict()
     assert "heat_source_type" in as_dict
     assert "temperature_output_in_celsius" in as_dict
@@ -110,7 +112,7 @@ def test_config_from_dict_accepts_legacy_field_names() -> None:
     ``temperature_out_in_celsius``. Loading it must still work and emit a
     DeprecationWarning guiding users to the new names.
     """
-    config = simple_heat_source.SimpleHeatSourceConfig.get_default_config_const_temperature()
+    config = simple_heat_source.SimpleHeatSourceConfig.preset_constant_temperature("HeatSourceConstTemperature")
 
     # from_dict path: to_dict() returns enum members, which from_dict accepts.
     legacy_dict = config.to_dict()
@@ -136,7 +138,7 @@ def test_config_from_dict_accepts_legacy_field_names() -> None:
 @pytest.mark.base
 def test_config_from_dict_new_name_takes_precedence() -> None:
     """When both old and new key are present, the new name wins and no data is lost."""
-    config = simple_heat_source.SimpleHeatSourceConfig.get_default_config_const_power()
+    config = simple_heat_source.SimpleHeatSourceConfig.preset_constant_thermal_power("HeatSourceConstPower")
     both = config.to_dict()
     both["const_source"] = simple_heat_source.SimpleHeatSourceType.CONSTANT_TEMPERATURE.value
     both["temperature_out_in_celsius"] = 999
@@ -151,34 +153,33 @@ def test_config_from_dict_new_name_takes_precedence() -> None:
 @pytest.mark.base
 def test_config_from_dict_without_legacy_names_emits_no_warning() -> None:
     """Loading a current-shape config must not warn (regression guard)."""
-    config = simple_heat_source.SimpleHeatSourceConfig.get_default_config_const_power()
+    config = simple_heat_source.SimpleHeatSourceConfig.preset_constant_thermal_power("HeatSourceConstPower")
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
         simple_heat_source.SimpleHeatSourceConfig.from_dict(config.to_dict())
 
 
 @pytest.mark.base
-def test_get_default_config_near_surface_brine_temperature() -> None:
-    """The renamed factory sets the near-surface brine temperature mode."""
-    config = simple_heat_source.SimpleHeatSourceConfig.get_default_config_near_surface_brine_temperature()
+def test_the_near_surface_brine_preset_pins_neither_a_power_nor_a_temperature() -> None:
+    """The brine preset selects the weather-driven mode and leaves both numbers unset.
+
+    Catches the preset being written as a copy of one of the two constant presets: a pinned
+    power or temperature would be silently ignored by the component, which derives the output
+    temperature from the daily average outside temperature in this mode, so the mistake would
+    only show as an unexplained value in a recorded file.
+    """
+    config = simple_heat_source.SimpleHeatSourceConfig.preset_near_surface_brine("HeatSourceVarBrineTemperature")
     assert config.heat_source_type is simple_heat_source.SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE
     assert config.component_id.name == "HeatSourceVarBrineTemperature"
-
-
-@pytest.mark.base
-def test_deprecated_get_default_config_var_brinetemperature_alias() -> None:
-    """The old abbreviated factory name still works and warns."""
-    with pytest.warns(DeprecationWarning, match="get_default_config_var_brinetemperature"):
-        config = simple_heat_source.SimpleHeatSourceConfig.get_default_config_var_brinetemperature()
-    assert config.heat_source_type is simple_heat_source.SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE
-    assert config.component_id.name == "HeatSourceVarBrineTemperature"
+    assert config.power_th_in_watt is None
+    assert config.temperature_output_in_celsius is None
 
 
 @pytest.mark.base
 def test_the_configured_maintenance_rate_reaches_the_simulated_period() -> None:
     """Catches the configured annual upkeep never being booked anywhere.
 
-    Every factory config of this component sets a 10 EUR/a maintenance rate, and
+    Every configuration of this component carries a 10 EUR/a maintenance rate, and
     ``get_cost_opex`` books maintenance through ``Component.calc_maintenance_cost``, which reads
     ``maintenance_cost_per_simulated_period_in_euro`` off the capital cost data. While
     ``get_cost_capex`` left both maintenance fields at their zero defaults, that configured rate
@@ -187,7 +188,7 @@ def test_the_configured_maintenance_rate_reaches_the_simulated_period() -> None:
     Over a full simulated year the per-period figure is the annual rate itself; the annual rate
     is reported unchanged beside it.
     """
-    config = simple_heat_source.SimpleHeatSourceConfig.get_default_config_const_power()
+    config = simple_heat_source.SimpleHeatSourceConfig.preset_constant_thermal_power("HeatSourceConstPower")
     assert config.maintenance_costs_in_euro_per_year == 10
 
     capex = simple_heat_source.SimpleHeatSource.get_cost_capex(

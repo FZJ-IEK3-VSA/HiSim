@@ -1,19 +1,10 @@
 """The weather configuration: which station, which data set, which reader.
 
-Part of the ``hisim.components.weather`` package split (see the package ``__init__`` for the layout).
-Holds :class:`WeatherConfig`, the catalogue of stations :class:`LocationEnum` they are named by, and the
-sizing fact ``weather_identity`` that every component whose result depends on the weather copies into
-its own configuration.
-
-:class:`WeatherDataSourceEnum` is not here but in :mod:`hisim.components.weather.calculation`, and this
-module imports it from there. It names the reader, so it is key material for the cached weather series,
-and the producer must be able to import it without importing this module. The reason is what the import
-closure costs: a configuration module has to import ``hisim.config``, and a closure is computed by
-reading source, so the lazy imports inside ``hisim.config``'s function bodies count as much as the ones
-at the top of a file. ``ImportClosure.of(hisim.config)`` is 45 modules, ``hisim.component``, the
-post-processing and the repository among them -- all of that would be hashed into every weather cache
-key (``roadmap/cache_service_spec.md`` §3) and would throw the cached series away on edits that cannot
-change a number in them. The layering rule of §12 names those three modules for the same reason.
+Holds :class:`WeatherConfig`, the catalogue of stations :class:`LocationEnum` names, and the sizing
+fact ``weather_identity`` that every component whose result depends on the weather copies into its
+own configuration. :class:`WeatherDataSourceEnum`, which names the reader, lives in
+:mod:`hisim.components.weather.calculation` and is imported from there; the package ``__init__``
+explains why.
 """
 
 # pylint: disable=cyclic-import
@@ -24,20 +15,13 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import PurePath
-from typing import Any, Dict, Optional
+from typing import Any, ClassVar, Dict, Optional, Tuple
 
 from dataclasses_json import dataclass_json
 
 from hisim import utils
 from hisim.components.weather.calculation import WeatherDataSourceEnum, WeatherSourceFiles
 from hisim.config import ConfigBase, ComponentID, FactContribution, constructor, preset
-
-__authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = "MIT"
-__version__ = "0.1"
-__maintainer__ = "Noah Pflugradt"
 
 
 class LocationEnum(Enum):
@@ -363,24 +347,23 @@ class LocationEnum(Enum):
 @dataclass_json
 @dataclass
 class WeatherConfig(ConfigBase):
-    """Configuration class for Weather.
+    """Configuration class for Weather: the station, the file it is read from and the reader.
 
-    Decorated with dataclass_json like every other config class, so that
-    serialization uses the dataclass field names verbatim (snake_case).
+    The one preset is :meth:`preset_aachen`, the repository's reference climate; any other station
+    comes from :meth:`for_location` and any file outside the catalogue from :meth:`for_data_file`.
     """
 
+    MAIN_CLASS = "hisim.components.weather.Weather"
+
     component_id: ComponentID
+    #: The station's display name, which labels the region a run is reported under.
     location: str
+    #: The weather data on this machine, as the reader named by ``data_source`` expects it: a path
+    #: with the extension for the sub-hourly readers, the stem for the ones that append their own.
     source_path: str
     data_source: WeatherDataSourceEnum
-    predictive_control: bool
-
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Get the name of the main class."""
-        from hisim.components.weather.weather import Weather  # pylint: disable=import-outside-toplevel  # avoids config->component import cycle
-
-        return Weather.get_full_classname()  # type: ignore[no-any-return]
+    #: Whether the component publishes its 24 h forecast for predictive controllers to read.
+    predictive_control: bool = False
 
     def identity(self) -> str:
         """Return a short string that says which weather this configuration reads: station, data set, file.
@@ -412,7 +395,7 @@ class WeatherConfig(ConfigBase):
     def identity_facts(config: "WeatherConfig", ctx: Any) -> Dict[str, Any]:
         """Provide :meth:`identity` as the sizing fact ``weather_identity``.
 
-        Registered in ``SIZING_CONTRIBUTIONS`` below; the sizing engine calls it with the resolved config.
+        Registered in :attr:`SIZING_CONTRIBUTIONS`; the sizing engine calls it with the resolved config.
 
         Args:
             config: this weather configuration.
@@ -423,6 +406,12 @@ class WeatherConfig(ConfigBase):
         """
         del ctx
         return {"weather_identity": config.identity()}
+
+    #: Every scenario has exactly one weather, so the bare fact ``weather_identity`` binds to this
+    #: contribution without any consumer naming a source.
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
+        FactContribution(facts=("weather_identity",), compute=identity_facts),
+    )
 
     @staticmethod
     def _is_under(directory: str, path: str) -> bool:
@@ -488,7 +477,6 @@ class WeatherConfig(ConfigBase):
                 utils.get_input_directory(), "weather", directory, subdirectory, file_stem
             ),
             data_source=data_source if data_source is not None else catalogue_source,
-            predictive_control=False,
         )
 
     @constructor(note="a weather file this repository does not ship, named by path and reader")
@@ -549,12 +537,4 @@ class WeatherConfig(ConfigBase):
             location=os.path.splitext(os.path.basename(path))[0],
             source_path=source_path,
             data_source=data_source,
-            predictive_control=False,
         )
-
-
-# Declared after the class because it refers to it. Every scenario has exactly one weather, so the
-# bare fact ``weather_identity`` binds to this contribution without any consumer naming a source.
-WeatherConfig.SIZING_CONTRIBUTIONS = (
-    FactContribution(facts=("weather_identity",), compute=WeatherConfig.identity_facts),
-)

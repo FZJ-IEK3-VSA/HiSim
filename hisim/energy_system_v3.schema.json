@@ -141,6 +141,7 @@
             "hisim.components.heat_distribution_system.HeatDistributionController",
             "hisim.components.heating_meter.HeatingMeter",
             "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
+            "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib",
             "hisim.components.simple_water_storage.SimpleDHWStorage",
             "hisim.components.simple_water_storage.SimpleHotWaterStorage",
             "hisim.components.weather.Weather"
@@ -2030,6 +2031,190 @@
                 "$ref": "#/$defs/sizing_sources",
                 "propertyNames": {
                   "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "air_water"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "model": {
+                    "type": "string"
+                  },
+                  "fluid_primary_side": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "integer"
+                  },
+                  "flow_temperature_in_celsius": {
+                    "type": "number"
+                  },
+                  "cycling_mode": {
+                    "type": "boolean"
+                  },
+                  "minimum_running_time_in_seconds": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "minimum_idle_time_in_seconds": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "minimum_thermal_output_power_in_watt": {
+                    "type": "number"
+                  },
+                  "position_hot_water_storage_in_system": {
+                    "enum": [
+                      "PARALLEL",
+                      "SERIES",
+                      "NO_STORAGE"
+                    ]
+                  },
+                  "with_domestic_hot_water_preparation": {
+                    "type": "boolean"
+                  },
+                  "passive_cooling_with_brine": {
+                    "type": "boolean"
+                  },
+                  "electrical_input_power_brine_pump_in_watt": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "massflow_nominal_secondary_side_in_kg_per_s": {
+                    "type": "number"
+                  },
+                  "specific_heat_capacity_of_primary_fluid": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "device_co2_footprint_in_kg": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "investment_costs_in_euro": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lifetime_in_years": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maintenance_costs_in_euro_per_year": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "subsidy_as_percentage_of_investment_costs": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "heating_reference_temperature_in_celsius": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "set_thermal_output_power_in_watt": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": [
+                    "heating_load_in_watt",
+                    "heating_reference_temperature_in_celsius"
+                  ]
                 }
               }
             }

@@ -125,6 +125,12 @@ class AdapterContractScan:
         "HeatDistributionConfig.absolute_conditioned_floor_area_in_m2": 120.0,
         # What the area law gives the single apartment of a single-family house.
         "SolarThermalSystemConfig.area_m2": COLLECTOR_AREA_IN_M2_PER_APARTMENT,
+        # The heat pump the copy laws build for the fleet's archetype: the machine covers the
+        # building's heating load exactly and is rated at the building's design outside
+        # temperature. The extractor reads the power as the kilowatts it prices; the reference
+        # temperature it does not read, but the sweep resolves the whole configuration.
+        "MoreAdvancedHeatPumpHPLibConfig.set_thermal_output_power_in_watt": 7780.75,
+        "MoreAdvancedHeatPumpHPLibConfig.heating_reference_temperature_in_celsius": -7.0,
     }
 
     @staticmethod

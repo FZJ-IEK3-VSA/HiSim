@@ -8,7 +8,7 @@ import pytest
 import numpy as np
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
-from hisim.config import SizingContext
+from hisim.config import SizingContext, concrete
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import (
@@ -151,9 +151,13 @@ def test_house(
 
     # Build the heat pump's config first: the buffer storage below is sized from the heat
     # pump's rated thermal output, not from the building's heating load.
-    my_heatpump_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_default_generic_advanced_hp_lib()
+    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
+        "MoreAdvancedHeatPumpHPLib"
     )
+    # The preset sizes both fields from the building; this setup states the machine instead,
+    # because the buffer volume asserted below is the one an 8 kW machine gets.
+    my_heatpump_config.set_thermal_output_power_in_watt = 8000.0
+    my_heatpump_config.heating_reference_temperature_in_celsius = -7.0
     my_heatpump_config.with_domestic_hot_water_preparation = True
 
     # Build Heat Water Storage
@@ -166,7 +170,9 @@ def test_house(
         simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
     )
     my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
-        SizingContext(maximal_thermal_power_in_watt=my_heatpump_config.set_thermal_output_power_in_watt)
+        SizingContext(
+            maximal_thermal_power_in_watt=concrete(my_heatpump_config.set_thermal_output_power_in_watt)
+        )
     )
     my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,

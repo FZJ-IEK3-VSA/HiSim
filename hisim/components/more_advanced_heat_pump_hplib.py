@@ -190,48 +190,6 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
         FactContribution(facts=("maximal_thermal_power_in_watt",), compute=sizing_facts),
     )
 
-    @classmethod
-    def get_default_generic_advanced_hp_lib(
-        cls,
-        component_id: Optional[ComponentID] = None,
-        name: str = "MoreAdvancedHeatPumpHPLib",
-        set_thermal_output_power_in_watt: float = 8000,
-        heating_reference_temperature_in_celsius: float = -7.0,
-        massflow_nominal_secondary_side_in_kg_per_s: float = 0.333,
-    ) -> "MoreAdvancedHeatPumpHPLibConfig":
-        """Gets a default HPLib Heat Pump.
-
-        see default values for air/water hp on:
-        https://github.com/FZJ-IEK3-VSA/HPLib/blob/main/HPLib/HPLib.py l.135 "fit_p_th_ref.
-        """
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        return MoreAdvancedHeatPumpHPLibConfig(
-            component_id=component_id,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
-            massflow_nominal_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
-        )
-
-    @classmethod
-    def get_scaled_advanced_hp_lib(
-        cls,
-        heating_load_of_building_in_watt: float,
-        name: str = "MoreAdvancedHeatPumpHPLib",
-        component_id: Optional[ComponentID] = None,
-        heating_reference_temperature_in_celsius: float = -7.0,
-        massflow_nominal_secondary_side_in_kg_per_s: float = 0.333,
-    ) -> "MoreAdvancedHeatPumpHPLibConfig":
-        """Gets a default heat pump with scaling according to heating load of the building."""
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        return MoreAdvancedHeatPumpHPLibConfig(
-            component_id=component_id,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            set_thermal_output_power_in_watt=heating_load_of_building_in_watt,
-            massflow_nominal_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
-        )
-
     @preset
     @classmethod
     def preset_air_water(cls, name: str) -> "MoreAdvancedHeatPumpHPLibConfig":

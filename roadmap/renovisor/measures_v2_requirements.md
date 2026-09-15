@@ -7,7 +7,7 @@
 **Builds on:** `requirements.md` (the calculation-library requirements; its R/A/Q ids are reused
 here unchanged) · `field_inventory.md` · `mockups/measures.schema.yaml` (the previous measure
 model, now superseded) · `mockups/heat_pump_household.energy_system.yaml`
-**Subject:** `mockups/measures.yaml`, checked in verbatim beside this document
+**Subject:** `hisim/renovisor/contract/measures.yaml`, checked in verbatim beside this document
 **Code surveyed at:** `4612b899` (identical to `main` for everything cited here)
 
 ---
@@ -57,7 +57,7 @@ package generation, the HTTP service.
 
 | Source | Version | Location |
 |---|---|---|
-| Measure catalogue | received 2026-09-13 | `mockups/measures.yaml` |
+| Measure catalogue | received 2026-09-13 | `hisim/renovisor/contract/measures.yaml` |
 | Calculation-library requirements | 2026-08-27 | `requirements.md` |
 | Field inventory | 2026-08-27 | `field_inventory.md` |
 | Previous measure model | superseded | `mockups/measures.schema.yaml` |
@@ -84,7 +84,7 @@ itself or may trust the caller (§5.3).
 
 ## 4. The catalogue in numbers
 
-Counted from `mockups/measures.yaml` with a script; the numbers are reproducible.
+Counted from `hisim/renovisor/contract/measures.yaml` with a script; the numbers are reproducible.
 
 | | Count |
 |---|---|
@@ -508,7 +508,7 @@ the odd case in three lines.
 
 mypy covers the effect types and the registry's signatures. Tests add what mypy cannot see:
 
-1. **Bijection with the catalogue.** Every `display_name` in `mockups/measures.yaml` is a key
+1. **Bijection with the catalogue.** Every `display_name` in `hisim/renovisor/contract/measures.yaml` is a key
    in `MeasureRegistry.BY_ID`, and vice versa. A catalogue revision that adds a measure fails
    the build.
 2. **Every option and enum value is handled.** For each measure, every option name and every
@@ -695,7 +695,7 @@ invented factor. Check (c) before committing further.
 
 ## 11. Glossary
 
-**Catalogue** — `mockups/measures.yaml`: the closed set of measures a request may name.
+**Catalogue** — `hisim/renovisor/contract/measures.yaml`: the closed set of measures a request may name.
 **Package** — a chosen subset of the catalogue with chosen option values.
 **Stage 0** — the existing building expressed as measures, for the dependency engine. Not read
 by HiSim.

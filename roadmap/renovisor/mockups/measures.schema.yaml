@@ -1,6 +1,6 @@
 # ---------------------------------------------------------------------------
 # MOCKUP — proposed replacement for the `Measure` schema of
-# roadmap/renovisor/openapi.yaml v0.3.0-draft. An OpenAPI 3.1 schema fragment,
+# hisim/renovisor/contract/openapi.yaml v0.3.0-draft. An OpenAPI 3.1 schema fragment,
 # ready to paste into `components.schemas` once agreed.
 #
 # It is the external representation requirement A6 is about, so it is a

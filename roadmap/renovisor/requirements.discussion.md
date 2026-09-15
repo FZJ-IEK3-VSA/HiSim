@@ -275,7 +275,7 @@ could easily conclude the requirement is already met.
 
 ## Part 3 — Contract findings that are not HiSim's problem
 
-These are defects in `roadmap/renovisor/openapi.yaml` v0.3.0-draft. They are real, and each was
+These are defects in `hisim/renovisor/contract/openapi.yaml` v0.3.0-draft. They are real, and each was
 found by trying to build something against the contract. None of them blocks the pipeline
 `requirements.md` specifies, which is why they are not requirements there — but the RenoVisor
 frontend and the C# service teams should see them, and this file is where they are written down

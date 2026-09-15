@@ -1,0 +1,24 @@
+# Written by `python -m hisim.renovisor.contract.refresh`; do not edit by hand.
+# Records which contract revision each vendored file was copied from and the
+# SHA-256 it had; tests/test_renovisor_contract.py recomputes the hashes.
+repository: https://github.com/climatemedia/renovisor-api-contract
+refreshed_at: '2026-09-15T09:47:25+00:00'
+files:
+  openapi.yaml:
+    ref: main
+    path: openapi.yaml
+    commit: eeb49b59ffe0e76d5c62dd8e0476cf5e5045b63c
+    commit_date: '2026-09-14T14:32:21+02:00'
+    sha256: 8100cbeebaba4b4465682b879bbe706320f93c88d4f67a2a69fa55569eee1a21
+  measures.yaml:
+    ref: main
+    path: measures.yaml
+    commit: eeb49b59ffe0e76d5c62dd8e0476cf5e5045b63c
+    commit_date: '2026-09-14T14:32:21+02:00'
+    sha256: 51112170218210fe80ef1948d4f93618eaccdc6a8a0c7dde17d1d3b166f8e296
+  materials.yaml:
+    ref: materials
+    path: materials.yaml
+    commit: a79f13d4a88d5cdbc5a809d46bd98dab4cb7aba0
+    commit_date: '2026-09-14T16:27:56+02:00'
+    sha256: d4a12e02242e5dd95f5630dc0329ec5dfce4eaf85afbf7880463d5bad8c94a7f

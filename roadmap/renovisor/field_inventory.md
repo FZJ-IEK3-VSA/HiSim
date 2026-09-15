@@ -1,7 +1,7 @@
 # RenoVisor v0.3 contract ↔ HiSim — counted field inventory
 
 **Companion to** `roadmap/renovisor/requirements.md` · **Date:** 2026-08-27
-**Sources surveyed:** `roadmap/renovisor/openapi.yaml` (v0.3.0-draft), `hisim/components/`,
+**Sources surveyed:** `hisim/renovisor/contract/openapi.yaml` (v0.3.0-draft), `hisim/components/`,
 `hisim/economics/`, `hisim/energy_system/`, `hisim/postprocessing/kpi_computation/`,
 `energy_systems/gas_boiler_household.energy_system.yaml`,
 `roadmap/declarative_energy_systems/plan.md`.
@@ -184,7 +184,7 @@ NO_STORAGE_MASS_FLOW_FIX` and no DHW branch at all.
 
 ## 7. Endpoint surface
 
-`roadmap/renovisor/openapi.yaml`: 15 paths, 17 operations, 20 schemas.
+`hisim/renovisor/contract/openapi.yaml`: 15 paths, 17 operations, 20 schemas.
 
 **One** operation is answered by a HiSim calculation: `detailed-simulation`. Three others are
 produced outside HiSim (requirements §5) — `packageset` enumerates packages, `fast-estimate` is a

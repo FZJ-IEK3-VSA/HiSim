@@ -6,21 +6,6 @@
 # - category and subcategory use natural language.
 # - value_type is inferred from the spreadsheet structure.
 # - Comments mark places where information appears incomplete or ambiguous.
-#
-# ---------------------------------------------------------------------------
-# CHECKED IN VERBATIM as received on 2026-09-13, so that
-# `roadmap/renovisor/measures_v2_requirements.md` has a fixed text to be about.
-# It is the RenoVisor side's document, not HiSim's: do not edit it here. When a
-# newer revision arrives, replace this file wholesale and re-check the counts in
-# §4 of the requirements document.
-#
-# Two files this one refers to are NOT in this repository and were not available
-# when the requirements document was written: `dependencies.yaml` (which measures
-# may follow which state) and the revision of `openapi.yaml` these comments cite
-# — the copy beside this directory is v0.3.0-draft of 2026-08-27 and predates
-# `worst_window_glazing_panes`, `hvo_heating`, the snake_case
-# `heat_distribution_system` values and the `ventilation_system` block.
-# ---------------------------------------------------------------------------
 
 measures:
 

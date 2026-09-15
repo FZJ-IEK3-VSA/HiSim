@@ -5,7 +5,7 @@
 **Author(s):** assistant (all `[proposed]` items, evidence survey) · Noah Pflugradt (owner; all `[given]` and `[decided]` items)
 **Reviewers:** HiSim core team · RenoVisor frontend team (§8.2 only)
 **Supersedes / related:** `hisim/renovisor/spec.md` (the v1 translator spec — superseded by
-§8.1, kept until the replacement is accepted) · `roadmap/renovisor/openapi.yaml` (RenoVisor API
+§8.1, kept until the replacement is accepted) · `hisim/renovisor/contract/openapi.yaml` (RenoVisor API
 v0.3.0-draft) · `roadmap/declarative_energy_systems/epic.md` and its `plan.md` P5 row (this work
 *is* the RenoVisor half of P5) · `roadmap/cost-spec-v2.md` (the cost engine)
 **Companions:** `roadmap/renovisor/field_inventory.md` (the counted survey) ·
@@ -66,7 +66,7 @@ image the C# service reuses across calculations. (b) A revised API contract in w
 the pipeline reads has a consumer, the measure model can express a renovation, and a cost `Range`
 means something definite.
 
-**Affected.** `hisim/renovisor/` (rewritten), `roadmap/renovisor/openapi.yaml` (amended), the
+**Affected.** `hisim/renovisor/` (rewritten), `hisim/renovisor/contract/openapi.yaml` (amended), the
 declarative-energy-systems P4 sweep (≈13 modules become blocking), `hisim/economics` (Irish tariff
 and subsidy data).
 

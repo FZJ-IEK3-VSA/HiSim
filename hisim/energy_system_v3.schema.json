@@ -129,6 +129,7 @@
             "hisim.components.advanced_battery_bslib.Battery",
             "hisim.components.advanced_fuel_cell.CHP",
             "hisim.components.air_conditioner.AirConditioner",
+            "hisim.components.air_conditioner.AirConditionerController",
             "hisim.components.building.Building",
             "hisim.components.building.building.Building",
             "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
@@ -154,11 +155,14 @@
             "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib",
             "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW",
             "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating",
+            "hisim.components.night_setback_controller.NightSetbackController",
             "hisim.components.simple_air_conditioner.SimpleAirConditioner",
+            "hisim.components.simple_air_conditioner.SimpleAirConditionerController",
             "hisim.components.simple_heat_source.SimpleHeatSource",
             "hisim.components.simple_water_storage.SimpleDHWStorage",
             "hisim.components.simple_water_storage.SimpleHotWaterStorage",
             "hisim.components.solar_thermal_system.SolarThermalSystem",
+            "hisim.components.solar_thermal_system.SolarThermalSystemController",
             "hisim.components.weather.Weather"
           ],
           "description": "The component class, as a dotted path."
@@ -542,6 +546,61 @@
                     "type": "number"
                   },
                   "maintenance_costs_in_euro_per_year": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.air_conditioner.AirConditionerController"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "heating_set_temperature_deg_c": {
+                    "type": "number"
+                  },
+                  "cooling_set_temperature_deg_c": {
+                    "type": "number"
+                  },
+                  "minimum_runtime_s": {
+                    "type": "number"
+                  },
+                  "minimum_idle_time_s": {
+                    "type": "number"
+                  },
+                  "offset": {
+                    "type": "number"
+                  },
+                  "temperature_difference_full_power_deg_c": {
                     "type": "number"
                   }
                 }
@@ -3214,6 +3273,52 @@
             "properties": {
               "class": {
                 "enum": [
+                  "hisim.components.night_setback_controller.NightSetbackController"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "setback_delta_in_kelvin": {
+                    "type": "number"
+                  },
+                  "night_start_time_in_hours": {
+                    "type": "integer"
+                  },
+                  "night_end_time_in_hours": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
                   "hisim.components.simple_air_conditioner.SimpleAirConditioner"
                 ]
               }
@@ -3242,6 +3347,49 @@
                     "type": "number"
                   },
                   "temperature_epsilon_k": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.simple_air_conditioner.SimpleAirConditionerController"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "setpoint_temperature_c": {
+                    "type": "number"
+                  },
+                  "deadband_k": {
                     "type": "number"
                   }
                 }
@@ -3706,6 +3854,46 @@
                   "enum": [
                     "number_of_apartments"
                   ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.solar_thermal_system.SolarThermalSystemController"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "set_temperature_difference_for_on": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
                 }
               }
             }

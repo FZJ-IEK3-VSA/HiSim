@@ -36,7 +36,8 @@ def test_solar_thermal_system() -> None:
     my_weather.i_prepare_simulation()
 
     # Configure solar thermal
-    my_sts_config = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(area_m2=4)
+    my_sts_config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
+    my_sts_config.area_m2 = 4
     my_sts = solar_thermal_system.SolarThermalSystem(config=my_sts_config, my_simulation_parameters=mysim)
 
     state_controller = component.ComponentOutput(
@@ -136,8 +137,10 @@ def test_only_the_sun_is_cached(tmp_path: Any) -> None:
     """The cached artefact holds the solar position and nothing downstream of it."""
     simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     simulation_parameters.cache_dir_path = str(tmp_path)
+    config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
+    config.area_m2 = 1.5
     collector = solar_thermal_system.SolarThermalSystem(
-        config=solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(area_m2=1.5),
+        config=config,
         my_simulation_parameters=simulation_parameters,
     )
 
@@ -164,7 +167,8 @@ def test_the_cached_sun_round_trips_exactly(tmp_path: Any) -> None:
     """
     simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     simulation_parameters.cache_dir_path = str(tmp_path)
-    config = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(area_m2=1.5)
+    config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
+    config.area_m2 = 1.5
 
     computed = solar_thermal_system.SolarThermalSystem(config=config, my_simulation_parameters=simulation_parameters)
     computed.i_prepare_simulation()
@@ -182,8 +186,10 @@ def test_the_cached_sun_round_trips_exactly(tmp_path: Any) -> None:
 def test_every_timestep_gets_an_instant() -> None:
     """The timestamps are the cache key's claim about the contents, so they must match the run."""
     simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
+    config.area_m2 = 1.5
     collector = solar_thermal_system.SolarThermalSystem(
-        config=solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(area_m2=1.5),
+        config=config,
         my_simulation_parameters=simulation_parameters,
     )
 
@@ -202,9 +208,9 @@ def test_the_collector_grows_with_the_apartments() -> None:
     and another just ``4``, so the two disagreed for every multi-family building. The law is
     now the single place the factor is written down, and this pins both ends of it.
     """
-    unresolved = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system()
+    unresolved = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
 
-    assert unresolved.area_m2 is AUTO, "the factory must leave the area to its law"
+    assert unresolved.area_m2 is AUTO, "the preset must leave the area to its law"
 
     for apartments, expected_area_m2 in ((1, 4.0), (3, 12.0)):
         resolved = unresolved.resolve(SizingContext(number_of_apartments=apartments))
@@ -222,7 +228,8 @@ def test_a_named_collector_area_beats_the_law() -> None:
     concrete -- so a setup can hand every config the same context without having to know
     which of them still has something to size.
     """
-    config = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(area_m2=1.5)
+    config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
+    config.area_m2 = 1.5
 
     assert config.area_m2 == 1.5
     assert config.resolve(SizingContext(number_of_apartments=3)).area_m2 == 1.5
@@ -250,7 +257,7 @@ def test_the_timestep_reads_the_resolved_area() -> None:
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
 
-    unresolved = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system()
+    unresolved = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
 
     def collector_of(apartments: int) -> solar_thermal_system.SolarThermalSystem:
         """Builds the collector the law gives a building with that many dwellings."""

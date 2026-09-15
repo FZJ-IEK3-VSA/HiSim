@@ -356,11 +356,20 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build district heating controller
-    my_district_heating_controller_sh_config = generic_district_heating.DistrictHeatingControllerConfig.get_default_district_heating_controller_config(
-        with_domestic_hot_water_preparation=True,
-        set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
-        parallel_space_heating_and_dhw_option=True,
+    my_district_heating_controller_sh_config = (
+        generic_district_heating.DistrictHeatingControllerConfig.preset_standard(
+            "DistrictHeatingController"
+        ).resolve(
+            SizingContext(
+                set_heating_threshold_outside_temperature_in_celsius=(
+                    my_hds_controller_information.set_heating_threshold_temperature_in_celsius
+                )
+            )
+        )
     )
+    # This house takes its hot water off the network as well, and serves both circuits at once.
+    my_district_heating_controller_sh_config.with_domestic_hot_water_preparation = True
+    my_district_heating_controller_sh_config.parallel_space_heating_and_dhw_option = True
 
     my_district_heating_controller = generic_district_heating.DistrictHeatingController(
         my_simulation_parameters=my_simulation_parameters,

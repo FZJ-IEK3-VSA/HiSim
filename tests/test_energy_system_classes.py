@@ -50,7 +50,7 @@ class Systems:
     #: since it provides the facts a boiler reads.
     BUILDING: ClassVar[str] = """  building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
 """
 
     @classmethod
@@ -100,9 +100,6 @@ class ExpectedFailures:
         "heat_pump": "EF-13",
         "buffer_storage": "EF-13",
         "dhw_storage": "EF-13",
-        "pv_south": "EF-13",
-        "pv_east": "EF-13",
-        "battery": "EF-13",
         "ems": "EF-43",
         "heating_rod": "EF-13",
         # `controller_l1_heatpump` retired to `obsolete/` under D-2: module gone, not preset gone.
@@ -113,8 +110,6 @@ class ExpectedFailures:
         "heat_pump": "EF-13",
         "heat_pump_controller_sh": "EF-13",
         "buffer_storage": "EF-13",
-        "pv_central": "EF-13",
-        "battery": "EF-13",
         "ems": "EF-43",
         **{
             f"apt{index}_{suffix}": error_id
@@ -130,8 +125,6 @@ class ExpectedFailures:
                 ("charger", "EF-13"),
             )
         },
-        "apt1_pv": "EF-13",
-        "apt2_pv": "EF-13",
     }
 
     BY_MOCKUP: ClassVar[Mapping[str, Mapping[str, str]]] = {
@@ -173,7 +166,7 @@ def test_a_file_of_converted_classes_binds_without_complaint() -> None:
     preset: condensing_gas
   hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
-    preset: standard
+    preset: building_derived
   ems:
     class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     preset: optimize_own_consumption

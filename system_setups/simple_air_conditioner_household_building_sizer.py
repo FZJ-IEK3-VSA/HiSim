@@ -93,7 +93,7 @@ def setup_function(
     # component itself is still added further down, so the simulator's component order is unchanged.
     my_weather_config = weather.WeatherConfig.for_location("Weather", weather.LocationEnum[weather_location])
 
-    my_building_config = building.BuildingConfig.preset_standard("Building")
+    my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.set_heating_temperature_in_celsius = 20.0
     my_building_config.set_cooling_temperature_in_celsius = 25.0
     my_building_config.building_code = building_code

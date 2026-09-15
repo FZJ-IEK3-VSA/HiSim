@@ -59,7 +59,7 @@ matches the file's intended system), ``heat_distribution_system`` selects the
 heat-distribution type, ``share_of_maximum_pv_potential`` drives
 :class:`~hisim.components.generic_pv_system.PVSystemConfig` scaling against the
 building's roof area, and the battery is scaled to the resulting PV peak power
-through the ``pv_peak_power_in_watt`` sizing fact its ``standard`` preset reads.
+through the ``pv_peak_power_in_watt`` sizing fact its ``sized_to_pv`` preset reads.
 
 Control logic and sizing constraints
 ------------------------------------

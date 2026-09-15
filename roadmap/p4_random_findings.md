@@ -531,7 +531,7 @@ Fix: bracket a compound inner in `_RoundedLaw.describe` — `(0.5 * Size.PV_PEAK
 test over the battery's two laws pins the rendering. Not fixed on the B2 branches, which are
 conversions; belongs with the next kernel touch.
 
-### F-11 — the P2 mockups still name presets that the P4 decisions renamed, so their pinned errors pass for the wrong reason **[verified]**
+### F-11 — the P2 mockups still name presets that the P4 decisions renamed, so their pinned errors pass for the wrong reason **[verified, fixed]**
 
 Found on 2026-09-13 after the PV and battery conversions (B2). `roadmap/declarative_energy_systems/energy_system_mockup.yaml`
 writes `preset: standard` for `pv_south` and `pv_east` (lines 157, 163) and `preset: sized_to_pv`
@@ -547,7 +547,9 @@ entries however many classes convert. The PV entry's comment is also stale: it s
 `power_in_watt AUTO <- building.conditioned_floor_area_in_m2`, and the law reads `roof_area_in_m2`.
 
 Fix: rename the three preset lines in the mockup and the comment on line 157, then remove the three
-entries from `BY_MOCKUP` and watch the test stay green. The mockup lives under `roadmap/`, which the
+entries from `BY_MOCKUP` and watch the test stay green.
+
+**Fixed 2026-09-14** on the preset-rename branch: the PV lines of all three mockups say `rooftop`, the battery lines already said `sized_to_pv`, both stale `conditioned_floor_area_in_m2` comments name `roof_area_in_m2`, and seven `EF-13` pins left `BY_MOCKUP` (`pv_south`, `pv_east`, `battery`, `pv_central`, `apt1_pv`, `apt2_pv`, and the MFH `battery`) with the equality assert green. The pins that stay are all unconverted classes. Six test fixtures in `tests/test_energy_system_loader.py` and `tests/test_energy_system_validation.py` still write `preset: standard` on a `PVSystem` — not class-validated, so green, but the same shape. The mockup lives under `roadmap/`, which the
 B2 conversion briefs kept out of scope; a doc-only commit at the top of the B2 stack is the natural
 place, or the first B3 PR.
 

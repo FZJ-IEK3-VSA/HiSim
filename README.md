@@ -195,7 +195,7 @@ Every component entry of an energy-system file lists where its inputs come from 
 ```yaml
   Building:
     class: hisim.components.building.building.Building
-    preset: standard
+    preset: german_single_family_home
     config:
       weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
     inputs:

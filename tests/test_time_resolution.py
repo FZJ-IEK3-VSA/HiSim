@@ -178,12 +178,12 @@ def test_cluster_house_for_several_time_resolutions():
     # which builds the variable name from the component output's pretty name
     # (object_name == component_name). The load-profile generator is configured
     # with the name "UTSPConnector"
-    # (the name every setup passes to UtspLpgConnectorConfig.preset_standard), so its class
+    # (the name every setup passes to UtspLpgConnectorConfig.preset_couple_both_at_work), so its class
     # name "UtspLpgConnector" does not appear in the yearly-result keys -- match
     # the configured name instead. PVSystem's and Weather's configured names equal
     # their class names, so their get_classname() matches their yearly-result keys.
     utsp_connector_name = (
-        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_standard("UTSPConnector").component_id.name
+        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector").component_id.name
     )
     # Predefined-input components whose aggregated yearly results must be stable
     # across the three time resolutions (15/30/60 min).
@@ -233,7 +233,7 @@ def test_cluster_house_for_several_time_resolutions():
     # configured component name (Component.component_name == config.component_id.name for this
     # single-building simulation), not by the Python class name. The load-profile
     # generator is configured with the name "UTSPConnector"
-    # (the name every setup passes to UtspLpgConnectorConfig.preset_standard), so its class
+    # (the name every setup passes to UtspLpgConnectorConfig.preset_couple_both_at_work), so its class
     # name "UtspLpgConnector" does not appear in the opex keys -- match the
     # configured name instead. PVSystem's configured name equals its class name, so
     # PVSystem.get_classname() matches its opex key. The opex CSV also contains
@@ -352,7 +352,7 @@ def run_cluster_house(
     # component itself is still added further down, so the simulator's component order is unchanged.
     my_weather_config = weather.WeatherConfig.for_location("Weather", weather.LocationEnum[weather_location])
 
-    my_building_config = building.BuildingConfig.preset_standard("Building")
+    my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building_config.weather_identity = my_weather_config.identity()
@@ -361,7 +361,7 @@ def run_cluster_house(
     my_sim.add_component(my_building, connect_automatically=True)
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_standard("UTSPConnector")
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     my_occupancy_config.data_acquisition_mode = (
         loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
     )
@@ -394,7 +394,7 @@ def run_cluster_house(
 
     # Build Heat Distribution Controller
     my_heat_distribution_controller_config = (
-        heat_distribution_system.HeatDistributionControllerConfig.preset_standard(
+        heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
             "HeatDistributionController"
         ).resolve(
             SizingContext(
@@ -498,7 +498,7 @@ def run_cluster_house(
     my_sim.add_component(my_simple_water_storage, connect_automatically=True)
 
     # Build Heat Distribution System
-    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.preset_standard(
+    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.preset_building_derived(
         "HeatDistributionSystem"
     ).resolve(
         SizingContext(
@@ -531,7 +531,7 @@ def run_cluster_house(
     )
 
     # Build Battery
-    my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.preset_standard("Battery").resolve(
+    my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
         SizingContext(pv_peak_power_in_watt=concrete(my_photovoltaic_system_config.power_in_watt))
     )
     my_advanced_battery = advanced_battery_bslib.Battery(

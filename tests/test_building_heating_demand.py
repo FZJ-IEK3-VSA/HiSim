@@ -107,15 +107,15 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     # The weather config is created first: the building and PV configs copy its identity
     # (weather_identity) and must have it before those components are built. The weather
     # component itself is still added further down, so the simulator's component order is unchanged.
-    my_weather_config = weather.WeatherConfig.preset_standard("Weather")
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
 
-    my_building_config = building.BuildingConfig.preset_standard("Building")
+    my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.set_cooling_temperature_in_celsius = set_cooling_temperature_for_building_in_celsius
     my_building_config.set_heating_temperature_in_celsius = set_heating_temperature_for_building_in_celsius
     my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_standard("UTSPConnector")
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )

@@ -51,13 +51,13 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     # This setup has no PV array to size a battery from, so neither battery is resolved against a
     # sizing context: both state their own capacity and inverter power, which is what the two
     # sizable fields of the preset are left open for.
-    my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig.preset_standard("Battery1")
+    my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery1")
     my_advanced_battery_config_1.system_id = "SG1"
     my_advanced_battery_config_1.custom_battery_capacity_generic_in_kilowatt_hour = 10.0
     my_advanced_battery_config_1.custom_pv_inverter_power_generic_in_watt = 5.0
     my_advanced_battery_config_1.source_weight = 1
 
-    my_advanced_battery_config_2 = advanced_battery_bslib.BatteryConfig.preset_standard("Battery2")
+    my_advanced_battery_config_2 = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery2")
     my_advanced_battery_config_2.system_id = "SG1"
     my_advanced_battery_config_2.custom_battery_capacity_generic_in_kilowatt_hour = 5.0
     my_advanced_battery_config_2.custom_pv_inverter_power_generic_in_watt = 2.5
@@ -91,12 +91,12 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     )
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_standard("UTSPConnector")
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    my_weather_config = weather.WeatherConfig.preset_standard("Weather")
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
 
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")

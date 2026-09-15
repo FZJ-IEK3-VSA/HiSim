@@ -245,7 +245,7 @@ def test_the_shipped_household_is_the_one_the_preset_builds() -> None:
     """
     assert UtspLpgConnectorConfig.predefined_households() == ("CHR01 Couple both at Work",)
 
-    preset = UtspLpgConnectorConfig.preset_standard("occupancy")
+    preset = UtspLpgConnectorConfig.preset_couple_both_at_work("occupancy")
 
     assert preset.name_of_predefined_loadprofile == "CHR01 Couple both at Work"
     assert preset.data_acquisition_mode is LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE

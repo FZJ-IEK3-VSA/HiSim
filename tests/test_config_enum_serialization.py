@@ -66,7 +66,7 @@ class ConfigEnumSerializationCases:
 
     #: Config classes owning at least one enum-typed field, with a default factory.
     CONFIG_FACTORIES: Dict[str, Any] = {
-        "WeatherConfig": lambda: weather.WeatherConfig.preset_standard("Weather"),
+        "WeatherConfig": lambda: weather.WeatherConfig.preset_aachen("Weather"),
         "PVSystemConfig": lambda: generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem"),
         "GenericBoilerConfig": lambda: (
             generic_boiler.GenericBoilerConfig.preset_condensing_gas_12kw("CondensingGasBoiler")
@@ -80,7 +80,7 @@ class ConfigEnumSerializationCases:
         ),
         "SimpleHeatSourceConfig": simple_heat_source.SimpleHeatSourceConfig.get_default_config_const_power,
         "HeatDistributionConfig": lambda: (
-            heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(
+            heat_distribution_system.HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").resolve(
                 SizingContext(
                     water_mass_flow_rate_in_kg_per_second=0.5,
                     conditioned_floor_area_in_m2=120.0,
@@ -89,7 +89,7 @@ class ConfigEnumSerializationCases:
             )
         ),
         "HeatDistributionControllerConfig": lambda: (
-            heat_distribution_system.HeatDistributionControllerConfig.preset_standard(
+            heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
                 "HeatDistributionController"
             ).resolve(
                 SizingContext(

@@ -156,7 +156,7 @@ class UtspLpgConnectorConfig(ConfigBase):
 
     @preset(note="CHR01, a couple both at work, on the shipped predefined profile")
     @classmethod
-    def preset_standard(cls, name: str) -> "UtspLpgConnectorConfig":
+    def preset_couple_both_at_work(cls, name: str) -> "UtspLpgConnectorConfig":
         """The reference household of this repository: CHR01, a couple both at work.
 
         Every example household and every occupancy fixture in HiSim runs this profile, and it

@@ -5,14 +5,14 @@ description: Single-family house with a condensing gas boiler, floor heating and
 components:
   weather:
     class: hisim.components.weather.Weather
-    config: # built from preset: standard
+    config: # built from preset: aachen
       location: Aachen
       source_path: ${inputs}/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
       data_source: DWD_TRY
       predictive_control: false
   occupancy:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    config: # built from preset: standard
+    config: # built from preset: couple_both_at_work
       data_acquisition_mode: USE_PREDEFINED_PROFILE
       household:
         Name: CHR01 Couple both at Work
@@ -42,7 +42,7 @@ components:
       cars: null
   building:
     class: hisim.components.building.Building
-    config: # built from preset: standard
+    config: # built from preset: german_single_family_home
       heating_reference_temperature_in_celsius: -7.0
       building_code: DE.N.SFH.05.Gen.ReEx.001.002
       building_heat_capacity_class: medium
@@ -78,7 +78,7 @@ components:
       weather_identity: weather.weather_identity # unique provider, written for re-execution
   hds_controller:
     class: hisim.components.heat_distribution_system.HeatDistributionController
-    config: # built from preset: standard
+    config: # built from preset: building_derived
       heating_system: FLOORHEATING
       set_heating_threshold_outside_temperature_in_celsius: 18.0 # sized from building.heating_load_in_watt=7780.752200000001, building.conditioned_floor_area_in_m2=121.2
       heating_reference_temperature_in_celsius: -7.0 # sized from building.heating_reference_temperature_in_celsius=-7.0
@@ -96,7 +96,7 @@ components:
       set_cooling_temperature_in_celsius: building.set_cooling_temperature_in_celsius # unique provider, written for re-execution
   hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
-    config: # built from preset: standard
+    config: # built from preset: building_derived
       heating_system: FLOORHEATING # sized from hds_controller.heat_distribution_system_type=FLOORHEATING
       water_mass_flow_rate_in_kg_per_second: 0.27 # sized from hds_controller.water_mass_flow_rate_in_kg_per_second=0.2659176349965824
       absolute_conditioned_floor_area_in_m2: 121.2 # sized from building.conditioned_floor_area_in_m2=121.2

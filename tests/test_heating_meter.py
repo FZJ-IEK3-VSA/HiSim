@@ -85,7 +85,7 @@ def test_house(
     heating_reference_temperature_in_celsius: float = -7.0
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.preset_standard("Weather")
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build PV
@@ -98,21 +98,21 @@ def test_house(
     )
 
     # Build Building
-    my_building_config = building.BuildingConfig.preset_standard("Building")
+    my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
     my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     my_building_information = building.BuildingInformation(config=my_building_config)
 
     # Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_standard("UTSPConnector")
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Heat Distribution Controller
     my_heat_distribution_controller_config = (
-        heat_distribution_system.HeatDistributionControllerConfig.preset_standard(
+        heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
             "HeatDistributionController"
         ).resolve(
             SizingContext(
@@ -138,7 +138,7 @@ def test_house(
     )
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(
+        heat_distribution_system.HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").resolve(
             SizingContext(
                 water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                 conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,

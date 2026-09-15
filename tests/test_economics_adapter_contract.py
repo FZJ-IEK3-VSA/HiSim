@@ -520,7 +520,7 @@ def test_the_heat_distribution_extractor_matches_the_real_emitter_types():
     and every real heat distribution system becomes unpriceable. Asserting against the real enum
     members ties the extractor to the type it reads.
     """
-    base = AdapterContractScan.concrete(HeatDistributionConfig.preset_standard(AdapterContractScan.PROBE_NAME))
+    base = AdapterContractScan.concrete(HeatDistributionConfig.preset_building_derived(AdapterContractScan.PROBE_NAME))
 
     floor_heating = _hds_facts(dataclasses.replace(base, heating_system=HeatDistributionSystemType.FLOORHEATING))
     assert floor_heating is not None

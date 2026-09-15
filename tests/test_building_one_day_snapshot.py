@@ -339,7 +339,7 @@ class OneDaySnapshot:
         never gets to 25 degrees. Lowering the setpoints buys both branches without adding a
         third simulation run.
         """
-        config: BuildingConfig = BuildingConfig.preset_standard("Building")
+        config: BuildingConfig = BuildingConfig.preset_german_single_family_home("Building")
         # The snapshot drives the building with synthetic inputs and no weather component, so the
         # identity is a description rather than a station; it has to be set for the building to build.
         config.weather_identity = "synthetic winter day, no weather component"

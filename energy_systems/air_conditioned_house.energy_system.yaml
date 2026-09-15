@@ -6,7 +6,7 @@ description: Air-conditioned household.
 components:
   UTSPConnector:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    preset: standard
+    preset: couple_both_at_work
   Weather:
     class: hisim.components.weather.Weather
     config:

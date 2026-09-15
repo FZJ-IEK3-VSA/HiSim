@@ -6,7 +6,7 @@ description: Basic household new system setup.
 components:
   Building:
     class: hisim.components.building.building.Building
-    preset: standard
+    preset: german_single_family_home
     config:
       number_of_apartments: 1.0
       enable_opening_windows: true
@@ -18,7 +18,7 @@ components:
       - HeatDistributionSystem
   UTSPConnector:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    preset: standard
+    preset: couple_both_at_work
     config:
       data_acquisition_mode: USE_LOCAL_LPG
   Weather:
@@ -37,7 +37,7 @@ components:
       - Weather
   HeatDistributionController:
     class: hisim.components.heat_distribution_system.HeatDistributionController
-    preset: standard
+    preset: building_derived
     inputs:
       - L2EMSElectricityController
       - Weather
@@ -116,7 +116,7 @@ components:
       - MoreAdvancedHeatPumpHPLib
   HeatDistributionSystem:
     class: hisim.components.heat_distribution_system.HeatDistribution
-    preset: standard
+    preset: building_derived
     inputs:
       - Building
       - HeatDistributionController
@@ -131,7 +131,7 @@ components:
         weight: 999
   Battery:
     class: hisim.components.advanced_battery_bslib.Battery
-    preset: standard
+    preset: sized_to_pv
   L2EMSElectricityController:
     class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     preset: optimize_own_consumption

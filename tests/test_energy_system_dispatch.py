@@ -92,10 +92,10 @@ name: pv battery ems household
 components:
   weather:
     class: hisim.components.weather.Weather
-    preset: standard
+    preset: aachen
   occupancy:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    preset: standard
+    preset: couple_both_at_work
   pv:
     class: hisim.components.generic_pv_system.PVSystem
     config:
@@ -297,7 +297,7 @@ class SignalCollisions:
         """
         return Battery(
             my_simulation_parameters=SimulationParameters.one_day_only(2021, 900),
-            config=BatteryConfig.preset_standard(name).resolve(
+            config=BatteryConfig.preset_sized_to_pv(name).resolve(
                 SizingContext(pv_peak_power_in_watt=cls.PV_PEAK_POWER_IN_WATT)
             ),
         )

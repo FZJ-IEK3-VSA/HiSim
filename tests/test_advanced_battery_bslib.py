@@ -177,7 +177,7 @@ FLEET_PV_PEAK_POWER_IN_WATT = 22272.28
 
 
 @pytest.mark.base
-def test_the_standard_preset_sizes_both_power_numbers_from_the_pv_peak_power() -> None:
+def test_the_sized_to_pv_preset_sizes_both_power_numbers_from_the_pv_peak_power() -> None:
     """Test that the preset reproduces the fleet's battery from the array's peak power.
 
     The two laws are the arithmetic the deleted ``get_scaled_battery`` factory performed: one
@@ -185,7 +185,7 @@ def test_the_standard_preset_sizes_both_power_numbers_from_the_pv_peak_power() -
     On the archetype roof the fleet's eleven building sizers stand on this is 22.27 kWh behind
     an 11 136.14 W inverter, which is the pair every recorded twin of those setups carries.
     """
-    config = advanced_battery_bslib.BatteryConfig.preset_standard("Battery").resolve(
+    config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
         SizingContext(pv_peak_power_in_watt=FLEET_PV_PEAK_POWER_IN_WATT)
     )
 
@@ -204,7 +204,7 @@ def test_the_inverter_law_reads_the_fact_and_not_the_rounded_capacity() -> None:
     test pins the difference rather than only the result, so that a later rewrite of the law
     into a sibling read fails here with the reason spelled out.
     """
-    config = advanced_battery_bslib.BatteryConfig.preset_standard("Battery").resolve(
+    config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
         SizingContext(pv_peak_power_in_watt=FLEET_PV_PEAK_POWER_IN_WATT)
     )
 
@@ -216,7 +216,7 @@ def test_the_inverter_law_reads_the_fact_and_not_the_rounded_capacity() -> None:
 
 
 @pytest.mark.base
-def test_the_standard_preset_pins_the_device_and_leaves_the_size_open() -> None:
+def test_the_sized_to_pv_preset_pins_the_device_and_leaves_the_size_open() -> None:
     """Test that the preset fixes the device's constants and nothing else.
 
     What the preset states is the bslib system it is, its place in the energy management
@@ -225,7 +225,7 @@ def test_the_standard_preset_pins_the_device_and_leaves_the_size_open() -> None:
     supplies the array's peak power, and the capex fields stay ``None`` so post-processing
     looks the device up in the cost database.
     """
-    config = advanced_battery_bslib.BatteryConfig.preset_standard("Battery")
+    config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery")
 
     assert config.component_id == ComponentID(name="Battery")
     assert config.system_id == "SG1"
@@ -254,4 +254,4 @@ def test_a_battery_cannot_be_sized_without_an_array_beside_it() -> None:
     aging calculation and price a device that is not there.
     """
     with pytest.raises(ConfigSizingError, match="pv_peak_power_in_watt"):
-        advanced_battery_bslib.BatteryConfig.preset_standard("Battery").resolve(SizingContext())
+        advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(SizingContext())

@@ -290,7 +290,7 @@ def test_for_building_snapshots_the_derived_building_facts():
     """for_building runs the TABULA lookup once and fills the building-scope facts."""
     from hisim.components.building import BuildingConfig
 
-    ctx = SizingContext.for_building(BuildingConfig.preset_standard("Building"))
+    ctx = SizingContext.for_building(BuildingConfig.preset_german_single_family_home("Building"))
     assert ctx.heating_load_in_watt is not None and ctx.heating_load_in_watt > 0
     assert ctx.number_of_apartments == 1
     assert ctx.conditioned_floor_area_in_m2 == pytest.approx(121.2)
@@ -342,7 +342,7 @@ def test_hds_preset_is_sizing_mandatory_and_enum_typed():
         conditioned_floor_area_in_m2=121.2,
         heat_distribution_system_type=HeatDistributionSystemType.FLOORHEATING,
     )
-    resolved = HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(ctx)
+    resolved = HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").resolve(ctx)
     assert resolved.water_mass_flow_rate_in_kg_per_second == 0.27  # the old factory's round(.., 2)
     assert resolved.heating_system is HeatDistributionSystemType.FLOORHEATING
     # enum-typed sizable field round-trips as a member, thanks to value_type

@@ -445,7 +445,7 @@ class WeatherConfig(ConfigBase):
 
     @preset(note="the repository's reference climate")
     @classmethod
-    def preset_standard(cls, name: str) -> "WeatherConfig":
+    def preset_aachen(cls, name: str) -> "WeatherConfig":
         """The reference weather of this repository: the DWD test reference year for Aachen.
 
         Aachen is the location every example household and almost every test in HiSim runs on,

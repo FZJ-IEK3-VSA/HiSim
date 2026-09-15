@@ -270,7 +270,7 @@ def test_a_file_with_a_metadata_block_is_refused_on_a_plain_run(tmp_path: Path) 
         "components:\n"
         "  weather:\n"
         "    class: hisim.components.weather.Weather\n"
-        "    preset: standard\n"
+        "    preset: aachen\n"
         "metadata:\n"
         "  source_energy_system_file: authored.energy_system.yaml\n",
         encoding="utf-8",
@@ -298,7 +298,7 @@ def test_a_file_with_a_metadata_block_runs_when_the_caller_asks_for_a_re_run(tmp
         "components:\n"
         "  weather:\n"
         "    class: hisim.components.weather.Weather\n"
-        "    preset: standard\n"
+        "    preset: aachen\n"
         "metadata:\n"
         "  source_energy_system_file: authored.energy_system.yaml\n",
         encoding="utf-8",

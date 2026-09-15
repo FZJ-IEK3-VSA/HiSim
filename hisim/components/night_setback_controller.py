@@ -19,19 +19,11 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.component import CapexCostDataClass, OpexCostDataClass
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.components.building import Building
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
 from hisim.simulationparameters import SimulationParameters
 from hisim.economics.facts import CostRelevance
-
-__authors__ = "Jonas Pfeiffer"
-__copyright__ = "Copyright 2026, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt", "Vitor Hugo Bellotto Zago"]
-__license__ = "MIT"
-__version__ = "0.1"
-__maintainer__ = "Jonas Pfeiffer"
-__status__ = "development"
 
 # Conversion factors for time units. The night window is configured in hours of
 # the day (0..23), so the comparisons inside ``i_simulate`` are carried out in
@@ -44,36 +36,55 @@ SECONDS_PER_DAY: int = 24 * SECONDS_PER_HOUR  # s per day
 @dataclass_json
 @dataclass
 class NightSetbackConfig(ConfigBase):
-    """Configuration of the night setback controller."""
+    """Configuration of the night setback controller: how much cooler the house is at night.
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Return the full class name of the controller."""
-        return NightSetbackController.get_full_classname()  # type: ignore[no-any-return]
+    Three numbers describe the whole controller: how far the heating set temperature is
+    lowered, and the two hours of the day between which that lowering applies. The
+    controller emits the offset during the window and zero outside it, which the Building
+    adds to its heating set temperature.
+
+    The named default is :meth:`preset_standard`::
+
+        NightSetbackConfig.preset_standard("NightSetbackController")
+
+    Nothing here is derived from the building. A setback window is when the residents sleep
+    and how cold they will let the house get, so no field is sizable and the preset takes
+    nothing but the instance name.
+    """
+
+    MAIN_CLASS = "hisim.components.night_setback_controller.NightSetbackController"
 
     component_id: ComponentID
-    setback_delta_in_kelvin: float
+    #: Offset added to the building's heating set temperature during the night window, in
+    #: kelvin. Negative lowers the set temperature, which is the point of a setback.
+    setback_delta_in_kelvin: float = -4.0
     # The Python attributes carry the explicit ``_in_hours`` unit suffix: the
     # value is hours since midnight (0..23). The dataclasses_json ``field_name``
     # aliases preserve the legacy ``night_start_hour`` / ``night_end_hour``
     # serialization keys so existing JSON/HDF5 configs and reports still load
     # unchanged (per KB-6843, KB-5295).
-    night_start_time_in_hours: int = field(metadata=dc_json_config(field_name="night_start_hour"))
-    night_end_time_in_hours: int = field(metadata=dc_json_config(field_name="night_end_hour"))
+    #: Hour of the day at which the setback starts, 0..23.
+    night_start_time_in_hours: int = field(default=22, metadata=dc_json_config(field_name="night_start_hour"))
+    #: Hour of the day at which it ends, 0..23. A value below the start hour means the window
+    #: wraps across midnight, which is the usual case; equal hours mean no window at all.
+    night_end_time_in_hours: int = field(default=6, metadata=dc_json_config(field_name="night_end_hour"))
 
-    @staticmethod
-    def get_default_config(
-        component_id: Optional[ComponentID] = None,
-    ) -> "NightSetbackConfig":
-        """Return a default configuration with a 22:00 to 06:00 setback window."""
-        if component_id is None:
-            component_id = ComponentID(name="NightSetbackController")
-        return NightSetbackConfig(
-            component_id=component_id,
-            setback_delta_in_kelvin=-4.0,
-            night_start_time_in_hours=22,
-            night_end_time_in_hours=6,
-        )
+    @preset
+    @classmethod
+    def preset_standard(cls, name: str) -> "NightSetbackConfig":
+        """The one setback the fleet runs: four kelvin cooler from 22:00 to 06:00.
+
+        The three field defaults are the whole controller. The preset is called ``standard``
+        because a night window describes no device and no standard — there is nothing else to
+        name it after.
+
+        Args:
+            name: Instance name of the controller in the simulation.
+
+        Returns:
+            The configuration, fully concrete — the class has no sizable field.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class NightSetbackController(cp.Component):

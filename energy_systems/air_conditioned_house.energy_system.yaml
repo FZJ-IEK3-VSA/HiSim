@@ -114,13 +114,7 @@ components:
         from: AirConditioner.ThermalPowerDelivered
   AirConditionerControllerConfig:
     class: hisim.components.air_conditioner.AirConditionerController
-    config:
-      heating_set_temperature_deg_c: 20.0
-      cooling_set_temperature_deg_c: 24.0
-      minimum_runtime_s: 1800.0
-      minimum_idle_time_s: 900.0
-      offset: 5.0
-      temperature_difference_full_power_deg_c: 3.0
+    preset: standard
     inputs:
       - Building
   ElectricityMeter:

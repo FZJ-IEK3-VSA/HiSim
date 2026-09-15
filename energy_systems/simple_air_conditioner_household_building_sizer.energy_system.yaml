@@ -31,8 +31,6 @@ components:
       - Weather
   SimpleAirConditionerController:
     class: hisim.components.simple_air_conditioner.SimpleAirConditionerController
-    config:
-      setpoint_temperature_c: 24.0
-      deadband_k: 0.5
+    preset: standard
     inputs:
       - Building

@@ -84,8 +84,7 @@ components:
       - DHWStorage
   SolarThermalSystemController:
     class: hisim.components.solar_thermal_system.SolarThermalSystemController
-    config:
-      set_temperature_difference_for_on: 10.0
+    preset: standard
     inputs:
       - SolarThermalSystem
       - DHWStorage

@@ -95,7 +95,6 @@ class ExpectedFailures:
     HEAT_PUMP: ClassVar[Mapping[str, str]] = {
         "heat_pump_controller_sh": "EF-13",
         "heat_pump_controller_dhw": "EF-13",
-        "heat_pump": "EF-13",
         "buffer_storage": "EF-13",
         "dhw_storage": "EF-13",
         "ems": "EF-43",
@@ -105,7 +104,6 @@ class ExpectedFailures:
     }
 
     MULTI_FAMILY: ClassVar[Mapping[str, str]] = {
-        "heat_pump": "EF-13",
         "heat_pump_controller_sh": "EF-13",
         "buffer_storage": "EF-13",
         "ems": "EF-43",

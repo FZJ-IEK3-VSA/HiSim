@@ -187,9 +187,10 @@ def setup_function(
     my_sim.add_component(my_photovoltaic_system)
 
     """Air Conditioner"""
-    my_air_conditioner_config = air_conditioner.AirConditionerConfig.get_scaled_air_conditioner_config(
-        my_building_information.max_thermal_building_demand_in_watt,
-        my_building_information.heating_reference_temperature_in_celsius,
+    my_air_conditioner_config = air_conditioner.AirConditionerConfig.for_building_load(
+        "AirConditioner",
+        heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        heating_reference_temperature_in_celsius=my_building_information.heating_reference_temperature_in_celsius,
     )
     my_air_conditioner = air_conditioner.AirConditioner(
         config=my_air_conditioner_config,

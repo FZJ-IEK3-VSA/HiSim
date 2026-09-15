@@ -173,6 +173,8 @@ def given_default_component_testee(with_warm_water: bool = False) -> DistrictHea
     simulation_parameters = sim.SimulationParameters.full_year(
         year=2021, seconds_per_timestep=60
     )
-    config = DistrictHeatingConfig.get_default_district_heating_config(with_domestic_hot_water_preparation=with_warm_water)
+    config = DistrictHeatingConfig.preset_standard("DistrictHeating")
+    config.with_domestic_hot_water_preparation = with_warm_water
+    config.connected_load_in_w = 20000.0
 
     return DistrictHeating(simulation_parameters, config)

@@ -369,10 +369,10 @@ def setup_function(
     my_sim.add_component(my_district_heating_controller, connect_automatically=True)
 
     # Build district heating For Space Heating and DHW
-    my_district_heating_sh_config = generic_district_heating.DistrictHeatingConfig.get_default_district_heating_config(
-        with_domestic_hot_water_preparation=True,
-        connected_load_in_w=my_building_information.max_thermal_building_demand_in_watt,
-    )
+    my_district_heating_sh_config = generic_district_heating.DistrictHeatingConfig.preset_standard(
+        "DistrictHeating"
+    ).resolve(SizingContext(heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt))
+    my_district_heating_sh_config.with_domestic_hot_water_preparation = True
 
     my_district_heating = generic_district_heating.DistrictHeating(
         config=my_district_heating_sh_config, my_simulation_parameters=my_simulation_parameters
@@ -408,16 +408,20 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
 
     # Build Heating Meter
-    # The district-heating class is not converted yet, so nothing in this setup contributes the
-    # meter's fuel constants and the setup states them itself, on top of the preset and before
-    # resolving. District heat burns nothing, so it has neither a heating value nor a fuel
-    # density: both are None, which is what `GenericBoilerConfig.fuel_constants` returns for
-    # this carrier and what a converted district-heating class will contribute.
+    # The meter accounts what the connection delivers, so the carrier is a fact of the district
+    # heating's configuration and is read off the same class constant its contribution uses,
+    # instead of being named a second time here. The two fuel constants are None -- district heat
+    # burns nothing in the house -- and a law cannot resolve a field to None, so they are assigned
+    # before resolving, which is what leaves them out of the sizing entirely.
     my_fuel_meter_config = fuel_meter.FuelMeterConfig.preset_standard("FuelMeter")
-    my_fuel_meter_config.heating_value_of_fuel_in_kwh_per_liter = None
-    my_fuel_meter_config.fuel_density_in_kg_per_m3 = None
+    my_fuel_meter_config.heating_value_of_fuel_in_kwh_per_liter = (
+        generic_district_heating.DistrictHeatingConfig.HEATING_VALUE_IN_KWH_PER_LITER
+    )
+    my_fuel_meter_config.fuel_density_in_kg_per_m3 = (
+        generic_district_heating.DistrictHeatingConfig.FUEL_DENSITY_IN_KG_PER_M3
+    )
     my_fuel_meter_config = my_fuel_meter_config.resolve(
-        SizingContext(energy_carrier=lt.LoadTypes.DISTRICTHEATING)
+        SizingContext(energy_carrier=generic_district_heating.DistrictHeatingConfig.ENERGY_CARRIER)
     )
     my_fuel_meter = fuel_meter.FuelMeter(
         my_simulation_parameters=my_simulation_parameters,

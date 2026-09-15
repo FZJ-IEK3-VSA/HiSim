@@ -30,6 +30,7 @@ from hisim.components.simple_air_conditioner import (
     SimpleAirConditioner,
     SimpleAirConditionerConfig,
     SimpleAirConditionerController,
+    SimpleAirConditionerControllerConfig,
 )
 from hisim import hisim_main
 from hisim import utils
@@ -255,10 +256,13 @@ def test_recorded_twin_structure() -> None:
     assert built.eta_carnot == 0.3
     assert built.temperature_epsilon_k == 0.01
 
-    # Controller config sanity
-    ctrl_config = components["SimpleAirConditionerController"]["config"]
-    assert ctrl_config["setpoint_temperature_c"] == 24.0
-    assert ctrl_config["deadband_k"] == 0.5
+    # Controller config sanity: its preset states both numbers too, so the twin carries the
+    # preset name and no override, exactly as the machine's block does.
+    assert components["SimpleAirConditionerController"]["preset"] == "standard"
+    assert "config" not in components["SimpleAirConditionerController"]
+    built_controller = SimpleAirConditionerControllerConfig.preset_standard("SimpleAirConditionerController")
+    assert built_controller.setpoint_temperature_c == 24.0
+    assert built_controller.deadband_k == 0.5
 
 
 class UndefinedForThisHousehold:

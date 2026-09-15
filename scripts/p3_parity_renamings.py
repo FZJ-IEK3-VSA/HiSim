@@ -9,7 +9,8 @@ derive that port's name differently. The imperative add-API names an aggregator 
 participant, the output being measured and its insertion order — ``Input_<source>_<field>_<n>`` —
 and a dispatch output after whatever the setup passed as a prefix plus the source weight it
 steers on. The declarative path derives both from the frozen templates of the format:
-``<field>From<source>`` for an input and ``DispatchTo<source>_<input>`` for a dispatch output. The
+``<field>From<source>`` for an input, ``DispatchTo<source>_<input>`` for a dispatch output another
+component reads, and ``DispatchFor<source>_<output>`` for one whose signal is only recorded. The
 two names denote the same wire, so comparing them literally would report a difference where there
 is none — and dropping the comparison would hide a real one (C-P3.2).
 
@@ -214,6 +215,55 @@ class DeclaredPortRenamings:
                 "DispatchToL1EVChargeControl_1_ElectricityTargetFromEMS"
             ),
             "ChargingPowerForBattery_6": "DispatchToBattery_LoadingPowerInput",
+            # The six participant targets below are the other kind of dispatch output: nothing
+            # reads them, they exist so that the electricity the manager grants each controlled
+            # load appears in the result file and in the per-participant KPIs. Both paths grow
+            # them, and each names them in its own scheme — the legacy one from the prefix the
+            # manager's own default connection passes, 'ElectricityToOrFromGridOf' plus the
+            # participant's class name (with the flow, SH or DHW, in front of that class name
+            # wherever one participant has two), and the source weight it is steered on; the
+            # declarative one from the recorded-dispatch template, 'DispatchFor' plus the
+            # participant and the output being measured.
+            #
+            # These wires needed no row until F-1. The manager used to publish a target port per
+            # participant class it can describe from its constructor, so both paths carried the
+            # same constructor-made ports under the same counter-derived names and the comparison
+            # matched them literally. F-1 retired those constructor ports and materialises the
+            # target beside the feed instead, for the participants a run actually has, which is
+            # what left each path spelling these six in its own scheme with nothing declaring the
+            # two spellings equal — and all eleven EMS sizers failing the result comparison over
+            # nothing but names.
+            #
+            # The occupancy, weight 1, in all eleven EMS sizers. It is the one pair whose halves
+            # name the participant differently: the legacy prefix carries the connector's class
+            # name, ``UtspLpgConnector``, while the twins call the instance ``UTSPConnector``.
+            "ElectricityToOrFromGridOfUtspLpgConnector_1": (
+                "DispatchForUTSPConnector_ElectricalPowerConsumption"
+            ),
+            # The hplib heat pump's two controlled draws, space heating on weight 2 and domestic
+            # hot water on weight 3, in the three heat-pump sizers: the plain one, the one with a
+            # solar-thermal collector and the one with a car.
+            "ElectricityToOrFromGridOfSHMoreAdvancedHeatPumpHPLib_2": (
+                "DispatchForMoreAdvancedHeatPumpHPLib_ElectricalInputPowerSH"
+            ),
+            "ElectricityToOrFromGridOfDHWMoreAdvancedHeatPumpHPLib_3": (
+                "DispatchForMoreAdvancedHeatPumpHPLib_ElectricalInputPowerDHW"
+            ),
+            # The resistive heater's two controlled draws, on the same weights 2 and 3, in the
+            # electric-heating sizer. Sharing a weight with the heat pump costs nothing because no
+            # setup has both; here the class name and the twin's component key agree, so only the
+            # scheme differs.
+            "ElectricityToOrFromGridOfSHElectricHeating_2": (
+                "DispatchForElectricHeating_ElectricOutputShPower"
+            ),
+            "ElectricityToOrFromGridOfDHWElectricHeating_3": (
+                "DispatchForElectricHeating_ElectricOutputDhwPower"
+            ),
+            # The solar-thermal collector's pump draw, weight 4, in the two solar-thermal sizers,
+            # the gas one and the heat-pump one.
+            "ElectricityToOrFromGridOfSolarThermalSystem_4": (
+                "DispatchForSolarThermalSystem_ElectricityConsumptionOutput"
+            ),
         },
     }
 

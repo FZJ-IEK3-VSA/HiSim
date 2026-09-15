@@ -59,6 +59,14 @@ class ComponentConfigScan:
     #: numeric in a name is a value that belongs in a field, not in the wire format.
     RATING_SUFFIX: "re.Pattern[str]" = re.compile(r"^[a-z]+(_[a-z]+)*(_[0-9]+[a-z]+)?$")
 
+    #: Rule 2's one sanctioned exception, as ``"<ConfigClass>.<preset>"``: a preset named
+    #: after a real catalogue device carries that device's designation, digits and all, and
+    #: no rating suffix can spell it. ``vitocal_300_a`` is Viessmann's Vitocal 300-A, the one
+    #: machine the generic heat pump's device database is keyed to in the fleet. Listing the
+    #: exemption here is what keeps rule 2 strict: a number that is a *value* still fails,
+    #: because it will not be in this tuple.
+    CATALOGUE_DEVICE_PRESETS: Tuple[str, ...] = ("GenericHeatPumpConfig.vitocal_300_a",)
+
     #: Rule 5 (with amendment A1 of the naming supplement): ``standard`` is reserved for a
     #: class with exactly one defensible preset, and survives a second one only when that
     #: sibling is its own rating variant, ``standard_<rating>``.
@@ -180,6 +188,13 @@ class PilotWireFormat:
         "MoreAdvancedHeatPumpHPLibConfig": ("air_water",),
         "ElectricHeatingConfig": ("resistive",),
         "DistrictHeatingConfig": ("standard",),
+        "GenericHeatPumpConfig": ("vitocal_300_a",),
+        "IdealizedHeaterConfig": ("standard",),
+        "SimpleHeatSourceConfig": (
+            "constant_thermal_power",
+            "constant_temperature",
+            "near_surface_brine",
+        ),
         "CarConfig": (),
     }
 
@@ -206,6 +221,9 @@ class PilotWireFormat:
         "MoreAdvancedHeatPumpHPLibConfig": (),
         "ElectricHeatingConfig": (),
         "DistrictHeatingConfig": (),
+        "GenericHeatPumpConfig": ("for_device",),
+        "IdealizedHeaterConfig": (),
+        "SimpleHeatSourceConfig": (),
         "CarConfig": ("for_household",),
     }
 
@@ -259,6 +277,9 @@ class PilotWireFormat:
         "UtspLpgConnectorConfig": ("occupancy_identity",),
         "ElectricityMeterConfig": (),
         "GenericBoilerControllerConfig": (),
+        "GenericHeatPumpConfig": (),
+        "IdealizedHeaterConfig": (),
+        "SimpleHeatSourceConfig": (),
     }
 
 
@@ -460,6 +481,10 @@ def test_every_preset_wire_name_follows_the_naming_convention(scan):
     scenario file, where it becomes a permanent spelling nobody may change; a number baked
     into a name that belongs in a field; or ``standard`` surviving next to a real second
     variant, where it stops saying anything about the configuration it names.
+
+    A preset named after a real catalogue device spells that device's designation and so may
+    carry digits a rating suffix cannot; each such name is listed in
+    :attr:`ComponentConfigScan.CATALOGUE_DEVICE_PRESETS` rather than loosening the rule.
     """
     offenders: List[str] = []
     for config_class in scan[0]:
@@ -467,7 +492,10 @@ def test_every_preset_wire_name_follows_the_naming_convention(scan):
         for name in names:
             if not ComponentConfigScan.SNAKE_CASE.match(name):
                 offenders.append(f"{config_class.__name__}.preset_{name} is not snake_case")
-            elif not ComponentConfigScan.RATING_SUFFIX.match(name):
+            elif (
+                not ComponentConfigScan.RATING_SUFFIX.match(name)
+                and f"{config_class.__name__}.{name}" not in ComponentConfigScan.CATALOGUE_DEVICE_PRESETS
+            ):
                 offenders.append(f"{config_class.__name__}.preset_{name} has digits outside a rating suffix")
         standard = ComponentConfigScan.STANDARD_NAME
         siblings = [name for name in names if name != standard]
@@ -534,13 +562,16 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     from hisim.components.generic_car import CarConfig
     from hisim.components.generic_district_heating import DistrictHeatingConfig
     from hisim.components.generic_electric_heating import ElectricHeatingConfig
+    from hisim.components.generic_heat_pump import GenericHeatPumpConfig
     from hisim.components.heat_distribution_system import (
         HeatDistributionConfig,
         HeatDistributionControllerConfig,
     )
     from hisim.components.generic_pv_system import PVSystemConfig
     from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnectorConfig
+    from hisim.components.idealized_electric_heater import IdealizedHeaterConfig
     from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLibConfig
+    from hisim.components.simple_heat_source import SimpleHeatSourceConfig
     from hisim.components.simple_water_storage import SimpleDHWStorageConfig, SimpleHotWaterStorageConfig
     from hisim.components.weather import WeatherConfig
 
@@ -564,6 +595,9 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "MoreAdvancedHeatPumpHPLibConfig": MoreAdvancedHeatPumpHPLibConfig,
         "ElectricHeatingConfig": ElectricHeatingConfig,
         "DistrictHeatingConfig": DistrictHeatingConfig,
+        "GenericHeatPumpConfig": GenericHeatPumpConfig,
+        "IdealizedHeaterConfig": IdealizedHeaterConfig,
+        "SimpleHeatSourceConfig": SimpleHeatSourceConfig,
         "CarConfig": CarConfig,
     }
     for class_name, expected in PilotWireFormat.PRESET_NAMES.items():

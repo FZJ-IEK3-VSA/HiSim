@@ -118,7 +118,7 @@ def setup_function(
     my_sim.add_component(my_heat_pump_controller)
 
     my_heat_pump = generic_heat_pump.GenericHeatPump(
-        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump_config(),
+        config=generic_heat_pump.GenericHeatPumpConfig.preset_vitocal_300_a("HeatPump"),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_heat_pump.connect_only_predefined_connections(my_weather, my_heat_pump_controller)

@@ -120,7 +120,7 @@ def setup_function(
 
     # Build Heat Pump
     my_heat_pump = generic_heat_pump.GenericHeatPump(
-        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump_config(),
+        config=generic_heat_pump.GenericHeatPumpConfig.preset_vitocal_300_a("HeatPump"),
         my_simulation_parameters=my_simulation_parameters,
     )
 

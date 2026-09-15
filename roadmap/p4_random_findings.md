@@ -633,3 +633,17 @@ file gets the same run as one who does not. Two honest ways out: delete the fiel
 1.0 by physics, which is why nobody missed it), or make the component honour it, which is a behaviour change
 under R5 with its own diff. Left as is in the conversion, since either changes the wire format or the
 results; the field's docstring says it is not read.
+
+### F-17 — the preset naming check has no room for a device designation **[fixed in place]**
+
+Found on 2026-09-15 while converting the generic heat pump (B4). R4 mints a name after a real
+catalogue device, and `tests/test_config_contracts.py` enforces rule 2 — no digits outside one
+trailing rating suffix — with `RATING_SUFFIX = ^[a-z]+(_[a-z]+)*(_[0-9]+[a-z]+)?$`. That pattern
+spells `oil_12kw`, a rating, but no manufacturer's designation: Viessmann's Vitocal 300-A is
+`vitocal_300_a`, whose digits sit in the middle and whose last segment is a bare letter. The two
+rules therefore contradicted each other for exactly the case R4's amendment invites.
+
+Resolved by listing rather than loosening: `ComponentConfigScan.CATALOGUE_DEVICE_PRESETS` names each
+preset whose digits belong to a device designation, and rule 2 keeps refusing everything else, so a
+number that is a *value* still fails. A second such preset costs one line and a moment's thought
+about whether the device is real — which is the check R4 actually wants.

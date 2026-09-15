@@ -225,3 +225,55 @@ def test_the_worst_relative_deviation_is_reported_with_the_column_and_the_timest
     assert comparison.worst_column == Frames.column("Drifting")
     assert comparison.worst_timestamp == Frames.TIMESTAMPS[2]
     assert not comparison.is_identical()
+
+
+@pytest.mark.base
+def test_the_same_columns_in_a_different_order_are_a_note_and_the_values_still_compare() -> None:
+    """Catches column position being read as a difference in the results.
+
+    The two assembly paths reach the same set of output columns by different registration routes:
+    the Python path grows the energy manager's participant targets after registration, so they land
+    at the end of the frame, while the declarative executor creates them while wiring, so they land
+    in the manager's own block. Nothing downstream addresses a result column by position —
+    postprocessing, the KPI layer, the goldens and the probes all look columns up by name — so the
+    sequence is a fact to report and not a defect to fail. The values are still matched by name and
+    compared at exact equality, which is what this pins: the deviation the reordered frame carries
+    is found in the column it actually sits in.
+    """
+    expected = Frames.frame({"Power": (1.0, 2.0, 3.0), "Charge": (7.0, 8.0, 9.0)})
+    reordered = Frames.frame({"Charge": (7.0, 8.0, 9.0), "Power": (1.0, 2.0, 3.0)})
+    deviating = Frames.frame({"Charge": (7.0, 8.0, 9.5), "Power": (1.0, 2.0, 3.0)})
+
+    identical = ResultComparison.between(expected, reordered)
+    differing = ResultComparison.between(expected, deviating)
+
+    assert identical.is_identical()
+    assert identical.structural_problems == []
+    assert identical.notes == ["the result columns are in a different order"]
+    assert identical.compared_columns == 2
+    assert identical.max_absolute_deviation == 0.0
+    assert "note: the result columns are in a different order" in identical.describe()
+    assert not differing.is_identical()
+    assert differing.notes == ["the result columns are in a different order"]
+    assert differing.worst_column == Frames.column("Charge")
+    assert differing.max_absolute_deviation == 0.5
+
+
+@pytest.mark.base
+def test_a_column_only_one_side_carries_is_still_a_structural_problem_and_not_a_note() -> None:
+    """Catches the order note being widened into "any column difference is only a note".
+
+    Order is negotiable because both frames carry the same information either way; a column one run
+    produced and the other did not is the difference the comparison exists to find. The two live one
+    branch apart in the same check, so the rule that separates them has to be pinned, or a migration
+    that drops an output would report a note and pass.
+    """
+    expected = Frames.frame({"Power": (1.0, 2.0, 3.0), "Charge": (7.0, 8.0, 9.0)})
+    actual = Frames.frame({"Charge": (7.0, 8.0, 9.0)})
+
+    comparison = ResultComparison.between(expected, actual)
+
+    assert not comparison.is_identical()
+    assert comparison.notes == []
+    assert len(comparison.structural_problems) == 1
+    assert "columns missing from the actual results" in comparison.structural_problems[0]

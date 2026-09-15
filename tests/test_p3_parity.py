@@ -754,6 +754,32 @@ def test_a_differing_column_is_judged_at_every_row() -> None:
 
 
 @pytest.mark.base
+def test_result_columns_in_a_different_order_are_noted_and_the_triple_still_reaches_parity() -> None:
+    """Catches the rig failing a triple over where its columns sit rather than what they contain.
+
+    The two assembly paths register the energy manager's participant targets at different moments —
+    the Python path grows them after registration, the declarative executor creates them while
+    wiring — so the same columns come out in a different sequence. No consumer of a result frame
+    reads a column by position, which makes the sequence a note; the values behind those columns are
+    still matched by name and compared at exact equality. This pins both halves: the note reaches
+    the verdict's notes column, and the triple passes.
+    """
+    verdict = TripleVerdict(stem="s", window="january", wiring=Verdict.OK, kpis=Verdict.OK)
+    values = {"A": [1.0, 2.0], "B": [3.0, 4.0]}
+
+    Rig.checker().compare_results(
+        RunOutcome(frame=pd.DataFrame(values)),
+        RunOutcome(frame=pd.DataFrame(values)[["B", "A"]]),
+        verdict,
+    )
+
+    assert verdict.results == Verdict.OK
+    assert verdict.passed
+    assert verdict.notes == ["the result columns are in a different order"]
+    assert "the result columns are in a different order" in verdict.row()
+
+
+@pytest.mark.base
 def test_an_unavailable_stage_fails_its_triple_and_a_negative_tolerance_is_refused() -> None:
     """Catches the two verdict rules the 2026-09-05 review round pinned down.
 

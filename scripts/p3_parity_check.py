@@ -12,17 +12,20 @@ default, which is the January week alone while the July window is fenced (see
 ``p3_parity_matrix.MatrixPaths.FENCED_WINDOWS``) — and prints one table over all of it. First the
 component set and the wire set, through the declared port-renaming table, because two systems
 wired differently have nothing worth comparing numerically. Then **every** column of the result
-frame — the content of ``all_results.csv`` — since a difference the KPI layer happens to average
-away is still a difference. Then
+frame — the content of ``all_results.csv``, matched column by *name* — since a difference the KPI
+layer happens to average away is still a difference. The order the columns sit in is reported as a
+note and not as a difference: the two paths register the same outputs by different routes, and
+nothing downstream of a result frame addresses a column by position. Then
 ``all_kpis.json``, where KPI computation succeeds; a setup that crashes in that layer still
 receives a named verdict from the first two comparisons rather than an error, but its unavailable
 KPI stage fails the triple, so a new KPI regression cannot read green (R11.4 as amended
 2026-09-05).
 
-The comparison is **exact by default** (R11.2). Both runs happen in one process on one machine,
-where determinism is byte-exact, so the ``rel_tol = 1e-9`` of the permanent gate — which exists to
-absorb drift between machines — is not needed here. ``--rel-tol`` and ``--abs-tol`` exist so that a
-triple which turns out to need a tolerance can be measured rather than argued about, and the
+The comparison of *values* is **exact by default** (R11.2). Both runs happen in one process on
+one machine, where determinism is byte-exact, so the ``rel_tol = 1e-9`` of the permanent gate —
+which exists to absorb drift between machines — is not needed here. ``--rel-tol`` and
+``--abs-tol`` exist so that a triple which turns out to need a tolerance can be measured rather
+than argued about, and the
 report says so loudly when a non-zero tolerance is what made a triple pass: that is a finding to
 investigate, never a threshold to settle on.
 
@@ -255,6 +258,12 @@ class ParityChecker:
     def compare_results(self, expected: RunOutcome, actual: RunOutcome, verdict: TripleVerdict) -> None:
         """Makes the second comparison: every column of the result frame (R11.3, amended).
 
+        The comparison's own notes are carried onto the verdict whatever the verdict turns out to
+        be, because a note is a fact about the two frames rather than a reason to fail one. A
+        differing column *order* is the case that produces one: the two assembly paths register
+        the same outputs by different routes, and since every consumer of a result frame addresses
+        its columns by name, the table says so in the notes column and the triple still passes.
+
         Args:
             expected: The Python side.
             actual: The declarative side.
@@ -266,6 +275,7 @@ class ParityChecker:
             return
         translated = self.renaming.apply_to_results(expected.frame)
         comparison = ResultComparison.between(translated, actual.frame)
+        verdict.notes.extend(comparison.notes)
         if comparison.structural_problems:
             verdict.results = Verdict.FAILED
             verdict.notes.extend(comparison.structural_problems)

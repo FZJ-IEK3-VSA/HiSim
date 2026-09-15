@@ -12,10 +12,11 @@ a cell means.
 
 Three of these classes carry a rule rather than a format. :class:`Verdict` has four states rather
 than two, because "the two runs agree" and "there was nothing to compare" are different answers
-(R11.4). :class:`Tolerance` defaults to exact equality and marks any run that needed slack, because
-needing slack is a finding rather than a setting (R11.2). And :class:`ArtifactWriter` writes only
-for a failing triple, because forty passing triples' result frames are evidence for something
-nobody is going to look at.
+(R11.4). :class:`Tolerance` defaults to exact equality *of values* and marks any run that needed
+slack, because needing slack is a finding rather than a setting (R11.2); it says nothing about the
+order the compared columns or KPIs sit in, which the comparison reports as a note. And
+:class:`ArtifactWriter` writes only for a failing triple, because forty passing triples' result
+frames are evidence for something nobody is going to look at.
 """
 
 from __future__ import annotations
@@ -145,11 +146,11 @@ class CheckedTriple:
 class Tolerance:
     """The relative and absolute slack a run allows, and the fact that allowing any is a finding.
 
-    Exact equality is the default and the only setting that proves what the rig exists to prove
-    (R11.2). A tolerance is offered because a triple that needs one has to be *measured* — knowing
-    that a setup agrees to 1e-14 and not to 1e-16 is the beginning of an investigation — but a run
-    that used one is marked as such in every line of output it produces, so the finding cannot be
-    mistaken for a pass.
+    Exact equality of every compared value is the default and the only setting that proves what
+    the rig exists to prove (R11.2). A tolerance is offered because a triple that needs one has to
+    be *measured* — knowing that a setup agrees to 1e-14 and not to 1e-16 is the beginning of an
+    investigation — but a run that used one is marked as such in every line of output it produces,
+    so the finding cannot be mistaken for a pass.
     """
 
     def __init__(self, relative: float = 0.0, absolute: float = 0.0) -> None:

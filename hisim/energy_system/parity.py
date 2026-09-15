@@ -482,8 +482,16 @@ class ResultComparison:
     same numbers. The comparison reports the worst absolute and relative deviation together with
     the column and timestamp where it occurred, because a migration that changes results by 1e-9 in
     one column is a very different finding from one that changes them everywhere. Structural
-    problems — different columns, different row counts — are collected separately and make the
-    comparison fail regardless of the numeric tolerance.
+    problems — a column present on one side only, different row counts, different timestamps —
+    are collected separately and make the comparison fail regardless of the numeric tolerance.
+
+    Findings that are worth saying but do not make a comparison wrong go into :attr:`notes`
+    instead. The one such finding today is column *order*: the two frames carry the same columns
+    in a different sequence. Nothing downstream addresses a result column by position —
+    postprocessing, the KPI layer, the goldens and the probes all look columns up by name — so a
+    reordering is a fact about the frame, not a defect in it, and the comparison says so without
+    failing. Every consumer of the deviations still gets them, because the values are matched by
+    name and compared at exact equality either way.
     """
 
     #: Relative deviation below which two runs count as numerically identical. Identical configs on
@@ -507,6 +515,7 @@ class ResultComparison:
     worst_column: Optional[str] = None
     worst_timestamp: Optional[str] = None
     structural_problems: List[str] = field(default_factory=list)
+    notes: List[str] = field(default_factory=list)
 
     def is_identical(self, relative_tolerance: float = DEFAULT_RELATIVE_TOLERANCE) -> bool:
         """Reports whether the two result frames agree within the given relative tolerance.
@@ -534,6 +543,7 @@ class ResultComparison:
         if self.worst_column is not None:
             lines.append(f"worst column: '{self.worst_column}' at {self.worst_timestamp}")
         lines.extend(f"structural problem: {problem}" for problem in self.structural_problems)
+        lines.extend(f"note: {note}" for note in self.notes)
         return "\n".join(lines)
 
     @classmethod
@@ -541,8 +551,11 @@ class ResultComparison:
         """Compares two result frames column by column and returns the worst deviation.
 
         Columns are matched by name rather than by position, so a run that produces the same
-        outputs in a different order still compares numerically; the order difference itself is
-        reported as a structural problem, because it changes every result file downstream.
+        outputs in a different order compares exactly as a run that produces them in the reference
+        order does. The order difference itself is recorded as a note rather than as a structural
+        problem: the two assembly paths reach the same set of columns by different registration
+        routes, and no consumer of a result frame reads a column by position, so the sequence is
+        worth reporting and is not a difference in the results.
 
         Rows, in contrast, are matched by position, which is only meaningful while both frames
         carry the same index. Two frames of equal length whose timestamps differ are therefore
@@ -567,7 +580,7 @@ class ResultComparison:
         if extra:
             comparison.structural_problems.append(f"columns only in the actual results: {extra}")
         if not missing and not extra and expected_columns != actual_columns:
-            comparison.structural_problems.append("the result columns are in a different order")
+            comparison.notes.append("the result columns are in a different order")
         if len(expected.index) != len(actual.index):
             comparison.structural_problems.append(
                 f"different number of timesteps: {len(expected.index)} vs {len(actual.index)}"

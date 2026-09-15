@@ -150,8 +150,13 @@ def simulation_for_one_timestep(
     )
 
     # Set hplib
-    my_hplib_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=my_residence_information.max_thermal_building_demand_in_watt
+    my_hplib_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
+        "MoreAdvancedHeatPumpHPLib"
+    ).resolve(
+        SizingContext(
+            heating_load_in_watt=my_residence_information.max_thermal_building_demand_in_watt,
+            heating_reference_temperature_in_celsius=-7.0,
+        )
     )
 
     # Set Hot Water Storage
@@ -164,7 +169,9 @@ def simulation_for_one_timestep(
         simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
     )
     my_simple_hot_water_storage_config = my_simple_hot_water_storage_config.resolve(
-        SizingContext(maximal_thermal_power_in_watt=my_hplib_config.set_thermal_output_power_in_watt)
+        SizingContext(
+            maximal_thermal_power_in_watt=concrete(my_hplib_config.set_thermal_output_power_in_watt)
+        )
     )
 
     # Set Battery
@@ -179,7 +186,7 @@ def simulation_for_one_timestep(
 
     # Energy system sizes
     pv_power_in_watt = concrete(my_pv_config.power_in_watt)
-    hplib_thermal_power_in_watt = my_hplib_config.set_thermal_output_power_in_watt
+    hplib_thermal_power_in_watt = concrete(my_hplib_config.set_thermal_output_power_in_watt)
     simple_hot_water_storage_size_in_liter = (
         my_simple_hot_water_storage_config.volume_heating_water_storage_in_liter
     )

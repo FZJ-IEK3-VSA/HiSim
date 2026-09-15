@@ -21,6 +21,22 @@ INVESTMENT_COST_COEFFICIENT: float = 1513.74  # EUR per kW thermal power
 MAINTENANCE_COST_FRACTION: float = 0.025  # Fraction of investment cost per year
 
 
+def _eight_kilowatt_heat_pump_config() -> MoreAdvancedHeatPumpHPLibConfig:
+    """Builds the 8 kW air/water heat pump the postprocessing tests below run on.
+
+    The ``air_water`` preset leaves the machine's rated thermal power and the outside
+    temperature it is rated at to the building's sizing facts. These tests have no
+    building, so both are stated here; 8 kW is the size the tests have always used.
+
+    Returns:
+        MoreAdvancedHeatPumpHPLibConfig: A concrete 8 kW air/water configuration.
+    """
+    config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("MoreAdvancedHeatPumpHPLib")
+    config.set_thermal_output_power_in_watt = 8000.0
+    config.heating_reference_temperature_in_celsius = -7.0
+    return config
+
+
 @pytest.mark.base
 def test_heat_pump_hplib_new() -> None:
     """Test MoreAdvancedHeatPumpHPLib with a generic model in heating mode.
@@ -198,7 +214,7 @@ def test_get_heatpump_cycles_counts_transitions() -> None:
     element has no successor and must not raise.
     """
     simpars = SimulationParameters.one_day_only(2017, 60)
-    config = MoreAdvancedHeatPumpHPLibConfig.get_default_generic_advanced_hp_lib()
+    config = _eight_kilowatt_heat_pump_config()
     heatpump = MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=simpars)
 
     time_off_output = cp.ComponentOutput(
@@ -262,7 +278,7 @@ def _running_streak_counter(is_active_profile: list, seconds_per_timestep: int) 
 def test_get_component_kpi_entries_heating_and_cooling_hours_match_active_time(is_active_profile: list) -> None:
     """Heating/cooling hours must equal the actual time the heat pump was on."""
     simpars = SimulationParameters.one_day_only(2017, 60)
-    config = MoreAdvancedHeatPumpHPLibConfig.get_default_generic_advanced_hp_lib()
+    config = _eight_kilowatt_heat_pump_config()
     heatpump = MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=simpars)
 
     streak = _running_streak_counter(is_active_profile, simpars.seconds_per_timestep)
@@ -292,7 +308,7 @@ def test_get_heatpump_cycles_propagates_non_index_errors() -> None:
     being masked as a silently-wrong cycle count.
     """
     simpars = SimulationParameters.one_day_only(2017, 60)
-    config = MoreAdvancedHeatPumpHPLibConfig.get_default_generic_advanced_hp_lib()
+    config = _eight_kilowatt_heat_pump_config()
     heatpump = MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=simpars)
 
     time_off_output = cp.ComponentOutput(

@@ -93,7 +93,9 @@ class ConfigEnumSerializationCases:
             simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer("SimpleHotWaterStorage")
         ),
         "MoreAdvancedHeatPumpHPLibConfig": _air_water_heat_pump_config,
-        "SimpleHeatSourceConfig": simple_heat_source.SimpleHeatSourceConfig.get_default_config_const_power,
+        "SimpleHeatSourceConfig": lambda: (
+            simple_heat_source.SimpleHeatSourceConfig.preset_constant_thermal_power("HeatSourceConstPower")
+        ),
         "HeatDistributionConfig": lambda: (
             heat_distribution_system.HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").resolve(
                 SizingContext(

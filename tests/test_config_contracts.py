@@ -195,6 +195,7 @@ class PilotWireFormat:
         "GenericHeatPumpConfig": ("vitocal_300_a",),
         "AirConditionerConfig": ("samsung_ac120",),
         "SimpleAirConditionerConfig": ("standard",),
+        "SolarThermalSystemConfig": ("flat_plate",),
         "IdealizedHeaterConfig": ("standard",),
         "SimpleHeatSourceConfig": (
             "constant_thermal_power",
@@ -230,6 +231,7 @@ class PilotWireFormat:
         "GenericHeatPumpConfig": ("for_device",),
         "AirConditionerConfig": ("for_device", "for_building_load"),
         "SimpleAirConditionerConfig": (),
+        "SolarThermalSystemConfig": (),
         "IdealizedHeaterConfig": (),
         "SimpleHeatSourceConfig": (),
         "CarConfig": ("for_household",),
@@ -288,6 +290,7 @@ class PilotWireFormat:
         "GenericHeatPumpConfig": (),
         "AirConditionerConfig": (),
         "SimpleAirConditionerConfig": (),
+        "SolarThermalSystemConfig": (),
         "IdealizedHeaterConfig": (),
         "SimpleHeatSourceConfig": (),
     }
@@ -585,6 +588,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLibConfig
     from hisim.components.simple_heat_source import SimpleHeatSourceConfig
     from hisim.components.simple_water_storage import SimpleDHWStorageConfig, SimpleHotWaterStorageConfig
+    from hisim.components.solar_thermal_system import SolarThermalSystemConfig
     from hisim.components.weather import WeatherConfig
 
     by_name: Dict[str, Any] = {
@@ -610,6 +614,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "GenericHeatPumpConfig": GenericHeatPumpConfig,
         "AirConditionerConfig": AirConditionerConfig,
         "SimpleAirConditionerConfig": SimpleAirConditionerConfig,
+        "SolarThermalSystemConfig": SolarThermalSystemConfig,
         "IdealizedHeaterConfig": IdealizedHeaterConfig,
         "SimpleHeatSourceConfig": SimpleHeatSourceConfig,
         "CarConfig": CarConfig,

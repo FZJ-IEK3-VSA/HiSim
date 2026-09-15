@@ -35,7 +35,7 @@ def build_chp_system(
 ) -> _ChpTestSetup:
     """Build and wire a CHP system with fake control, mass-flow, and target inputs.
 
-    Constructs an ``advanced_fuel_cell.CHP`` from the default config with the
+    Constructs an ``advanced_fuel_cell.CHP`` from the hydrogen preset with the
     requested ``operating_mode`` and ``gas_type``, connects three fake
     ``ComponentOutput`` sources to its input channels, allocates a
     ``SingleTimeStepValues`` buffer, and assigns global indices. The returned
@@ -44,7 +44,7 @@ def build_chp_system(
     """
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
-    my_chp_system_config = advanced_fuel_cell.CHPConfig.get_default_config()
+    my_chp_system_config = advanced_fuel_cell.CHPConfig.preset_hydrogen("CHP")
     my_chp_system_config.operating_mode = operating_mode
     my_chp_system_config.gas_type = gas_type
 
@@ -347,7 +347,7 @@ def test_chp_kpi_entries_refuse_nan_instead_of_understating() -> None:
 
 
 def _build_config(p_el_max: float = 3_000.0, gas_type: str = "Hydrogen") -> advanced_fuel_cell.CHPConfig:
-    """Build the default CHP configuration, optionally at another rating or on another fuel.
+    """Build the hydrogen CHP configuration, optionally at another rating or on another fuel.
 
     The rating is a parameter because the capex tests below assert that the cost scales with it,
     and everything else about the machine is held fixed so that the rating is the only thing that
@@ -360,10 +360,10 @@ def _build_config(p_el_max: float = 3_000.0, gas_type: str = "Hydrogen") -> adva
         gas_type: the fuel the unit burns, which decides the load type and tariff of its opex.
 
     Returns:
-        CHPConfig: the default configuration at that rating and fuel, cost fields unset.
+        CHPConfig: the preset configuration at that rating and fuel, cost fields unset.
     """
     return dataclasses.replace(
-        advanced_fuel_cell.CHPConfig.get_default_config(), p_el_max=p_el_max, gas_type=gas_type
+        advanced_fuel_cell.CHPConfig.preset_hydrogen("CHP"), p_el_max=p_el_max, gas_type=gas_type
     )
 
 

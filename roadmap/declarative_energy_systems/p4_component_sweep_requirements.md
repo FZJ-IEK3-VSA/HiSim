@@ -133,6 +133,10 @@ every golden pair unchanged in both modes, `describe` output identical except th
 their defaults, `hisim energy-system schema` unchanged, and the line count of each touched
 configuration module reported before and after.
 
+Executed 2026-09-15: the fourteen touched modules lose 240 lines (13 589 → 13 349; the PV
+configuration alone 342 → 268), `ConfigBase` gains 47 for `MAIN_CLASS` and the one
+`get_main_classname`; twins, goldens (both modes, `one_week_60s`) and the schema unchanged.
+
 ### R2 — Gates that touch shared code `[proposed; survey A Gate 0, B Gate B-0, C D-19]`
 Own commits, before the batch that needs them, each golden-neutral:
 - R2.1 Facts added to `SizingContext`/`Size` — **executed 2026-09-11**, D-21 excepted: `set_heating_threshold_outside_temperature_in_celsius` (contributed by `HeatDistributionControllerConfig`), `roof_area_in_m2` (Building; value exists as `BuildingInformation.roof_area_in_m2`), `pv_peak_power_in_watt` (PV, `PVSystemConfig`'s first contribution), plus D-15's three carrier/fuel facts `energy_carrier`, `heating_value_of_fuel_in_kwh_per_liter` and `fuel_density_in_kg_per_m3` (contributed by `GenericBoilerConfig`, decided (b); its `__init__` derivation moved to `GenericBoilerConfig.fuel_constants`, `None` for district heating). Six facts, no reader yet: every one of them draws the "provides X, which no component reads" warning until the batch that consumes it lands, and no recorded twin moved. D-21's `heating_reference_temperature_in_celsius` (contributed by `WeatherConfig`, decided (c)) is **pending its own PR**: it needs a per-station DIN 12831 table, which is a data decision and not a vocabulary one. The `value_type=lt.LoadTypes` codec and the `Many` aggregator D-15 also names stay with the meter batch that needs them.

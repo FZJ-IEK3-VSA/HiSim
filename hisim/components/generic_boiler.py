@@ -70,15 +70,6 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.economics.facts import CostRelevance
 
-__authors__ = "Frank Burkrad, Maximilian Hillen, Markus Blasberg, Katharina Rieck, Kristina Dabrock"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = ""
-__version__ = ""
-__maintainer__ = "Katharina Rieck"
-__email__ = "maximilian.hillen@rwth-aachen.de"
-__status__ = ""
-
 
 @unique
 class BoilerType(str, Enum):
@@ -100,18 +91,13 @@ class BoilerType(str, Enum):
 class GenericBoilerConfig(ConfigBase):
     """Configuration of the GenericBoiler class.
 
-    Named default variants are the ``preset_*`` classmethods below (one per fuel), and the
-    power fields are sizable: a preset carries ``AUTO`` where
-    the value derives from the building, and ``.resolve(ctx)`` computes it. The former
-    ``get_default_*``/``get_scaled_*`` factory pairs are replaced by exactly that split —
-    the sizable preset resolves to what the scaled factory produced, the concrete
-    ``*_12kw`` presets are the former nominal defaults.
+    Named default variants are the ``preset_*`` classmethods below, one per fuel plus the
+    nominal catalogue devices. The power fields are sizable: a fuel preset leaves them ``AUTO``
+    and ``.resolve(ctx)`` scales them to the building, while a ``*_12kw`` preset pins both to
+    the rated device.
     """
 
-    @classmethod
-    def get_main_classname(cls):
-        """Return the full class name of the base class."""
-        return GenericBoiler.get_full_classname()
+    MAIN_CLASS = "hisim.components.generic_boiler.GenericBoiler"
 
     @staticmethod
     def scale_thermal_power(
@@ -173,7 +159,7 @@ class GenericBoilerConfig(ConfigBase):
         kilograms. It is derived at *build* time rather than inside the component, so a
         meter can read the same two numbers off the generator's configuration through the
         sizing facts instead of repeating them — a gas boiler beside an oil meter is what
-        the repetition used to produce (D-15).
+        the repetition used to produce.
 
         District heating is the one carrier that burns nothing: it has no heating value
         and no fuel density, and both are ``None`` rather than a stand-in number that
@@ -218,22 +204,54 @@ class GenericBoilerConfig(ConfigBase):
     subsidy_as_percentage_of_investment_costs: Optional[float] = None
     consumption_in_kilowatt_hour: float = 0.0
 
-    #: Sizing facts this config contributes: its resolved power band, for consumers that
-    #: size from this boiler (its controller), and its fuel — the carrier plus the two
-    #: constants derived from it — for the meter that accounts what it burns. With two
-    #: boilers in one scenario each is addressable as
-    #: "<its name>.maximal_thermal_power_in_watt" and a consumer must say which one it
-    #: means; assigned below the class.
-    SIZING_CONTRIBUTIONS: ClassVar[Tuple["FactContribution", ...]] = ()
+    @staticmethod
+    def sizing_facts(config: "GenericBoilerConfig", ctx: SizingContext) -> dict:
+        """Contributes the boiler's resolved power band and fuel for the components around it.
 
-    #: The named default boilers, one per fuel plus the nominal catalogue devices, are
-    #: declared below as ``preset_*`` classmethods (preset names are wire format: scenario
-    #: files reference them, so renames are breaking changes). The fuel presets are sizable
-    #: templates whose power fields stay ``AUTO`` for the resolver to scale to the building,
-    #: which is what the deleted ``get_scaled_*`` factories did; the ``*_12kw`` presets are
-    #: the former nominal defaults with both power fields pinned. Capex fields stay ``None``
-    #: throughout so postprocessing looks them up from the device database, exactly as the
-    #: factories did.
+        Runs after the boiler itself resolved, so the values are the final concrete numbers
+        whether they came from a law, a preset constant or an override.
+
+        The fuel half — the carrier and the two constants :meth:`fuel_constants` derives from it
+        and from the boiler type — is what the gas and fuel meters copy instead of repeating, so
+        a meter accounting this boiler's consumption cannot state a different fuel from the one
+        it burns. Both constants are ``None`` for district heating, which burns nothing.
+
+        Args:
+            config: this boiler configuration, fully resolved.
+            ctx: the sizing context; unused, every value is this config's own.
+
+        Returns:
+            dict: the five facts named in :attr:`SIZING_CONTRIBUTIONS`.
+        """
+        del ctx
+        heating_value_in_kwh_per_liter, density_in_kg_per_m3 = GenericBoilerConfig.fuel_constants(
+            config.energy_carrier, config.boiler_type
+        )
+        return {
+            "maximal_thermal_power_in_watt": concrete(config.maximal_thermal_power_in_watt),
+            "minimal_thermal_power_in_watt": concrete(config.minimal_thermal_power_in_watt),
+            "energy_carrier": config.energy_carrier,
+            "heating_value_of_fuel_in_kwh_per_liter": heating_value_in_kwh_per_liter,
+            "fuel_density_in_kg_per_m3": density_in_kg_per_m3,
+        }
+
+    #: Sizing facts this config contributes: its resolved power band, for consumers that size
+    #: from this boiler (its controller), and its fuel — the carrier plus the two constants
+    #: derived from it — for the meter that accounts what it burns. With two boilers in one
+    #: scenario each is addressable as "<its name>.maximal_thermal_power_in_watt" and a consumer
+    #: must say which one it means.
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
+        FactContribution(
+            facts=(
+                "maximal_thermal_power_in_watt",
+                "minimal_thermal_power_in_watt",
+                "energy_carrier",
+                "heating_value_of_fuel_in_kwh_per_liter",
+                "fuel_density_in_kg_per_m3",
+            ),
+            compute=sizing_facts,
+        ),
+    )
 
     @preset
     @classmethod
@@ -1072,12 +1090,14 @@ class GenericBoiler(Component):
 @dataclass_json
 @dataclass
 class GenericBoilerControllerConfig(ConfigBase):
-    """Boiler Controller Config Class."""
+    """Boiler Controller Config Class.
 
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return GenericBoilerController.get_full_classname()
+    The two control laws a burner can be run under are :meth:`preset_modulating` and
+    :meth:`preset_on_off`; the boiler's power band is not part of either, being copied from
+    the boiler this controller regulates.
+    """
+
+    MAIN_CLASS = "hisim.components.generic_boiler.GenericBoilerController"
 
     component_id: ComponentID
     #: Whether the controller modulates the burner continuously or switches it on and off.
@@ -1575,42 +1595,3 @@ class GenericBoilerController(Component):
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         return []
-
-
-def _boiler_sizing_facts(config: GenericBoilerConfig, ctx: SizingContext) -> dict:
-    """Contributes the boiler's resolved power band and fuel for connected consumers.
-
-    Computed after the boiler itself resolved, so the values are the final concrete
-    numbers whether they came from a law, a preset constant or a manual override.
-
-    The fuel half — the carrier and the two constants
-    :meth:`GenericBoilerConfig.fuel_constants` derives from it and from the boiler type —
-    is what the gas and fuel meters copy instead of repeating (D-15): a meter accounting
-    this boiler's consumption then cannot state a different fuel from the one it burns.
-    Both constants are ``None`` for district heating, which burns nothing.
-    """
-    del ctx
-    heating_value_in_kwh_per_liter, density_in_kg_per_m3 = GenericBoilerConfig.fuel_constants(
-        config.energy_carrier, config.boiler_type
-    )
-    return {
-        "maximal_thermal_power_in_watt": concrete(config.maximal_thermal_power_in_watt),
-        "minimal_thermal_power_in_watt": concrete(config.minimal_thermal_power_in_watt),
-        "energy_carrier": config.energy_carrier,
-        "heating_value_of_fuel_in_kwh_per_liter": heating_value_in_kwh_per_liter,
-        "fuel_density_in_kg_per_m3": density_in_kg_per_m3,
-    }
-
-
-GenericBoilerConfig.SIZING_CONTRIBUTIONS = (
-    FactContribution(
-        facts=(
-            "maximal_thermal_power_in_watt",
-            "minimal_thermal_power_in_watt",
-            "energy_carrier",
-            "heating_value_of_fuel_in_kwh_per_liter",
-            "fuel_density_in_kg_per_m3",
-        ),
-        compute=_boiler_sizing_facts,
-    ),
-)

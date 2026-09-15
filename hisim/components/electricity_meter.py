@@ -36,22 +36,20 @@ from hisim.postprocessing.cost_and_emission_computation.capex_computation import
 class ElectricityMeterConfig(ConfigBase):
     """Electricity Meter Config."""
 
-    @classmethod
-    def get_main_classname(cls):
-        """Return the fully qualified class name of the main component class."""
-        return ElectricityMeter.get_full_classname()
+    MAIN_CLASS = "hisim.components.electricity_meter.ElectricityMeter"
 
     component_id: ComponentID
-    #: CO2 footprint of investment in kg
-    device_co2_footprint_in_kg: Optional[float]
+    #: CO2 footprint of investment in kg. ``None`` lets postprocessing look the device up in
+    #: the cost database, which is what every meter in the repository does.
+    device_co2_footprint_in_kg: Optional[float] = None
     #: cost for investment in Euro
-    investment_costs_in_euro: Optional[float]
+    investment_costs_in_euro: Optional[float] = None
     #: lifetime in years
-    lifetime_in_years: Optional[float]
+    lifetime_in_years: Optional[float] = None
     # maintenance cost in euro per year
-    maintenance_costs_in_euro_per_year: Optional[float]
+    maintenance_costs_in_euro_per_year: Optional[float] = None
     # subsidies as percentage of investment costs
-    subsidy_as_percentage_of_investment_costs: Optional[float]
+    subsidy_as_percentage_of_investment_costs: Optional[float] = None
 
     @preset
     @classmethod
@@ -60,17 +58,15 @@ class ElectricityMeterConfig(ConfigBase):
 
         A meter has no technology, no rating and no operating mode — it sums what its
         participants produce and consume — so there is exactly one defensible configuration of
-        it. Its four cost fields stay unset so that postprocessing looks the numbers up from the
-        device database rather than freezing them into the wire format.
+        it, and the preset adds nothing to the field defaults but the component's name.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            ElectricityMeterConfig: The preset configuration.
         """
-        return cls(
-            component_id=ComponentID(name=name),
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-        )
+        return cls(component_id=ComponentID(name=name))
 
 
 class ElectricityMeter(DynamicComponent):

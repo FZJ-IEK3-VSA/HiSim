@@ -19,6 +19,7 @@ from __future__ import annotations
 import copy
 import dataclasses as dc
 import enum
+import importlib
 import sys
 import types
 import typing
@@ -288,6 +289,13 @@ class ConfigBase:
         check_builder_declarations(cls, _field_names_under_construction(cls))
         _complete_sizable_enum_codecs(cls)
 
+    #: Dotted import path of the component class this configuration configures, for example
+    #: ``"hisim.components.generic_pv_system.PVSystem"``. Declaring it is how a configuration
+    #: class says what it is a configuration *of*; :py:meth:`get_main_classname` resolves it.
+    #: Empty here and on every class that still writes its own ``get_main_classname``, which
+    #: keeps working: the override wins and the empty default is never read.
+    MAIN_CLASS: ClassVar[str] = ""
+
     #: The sizing facts this config class contributes to the scenario-wide fact pool
     #: (resolved engine-side before components are constructed). Empty for the vast majority of
     #: config classes; a class that *is* a fact source — the building, a boiler whose
@@ -344,9 +352,42 @@ class ConfigBase:
         self.component_id = component_id
 
     @classmethod
-    def get_main_classname(cls):
-        """Returns the fully qualified class name for the class that is getting configured. Used for Json."""
-        raise NotImplementedError("Missing a definition of the ")
+    def get_main_classname(cls) -> str:
+        """Returns the fully qualified name of the component class this configuration configures.
+
+        Serialized scenarios and postprocessing spell a component by this string, so it has to be
+        the one the rest of HiSim uses. It is derived from :py:attr:`MAIN_CLASS`: the named module
+        is imported at call time (a component module imports its configuration, so a module-level
+        import here would close the cycle) and the resolved class supplies its own module and
+        name. Resolving instead of echoing the path is what lets a component re-exported under a
+        shorter package path (``PVSystem``, ``Weather``) come out under the path HiSim uses.
+
+        Example: ``PVSystemConfig.MAIN_CLASS`` is ``"hisim.components.generic_pv_system.PVSystem"``
+        and this returns that same string.
+
+        Returns:
+            str: ``<module of the component class>.<name of the component class>``.
+
+        Raises:
+            NotImplementedError: If the class neither declares ``MAIN_CLASS`` nor overrides this
+                method; the message names the class.
+            ValueError: If ``MAIN_CLASS`` is not a dotted path and so names no module.
+        """
+        if not cls.MAIN_CLASS:
+            raise NotImplementedError(
+                f"{cls.__name__} does not say which component it configures. Declare "
+                f"MAIN_CLASS = \"<dotted path of the component class>\" on {cls.__name__}, "
+                "or override get_main_classname()."
+            )
+        module_name, _, class_name = cls.MAIN_CLASS.rpartition(".")
+        if not module_name:
+            raise ValueError(
+                f"{cls.__name__}.MAIN_CLASS is {cls.MAIN_CLASS!r}, which names no module. It is "
+                "the dotted path of the component class, for example "
+                "\"hisim.components.generic_pv_system.PVSystem\"."
+            )
+        component_class = getattr(importlib.import_module(module_name), class_name)
+        return f"{component_class.__module__}.{component_class.__name__}"
 
     @classmethod
     def get_config_classname(cls):

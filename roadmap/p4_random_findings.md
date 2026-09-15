@@ -507,6 +507,83 @@ why the golden check reproduced the failure correctly while the regenerator quie
 *A second occurrence on a different branch, three days apart, on the same script. The fix is one line of
 `env` in the subprocess call.*
 
+### F-10 — a rounded product renders as if only the fact were rounded **[verified]**
+
+Found on 2026-09-13 while converting the battery (B2). Its inverter law is
+`(Size.PV_PEAK_POWER_IN_WATT * 0.5).rounded(2)`, and `hisim energy-system describe` prints it as
+
+```
+law: 0.5 * Size.PV_PEAK_POWER_IN_WATT.rounded(2)
+```
+
+which reads as `0.5 * round(fact, 2)`. The rounding applies to the product. `_RoundedLaw.describe`
+(`hisim/config/laws.py:329`) appends `.rounded(n)` to whatever its inner law renders, and
+`_ScaledLaw.describe` (`:284`) renders `factor * inner` without brackets, so any compound inner
+law loses its grouping in the suffix form. Nothing before the battery had a compound law under a
+rounding: `HEATING_LOAD_IN_WATT.rounded(2)` and the HDS controller's laws round a bare term.
+
+The string is not only CLI output. `describe()` is what a `ConfigSizingError` quotes
+(`hisim/config/sizing.py`, the `<- {effective_law.describe()}` in the resolution loop), so a sizing
+failure on such a field would name a law that differs from the one that ran.
+
+Fix: bracket a compound inner in `_RoundedLaw.describe` — `(0.5 * Size.PV_PEAK_POWER_IN_WATT).rounded(2)`
+— or have `_ScaledLaw` bracket itself whenever it is not the outermost law. One line either way; a
+test over the battery's two laws pins the rendering. Not fixed on the B2 branches, which are
+conversions; belongs with the next kernel touch.
+
+### F-11 — the P2 mockups still name presets that the P4 decisions renamed, so their pinned errors pass for the wrong reason **[verified]**
+
+Found on 2026-09-13 after the PV and battery conversions (B2). `roadmap/declarative_energy_systems/energy_system_mockup.yaml`
+writes `preset: standard` for `pv_south` and `pv_east` (lines 157, 163) and `preset: sized_to_pv`
+for the battery (line 222). D-13 minted the PV preset `rooftop` and D-14 the battery preset
+`standard`; neither mockup line was updated when the decisions were taken.
+
+`tests/test_energy_system_classes.py::ExpectedFailures.BY_MOCKUP` pins all three entries as `EF-13`
+("the configuration class declares no such preset"). Before B2 they failed with `EF-13` because the
+classes had **no presets at all**; after B2 they fail with `EF-13` because the classes have presets
+**under different names**. Same code, different cause, and the test cannot tell the two apart — so
+UC-P4.4's "the pinned error set shrinks to empty as B2–B5 land" will not happen for these three
+entries however many classes convert. The PV entry's comment is also stale: it says
+`power_in_watt AUTO <- building.conditioned_floor_area_in_m2`, and the law reads `roof_area_in_m2`.
+
+Fix: rename the three preset lines in the mockup and the comment on line 157, then remove the three
+entries from `BY_MOCKUP` and watch the test stay green. The mockup lives under `roadmap/`, which the
+B2 conversion briefs kept out of scope; a doc-only commit at the top of the B2 stack is the natural
+place, or the first B3 PR.
+
+### F-12 — an optional sized field cannot receive a `None` fact **[verified]**
+
+Found on 2026-09-13 converting the fuel meter (B2). `FuelMeterConfig.heating_value_of_fuel_in_kwh_per_liter`
+and `fuel_density_in_kg_per_m3` are `Sizable[Optional[float]]` with `sized_field(optional=True)` and copy laws
+over the boiler's facts. `GenericBoilerConfig.fuel_constants` returns `None` for both when the carrier is
+district heating, and the boiler's contribution passes that `None` on. The engine then refuses:
+`engine.py:_bind_one` raises `"'<fact>' provided as null by '<provider>' (feature off)"`, and in Python mode a
+`SizingContext` field left `None` makes `_FactTerm.evaluate` raise `"the SizingContext carries no <fact>"`.
+
+`optional=True` today means only that a `None` **written on the field** counts as resolved. It does not let a
+law legitimately produce nothing. So the district-heating setup pins the two `None`s itself instead of
+resolving them, and the moment `generic_district_heating` is converted and contributes the facts, its fuel
+meter's laws will hit the refusal — even though every declaration involved says `None` is a legal value.
+
+Fix, before the district-heating conversion (B4): an optional sized field whose fact is `None` resolves to
+`None`. One rule in `_bind_one` (and the Python-mode `evaluate`), keyed on the field's `optional` flag, so a
+non-optional field keeps refusing a null fact as it does today.
+
+### F-13 — `dataclasses.replace` drops a preset's provenance, and the twin loses its `preset:` line **[verified]**
+
+Found on 2026-09-13 converting the fuel meter (B2). A preset builder stamps the returned instance with
+`ConfigBuilder.PROVENANCE_ATTRIBUTE`, which is what the recorder reads to write `preset: standard` and only
+the fields that differ. `dataclasses.replace` builds a new instance and copies fields, not attributes: the
+stamp is gone, and the recorder writes the whole block as literals with no `preset:` line — a silent
+regression of exactly what the conversions exist to produce. `resolve_config` carries the stamp across;
+`replace` does not.
+
+Plain attribute assignment on the preset instance before `.resolve(...)` keeps the stamp, and that is the
+idiom every converted setup now uses (the PV's `azimuth`/`tilt`, the fuel meter's two constants). The
+survey's conversion pattern should say so, or a `replace`-shaped helper should carry the stamp; until one
+of the two exists this is an easy way to lose a preset from a twin without any test noticing, since the
+twin still loads and runs identically.
+
 ### F-14 — the recorder had the provenance to write `AUTO` and wrote the number instead, so no twin could be reused **[verified, decided]**
 
 Found on 2026-09-14 while reviewing the battery conversion (#740). Every recorded twin pins the

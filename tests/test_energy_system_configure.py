@@ -644,7 +644,7 @@ def test_a_preset_replacing_a_law_sizes_the_file_by_that_law_and_not_the_class_d
     """
     hydrogen = Systems.configure(
         """  chp:
-    class: hisim.components.generic_chp.chp.SimpleCHP
+    class: hisim.components.generic_chp.SimpleCHP
     preset: hydrogen
     config:
       p_th: 1000.0
@@ -652,7 +652,7 @@ def test_a_preset_replacing_a_law_sizes_the_file_by_that_law_and_not_the_class_d
     ).config_of("chp")
     gas = Systems.configure(
         """  chp:
-    class: hisim.components.generic_chp.chp.SimpleCHP
+    class: hisim.components.generic_chp.SimpleCHP
     preset: gas
     config:
       p_th: 1000.0

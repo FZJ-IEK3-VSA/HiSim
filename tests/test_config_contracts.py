@@ -163,7 +163,10 @@ class PilotWireFormat:
     what a stored scenario means.
     """
 
-    #: Config class name → its preset names in declaration order, canonical first.
+    #: Config class name → its preset names in declaration order, canonical first. Two
+    #: different classes are both called ``CHPConfig`` -- the non-modulating generic CHP and
+    #: the modulating fuel cell -- so those two are keyed by module and class together; every
+    #: other name is unique in the repository and stays bare.
     PRESET_NAMES: Dict[str, Tuple[str, ...]] = {
         "GenericBoilerConfig": (
             "condensing_gas",
@@ -196,6 +199,8 @@ class PilotWireFormat:
         "AirConditionerConfig": ("samsung_ac120",),
         "SimpleAirConditionerConfig": ("standard",),
         "SolarThermalSystemConfig": ("flat_plate",),
+        "generic_chp.CHPConfig": ("gas", "hydrogen"),
+        "advanced_fuel_cell.CHPConfig": ("hydrogen",),
         "IdealizedHeaterConfig": ("standard",),
         "SimpleHeatSourceConfig": (
             "constant_thermal_power",
@@ -232,6 +237,8 @@ class PilotWireFormat:
         "AirConditionerConfig": ("for_device", "for_building_load"),
         "SimpleAirConditionerConfig": (),
         "SolarThermalSystemConfig": (),
+        "generic_chp.CHPConfig": (),
+        "advanced_fuel_cell.CHPConfig": (),
         "IdealizedHeaterConfig": (),
         "SimpleHeatSourceConfig": (),
         "CarConfig": ("for_household",),
@@ -291,6 +298,8 @@ class PilotWireFormat:
         "AirConditionerConfig": (),
         "SimpleAirConditionerConfig": (),
         "SolarThermalSystemConfig": (),
+        "generic_chp.CHPConfig": (),
+        "advanced_fuel_cell.CHPConfig": (),
         "IdealizedHeaterConfig": (),
         "SimpleHeatSourceConfig": (),
     }
@@ -587,6 +596,8 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     from hisim.components.idealized_electric_heater import IdealizedHeaterConfig
     from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLibConfig
     from hisim.components.simple_heat_source import SimpleHeatSourceConfig
+    from hisim.components.advanced_fuel_cell import CHPConfig as FuelCellCHPConfig
+    from hisim.components.generic_chp.chp import CHPConfig as GenericCHPConfig
     from hisim.components.simple_water_storage import SimpleDHWStorageConfig, SimpleHotWaterStorageConfig
     from hisim.components.solar_thermal_system import SolarThermalSystemConfig
     from hisim.components.weather import WeatherConfig
@@ -615,6 +626,8 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "AirConditionerConfig": AirConditionerConfig,
         "SimpleAirConditionerConfig": SimpleAirConditionerConfig,
         "SolarThermalSystemConfig": SolarThermalSystemConfig,
+        "generic_chp.CHPConfig": GenericCHPConfig,
+        "advanced_fuel_cell.CHPConfig": FuelCellCHPConfig,
         "IdealizedHeaterConfig": IdealizedHeaterConfig,
         "SimpleHeatSourceConfig": SimpleHeatSourceConfig,
         "CarConfig": CarConfig,

@@ -127,6 +127,7 @@
         "class": {
           "enum": [
             "hisim.components.advanced_battery_bslib.Battery",
+            "hisim.components.advanced_fuel_cell.CHP",
             "hisim.components.air_conditioner.AirConditioner",
             "hisim.components.building.Building",
             "hisim.components.building.building.Building",
@@ -137,6 +138,7 @@
             "hisim.components.generic_boiler.GenericBoiler",
             "hisim.components.generic_boiler.GenericBoilerController",
             "hisim.components.generic_car.Car",
+            "hisim.components.generic_chp.SimpleCHP",
             "hisim.components.generic_district_heating.DistrictHeating",
             "hisim.components.generic_electric_heating.ElectricHeating",
             "hisim.components.generic_heat_pump.GenericHeatPump",
@@ -297,6 +299,141 @@
                   "enum": [
                     "pv_peak_power_in_watt"
                   ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.advanced_fuel_cell.CHP"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "hydrogen"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "min_operation_time": {
+                    "type": "number"
+                  },
+                  "min_idle_time": {
+                    "type": "number"
+                  },
+                  "gas_type": {
+                    "type": "string"
+                  },
+                  "operating_mode": {
+                    "type": "string"
+                  },
+                  "is_modulating": {
+                    "type": "boolean"
+                  },
+                  "p_el_min": {
+                    "type": "number"
+                  },
+                  "p_th_min": {
+                    "type": "number"
+                  },
+                  "eff_el_min": {
+                    "type": "number"
+                  },
+                  "eff_th_min": {
+                    "type": "number"
+                  },
+                  "mass_flow_max": {
+                    "type": "number"
+                  },
+                  "p_el_max": {
+                    "type": "number"
+                  },
+                  "p_th_max": {
+                    "type": "number"
+                  },
+                  "eff_el_max": {
+                    "type": "number"
+                  },
+                  "eff_th_max": {
+                    "type": "number"
+                  },
+                  "temperature_max": {
+                    "type": "number"
+                  },
+                  "delta_temperature": {
+                    "type": "number"
+                  },
+                  "device_co2_footprint_in_kg": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "investment_costs_in_euro": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lifetime_in_years": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maintenance_costs_in_euro_per_year": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "subsidy_as_percentage_of_investment_costs": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
                 }
               }
             }
@@ -1557,6 +1694,97 @@
                   "enum": [
                     "occupancy_identity"
                   ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.generic_chp.SimpleCHP"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "gas",
+                  "hydrogen"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "fuel_type": {
+                    "enum": [
+                      "ANY",
+                      "ELECTRICITY",
+                      "IRRADIANCE",
+                      "SPEED",
+                      "HEATING",
+                      "COOLING",
+                      "TEMPERATURE",
+                      "PRESSURE",
+                      "TIME",
+                      "PRICE",
+                      "GAS",
+                      "AIR",
+                      "GREEN_HYDROGEN",
+                      "OXYGEN",
+                      "WATER",
+                      "WARM_WATER",
+                      "DIESEL",
+                      "OIL",
+                      "PELLETS",
+                      "WOOD_CHIPS",
+                      "DISTRICTHEATING",
+                      "ON_OFF",
+                      "ACTIVATION"
+                    ]
+                  },
+                  "p_th": {
+                    "type": "number"
+                  },
+                  "source_weight": {
+                    "type": "integer"
+                  },
+                  "p_el": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "p_fuel": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
                 }
               }
             }

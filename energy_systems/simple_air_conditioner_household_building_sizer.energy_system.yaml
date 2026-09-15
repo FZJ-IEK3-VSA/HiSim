@@ -24,10 +24,7 @@ components:
       predictive_control: false
   SimpleAirConditioner:
     class: hisim.components.simple_air_conditioner.SimpleAirConditioner
-    config:
-      nominal_cooling_power_w: 2000.0
-      eta_carnot: 0.3
-      temperature_epsilon_k: 0.01
+    preset: standard
     inputs:
       - SimpleAirConditionerController
       - Building

@@ -95,24 +95,7 @@ components:
         weight: 999
   SolarThermalSystem:
     class: hisim.components.solar_thermal_system.SolarThermalSystem
-    config:
-      coordinates:
-        latitude_in_degrees: 50.78
-        longitude_in_degrees: 6.08
-      azimuth: 180.0
-      tilt: 30.0
-      eta_0: 0.78
-      a_1_w_m2_k: 3.2
-      a_2_w_m2_k: 0.015
-      old_solar_pump: false
-      device_co2_footprint_in_kg: null
-      investment_costs_in_euro: null
-      lifetime_in_years: null
-      maintenance_costs_in_euro_per_year: null
-      subsidy_as_percentage_of_investment_costs: null
-      source_weight: 1
-      area_m2: 4.0
-      delta_temperature_n_k: 10.0
+    preset: flat_plate
     inputs:
       - Weather
       - SolarThermalSystemController

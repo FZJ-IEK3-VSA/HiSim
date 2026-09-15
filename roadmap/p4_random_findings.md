@@ -611,8 +611,8 @@ gives each of its two sides a private, empty cache directory and deletes the who
 start of every triple (`p3_parity_check.py:159`, `p3_parity_runs.py:324`), which is right for the question
 it asks: a shared cache would let one side answer from the other side's result. The consequence is that
 every setup whose occupancy comes from `USE_LOCAL_LPG` must actually run the LoadProfileGenerator binary,
-twice, on every invocation. On a machine where that binary fails — here it produces no results and no log
-at all — no such setup can be measured, and the rig reports a parity failure rather than an unrunnable
+twice, on every invocation. On a machine where that binary fails — here the root filesystem was 98 % full and the binary died
+with `System.IO.IOException: No space left on device`, leaving no results and no log — no such setup can be measured, and the rig reports a parity failure rather than an unrunnable
 environment: three identical `FAIL` rows whose note is `the python run did not finish`. The golden gate
 has no such problem, since it uses the normal cache directory and a seeded entry answers both modes.
 

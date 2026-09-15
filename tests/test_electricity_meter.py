@@ -81,7 +81,7 @@ def _build_system(
     # Build Fake Heater
     my_idealized_electric_heater = idealized_electric_heater.IdealizedElectricHeater(
         my_simulation_parameters=my_simulation_parameters,
-        config=idealized_electric_heater.IdealizedHeaterConfig.get_default_config(),
+        config=idealized_electric_heater.IdealizedHeaterConfig.preset_standard("IdealizedHeater"),
     )
 
     # =========================================================================================================================================================

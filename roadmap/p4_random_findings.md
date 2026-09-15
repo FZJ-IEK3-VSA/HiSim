@@ -1,6 +1,6 @@
 # P4 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-15 (12 findings)
+**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-15 (13 findings)
 **Context:** things that surfaced while working through
 `roadmap/declarative_energy_systems/p4_component_sweep_requirements.md` — the component sweep, decisions
 D-1 … D-32 — and were **not** what the work set out to do. Kept separately so the requirements stay about
@@ -671,3 +671,15 @@ built value is a `SizingLaw` and, if it is, print that law's `describe()` beside
 alone here because it changes a shared introspection surface rather than the class under
 conversion, and because the number of classes with per-preset laws is still three.
 
+### F-19 — a `dataclasses_json` field alias is invisible to `describe`, the schema and the energy-system file **[reported]**
+
+Found on 2026-09-15 while converting `NightSetbackConfig` (B5). Its two hour fields carry
+`dc_json_config(field_name="night_start_hour")` / `"night_end_hour"`, so `to_dict` and the legacy JSON path
+spell them by the alias, while `describe_config`, the v3 schema and therefore any `config:` block in an
+energy-system file spell them by the Python attribute, `night_start_time_in_hours` / `night_end_time_in_hours`:
+`describe_config` reads `dataclasses.fields()` and ignores the `dataclasses_json` metadata. The class had no
+preset before, so it had no schema presence and the two spellings never met; now they do. No twin carries the
+controller, so nothing is wrong today. Two honest ways out: drop the alias (the legacy JSON spelling is the only
+thing it serves, and D-16's sweep already retired the repository's other aliases with the RSOC controller), or
+teach the codec the alias. The first is the smaller change and the one the wire-format rule favours: one name
+per field.

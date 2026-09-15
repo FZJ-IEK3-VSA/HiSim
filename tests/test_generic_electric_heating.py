@@ -43,9 +43,9 @@ def _make_electric_heating() -> ElectricHeating:
     my_simulation_parameters = SimulationParameters.one_day_only(
         year=2021, seconds_per_timestep=_SECONDS_PER_TIMESTEP
     )
-    config = ElectricHeatingConfig.get_default_electric_heating_config(
-        with_domestic_hot_water_preparation=True
-    )
+    config = ElectricHeatingConfig.preset_resistive("ElectricHeating")
+    config.with_domestic_hot_water_preparation = True
+    config.maximum_electric_power_w = 40000.0
     return ElectricHeating(
         my_simulation_parameters=my_simulation_parameters,
         config=config,
@@ -181,7 +181,8 @@ def test_electric_heating_display_config_default_instances_are_isolated() -> Non
     my_simulation_parameters = SimulationParameters.one_day_only(
         year=2021, seconds_per_timestep=_SECONDS_PER_TIMESTEP
     )
-    config = ElectricHeatingConfig.get_default_electric_heating_config()
+    config = ElectricHeatingConfig.preset_resistive("ElectricHeating")
+    config.maximum_electric_power_w = 40000.0
 
     first = ElectricHeating(
         my_simulation_parameters=my_simulation_parameters,

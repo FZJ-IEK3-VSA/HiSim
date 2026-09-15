@@ -125,12 +125,20 @@ class InterchangeableProviders:
 
     #: Fact name → the config classes sanctioned to declare it. The heating-generator
     #: family shares its power band because exactly one of its members is present in a
-    #: scenario and every consumer of the band is indifferent to which. Today only the
-    #: boiler family is converted; the heat pump, electric and district heating generators
-    #: join this entry as they are converted.
+    #: scenario and every consumer of the band is indifferent to which. The fuel facts are
+    #: shared for the same reason one step further on: the meter accounts whatever the one
+    #: generator delivers, be that a burnt fuel or heat off a network.
     ALLOWED: Dict[str, Set[str]] = {
-        "maximal_thermal_power_in_watt": {"GenericBoilerConfig", "MoreAdvancedHeatPumpHPLibConfig"},
+        "maximal_thermal_power_in_watt": {
+            "GenericBoilerConfig",
+            "MoreAdvancedHeatPumpHPLibConfig",
+            "ElectricHeatingConfig",
+            "DistrictHeatingConfig",
+        },
         "minimal_thermal_power_in_watt": {"GenericBoilerConfig"},
+        "energy_carrier": {"GenericBoilerConfig", "DistrictHeatingConfig"},
+        "heating_value_of_fuel_in_kwh_per_liter": {"GenericBoilerConfig", "DistrictHeatingConfig"},
+        "fuel_density_in_kg_per_m3": {"GenericBoilerConfig", "DistrictHeatingConfig"},
     }
 
 
@@ -170,6 +178,8 @@ class PilotWireFormat:
         "SimpleDHWStorageConfig": ("standard",),
         "SimpleHotWaterStorageConfig": ("buffer",),
         "MoreAdvancedHeatPumpHPLibConfig": ("air_water",),
+        "ElectricHeatingConfig": ("resistive",),
+        "DistrictHeatingConfig": ("standard",),
         "CarConfig": (),
     }
 
@@ -194,6 +204,8 @@ class PilotWireFormat:
         "SimpleDHWStorageConfig": (),
         "SimpleHotWaterStorageConfig": (),
         "MoreAdvancedHeatPumpHPLibConfig": (),
+        "ElectricHeatingConfig": (),
+        "DistrictHeatingConfig": (),
         "CarConfig": ("for_household",),
     }
 
@@ -230,6 +242,13 @@ class PilotWireFormat:
         ),
         "PVSystemConfig": ("pv_peak_power_in_watt",),
         "MoreAdvancedHeatPumpHPLibConfig": ("maximal_thermal_power_in_watt",),
+        "ElectricHeatingConfig": ("maximal_thermal_power_in_watt",),
+        "DistrictHeatingConfig": (
+            "maximal_thermal_power_in_watt",
+            "energy_carrier",
+            "heating_value_of_fuel_in_kwh_per_liter",
+            "fuel_density_in_kg_per_m3",
+        ),
         "BatteryConfig": (),
         "GasMeterConfig": (),
         "FuelMeterConfig": (),
@@ -323,27 +342,31 @@ def test_no_two_classes_declare_the_same_fact_unless_they_are_interchangeable(sc
 
 @pytest.mark.base
 def test_the_batch_one_facts_have_exactly_the_provider_they_were_added_for(scan):
-    """Each fact R2.1 added is declared by one class, and by that class.
+    """Each fact R2.1 added is declared by the generator it was added for, and by no one else.
 
     Failure mode caught: a fact landing on the wrong config — the roof area on the PV rather
     than on the building, say — which binds silently today (nothing reads it yet) and becomes
     a wrong number or an ambiguity only once the batch that reads it lands.
+
+    The three fuel facts name two classes because a house's heat comes from one generator and
+    the meter accounts whatever that generator delivers: a burnt fuel from the boiler, or heat
+    off a network from the district-heating connection, which has no fuel and says so.
     """
     expected = {
-        "set_heating_threshold_outside_temperature_in_celsius": "HeatDistributionControllerConfig",
-        "roof_area_in_m2": "BuildingConfig",
-        "pv_peak_power_in_watt": "PVSystemConfig",
-        "energy_carrier": "GenericBoilerConfig",
-        "heating_value_of_fuel_in_kwh_per_liter": "GenericBoilerConfig",
-        "fuel_density_in_kg_per_m3": "GenericBoilerConfig",
+        "set_heating_threshold_outside_temperature_in_celsius": {"HeatDistributionControllerConfig"},
+        "roof_area_in_m2": {"BuildingConfig"},
+        "pv_peak_power_in_watt": {"PVSystemConfig"},
+        "energy_carrier": {"GenericBoilerConfig", "DistrictHeatingConfig"},
+        "heating_value_of_fuel_in_kwh_per_liter": {"GenericBoilerConfig", "DistrictHeatingConfig"},
+        "fuel_density_in_kg_per_m3": {"GenericBoilerConfig", "DistrictHeatingConfig"},
     }
     declarers: Dict[str, Set[str]] = {}
     for config_class in scan[0]:
         for contribution in getattr(config_class, FactContribution.CLASS_ATTRIBUTE, ()):
             for fact in contribution.facts:
                 declarers.setdefault(fact, set()).add(config_class.__name__)
-    for fact, provider in expected.items():
-        assert declarers.get(fact) == {provider}, f"'{fact}' is declared by {sorted(declarers.get(fact) or ())}"
+    for fact, providers in expected.items():
+        assert declarers.get(fact) == providers, f"'{fact}' is declared by {sorted(declarers.get(fact) or ())}"
 
 
 @pytest.mark.base
@@ -509,6 +532,8 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     from hisim.components.heating_meter import HeatingMeterConfig
     from hisim.components.generic_boiler import GenericBoilerConfig, GenericBoilerControllerConfig
     from hisim.components.generic_car import CarConfig
+    from hisim.components.generic_district_heating import DistrictHeatingConfig
+    from hisim.components.generic_electric_heating import ElectricHeatingConfig
     from hisim.components.heat_distribution_system import (
         HeatDistributionConfig,
         HeatDistributionControllerConfig,
@@ -537,6 +562,8 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "SimpleDHWStorageConfig": SimpleDHWStorageConfig,
         "SimpleHotWaterStorageConfig": SimpleHotWaterStorageConfig,
         "MoreAdvancedHeatPumpHPLibConfig": MoreAdvancedHeatPumpHPLibConfig,
+        "ElectricHeatingConfig": ElectricHeatingConfig,
+        "DistrictHeatingConfig": DistrictHeatingConfig,
         "CarConfig": CarConfig,
     }
     for class_name, expected in PilotWireFormat.PRESET_NAMES.items():

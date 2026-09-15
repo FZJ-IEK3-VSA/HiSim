@@ -118,7 +118,7 @@ def test_lifecycle_cost_engine_runs_in_shadow_mode() -> None:
     )
     my_idealized_electric_heater = idealized_electric_heater.IdealizedElectricHeater(
         my_simulation_parameters=my_simulation_parameters,
-        config=idealized_electric_heater.IdealizedHeaterConfig.get_default_config(),
+        config=idealized_electric_heater.IdealizedHeaterConfig.preset_standard("IdealizedHeater"),
     )
 
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)

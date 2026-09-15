@@ -2,56 +2,65 @@
 from __future__ import annotations
 
 # Owned
-from typing import Optional, List
+from typing import List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
 import hisim.component as cp
 from hisim.component import OpexCostDataClass, CapexCostDataClass
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
 from hisim.economics.facts import CostRelevance
 
-__authors__ = "Katharina Rieck"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = ""
-__version__ = ""
-__maintainer__ = "Katharina Rieck"
-__email__ = "k.rieck@fz-juelich.de"
-__status__ = ""
-
 
 @dataclass_json
 @dataclass
 class IdealizedHeaterConfig(ConfigBase):
-    """Configuration of the Idealized Heater."""
+    """Configuration of the Idealized Heater class.
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the base class."""
-        return IdealizedElectricHeater.get_full_classname()  # type: ignore[no-any-return]
+    A heater with no machine behind it: it delivers exactly the thermal power the building
+    asks for, every timestep, with no capacity limit and no losses. It exists to hold a
+    building's indoor temperature at a setpoint so that the building's own heating demand can
+    be measured, which is why it has no size, no efficiency and no cost.
+
+    The named default is :meth:`preset_standard`; the two setpoints are the whole
+    configuration::
+
+        IdealizedHeaterConfig.preset_standard("IdealizedHeater")
+
+    The two setpoints are deliberately not copied from the building's own
+    ``set_heating_temperature_in_celsius`` / ``set_cooling_temperature_in_celsius``: this band
+    is the narrower one (19.5/23.5 against the building's 20/25), so making the heater follow
+    the building would change every result this component appears in.
+    """
+
+    MAIN_CLASS = "hisim.components.idealized_electric_heater.IdealizedElectricHeater"
 
     component_id: ComponentID
-    set_heating_temperature_for_building_in_celsius: float
-    set_cooling_temperature_for_building_in_celsius: float
+    #: Indoor temperature below which the heater delivers heat.
+    set_heating_temperature_for_building_in_celsius: float = 19.5
+    #: Indoor temperature above which the heater removes heat.
+    set_cooling_temperature_for_building_in_celsius: float = 23.5
 
+    @preset
     @classmethod
-    def get_default_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> IdealizedHeaterConfig:
-        """Gets a default Idealized Heater."""
-        if component_id is None:
-            component_id = ComponentID(name="IdealizedHeater")
-        return IdealizedHeaterConfig(
-            component_id=component_id,
-            set_heating_temperature_for_building_in_celsius=19.5,
-            set_cooling_temperature_for_building_in_celsius=23.5,
-        )
+    def preset_standard(cls, name: str) -> "IdealizedHeaterConfig":
+        """The heater the building tests hold their indoor temperature with.
+
+        The field defaults are the whole appliance: a heating setpoint of 19.5 °C and a
+        cooling setpoint of 23.5 °C. Nothing else describes it, since an idealized heater has
+        neither a size nor a fuel.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            IdealizedHeaterConfig: The preset configuration.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class IdealizedElectricHeater(cp.Component):

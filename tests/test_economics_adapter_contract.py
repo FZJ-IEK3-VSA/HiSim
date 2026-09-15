@@ -131,6 +131,10 @@ class AdapterContractScan:
         # temperature it does not read, but the sweep resolves the whole configuration.
         "MoreAdvancedHeatPumpHPLibConfig.set_thermal_output_power_in_watt": 7780.75,
         "MoreAdvancedHeatPumpHPLibConfig.heating_reference_temperature_in_celsius": -7.0,
+        # The two heat generators the copy law sizes to the archetype's heating load exactly.
+        # The extractor reads both as the kilowatts it prices.
+        "ElectricHeatingConfig.maximum_electric_power_w": 7780.75,
+        "DistrictHeatingConfig.connected_load_in_w": 7780.75,
     }
 
     @staticmethod

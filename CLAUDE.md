@@ -121,8 +121,20 @@ artifacts and writes an overview — per-workflow runner-minutes, jobs that got 
 hungrier, jobs near the 16 GB runner limit — into its own job summary. Nothing is committed.
 See `.github/ci-monitoring.md`; the probe never fails the job it measures.
 
-### RenoVisor translator (`hisim/renovisor/`)
-All RenoVisor translation code lives in `hisim/renovisor/` — schema validation (`schema.py`), measure application (`measures.py`), request→setup mapping (`mapping.py`), TABULA lookup (`tabula_ie.py`), in-process simulation runner (`runner.py`), REST upload (`uploader.py`), and the CLI (`__main__.py`). Spec: `hisim/renovisor/spec.md`; usage: `hisim/renovisor/how_to_use.md`; example requests in `hisim/renovisor/examples/`. Tests: `tests/test_renovisor_*.py`. Run via `python -m hisim.renovisor run <request.json> --variant {base|measures}`.
+### RenoVisor translation layer (`hisim/renovisor/`)
+Turns a RenoVisor home inventory plus a package of renovation measures into a parametrised energy-system
+file and, later, a result payload. Design and decisions: `roadmap/renovisor/requirements.md`,
+`measures_v2_requirements.md`, and the decision register in `roadmap/renovisor/challenges.md` §9;
+implementation specs under `roadmap/renovisor/implementation/`. Layers: `contract/` (vendored copy of the
+RenoVisor API contract, pinned in `PINNED.yaml`; refresh with `python -m hisim.renovisor.contract.refresh
+<checkout>`), `vocabulary.py` (closed enums in HiSim spelling), `catalogue.py` (the measure catalogue with
+id derivation), `options.py`, `effects.py` (closed effect set + resolver), `registry.py` (one function per
+catalogue measure; never names a HiSim component or field), `envelope.py` (U-value derivation),
+`materials.py` + `materials_import.py` (typed insulation-material table under `data/`), `inventory.py`
+(schema-validated inventory), `base_files.py` (selection over the recorded `*_building_sizer.grouped`
+energy-system files), `application.py` (apply a package), `report.py`, `reasons.py`, `tabula_ie.py`.
+Bindings, parametriser, map generator and the `calculate` entry point follow in steps 4 and 5. Tests:
+`tests/test_renovisor_*.py` (all `base`).
 
 ## Adding a new component
 

@@ -1,0 +1,76 @@
+{
+  "location": {
+    "country_code": "IE",
+    "region": "Dublin",
+    "eircode_or_postcode": "D14 AB12"
+  },
+  "building_config": {
+    "general": {
+      "tabula_building_type": "SFH",
+      "building_heat_capacity_class": "medium",
+      "construction_year": 1988,
+      "conditioned_floor_area_m2": 157,
+      "number_of_apartments": 1,
+      "set_heating_temperature_in_celsius": 20.0,
+      "set_cooling_temperature_in_celsius": 25.0,
+      "retrofit_status": "unrenovated",
+      "max_thermal_building_demand_in_watt": null
+    },
+    "envelope_details": {
+      "floor_u_value_in_watt_per_m2_per_kelvin": null,
+      "floor_area_in_m2": 78.5,
+      "facade_u_value_in_watt_per_m2_per_kelvin": null,
+      "facade_area_in_m2": 173.0,
+      "roof_u_value_in_watt_per_m2_per_kelvin": null,
+      "roof_area_in_m2": 98.0,
+      "window_u_value_in_watt_per_m2_per_kelvin": 4.8,
+      "window_area_in_m2": 22.4,
+      "door_u_value_in_watt_per_m2_per_kelvin": null,
+      "door_area_in_m2": 3.6
+    }
+  },
+  "occupancy_config": {
+    "residents_count": 2,
+    "residents_type": ["adult", "adult"],
+    "residents_employment_status": ["full_time", "full_time"],
+    "travel_route_set": null
+  },
+  "energy_system_config": {
+    "heating_system": {
+      "system": "GAS_HEATING",
+      "heatpump_flow_temperature_in_celsius": null,
+      "power_in_watt": 18000,
+      "installation_year": 2004,
+      "with_dhw_preparation": true,
+      "heat_distribution_system": "RADIATOR"
+    },
+    "water_storage": {
+      "hot_water_storage": {
+        "volume_in_liters": 120,
+        "installation_year": 2004
+      },
+      "domestic_hot_water_storage": {
+        "volume_in_liters": 180,
+        "installation_year": 2004
+      }
+    },
+    "photovoltaics": {
+      "power_in_watt": 0,
+      "azimuth_in_degree": 180,
+      "tilt_in_degree": 35,
+      "installation_year": null,
+      "remaining_performance_in_percent": null
+    },
+    "battery_storage": {
+      "capacity_in_kwh": 0,
+      "power_in_watt": null,
+      "installation_year": null,
+      "state_of_health_in_percent": null
+    },
+    "vehicles": {
+      "electric_vehicles": [],
+      "fossil_vehicles": []
+    }
+  },
+  "selected_grant_schemes": []
+}

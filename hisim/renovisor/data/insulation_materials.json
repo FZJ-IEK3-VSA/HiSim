@@ -1,0 +1,1017 @@
+{
+  "source": {
+    "contract_commit": "a79f13d4a88d5cdbc5a809d46bd98dab4cb7aba0",
+    "file": "materials.yaml",
+    "sha256": "d4a12e02242e5dd95f5630dc0329ec5dfce4eaf85afbf7880463d5bad8c94a7f"
+  },
+  "materials": [
+    {
+      "asp_id": "wood_fiber_rigid_board",
+      "name": "Wood fiber - Rigid board",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.041,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": null,
+        "raw": "≥ 50"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": 260.0,
+          "high": 660.0,
+          "raw_low": "260",
+          "raw_high": "660"
+        },
+        "ES": {
+          "low": 140.0,
+          "high": 180.0,
+          "raw_low": "140",
+          "raw_high": "180"
+        },
+        "NL": {
+          "low": 130.0,
+          "high": 150.0,
+          "raw_low": "130",
+          "raw_high": "150"
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 11.421507,
+      "co2_storage_in_kg_per_m2": -36.981043,
+      "end_of_life": [
+        "Re-Use",
+        "Recycling",
+        "Composting"
+      ],
+      "comparison_baseline": false,
+      "sources": "https://www.oekobaudat.de/OEKOBAU.DAT/datasetdetail/process.xhtml?uuid=5488d3f3-1e39-4a71-b357-ef605b65ed9c&version=00.00.062&lang=en\nProcess Data set: Wood fiber insulation - dry process (German average), Data set valid until 2028\nGWP total (Gesamt, 100 mm) = 8,3572\nGWP-biogenic (A1-A3, 100 mm) = -27,0593",
+      "summary": "This insulation lets your walls breathe, helping to balance moisture and prevent mould. It keeps your home warm in winter and cool in summer, and makes it a quieter, more comfortable place to live. Made from natural, renewable materials, it's a great choice for a healthier home and a better planet."
+    },
+    {
+      "asp_id": "wood_wool_rigid_board",
+      "name": "Wood wool - Rigid board",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.09,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": null,
+        "raw": "≥ 50"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 87.69,
+      "co2_storage_in_kg_per_m2": -99.078,
+      "end_of_life": [
+        "Re-Use",
+        "Recycling",
+        "Landfill"
+      ],
+      "comparison_baseline": false,
+      "sources": "https://www.oekobaudat.de/OEKOBAU.DAT/datasetdetail/process.xhtml?uuid=3686129f-7ba6-48b5-bb4d-879455ad1bc2&version=00.01.000&lang=en\nProcess Data set: Fibrolith® mineral-bonded wood wool panels (mono-panels of building materials class B1), gross density = 350,8 kg/m³, Data set valid until 2029. kg CO₂-eq. / t (or kg? it is not clear)\nGWP total (Gesamt, 100 mm) = 29,23\nGWP-biogenic (A1-A3, 100 mm) = -33,03",
+      "summary": ""
+    },
+    {
+      "asp_id": "hemp_semi_flexible_mats",
+      "name": "Hemp - Semi-flexible mats",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.04,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": null,
+        "raw": "≥ 50"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": 180.0,
+          "high": 260.0,
+          "raw_low": "180",
+          "raw_high": "260"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "NL": {
+          "low": 160.0,
+          "high": 240.0,
+          "raw_low": "160",
+          "raw_high": "240"
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 3.173333,
+      "co2_storage_in_kg_per_m2": -10.48,
+      "end_of_life": [
+        "Re-Use",
+        "Recycling"
+      ],
+      "comparison_baseline": false,
+      "sources": "Environmental Product Declaration\n1 m² of insulation product with 100 mm thickness and R = 2.56 m²K/W, reference service life 100 years\nGWP total (Gesamt, 100 mm) = -3,7 (A1-A3) + 6,08 (C4)\nGWP-biogenic (A1-A3, 100 mm) = -7,86",
+      "summary": "This insulation lets your walls breathe, helping to balance moisture and prevent mould. It keeps your home warm in winter and cool in summer, and makes it a quieter, more comfortable place to live. Made from natural, renewable materials, it's a great choice for a healthier home and a better planet."
+    },
+    {
+      "asp_id": "hemp_lime_blown_in_insulation",
+      "name": "Hemp-lime - Blown-in insulation",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.065,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": null,
+        "raw": "≥ 50"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        }
+      },
+      "co2_footprint_in_kg_per_m2": null,
+      "co2_storage_in_kg_per_m2": null,
+      "end_of_life": [
+        "Composting"
+      ],
+      "comparison_baseline": false,
+      "sources": "no Info",
+      "summary": ""
+    },
+    {
+      "asp_id": "hemp_lime_blocks",
+      "name": "Hemp-lime - Blocks",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.071,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": null,
+        "raw": "≥ 50"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "NL": {
+          "low": 510.0,
+          "high": 510.0,
+          "raw_low": "510",
+          "raw_high": "510"
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 42.860333,
+      "co2_storage_in_kg_per_m2": -51.593333,
+      "end_of_life": [
+        "Re-Use",
+        "Recycling",
+        "Composting"
+      ],
+      "comparison_baseline": false,
+      "sources": "https://www.bau-epd.at/fileadmin/user_upload/epds_Deutsch/BAU-EPD-SCHOENTHALER-2025-1-ECOINVENT-Hanfsteine-20250923_Webseite.pdf\n1 m³ of hemp blocks with a dry weight of 335 kg/m³ and an average bulk density of approximately 405 kg/m³\nGWP total (Gesamt, 1000 mm) = -38,9 (A1-A3) + 220 (C3)\nGWP-biogenic (A1-A3, 1000 mm) = -218",
+      "summary": "This insulation lets your walls breathe, helping to balance moisture and prevent mould. It keeps your home warm in winter and cool in summer, and makes it a quieter, more comfortable place to live. Because it's made from natural materials like hemp and lime, it's a great choice for a healthier home and a better planet."
+    },
+    {
+      "asp_id": "flax_flexible_insulation_blankets",
+      "name": "Flax - Flexible insulation blankets",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.04,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": null,
+        "raw": "≥ 50"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        }
+      },
+      "co2_footprint_in_kg_per_m2": null,
+      "co2_storage_in_kg_per_m2": null,
+      "end_of_life": [
+        "Re-Use",
+        "Recycling",
+        "Composting"
+      ],
+      "comparison_baseline": false,
+      "sources": "",
+      "summary": ""
+    },
+    {
+      "asp_id": "sheep_s_wool_flexible_insulation_blankets",
+      "name": "Sheep’s wool - Flexible insulation blankets",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.0415,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": 50.0,
+        "raw": "50"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": 170.0,
+          "high": 360.0,
+          "raw_low": "170",
+          "raw_high": "360"
+        },
+        "ES": {
+          "low": 0.0,
+          "high": 0.0,
+          "raw_low": "0",
+          "raw_high": "0"
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 2.503833,
+      "co2_storage_in_kg_per_m2": -5.036717,
+      "end_of_life": [
+        "Re-Use",
+        "Recycling",
+        "Composting"
+      ],
+      "comparison_baseline": false,
+      "sources": "https://oekobaudat.de/OEKOBAU.DAT/datasetdetail/process.xhtml?uuid=4f0df91e-dbc6-457b-bdd9-bf6ca0b518d3&version=00.00.023\nProcess Data set: ISOLENA Sheep's wool insulation; 1 m³ sheep's wool product with 23,26 kg per m³, Dataset valid till 2030\nGWP total (Gesamt, 1000 mm) = -19,3 (A1-A3) + 37,4 (C3)\nGWP-biogenic (A1-A3, 1000 mm) = -36,41",
+      "summary": "This insulation lets your walls breathe, helping to balance moisture and prevent mould. It also helps purify indoor air by absorbing odours and pollutants, making your home a healthier place to live. It keeps your home warm in winter and makes it a quieter, more comfortable place to live. Made from natural, renewable materials, it's a great choice for a healthier home and a better planet."
+    },
+    {
+      "asp_id": "cellulose_flexible_insulation_blankets",
+      "name": "Cellulose - Flexible insulation blankets",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.041,
+      "lifespan_in_years": {
+        "low": null,
+        "high": null,
+        "raw": null
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        }
+      },
+      "co2_footprint_in_kg_per_m2": null,
+      "co2_storage_in_kg_per_m2": null,
+      "end_of_life": [
+        "Re-Use",
+        "Composting"
+      ],
+      "comparison_baseline": false,
+      "sources": "https://www.oekobaudat.de/OEKOBAU.DAT/datasetdetail/process.xhtml?uuid=ee0c4b18-f9c9-44d1-8766-36db08856a2f&version=00.00.061&lang=en\nProcess Data set: Cellulose fibre board; 80 kg/m3; Dataset valid till 2026",
+      "summary": ""
+    },
+    {
+      "asp_id": "cellulose_blown_in_insulation",
+      "name": "Cellulose - Blown-in insulation",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.041,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": 50.0,
+        "raw": "50"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": 90.0,
+          "high": 120.0,
+          "raw_low": "90",
+          "raw_high": "120"
+        },
+        "ES": {
+          "low": 70.0,
+          "high": 70.0,
+          "raw_low": "70",
+          "raw_high": "70"
+        },
+        "NL": {
+          "low": 60.0,
+          "high": 80.0,
+          "raw_low": "60",
+          "raw_high": "80"
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 1.561553,
+      "co2_storage_in_kg_per_m2": -11.271447,
+      "end_of_life": [
+        "Re-Use",
+        "Composting"
+      ],
+      "comparison_baseline": false,
+      "sources": "https://www.oekobaudat.de/OEKOBAU.DAT/datasetdetail/process.xhtml?uuid=3f764d2e-320b-4996-8c28-0f38e8971044&version=20.24.070&lang=en\nProcess Data set: Cellulose fibre blowing insulation material; 45 kg/m3; Dataset valid till 2026\nGWP total (Gesamt, 100 mm) = 1,1426\nGWP-biogenic (A1-A3, 100 mm) = -8,2474",
+      "summary": "This insulation lets your walls breathe, helping to balance moisture and prevent mould. It keeps your home warm in winter and cool in summer, and makes it a quieter, more comfortable place to live. Made from recycled waste paper, it's a great choice for a healthier home and a better planet."
+    },
+    {
+      "asp_id": "straw_bale",
+      "name": "Straw - Bale",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.067,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": null,
+        "raw": "≥ 50"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "ES": {
+          "low": 0.0,
+          "high": 0.0,
+          "raw_low": "0",
+          "raw_high": "0"
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 5.019417,
+      "co2_storage_in_kg_per_m2": -33.107603,
+      "end_of_life": [
+        "Re-Use",
+        "Composting"
+      ],
+      "comparison_baseline": false,
+      "sources": "Process Data set: FASBA e.V. Baustroh 100 kg/m³ GaBi - 2024\nProcess Data set: FASBA e.V. Baustroh 100 kg/m³ GaBi - 2024; 100 kg/m³, dataset valid till 2029\nGWP total (Gesamt, 100 mm) = 2,2475\nGWP-biogenic (A1-A3, 100 mm) = -14,8243",
+      "summary": ""
+    },
+    {
+      "asp_id": "straw_blown_in_insulation",
+      "name": "Straw - Blown-in insulation",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.067,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": null,
+        "raw": "≥ 50"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "NL": {
+          "low": 50.0,
+          "high": 100.0,
+          "raw_low": "50",
+          "raw_high": "100"
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 1.563333,
+      "co2_storage_in_kg_per_m2": -34.17,
+      "end_of_life": [
+        "Re-Use",
+        "Composting"
+      ],
+      "comparison_baseline": false,
+      "sources": "https://www.iso-stroh.net/pdf/ISO-STROH-EPD.pdf\n1 m³ Stroheinblasdämmstoff im eingebauten Zustand mit einer Rohdichte von 105 kg/m³, dataset valid till 2030\nGWP total (Gesamt, 1000 mm) = -147 (A1-A3) + 154 (C3)\nGWP-biogenic (A1-A3, 1000 mm) = -153",
+      "summary": "This insulation lets your walls breathe, helping to balance moisture and prevent mould. It keeps your home warm in winter and cool in summer, and makes it a quieter, more comfortable place to live. Made from natural, renewable materials, it's a great choice for a healthier home and a better planet."
+    },
+    {
+      "asp_id": "cork_rigid_board",
+      "name": "Cork - Rigid board",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.05,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": null,
+        "raw": "≥ 50"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "ES": {
+          "low": 590.0,
+          "high": 880.0,
+          "raw_low": "590",
+          "raw_high": "880"
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 7.206667,
+      "co2_storage_in_kg_per_m2": -21.079167,
+      "end_of_life": [
+        "Re-Use",
+        "Recycling",
+        "Composting"
+      ],
+      "comparison_baseline": false,
+      "sources": "Process Data set: Expanded cork; 80 kg/m3 (en) - OEKOBAU.DAT\nProcess Data set: Expanded cork; 80 kg/m³, Dataset valid till 2026\nGWP total (Gesamt, 100 mm) = 4,324\nGWP-biogenic (A1-A3, 100 mm) = -12,6475",
+      "summary": ""
+    },
+    {
+      "asp_id": "grass_insulation_semi_flexible_mats",
+      "name": "Grass Insulation - Semi-flexible mats",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.041,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": null,
+        "raw": "≥ 50"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 21.828673,
+      "co2_storage_in_kg_per_m2": -10.269133,
+      "end_of_life": [
+        "Re-Use",
+        "Recycling"
+      ],
+      "comparison_baseline": false,
+      "sources": "EPD Gramitherm: 1m² GRAMITHERM®\n100 PANELS, 100mm thick, R = 2.47 m²K/W: \n-5,012 kg CO₂-eq./m²\nGWP total (Gesamt, 100 mm) = 5,93 (A1) + 0,0492 (A2) + 0,869 (A3) + 8,77 (C3) + 0,354 (C4)\nGWP-biogenic (A1-A3, 100 mm) = -7,03 (A1) + -0,484 (A3)",
+      "summary": ""
+    },
+    {
+      "asp_id": "cellular_glass_boards",
+      "name": "Cellular glass boards",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.0485,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": 50.0,
+        "raw": "50"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": 1110.0,
+          "high": 1110.0,
+          "raw_low": "1110",
+          "raw_high": "1110"
+        },
+        "ES": {
+          "low": 1650.0,
+          "high": 2770.0,
+          "raw_low": "1650",
+          "raw_high": "2770"
+        },
+        "NL": {
+          "low": 870.0,
+          "high": 870.0,
+          "raw_low": "870",
+          "raw_high": "870"
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 23.747055,
+      "co2_storage_in_kg_per_m2": 0.0,
+      "end_of_life": [
+        "Re-Use",
+        "Recycling"
+      ],
+      "comparison_baseline": false,
+      "sources": "https://www.oekobaudat.de/OEKOBAU.DAT/datasetdetail/process.xhtml?uuid=44d20812-1ed2-4e11-9cf0-54a3b7eb56fa&version=00.01.000&lang=en\nProcess Data set: FOAMGLAS® T3+, gross density: 100.0 kg/m³, Dataset valid till 2026\nGWP total (Gesamt, 100 mm) = 14,6889\nGWP-biogenic (A1-A3, 100 mm) = 0",
+      "summary": "This insulation acts as a barrier against rising damp and groundwater, making it ideal for foundations and underground walls. It is completely waterproof, airtight and frost-resistant, so it stays strong and effective even in the harshest conditions. It keeps your home warm in winter, and because it's made from recycled glass, it's also a great choice for the planet."
+    },
+    {
+      "asp_id": "lime_cork_clay_based_insulating_plaster",
+      "name": "Lime-cork-clay-based insulating plaster",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.0675,
+      "lifespan_in_years": {
+        "low": null,
+        "high": null,
+        "raw": null
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": 1300.0,
+          "high": 1320.0,
+          "raw_low": "1300",
+          "raw_high": "1320"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 65.205,
+      "co2_storage_in_kg_per_m2": 0.0,
+      "end_of_life": [
+        "Landfill"
+      ],
+      "comparison_baseline": false,
+      "sources": "Environmental Product Declaration\nEPD Diathonite Evolution: 0,805 kg CO₂-eq./kg, EPD valid till 04.2026\nDensity = 360 ± 20 kg/m³\nGWP total (A1-A3, 1000 mm) = 289,8\nGWP-biogenic (A1-A3, 100 mm) = 0\n\nOnly A1-A3! No data available to calculate a full LCA!",
+      "summary": "This insulating plaster lets your walls breathe naturally, helping to keep moisture balanced and your home comfortable all year round. It keeps your home warm in winter and quieter every day. And because it's made from natural materials like cork, clay and lime, it's a great choice for a healthier home and a better planet."
+    },
+    {
+      "asp_id": "textile_insulation",
+      "name": "Textile insulation",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.033,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": 50.0,
+        "raw": "50"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        },
+        "ES": {
+          "low": 130.0,
+          "high": 310.0,
+          "raw_low": "130",
+          "raw_high": "310"
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": "not relevant",
+          "raw_high": "not relevant"
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 1.83469,
+      "co2_storage_in_kg_per_m2": null,
+      "end_of_life": [
+        "Recycling"
+      ],
+      "comparison_baseline": false,
+      "sources": "https://atlas.emidat.com/epd/4af28e71-a053-5118-8807-60d8c82df0ad\nEPD Epotex Isoltex: 1m2, Tickness = 40 mm, λ = 0,034, ρ = 30. Valid till 10.26:  0,67 kg CO₂-eq./m²\nGWP total (Gesamt, 100 mm) =1,67\nGWP-biogenic: no information!",
+      "summary": "This insulation lets your walls breathe, helping to balance moisture levels and prevent mould. It keeps your home warm in winter and makes it a quieter, more comfortable place to live. And because it's made from recycled textile waste from the clothing industry, it's also a great choice for the planet."
+    },
+    {
+      "asp_id": "polystyrene_eps_rigid_board",
+      "name": "polystyrene EPS - Rigid board",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.0355,
+      "lifespan_in_years": {
+        "low": 40.0,
+        "high": 75.0,
+        "raw": "40-75"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": 107.0,
+          "high": 172.0,
+          "raw_low": "107",
+          "raw_high": "172"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "41-80",
+          "raw_high": null
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": null,
+          "raw_high": null
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 21.207108,
+      "co2_storage_in_kg_per_m2": 0.0,
+      "end_of_life": [
+        "Re-Use",
+        "Recycling"
+      ],
+      "comparison_baseline": true,
+      "sources": "Process Data set: Expanded Polystyrene (EPS) Foam Insulation (density 20 kg/m³) (en) - OEKOBAU.DAT\nProcess Data set: Expanded Polystyrene (EPS) Foam Insulation (density 20 kg/m³)",
+      "summary": "EPS (expanded polystyrene) is derived from petroleum-based materials. Its production creates significant carbon emissions and has a large environmental impact. The boards diffuse moisture very slowly, which can lead to higher humidity and the need for increased ventilation."
+    },
+    {
+      "asp_id": "extruded_polystyrene_xps",
+      "name": "Extruded Polystyrene (XPS)",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.029,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": 100.0,
+        "raw": "50-100"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": 107.0,
+          "high": 172.0,
+          "raw_low": "107",
+          "raw_high": "172"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "41-80€/m2",
+          "raw_high": null
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": null,
+          "raw_high": null
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 21.28078,
+      "co2_storage_in_kg_per_m2": 0.0,
+      "end_of_life": [
+        "Recycling"
+      ],
+      "comparison_baseline": true,
+      "sources": "Ökobaudat:\nhttps://www.oekobaudat.de/OEKOBAU.DAT/datasetdetail/process.xhtml?uuid=c4ddfdbc-ee2b-4dd5-a754-b317cf06470a&version=20.24.070&lang=en\nExtruded polystyrene (XPS); 32 kg/m3\nData set valid until: 2026\n\nEcovision: 3,5-5,5 kg CO₂-eq./m³",
+      "summary": "XPS is a high-performance, moisture-resistant insulation ideal for floors, foundations, and below-ground applications where durability and water resistance are critical. It delivers excellent thermal performance in thinner layers, but it is combustible, not breathable, and offers little benefit for summer overheating or acoustic comfort"
+    },
+    {
+      "asp_id": "stone_wool_flexible_insulation_blankets",
+      "name": "Stone wool - Flexible insulation blankets",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.0425,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": null,
+        "raw": "≥ 50"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": 18.0,
+          "high": 35.7,
+          "raw_low": "18",
+          "raw_high": "35.7"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "4-12€/m2",
+          "raw_high": null
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": null,
+          "raw_high": null
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 9.79625,
+      "co2_storage_in_kg_per_m2": 0.0,
+      "end_of_life": [
+        "Re-Use"
+      ],
+      "comparison_baseline": true,
+      "sources": "https://www.oekobaudat.de/OEKOBAU.DAT/datasetdetail/process.xhtml?uuid=50d421e2-3a7b-4659-92a4-f20d6a52fcf0&version=20.24.070&lang=en\nProcess Data set: Mineral wool (facade insulation); 46 kg/m3",
+      "summary": "Rockwool is a breathable, fire-safe insulation that performs very well acoustically and offers better summer comfort than most synthetic insulations. It is ideal for walls, roofs, and partitions where moisture movement and fire performance matter. It is less suitable where very thin build-ups or maximum U-values are required."
+    },
+    {
+      "asp_id": "metac_glasswool",
+      "name": "Metac -Glasswool",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.0385,
+      "lifespan_in_years": {
+        "low": 30.0,
+        "high": 50.0,
+        "raw": "30-50"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": 18.0,
+          "high": 35.7,
+          "raw_low": "18",
+          "raw_high": "35.7"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "4-12€/m2",
+          "raw_high": null
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": null,
+          "raw_high": null
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 4.505783,
+      "co2_storage_in_kg_per_m2": 0.0,
+      "end_of_life": [
+        "Landfill"
+      ],
+      "comparison_baseline": true,
+      "sources": "ENVIRONMENTAL PRODUCT DECLARATION FMI Fachverband Mineralwolleindustrie e.V.",
+      "summary": "Glass wool is a flexible, fibrous insulation commonly used in attics and walls, offering good thermal and sound insulation at a relatively low cost. It is breathable and works well in standard constructions, but it must be kept dry and properly installed to perform well. While it has low emissions in use, it can release fibres during installation and offers limited benefit for summer comfort or moisture buffering. It’s a reliable, conventional option where access and installation quality can be controlled."
+    },
+    {
+      "asp_id": "eps_beads_cavity",
+      "name": "EPS beads-Cavity",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.0355,
+      "lifespan_in_years": {
+        "low": 30.0,
+        "high": 50.0,
+        "raw": "30-50"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": 14.0,
+          "high": 24.0,
+          "raw_low": "14",
+          "raw_high": "24"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "3-8€/m2",
+          "raw_high": null
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": null,
+          "raw_high": null
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 12.792425,
+      "co2_storage_in_kg_per_m2": 0.0,
+      "end_of_life": [
+        "Recycling"
+      ],
+      "comparison_baseline": true,
+      "sources": "https://www.oekobaudat.de/OEKOBAU.DAT/datasetdetail/process.xhtml?uuid=f2552bdf-c847-4ef8-9665-c37e8ef4d44d&version=20.24.070&lang=en\nPolystyrene foam filling, density: 15.0 kg/m^3, Dataset valid until 2026\n\nEcovision: 2,5-3,5\nwww.nsai.ie/",
+      "summary": "EPS beads are commonly injected into wall cavities to provide even, gap-free insulation with minimal disruption, making them a popular retrofit solution in Ireland. They are water-resistant and perform well in exposed conditions, with low health risk once installed, but they do not regulate moisture or improve summer comfort. While technically recyclable, they are rarely recovered in practice. This is a low-risk, cost-effective upgrade for cavity walls, particularly in existing homes."
+    },
+    {
+      "asp_id": "cement_based_insulating_screed_perlite",
+      "name": "Cement Based Insulating screed (perlite)",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.095,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": 100.0,
+        "raw": "50-100"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": 72.0,
+          "high": 117.0,
+          "raw_low": "72",
+          "raw_high": "117"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "36-72€/m2",
+          "raw_high": null
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": null,
+          "raw_high": null
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 172.2103,
+      "co2_storage_in_kg_per_m2": 0.0,
+      "end_of_life": [
+        "Re-Use"
+      ],
+      "comparison_baseline": true,
+      "sources": "Assumption: 1 part cement by volume to 6 parts perlite by volume\nExpanded perlite insulation boards for interior use (gross density: 140.0 kg/m^3, Data set valid until 2026):\nhttps://www.oekobaudat.de/OEKOBAU.DAT/datasetdetail/process.xhtml?uuid=5d087386-ed6b-4786-b37b-87164384927b&version=20.24.070&lang=en\nCement screed (gross density: 2400.0 kg/m^3, Data set valid until 2026):\nhttps://www.oekobaudat.de/OEKOBAU.DAT/datasetdetail/process.xhtml?uuid=86d919ee-8f30-4ca4-9b7e-717aecba6ac0&version=20.24.070&lang=en\n\nEcovision: 1-1,5\nwww.nsai.ie/",
+      "summary": "This is a pumped, cement-based insulation layer (often with EPS beads) used under floors to create a seamless, gap-free insulation base, making it excellent for reducing heat loss and thermal bridging. It’s very durable and has good indoor air quality once cured, but it does not regulate moisture or help with summer overheating, and it cannot be removed or recycled at end of life. It’s best suited where you want a robust, long-term floor solution with minimal installation risk, particularly in solid floor upgrades."
+    },
+    {
+      "asp_id": "cement_based_insulating_screed_eps",
+      "name": "Cement Based Insulating screed (eps)",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.095,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": 100.0,
+        "raw": "50-100"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": 72.0,
+          "high": 117.0,
+          "raw_low": "72",
+          "raw_high": "117"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "36-72€/m2",
+          "raw_high": null
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": null,
+          "raw_high": null
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 52.079633,
+      "co2_storage_in_kg_per_m2": 0.0,
+      "end_of_life": [
+        "Re-Use"
+      ],
+      "comparison_baseline": true,
+      "sources": "Assumption: 1 part cement by volume to 6 parts EPS by volume\nPolystyrene foam filling (gross density: 15.0 kg/m^3, Dataset valid till 2026):\nhttps://www.oekobaudat.de/OEKOBAU.DAT/datasetdetail/process.xhtml?uuid=f2552bdf-c847-4ef8-9665-c37e8ef4d44d&version=20.24.070&lang=en\nCement screed (gross density: 2400.0 kg/m^3, Data set valid until 2026):\nhttps://www.oekobaudat.de/OEKOBAU.DAT/datasetdetail/process.xhtml?uuid=86d919ee-8f30-4ca4-9b7e-717aecba6ac0&version=20.24.070&lang=en\n\nEcovision: 1-1,5\nwww.nsai.ie/",
+      "summary": "This is a pumped, cement-based insulation layer (often with EPS beads) used under floors to create a seamless, gap-free insulation base, making it excellent for reducing heat loss and thermal bridging. It’s very durable and has good indoor air quality once cured, but it does not regulate moisture or help with summer overheating, and it cannot be removed or recycled at end of life. It’s best suited where you want a robust, long-term floor solution with minimal installation risk, particularly in solid floor upgrades."
+    },
+    {
+      "asp_id": "cement_based_insulatiing_screed_vermiculite",
+      "name": "Cement Based Insulatiing screed (vermiculite)",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.095,
+      "lifespan_in_years": {
+        "low": 50.0,
+        "high": 100.0,
+        "raw": "50-100"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": 72.0,
+          "high": 117.0,
+          "raw_low": "72",
+          "raw_high": "117"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "36-72€/m2",
+          "raw_high": null
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": null,
+          "raw_high": null
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 172.2103,
+      "co2_storage_in_kg_per_m2": 0.0,
+      "end_of_life": [
+        "Re-Use"
+      ],
+      "comparison_baseline": true,
+      "sources": "Due to missing data sets, GWP was derived from the Perlite dataset - see \"Cement Based Insulating screed (perlite)\"\n\nEcovision: 1-1,5\nwww.nsai.ie/",
+      "summary": "This is a pumped, cement-based insulation layer (often with EPS beads) used under floors to create a seamless, gap-free insulation base, making it excellent for reducing heat loss and thermal bridging. It’s very durable and has good indoor air quality once cured, but it does not regulate moisture or help with summer overheating, and it cannot be removed or recycled at end of life. It’s best suited where you want a robust, long-term floor solution with minimal installation risk, particularly in solid floor upgrades."
+    },
+    {
+      "asp_id": "open_cell_spray_foam",
+      "name": "Open cell Spray Foam",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.027,
+      "lifespan_in_years": {
+        "low": 25.0,
+        "high": 40.0,
+        "raw": "25-40"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": 67.0,
+          "high": 82.0,
+          "raw_low": "67",
+          "raw_high": "82"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "54-82€/m2",
+          "raw_high": null
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": null,
+          "raw_high": null
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 23.79699,
+      "co2_storage_in_kg_per_m2": 0.0,
+      "end_of_life": [
+        "Landfill"
+      ],
+      "comparison_baseline": true,
+      "sources": "Ökobaudat:\nhttps://www.oekobaudat.de/OEKOBAU.DAT/datasetdetail/process.xhtml?uuid=b960f95d-466b-4014-9565-64e51407a364&version=20.24.070&lang=en\nPUR rigid foam; hard foam, gross density: 30.0 kg/m^3\n\nEcovision: 3,0-5,0\nBuildings Performance Institute Europe",
+      "summary": "Open cell spray foam expands to fill gaps, creating a highly airtight and breathable insulation layer, typically used in roofs. It can improve comfort and reduce drafts, especially in hard-to-insulate spaces, but installation quality is critical due to chemical emissions during application. It allows some moisture movement, which can be beneficial, but also requires careful design to avoid issues. It is not removable or recyclable, so it’s best used where other insulation methods are not feasible."
+    },
+    {
+      "asp_id": "closed_cell_spray_foam",
+      "name": "Closed Cell spray foam",
+      "thermal_conductivity_in_watt_per_meter_per_kelvin": 0.027,
+      "lifespan_in_years": {
+        "low": 40.0,
+        "high": 60.0,
+        "raw": "40-60"
+      },
+      "investment_cost_in_euro_per_m3": {
+        "IE": {
+          "low": 67.0,
+          "high": 82.0,
+          "raw_low": "67",
+          "raw_high": "82"
+        },
+        "ES": {
+          "low": null,
+          "high": null,
+          "raw_low": "54-82€/m2",
+          "raw_high": null
+        },
+        "NL": {
+          "low": null,
+          "high": null,
+          "raw_low": null,
+          "raw_high": null
+        }
+      },
+      "co2_footprint_in_kg_per_m2": 15.92334,
+      "co2_storage_in_kg_per_m2": 0.0,
+      "end_of_life": [
+        "Landfill"
+      ],
+      "comparison_baseline": true,
+      "sources": "Ökobaudat:\nhttps://www.oekobaudat.de/OEKOBAU.DAT/datasetdetail/process.xhtml?uuid=355dbd58-78dc-45cc-be8a-43d66d117e15&version=20.24.070&lang=en\nPIR high-density foam, gross density: 30.0 kg/m^3\n\nEcovision: 3,0-5,0\nhttps://www.bpie.eu/",
+      "summary": "Closed cell spray foam is a dense, rigid insulation that provides high insulation value and acts as a vapour barrier, making it effective for sealing and strengthening structures. However, it can trap moisture if incorrectly applied, carries similar installation emission risks, and has no recycling or removal options at end of life. It also does little for summer comfort. This solution should be used cautiously and typically only where its specific properties (e.g. moisture barrier or structural support) are required."
+    }
+  ]
+}

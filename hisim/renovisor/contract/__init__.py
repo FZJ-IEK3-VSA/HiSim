@@ -29,7 +29,7 @@ Refreshing them from a local checkout of the contract repository::
 """
 
 from pathlib import Path
-from typing import Any, ClassVar, Dict
+from typing import Any, ClassVar, Dict, cast
 
 import yaml
 
@@ -74,19 +74,19 @@ class ContractFiles:
     @classmethod
     def openapi(cls) -> Dict[str, Any]:
         """Return the parsed ``openapi.yaml`` (the OpenAPI 3.1 document as a dictionary)."""
-        return cls._load(cls.OPENAPI_FILENAME)
+        return cast(Dict[str, Any], cls._load(cls.OPENAPI_FILENAME))
 
     @classmethod
     def measures(cls) -> Dict[str, Any]:
         """Return the parsed ``measures.yaml``; its ``measures`` key holds the catalogue list."""
-        return cls._load(cls.MEASURES_FILENAME)
+        return cast(Dict[str, Any], cls._load(cls.MEASURES_FILENAME))
 
     @classmethod
     def materials(cls) -> Dict[str, Any]:
         """Return the parsed ``materials.yaml``; its ``materials`` key holds the material list."""
-        return cls._load(cls.MATERIALS_FILENAME)
+        return cast(Dict[str, Any], cls._load(cls.MATERIALS_FILENAME))
 
     @classmethod
     def pinned(cls) -> Dict[str, Any]:
         """Return the parsed ``PINNED.yaml``: repository, and per file the source ref, commit and hash."""
-        return cls._load(cls.PINNED_FILENAME)
+        return cast(Dict[str, Any], cls._load(cls.PINNED_FILENAME))

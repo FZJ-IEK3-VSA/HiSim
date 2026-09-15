@@ -1,10 +1,34 @@
-"""RenoVisor -> HiSim translator.
+"""The RenoVisor translation layer: a home inventory plus a renovation package into a simulation.
 
-Takes a JSON request with a home inventory (RenoVisor contract, see ``scripts/hisim_spec.md``),
-selects a ``*_building_sizer`` system setup, generates a ``ModularHouseholdConfig`` parameter
-file, runs the simulation and submits selected result files to a server via REST.
+RenoVisor is a renovation-advice product whose backend asks HiSim what a given renovation of a
+given dwelling would do to its energy use, its emissions and its costs. This package is the layer
+that turns its vocabulary into HiSim's, in three parts that the contract, not HiSim, fixes the
+shape of:
 
-See ``spec.md`` in this package for the full specification.
+*the contract* (:mod:`hisim.renovisor.contract`) — a vendored copy of the shared API contract:
+the inventory schema an incoming request is validated against, the catalogue of renovation
+measures, and the insulation-material database.
+
+*the pure translation layer* — :mod:`~hisim.renovisor.vocabulary` (the closed vocabularies),
+:mod:`~hisim.renovisor.catalogue` (the only reader of the catalogue),
+:mod:`~hisim.renovisor.options` (reading one measure's option values),
+:mod:`~hisim.renovisor.registry` (one function per measure),
+:mod:`~hisim.renovisor.effects` (the closed effect set and its resolver),
+:mod:`~hisim.renovisor.envelope` and :mod:`~hisim.renovisor.materials` (the physics and its data),
+:mod:`~hisim.renovisor.inventory` (the path-addressed document) and
+:mod:`~hisim.renovisor.application` (applying one package to one inventory). Nothing here runs a
+simulation or opens an energy-system file.
+
+*the run* — the bindings, the parametriser and the ``calculate`` command, which are step 5 of
+``roadmap/renovisor/implementation/``. :mod:`hisim.renovisor.__main__` carries the intended
+interface and refuses to pretend it works.
+
+The layering rule the whole package rests on: the measure layer writes the *inventory* and never
+names a HiSim component or config field, so a HiSim rename changes one binding rather than 33
+measure functions (requirement M6 of ``roadmap/renovisor/measures_v2_requirements.md``).
 """
 
-TRANSLATOR_VERSION: str = "1.0.0"
+#: The version of the translation layer itself, distinct from the contract revision
+#: ``contract/PINNED.yaml`` records and from the HiSim version. It is echoed in the translation
+#: report so a result can be traced back to the rules that produced it.
+TRANSLATOR_VERSION: str = "2.0.0-dev"

@@ -1,0 +1,63 @@
+{
+  "country_code": "IE",
+  "description": "Target U-values per envelope element for Ireland, used by decision Q11 to size an insulation layer whose thickness a request does not state: the thickness is the smallest 10 mm step that brings the element from its current U-value to the target. Every row is PROVISIONAL and has to be checked against the current revision of the Technical Guidance Document before a result leaves a laboratory.",
+  "unit": "watt_per_m2_per_kelvin",
+  "targets": [
+    {
+      "id": "pitched_roof_insulated_at_ceiling",
+      "u_value_in_watt_per_m2_per_kelvin": 0.16,
+      "description": "Pitched roof insulated on the flat, at ceiling level, with the attic left cold.",
+      "source": "Building Regulations TGD L Dwellings 2011, Table 5, material alterations",
+      "status": "PROVISIONAL — verify against the current TGD L revision"
+    },
+    {
+      "id": "pitched_roof_insulated_on_slope",
+      "u_value_in_watt_per_m2_per_kelvin": 0.25,
+      "description": "Pitched roof insulated on the slope, between and under the rafters, with the attic warm.",
+      "source": "Building Regulations TGD L Dwellings 2011, Table 5, material alterations",
+      "status": "PROVISIONAL — verify against the current TGD L revision"
+    },
+    {
+      "id": "flat_roof",
+      "u_value_in_watt_per_m2_per_kelvin": 0.25,
+      "description": "Flat roof, insulated above the deck (a warm roof).",
+      "source": "Building Regulations TGD L Dwellings 2011, Table 5, material alterations",
+      "status": "PROVISIONAL — verify against the current TGD L revision"
+    },
+    {
+      "id": "wall",
+      "u_value_in_watt_per_m2_per_kelvin": 0.35,
+      "description": "External wall insulated on one of its faces, externally or internally.",
+      "source": "Building Regulations TGD L Dwellings 2011, Table 5, material alterations",
+      "status": "PROVISIONAL — verify against the current TGD L revision"
+    },
+    {
+      "id": "cavity_fill_wall",
+      "u_value_in_watt_per_m2_per_kelvin": 0.55,
+      "description": "External wall improved by filling its existing cavity, where the cavity width caps what is achievable.",
+      "source": "Building Regulations TGD L Dwellings 2011, Table 5, material alterations",
+      "status": "PROVISIONAL — verify against the current TGD L revision"
+    },
+    {
+      "id": "ground_floor",
+      "u_value_in_watt_per_m2_per_kelvin": 0.45,
+      "description": "Ground floor, whether a solid slab, a suspended timber floor or a basement ceiling.",
+      "source": "Building Regulations TGD L Dwellings 2011, Table 5, material alterations",
+      "status": "PROVISIONAL — verify against the current TGD L revision"
+    },
+    {
+      "id": "window",
+      "u_value_in_watt_per_m2_per_kelvin": 1.6,
+      "description": "Replacement window, whole-window U-value including the frame.",
+      "source": "Building Regulations TGD L Dwellings 2011, Table 5, material alterations",
+      "status": "PROVISIONAL — verify against the current TGD L revision"
+    },
+    {
+      "id": "door",
+      "u_value_in_watt_per_m2_per_kelvin": 1.6,
+      "description": "Replacement external door, whole-door U-value including the frame.",
+      "source": "Building Regulations TGD L Dwellings 2011, Table 5, material alterations",
+      "status": "PROVISIONAL — verify against the current TGD L revision"
+    }
+  ]
+}

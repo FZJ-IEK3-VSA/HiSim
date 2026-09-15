@@ -57,6 +57,9 @@ setup(
             "subsidy_catalog/*.json",
             # JSON Schema of the energy-system file format, which editors bind to:
             "energy_system_v3.schema.json",
+            # Vendored RenoVisor API contract and the data tables derived from it:
+            "renovisor/contract/*.yaml",
+            "renovisor/data/*.json",
         ]
     },
     include_package_data=True,

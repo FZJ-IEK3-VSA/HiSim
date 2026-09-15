@@ -2541,39 +2541,49 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
 @dataclass_json
 @dataclass
 class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
-    """HeatPump Controller Config Class."""
+    """Configuration of the hplib heat pump's domestic-hot-water controller.
 
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return MoreAdvancedHeatPumpHPLibControllerDHW.get_full_classname()
+    The hysteresis in front of the machine's hot-water side: it switches the machine on
+    when the DHW vessel has cooled to :attr:`t_min_dhw_storage_in_celsius` and off again
+    when it has reached :attr:`t_max_dhw_storage_in_celsius`. The named default is
+    :meth:`preset_standard`, the 40/60 °C band the fleet runs::
+
+        MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard("HeatPumpControllerDHW")
+
+    Nothing here depends on the building or on the machine beside it, which is why no
+    field is sizable and the preset takes nothing but the instance name.
+    """
+
+    MAIN_CLASS = "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW"
 
     component_id: ComponentID
     #: lower set temperature of DHW Storage, given in °C
-    t_min_dhw_storage_in_celsius: float
+    t_min_dhw_storage_in_celsius: float = 40.0
     #: upper set temperature of DHW Storage, given in °C
-    t_max_dhw_storage_in_celsius: float
-    #: set thermal power delivered for dhw on constant value --> max. Value of heatpump
-    thermalpower_dhw_is_constant: bool
-    #: max. Power of Heatpump for not modulation dhw production
-    p_th_max_dhw_in_watt: float
+    t_max_dhw_storage_in_celsius: float = 60.0
+    #: set thermal power delivered for dhw on constant value --> max. Value of heatpump.
+    #: false: modulation, true: constant power for dhw
+    thermalpower_dhw_is_constant: bool = False
+    #: max. Power of Heatpump for not modulation dhw production; only read when
+    #: ``thermalpower_dhw_is_constant`` is true
+    p_th_max_dhw_in_watt: float = 5000.0
 
+    @preset
     @classmethod
-    def get_default_dhw_controller_config(
-        cls,
-        name: str = "HeatPumpControllerDHW",
-        component_id: Optional[ComponentID] = None,
-    ) -> "MoreAdvancedHeatPumpHPLibControllerDHWConfig":
-        """Gets a default Generic Heat Pump Controller."""
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        return MoreAdvancedHeatPumpHPLibControllerDHWConfig(
-            component_id=component_id,
-            t_min_dhw_storage_in_celsius=40.0,
-            t_max_dhw_storage_in_celsius=60.0,
-            thermalpower_dhw_is_constant=False,  # false: modulation, true: constant power for dhw
-            p_th_max_dhw_in_watt=5000.0,  # only if true
-        )
+    def preset_standard(cls, name: str) -> "MoreAdvancedHeatPumpHPLibControllerDHWConfig":
+        """The one hot-water controller the fleet runs, reheating the vessel from 40 to 60 °C.
+
+        The field defaults are that controller: a modulating machine, so the constant-power
+        limit below is not read, and the 40/60 °C band that keeps the vessel above the
+        legionella temperature without cycling the machine on every tap.
+
+        Args:
+            name: Instance name of the controller in the simulation.
+
+        Returns:
+            The configuration, fully concrete -- the class has no sizable field.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class MoreAdvancedHeatPumpHPLibControllerDHW(Component):

@@ -410,7 +410,7 @@ def setup_function(
 
     # Solar thermal for DHW - Controller
     my_solar_thermal_system_controller_config = (
-        solar_thermal_system.SolarThermalSystemControllerConfig.get_solar_thermal_system_controller_config()
+        solar_thermal_system.SolarThermalSystemControllerConfig.preset_standard("SolarThermalSystemController")
     )
 
     my_solar_thermal_system_controller = solar_thermal_system.SolarThermalSystemController(

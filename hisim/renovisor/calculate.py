@@ -12,6 +12,7 @@ it imports no Python, parses no log and passes no arguments beyond the two paths
       simulation.yaml                    realized.audit.yaml
                                          component_connections.json
                                          translation_report.json
+                                         result.json        the KPIs and costs, with provenance
                                          calculation.json
                                          errors.json        (only when something went wrong)
                                          results/           the simulation's own output
@@ -53,13 +54,21 @@ from hisim.renovisor import TRANSLATOR_VERSION
 from hisim.renovisor.application import ApplicationResult, PackageApplication
 from hisim.renovisor.catalogue import Catalogue
 from hisim.renovisor.contract import ContractFiles
+from hisim.renovisor.costs import SubsidyCatalogue
 from hisim.renovisor.inventory import Inventory
 from hisim.renovisor.laws import PreRunDemandEstimator
 from hisim.renovisor.materials import InsulationMaterials
 from hisim.renovisor.occupancy import HouseholdMatcher
 from hisim.renovisor.parametriser import ParametrisedSystem, Parametriser
-from hisim.renovisor.reasons import ReasonCode, RefusalError, ValidationError
+from hisim.renovisor.reasons import (
+    ReasonCode,
+    RefusalError,
+    ResultDerivationError,
+    ValidationError,
+)
 from hisim.renovisor.registry import MeasureRegistry
+from hisim.renovisor.result import ResultBuilder
+from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.result_path_provider import ResultPathProviderSingleton
 from hisim.simulationparameters import SimulationParameters
 
@@ -237,6 +246,9 @@ class OutputFiles:
     #: The per-field and per-measure account of the translation (requirement R7).
     TRANSLATION_REPORT: ClassVar[str] = "translation_report.json"
 
+    #: The result payload: the contract's KPIs and costs, each value with its provenance.
+    RESULT: ClassVar[str] = "result.json"
+
     #: The outcome, always written.
     CALCULATION: ClassVar[str] = "calculation.json"
 
@@ -257,7 +269,100 @@ class OutputFiles:
     @classmethod
     def expected(cls) -> Tuple[str, ...]:
         """Return every artifact a finished calculation produces, in a fixed order."""
-        return (cls.PARAMETRISED,) + cls.RECORDS + (cls.TRANSLATION_REPORT, cls.CALCULATION)
+        return (cls.PARAMETRISED,) + cls.RECORDS + (cls.TRANSLATION_REPORT, cls.RESULT, cls.CALCULATION)
+
+
+class RequiredOptions:
+    """The post-processing options a result payload cannot be assembled without.
+
+    Requirement A18 leaves the period, the resolution and the post-processing to the caller's own
+    ``simulation.yaml``, and a caller who asks for a RenoVisor result has asked for the contract's
+    KPIs and costs whether or not they knew which HiSim switches produce them. So the three
+    switches that do are added when the caller left them out, and ``calculation.json`` records
+    which ones were added -- a calculation that quietly ran with different options than it was
+    given is exactly the sort of thing requirement R10's determinism is supposed to rule out.
+
+    Nothing is ever removed: a caller who asked for plots gets plots.
+    """
+
+    #: ``COMPUTE_KPIS`` produces the KPI collection, ``WRITE_KPIS_TO_JSON`` writes it as
+    #: ``all_kpis.json``, and ``COMPUTE_LIFECYCLE_COSTS`` produces the cost engine's exports. The
+    #: first is a precondition of the second, which is why both are named rather than only the
+    #: writer.
+    REQUIRED: ClassVar[Tuple[PostProcessingOptions, ...]] = (
+        PostProcessingOptions.COMPUTE_KPIS,
+        PostProcessingOptions.WRITE_KPIS_TO_JSON,
+        PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS,
+    )
+
+    @classmethod
+    def add_to(cls, parameters: SimulationParameters) -> Tuple[str, ...]:
+        """Add every missing required option to *parameters* and say which were added.
+
+        Args:
+            parameters: The run's parameters, as the caller's file produced them.
+
+        Returns:
+            The names of the options that were not there, in :attr:`REQUIRED` order.
+        """
+        added: List[str] = []
+        for option in cls.REQUIRED:
+            if option not in parameters.post_processing_options:
+                parameters.post_processing_options.append(option)
+                added.append(option.name)
+        return tuple(added)
+
+
+class EconomicSetup:
+    """Points the lifecycle cost engine at the dwelling's own country.
+
+    The engine prices a run against ``<country>`` data files -- ``devices_IE.json``,
+    ``energy_prices_IE.json``, ``escalation_defaults_IE.json`` -- and picks the country either
+    from an ``EconomicParameters`` the setup attached or, failing that, from
+    ``SimulationParameters.country``. This class attaches the former rather than setting the
+    latter, and the reason is a finding of step 6 rather than a preference:
+    ``SimulationParameters.country`` also selects the *legacy* emission and price factors of
+    ``hisim/components/configuration.py``, whose table has rows for ``DE`` and ``AT`` only, so
+    setting it to ``IE`` makes ``COMPUTE_KPIS`` raise before any KPI is computed. Attaching the
+    economic parameters reaches the engine, leaves that table alone, and costs one thing that the
+    payload then has to say out loud: the operational CO2 KPI is computed with the emission
+    factors of whichever country the parameters file names, which the emissions field's ``source``
+    states.
+
+    It also names the subsidy catalogue when the country has one. Today Ireland has none and the
+    engine therefore books no catalogue support (decision Q24, step 6b builds the file); the
+    moment ``hisim/subsidy_catalog/IE.json`` appears, this hands it to the engine and the payload's
+    grant field starts being published, with no other change.
+    """
+
+    @classmethod
+    def attach(
+        cls,
+        parameters: SimulationParameters,
+        country: str,
+        catalogue_directory: Optional[Path] = None,
+    ) -> Optional[Path]:
+        """Attach economic parameters for *country* and return the catalogue they name.
+
+        Args:
+            parameters: The run's parameters; its ``economic_parameters`` are replaced.
+            country: The dwelling's country code, from ``location.country_code``.
+            catalogue_directory: Where to look for ``<COUNTRY>.json``; the shipped
+                ``hisim/subsidy_catalog/`` when omitted.
+
+        Returns:
+            The catalogue file the engine was pointed at, or ``None`` when the country has none.
+        """
+        from hisim.economics.parameters import EconomicParameters
+
+        catalogue = SubsidyCatalogue.path_for(country, catalogue_directory)
+        parameters.set_economic_parameters(
+            EconomicParameters(
+                country=country,
+                subsidy_catalog_path=str(catalogue.parent) if catalogue is not None else None,
+            )
+        )
+        return catalogue
 
 
 class SimulationRunner(Protocol):
@@ -400,6 +505,9 @@ class CalculationRunner:
             unset too (decision Q26).
         simulation_runner: How the parametrised file is run; the real one unless a test injects
             another.
+        subsidy_catalogue_directory: Where the country subsidy catalogues live; the shipped
+            ``hisim/subsidy_catalog/`` when omitted. A test points it at a temporary directory to
+            prove that the payload picks a catalogue up the moment one exists (decision Q24).
     """
 
     #: The environment variable the image digest is read from when the caller passes none.
@@ -419,6 +527,7 @@ class CalculationRunner:
         base_files_directory: Optional[Path] = None,
         image_digest: Optional[str] = None,
         simulation_runner: Optional[SimulationRunner] = None,
+        subsidy_catalogue_directory: Optional[Path] = None,
     ) -> None:
         """Store the locations; nothing is read and nothing is created until :meth:`run`."""
         self._input = Path(input_directory)
@@ -433,7 +542,11 @@ class CalculationRunner:
             image_digest if image_digest is not None else os.environ.get(self.IMAGE_DIGEST_VARIABLE)
         )
         self._runner: SimulationRunner = simulation_runner or EnergySystemSimulationRunner()
+        self._catalogue_directory = (
+            Path(subsidy_catalogue_directory) if subsidy_catalogue_directory is not None else None
+        )
         self._written: List[str] = []
+        self._options_added: Tuple[str, ...] = ()
 
     def run(self) -> ExitCode:
         """Run the calculation and write everything it produced.
@@ -463,13 +576,18 @@ class CalculationRunner:
                 ),
             )
         except BaseException as error:  # pylint: disable=broad-except  # R13.2.1: no silent death
+            reason = (
+                error.reason
+                if isinstance(error, ResultDerivationError)
+                else ReasonCode.SIMULATION_FAILED
+            )
             outcome = CalculationOutcome(
                 status=CalculationStatus.FAILED,
                 exit_code=ExitCode.FAILED,
                 errors=(
                     {
-                        "reason": ReasonCode.SIMULATION_FAILED.value,
-                        "description": ReasonCode.SIMULATION_FAILED.describe(),
+                        "reason": reason.value,
+                        "description": reason.describe(),
                         "group": ErrorGroup.CRASH.value,
                         "path": str(self._input),
                         "detail": f"{type(error).__name__}: {error}",
@@ -501,6 +619,10 @@ class CalculationRunner:
         result = application.apply(inventory, package)
 
         parameters = self._parameters(parameters_path)
+        self._options_added = RequiredOptions.add_to(parameters)
+        catalogue = EconomicSetup.attach(
+            parameters, self._country(result.inventory), self._catalogue_directory
+        )
         estimator = PreRunDemandEstimator(
             inventory=result.inventory,
             base_file_key=result.base_file_key,
@@ -520,6 +642,57 @@ class CalculationRunner:
         self._runner.run(energy_system_path, parameters_path, parameters, self._output)
         self._written.extend(OutputFiles.RECORDS)
         self._written.append(f"{OutputFiles.RESULTS_DIRECTORY}/")
+        self._write_result(result, parametrised, parameters, catalogue)
+
+    def _country(self, inventory: Inventory) -> str:
+        """Return the dwelling's country code, which selects the cost data and the catalogue.
+
+        Args:
+            inventory: The post-measure inventory.
+
+        Returns:
+            ``location.country_code``, upper-cased; the economics engine's own default ``DE`` when
+            the inventory states none, which no valid request does.
+        """
+        raw = inventory.get("location.country_code")
+        return str(raw).upper() if raw else "DE"
+
+    def _write_result(
+        self,
+        result: ApplicationResult,
+        parametrised: ParametrisedSystem,
+        parameters: SimulationParameters,
+        catalogue: Optional[Path],
+    ) -> None:
+        """Assemble ``result.json`` and write it beside the records.
+
+        Args:
+            result: What applying the package produced.
+            parametrised: The parametrised system that ran.
+            parameters: The parameters the run used.
+            catalogue: The subsidy catalogue the run was configured with, or ``None``.
+
+        Raises:
+            ResultDerivationError: When the payload cannot be assembled. The run's records, its
+                report and its raw results stay on disk; only the derived payload is missing, and
+                the outcome says which of the two failed.
+        """
+        try:
+            document = ResultBuilder(
+                application=result,
+                parametrised=parametrised,
+                output_directory=self._output,
+                simulation_parameters=parameters,
+                materials=InsulationMaterials.load(),
+                image_digest=self._image_digest,
+                subsidy_catalogue_path=catalogue,
+            ).build(TranslationReportDocument.contract())
+        except Exception as error:  # pylint: disable=broad-except  # re-raised with its own code
+            raise ResultDerivationError(
+                f"the simulation finished and {OutputFiles.RESULT} could not be derived from its "
+                f"output ({type(error).__name__}: {error})"
+            ) from error
+        self._write_json(OutputFiles.RESULT, document)
 
     def _parameters(self, parameters_path: Path) -> SimulationParameters:
         """Read the simulation parameters and point everything they decide at this calculation.
@@ -567,6 +740,7 @@ class CalculationRunner:
                 "status": outcome.status.value,
                 "translator_version": TRANSLATOR_VERSION,
                 "image_digest": self._image_digest,
+                "options_added": list(self._options_added),
                 "output_files": sorted(set(self._written) | {OutputFiles.CALCULATION}),
             },
         )

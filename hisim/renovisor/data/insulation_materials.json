@@ -35,6 +35,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 11.421507,
+      "co2_footprint_in_kg_per_m3": -174.8,
       "co2_storage_in_kg_per_m2": -36.981043,
       "end_of_life": [
         "Re-Use",
@@ -75,6 +76,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 87.69,
+      "co2_footprint_in_kg_per_m3": -35.11508,
       "co2_storage_in_kg_per_m2": -99.078,
       "end_of_life": [
         "Re-Use",
@@ -115,6 +117,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 3.173333,
+      "co2_footprint_in_kg_per_m3": -37.0,
       "co2_storage_in_kg_per_m2": -10.48,
       "end_of_life": [
         "Re-Use",
@@ -154,6 +157,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": null,
+      "co2_footprint_in_kg_per_m3": null,
       "co2_storage_in_kg_per_m2": null,
       "end_of_life": [
         "Composting"
@@ -192,6 +196,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 42.860333,
+      "co2_footprint_in_kg_per_m3": -96.3,
       "co2_storage_in_kg_per_m2": -51.593333,
       "end_of_life": [
         "Re-Use",
@@ -232,6 +237,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": null,
+      "co2_footprint_in_kg_per_m3": null,
       "co2_storage_in_kg_per_m2": null,
       "end_of_life": [
         "Re-Use",
@@ -272,6 +278,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 2.503833,
+      "co2_footprint_in_kg_per_m3": -19.34,
       "co2_storage_in_kg_per_m2": -5.036717,
       "end_of_life": [
         "Re-Use",
@@ -312,6 +319,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": null,
+      "co2_footprint_in_kg_per_m3": -42.0006,
       "co2_storage_in_kg_per_m2": null,
       "end_of_life": [
         "Re-Use",
@@ -351,6 +359,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 1.561553,
+      "co2_footprint_in_kg_per_m3": -72.72,
       "co2_storage_in_kg_per_m2": -11.271447,
       "end_of_life": [
         "Re-Use",
@@ -390,6 +399,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 5.019417,
+      "co2_footprint_in_kg_per_m3": -129.38,
       "co2_storage_in_kg_per_m2": -33.107603,
       "end_of_life": [
         "Re-Use",
@@ -429,6 +439,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 1.563333,
+      "co2_footprint_in_kg_per_m3": -147.0,
       "co2_storage_in_kg_per_m2": -34.17,
       "end_of_life": [
         "Re-Use",
@@ -468,6 +479,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 7.206667,
+      "co2_footprint_in_kg_per_m3": -85.08,
       "co2_storage_in_kg_per_m2": -21.079167,
       "end_of_life": [
         "Re-Use",
@@ -508,6 +520,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 21.828673,
+      "co2_footprint_in_kg_per_m3": -50.118,
       "co2_storage_in_kg_per_m2": -10.269133,
       "end_of_life": [
         "Re-Use",
@@ -547,6 +560,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 23.747055,
+      "co2_footprint_in_kg_per_m3": 145.36,
       "co2_storage_in_kg_per_m2": 0.0,
       "end_of_life": [
         "Re-Use",
@@ -586,6 +600,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 65.205,
+      "co2_footprint_in_kg_per_m3": 289.8,
       "co2_storage_in_kg_per_m2": 0.0,
       "end_of_life": [
         "Landfill"
@@ -624,6 +639,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 1.83469,
+      "co2_footprint_in_kg_per_m3": null,
       "co2_storage_in_kg_per_m2": null,
       "end_of_life": [
         "Recycling"
@@ -662,6 +678,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 21.207108,
+      "co2_footprint_in_kg_per_m3": 59.806,
       "co2_storage_in_kg_per_m2": 0.0,
       "end_of_life": [
         "Re-Use",
@@ -701,6 +718,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 21.28078,
+      "co2_footprint_in_kg_per_m3": 102.0195,
       "co2_storage_in_kg_per_m2": 0.0,
       "end_of_life": [
         "Recycling"
@@ -739,6 +757,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 9.79625,
+      "co2_footprint_in_kg_per_m3": 66.975,
       "co2_storage_in_kg_per_m2": 0.0,
       "end_of_life": [
         "Re-Use"
@@ -777,6 +796,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 4.505783,
+      "co2_footprint_in_kg_per_m3": 33.6,
       "co2_storage_in_kg_per_m2": 0.0,
       "end_of_life": [
         "Landfill"
@@ -815,6 +835,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 12.792425,
+      "co2_footprint_in_kg_per_m3": 52.7329,
       "co2_storage_in_kg_per_m2": 0.0,
       "end_of_life": [
         "Recycling"
@@ -853,6 +874,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 172.2103,
+      "co2_footprint_in_kg_per_m3": 521.2931,
       "co2_storage_in_kg_per_m2": 0.0,
       "end_of_life": [
         "Re-Use"
@@ -891,6 +913,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 52.079633,
+      "co2_footprint_in_kg_per_m3": 111.4147,
       "co2_storage_in_kg_per_m2": 0.0,
       "end_of_life": [
         "Re-Use"
@@ -929,6 +952,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 172.2103,
+      "co2_footprint_in_kg_per_m3": 521.2931,
       "co2_storage_in_kg_per_m2": 0.0,
       "end_of_life": [
         "Re-Use"
@@ -967,6 +991,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 23.79699,
+      "co2_footprint_in_kg_per_m3": 176.0482,
       "co2_storage_in_kg_per_m2": 0.0,
       "end_of_life": [
         "Landfill"
@@ -1005,6 +1030,7 @@
         }
       },
       "co2_footprint_in_kg_per_m2": 15.92334,
+      "co2_footprint_in_kg_per_m3": 98.7979,
       "co2_storage_in_kg_per_m2": 0.0,
       "end_of_life": [
         "Landfill"

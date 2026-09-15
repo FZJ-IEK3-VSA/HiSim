@@ -1,8 +1,8 @@
 """The runtime reader of the typed insulation-material table.
 
 The translation layer needs one number per material to turn a thickness into a U-value — the
-thermal conductivity λ in W/(m·K) — and four more to price and account for it later: the lifespan,
-the investment cost per country, and the CO2 footprint and storage per m2. They live in
+thermal conductivity λ in W/(m·K) — and five more to price and account for it later: the lifespan,
+the investment cost per country, the CO2 footprint per m2 and per m3, and the CO2 storage per m2. They live in
 ``data/insulation_materials.json``, generated from the contract's material dump by
 :mod:`hisim.renovisor.materials_import` (decision Q5)::
 
@@ -86,6 +86,11 @@ class Material:
         investment_cost_in_euro_per_m3: The cost range per country code (``IE``, ``ES``, ``NL``).
         co2_footprint_in_kg_per_m2: Cradle-to-gate plus end-of-life CO2 equivalent per square
             metre of the dump's reference build-up, or ``None`` when the dump has no figure.
+        co2_footprint_in_kg_per_m3: Cradle-to-gate CO2 equivalent per cubic metre of material,
+            which is the figure an embodied-carbon total needs because a layer is priced in
+            thickness times area rather than in reference build-ups; ``None`` for the three rows
+            whose dump cell is empty. Negative for a material that stores more biogenic carbon
+            than its production emits.
         co2_storage_in_kg_per_m2: Biogenic carbon stored per square metre, negative for a material
             that stores more than it emits; ``None`` when the dump has no figure.
         end_of_life: The dump's best-case end-of-life options, e.g. ``["Re-Use", "Recycling"]``.
@@ -101,6 +106,7 @@ class Material:
     lifespan_in_years: ValueRange
     investment_cost_in_euro_per_m3: Mapping[str, CostRange]
     co2_footprint_in_kg_per_m2: Optional[float]
+    co2_footprint_in_kg_per_m3: Optional[float]
     co2_storage_in_kg_per_m2: Optional[float]
     end_of_life: Tuple[str, ...]
     comparison_baseline: bool
@@ -122,6 +128,7 @@ class Material:
                 country: CostRange.from_dict(block) for country, block in costs.items()
             },
             co2_footprint_in_kg_per_m2=data.get("co2_footprint_in_kg_per_m2"),
+            co2_footprint_in_kg_per_m3=data.get("co2_footprint_in_kg_per_m3"),
             co2_storage_in_kg_per_m2=data.get("co2_storage_in_kg_per_m2"),
             end_of_life=tuple(str(item) for item in data.get("end_of_life") or ()),
             comparison_baseline=bool(data.get("comparison_baseline", False)),

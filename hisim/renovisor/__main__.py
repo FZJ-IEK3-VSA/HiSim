@@ -13,6 +13,7 @@ another. Nothing is posted anywhere -- the service that started the container co
       simulation.yaml                    realized.audit.yaml               where each number came from
                                          component_connections.json        every wire that was made
                                          translation_report.json           the fate of every field
+                                         result.json                       the KPIs and costs, with provenance
                                          calculation.json                  the outcome
                                          errors.json                       only when it went wrong
                                          results/                          the simulation's output

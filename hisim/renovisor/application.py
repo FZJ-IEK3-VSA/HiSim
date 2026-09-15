@@ -87,6 +87,12 @@ class ApplicationResult:
             page of the translation map reads it to link each changed inventory leaf back to the
             measure that changed it; one path may carry two measures when both insulate the same
             element.
+        insulation_layers: Every insulation layer the package added, in the order the measures
+            added them, each with its element, material and resolved thickness. The composed
+            U-value the parametriser writes has already forgotten the layers it was composed from,
+            and the result payload of step 6 needs them back: embodied carbon and the material
+            half of the investment cost are both integrals over material volume (decisions Q22
+            and Q8/Q9), and volume is thickness times the element's area.
     """
 
     inventory: Inventory
@@ -99,6 +105,7 @@ class ApplicationResult:
     u_values: Mapping[str, float]
     measure_written_paths: Tuple[str, ...] = ()
     paths_by_measure: Mapping[str, Tuple[str, ...]] = field(default_factory=dict)
+    insulation_layers: Tuple[AddThermalResistance, ...] = ()
 
 
 class PackagePaths:
@@ -275,6 +282,7 @@ class PackageApplication:
             u_values=u_values,
             measure_written_paths=self.written_paths(resolved),
             paths_by_measure=self._paths_by_measure(entries, effects),
+            insulation_layers=self._insulation_layers(effects),
         )
 
     def _read_package(self, package: Sequence[Mapping[str, Any]]) -> Tuple[PackageEntry, ...]:
@@ -478,6 +486,24 @@ class PackageApplication:
                     paths.add(EnvelopePaths.u_value_path(effect.element))
             found[entry.measure_id] = tuple(sorted(paths))
         return found
+
+    @classmethod
+    def _insulation_layers(cls, effects: Effects) -> Tuple[AddThermalResistance, ...]:
+        """Return every insulation layer the package added, in the order the measures added them.
+
+        The resolution step composes the layers of one element into a single U-value and keeps
+        only that, which is all the simulation needs and not all the result needs: the embodied
+        carbon and the material cost of a renovation are both figures per cubic metre of
+        material, so the material and the thickness of each layer have to survive the composition
+        (step 6 §3 and §4).
+
+        Args:
+            effects: The accumulator every measure wrote into.
+
+        Returns:
+            The ``AddThermalResistance`` effects, in the order they were recorded.
+        """
+        return tuple(effect for effect in effects.all() if isinstance(effect, AddThermalResistance))
 
     @classmethod
     def written_paths(cls, resolved: ResolvedEffects) -> Tuple[str, ...]:

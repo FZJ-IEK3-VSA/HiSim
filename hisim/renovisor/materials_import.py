@@ -2,9 +2,10 @@
 
 ``materials.yaml`` in the vendored contract is a spreadsheet export, not a database: 26 materials
 with fourteen application areas, product listings per country, footnote-bearing prose, and a
-handful of cells that carry the wrong quantity or a string where a number belongs. HiSim needs six
+handful of cells that carry the wrong quantity or a string where a number belongs. HiSim needs seven
 things out of it — the thermal conductivity, the lifespan, the investment cost per country, the
-CO2 footprint and storage per m2, and the end-of-life options — and needs them to be numbers.
+CO2 footprint per m2 and per m3, the CO2 storage per m2, and the end-of-life options — and needs
+them to be numbers.
 
 Decision Q5 settled how: this script reads the dump once and writes
 ``hisim/renovisor/data/insulation_materials.json``, which is what the runtime reads. Run it after
@@ -181,6 +182,21 @@ class MaterialsImport:
     COST_KEY_TEMPLATE: ClassVar[str] = "material's investment costs {country} (€/m³)"
     CO2_FOOTPRINT_KEY: ClassVar[str] = "CO₂ footprint (A1-A3, C3-C4 EN 15804 +A2) kg CO₂-eq./m2"
     CO2_STORAGE_KEY: ClassVar[str] = "CO₂ storage (GWP-biogenic A1-A3) kg CO₂-eq./m2"
+
+    #: The dump's *per-unit* footprint block, the only cell carrying a footprint per cubic metre.
+    #: It is a two-cell block: ``column X`` holds the number and ``column Y`` names the unit that
+    #: number is in, so the unit has to be read before the number may be believed.
+    CO2_PER_UNIT_BLOCK_KEY: ClassVar[str] = "CO₂ footprint (A1-A3, EN 15804 +A2)"
+    CO2_PER_UNIT_KEY: ClassVar[str] = "(kg CO₂-eq./unit)"
+    CO2_PER_UNIT_VALUE_COLUMN: ClassVar[str] = "column X"
+    CO2_PER_UNIT_UNIT_COLUMN: ClassVar[str] = "column Y"
+
+    #: The only unit whose number is imported as ``co2_footprint_in_kg_per_m3``. A row whose
+    #: ``column Y`` says anything else states the footprint of a different quantity, and importing
+    #: it as a volumetric one would later be multiplied by a thickness and an area, which is how a
+    #: per-square-metre figure becomes a wrong embodied-carbon total.
+    CO2_PER_CUBIC_METRE_UNIT: ClassVar[str] = "kg CO₂-eq./m³"
+
     END_OF_LIFE_KEY: ClassVar[str] = "End of Life (best scenario)"
     SOURCES_KEY: ClassVar[str] = "Sources"
     SUMMARY_KEY: ClassVar[str] = "summary"
@@ -299,12 +315,39 @@ class MaterialsImport:
             "lifespan_in_years": RangeParser.parse(lifespan_raw).to_dict(),
             "investment_cost_in_euro_per_m3": cls._costs(economics),
             "co2_footprint_in_kg_per_m2": RangeParser.number_or_none(environment.get(cls.CO2_FOOTPRINT_KEY)),
+            "co2_footprint_in_kg_per_m3": cls._co2_per_cubic_metre(environment),
             "co2_storage_in_kg_per_m2": RangeParser.number_or_none(environment.get(cls.CO2_STORAGE_KEY)),
             "end_of_life": [str(item) for item in end_of_life],
             "comparison_baseline": bool(entry.get("comparison_baseline", False)),
             "sources": cls._text(environment.get(cls.SOURCES_KEY)),
             "summary": cls._text(environment.get(cls.SUMMARY_KEY)),
         }
+
+    @classmethod
+    def _co2_per_cubic_metre(cls, environment: Mapping[str, Any]) -> Optional[float]:
+        """Return the row's cradle-to-gate footprint per cubic metre, or ``None``.
+
+        The dump states this figure in a block of two cells rather than in a column whose header
+        names the unit: ``column X`` is the number and ``column Y`` is the unit it is in. Every
+        row of the current dump that has the block at all says ``kg CO₂-eq./m³``, but reading the
+        unit is the point -- three rows carry no block, and a row whose unit ever changes must
+        drop out of the table rather than be multiplied by a volume (step 6 §3, decision Q22).
+
+        Args:
+            environment: The row's ``Environmental / Health factor`` block.
+
+        Returns:
+            The footprint in kg CO2-eq. per cubic metre, or ``None`` when the row has no such
+            block, no number in it, or a unit other than :attr:`CO2_PER_CUBIC_METRE_UNIT`.
+        """
+        block = environment.get(cls.CO2_PER_UNIT_BLOCK_KEY)
+        per_unit = block.get(cls.CO2_PER_UNIT_KEY) if isinstance(block, dict) else None
+        if not isinstance(per_unit, dict):
+            return None
+        unit = per_unit.get(cls.CO2_PER_UNIT_UNIT_COLUMN)
+        if str(unit).strip() != cls.CO2_PER_CUBIC_METRE_UNIT:
+            return None
+        return RangeParser.number_or_none(per_unit.get(cls.CO2_PER_UNIT_VALUE_COLUMN))
 
     @classmethod
     def _costs(cls, economics: Mapping[str, Any]) -> Dict[str, Dict[str, Any]]:

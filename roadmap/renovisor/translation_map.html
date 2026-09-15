@@ -1403,6 +1403,30 @@ pre.diff .ctx{color:var(--muted);}
 <tr><td class="mono">package.measures[6].options.days_to_cover</td><td>USED</td><td>option &#x27;days to cover&#x27; = 2</td><td class="sub"></td></tr>
 <tr><td class="mono">selected_grant_schemes</td><td>NON_SIMULATION</td><td>the subsidy layer reads it (Q24); nothing in a simulation does</td><td class="sub"></td></tr>
 </tbody></table></div>
+<h3>4. The result payload</h3>
+<p class="sub">The shape of <code>result.json</code>, not a run: every field of the contract's KPI and cost blocks, the HiSim figure or contract example behind it, and the provenance it carries. A field whose provenance column says <em>absent</em> is not in the payload at all and appears under <code>missing</code> with that reason (decisions Q21, Q22, Q23, A12, R8).</p>
+<div class="scroll"><table><thead><tr><th>Block</th><th>Field</th><th>Source</th><th>Provenance</th></tr></thead><tbody>
+<tr><td>kpis</td><td class="mono">energy_demand_in_kilowatt_hour_per_year</td><td class="sub">all_kpis.json &#x27;Purchased energy consumption for simulated period&#x27; (energy bought, Q22)</td><td>SIMULATED over a full year, PARTIAL and scaled otherwise</td></tr>
+<tr><td>kpis</td><td class="mono">emissions_in_kg_co2_per_year</td><td class="sub">all_kpis.json &#x27;Total CO2 emissions for simulated period&#x27; (operational CO2, Q22)</td><td>SIMULATED over a full year, PARTIAL and scaled otherwise</td></tr>
+<tr><td>kpis</td><td class="mono">self_sufficiency_in_percent</td><td class="sub">all_kpis.json &#x27;Self-sufficiency rate of electricity&#x27; (a rate, never scaled)</td><td>SIMULATED</td></tr>
+<tr><td>kpis</td><td class="mono">embodied_co2_in_kg</td><td class="sub">insulation_materials.json co2_footprint_in_kg_per_m3 x thickness x element area</td><td>SIMULATED; absent when the package insulates nothing</td></tr>
+<tr><td>kpis</td><td class="mono">energy_label</td><td class="sub">no BER/DEAP procedure in HiSim</td><td>MOCKED, value null</td></tr>
+<tr><td>kpis</td><td class="mono">disruption_days_by_level</td><td class="sub">openapi.yaml Kpis.disruption_days_by_level examples[0]</td><td>MOCKED</td></tr>
+<tr><td>kpis</td><td class="mono">indoor_air_quality</td><td class="sub">openapi.yaml Kpis.indoor_air_quality examples[0]</td><td>MOCKED</td></tr>
+<tr><td>kpis</td><td class="mono">thermal_insulation_effect</td><td class="sub">openapi.yaml Kpis.thermal_insulation_effect examples[0]</td><td>MOCKED</td></tr>
+<tr><td>kpis</td><td class="mono">summer_heat_protection</td><td class="sub">openapi.yaml Kpis.summer_heat_protection examples[0]</td><td>MOCKED</td></tr>
+<tr><td>kpis</td><td class="mono">comfort</td><td class="sub">openapi.yaml Kpis.comfort.heating examples[0] and comfort.cooling</td><td>MOCKED</td></tr>
+<tr><td>costs</td><td class="mono">investment_costs_in_euro</td><td class="sub">lifecycle cost engine under &#x27;greenfield_gross&#x27;: year-0 INVESTMENT entries, plus the envelope material cost from insulation_materials.json (Q9)</td><td>PARTIAL: device prices are AI estimates, the envelope is material only</td></tr>
+<tr><td>costs</td><td class="mono">energy_costs_in_euro_per_year</td><td class="sub">lifecycle cost engine under &#x27;greenfield_gross&#x27;: year-1 nominal ENERGY_WORKING, ENERGY_STANDING, ENERGY_CO2_PRICE, ENERGY_CAPACITY_CHARGE</td><td>PARTIAL: Irish energy prices are AI estimates</td></tr>
+<tr><td>costs</td><td class="mono">maintenance_costs_in_euro_per_year</td><td class="sub">lifecycle cost engine under &#x27;greenfield_gross&#x27;: year-1 nominal MAINTENANCE</td><td>PARTIAL: maintenance rates are AI estimates</td></tr>
+<tr><td>costs</td><td class="mono">net_present_value_in_euro</td><td class="sub">lifecycle cost engine under &#x27;greenfield_gross&#x27;: total_npv_in_euro over the engine&#x27;s horizon</td><td>PARTIAL</td></tr>
+<tr><td>costs</td><td class="mono">monthly_net_cost_20y_in_euro</td><td class="sub">lifecycle cost engine under &#x27;greenfield_gross&#x27;: equivalent_annual_cost_in_euro / 12</td><td>PARTIAL</td></tr>
+<tr><td>costs</td><td class="mono">monthly_net_cost_10y_in_euro</td><td class="sub">lifecycle_costs.json&#x27;s stored inputs re-evaluated over 10 years, / 12</td><td>PARTIAL</td></tr>
+<tr><td>costs</td><td class="mono">grant_in_euro</td><td class="sub">the subsidy solver under &#x27;greenfield_net&#x27;, when a country catalogue exists</td><td>absent until subsidy_catalog/&lt;COUNTRY&gt;.json exists (Q24)</td></tr>
+<tr><td>costs</td><td class="mono">payback_period_in_years</td><td class="sub">the difference against the same dwelling without the package</td><td>absent: needs the base calculation (a compare entry point)</td></tr>
+<tr><td>costs</td><td class="mono">property_value_increase_in_percent</td><td class="sub">no model</td><td>absent (A13)</td></tr>
+<tr><td>costs</td><td class="mono">investment_breakdown</td><td class="sub">the two halves of the investment, separately: devices and envelope_material</td><td>PARTIAL</td></tr>
+</tbody></table></div>
 </section>
 </main>
 <script>

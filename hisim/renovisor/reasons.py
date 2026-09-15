@@ -64,6 +64,7 @@ class ReasonCode(str, Enum):
     NO_BEHAVIOUR_MODEL = "NO_BEHAVIOUR_MODEL"
 
     SIMULATION_FAILED = "SIMULATION_FAILED"
+    RESULT_DERIVATION_FAILED = "RESULT_DERIVATION_FAILED"
 
     def describe(self) -> str:
         """Return the one-line description of this code for ``errors.json``.
@@ -145,6 +146,8 @@ class ReasonDescriptions:
         ReasonCode.NO_CONTROL_SCHEDULE_MODEL: "HiSim has no heating control schedule model for the MVP.",
         ReasonCode.NO_BEHAVIOUR_MODEL: "HiSim has no occupant behaviour model to change.",
         ReasonCode.SIMULATION_FAILED: "The request was accepted and the calculation then failed.",
+        ReasonCode.RESULT_DERIVATION_FAILED: "The simulation finished and its result payload could not be "
+                                             "derived.",
     }
 
     GROUP_BY_CODE: ClassVar[Dict[ReasonCode, ReasonGroup]] = {
@@ -174,6 +177,7 @@ class ReasonDescriptions:
         ReasonCode.NO_CONTROL_SCHEDULE_MODEL: ReasonGroup.NO_EFFECT,
         ReasonCode.NO_BEHAVIOUR_MODEL: ReasonGroup.NO_EFFECT,
         ReasonCode.SIMULATION_FAILED: ReasonGroup.CRASH,
+        ReasonCode.RESULT_DERIVATION_FAILED: ReasonGroup.CRASH,
     }
 
 
@@ -280,3 +284,24 @@ class RefusalError(Exception):
     def to_list(self) -> Tuple[Dict[str, str], ...]:
         """Return every refusal as JSON-ready dictionaries, in the order they were found."""
         return tuple(item.to_dict() for item in self.refusals)
+
+
+class ResultDerivationError(Exception):
+    """Raised when the simulation finished and its result payload could not be assembled.
+
+    It is a crash and not a refusal: the request was accepted, the run happened, and its records,
+    its report and its raw results are on disk -- what failed is the step that turns them into the
+    contract's ``kpis`` and ``costs`` blocks. Telling it apart from a failed *simulation* matters
+    to whoever gets paged, because the two have different causes and different fixes: a simulation
+    that dies is a physics or a data problem in the run, while a payload that cannot be derived is
+    a problem in the translation layer over a run that worked.
+
+    Args:
+        detail: One sentence naming what could not be derived and why.
+    """
+
+    def __init__(self, detail: str) -> None:
+        """Store the detail and build the message ``str(error)`` shows."""
+        super().__init__(f"{ReasonCode.RESULT_DERIVATION_FAILED.value}: {detail}")
+        self.reason = ReasonCode.RESULT_DERIVATION_FAILED
+        self.detail = detail

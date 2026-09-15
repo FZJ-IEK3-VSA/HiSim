@@ -49,6 +49,7 @@ from hisim.renovisor.base_files import BaseFileKey, BaseFiles
 from hisim.renovisor.bindings import BindingError, Bindings
 from hisim.renovisor.catalogue import AccessLevel, Catalogue, MeasureSpec, OptionSpec, OptionValueType
 from hisim.renovisor.contract import ContractFiles
+from hisim.renovisor.costs import CostSchema
 from hisim.renovisor.effects import (
     AddThermalResistance,
     Effect,
@@ -63,6 +64,7 @@ from hisim.renovisor.effects import (
     SetUValue,
 )
 from hisim.renovisor.envelope import EnvelopePaths, ExclusivityTable, RegulatoryTargets
+from hisim.renovisor.kpis import KpiSchema
 from hisim.renovisor.laws import LawResolver, StaticDemandEstimator
 from hisim.renovisor.inventory import Inventory
 from hisim.renovisor.materials import InsulationMaterials
@@ -1456,7 +1458,7 @@ class MapRenderer:
         return tuple(missing)
 
     def trace_panel(self) -> List[str]:
-        """Return the trace tab: the inventory diff, the YAML diff and the report table."""
+        """Return the trace tab: the inventory diff, the YAML diff, the report and the result."""
         lines = [
             '<section role="tabpanel" id="panel-trace" hidden>',
             "<h2>Worked example trace</h2>",
@@ -1475,6 +1477,7 @@ class MapRenderer:
         lines.extend(self._trace_inventory(trace))
         lines.extend(self._trace_yaml(trace))
         lines.extend(self._trace_report(trace))
+        lines.extend(self._trace_result())
         lines.append("</section>")
         lines.append("</main>")
         return lines
@@ -1562,6 +1565,40 @@ class MapRenderer:
                 f'<td>{html.escape(str(line.get("note", "")))}</td>'
                 f'<td class="sub">{html.escape(str(line.get("rule", "")))}</td></tr>'
             )
+        lines.append("</tbody></table></div>")
+        return lines
+
+    def _trace_result(self) -> List[str]:
+        """Return the fourth pane: the shape of ``result.json`` and where each field comes from.
+
+        The map is generated offline and no run artefact is available when it is, so what the pane
+        shows is the payload's *schema* rather than one payload: every field the contract's
+        ``kpis`` and ``costs`` blocks can carry, the HiSim figure or contract example behind it,
+        and the provenance it will be published with. That is the thing a frontend team needs
+        before the first real result exists -- which numbers will be real, which are constants, and
+        which fields will simply not be there.
+
+        Returns:
+            The pane's HTML lines.
+        """
+        lines = [
+            "<h3>4. The result payload</h3>",
+            '<p class="sub">The shape of <code>result.json</code>, not a run: every field of the '
+            "contract's KPI and cost blocks, the HiSim figure or contract example behind it, and the "
+            "provenance it carries. A field whose provenance column says <em>absent</em> is not in "
+            "the payload at all and appears under <code>missing</code> with that reason "
+            "(decisions Q21, Q22, Q23, A12, R8).</p>",
+            '<div class="scroll"><table><thead><tr>'
+            "<th>Block</th><th>Field</th><th>Source</th><th>Provenance</th></tr></thead><tbody>",
+        ]
+        for block, rows in (("kpis", KpiSchema.rows()), ("costs", CostSchema.rows())):
+            for row in rows:
+                lines.append(
+                    f"<tr><td>{html.escape(block)}</td>"
+                    f'<td class="mono">{html.escape(row.field)}</td>'
+                    f'<td class="sub">{html.escape(row.source)}</td>'
+                    f"<td>{html.escape(row.provenance)}</td></tr>"
+                )
         lines.append("</tbody></table></div>")
         return lines
 

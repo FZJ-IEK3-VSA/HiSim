@@ -22,7 +22,10 @@ from hisim import utils
 from hisim.components.weather.config import LocationEnum
 from hisim.energy_system.loader import load_energy_system
 from hisim.renovisor.calculate import CalculationRunner, CalculationStatus, ExitCode, InputFiles, OutputFiles
+from hisim.renovisor.costs import CostBuilder, CostField
+from hisim.renovisor.kpis import KpiField
 from hisim.renovisor.map import TraceExample
+from hisim.renovisor.vocabulary import Provenance
 
 pytestmark = pytest.mark.system_setups
 
@@ -133,3 +136,79 @@ def test_the_file_that_ran_is_the_one_the_parametriser_wrote(tmp_path: Path) -> 
     weather_entry = parametrised.components["Weather"]
     assert weather_entry.constructor is not None
     assert weather_entry.constructor.arguments == {"location": "IE"}
+
+
+def test_the_result_payload_says_where_every_number_came_from(tmp_path: Path) -> None:
+    """The step-6 payload of a one-day run: three real figures, the mocked rest, and the gaps.
+
+    Everything asserted here is a claim the frontend acts on. The two annual figures come from a
+    day and are therefore extrapolations, labelled ``PARTIAL`` and carrying the period they were
+    extrapolated from; self-sufficiency is a rate and is not extrapolated at all. Embodied carbon
+    is there because this package insulates two elements, and the investment carries the split
+    between the engine's device estimate and the material-table envelope cost that decision Q23
+    asks to stay visible. The three fields nobody can compute yet are in ``missing`` with reasons.
+
+    Args:
+        tmp_path: The output location.
+    """
+    weather = irish_weather_file()
+    if not weather.is_file():
+        pytest.skip(f"the Irish NSRDB weather file is not in this checkout: {weather}")
+
+    inputs = tmp_path / "in"
+    inputs.mkdir()
+    (inputs / InputFiles.INVENTORY).write_text(
+        TraceExample.INVENTORY_PATH.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    (inputs / InputFiles.PACKAGE).write_text(
+        TraceExample.PACKAGE_PATH.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    (inputs / InputFiles.PARAMETER_NAMES[0]).write_text(
+        PARAMETERS_PATH.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    output = tmp_path / "out"
+
+    code = CalculationRunner(inputs, output, base_files_directory=BASE_FILES).run()
+    assert code is ExitCode.FINISHED, (output / OutputFiles.ERRORS).read_text(encoding="utf-8")
+
+    payload: Dict[str, Any] = json.loads((output / OutputFiles.RESULT).read_text(encoding="utf-8"))
+
+    assert payload["weather_basis"] == {
+        "location": "IE",
+        "station": "Dublin",
+        "dataset": "NSRDB_15MIN",
+        "year": 2019,
+    }
+    assert payload["period"]["fraction_of_year"] == pytest.approx(1 / 365, rel=1e-2)
+
+    kpis = payload["kpis"]
+    for name in (KpiField.ENERGY_DEMAND.value, KpiField.EMISSIONS.value):
+        assert kpis[name]["provenance"] == Provenance.PARTIAL.value
+        assert kpis[name]["period"]["fraction_of_year"] == pytest.approx(1 / 365, rel=1e-2)
+    assert kpis[KpiField.SELF_SUFFICIENCY.value]["provenance"] == Provenance.SIMULATED.value
+    assert kpis[KpiField.EMBODIED_CO2.value]["provenance"] == Provenance.SIMULATED.value
+    assert kpis[KpiField.ENERGY_LABEL.value]["value"] is None
+
+    costs = payload["costs"]
+    breakdown = costs[CostField.INVESTMENT_BREAKDOWN.value]
+    assert set(breakdown) == {CostBuilder.DEVICES_KEY, CostBuilder.ENVELOPE_KEY}
+    total = costs[CostField.INVESTMENT.value]["value"]["best_estimate"]
+    assert total == pytest.approx(
+        breakdown[CostBuilder.DEVICES_KEY]["value"]["best_estimate"]
+        + breakdown[CostBuilder.ENVELOPE_KEY]["value"]["best_estimate"]
+    )
+    for name in (
+        CostField.NET_PRESENT_VALUE.value,
+        CostField.MONTHLY_TWENTY_YEARS.value,
+        CostField.MONTHLY_TEN_YEARS.value,
+        CostField.ENERGY.value,
+        CostField.MAINTENANCE.value,
+    ):
+        assert set(costs[name]["value"]) == {"low", "best_estimate", "high"}
+
+    missing = {entry["field"] for entry in payload["missing"]}
+    assert missing == {
+        f"costs.{CostField.GRANT.value}",
+        f"costs.{CostField.PAYBACK.value}",
+        f"costs.{CostField.PROPERTY_VALUE.value}",
+    }

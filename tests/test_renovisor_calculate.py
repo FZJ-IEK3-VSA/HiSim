@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from hisim.renovisor import TRANSLATOR_VERSION
+from hisim.renovisor import calculate as calculate_module
 from hisim.renovisor.calculate import (
     CalculationRunner,
     CalculationStatus,
@@ -26,7 +27,11 @@ from hisim.renovisor.calculate import (
     ExitCode,
     InputFiles,
     OutputFiles,
+    RequiredOptions,
 )
+from hisim.renovisor.costs import CostField
+from hisim.renovisor.kpis import KpiField
+from hisim.renovisor.result import ResultBuilder
 from hisim.renovisor.reasons import ReasonCode
 from hisim.simulationparameters import SimulationParameters
 
@@ -279,3 +284,112 @@ def test_the_command_line_returns_the_outcomes_exit_code(tmp_path: Path) -> None
     )
 
     assert code == int(ExitCode.INVALID)
+
+
+class RecordingRunner:
+    """A simulation runner that records the parameters it was handed and simulates nothing.
+
+    The three post-processing options a result payload needs are added by the runner *before* the
+    simulation starts, and what the simulation is then given is the only place that decision can
+    be observed. Injecting this in place of the real runner makes that observable without a run.
+    """
+
+    def __init__(self) -> None:
+        """Start with nothing recorded."""
+        self.parameters: Optional[SimulationParameters] = None
+
+    def run(
+        self,
+        energy_system_path: Path,
+        parameters_path: Path,
+        parameters: SimulationParameters,
+        record_directory: Path,
+    ) -> None:
+        """Record the parameters and return without simulating."""
+        del energy_system_path, parameters_path, record_directory
+        self.parameters = parameters
+
+
+def a_heat_pump_package() -> List[Dict[str, Any]]:
+    """Return the measure list of a package that changes the heating system and nothing else."""
+    return [{"measure_id": "HEATING_SYSTEM", "options": {"type_of_system": "HEAT_PUMP"}}]
+
+
+def test_the_options_a_result_needs_are_added_and_recorded(tmp_path: Path) -> None:
+    """A caller who asked for a RenoVisor result asked for the switches that produce one."""
+    inputs = write_input_directory(tmp_path / "in", {"measures": a_heat_pump_package()})
+    output = tmp_path / "out"
+    runner = RecordingRunner()
+
+    CalculationRunner(
+        inputs, output, base_files_directory=BASE_FILES, simulation_runner=runner
+    ).run()
+
+    assert runner.parameters is not None
+    for option in RequiredOptions.REQUIRED:
+        assert option in runner.parameters.post_processing_options
+    assert outcome_of(output)["options_added"] == [option.name for option in RequiredOptions.REQUIRED]
+
+
+def test_the_cost_engine_is_pointed_at_the_dwellings_own_country(tmp_path: Path) -> None:
+    """The engine prices against ``_IE`` data files, which it picks from the attached parameters."""
+    inputs = write_input_directory(tmp_path / "in", {"measures": a_heat_pump_package()})
+    runner = RecordingRunner()
+
+    CalculationRunner(
+        inputs, tmp_path / "out", base_files_directory=BASE_FILES, simulation_runner=runner
+    ).run()
+
+    assert runner.parameters is not None
+    assert runner.parameters.economic_parameters is not None
+    assert runner.parameters.economic_parameters.country == "IE"
+
+
+def test_a_result_payload_is_written_even_when_the_run_produced_no_figures(tmp_path: Path) -> None:
+    """A payload with nothing in it still says what is missing and why (decision R8)."""
+    inputs = write_input_directory(tmp_path / "in", {"measures": a_heat_pump_package()})
+    output = tmp_path / "out"
+
+    code = CalculationRunner(
+        inputs, output, base_files_directory=BASE_FILES, simulation_runner=RecordingRunner()
+    ).run()
+
+    assert code is ExitCode.FINISHED
+    payload: Dict[str, Any] = json.loads((output / OutputFiles.RESULT).read_text(encoding="utf-8"))
+    assert payload["base_file"]
+    assert payload["weather_basis"]["location"] == "IE"
+    assert payload["period"]["fraction_of_year"] == pytest.approx(1 / 365, rel=1e-2)
+    missing = {entry["field"] for entry in payload["missing"]}
+    assert f"kpis.{KpiField.ENERGY_DEMAND.value}" in missing
+    assert f"costs.{CostField.NET_PRESENT_VALUE.value}" in missing
+    assert OutputFiles.RESULT in outcome_of(output)["output_files"]
+
+
+def test_a_failure_while_deriving_the_result_has_its_own_reason_code(tmp_path: Path) -> None:
+    """A payload that cannot be derived is a different failure from a simulation that died."""
+    inputs = write_input_directory(tmp_path / "in", {"measures": a_heat_pump_package()})
+    output = tmp_path / "out"
+    runner = RecordingRunner()
+
+    class BrokenBuilder(ResultBuilder):
+        """A builder that raises, standing in for any defect in the derivation."""
+
+        def build(self, contract: Any) -> Dict[str, Any]:
+            """Raise instead of assembling a payload."""
+            raise ValueError("no")
+
+    calculation = CalculationRunner(
+        inputs, output, base_files_directory=BASE_FILES, simulation_runner=runner
+    )
+    original = calculate_module.ResultBuilder
+    calculate_module.ResultBuilder = BrokenBuilder  # type: ignore[misc]
+    try:
+        code = calculation.run()
+    finally:
+        calculate_module.ResultBuilder = original  # type: ignore[misc]
+
+    assert code is ExitCode.FAILED
+    errors = errors_of(output)["errors"]
+    assert errors[0]["reason"] == ReasonCode.RESULT_DERIVATION_FAILED.value
+    assert errors[0]["group"] == ErrorGroup.CRASH.value
+    assert (output / OutputFiles.TRANSLATION_REPORT).is_file(), "the report must survive a failed derivation"

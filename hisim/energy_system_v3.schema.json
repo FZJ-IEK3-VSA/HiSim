@@ -151,6 +151,7 @@
             "hisim.components.simple_heat_source.SimpleHeatSource",
             "hisim.components.simple_water_storage.SimpleDHWStorage",
             "hisim.components.simple_water_storage.SimpleHotWaterStorage",
+            "hisim.components.solar_thermal_system.SolarThermalSystem",
             "hisim.components.weather.Weather"
           ],
           "description": "The component class, as a dotted path."
@@ -3036,6 +3037,130 @@
                 "propertyNames": {
                   "enum": [
                     "maximal_thermal_power_in_watt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.solar_thermal_system.SolarThermalSystem"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "flat_plate"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "coordinates": {},
+                  "azimuth": {
+                    "type": "number"
+                  },
+                  "tilt": {
+                    "type": "number"
+                  },
+                  "eta_0": {
+                    "type": "number"
+                  },
+                  "a_1_w_m2_k": {
+                    "type": "number"
+                  },
+                  "a_2_w_m2_k": {
+                    "type": "number"
+                  },
+                  "old_solar_pump": {
+                    "type": "boolean"
+                  },
+                  "device_co2_footprint_in_kg": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "investment_costs_in_euro": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lifetime_in_years": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maintenance_costs_in_euro_per_year": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "subsidy_as_percentage_of_investment_costs": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "source_weight": {
+                    "type": "integer"
+                  },
+                  "area_m2": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "delta_temperature_n_k": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": [
+                    "number_of_apartments"
                   ]
                 }
               }

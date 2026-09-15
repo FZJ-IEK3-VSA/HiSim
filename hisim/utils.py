@@ -3,12 +3,10 @@
 # clean
 import datetime as dt
 import gc
-import hashlib
 import inspect
 import itertools
 import json
 import os
-import dataclasses
 from dataclasses import dataclass
 from functools import lru_cache
 from functools import reduce as freduce
@@ -22,6 +20,7 @@ import psutil
 import pytz
 
 from hisim import log
+from hisim.caching import CacheClient
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago"
@@ -344,53 +343,74 @@ def get_cache_file(
     my_simulation_parameters: SimulationParameters,
     cache_dir_path: Optional[str] = None
 ) -> Tuple[bool, str]:  # noqa
-    """Gets a cache path for a given parameter set.
+    """Return ``(exists, path)`` for the cache entry of a configuration under the given simulation parameters.
 
-    This will generate a file path based on any dataclass_json.
-    It works by turning the class into a json string, hashing the string and then using that as filename.
-    The idea is to have a unique file path for every possible configuration.
+    The key material is built here with :func:`build_cache_key_string`; the lookup itself -- filename,
+    directory, validation of an existing entry -- is :meth:`hisim.caching.CacheClient.lookup`. The
+    signature and return value are unchanged, so no component had to change when the client was introduced.
+
+    ``exists`` is advisory: two processes may both miss the same key and both compute the entry, which
+    wastes work but is harmless. Never write to the returned path directly; use
+    :func:`hisim.caching.atomic_cache_write`, otherwise a concurrent reader can see a half-written file.
+
+    The directory is chosen in this order: the ``cache_dir_path`` argument, then ``HISIM_CACHE_DIR``, then
+    ``my_simulation_parameters.cache_dir_path``. The argument wins over the environment so that a test
+    pointing at its own directory keeps working on a machine where the override is set.
 
     Args:
-        component_key: filename prefix for the component type.
-        parameter_class: dataclass with a ``to_json`` method; the building of its
-            ``component_id`` is nulled before hashing.
-        my_simulation_parameters: provides the cache directory and a unique key appended before hashing.
-        cache_dir_path: optional override; defaults to ``my_simulation_parameters.cache_dir_path``.
+        component_key: filename prefix, today the component's instance name.
+        parameter_class: a dataclass with ``to_json``; its ``component_id.building`` is cleared before hashing.
+        my_simulation_parameters: provides the default directory and the simulation part of the key.
+        cache_dir_path: optional directory override; see the order above.
 
     Returns:
         Tuple[bool, str]: ``(exists, absolute_path)``.
 
     Raises:
-        ValueError: if ``my_simulation_parameters`` is None or the JSON string is too short.
+        ValueError: if ``my_simulation_parameters`` is None or the key material is implausibly short.
     """
-    parameter_class_copy = copy.deepcopy(parameter_class)
-    component_id = getattr(parameter_class_copy, "component_id", None)
-    if component_id is not None:
-        # The cached data depends on what the component is and how it is parameterized, not on
-        # which building it happens to sit in, so the building is removed from the identity
-        # before the configuration is hashed. The identity is frozen, hence the replacement.
-        setattr(parameter_class_copy, "component_id", dataclasses.replace(component_id, building=None))
-    json_str = parameter_class_copy.to_json()
+    key_material = build_cache_key_string(parameter_class, my_simulation_parameters)
+    client = CacheClient.from_environment()
+    if cache_dir_path is not None:
+        # The explicit argument outranks the environment; the override is simply not consulted.
+        directory = cache_dir_path
+    else:
+        directory = client.settings.resolve_local_directory(my_simulation_parameters.cache_dir_path)
+        if client.settings.local_directory is not None:
+            client.announce_environment_override(directory)
+    entry = client.lookup(component_key, key_material, directory)
+    return entry.exists, entry.path
+
+
+def build_cache_key_string(parameter_class: Any, my_simulation_parameters: SimulationParameters) -> str:
+    """Return the string a cache entry's filename is hashed from and its ``.meta`` file records.
+
+    The same string is used by the lookup (hashed into the filename), by the writer (stored beside the
+    entry) and by the validation (re-hashed and compared with the filename), so it is built in one place.
+
+    What is hashed is ``parameter_class.cache_key_view()`` when the class provides it (every
+    ``ConfigBase`` does): a copy with the fields that do not affect the result cleared and any paths made
+    portable. A parameter class without that method -- tests pass minimal stand-ins -- is hashed as it is.
+
+    Args:
+        parameter_class: the configuration; must provide ``to_json``.
+        my_simulation_parameters: contributes start, end, resolution, year, timesteps and country.
+
+    Returns:
+        str: the configuration JSON followed by the simulation parameters' unique key.
+
+    Raises:
+        ValueError: if ``my_simulation_parameters`` is None, or the result is too short to be a real
+            configuration.
+    """
     if my_simulation_parameters is None:
         raise ValueError("Simulation parameters was none.")
-    if cache_dir_path is None:
-        cache_dir_path = my_simulation_parameters.cache_dir_path
-    simulation_parameter_str = my_simulation_parameters.get_unique_key()
-    json_str = json_str + simulation_parameter_str
+    view_method = getattr(parameter_class, "cache_key_view", None)
+    hashed = view_method() if callable(view_method) else parameter_class
+    json_str = hashed.to_json() + my_simulation_parameters.get_unique_key()
     if len(json_str) < 5:
         raise ValueError("Empty json detected for caching. This is a bug.")
-    json_str_encoded = json_str.encode("utf-8")
-    # Johanna Ganglbauer: python told me "TypeError: openssl_sha256() takes at most 1 argument (2 given)",
-    # I removed the second input argument "usedforsecurity=False" and it works - maybe I need to update the hashlib package?
-    sha_key = hashlib.sha256(json_str_encoded).hexdigest()
-    filename = f"{component_key}_{sha_key}.cache"
-
-    cache_absolute_filepath = os.path.join(cache_dir_path, filename)
-    if not os.path.isdir(cache_dir_path):
-        os.mkdir(cache_dir_path)
-    if os.path.isfile(cache_absolute_filepath):
-        return True, cache_absolute_filepath
-    return False, cache_absolute_filepath
+    return str(json_str)
 
 
 def load_export_load_profile_generator(target: str) -> Dict[str, List[str]]:  # noqa
@@ -433,9 +453,9 @@ def measure_execution_time(my_function):  # noqa
         start = timer()
         result = my_function(*args, **kwargs)
         end = timer()
-        diff = end - start
+        diff_in_s = end - start
         log.profile(
-            "Executing " + my_function.__module__ + "." + my_function.__name__ + " took " + f"{diff:1.2f}" + " seconds"
+            "Executing " + my_function.__module__ + "." + my_function.__name__ + " took " + f"{diff_in_s:1.2f}" + " seconds"
         )
         return result
 

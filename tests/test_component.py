@@ -7,7 +7,13 @@ Each test verifies a specific aspect of the component system.
 
 # clean
 
+from dataclasses import dataclass
+from enum import Enum, unique
+from typing import List
+from unittest.mock import patch
+
 import pytest
+from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -221,6 +227,49 @@ def test_config_base() -> None:
     log.information("ConfigBase tests passed!")
 
 
+@unique
+class ReportedOperationMode(str, Enum):
+    """Two modes spelled the way a configuration file on disk spells them."""
+
+    NOMINAL = "NominalLoad"
+    STANDBY = "StandbyLoad"
+
+
+@dataclass_json
+@dataclass
+class ReportedConfig(ConfigBase):
+    """A config with an enum field, a list of enum values and a plain float field."""
+
+    component_id: ComponentID
+    operation_mode: ReportedOperationMode
+    fallback_modes: List[ReportedOperationMode]
+    rated_power_in_watt: float
+
+
+@pytest.mark.base
+def test_get_string_dict_renders_an_enum_field_by_its_value() -> None:
+    """An enum-typed field reads as its wire value in the report.
+
+    ``get_string_dict`` renders each field with ``str``, which spells an enum member as
+    ``ReportedOperationMode.NOMINAL`` -- a class name and a Python identifier in a line
+    whose job is to name a setting. The report names the value the field is written and
+    serialized as instead, for a field of its own and for enum values nested in a
+    container, while every non-enum field renders exactly as before.
+    """
+    config = ReportedConfig(
+        component_id=ComponentID(name="ReportedComponent"),
+        operation_mode=ReportedOperationMode.NOMINAL,
+        fallback_modes=[ReportedOperationMode.STANDBY],
+        rated_power_in_watt=1500.0,
+    )
+
+    report = config.get_string_dict()
+
+    assert "Operation mode: NominalLoad" in report
+    assert "Fallback modes: ['StandbyLoad']" in report
+    assert "Rated power in watt: 1500.0" in report
+
+
 @pytest.mark.base
 def test_example_component_with_config() -> None:
     """Test ExampleComponent with a custom configuration.
@@ -240,7 +289,10 @@ def test_example_component_with_config() -> None:
         loadtype=lt.LoadTypes.ELECTRICITY,
         unit=lt.Units.WATT,
         electricity=-1e3,
-        capacity=45 * 121.2,
+        capacity=(
+            example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+            * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
+        ),
         initial_temperature=25.0,
     )
 
@@ -293,7 +345,10 @@ def test_component_connections() -> None:
         loadtype=lt.LoadTypes.HEATING,
         unit=lt.Units.WATT,
         electricity=-1e3,
-        capacity=45 * 121.2,
+        capacity=(
+            example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+            * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
+        ),
         initial_temperature=25.0,
     )
 
@@ -373,7 +428,10 @@ def test_add_default_connections_empty_raises() -> None:
         loadtype=lt.LoadTypes.HEATING,
         unit=lt.Units.WATT,
         electricity=-1e3,
-        capacity=45 * 121.2,
+        capacity=(
+            example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+            * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
+        ),
         initial_temperature=25.0,
     )
     component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
@@ -430,7 +488,7 @@ def test_component_default_opex_and_capex() -> None:
     assert capex_default.lifetime_in_years == 1
     assert capex_default.capex_investment_cost_for_simulated_period_in_euro == 0
     assert capex_default.device_co2_footprint_for_simulated_period_in_kg == 0
-    assert capex_default.maintenance_costs_in_euro == 0
+    assert capex_default.maintenance_costs_in_euro_per_year == 0
     assert capex_default.maintenance_cost_per_simulated_period_in_euro == 0
     assert capex_default.subsidy_as_percentage_of_investment_costs == 0
     assert capex_default.kpi_tag is None
@@ -460,7 +518,7 @@ def test_component_default_opex_and_capex() -> None:
         lifetime_in_years=20,
         capex_investment_cost_for_simulated_period_in_euro=500,
         device_co2_footprint_for_simulated_period_in_kg=25,
-        maintenance_costs_in_euro=100,
+        maintenance_costs_in_euro_per_year=100,
         maintenance_cost_per_simulated_period_in_euro=5,
         subsidy_as_percentage_of_investment_costs=10,
         kpi_tag=None,
@@ -471,7 +529,7 @@ def test_component_default_opex_and_capex() -> None:
     assert custom_capex.lifetime_in_years == 20
     assert custom_capex.capex_investment_cost_for_simulated_period_in_euro == 500
     assert custom_capex.device_co2_footprint_for_simulated_period_in_kg == 25
-    assert custom_capex.maintenance_costs_in_euro == 100
+    assert custom_capex.maintenance_costs_in_euro_per_year == 100
     assert custom_capex.maintenance_cost_per_simulated_period_in_euro == 5
     assert custom_capex.subsidy_as_percentage_of_investment_costs == 10
 
@@ -491,7 +549,7 @@ def test_example_component_simulation() -> None:
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
 
     # Create component with default config
-    config = example_component.ExampleComponentConfig.get_default_example_component()
+    config = fft.sized_example_component_config()
     component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
 
     # Create outputs
@@ -721,7 +779,7 @@ def test_connect_inputs_raises_for_unconnected_mandatory() -> None:
     from hisim.component_wrapper import ComponentWrapper
 
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    config = example_component.ExampleComponentConfig.get_default_example_component()
+    config = fft.sized_example_component_config()
     component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
 
     mandatory_input = cp.ComponentInput(
@@ -746,7 +804,7 @@ def test_connect_inputs_warns_for_allow_unconnected_mandatory() -> None:
     from hisim.component_wrapper import ComponentWrapper
 
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    config = example_component.ExampleComponentConfig.get_default_example_component()
+    config = fft.sized_example_component_config()
     component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
 
     optional_mandatory_input = cp.ComponentInput(
@@ -762,8 +820,15 @@ def test_connect_inputs_warns_for_allow_unconnected_mandatory() -> None:
     component.inputs.append(optional_mandatory_input)
 
     wrapper = ComponentWrapper(component, is_cachable=False, connect_automatically=False)
-    # Should not raise — the input is marked as allow_unconnected_mandatory.
-    wrapper.connect_inputs(all_outputs=[])
+    with patch.object(log, 'warning') as mock_warning:
+        # Should not raise — the input is marked as allow_unconnected_mandatory.
+        wrapper.connect_inputs(all_outputs=[])
+        mock_warning.assert_called_once()
+        # Verify the warning actually concerns the unconnected mandatory input,
+        # not some unrelated message (the specific silent-degradation risk the
+        # test name claims to guard against).
+        args, _ = mock_warning.call_args
+        assert "not connected" in args[0]
     assert optional_mandatory_input.source_output is None
 
 
@@ -828,6 +893,101 @@ def test_add_component_input_and_connect_propagates_allow_unconnected() -> None:
     assert created_input.allow_unconnected_mandatory is True
     assert created_input.src_object_name == "TestSource"
     assert created_input.src_field_name == "TestOutput"
+
+
+@pytest.mark.base
+def test_get_dynamic_inputs_returns_participants_in_sorted_order() -> None:
+    """Test that get_dynamic_inputs sorts by weight, source component name and source output.
+
+    The returned list is the order an aggregator sums its participants in, and IEEE-754 addition
+    is not associative, so that order has to be the same whichever way the house was written
+    down. Here the inputs are created in an order that is wrong on all three parts of the key at
+    once, and the accessor is expected to hand them back in the executor's order while leaving
+    the creation-ordered bookkeeping untouched.
+    """
+    from hisim.dynamic_component import DynamicComponent
+
+    sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = ConfigBase(component_id=ComponentID(name="TestDynamic"))
+    dyn_component = DynamicComponent(
+        my_component_inputs=[],
+        my_component_outputs=[],
+        name="TestDynamic",
+        my_simulation_parameters=sim_params,
+        my_config=config,
+        my_display_config=DisplayConfig(),
+    )
+
+    creation_order = [
+        ("zebra", "ElectricityOutput", 2),
+        ("alpha", "SecondOutput", 1),
+        ("alpha", "FirstOutput", 1),
+        ("beta", "ElectricityOutput", 1),
+    ]
+    for source_object_name, source_component_output, source_weight in creation_order:
+        dyn_component.add_component_input_and_connect(
+            source_component_output=source_component_output,
+            source_object_name=source_object_name,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
+            source_weight=source_weight,
+        )
+
+    returned = dyn_component.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
+    assert [(item.src_object_name, item.src_field_name) for item in returned] == [
+        ("alpha", "FirstOutput"),
+        ("alpha", "SecondOutput"),
+        ("beta", "ElectricityOutput"),
+        ("zebra", "ElectricityOutput"),
+    ]
+
+    # The bookkeeping itself is read positionally elsewhere and must keep its creation order.
+    assert [
+        (entry.source_component_field_name, entry.source_weight) for entry in dyn_component.my_component_inputs
+    ] == [(output, weight) for _, output, weight in creation_order]
+
+
+@pytest.mark.base
+def test_get_dynamic_inputs_only_returns_inputs_carrying_all_tags() -> None:
+    """Test that sorting did not change which inputs get_dynamic_inputs selects.
+
+    Sorting the result must not widen or narrow the tag match: an input still has to carry every
+    requested tag, and one carrying only some of them stays out of the list no matter where the
+    sort key would have placed it.
+    """
+    from hisim.dynamic_component import DynamicComponent
+
+    sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = ConfigBase(component_id=ComponentID(name="TestDynamic"))
+    dyn_component = DynamicComponent(
+        my_component_inputs=[],
+        my_component_outputs=[],
+        name="TestDynamic",
+        my_simulation_parameters=sim_params,
+        my_config=config,
+        my_display_config=DisplayConfig(),
+    )
+
+    dyn_component.add_component_input_and_connect(
+        source_component_output="Consumed",
+        source_object_name="aaa_consumer",
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=1,
+    )
+    dyn_component.add_component_input_and_connect(
+        source_component_output="Produced",
+        source_object_name="zzz_producer",
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
+        source_weight=1,
+    )
+
+    returned = dyn_component.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
+    assert [item.src_object_name for item in returned] == ["zzz_producer"]
 
 
 @pytest.mark.base

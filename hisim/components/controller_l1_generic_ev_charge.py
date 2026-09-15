@@ -23,6 +23,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, 
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -112,6 +113,8 @@ class L1Controller(cp.Component):
     (2) Car Battery (advanced_ev_battery_bslib)
     (3) EMS (controller_l2_energy_management_system) - optional
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     ElectricityNeededByCar = "ElectricityNeededByCar"
@@ -266,7 +269,7 @@ class L1Controller(cp.Component):
         """Prepares the simulation."""
         pass
 
-    def _handle_discharging(self, car_consumption_in_watt: float) -> float:
+    def _handle_discharging_power_in_watt(self, car_consumption_in_watt: float) -> float:
         """Handle discharging case when car is consuming energy.
 
         When the car is driving or has standby losses, it consumes energy from the battery.
@@ -274,7 +277,7 @@ class L1Controller(cp.Component):
         """
         return car_consumption_in_watt * (-1)
 
-    def _handle_parking(self, _car_location: int) -> float:
+    def _handle_parking_power_in_watt(self, _car_location: int) -> float:
         """Handle parking case when car is not at charging location.
 
         When the car is parked but not at the charging location, no charging occurs.
@@ -282,7 +285,7 @@ class L1Controller(cp.Component):
         """
         return 0.0
 
-    def _handle_charging(
+    def _handle_charging_power_in_watt(
         self,
         soc: float,
         electricity_target_in_watt: float
@@ -320,7 +323,7 @@ class L1Controller(cp.Component):
 
         return charging_power_in_watt
 
-    def control(
+    def control_power_in_watt(
         self,
         car_consumption_in_watt: float,
         car_location: int,
@@ -349,16 +352,16 @@ class L1Controller(cp.Component):
         """
         # DISCHARGING: car is consuming energy (driving or standby losses)
         if car_consumption_in_watt > 0.0:
-            return self._handle_discharging(car_consumption_in_watt)
+            return self._handle_discharging_power_in_watt(car_consumption_in_watt)
 
         # CHARGING or PARKING: car is not driving
         if car_consumption_in_watt == 0.0:
             # PARKING: car is not at charging location
             if car_location != self.charging_location:
-                return self._handle_parking(car_location)
+                return self._handle_parking_power_in_watt(car_location)
 
             # CHARGING: car is at charging location
-            return self._handle_charging(soc, electricity_target_in_watt)
+            return self._handle_charging_power_in_watt(soc, electricity_target_in_watt)
 
         raise ValueError(
             f"Car consumption cannot be negative, otherwise car would be producing energy: {car_consumption_in_watt}"
@@ -376,7 +379,7 @@ class L1Controller(cp.Component):
                 electricity_target_from_ems_in_watt = stsv.get_input_value(self.electricity_target_from_ems_channel)
             else:
                 electricity_target_from_ems_in_watt = 0
-            self.state.power_in_watt = self.control(
+            self.state.power_in_watt = self.control_power_in_watt(
                 car_consumption_in_watt,
                 car_location=car_location,
                 soc=soc,

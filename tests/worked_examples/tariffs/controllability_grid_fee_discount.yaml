@@ -1,0 +1,34 @@
+# GENERATED from controllability_grid_fee_discount.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "controllability_grid_fee_discount"
+group: "tariffs"
+spec_section: "8.2"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "A controllable consumption device (section 14a EnWG style) earns a 60 % reduction of the grid fee. The discount changes the additive per-kWh components only: the effective grid fee is 40 % of the list fee, and the working cost is the volume times energy price plus reduced grid fee plus taxes."
+inputs:
+  supply_kind: "FLAT"
+  energy_bought_in_kwh: 6000
+  working_price_in_euro_per_kwh: 0.22
+  grid_fee_in_euro_per_kwh: 0.1
+  taxes_and_levies_in_euro_per_kwh: 0.06
+  controllability_kind: "GRID_FEE_SHARE"
+  grid_fee_reduction_share: 0.6
+  standing_charge_in_euro_per_year: 150
+expected:
+  marginal_price_components_in_euro_per_kwh:
+    value: 0.100000
+    abs_tol: 0.000001
+    derivation: "grid_fee_in_euro_per_kwh*(1-grid_fee_reduction_share)+taxes_and_levies_in_euro_per_kwh"
+    note: "the discount reduces the grid fee before it enters the marginal price"
+  energy_working_in_euro:
+    value: 1920.00
+    abs_tol: 0.01
+    derivation: "energy_bought_in_kwh*(working_price_in_euro_per_kwh+marginal_price_components_in_euro_per_kwh)"
+  energy_standing_in_euro:
+    value: 150.00
+    abs_tol: 0.01
+    derivation: "standing_charge_in_euro_per_year"
+  total_bill_in_euro:
+    value: 2070.00
+    abs_tol: 0.01
+    derivation: "energy_working_in_euro+energy_standing_in_euro"

@@ -1,0 +1,121 @@
+# GENERATED from co2_price_from_trajectory.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "co2_price_from_trajectory"
+group: "end_to_end"
+spec_section: "3.5"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-09-08"
+description: "A 10,000 EUR device over an 8-year horizon at 3 % interest, buying 5,000 kWh of electricity a year at 0.25 EUR/kWh. What the example pins is the CO2 *price* component of the bill - a real cash flow, and the one energy figure apply_tariff does not produce: the tariff engine never sees a carbon price, and the energy calculator adds the component per projection year as emission factor x kWh x exposure share x the CO2 price of that calendar year, divided by 1,000 kg per ton. The trajectory steps from 50 EUR/t (2024) to 80 (2027) to 110 (2030), is read with step interpolation - the last point at or before the year applies, and the last point persists past its end - and is never escalated. This is figure (3) of calculators/co2.py's four CO2 figures; the CO2 damage cost (4) is a macroeconomic shadow price that never coexists with it (§3.8). The emission factor, the exposure share and the trajectory come from the synthetic XX database (SyntheticCarbonData in tests/worked_example_runners.py) and are copied here as inputs, so a change there fails this example instead of re-baselining it."
+inputs:
+  investment_in_euro: 10000
+  lifetime_in_years: 8
+  maintenance_rate: 0
+  horizon_in_years: 8
+  interest_rate: 0.03
+  general_price_escalation_rate: 0
+  investment_price_escalation_rate: 0
+  energy_price_escalation_rate: 0
+  price_basis_year: 2024
+  co2_price_scenario: "worked_example"
+  energy_bought_in_kwh: 5000
+  electricity_price_in_euro_per_kwh: 0.25
+  standing_charge_in_euro_per_year: 0
+  emission_factor_in_kg_per_kwh: 0.4
+  co2_price_exposure: 1
+  co2_price_2024_in_euro_per_ton: 50
+  co2_price_2027_in_euro_per_ton: 80
+  co2_price_2030_in_euro_per_ton: 110
+  kilograms_per_ton: 1000
+  months_per_year: 12
+expected:
+  nominal_energy_co2_price_year_1_in_euro:
+    value: 100.00
+    abs_tol: 0.01
+    derivation: "energy_bought_in_kwh*emission_factor_in_kg_per_kwh*co2_price_exposure*co2_price_2024_in_euro_per_ton/kilograms_per_ton"
+    note: "year 1 = calendar 2024: 5,000 kWh x 0.4 kg/kWh = 2,000 kg = 2 t, at the 50 EUR/t point"
+  nominal_energy_co2_price_year_2_in_euro:
+    value: 100.00
+    abs_tol: 0.01
+    derivation: "energy_bought_in_kwh*emission_factor_in_kg_per_kwh*co2_price_exposure*co2_price_2024_in_euro_per_ton/kilograms_per_ton"
+  nominal_energy_co2_price_year_3_in_euro:
+    value: 100.00
+    abs_tol: 0.01
+    derivation: "energy_bought_in_kwh*emission_factor_in_kg_per_kwh*co2_price_exposure*co2_price_2024_in_euro_per_ton/kilograms_per_ton"
+    note: "year 3 = calendar 2026: still the 2024 point. Step interpolation applies the last point at or before the year, it does not interpolate towards the next one"
+  nominal_energy_co2_price_year_4_in_euro:
+    value: 160.00
+    abs_tol: 0.01
+    derivation: "energy_bought_in_kwh*emission_factor_in_kg_per_kwh*co2_price_exposure*co2_price_2027_in_euro_per_ton/kilograms_per_ton"
+    note: "year 4 = calendar 2027: the trajectory steps to 80 EUR/t on 1 January"
+  nominal_energy_co2_price_year_5_in_euro:
+    value: 160.00
+    abs_tol: 0.01
+    derivation: "energy_bought_in_kwh*emission_factor_in_kg_per_kwh*co2_price_exposure*co2_price_2027_in_euro_per_ton/kilograms_per_ton"
+  nominal_energy_co2_price_year_6_in_euro:
+    value: 160.00
+    abs_tol: 0.01
+    derivation: "energy_bought_in_kwh*emission_factor_in_kg_per_kwh*co2_price_exposure*co2_price_2027_in_euro_per_ton/kilograms_per_ton"
+  nominal_energy_co2_price_year_7_in_euro:
+    value: 220.00
+    abs_tol: 0.01
+    derivation: "energy_bought_in_kwh*emission_factor_in_kg_per_kwh*co2_price_exposure*co2_price_2030_in_euro_per_ton/kilograms_per_ton"
+    note: "year 7 = calendar 2030: the last point, 110 EUR/t"
+  nominal_energy_co2_price_year_8_in_euro:
+    value: 220.00
+    abs_tol: 0.01
+    derivation: "energy_bought_in_kwh*emission_factor_in_kg_per_kwh*co2_price_exposure*co2_price_2030_in_euro_per_ton/kilograms_per_ton"
+    note: "year 8 = calendar 2031, past the last point, which therefore persists. The CO2 price component is never escalated: the trajectory already carries the whole path"
+  npv_energy_co2_price_in_euro:
+    value: 1049.58
+    abs_tol: 0.01
+    derivation: "nominal_energy_co2_price_year_1_in_euro/(1+interest_rate)^1+nominal_energy_co2_price_year_2_in_euro/(1+interest_rate)^2+nominal_energy_co2_price_year_3_in_euro/(1+interest_rate)^3+nominal_energy_co2_price_year_4_in_euro/(1+interest_rate)^4+nominal_energy_co2_price_year_5_in_euro/(1+interest_rate)^5+nominal_energy_co2_price_year_6_in_euro/(1+interest_rate)^6+nominal_energy_co2_price_year_7_in_euro/(1+interest_rate)^7+nominal_energy_co2_price_year_8_in_euro/(1+interest_rate)^8"
+    note: "each year discounted on its own, because the series is a step function and no annuity factor describes it"
+  present_value_factor_sum:
+    value: 7.019692
+    abs_tol: 0.000001
+    derivation: "(1-(1+interest_rate)^-horizon_in_years)/interest_rate"
+    note: "sum of the discount factors of years 1..8; applies to the flat working cost, not to the stepped CO2 component"
+  nominal_energy_working_year_1_in_euro:
+    value: 1250.00
+    abs_tol: 0.01
+    derivation: "energy_bought_in_kwh*electricity_price_in_euro_per_kwh"
+    note: "the working cost apply_tariff bills. The CO2 component is deliberately not part of it: the tariff engine never sees the trajectory, the energy calculator adds the component per projection year (§3.5, §3.6 rule 5)"
+  nominal_energy_working_year_8_in_euro:
+    value: 1250.00
+    abs_tol: 0.01
+    derivation: "nominal_energy_working_year_1_in_euro*(1+energy_price_escalation_rate)^(horizon_in_years-1)"
+    note: "flat, because the energy escalation is zero here - so every difference between year 1 and year 8 below is carbon price, not energy price"
+  npv_energy_working_in_euro:
+    value: 8774.62
+    abs_tol: 0.01
+    derivation: "nominal_energy_working_year_1_in_euro*present_value_factor_sum"
+  npv_investment_in_euro:
+    value: 10000.00
+    abs_tol: 0.01
+    derivation: "investment_in_euro"
+    note: "paid at year 0, undiscounted"
+  total_npv_in_euro:
+    value: 19824.20
+    abs_tol: 0.01
+    derivation: "npv_investment_in_euro+npv_energy_working_in_euro+npv_energy_co2_price_in_euro"
+  annuity_factor:
+    value: 0.142456
+    abs_tol: 0.000001
+    derivation: "interest_rate*(1+interest_rate)^horizon_in_years/((1+interest_rate)^horizon_in_years-1)"
+  eac_in_euro:
+    value: 2824.08
+    abs_tol: 0.01
+    derivation: "total_npv_in_euro*annuity_factor"
+  annual_cost_year_1_in_euro:
+    value: 1350.00
+    abs_tol: 0.01
+    derivation: "nominal_energy_working_year_1_in_euro+nominal_energy_co2_price_year_1_in_euro"
+    note: "nominal, not discounted: the liquidity view of year 1"
+  annual_cost_year_7_in_euro:
+    value: 1470.00
+    abs_tol: 0.01
+    derivation: "nominal_energy_working_year_1_in_euro+nominal_energy_co2_price_year_7_in_euro"
+    note: "the same view once the trajectory has stepped twice: the whole increase is carbon price"
+  monthly_cost_year_1_in_euro:
+    value: 112.50
+    abs_tol: 0.01
+    derivation: "annual_cost_year_1_in_euro/months_per_year"

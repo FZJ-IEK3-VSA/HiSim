@@ -33,9 +33,18 @@ class PostProcessingOptions(IntEnum):
     COMPUTE_KPIS = 19
     PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION = 20
     WRITE_COMPONENT_CONFIGS_TO_JSON = 21
+    # A run without a Building component writes no sizer JSON at all: its KPIs carry no
+    # conditioned floor area, which every per-m2 field of that file is normalized by.
     WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER = 22
     WRITE_KPIS_TO_JSON = 23
     EXPORT_TO_PKL = 24
     WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON = 25
     EXPORT_MONTHLY_RESULTS = 26
     EXPORT_RESULTS_IN_ONE_FILE = 27
+    # Runs the parallel lifecycle cost engine (cost_spec.md). Opt-in and side-effect free:
+    # only writes new files; all legacy outputs stay identical.
+    COMPUTE_LIFECYCLE_COSTS = 28
+    # Additionally writes the human-readable lifecycle reports: cost_summary.md,
+    # lifecycle_report.html (plausibility panel + charts along the calculation chain) and
+    # matplotlib PNGs. Implies COMPUTE_LIFECYCLE_COSTS.
+    LIFECYCLE_COST_REPORT = 29

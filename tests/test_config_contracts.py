@@ -157,13 +157,21 @@ class PilotWireFormat:
             "hydrogen",
         ),
         "GenericBoilerControllerConfig": ("modulating", "on_off"),
-        "HeatDistributionConfig": ("standard",),
-        "HeatDistributionControllerConfig": ("standard",),
+        "HeatDistributionConfig": ("building_derived",),
+        "HeatDistributionControllerConfig": ("building_derived",),
         "EMSConfig": ("optimize_own_consumption",),
-        "BuildingConfig": ("standard",),
-        "WeatherConfig": ("standard",),
-        "UtspLpgConnectorConfig": ("standard",),
+        "BuildingConfig": ("german_single_family_home",),
+        "WeatherConfig": ("aachen",),
+        "UtspLpgConnectorConfig": ("couple_both_at_work",),
         "ElectricityMeterConfig": ("standard",),
+        "PVSystemConfig": ("rooftop",),
+        "BatteryConfig": ("sized_to_pv",),
+        "GasMeterConfig": ("standard",),
+        "FuelMeterConfig": ("standard",),
+        "HeatingMeterConfig": ("standard",),
+        "SimpleDHWStorageConfig": ("standard",),
+        "SimpleHotWaterStorageConfig": ("buffer",),
+        "CarConfig": (),
     }
 
     #: Config class name → its named constructors, in declaration order. A constructor's
@@ -176,34 +184,59 @@ class PilotWireFormat:
         "HeatDistributionControllerConfig": (),
         "EMSConfig": (),
         "BuildingConfig": ("for_tabula_code",),
-        "WeatherConfig": ("for_location",),
+        "WeatherConfig": ("for_location", "for_data_file"),
         "UtspLpgConnectorConfig": ("for_household",),
         "ElectricityMeterConfig": (),
+        "PVSystemConfig": (),
+        "BatteryConfig": (),
+        "GasMeterConfig": (),
+        "FuelMeterConfig": (),
+        "HeatingMeterConfig": (),
+        "SimpleDHWStorageConfig": (),
+        "SimpleHotWaterStorageConfig": (),
+        "CarConfig": ("for_household",),
     }
 
-    #: The scanned classes that legitimately ship no preset at all. Every class converted so
-    #: far has one, so the tuple is empty; it stays here because zero presets is a legal state
-    #: — a pure fact provider, or a class whose every instance is spelled out — and the day one
-    #: arrives it should be a decision recorded here rather than an oversight.
-    CLASSES_WITHOUT_PRESETS: Tuple[str, ...] = ()
+    #: The scanned classes that legitimately ship no preset at all. Zero presets is a legal
+    #: state and this tuple is where that decision is recorded rather than discovered.
+    #: ``CarConfig`` is the first and so far only one: a preset takes nothing but the instance
+    #: name, and a car cannot be configured without naming the household and the car whose
+    #: LoadProfileGenerator driving profile it drives by, so every one of its builders has to
+    #: be a constructor (D-23, 2026-08-31).
+    CLASSES_WITHOUT_PRESETS: Tuple[str, ...] = ("CarConfig",)
 
     #: Config class name → the facts it contributes, in declaration order.
     FACT_NAMES: Dict[str, Tuple[str, ...]] = {
-        "GenericBoilerConfig": ("maximal_thermal_power_in_watt", "minimal_thermal_power_in_watt"),
+        "GenericBoilerConfig": (
+            "maximal_thermal_power_in_watt",
+            "minimal_thermal_power_in_watt",
+            "energy_carrier",
+            "heating_value_of_fuel_in_kwh_per_liter",
+            "fuel_density_in_kg_per_m3",
+        ),
         "HeatDistributionControllerConfig": (
             "water_mass_flow_rate_in_kg_per_second",
             "heat_distribution_system_type",
+            "set_heating_threshold_outside_temperature_in_celsius",
         ),
         "BuildingConfig": (
             "heating_load_in_watt",
             "number_of_apartments",
             "conditioned_floor_area_in_m2",
+            "roof_area_in_m2",
             "heating_reference_temperature_in_celsius",
             "set_heating_temperature_in_celsius",
             "set_cooling_temperature_in_celsius",
         ),
-        "WeatherConfig": (),
-        "UtspLpgConnectorConfig": (),
+        "PVSystemConfig": ("pv_peak_power_in_watt",),
+        "BatteryConfig": (),
+        "GasMeterConfig": (),
+        "FuelMeterConfig": (),
+        "HeatingMeterConfig": (),
+        "SimpleDHWStorageConfig": (),
+        "SimpleHotWaterStorageConfig": (),
+        "WeatherConfig": ("weather_identity",),
+        "UtspLpgConnectorConfig": ("occupancy_identity",),
         "ElectricityMeterConfig": (),
         "GenericBoilerControllerConfig": (),
     }
@@ -253,6 +286,13 @@ def test_the_scan_finds_the_converted_classes(scan):
         "WeatherConfig",
         "UtspLpgConnectorConfig",
         "ElectricityMeterConfig",
+        "PVSystemConfig",
+        "BatteryConfig",
+        "GasMeterConfig",
+        "FuelMeterConfig",
+        "HeatingMeterConfig",
+        "SimpleDHWStorageConfig",
+        "SimpleHotWaterStorageConfig",
     } <= names
 
 
@@ -278,6 +318,31 @@ def test_no_two_classes_declare_the_same_fact_unless_they_are_interchangeable(sc
             "fact in InterchangeableProviders.ALLOWED with the family that shares it."
         )
         assert names <= allowed, f"'{fact}' is declared by {sorted(names - allowed)}, which is not in the family"
+
+
+@pytest.mark.base
+def test_the_batch_one_facts_have_exactly_the_provider_they_were_added_for(scan):
+    """Each fact R2.1 added is declared by one class, and by that class.
+
+    Failure mode caught: a fact landing on the wrong config — the roof area on the PV rather
+    than on the building, say — which binds silently today (nothing reads it yet) and becomes
+    a wrong number or an ambiguity only once the batch that reads it lands.
+    """
+    expected = {
+        "set_heating_threshold_outside_temperature_in_celsius": "HeatDistributionControllerConfig",
+        "roof_area_in_m2": "BuildingConfig",
+        "pv_peak_power_in_watt": "PVSystemConfig",
+        "energy_carrier": "GenericBoilerConfig",
+        "heating_value_of_fuel_in_kwh_per_liter": "GenericBoilerConfig",
+        "fuel_density_in_kg_per_m3": "GenericBoilerConfig",
+    }
+    declarers: Dict[str, Set[str]] = {}
+    for config_class in scan[0]:
+        for contribution in getattr(config_class, FactContribution.CLASS_ATTRIBUTE, ()):
+            for fact in contribution.facts:
+                declarers.setdefault(fact, set()).add(config_class.__name__)
+    for fact, provider in expected.items():
+        assert declarers.get(fact) == {provider}, f"'{fact}' is declared by {sorted(declarers.get(fact) or ())}"
 
 
 @pytest.mark.base
@@ -434,15 +499,22 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     invalidates every scenario file and every result column already written against the old
     spelling.
     """
+    from hisim.components.advanced_battery_bslib import BatteryConfig
     from hisim.components.building import BuildingConfig
     from hisim.components.controller_l2_energy_management_system import EMSConfig
     from hisim.components.electricity_meter import ElectricityMeterConfig
+    from hisim.components.fuel_meter import FuelMeterConfig
+    from hisim.components.gas_meter import GasMeterConfig
+    from hisim.components.heating_meter import HeatingMeterConfig
     from hisim.components.generic_boiler import GenericBoilerConfig, GenericBoilerControllerConfig
+    from hisim.components.generic_car import CarConfig
     from hisim.components.heat_distribution_system import (
         HeatDistributionConfig,
         HeatDistributionControllerConfig,
     )
+    from hisim.components.generic_pv_system import PVSystemConfig
     from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnectorConfig
+    from hisim.components.simple_water_storage import SimpleDHWStorageConfig, SimpleHotWaterStorageConfig
     from hisim.components.weather import WeatherConfig
 
     by_name: Dict[str, Any] = {
@@ -452,9 +524,17 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "HeatDistributionControllerConfig": HeatDistributionControllerConfig,
         "EMSConfig": EMSConfig,
         "BuildingConfig": BuildingConfig,
+        "PVSystemConfig": PVSystemConfig,
         "WeatherConfig": WeatherConfig,
         "UtspLpgConnectorConfig": UtspLpgConnectorConfig,
         "ElectricityMeterConfig": ElectricityMeterConfig,
+        "BatteryConfig": BatteryConfig,
+        "GasMeterConfig": GasMeterConfig,
+        "FuelMeterConfig": FuelMeterConfig,
+        "HeatingMeterConfig": HeatingMeterConfig,
+        "SimpleDHWStorageConfig": SimpleDHWStorageConfig,
+        "SimpleHotWaterStorageConfig": SimpleHotWaterStorageConfig,
+        "CarConfig": CarConfig,
     }
     for class_name, expected in PilotWireFormat.PRESET_NAMES.items():
         assert tuple(presets_of(by_name[class_name])) == expected

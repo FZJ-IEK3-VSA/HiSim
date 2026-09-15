@@ -2,7 +2,7 @@
 
 # clean
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import ClassVar, List, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -11,7 +11,8 @@ from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim.component import ComponentInput, OpexCostDataClass
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ComponentID, ConfigBase, DisplayConfig, preset
+from hisim.config.channels import DispatchRule, DynamicConnectionChannel
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
@@ -20,6 +21,7 @@ from hisim.dynamic_component import (
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
+from hisim.economics.facts import CostRelevance
 
 DEFAULT_SOURCE_WEIGHT = 999
 __authors__ = "Jonas Hoppe"
@@ -36,8 +38,9 @@ __status__ = ""
 class HeatingMeterConfig(ConfigBase):
     """Configuration dataclass for the HeatingMeter component.
 
-    Holds the building name and component name used to instantiate
-    a HeatingMeter.
+    Holds the component identity and nothing else: a heat meter sums watt-hours, so there is
+    no device, no carrier and no constant to configure. The named default is
+    :meth:`preset_standard`, which takes the instance name.
     """
 
     @classmethod
@@ -47,17 +50,23 @@ class HeatingMeterConfig(ConfigBase):
 
     component_id: ComponentID
 
+    @preset
     @classmethod
-    def get_heating_meter_default_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "HeatingMeterConfig":
-        """Gets a default HeatingMeter config."""
-        if component_id is None:
-            component_id = ComponentID(name="HeatingMeter")
-        return HeatingMeterConfig(
-            component_id=component_id,
-        )
+    def preset_standard(cls, name: str) -> "HeatingMeterConfig":
+        """The heat meter of a household, which has nothing to configure but its own identity.
+
+        The only preset the class has, and the whole configuration: the component identity is
+        this class's single field, because a heat meter sums watt-hours and neither prices a
+        fuel nor owns a device. It reproduces the deleted ``get_heating_meter_default_config``
+        factory exactly.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            HeatingMeterConfig: The preset configuration.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class HeatingMeter(DynamicComponent):
@@ -69,6 +78,8 @@ class HeatingMeter(DynamicComponent):
     OPEX costs and CO2 emissions for district heating.
     """
 
+    cost_relevance = CostRelevance.METER
+
     # Outputs
     HeatAvailableInWatt: str = "HeatAvailableInWatt"
     HeatConsumptionInWatt: str = "HeatConsumptionInWatt"
@@ -78,6 +89,41 @@ class HeatingMeter(DynamicComponent):
     HeatProduction: str = "HeatProduction"
     CumulativeConsumption: str = "CumulativeConsumption"
     CumulativeProduction: str = "CumulativeProduction"
+
+    #: Stable key of the channel carrying heat a participant delivered into the network.
+    PRODUCTION_CHANNEL: ClassVar[str] = "production"
+
+    #: Stable key of the channel carrying heat a participant drew out of it.
+    CONSUMPTION_UNCONTROLLED_CHANNEL: ClassVar[str] = "consumption_uncontrolled"
+
+    #: The two flows this meter understands, declared so that an energy-system file can address a
+    #: heat source or a heat consumer at it. They repeat the tags, load type, unit and
+    #: monitored-only weight that
+    #: :meth:`get_default_connections_from_more_advanced_heat_pump` and
+    #: :meth:`get_default_connections_from_heat_distribution_system` already build, so the
+    #: declaration describes the wiring the meter has always accepted rather than a new one.
+    #:
+    #: Both are concrete here, unlike the fuel and gas meters: everything this meter measures is
+    #: heat in watts, and nothing about the household changes that, so the strict form keeps the
+    #: check that catches a temperature summed into a power balance.
+    #:
+    #: Dispatch is forbidden on both, because a meter measures and never controls.
+    CHANNELS: Tuple[DynamicConnectionChannel, ...] = (
+        DynamicConnectionChannel(
+            key=PRODUCTION_CHANNEL,
+            tags=frozenset({lt.InandOutputType.HEAT_DELIVERED}),
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+        DynamicConnectionChannel(
+            key=CONSUMPTION_UNCONTROLLED_CHANNEL,
+            tags=frozenset({lt.InandOutputType.HEAT_CONSUMPTION}),
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+    )
 
     def __init__(
         self,
@@ -270,8 +316,8 @@ class HeatingMeter(DynamicComponent):
         """
 
         if timestep == 0:
-            self.production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_DELIVERED])
-            self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_CONSUMPTION])
+            self.production_inputs = self.get_channel_inputs(self.PRODUCTION_CHANNEL)
+            self.consumption_uncontrolled_inputs = self.get_channel_inputs(self.CONSUMPTION_UNCONTROLLED_CHANNEL)
 
         # get sum of production and consumption for all inputs for each iteration
         production_in_watt = (

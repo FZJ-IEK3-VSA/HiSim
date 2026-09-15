@@ -281,7 +281,7 @@ class EnergySystemExecutor:
         wired, wiring_warnings = wire_energy_system(
             expanded, configured, self.simulation_parameters
         )
-        simulator = self.register(expanded, wired)
+        simulator = self.register(expanded, wired, expansion)
         warnings = configured.warnings + wiring_warnings
         for warning in warnings:
             log.warning(warning)
@@ -299,7 +299,9 @@ class EnergySystemExecutor:
             rerun=self.rerun,
         )
 
-    def register(self, model: EnergySystemFile, wired: WiredSystem) -> sim.Simulator:
+    def register(
+        self, model: EnergySystemFile, wired: WiredSystem, expansion: ExpansionRecord
+    ) -> sim.Simulator:
         """Creates the simulator and registers every component in file order.
 
         File order decides the order of the global output list and therefore the column order of
@@ -307,9 +309,23 @@ class EnergySystemExecutor:
         is switched off, because every connection this format makes is an item of the file and
         has already been made.
 
+        The run metadata a Python setup has to assemble by hand — the scenario name and the
+        description — the file already carries: its ``name`` becomes the scenario name that
+        post-processing writes into the pyam "scenario" column and into ``scenario.json``, and
+        its ``description`` the run's description. Before this, a declarative run left both
+        empty: only the Python path set them, the twelve building-sizer setups writing the
+        scenario name and :mod:`hisim.hisim_main` the description.
+
+        A grouped file describes more than one system, so its name alone does not identify the
+        run: the same file run twice with a different ``variants.<v>.selected`` would otherwise
+        produce two physically different runs under one scenario, which a scenario evaluation
+        would merge. The selection therefore joins the name — see :meth:`scenario_name_of`.
+
         Args:
-            model: The expanded energy system, for its name.
+            model: The expanded energy system, for its name and description.
             wired: The constructed and connected components.
+            expansion: What the expansion resolved, for the variant selections that name the
+                run alongside the file's own name.
 
         Returns:
             The simulator holding every component of the system.
@@ -321,9 +337,37 @@ class EnergySystemExecutor:
             my_module_config=None,
             my_simulation_parameters=self.simulation_parameters,
         )
+        simulator.scenario_name = self.scenario_name_of(model, expansion)
+        simulator.description = model.description or ""
         for _name, component in wired.components:
             simulator.add_component(component, connect_automatically=self.CONNECT_AUTOMATICALLY)
         return simulator
+
+    @staticmethod
+    def scenario_name_of(model: EnergySystemFile, expansion: ExpansionRecord) -> str:
+        """Names the run: the file's own name, and the option every variant selected.
+
+        A variant is a decision the file leaves open, so two runs of one grouped file can be
+        two different households. The name has to say which one ran, or a scenario evaluation
+        sums the heat pump and the gas boiler into one row. The selections are written the way
+        a reader would name them — ``Household gas + solar [collector=large]``, and
+        ``[a=x, b=y]`` when a file decides more than one thing — in the file's own order, so
+        that re-running the same selection reproduces the same name exactly.
+
+        Args:
+            model: The expanded energy system, for its ``name``.
+            expansion: What the expansion resolved; its selections are empty for a file
+                without variants, which is then named by ``name`` alone.
+
+        Returns:
+            The scenario name of this run.
+        """
+        if not expansion.selections:
+            return model.name
+        selected = ", ".join(
+            f"{selection.variant}={selection.selected}" for selection in expansion.selections
+        )
+        return f"{model.name} [{selected}]"
 
     @classmethod
     def check_metadata(cls, model: EnergySystemFile, location: str, rerun: bool) -> None:

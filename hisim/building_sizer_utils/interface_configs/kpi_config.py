@@ -43,7 +43,9 @@ Fields whose name ends in ``_per_m2`` are normalized by the building's
 **conditioned floor area** (the "Conditioned floor area" KPI, in m2).
 Normalization is always per floor area, never per capita or per dwelling.
 Fields without the ``_per_m2`` suffix carry an absolute quantity for the whole
-building.
+building. A simulation that contains no :class:`~hisim.components.building.Building`
+computes no conditioned floor area, so post-processing writes no sizer JSON for it and
+logs that it skipped the building object.
 
 KPI formulas and units
 ----------------------

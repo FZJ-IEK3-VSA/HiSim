@@ -1,0 +1,15 @@
+# Review enforcement of the worked-example library (cost-spec-v2 §3.8).
+#
+# Accepted values, and the only two there are: `warn` and `error`. The value is
+# validated against that closed set when it is read (tools/worked_examples/
+# attestation.py, EnforcementMode.parse), so a misspelling such as "ERROR" or
+# "eror" fails the run instead of silently leaving the review gate disabled.
+#
+# warn  - unreviewed or stale examples emit a pytest warning (the current state:
+#         every example is machine-drafted and starts unreviewed by construction).
+#         `python tools/convert_worked_examples.py --check` prints how many of the
+#         examples carry a valid attestation, which is the number to watch; and
+#         `--list-unreviewed` names the ones still outstanding.
+# error - the same examples fail tests/test_worked_examples.py. Flipping this one
+#         word after the first human review round is the whole enforcement switch.
+enforcement: warn

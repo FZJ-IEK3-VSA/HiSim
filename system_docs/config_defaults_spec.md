@@ -843,23 +843,27 @@ constructed. The hard case, surfaced by the spike, is **sibling-derived facts** 
 question 3): the heat distribution system's water mass flow comes from the *heat
 distribution controller's* information object, not from the building.
 
-**The incumbent mechanism and why it is not kept.** Cross-component sizing is solved
-today by the ``SingletonSimRepository`` (``hisim/sim_repository_singleton.py``): a global
-singleton mapping ``SingletonDictKeyEnum`` keys to untyped values, written at
+**The incumbent mechanism and why it is not kept.** Cross-component sizing was solved,
+until 2026-09-12, by the ``SingletonSimRepository`` (``hisim/sim_repository_singleton.py``,
+module deleted that day): a global singleton mapping ``SingletonDictKeyEnum`` keys to untyped values, written at
 construction time by whoever constructs first and read by whoever constructs later.
 Auditing it (2026-08-19) shows the pattern has already failed silently in production:
 the sizing keys — ``NUMBEROFAPARTMENTS``, ``MAXTHERMALBUILDINGDEMAND``,
-``WATERMASSFLOWRATEOFHEATGENERATOR``, the storage set-temperatures — are **dead**:
-declared, read (``simple_water_storage`` falls back to ``None`` via ``entry_exists``),
-but written by nobody since their writers were obsoleted. Every property of the design
+``WATERMASSFLOWRATEOFHEATGENERATOR``, the storage set-temperatures — were **dead**:
+declared, read (``simple_water_storage`` fell back to ``None`` via ``entry_exists``),
+but written by nobody since their writers were obsoleted. They were deleted on
+2026-09-12, along with every other key nothing read and the predictive branches the
+runtime half served; the eight weather series the PV system reads moved to the
+per-simulation ``SimRepository``, ``RESULT_SCENARIO_NAME`` and ``DESCRIPTION`` became
+attributes of the ``Simulator``, and the emptied module was removed. Every property of the design
 invites exactly that: untyped ``Any`` values, an open-ended flat key enum, implicit
 construction-order coupling, silent ``entry_exists`` fallbacks instead of errors, and
 global mutable state that bleeds between tests. The context-contributor mechanism below
 is the typed, hard-erroring successor for the **construction-time sizing half** of the
 repository's job; the singleton's *runtime* half — per-timestep forecast exchange for
-the predictive controllers (heat-flux, weather, price forecasts) — is a separate concern
-and explicitly out of scope here (it deserves its own redesign decision later; proper
-component wiring is the likely answer).
+the predictive controllers (heat-flux, weather, price forecasts) — was a separate concern
+and explicitly out of scope here; it was resolved by deletion on 2026-09-12, the
+controllers that read those forecasts having gone to ``obsolete/`` first.
 
 Mechanism (revised 2026-08-19, after review): **declared facts, resolved to a fixed
 point over the configs — before any component is constructed.** Cross-component sizing

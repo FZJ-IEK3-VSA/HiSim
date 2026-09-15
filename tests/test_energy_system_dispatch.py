@@ -10,10 +10,15 @@ The tests here build the smallest system that has a controlled participant: a we
 an occupancy, a photovoltaic array, a battery, the energy management system that ranks them, and
 the meter that measures the grid exchange. Neither the array nor the battery has presets yet, so
 both are written as complete ``config`` blocks, which the format allows for exactly this reason.
-The positive test runs a simulated day and looks at the wires and the results; the two negative
-tests pin the rejections that make the rule unambiguous — a controlled participant whose signal
-nobody consumes leaves a mandatory input unfed, and an author may not reach the derived output
-from the participant's side, because that name is not in the file they are reading.
+The positive tests run a simulated day and look at the wires and the results; the negative tests
+pin the rejections that make the rule unambiguous — a controlled participant whose signal nobody
+consumes leaves a mandatory input unfed, an author may not reach the derived output from the
+participant's side because that name is not in the file they are reading, and no two participants
+may end up sharing one control signal, which an aggregator matches by tags and weight and could
+therefore never tell apart. The ambiguity rejections — a claim two feeds share, and a claim a port
+the aggregator already publishes would answer — are provoked on the resolver, because nothing a
+file builds publishes a control signal before resolution any more (F-1) and no aggregator arranges
+its ports that way today.
 
 Each test states the failure mode it catches.
 """
@@ -25,8 +30,17 @@ from typing import ClassVar
 
 import pytest
 
+from hisim import loadtypes as lt
+from hisim.components.advanced_battery_bslib import Battery, BatteryConfig
+from hisim.components.controller_l2_energy_management_system import (
+    EMSConfig,
+    L2GenericEnergyManagementSystem,
+)
+from hisim.config import SizingContext
+from hisim.energy_system.channels import FeedRequest
 from hisim.energy_system.errors import EnergySystemWiringError
 from hisim.energy_system.executor import build_energy_system, run_energy_system
+from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -78,10 +92,10 @@ name: pv battery ems household
 components:
   weather:
     class: hisim.components.weather.Weather
-    preset: standard
+    preset: aachen
   occupancy:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    preset: standard
+    preset: couple_both_at_work
   pv:
     class: hisim.components.generic_pv_system.PVSystem
     config:
@@ -103,7 +117,6 @@ components:
       lifetime_in_years: null
       maintenance_costs_in_euro_per_year: null
       subsidy_as_percentage_of_investment_costs: null
-      predictive: false
       predictive_control: false
       prediction_horizon: null
     inputs:
@@ -252,3 +265,167 @@ def test_an_author_may_not_wire_the_derived_dispatch_output_from_the_battery(
         build_energy_system(path, Household.parameters(tmp_path))
 
     assert "DispatchTobattery_LoadingPowerInput" in str(caught.value)
+
+
+class SignalCollisions:
+    """Builds the aggregator and the participants the two ambiguity tests provoke by hand.
+
+    Both conditions below need an aggregator whose published signals are arranged in a way no
+    realistic file produces yet, so they are provoked on the resolver rather than through a
+    document — the same route the port-name collision takes in the wiring tests. Sharing the
+    construction here keeps the two tests about the rule and not about the fixture.
+    """
+
+    #: Weight the battery channel is exercised at, chosen because the energy management system
+    #: publishes no signal of its own at it and the tests therefore control what is there.
+    BATTERY_WEIGHT: ClassVar[int] = 6
+
+    #: The PV peak power the batteries below are sized from. This file's batteries exist to be
+    #: wired, not to store anything in particular, so the array is a round ten kilowatts -- which
+    #: gives the ten-kilowatt-hour battery the deleted `get_default_config` factory used to pin.
+    PV_PEAK_POWER_IN_WATT: ClassVar[float] = 10000.0
+
+    @classmethod
+    def battery(cls, name: str) -> Battery:
+        """Builds one battery participant.
+
+        Args:
+            name: Its instance name, which is also its key in the resolver's index.
+
+        Returns:
+            The battery.
+        """
+        return Battery(
+            my_simulation_parameters=SimulationParameters.one_day_only(2021, 900),
+            config=BatteryConfig.preset_sized_to_pv(name).resolve(
+                SizingContext(pv_peak_power_in_watt=cls.PV_PEAK_POWER_IN_WATT)
+            ),
+        )
+
+    @classmethod
+    def ems(cls) -> L2GenericEnergyManagementSystem:
+        """Builds the aggregator, carrying only the signals its own constructor publishes.
+
+        Returns:
+            The energy management system.
+        """
+        built: L2GenericEnergyManagementSystem = L2GenericEnergyManagementSystem(
+            my_simulation_parameters=SimulationParameters.one_day_only(2021, 900),
+            config=EMSConfig.preset_optimize_own_consumption("ems"),
+        )
+        return built
+
+    @classmethod
+    def feed(cls, source: str) -> FeedRequest:
+        """Builds the controlled battery feed both tests address at the aggregator.
+
+        Args:
+            source: Name of the battery the feed measures.
+
+        Returns:
+            The feed request, dispatching into the battery's own power input.
+        """
+        return FeedRequest(
+            consumer="ems",
+            source=source,
+            output=Battery.AcBatteryPowerUsed,
+            component_type=lt.ComponentType.BATTERY,
+            flow_tags=(lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,),
+            weight=cls.BATTERY_WEIGHT,
+            has_dispatch=True,
+            dispatch_target_input="LoadingPowerInput",
+        )
+
+
+@pytest.mark.base
+def test_two_participants_may_not_claim_one_control_signal() -> None:
+    """Catches two ranked participants being steered through a single output.
+
+    An aggregator finds a participant's signal by that participant's tags and weight, so two
+    feeds agreeing on both describe two participants and one signal. Nothing about the port names
+    would notice: the derived names differ, the file reads fine, and at run time the aggregator
+    zips one participant list against a signal list of a different length, steering everything
+    after the duplicate through somebody else's port while the numbers stay plausible. The
+    rejection names the tags and the weight, because that pair is the whole of what collided.
+    """
+    resolver = DynamicConnectionResolver(
+        {
+            "battery": SignalCollisions.battery("battery"),
+            "battery2": SignalCollisions.battery("battery2"),
+            "ems": SignalCollisions.ems(),
+        }
+    )
+
+    with pytest.raises(EnergySystemWiringError) as caught:
+        resolver.resolve_target(
+            "ems", [SignalCollisions.feed("battery"), SignalCollisions.feed("battery2")]
+        )
+
+    assert caught.value.error_id.value == "EF-2B"
+    assert "ELECTRICITY_TARGET" in str(caught.value)
+    assert f"weight {SignalCollisions.BATTERY_WEIGHT}" in str(caught.value)
+
+
+@pytest.mark.base
+def test_a_signal_the_aggregator_already_publishes_is_refused() -> None:
+    """Catches a file quietly duplicating a signal the aggregator already has a port for.
+
+    A dispatch block used to take such a port over instead of growing a second one, because an
+    aggregator's constructor published a control output per participant class it declared a
+    default feed for. None does any more (F-1): before resolution a component built from a file
+    carries only its declared outputs, so a port answering a claim was grown outside the format
+    and the run would end up with two ports for one signal, which the runtime's tag-and-weight
+    lookup cannot tell apart. The refusal names the port so whoever grew it can be found.
+    """
+    ems = SignalCollisions.ems()
+    ems.add_component_output(
+        source_output_name="SignalOfSomebodyElse",
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+        source_component_class="SomeOtherParticipant",
+        source_weight=SignalCollisions.BATTERY_WEIGHT,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="A signal the battery's feed must not collide with.",
+    )
+    resolver = DynamicConnectionResolver({"battery": SignalCollisions.battery("battery"), "ems": ems})
+
+    with pytest.raises(EnergySystemWiringError) as caught:
+        resolver.resolve_target("ems", [SignalCollisions.feed("battery")])
+
+    assert caught.value.error_id.value == "EF-2B"
+    assert "SignalOfSomebodyElse" in str(caught.value)
+    assert "ELECTRICITY_TARGET" in str(caught.value)
+
+
+@pytest.mark.base
+def test_a_published_superset_of_a_claim_is_refused_instead_of_shadowed() -> None:
+    """Catches a published port answering a claim it does not exactly match.
+
+    The runtime lookup matches a signal by weight and tag *containment*, so a published port
+    whose tags contain a claim's set at the same weight is found by that lookup alongside the
+    port the claim creates, and the pairing lists come out one entry too long. Asking the
+    question in the runtime's own terms is what makes the superset as refusable as the exact
+    match, rather than something that slips past a stricter equality test.
+    """
+    ems = SignalCollisions.ems()
+    ems.add_component_output(
+        source_output_name="SupersetSignal",
+        source_tags=[
+            lt.ComponentType.BATTERY,
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+            lt.InandOutputType.ELECTRICITY_TARGET,
+        ],
+        source_component_class=None,
+        source_weight=SignalCollisions.BATTERY_WEIGHT,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="a port carrying more tags than the claim, at the claim's weight",
+    )
+    resolver = DynamicConnectionResolver({"battery": SignalCollisions.battery("battery"), "ems": ems})
+
+    with pytest.raises(EnergySystemWiringError) as caught:
+        resolver.resolve_target("ems", [SignalCollisions.feed("battery")])
+
+    assert caught.value.error_id.value == "EF-2B"
+    assert "SupersetSignal" in str(caught.value)
+    assert "containment" in str(caught.value)

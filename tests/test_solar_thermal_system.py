@@ -1,13 +1,15 @@
 """Tests for the solar thermal system component."""
 
 import datetime
+from typing import Any
 import pandas as pd
 import pytest
 from oemof.thermal.solar_thermal_collector import flat_plate_precalc
 from hisim import sim_repository, component, log, simulator as sim
 from hisim.components import weather, solar_thermal_system
 from hisim.loadtypes import LoadTypes, Units
-from hisim.config import ComponentID
+from hisim.config import AUTO, ComponentID, SizingContext
+from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
 
 
@@ -28,7 +30,7 @@ def test_solar_thermal_system() -> None:
     )
 
     # Configure weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=mysim)
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
@@ -109,3 +111,193 @@ def test_precalc() -> None:
     )
 
     assert precalc_data["collectors_heat"].iloc[0] == pytest.approx(0, abs=1e-9)
+
+
+class WhatMayBeCached:
+    """The columns the collector is allowed to remember between runs.
+
+    ``flat_plate_precalc`` computes in three stages and only the first can be known before the run:
+    the sun's position follows from the timestamps and the coordinates. The plane-of-array irradiance
+    needs the weather, which arrives through wired inputs, and the collector efficiency needs the
+    storage's inlet temperature, which is the simulation's own state feeding back.
+
+    This component used to cache the output of all three, including ``eta_c`` and
+    ``collectors_heat``. Those are functions of a trajectory the run had not taken yet, so no key
+    could describe them and any hit replayed one system's storage behaviour into another's. Pinning
+    the column list is what stops a later precompute quietly reacquiring that dependency -- the
+    original mistake is easy to make again, because caching more looks like caching better.
+    """
+
+    COLUMNS = ("apparent_zenith", "azimuth")
+
+
+@pytest.mark.base
+def test_only_the_sun_is_cached(tmp_path: Any) -> None:
+    """The cached artefact holds the solar position and nothing downstream of it."""
+    simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    simulation_parameters.cache_dir_path = str(tmp_path)
+    collector = solar_thermal_system.SolarThermalSystem(
+        config=solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(area_m2=1.5),
+        my_simulation_parameters=simulation_parameters,
+    )
+
+    collector.i_prepare_simulation()
+
+    assert tuple(collector.solar_position.columns) == WhatMayBeCached.COLUMNS, (
+        f"the collector precomputed {tuple(collector.solar_position.columns)}; anything beyond "
+        f"{WhatMayBeCached.COLUMNS} depends on the run and cannot be keyed"
+    )
+    assert len(collector.solar_position) == simulation_parameters.timesteps
+    written = list(tmp_path.glob("*.cache"))
+    assert len(written) == 1, f"expected one cache file, found {written}"
+    assert tuple(pd.read_csv(written[0]).columns) == WhatMayBeCached.COLUMNS
+
+
+@pytest.mark.base
+def test_the_cached_sun_round_trips_exactly(tmp_path: Any) -> None:
+    """A cached run and an uncached one must agree bit for bit, so the file keeps full precision.
+
+    The default CSV float format does not round-trip a float64, which is the defect
+    roadmap/pylpg_flakiness.md records for the photovoltaic cache: a cached run and an uncached one
+    are then not the same run. Seventeen significant digits do round-trip, and this asserts it on
+    the values actually written rather than trusting the format string.
+    """
+    simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    simulation_parameters.cache_dir_path = str(tmp_path)
+    config = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(area_m2=1.5)
+
+    computed = solar_thermal_system.SolarThermalSystem(config=config, my_simulation_parameters=simulation_parameters)
+    computed.i_prepare_simulation()
+
+    from_cache = solar_thermal_system.SolarThermalSystem(config=config, my_simulation_parameters=simulation_parameters)
+    from_cache.i_prepare_simulation()
+
+    for column in WhatMayBeCached.COLUMNS:
+        assert list(from_cache.solar_position[column]) == list(computed.solar_position[column]), (
+            f"'{column}' changed on the way through the cache, so a cached run is not the same run"
+        )
+
+
+@pytest.mark.base
+def test_every_timestep_gets_an_instant() -> None:
+    """The timestamps are the cache key's claim about the contents, so they must match the run."""
+    simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    collector = solar_thermal_system.SolarThermalSystem(
+        config=solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(area_m2=1.5),
+        my_simulation_parameters=simulation_parameters,
+    )
+
+    timestamps = collector.timestamps_of_the_run()
+
+    assert len(timestamps) == simulation_parameters.timesteps
+    assert timestamps[0] == simulation_parameters.start_date
+    assert (timestamps[1] - timestamps[0]).total_seconds() == simulation_parameters.seconds_per_timestep
+
+
+@pytest.mark.base
+def test_the_collector_grows_with_the_apartments() -> None:
+    """Four square metres per apartment: a single-family house gets 4 m2, a triplex 12 m2.
+
+    The arithmetic used to live in the setups -- one of them wrote ``4 * number_of_apartments``
+    and another just ``4``, so the two disagreed for every multi-family building. The law is
+    now the single place the factor is written down, and this pins both ends of it.
+    """
+    unresolved = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system()
+
+    assert unresolved.area_m2 is AUTO, "the factory must leave the area to its law"
+
+    for apartments, expected_area_m2 in ((1, 4.0), (3, 12.0)):
+        resolved = unresolved.resolve(SizingContext(number_of_apartments=apartments))
+        assert resolved.area_m2 == expected_area_m2, (
+            f"{apartments} apartment(s) must give {expected_area_m2} m2 of collector, "
+            f"got {resolved.area_m2}"
+        )
+
+
+@pytest.mark.base
+def test_a_named_collector_area_beats_the_law() -> None:
+    """An author who names the area gets that area, whatever the building holds.
+
+    Resolution is still allowed to run -- it is a no-op for a field that is already
+    concrete -- so a setup can hand every config the same context without having to know
+    which of them still has something to size.
+    """
+    config = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(area_m2=1.5)
+
+    assert config.area_m2 == 1.5
+    assert config.resolve(SizingContext(number_of_apartments=3)).area_m2 == 1.5
+
+
+@pytest.mark.base
+def test_the_timestep_reads_the_resolved_area() -> None:
+    """Three times the collector, three times the heat: ``i_simulate`` reads the sized field.
+
+    The area reaches the physics through ``self.area_m2``, read once in ``__init__`` through
+    ``concrete()`` -- the constructor has already refused any config still carrying AUTO. Two
+    collectors that differ in nothing but the dwelling count they were resolved against, driven
+    by the same weather at the same instant, must give thermal power in the ratio of their areas.
+    """
+    seconds_per_timestep = 60
+    repo = sim_repository.SimRepository()
+    mysim: sim.SimulationParameters = sim.SimulationParameters.full_year(
+        year=2021, seconds_per_timestep=seconds_per_timestep
+    )
+
+    my_weather = weather.Weather(
+        config=weather.WeatherConfig.preset_aachen("Weather"),
+        my_simulation_parameters=mysim,
+    )
+    my_weather.set_sim_repo(repo)
+    my_weather.i_prepare_simulation()
+
+    unresolved = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system()
+
+    def collector_of(apartments: int) -> solar_thermal_system.SolarThermalSystem:
+        """Builds the collector the law gives a building with that many dwellings."""
+        config = unresolved.resolve(SizingContext(number_of_apartments=apartments))
+        config.component_id = ComponentID(name=f"SolarThermalSystem{apartments}")
+        return solar_thermal_system.SolarThermalSystem(config=config, my_simulation_parameters=mysim)
+
+    single_family = collector_of(1)
+    triplex = collector_of(3)
+    collectors = [single_family, triplex]
+
+    assert single_family.area_m2 == 4.0
+    assert triplex.area_m2 == 12.0
+
+    state_controller = component.ComponentOutput(
+        "FakeControlState",
+        "ControlSignal",
+        LoadTypes.ANY,
+        Units.BINARY,
+        component_id=ComponentID("FakeControlState"),
+    )
+    for collector in collectors:
+        collector.control_signal_channel.source_output = state_controller
+        collector.set_sim_repo(repo)
+        collector.i_prepare_simulation()
+        collector.t_out_channel.source_output = my_weather.air_temperature_output
+        collector.dhi_channel.source_output = my_weather.dhi_output
+        collector.ghi_channel.source_output = my_weather.ghi_output
+
+    everything = [my_weather, *collectors, state_controller]
+    stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(
+        fft.get_number_of_outputs(everything)
+    )
+    fft.add_global_index_of_components(everything)
+    stsv.values[state_controller.global_index] = 1
+
+    timestep = 12 * 60 + 60 * 24 * 183  # 3rd July at noon
+    my_weather.i_simulate(timestep, stsv, False)
+    for collector in collectors:
+        collector.i_simulate(timestep, stsv, False)
+
+    power_of = {
+        collector: stsv.values[collector.thermal_power_w_output_channel.global_index]
+        for collector in collectors
+    }
+    assert power_of[single_family] > 0, "the reference instant has to produce heat at all"
+    assert power_of[triplex] == pytest.approx(3 * power_of[single_family]), (
+        f"a 12 m2 collector gave {power_of[triplex]} W where a 4 m2 one gave "
+        f"{power_of[single_family]} W; i_simulate is not reading the resolved area"
+    )

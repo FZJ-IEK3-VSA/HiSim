@@ -1,0 +1,77 @@
+# yaml-language-server: $schema=../hisim/energy_system_v3.schema.json
+# Recorded from system_setups/basic_household_only_heating.py with energy_systems/one_day_15min.simulation.yaml by the HiSim energy-system recorder v1.
+schema_version: 3
+name: basic_household_only_heating
+description: Shows a single household with only heating.
+components:
+  ModulatingBoilerController:
+    class: hisim.components.generic_boiler.GenericBoilerController
+    preset: modulating
+    inputs:
+      - Weather
+      - HeatDistributionController
+      - SimpleHotWaterStorage
+  HeatDistributionController:
+    class: hisim.components.heat_distribution_system.HeatDistributionController
+    preset: building_derived
+    config:
+      heating_system: RADIATOR
+      heating_reference_temperature_in_celsius: -12.2
+    inputs:
+      - Weather
+      - Building
+  HeatDistributionSystem:
+    class: hisim.components.heat_distribution_system.HeatDistribution
+    preset: building_derived
+    inputs:
+      - Building
+      - HeatDistributionController
+      - SimpleHotWaterStorage
+  SimpleHotWaterStorage:
+    class: hisim.components.simple_water_storage.SimpleHotWaterStorage
+    preset: buffer
+    config:
+      sizing_option: SIZE_ACCORDING_TO_GAS_HEATER
+    inputs:
+      - HeatDistributionSystem
+      - CondensingGasBoiler
+  CondensingGasBoiler:
+    class: hisim.components.generic_boiler.GenericBoiler
+    preset: condensing_gas_12kw
+    inputs:
+      - ModulatingBoilerController
+      - SimpleHotWaterStorage
+  Building:
+    class: hisim.components.building.building.Building
+    preset: german_single_family_home
+    config:
+      weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
+    inputs:
+      - Weather
+      - UTSPConnector
+  Weather:
+    class: hisim.components.weather.Weather
+    preset: aachen
+  UTSPConnector:
+    class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+    preset: couple_both_at_work
+  ElectricityMeter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    preset: standard
+    inputs:
+      - from: UTSPConnector.ElectricalPowerConsumption
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999
+  GasMeter:
+    class: hisim.components.gas_meter.GasMeter
+    preset: standard
+    inputs:
+      - from: CondensingGasBoiler.EnergyDemandDhw
+        tags:
+          - GAS_CONSUMPTION_UNCONTROLLED
+        weight: 999
+      - from: CondensingGasBoiler.EnergyDemandSh
+        tags:
+          - GAS_CONSUMPTION_UNCONTROLLED
+        weight: 999

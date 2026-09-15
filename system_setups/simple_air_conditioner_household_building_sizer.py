@@ -20,7 +20,6 @@ from hisim.components import weather
 from hisim.components import building
 from hisim.components import simple_air_conditioner
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.building_sizer_utils.interface_configs.modular_household_config import (
     read_in_configs,
@@ -56,7 +55,7 @@ def setup_function(
     if my_config is None:
         my_config = ModularHouseholdConfig().get_default_config_for_household_heatpump()
         log.warning(
-            f"Could not read the modular household config from path '{config_filename}'. "
+            "No modular household config was given. "
             "Using the heatpump household default config instead."
         )
     assert my_config.archetype_config_ is not None
@@ -89,7 +88,12 @@ def setup_function(
 
     # =================================================================================================================================
     # Build Building
-    my_building_config = building.BuildingConfig.preset_standard("Building")
+    # The weather config is created first: the building and PV configs copy its identity
+    # (weather_identity) and must have it before those components are built. The weather
+    # component itself is still added further down, so the simulator's component order is unchanged.
+    my_weather_config = weather.WeatherConfig.for_location("Weather", weather.LocationEnum[weather_location])
+
+    my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.set_heating_temperature_in_celsius = 20.0
     my_building_config.set_cooling_temperature_in_celsius = 25.0
     my_building_config.building_code = building_code
@@ -99,13 +103,13 @@ def setup_function(
     )
     my_building_config.number_of_apartments = number_of_apartments
     my_building_config.enable_opening_windows = True
+    my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # =================================================================================================================================
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -173,10 +177,9 @@ def setup_function(
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
         further_result_folder_description = "default_config"
 
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-        entry=f"{scenario_hash_string}",
-    )
+    # The scenario hash names this run; post-processing reads it off the simulator as the
+    # pyam "scenario" column.
+    my_sim.scenario_name = scenario_hash_string
 
     if my_simulation_parameters.result_directory == "":
         ResultPathProviderSingleton().set_important_result_path_information(

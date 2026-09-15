@@ -6,7 +6,8 @@ from typing import ClassVar, List, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
-from oemof.thermal.solar_thermal_collector import flat_plate_precalc
+import pvlib
+from oemof.thermal.solar_thermal_collector import calc_eta_c_flate_plate
 from hisim.component import (
     CapexCostDataClass,
     Component,
@@ -17,14 +18,25 @@ from hisim.component import (
     OpexCostDataClass,
     SingleTimeStepValues,
 )
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import (
+    AUTO,
+    ComponentID,
+    ConfigBase,
+    DisplayConfig,
+    Sizable,
+    Size,
+    concrete,
+    sized_field,
+)
 from hisim import loadtypes, log, utils
+from hisim.caching import atomic_cache_write
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig, PhysicsConfig
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+from hisim.economics.facts import CostRelevance
 
 
 __authors__ = "Kristina Dabrock"
@@ -35,6 +47,13 @@ __version__ = "0.1"
 __maintainer__ = "Kristina Dabrock"
 __email__ = "k.dabrock@fz-juelich.de"
 __status__ = "development"
+
+
+#: How much collector a solar thermal system gets per apartment it serves. The whole
+#: of the collector sizing law: a building with three flats gets three times the
+#: collector of a single-family house, the law assuming that hot water demand scales
+#: with the number of dwellings.
+COLLECTOR_AREA_IN_M2_PER_APARTMENT = 4.0
 
 
 @dataclass_json
@@ -53,7 +72,6 @@ class SolarThermalSystemConfig(ConfigBase):
     # Module configuration
     azimuth: float
     tilt: float
-    area_m2: float  # m2
     eta_0: float
     a_1_w_m2_k: float  # W/(m2*K)
     a_2_w_m2_k: float  # W/(m2*K2)
@@ -76,26 +94,17 @@ class SolarThermalSystemConfig(ConfigBase):
     # Weight of component, defines hierachy in control. The default is 1.
     source_weight: int
 
+    #: Collector area in m2, sized to the building it serves. A sizable field carries a
+    #: default (AUTO), so it sits here among the defaulted fields rather than up with the
+    #: other module parameters, which a dataclass would refuse.
+    area_m2: Sizable[float] = sized_field(
+        rule=Size.NUMBER_OF_APARTMENTS * COLLECTOR_AREA_IN_M2_PER_APARTMENT,
+        value_type=float,
+        note=f"{COLLECTOR_AREA_IN_M2_PER_APARTMENT} m2 of collector per apartment",
+    )
+
     # Temperature difference between collector inlet and mean temperature
     delta_temperature_n_k: float = 10  # K
-
-    @staticmethod
-    def _compute_device_co2_footprint(area_m2: float) -> float:
-        """Compute the CO2 footprint of a solar thermal system in kg.
-
-        Emission factors are derived from:
-        https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1255
-        """
-        return (
-            area_m2 * (240.1 / 2.03)  # material solar collector
-            + area_m2 * (34.74 / 2.03)
-            + 108.28  # material external support
-            + area_m2 * (8.64 / 2.03)  # manufacturing solar collector
-            + area_m2 * (2.53 / 2.03)  # manufacturing external support
-            + area_m2 * (4.39 * 0.56 / 2.03)
-            # 56% (share of mass of solar collector+support/total, i.e.,
-            # including storage) of transport phase 1
-        )
 
     @classmethod
     def get_default_solar_thermal_system(
@@ -104,14 +113,20 @@ class SolarThermalSystemConfig(ConfigBase):
         coordinates: Coordinates = Coordinates(latitude_in_degrees=50.78, longitude_in_degrees=6.08),
         azimuth: float = 180.0,
         tilt: float = 30.0,
-        area_m2: float = 1.5,
+        area_m2: Sizable[float] = AUTO,
         eta_0: float = 0.78,
         a_1_w_m2_k: float = 3.2,  # W/(m2*K)
         a_2_w_m2_k: float = 0.015,  # W/(m2*K2)
         old_solar_pump: bool = False,
         source_weight: int = 1,
     ) -> "SolarThermalSystemConfig":
-        """Gets a default SolarThermalSystem."""
+        """Gets a default SolarThermalSystem.
+
+        The collector area is left to the field's sizing law unless the caller names one:
+        the returned config then carries AUTO and has to be resolved against a
+        ``SizingContext`` that knows how many apartments the building holds. A caller that
+        passes a number keeps that number, as an explicit value always beats a law.
+        """
         if component_id is None:
             component_id = ComponentID(name="SolarThermalSystem")
         return SolarThermalSystemConfig(
@@ -137,48 +152,6 @@ class SolarThermalSystemConfig(ConfigBase):
             source_weight=source_weight,
         )
 
-    @classmethod
-    def get_default_solar_thermal_system_manually_calculated_capex(
-        cls,
-        component_id: Optional[ComponentID] = None,
-        coordinates: Coordinates = Coordinates(latitude_in_degrees=50.78, longitude_in_degrees=6.08),
-        azimuth: float = 180.0,
-        tilt: float = 30.0,
-        area_m2: float = 1.5,
-        eta_0: float = 0.78,
-        a_1_w_m2_k: float = 3.2,  # W/(m2*K)
-        a_2_w_m2_k: float = 0.015,  # W/(m2*K2)
-        old_solar_pump: bool = False,
-        source_weight: int = 1,
-    ) -> "SolarThermalSystemConfig":
-        """Gets a default SolarThermalSystem."""
-        if component_id is None:
-            component_id = ComponentID(name="SolarThermalSystem")
-        return SolarThermalSystemConfig(
-            coordinates=coordinates,
-            component_id=component_id,
-            azimuth=azimuth,
-            tilt=tilt,
-            area_m2=area_m2,  # m2
-            # These values are taken from the Excel sheet that can be downloaded from
-            # http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters
-            # Values were determined by changing eta_0, a_1, and a_2 so that the curve
-            # fits with the typical flat plat curve
-            eta_0=eta_0,
-            a_1_w_m2_k=a_1_w_m2_k,  # W/(m2*K)
-            a_2_w_m2_k=a_2_w_m2_k,  # W/(m2*K2)
-            old_solar_pump=old_solar_pump,
-            device_co2_footprint_in_kg=SolarThermalSystemConfig._compute_device_co2_footprint(
-                area_m2
-            ),
-            investment_costs_in_euro=area_m2 * 797,  # Flachkollektoren
-            # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
-            maintenance_costs_in_euro_per_year=100,  # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
-            subsidy_as_percentage_of_investment_costs=0.3,  # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
-            lifetime_in_years=20,  # https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1712
-            source_weight=source_weight,
-        )
-
 
 class SolarThermalSystem(Component):
     """Solar thermal system.
@@ -186,6 +159,8 @@ class SolarThermalSystem(Component):
     This class represents a solar thermal system that can be used
     for warm water and space heating.
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     TemperatureOutsideDegC: ClassVar[str] = "TemperatureOutsideDegC"
@@ -227,8 +202,13 @@ class SolarThermalSystem(Component):
         self.previous_state: SolarThermalSystemState = deepcopy(self.state)
         # Initialized variables
         self.factor: float = 1.0
-        self.precalc_data_for_all_timesteps_data: List[Optional[pd.DataFrame]] = []
-        self.precalc_data_for_all_timesteps_output: List[pd.DataFrame] = []
+        #: The collector area, read once here rather than at every timestep. ``super().__init__``
+        #: has just refused any config still carrying AUTO, so this read is what turns the
+        #: sizable field into the plain float the physics multiplies by.
+        self.area_m2: float = concrete(config.area_m2)
+        # Where the sun will be at every timestep, filled in i_prepare_simulation from the cache or
+        # from pvlib. Nothing downstream of the sun is stored: see i_prepare_simulation.
+        self.solar_position: pd.DataFrame = pd.DataFrame()
         self.cache_filepath: Optional[str] = None
 
         # Add inputs
@@ -350,7 +330,7 @@ class SolarThermalSystem(Component):
         component_type = loadtypes.ComponentType.SOLAR_THERMAL_SYSTEM
         kpi_tag = KpiTagEnumClass.SOLAR_THERMAL
         unit = loadtypes.Units.SQUARE_METER
-        size_of_energy_system = config.area_m2
+        size_of_energy_system = concrete(config.area_m2)
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
             simulation_parameters=simulation_parameters,
@@ -610,29 +590,74 @@ class SolarThermalSystem(Component):
         """Doublechecks."""
         pass
 
+    def timestamps_of_the_run(self) -> pd.DatetimeIndex:
+        """Return the instant of every timestep of this simulation.
+
+        The sun's position is a function of these and of the coordinates, and of nothing else, which
+        is what makes it the only part of the collector calculation that can be worked out before
+        the run and cached. They come from ``start_date`` and ``seconds_per_timestep``, both of which
+        are already in the cache key.
+
+        Returns:
+            pd.DatetimeIndex: one instant per timestep, in simulation order.
+        """
+        return pd.DatetimeIndex(
+            [
+                self.my_simulation_parameters.start_date
+                + datetime.timedelta(0, self.my_simulation_parameters.seconds_per_timestep * timestep)
+                for timestep in range(self.my_simulation_parameters.timesteps)
+            ]
+        )
+
     def i_prepare_simulation(self) -> None:
-        """Prepare the simulation."""
+        """Prepare the simulation by working out where the sun will be.
+
+        Only the sun's position is precomputed, and only it is cached. The collector calculation has
+        three stages and just the first qualifies: the solar position depends on the timestamps and
+        the coordinates, both already in the cache key; the plane-of-array irradiance depends on the
+        weather, which arrives through wired inputs; and the collector efficiency depends on the
+        storage's inlet temperature, which is the simulation's own state feeding back.
+
+        This component used to cache the output of all three. That value could not be keyed by
+        anything -- it was a function of a trajectory the run had not taken yet -- so any hit
+        replayed one system's storage behaviour into another's. Restricting what is cached is what
+        makes the existing key exactly correct, with nothing to widen. See roadmap/pylpg_flakiness.md
+        F8.
+        """
         file_exists, self.cache_filepath = utils.get_cache_file(
             self.config.component_id.name, self.config, self.my_simulation_parameters
         )
+        timestamps = self.timestamps_of_the_run()
 
         if file_exists:
-            log.information("Get solar thermal results from cache.")
-            df = pd.read_csv(self.cache_filepath, sep=",", decimal=".")
-            # Reconstruct list of DataFrames per timestep (if needed)
-            self.precalc_data_for_all_timesteps_output = [
-                group_df.drop(columns="timestep") for _, group_df in df.groupby("timestep", sort=True)
-            ]
+            log.information("Get solar position from cache.")
+            # float_precision="round_trip" is what makes a cached run and an uncached one the same
+            # run. pandas' default CSV reader uses a fast, inexact float parser, and it loses the
+            # last bit of roughly a sixth of the values here whatever precision they were written
+            # with -- measured: 317 of 2000 with the default write format, 358 with "%.17g", 542
+            # with "%.20g", and zero with this argument. The loss is in the reader, not in the
+            # digits on disk, which is worth knowing because the obvious remedies make it worse.
+            cached = pd.read_csv(self.cache_filepath, sep=",", decimal=".", float_precision="round_trip")
+            # No length check here on purpose. The old one accepted any file with the right number
+            # of rows, which is exactly how a cache entry belonging to a different system passed
+            # unnoticed. With a key that genuinely determines the contents, a mismatched length
+            # means the file is corrupt, so it is left to raise rather than warned about.
+            self.solar_position = cached.set_index(timestamps)
+        else:
+            self.solar_position = pvlib.solarposition.get_solarposition(
+                time=timestamps,
+                latitude=self.config.coordinates.latitude_in_degrees,
+                longitude=self.config.coordinates.longitude_in_degrees,
+            )[["apparent_zenith", "azimuth"]]
 
-            if len(self.precalc_data_for_all_timesteps_output) != self.my_simulation_parameters.timesteps:
-                raise ValueError(
-                    f"Reading the cached solar thermal precalc values seems to have failed. "
-                    f"Expected {self.my_simulation_parameters.timesteps} values, but got "
-                    f"{len(self.precalc_data_for_all_timesteps_output)}"
-                )
-
-        # create placeholder list for per-timestep precalc DataFrames, filled in i_simulate
-        self.precalc_data_for_all_timesteps_data = [None] * self.my_simulation_parameters.timesteps
+            assert self.cache_filepath is not None
+            with atomic_cache_write(
+                self.cache_filepath, utils.build_cache_key_string(self.config, self.my_simulation_parameters)
+            ) as temporary_cache_filepath:
+                # The default float format already writes a shortest round-trip representation;
+                # forcing more digits does not help, because what loses precision is the read. See
+                # the note beside the read above.
+                self.solar_position.to_csv(temporary_cache_filepath, sep=",", decimal=".", index=False)
 
     def i_simulate(
         self,
@@ -647,41 +672,45 @@ class SolarThermalSystem(Component):
         diffuse_horizontal_irradiance_w_m2 = stsv.get_input_value(self.dhi_channel)
         ambient_air_temperature_deg_c = stsv.get_input_value(self.t_out_channel)
         temperature_collector_inlet_deg_c = stsv.get_input_value(self.water_temperature_input_channel)
-        # check if results could be found in cache and if the list has
-        # the right length
-        if (
-            hasattr(self, "precalc_data_for_all_timesteps_output")
-            and len(self.precalc_data_for_all_timesteps_output) == self.my_simulation_parameters.timesteps
-        ):
-            precalc_data = self.precalc_data_for_all_timesteps_output[timestep]  # use precalculated data from cache
+        # The collector is calculated every timestep, from this timestep's weather and this
+        # timestep's storage temperature. Only the sun's position comes from the precomputation, and
+        # the three lines below are the body of oemof.thermal's flat_plate_precalc with its first
+        # stage lifted out -- see i_prepare_simulation for why that stage and no other.
+        # Some more info on the equation:
+        # http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters #noqa
+        time_ind = self.my_simulation_parameters.start_date + datetime.timedelta(
+            0,
+            self.my_simulation_parameters.seconds_per_timestep * timestep,
+        )
+        apparent_zenith = pd.Series(self.solar_position["apparent_zenith"].iloc[timestep], index=[time_ind])
+        azimuth = pd.Series(self.solar_position["azimuth"].iloc[timestep], index=[time_ind])
+        global_horizontal_irradiance = pd.Series(global_horizontal_irradiance_w_m2, index=[time_ind])
+        diffuse_horizontal_irradiance = pd.Series(diffuse_horizontal_irradiance_w_m2, index=[time_ind])
 
-        # calculate outputs
-        else:
+        direct_normal_irradiance = pvlib.irradiance.dni(
+            ghi=global_horizontal_irradiance, dhi=diffuse_horizontal_irradiance, zenith=apparent_zenith
+        )
+        total_irradiation = pvlib.irradiance.get_total_irradiance(
+            surface_tilt=self.config.tilt,
+            surface_azimuth=self.config.azimuth,
+            solar_zenith=apparent_zenith,
+            solar_azimuth=azimuth,
+            dni=direct_normal_irradiance.fillna(0),  # fill NaN values with '0'
+            ghi=global_horizontal_irradiance,
+            dhi=diffuse_horizontal_irradiance,
+        )
+        collector_efficiency = calc_eta_c_flate_plate(
+            self.config.eta_0,  # optical efficiency of the collector
+            self.config.a_1_w_m2_k,  # thermal loss parameter 1
+            self.config.a_2_w_m2_k,  # thermal loss parameter 2
+            temperature_collector_inlet_deg_c,  # collectors inlet temperature
+            self.config.delta_temperature_n_k,  # difference between collector inlet and mean temperature
+            pd.Series(ambient_air_temperature_deg_c, index=[time_ind]),
+            total_irradiation["poa_global"],
+        )
+        collectors_heat = collector_efficiency * total_irradiation["poa_global"]
 
-            # calculate collectors heat
-            # Some more info on equation:
-            # http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters #noqa
-            time_ind = self.my_simulation_parameters.start_date + datetime.timedelta(
-                0,
-                self.my_simulation_parameters.seconds_per_timestep * timestep,
-            )
-
-            precalc_data = flat_plate_precalc(
-                lat=self.config.coordinates.latitude_in_degrees,
-                long=self.config.coordinates.longitude_in_degrees,
-                collector_tilt=self.config.tilt,
-                collector_azimuth=self.config.azimuth,
-                eta_0=self.config.eta_0,  # optical efficiency of the collector
-                a_1=self.config.a_1_w_m2_k,  # thermal loss parameter 1
-                a_2=self.config.a_2_w_m2_k,  # thermal loss parameter 2
-                temp_collector_inlet=temperature_collector_inlet_deg_c,  # collectors inlet temperature
-                delta_temp_n=self.config.delta_temperature_n_k,  # temperature difference between collector inlet and mean temperature
-                irradiance_global=pd.Series(global_horizontal_irradiance_w_m2, index=[time_ind]),
-                irradiance_diffuse=pd.Series(diffuse_horizontal_irradiance_w_m2, index=[time_ind]),
-                temp_amb=pd.Series(ambient_air_temperature_deg_c, index=[time_ind]),
-            )
-
-        thermal_power_output_w = precalc_data["collectors_heat"].iloc[0] * self.config.area_m2
+        thermal_power_output_w = collectors_heat.iloc[0] * self.area_m2
 
         thermal_energy_output_wh = thermal_power_output_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         required_mass_flow_output_kg_s = thermal_power_output_w / (
@@ -728,19 +757,6 @@ class SolarThermalSystem(Component):
             self.electricity_consumption_output_channel,
             electric_power_demand_solar_pump_w,
         )
-        # cache results at the end of the simulation
-        self.precalc_data_for_all_timesteps_data[timestep] = precalc_data
-
-        if timestep + 1 == self.my_simulation_parameters.timesteps:
-            for i, df in enumerate(self.precalc_data_for_all_timesteps_data):
-                assert df is not None
-                df["timestep"] = i  # Add timestep column to each
-
-            # Combine all into one large DataFrame
-            full_df = pd.concat(self.precalc_data_for_all_timesteps_data, ignore_index=True)
-
-            # Save directly as flat CSV
-            full_df.to_csv(self.cache_filepath, sep=",", decimal=".", index=False)
 
 
 @dataclass
@@ -800,6 +816,8 @@ class SolarThermalSystemController(Component):
     (1) SolarThermalSystem (control_signal)
 
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     MeanWaterTemperatureInStorage: ClassVar[str] = "MeanWaterTemperatureInStorage"

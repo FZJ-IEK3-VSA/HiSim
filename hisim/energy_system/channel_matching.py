@@ -201,7 +201,8 @@ class ChannelMatcher:
         A watt-valued electricity channel fed by a temperature output would produce numbers the
         aggregator sums into a meaningless total, which is precisely the class of mistake the
         channel declaration exists to catch. Unknown types are skipped rather than assumed to
-        agree.
+        agree, and a channel declaring the wildcard load type or unit accepts every counterpart —
+        the fuel meter's case, where the carrier of the same flow differs per household.
 
         Args:
             feed: The feed being checked.
@@ -213,7 +214,7 @@ class ChannelMatcher:
         Raises:
             EnergySystemWiringError: ``EF-30`` on a load type or unit mismatch.
         """
-        if source_load_type is not None and source_load_type != channel.load_type:
+        if source_load_type is not None and not channel.accepts_load_type(source_load_type):
             raise EnergySystemWiringError(
                 EnergySystemErrorId.PORT_TYPE_MISMATCH,
                 feed.location,
@@ -221,7 +222,7 @@ class ChannelMatcher:
                 f"channel {channel.describe()} of the aggregator {target}, which carries "
                 f"'{channel.load_type.name}'.",
             )
-        if source_unit is not None and source_unit != channel.unit:
+        if source_unit is not None and not channel.accepts_unit(source_unit):
             raise EnergySystemWiringError(
                 EnergySystemErrorId.PORT_TYPE_MISMATCH,
                 feed.location,

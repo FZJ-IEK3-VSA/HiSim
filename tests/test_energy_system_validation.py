@@ -45,7 +45,7 @@ name: rule under test
 components:
   weather:
     class: hisim.components.weather.Weather
-    preset: standard
+    preset: aachen
   boiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas
@@ -335,7 +335,7 @@ name: x
 components:
   occupancy:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    preset: standard
+    preset: couple_both_at_work
   meter:
     class: hisim.components.electricity_meter.ElectricityMeter
     preset: standard
@@ -365,10 +365,10 @@ name: x
 components:
   weather:
     class: hisim.components.weather.Weather
-    preset: standard
+    preset: aachen
   other_weather:
     class: hisim.components.weather.Weather
-    preset: standard
+    preset: aachen
   heat_pump:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
     preset: air_water
@@ -397,7 +397,7 @@ name: x
 components:
   occupancy:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    preset: standard
+    preset: couple_both_at_work
   meter:
     class: hisim.components.electricity_meter.ElectricityMeter
     preset: standard

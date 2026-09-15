@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from tests import functions_for_testing as fft
 from hisim import hisim_main
-from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
 
@@ -22,7 +22,7 @@ def test_basic_household() -> None:
     run.
     """
     path = "../system_setups/basic_household.py"
-    mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    mysimpar = fft.SetupTestParameters.one_day_with_kpis()
     hisim_main.main(path, mysimpar)
     log.information(str(Path.cwd()))
 

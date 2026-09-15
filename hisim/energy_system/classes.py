@@ -119,6 +119,33 @@ class ClassBinder:
         )
 
     @classmethod
+    def config_class_of(cls, name: str, entry: ComponentEntry) -> type:
+        """Resolves the configuration class one entry's component takes, and checks nothing else.
+
+        :meth:`bind_entry` answers the same question on the way to a great deal more — presets,
+        constructor arguments, ``config`` keys, sizing facts — and raises on the first of those
+        that contradicts the file. A caller that only wants to know how the configuration class
+        declares its fields, such as the realizer restoring a patched ``config`` block to the order
+        every writer emits it in, should neither pay for those checks nor be stopped by one, so the
+        two steps that answer it alone are exposed here.
+
+        Args:
+            name: The component's name, which is the entry's key, for the message.
+            entry: The entry naming the component class.
+
+        Returns:
+            The configuration dataclass the component's ``__init__`` annotates.
+
+        Raises:
+            EnergySystemBindingError: ``EF-10`` when the class path does not import to a component,
+                or the component does not annotate its ``config`` parameter with a configuration
+                dataclass.
+        """
+        location = f"components.{name}"
+        component_class = cls._import_component_class(entry.class_path, location, name)
+        return cls._config_class_of(component_class, location, name)
+
+    @classmethod
     def _import_component_class(cls, class_path: str, location: str, name: str) -> type:
         """Imports the dotted class path of one entry and checks that it names a component.
 

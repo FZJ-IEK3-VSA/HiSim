@@ -8,11 +8,19 @@ lets a file be rejected for a sizing contradiction without anything having been 
 is what lets a run write down what it would have built even when it is not going to run.
 
 Three things happen per entry, in a fixed order. The configuration's *origin* is realized:
-the named preset is called, or the named constructor is called with the entry's arguments, or
+the named preset is called, or the named constructor is called with the entry's arguments —
+each decoded into the type its parameter asks for, exactly as a ``config`` value is — or
 the entry's own complete block is deserialized. The *overrides* are applied on top, each value
 decoded into the type its field holds, with the bare word ``AUTO`` re-opening a field that the
 preset had pinned. Then the *paths* are expanded, turning the portable ``${inputs}/…``
 spelling of the file into locations on this machine.
+
+An entry has overrides only when it named a builder. Its own complete block *is* the origin, and
+re-applying it field by field on top of itself would be worse than redundant: the field-by-field
+decoder writes a nested mapping onto a nested dataclass unchanged, so a configuration holding a
+``Coordinates`` — correctly rebuilt a moment earlier by the class's own deserializer, which is the
+only thing that knows how — would come back out as a plain ``dict`` and fail in the component that
+reads it. The two paths are therefore exclusive rather than sequential.
 
 What follows is one call into the sizing kernel for the whole system. The file's
 ``sizing_sources`` blocks are handed over as the kernel's per-consumer mapping — a plain
@@ -29,7 +37,7 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Any, ClassVar, List, Mapping, Optional, Tuple
+from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 
 from hisim.config.presets import ConfigBuilder
 from hisim.config.report import ResolutionReport
@@ -138,6 +146,11 @@ class EntryConfigurator:
     def build(self) -> Tuple[Any, Any]:
         """Builds the entry's configuration object, overrides and paths applied.
 
+        The overrides step is skipped for an entry configured by its own complete block, because
+        such a block is not an override of anything: it was already read, as a whole, by the
+        configuration class's own deserializer, and applying it a second time field by field would
+        flatten every nested dataclass that deserializer had rebuilt.
+
         Returns:
             A pair of the configuration as the origin produced it — the preset or constructor
             default a record compares an override against — and the finished configuration,
@@ -149,8 +162,63 @@ class EntryConfigurator:
                 builder that refused the arguments the entry passed.
         """
         origin = self._realize_origin()
-        config = self._apply_overrides(origin)
+        if self.origin_is_the_entrys_own_block:
+            # The block is origin and configuration at once, and path expansion mutates its
+            # target in place — expanding a copy keeps the returned origin at the file's own
+            # ${var} spelling instead of quietly reporting the expanded value.
+            config = self._copy_with_provenance(origin)
+        else:
+            config = self._apply_overrides(origin)
         return origin, self._expand_paths(config)
+
+    @staticmethod
+    def _copy_with_provenance(config: Any) -> Any:
+        """Copies a configuration, carrying the preset stamp the copy would otherwise lose.
+
+        Args:
+            config: The configuration to copy.
+
+        Returns:
+            A fresh instance equal to ``config``, provenance included.
+        """
+        copied = dataclasses.replace(config)
+        provenance = getattr(config, ConfigBuilder.PROVENANCE_ATTRIBUTE, None)
+        if provenance is not None:
+            setattr(copied, ConfigBuilder.PROVENANCE_ATTRIBUTE, provenance)
+        return copied
+
+    @property
+    def origin_is_the_entrys_own_block(self) -> bool:
+        """Whether this entry's configuration comes from its own complete ``config`` block.
+
+        The format's three origins are exclusive and the block is the last of them, so an entry is
+        configured by its own block exactly when it selected neither a preset nor a named
+        constructor. The question is asked twice — once to realize the origin, once to decide
+        whether that block is also a set of overrides — and both readings go through
+        :meth:`_selected_builder`, so the two cannot drift apart.
+
+        Returns:
+            ``True`` when the entry names no builder and states its configuration in full.
+        """
+        return self._selected_builder()[0] is None
+
+    def _selected_builder(self) -> Tuple[Optional[ConfigBuilder], Mapping[str, Any]]:
+        """Returns the builder this entry selected and the arguments it passes, if it selected one.
+
+        A preset takes no arguments and a named constructor takes the entry's own, which is the
+        whole difference between the two; an entry that named neither is configured by its block.
+        The validator has already ruled out an entry naming both, so the order here is a reading
+        order rather than a precedence.
+
+        Returns:
+            The builder and its arguments, or ``None`` and an empty mapping.
+        """
+        entry = self.binding.entry
+        if self.binding.preset is not None:
+            return self.binding.preset, {}
+        if self.binding.constructor is not None and entry.constructor is not None:
+            return self.binding.constructor, dict(entry.constructor.arguments)
+        return None, {}
 
     def _realize_origin(self) -> Any:
         """Calls the preset or the constructor, or deserializes the entry's own block.
@@ -167,10 +235,9 @@ class EntryConfigurator:
                 raises, with the underlying message kept.
         """
         entry = self.binding.entry
-        if self.binding.preset is not None:
-            return self._call_builder(self.binding.preset, {})
-        if self.binding.constructor is not None and entry.constructor is not None:
-            return self._call_builder(self.binding.constructor, dict(entry.constructor.arguments))
+        builder, arguments = self._selected_builder()
+        if builder is not None:
+            return self._call_builder(builder, arguments)
         payload = self.codec.to_deserializer_payload(
             entry.config, f"components.{entry.name}.config", entry.name
         )
@@ -188,6 +255,13 @@ class EntryConfigurator:
     def _call_builder(self, builder: ConfigBuilder, arguments: Mapping[str, Any]) -> Any:
         """Calls one preset or named constructor with the entry's key as the instance name.
 
+        The arguments are decoded before the call, not handed over as the file wrote them: a
+        constructor is an ordinary Python classmethod asking for an enum member or a nested
+        object, and a file can only write a string, a number or a mapping. Passing those
+        through unconverted made the builder fail somewhere inside itself — ``'str' object has
+        no attribute 'value'`` for a weather location — which named neither the argument nor
+        the spellings that would have worked.
+
         Args:
             builder: The declared builder the entry selected.
             arguments: The arguments the entry passes; empty for a preset.
@@ -196,12 +270,14 @@ class EntryConfigurator:
             The configuration the builder produced.
 
         Raises:
-            EnergySystemBindingError: ``EF-1A`` when the builder raises, naming the builder
-                and keeping its own message.
+            EnergySystemBindingError: ``EF-1A`` for an argument that does not fit its
+                parameter, or when the builder itself raises, naming the builder and keeping
+                its own message.
         """
         entry = self.binding.entry
+        decoded = self._decode_arguments(builder, arguments)
         try:
-            return builder.build(entry.name, **arguments)
+            return builder.build(entry.name, **decoded)
         except Exception as error:  # pylint: disable=broad-except
             raise EnergySystemBindingError(
                 EnergySystemErrorId.UNDECODABLE_VALUE,
@@ -210,8 +286,94 @@ class EntryConfigurator:
                 f"{error}.",
             ) from error
 
+    def _decode_arguments(
+        self, builder: ConfigBuilder, arguments: Mapping[str, Any]
+    ) -> Mapping[str, Any]:
+        """Decodes a builder's written arguments into the types its parameters ask for.
+
+        Each argument goes through the same codec a ``config`` value does, against the
+        parameter's own resolved annotation rather than against a field's, so the two forms
+        accept the same spellings and refuse the same mistakes with the same sentence. The
+        annotations are the ones the ``@constructor`` decorator resolved when the class was
+        declared, read off the builder rather than resolved again here: a parameter's type is
+        part of the file format, and resolving it twice is how two readings of it start.
+
+        The decoded value is then checked against the shape its parameter asks for, which the
+        field path leaves to the configuration class. A constructor argument has no such
+        second reader — it goes straight into a Python call — so a mapping nothing rebuilt or
+        a list where one object belongs is refused here, at the argument's own key.
+
+        The argument names are already known to be parameters — the class-bound validator
+        checked that, with the parameter list in its message — so the only question left here
+        is whether each value fits.
+
+        A path-valued argument is expanded last, for the reason given at
+        :meth:`_expand_argument_path`: the builder consumes it, so the expansion a field gets
+        after the call would come too late for it.
+
+        Args:
+            builder: The declared builder the entry selected.
+            arguments: The arguments the entry passes.
+
+        Returns:
+            The arguments, each decoded into the type its parameter holds.
+
+        Raises:
+            EnergySystemBindingError: ``EF-1A`` for an argument that does not fit its
+                parameter, located at the parameter that refused it.
+        """
+        if not arguments:
+            return {}
+        entry = self.binding.entry
+        location = f"components.{entry.name}.{builder.kind.value}.{builder.name}"
+        decoded: Dict[str, Any] = {}
+        for key, value in arguments.items():
+            annotation = builder.parameter_types.get(key)
+            argument_location = f"{location}.{key}"
+            decoded[key] = self.codec.decode_argument(
+                annotation, value, argument_location, entry.name, key
+            )
+            self.codec.check_argument_shape(
+                annotation, decoded[key], argument_location, entry.name, key
+            )
+            decoded[key] = self._expand_argument_path(key, decoded[key])
+        return decoded
+
+    def _expand_argument_path(self, parameter: str, value: Any) -> Any:
+        """Turns the portable ``${var}`` spelling of a path-valued argument into a local path.
+
+        A constructor that takes a filesystem location is handed the same kind of string a
+        path *field* holds, and the file spells it the same way: symbolically, because the
+        structural validator refuses an absolute path under a path-valued key wherever it
+        appears, constructor arguments included. The expansion a field gets afterwards is no
+        use to an argument, which has already been consumed by the builder -- and a builder
+        that checks its file is there would have been handed the literal ``${inputs}/...``.
+        So an argument is expanded before the call, by the same resolver and under the same
+        name rule that decides a field.
+
+        Args:
+            parameter: The parameter's name, which is what makes its value a path.
+            value: The decoded argument.
+
+        Returns:
+            The argument, expanded when it is a non-empty path-valued string and unchanged
+            otherwise.
+
+        Raises:
+            EnergySystemFormatError: ``EF-04`` when the string references a variable the
+                resolver does not know.
+        """
+        if not self.is_path_field(parameter) or not isinstance(value, str) or not value:
+            return value
+        return self.resolver.resolve(value)
+
     def _apply_overrides(self, config: Any) -> Any:
         """Writes the entry's sparse ``config`` block onto the configuration it built.
+
+        Reached only for an entry that named a preset or a constructor, so the block this writes is
+        always the sparse one the format calls an override. A complete block never arrives here:
+        it is the origin, the class's own deserializer has already read it whole, and a field-level
+        second pass would flatten the nested objects that deserializer built.
 
         The overrides are applied as one replacement rather than one assignment per field, so
         that a configuration class validating itself on construction sees the final values and

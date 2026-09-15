@@ -46,15 +46,19 @@ def test_get_default_config_custom_building() -> None:
 
 
 @pytest.mark.base
-def test_get_default_config_empty_building() -> None:
-    """An empty building is accepted unchanged (no coercion/rejection)."""
-    config = SimpleControllerConfig.get_default_config(component_id=ComponentID(name="SimpleController", building=""))
-    _assert_defaults(config, "")
+def test_get_default_config_empty_building_is_refused() -> None:
+    """An empty building label is refused at the identity, naming the field.
+
+    Passed through, it would silently join into a key with a leading underscore — a component
+    nobody addressed that way — so the identity layer refuses it where it is written.
+    """
+    with pytest.raises(ValueError, match="building label"):
+        ComponentID(name="SimpleController", building="")
 
 
 @pytest.mark.base
 def test_get_default_config_arbitrary_building() -> None:
-    """``get_default_config`` forwards any string as the building."""
+    """``get_default_config`` forwards any identifier as the building."""
     config = SimpleControllerConfig.get_default_config(
         component_id=ComponentID(name="SimpleController", building="haus42")
     )

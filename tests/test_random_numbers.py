@@ -10,7 +10,9 @@ optional ``rng`` argument.
 
 These tests assert the seam directly: exact reproducible values, bounds, the
 requested count, the ``ValueError`` guard, and that the component wires the
-injected RNG through to ``self.values``.
+injected RNG through to ``self.values``. They also pin the configuration's own
+promises — that ``seed`` alone decides the series on the default path, and that a
+range written the wrong way round is refused rather than quietly inverted.
 """
 
 # clean
@@ -18,7 +20,9 @@ injected RNG through to ``self.values``.
 # These tests deliberately exercise the private helper ``RandomNumbers._generate_values``.
 # pylint: disable=protected-access
 
+import datetime
 import random
+from typing import ClassVar, List
 
 import pytest
 
@@ -27,20 +31,17 @@ from hisim.components.random_numbers import RandomNumbers, RandomNumbersConfig
 from hisim.simulationparameters import SimulationParameters
 
 
-def _make_config(timesteps: int = 10, minimum: float = 1.0, maximum: float = 20.0) -> RandomNumbersConfig:
-    """Build a small ``RandomNumbersConfig`` for testing."""
-    return RandomNumbersConfig(
-        component_id=ComponentID(name="RandomNumbers"),
-        timesteps=timesteps,
-        minimum=minimum,
-        maximum=maximum,
-    )
+class SeedZero:
+    """The hand-pinned series ``random.Random(0)`` produces over ``[1.0, 20.0)``.
 
+    Written out here rather than computed so that it is an independent oracle: both the helper
+    test and the constructor test compare against these literals, which means a defect inside
+    :meth:`RandomNumbers._generate_values` cannot vouch for itself by producing the expectation it
+    is being judged by.
+    """
 
-@pytest.mark.base
-def test_generate_values_is_reproducible_with_seeded_rng() -> None:
-    """A seeded ``random.Random`` yields an exact, pinable sequence."""
-    expected = [
+    #: The first ten values of that series, in draw order.
+    SERIES: ClassVar[List[float]] = [
         17.044015178975915,
         15.401133655865747,
         8.990860035786055,
@@ -52,8 +53,51 @@ def test_generate_values_is_reproducible_with_seeded_rng() -> None:
         10.055342128894761,
         12.084258749645592,
     ]
-    values = RandomNumbers._generate_values(1.0, 20.0, 10, random.Random(0))
-    assert values == expected
+
+    #: Lower bound of the range those values were drawn from.
+    MINIMUM: ClassVar[float] = 1.0
+
+    #: Upper bound of the range those values were drawn from.
+    MAXIMUM: ClassVar[float] = 20.0
+
+
+def _make_config(minimum: float = 1.0, maximum: float = 20.0, seed: int = 1) -> RandomNumbersConfig:
+    """Build a small ``RandomNumbersConfig`` for testing.
+
+    How many values the component draws is no longer part of its configuration — it is the length of
+    the simulation — so this helper only carries the range and the seed, and the tests pair it with
+    :func:`_make_parameters`.
+    """
+    return RandomNumbersConfig(
+        component_id=ComponentID(name="RandomNumbers"),
+        minimum=minimum,
+        maximum=maximum,
+        seed=seed,
+    )
+
+
+def _make_parameters(timesteps: int) -> SimulationParameters:
+    """Build simulation parameters that run for exactly ``timesteps`` steps.
+
+    The component draws one value per timestep of the run, so a test that wants a short series says
+    so here rather than in the configuration. One minute per step keeps the arithmetic obvious.
+    """
+    seconds_per_timestep = 60
+    start = datetime.datetime(2021, 1, 1)
+    return SimulationParameters(
+        start,
+        start + datetime.timedelta(seconds=timesteps * seconds_per_timestep),
+        seconds_per_timestep,
+    )
+
+
+@pytest.mark.base
+def test_generate_values_is_reproducible_with_seeded_rng() -> None:
+    """A seeded ``random.Random`` yields an exact, pinable sequence."""
+    values = RandomNumbers._generate_values(
+        SeedZero.MINIMUM, SeedZero.MAXIMUM, len(SeedZero.SERIES), random.Random(0)
+    )
+    assert values == SeedZero.SERIES
 
 
 @pytest.mark.base
@@ -102,10 +146,14 @@ def test_generate_values_does_not_touch_global_random() -> None:
 
 @pytest.mark.base
 def test_component_uses_injected_rng() -> None:
-    """Passing ``rng`` to the constructor makes ``self.values`` reproducible."""
-    sp = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
-    config = _make_config(timesteps=10, minimum=1.0, maximum=20.0)
-    expected = RandomNumbers._generate_values(1.0, 20.0, 10, random.Random(0))
+    """Passing ``rng`` to the constructor makes ``self.values`` reproducible.
+
+    The expectation is the hand-pinned :attr:`SeedZero.SERIES` rather than a fresh call to
+    ``_generate_values``, so that the assertion really compares the constructor's wiring against a
+    known series instead of comparing the helper with itself.
+    """
+    sp = _make_parameters(len(SeedZero.SERIES))
+    config = _make_config(minimum=SeedZero.MINIMUM, maximum=SeedZero.MAXIMUM)
 
     component = RandomNumbers(
         config=config,
@@ -113,16 +161,54 @@ def test_component_uses_injected_rng() -> None:
         my_display_config=DisplayConfig(),
         rng=random.Random(0),
     )
-    assert component.values == expected
-    assert component.minimum == 1.0
-    assert component.maximum == 20.0
+    assert component.values == SeedZero.SERIES
+    assert component.minimum == SeedZero.MINIMUM
+    assert component.maximum == SeedZero.MAXIMUM
+
+
+@pytest.mark.base
+def test_the_same_seed_reproduces_the_series() -> None:
+    """Two components built from equal configurations draw the very same numbers.
+
+    No ``rng`` is passed, so this exercises the default path all the way through
+    ``random.Random(config.seed)``. It would fail if the constructor ever regressed to an
+    unseeded ``random.Random()`` or to a seed hardcoded somewhere other than the configuration.
+    """
+    sp = _make_parameters(20)
+
+    first = RandomNumbers(config=_make_config(seed=7), my_simulation_parameters=sp)
+    second = RandomNumbers(config=_make_config(seed=7), my_simulation_parameters=sp)
+
+    assert first.values == second.values
+
+
+@pytest.mark.base
+def test_a_different_seed_changes_the_series() -> None:
+    """Changing only the seed changes the numbers, which is what makes the field mean anything."""
+    sp = _make_parameters(20)
+
+    first = RandomNumbers(config=_make_config(seed=7), my_simulation_parameters=sp)
+    second = RandomNumbers(config=_make_config(seed=8), my_simulation_parameters=sp)
+
+    assert first.values != second.values
+
+
+@pytest.mark.base
+def test_swapped_bounds_are_refused() -> None:
+    """A configuration whose minimum sits above its maximum is rejected at construction.
+
+    The generator would otherwise draw from the inverted interval while the report printed the
+    claimed bounds, so the two would disagree with nothing saying so.
+    """
+    with pytest.raises(ValueError, match="minimum"):
+        _make_config(minimum=20.0, maximum=1.0)
 
 
 @pytest.mark.base
 def test_component_default_rng_stays_in_bounds() -> None:
     """Without ``rng`` the component still produces in-range, correctly-sized values."""
-    sp = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
-    config = _make_config(timesteps=25, minimum=10.0, maximum=30.0)
+    sp = _make_parameters(25)
+    config = _make_config(minimum=10.0, maximum=30.0)
 
     component = RandomNumbers(
         config=config,
@@ -143,8 +229,8 @@ def test_default_display_config_not_shared_between_instances() -> None:
     Using ``None`` as a sentinel and creating a fresh ``DisplayConfig`` inside
     ``__init__`` prevents that shared state.
     """
-    sp = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
-    config = _make_config(timesteps=5, minimum=1.0, maximum=20.0)
+    sp = _make_parameters(5)
+    config = _make_config(minimum=1.0, maximum=20.0)
 
     # The seeded rng is only required to satisfy the constructor signature;
     # the assertions concern display-config identity, not RNG output.

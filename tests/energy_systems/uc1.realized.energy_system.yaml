@@ -5,14 +5,14 @@ description: Single-family house with a condensing gas boiler, floor heating and
 components:
   weather:
     class: hisim.components.weather.Weather
-    config: # built from preset: standard
+    config: # built from preset: aachen
       location: Aachen
       source_path: ${inputs}/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
       data_source: DWD_TRY
       predictive_control: false
   occupancy:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    config: # built from preset: standard
+    config: # built from preset: couple_both_at_work
       data_acquisition_mode: USE_PREDEFINED_PROFILE
       household:
         Name: CHR01 Couple both at Work
@@ -33,7 +33,6 @@ components:
           StrVal: 78dae308-24c4-45cc-8bdf-b001d61f45c2
       profile_with_washing_machine_and_dishwasher: true
       predictive_control: false
-      predictive: false
       result_dir_path: ${utsp_results}
       cache_dir_path: null
       name_of_predefined_loadprofile: CHR01 Couple both at Work
@@ -43,7 +42,7 @@ components:
       cars: null
   building:
     class: hisim.components.building.Building
-    config: # built from preset: standard
+    config: # built from preset: german_single_family_home
       heating_reference_temperature_in_celsius: -7.0
       building_code: DE.N.SFH.05.Gen.ReEx.001.002
       building_heat_capacity_class: medium
@@ -62,7 +61,6 @@ components:
       window_area_in_m2: null
       door_u_value_in_watt_per_m2_per_kelvin: null
       door_area_in_m2: null
-      predictive: false
       set_heating_temperature_in_celsius: 20.0
       set_cooling_temperature_in_celsius: 25.0
       enable_opening_windows: false
@@ -71,32 +69,34 @@ components:
       lifetime_in_years: null
       maintenance_costs_in_euro_per_year: null
       subsidy_as_percentage_of_investment_costs: null
+      weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center # sized from weather.weather_identity=Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
     inputs:
       - weather
       - occupancy
       - hds
+    sizing_sources:
+      weather_identity: weather.weather_identity # unique provider, written for re-execution
   hds_controller:
     class: hisim.components.heat_distribution_system.HeatDistributionController
-    config: # built from preset: standard
+    config: # built from preset: building_derived
       heating_system: FLOORHEATING
-      set_heating_threshold_outside_temperature_in_celsius: 18.0 # sized from self.specific_heating_load_of_building_in_watt_per_m2=64.19762541254126
+      set_heating_threshold_outside_temperature_in_celsius: 18.0 # sized from building.heating_load_in_watt=7780.752200000001, building.conditioned_floor_area_in_m2=121.2
       heating_reference_temperature_in_celsius: -7.0 # sized from building.heating_reference_temperature_in_celsius=-7.0
       set_heating_temperature_for_building_in_celsius: 20.0 # sized from building.set_heating_temperature_in_celsius=20.0
       set_cooling_temperature_for_building_in_celsius: 25.0 # sized from building.set_cooling_temperature_in_celsius=25.0
       heating_load_of_building_in_watt: 7780.75 # sized from building.heating_load_in_watt=7780.752200000001
-      specific_heating_load_of_building_in_watt_per_m2: 64.19762541254126 # sized from building.heating_load_in_watt=7780.752200000001, building.conditioned_floor_area_in_m2=121.2
     inputs:
       - weather
       - building
     sizing_sources:
+      heating_load_in_watt: building.heating_load_in_watt # unique provider, written for re-execution
+      conditioned_floor_area_in_m2: building.conditioned_floor_area_in_m2 # unique provider, written for re-execution
       heating_reference_temperature_in_celsius: building.heating_reference_temperature_in_celsius # unique provider, written for re-execution
       set_heating_temperature_in_celsius: building.set_heating_temperature_in_celsius # unique provider, written for re-execution
       set_cooling_temperature_in_celsius: building.set_cooling_temperature_in_celsius # unique provider, written for re-execution
-      heating_load_in_watt: building.heating_load_in_watt # unique provider, written for re-execution
-      conditioned_floor_area_in_m2: building.conditioned_floor_area_in_m2 # unique provider, written for re-execution
   hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
-    config: # built from preset: standard
+    config: # built from preset: building_derived
       heating_system: FLOORHEATING # sized from hds_controller.heat_distribution_system_type=FLOORHEATING
       water_mass_flow_rate_in_kg_per_second: 0.27 # sized from hds_controller.water_mass_flow_rate_in_kg_per_second=0.2659176349965824
       absolute_conditioned_floor_area_in_m2: 121.2 # sized from building.conditioned_floor_area_in_m2=121.2

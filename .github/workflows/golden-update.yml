@@ -1,7 +1,15 @@
-# Manual "bless" of the golden KPI references. Regenerates EVERY pair (both the
-# week and full-year horizons) in the CI container — so the reference environment
+# Manual "bless" of the golden KPI references. Re-runs EVERY pair (both the week
+# and full-year horizons) in the CI container — so the reference environment
 # matches the check environment — and opens a pull request with the updated
 # golden_references/ for review. This is the only sanctioned way to update goldens.
+#
+# The bless is sticky: a KPI whose fresh value the gate itself would still accept
+# keeps the value already committed, and a golden that comes out identical is not
+# rewritten, so the PR diff carries only what actually moved. When nothing moved at
+# all, the diff is the manifest alone. Nothing is ever dropped: a KPI the run no
+# longer produces stays in its golden and the gate goes on reporting it as missing.
+# The force_rewrite input dumps the fresh values verbatim instead — the way to clear
+# accumulated noise, to retire a KPI, and to repair an unreadable golden.
 
 name: golden-update
 
@@ -12,6 +20,11 @@ on:
         description: "Why are you re-blessing the goldens?"
         required: true
         default: "intentional simulation-output change"
+      force_rewrite:
+        description: "Overwrite every stored value with the fresh one, dropping KPIs the runs no longer produce."
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -25,9 +38,21 @@ jobs:
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
       - id: gen
         run: echo "matrix=$(python3 scripts/golden_matrix.py)" >> "$GITHUB_OUTPUT"
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report
 
   update:
     name: regenerate ${{ matrix.setup }} / ${{ matrix.param }}
@@ -42,19 +67,35 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
+          scope: ${{ matrix.setup }}-${{ matrix.param }}
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
         run: uv pip install --system -e .
       - name: Regenerate golden for this pair
-        run: python scripts/golden_update.py --setup "${{ matrix.setup }}" --param "${{ matrix.param }}"
+        run: >-
+          python scripts/golden_update.py --setup "${{ matrix.setup }}" --param "${{ matrix.param }}"
+          ${{ inputs.force_rewrite && '--force-rewrite' || '' }}
       - name: Upload regenerated golden
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: golden-${{ matrix.setup }}-${{ matrix.param }}
           path: golden_references/${{ matrix.setup }}__${{ matrix.param }}.json
           if-no-files-found: error
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report
+          scope: ${{ matrix.setup }}-${{ matrix.param }}
 
   collect:
     name: assemble goldens and open PR
@@ -68,11 +109,16 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Download all regenerated goldens
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: golden-*
           # upload-artifact strips the common leading dir, so each artifact holds a bare
@@ -99,6 +145,7 @@ jobs:
           PR_REPO: ${{ github.repository }}
           PR_BASE: ${{ github.ref_name }}
           PR_REASON: ${{ github.event.inputs.reason }}
+          PR_FORCED: ${{ inputs.force_rewrite }}
         run: |
           branch="bless/golden-${{ github.run_id }}"
           git config user.name "github-actions[bot]"
@@ -114,9 +161,22 @@ jobs:
           PR_HEAD="$branch" python - <<'PY'
           import json, os, urllib.request
           repo = os.environ["PR_REPO"]
+          forced = os.environ.get("PR_FORCED", "false") == "true"
+          how = (
+              "This bless was FORCED (--force-rewrite): every value was overwritten with\n"
+              "the fresh one and any KPI the runs no longer produce was dropped.\n\n"
+              if forced
+              else
+              "Only KPIs that moved beyond the gate's tolerance were rewritten, so a\n"
+              "manifest-only diff means every value reproduced within the gate's tolerance.\n\n"
+              "Any key the per-pair logs list as absent is still in its golden file: a bless\n"
+              "never removes a KPI, so the gate keeps reporting it as missing until someone\n"
+              "retires it deliberately by re-running this workflow with force_rewrite.\n\n"
+          )
           body = (
-              "Regenerated golden KPI references in the CI container.\n\n"
+              "Re-ran the golden KPI references in the CI container.\n\n"
               f"Reason: {os.environ['PR_REASON']}\n\n"
+              f"{how}"
               "Review the per-KPI diff before merging."
           )
           payload = json.dumps({
@@ -142,3 +202,10 @@ jobs:
           except urllib.error.HTTPError as exc:  # surface the API error body, not just a code
               raise SystemExit(f"PR creation failed ({exc.code}): {exc.read().decode()}")
           PY
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report

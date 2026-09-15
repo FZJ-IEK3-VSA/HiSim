@@ -1,0 +1,534 @@
+# -*- coding: utf-8 -*-
+# clean
+
+""" Generic CHP controller with minimal runtime.
+
+Heat is transfered to the drain hot water storage and either the buffer storage or the building directly.
+CHP is controlled by both (i) thermal demand and (ii) electricity demand - it is only activated when both electricity and heat are needed.
+"""
+
+# Owned
+import dataclasses
+import importlib
+from dataclasses import dataclass
+from typing import Optional, List
+from dataclasses_json import dataclass_json
+
+# Generic/Built-in
+from hisim import component as cp
+from hisim import utils
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.loadtypes import LoadTypes, Units
+from hisim.simulationparameters import SimulationParameters
+from hisim.economics.facts import CostRelevance
+
+
+#: Julian day of the simulation year on which the heating season begins.
+_DAY_OF_HEATING_SEASON_BEGIN = 270
+#: Julian day on which the heating season begins when a buffer storage is present: one day before
+#: the building's, so that the buffer has heated up a day ahead of the building it feeds.
+_BUFFER_DAY_OF_HEATING_SEASON_BEGIN = _DAY_OF_HEATING_SEASON_BEGIN - 1
+#: Upper set temperature of the buffer storage, given in °C.
+_BUFFER_T_MAX_HEATING_IN_CELSIUS = 40.0
+
+
+def _with_buffer_storage(
+    config: "L1CHPControllerConfig",
+    *,
+    t_min_heating_in_celsius: float,
+    t_min_dhw_in_celsius: float,
+) -> "L1CHPControllerConfig":
+    """Returns a copy of ``config`` regulated against a buffer storage rather than the building.
+
+    Two of the four changes are the same whichever fuel is burnt, and are taken from the module
+    constants here: the upper bound of the regulated band, which moves from the building's room
+    temperature up to the buffer's water temperature, and the start of the heating season, which
+    comes one day early so that the buffer is warm a day before the building calls for it.
+
+    The two lower bounds are *not* the same for both fuels - the gas and the hydrogen factory have
+    carried different ones since 2023, for reasons nothing on record explains, see
+    :class:`L1CHPControllerConfig` - so the caller passes them rather than this function choosing.
+    ``config`` itself is never modified.
+    """
+    return dataclasses.replace(
+        config,
+        t_min_heating_in_celsius=t_min_heating_in_celsius,
+        t_max_heating_in_celsius=_BUFFER_T_MAX_HEATING_IN_CELSIUS,
+        t_min_dhw_in_celsius=t_min_dhw_in_celsius,
+        day_of_heating_season_begin=_BUFFER_DAY_OF_HEATING_SEASON_BEGIN,
+    )
+
+
+@dataclass_json
+@dataclass
+class L1CHPControllerConfig(ConfigBase):
+    """CHP Controller Config.
+
+    The four default configurations cross two fuels - gas and green hydrogen, which differ in
+    ``use`` and in the hydrogen storage threshold that is only non-zero for the fuel cell - with
+    the presence of a buffer storage. Each of the four carries the temperature thresholds it was
+    written with in 2023, and they are not symmetric: the lower drain hot water bound runs 42 / 50
+    / 50 / 42 °C over chp, fuel cell, chp-with-buffer and fuel-cell-with-buffer, and a buffer
+    raises the lower heating bound to 35.0 °C on the gas axis but to 31.0 °C on the hydrogen one,
+    so the buffer axis differs per fuel. Nothing in this module, in the sibling controllers, in the
+    tests or in the commit history says why, and the values are kept as they stand rather than
+    guessed at: normalising them would change the behaviour of every simulation that uses them on
+    inference alone.
+    """
+
+    component_id: ComponentID
+    #: priority of the device in hierachy: the higher the number the lower the priority
+    source_weight: int
+    #: type of CHP: hydrogen or gas (hydrogen than considers also SOC of hydrogen storage)
+    use: LoadTypes
+    #: minimal electricity demand to start operating, given in W:
+    electricity_threshold: float
+    #: minimal state of charge of the hydrogen storage to start operating in percent (only relevant for fuel cell):
+    h2_soc_threshold: float
+    #: lower set temperature of building (or buffer storage), given in °C
+    t_min_heating_in_celsius: float
+    #: upper set temperature of building (or buffer storage), given in °C
+    t_max_heating_in_celsius: float
+    #: lower set temperature of drain hot water storage, given in °C
+    t_min_dhw_in_celsius: float
+    #: upper set temperature of drain hot water storage, given in °C
+    t_max_dhw_in_celsius: float
+    # julian day of simulation year, where heating season begins
+    day_of_heating_season_begin: int
+    # julian day of simulation year, where heating season ends
+    day_of_heating_season_end: int
+    # minimal operation time of heat source
+    min_operation_time_in_seconds: int
+    # minimal resting time of heat source
+    min_idle_time_in_seconds: int
+
+    def __post_init__(self) -> None:
+        """Refuses a set temperature band whose bounds are equal or the wrong way round.
+
+        :meth:`L1CHPController.determine_heating_mode` reads both bands as a state of charge - the
+        measured temperature's position inside the band, divided by the band's width - to decide
+        which of the two vessels is the emptier one and gets the heat. Equal bounds make that a
+        division by zero, and inverted bounds flip its sign, so the controller would quietly serve
+        whichever vessel is the fuller one instead. Neither surfaces as a failure later, so the
+        configuration is where both stop. The check covers the deserialising path and
+        :func:`dataclasses.replace` as well, because both route through ``__init__``.
+
+        Raises:
+            ValueError: If either band's lower bound is not strictly below its upper one, naming
+                the pair and both of its values.
+        """
+        if self.t_min_heating_in_celsius >= self.t_max_heating_in_celsius:
+            raise ValueError(
+                "The lower heating set temperature must be strictly below the upper one, but "
+                f"t_min_heating_in_celsius is {self.t_min_heating_in_celsius} °C and "
+                f"t_max_heating_in_celsius is {self.t_max_heating_in_celsius} °C."
+            )
+        if self.t_min_dhw_in_celsius >= self.t_max_dhw_in_celsius:
+            raise ValueError(
+                "The lower drain hot water set temperature must be strictly below the upper one, "
+                f"but t_min_dhw_in_celsius is {self.t_min_dhw_in_celsius} °C and "
+                f"t_max_dhw_in_celsius is {self.t_max_dhw_in_celsius} °C."
+            )
+
+    @staticmethod
+    def get_default_config_chp(
+        component_id: Optional[ComponentID] = None,
+    ) -> "L1CHPControllerConfig":
+        """Returns default configuration for the CHP controller."""
+        if component_id is None:
+            component_id = ComponentID(name="CHPController")
+        config = L1CHPControllerConfig(
+            component_id=component_id,
+            source_weight=1,
+            use=LoadTypes.GAS,
+            electricity_threshold=300,
+            h2_soc_threshold=0,
+            t_min_heating_in_celsius=20.0,
+            t_max_heating_in_celsius=20.5,
+            t_min_dhw_in_celsius=42,
+            t_max_dhw_in_celsius=60,
+            day_of_heating_season_begin=_DAY_OF_HEATING_SEASON_BEGIN,
+            day_of_heating_season_end=150,
+            min_operation_time_in_seconds=3600 * 4,
+            min_idle_time_in_seconds=3600 * 2,
+        )
+        return config
+
+    @staticmethod
+    def get_default_config_fuel_cell(
+        component_id: Optional[ComponentID] = None,
+    ) -> "L1CHPControllerConfig":
+        """Returns default configuration for the fuel cell controller."""
+        if component_id is None:
+            component_id = ComponentID(name="FuelCellController")
+        config = L1CHPControllerConfig(
+            component_id=component_id,
+            source_weight=1,
+            use=LoadTypes.GREEN_HYDROGEN,
+            electricity_threshold=300,
+            h2_soc_threshold=8.0,
+            t_min_heating_in_celsius=20.0,
+            t_max_heating_in_celsius=20.5,
+            t_min_dhw_in_celsius=50,
+            t_max_dhw_in_celsius=60,
+            day_of_heating_season_begin=_DAY_OF_HEATING_SEASON_BEGIN,
+            day_of_heating_season_end=150,
+            min_operation_time_in_seconds=3600 * 4,
+            min_idle_time_in_seconds=3600 * 2,
+        )
+        return config
+
+    @staticmethod
+    def get_default_config_chp_with_buffer(
+        component_id: Optional[ComponentID] = None,
+    ) -> "L1CHPControllerConfig":
+        """Returns default configuration for the CHP controller, when buffer storage for heating is available."""
+        return _with_buffer_storage(
+            L1CHPControllerConfig.get_default_config_chp(component_id=component_id),
+            t_min_heating_in_celsius=35.0,
+            t_min_dhw_in_celsius=50,
+        )
+
+    @staticmethod
+    def get_default_config_fuel_cell_with_buffer(
+        component_id: Optional[ComponentID] = None,
+    ) -> "L1CHPControllerConfig":
+        """Returns default configuration for the fuel cell controller, when buffer storage for heating is available."""
+        return _with_buffer_storage(
+            L1CHPControllerConfig.get_default_config_fuel_cell(component_id=component_id),
+            t_min_heating_in_celsius=31.0,
+            t_min_dhw_in_celsius=42,
+        )
+
+
+class L1CHPControllerState:
+    """Data class that saves the state of the CHP controller."""
+
+    def __init__(
+        self,
+        on_off: int,
+        mode: int,
+        activation_time_step: int,
+        deactivation_time_step: int,
+    ) -> None:
+        """Initializes CHP Controller state.
+
+        :param on_off: 0 if turned off, 1 if running.
+        :type on_off: int
+        :param mode: 0 if water heating, 1 if heating.
+        :type mode: int
+        :param activation_time_step: timestep of activation (simulation time step).
+        :type activation_time_step: int
+        :param deactivation_time_step: timestep of deactivation
+        :type deactivation_time_step: int
+        """
+        self.on_off: int = on_off
+        self.mode: int = mode
+        self.activation_time_step: int = activation_time_step
+        self.deactivation_time_step: int = deactivation_time_step
+
+    def clone(self) -> "L1CHPControllerState":
+        """Copies the current instance."""
+        return L1CHPControllerState(
+            on_off=self.on_off,
+            mode=self.mode,
+            activation_time_step=self.activation_time_step,
+            deactivation_time_step=self.deactivation_time_step,
+        )
+
+    def i_prepare_simulation(self) -> None:
+        """Prepares the simulation."""
+        pass
+
+    def activate(self, timestep: int) -> None:
+        """Activates the heat pump and remembers the time step."""
+        if self.on_off == 0:
+            self.activation_time_step = timestep
+        self.on_off = 1
+
+    def deactivate(self, timestep: int) -> None:
+        """Deactivates the heat pump and remembers the time step."""
+
+        if self.on_off == 1:
+            self.deactivation_time_step = timestep
+        self.on_off = 0
+
+
+class L1CHPController(cp.Component):
+    """L1 combined heat and power (CHP) or Fuel Cell Controller.
+
+    Is activated when both Electricity and Heat are demanded. Decides if heat is transferred to
+    Building or HotWaterStorage.
+    When it is a fuel cell, also the SOC of the hydrogen storage is checked.
+
+    Components to connect to:
+    (1) Hot Water Storage (generic_hot_water_storage_modular)
+    (2) Either buffer storage or building (generic_hot_water_storage_modular or building)
+    (3) EMS controller (controller_l2_energy_management_system) -> optional if electricity should be involved in control.
+    """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
+
+    # Inputs
+    BuildingTemperature = "BuildingTemperature"
+    HotWaterStorageTemperature = "HotWaterStorageTemperature"
+    ElectricityTarget = "ElectricityTarget"
+    HydrogenSOC = "HydrogenSOC"
+
+    # Outputs
+    CHPControllerOnOffSignal = "CHPControllerOnOffSignal"
+    CHPControllerHeatingModeSignal = "CHPControllerHeatingModeSignal"
+
+    @utils.measure_execution_time
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: L1CHPControllerConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
+    ) -> None:
+        """For initializing."""
+        if not config.__class__.__name__ == L1CHPControllerConfig.__name__:
+            raise ValueError("Wrong config class. Got a " + config.__class__.__name__)
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
+        super().__init__(
+            name=component_name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
+            my_display_config=my_display_config,
+        )
+        self.minimum_runtime_in_timesteps = int(
+            config.min_operation_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep
+        )
+        self.minimum_resting_time_in_timesteps = int(
+            config.min_idle_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep
+        )
+        """ Initializes the class. """
+        if config.day_of_heating_season_begin is None:
+            raise ValueError("Day of heating season begin was None")
+        if config.day_of_heating_season_end is None:
+            raise ValueError("Day of heating season end was None")
+        self.heating_season_begin = (
+            config.day_of_heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+        )
+        self.heating_season_end = (
+            config.day_of_heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+        )
+        self.state: L1CHPControllerState = L1CHPControllerState(0, 0, 0, 0)
+        self.previous_state: L1CHPControllerState = self.state.clone()
+        self.processed_state: L1CHPControllerState = self.state.clone()
+
+        # Component Outputs
+        self.chp_onoff_signal_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.CHPControllerOnOffSignal,
+            LoadTypes.ON_OFF,
+            Units.BINARY,
+            output_description="On off signal from CHP controller.",
+        )
+
+        self.chp_heatingmode_signal_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.CHPControllerHeatingModeSignal,
+            LoadTypes.ANY,
+            Units.BINARY,
+            output_description="Heating mode signal from CHP controller.",
+        )
+
+        # Component Inputs
+        self.building_temperature_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.BuildingTemperature,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            mandatory=True,
+        )
+        self.dhw_temperature_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.HotWaterStorageTemperature,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            mandatory=True,
+        )
+
+        self.electricity_target_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.ElectricityTarget,
+            LoadTypes.ELECTRICITY,
+            Units.WATT,
+            mandatory=False,
+        )
+
+        self.hydrogen_soc_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.HydrogenSOC,
+            LoadTypes.ANY,
+            Units.PERCENT,
+            mandatory=False,
+        )
+
+        self.add_default_connections(self.get_default_connections_simple_water_storage())
+        self.add_default_connections(self.get_default_connections_from_building())
+
+    def get_default_connections_simple_water_storage(self):
+        """Sets default connections for the boiler."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.simple_water_storage"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "SimpleHotWaterStorage")
+        connections = []
+        boiler_classname = component_class.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                L1CHPController.HotWaterStorageTemperature,
+                boiler_classname,
+                component_class.WaterTemperatureToHeatGenerator,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_building(self):
+        """Sets default connections for the boiler."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.building"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "Building")
+        connections = []
+        building_classname = component_class.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                L1CHPController.BuildingTemperature,
+                building_classname,
+                component_class.TemperatureMeanThermalMass,
+            )
+        )
+        return connections
+
+    def i_prepare_simulation(self) -> None:
+        """Prepares the simulation."""
+        pass
+
+    def i_save_state(self) -> None:
+        """Saves the state."""
+        self.previous_state = self.state.clone()
+
+    def i_restore_state(self) -> None:
+        """Restores previous state."""
+        self.state = self.previous_state.clone()
+
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """For double checking results."""
+        pass
+
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
+        """Core Simulation function."""
+        if force_convergence:
+            # states are saved after each timestep, outputs after each iteration
+            # outputs have to be in line with states, so if convergence is forced outputs are aligned to last known state.
+            self.state = self.processed_state.clone()
+        else:
+            # control temperatures of boiler and building or buffer
+            t_building = stsv.get_input_value(self.building_temperature_channel)
+            t_dhw = stsv.get_input_value(self.dhw_temperature_channel)
+            # surplus/deficit electricity threshold exceeded?
+            if self.electricity_target_channel.source_output is not None:
+                electricity_target = stsv.get_input_value(self.electricity_target_channel)
+                electricity_threshold_ok = (
+                    electricity_target <= -self.config.electricity_threshold and self.state.on_off == 0
+                ) or (electricity_target <= self.config.electricity_threshold and self.state.on_off == 1)
+            else:
+                electricity_threshold_ok = True
+            if self.hydrogen_soc_channel.source_output is not None:
+                hydrogen_soc = stsv.get_input_value(self.hydrogen_soc_channel)
+                hydrogen_soc_ok = hydrogen_soc >= self.config.h2_soc_threshold
+            else:
+                hydrogen_soc_ok = True
+            self.determine_heating_mode(timestep, t_building, t_dhw)
+            self.calculate_state(timestep, t_building, t_dhw, electricity_threshold_ok, hydrogen_soc_ok)
+            self.processed_state = self.state.clone()
+        stsv.set_output_value(self.chp_onoff_signal_channel, self.state.on_off)
+        stsv.set_output_value(self.chp_heatingmode_signal_channel, self.state.mode)
+
+    def determine_heating_mode(self, timestep: int, t_building: float, t_dhw: float) -> None:
+        """Determines if hot water or building should be heated.
+
+        The mode in the state is 0 if water heating is considered and 1 if heating is enforced.
+        """
+        if (
+            self.heating_season_begin > timestep > self.heating_season_end
+            and t_building >= self.config.t_min_heating_in_celsius - 30
+        ):
+            # only consider water heating in summer
+            self.state.mode = 0
+            return
+        # calculate heating level of DHW storage and building
+        soc_dhw = (t_dhw - self.config.t_min_dhw_in_celsius) / (
+            self.config.t_max_dhw_in_celsius - self.config.t_min_dhw_in_celsius
+        )
+        soc_building = (t_building - self.config.t_min_heating_in_celsius) / (
+            self.config.t_max_heating_in_celsius - self.config.t_min_heating_in_celsius
+        )
+
+        if soc_building >= soc_dhw:
+            self.state.mode = 0
+            return
+        self.state.mode = 1
+
+    def calculate_state(  # pylint: disable=R0911
+        self,
+        timestep: int,
+        t_building: float,
+        t_dhw: float,
+        electricity_threshold_ok: bool,
+        hydrogen_soc_ok: bool,
+    ) -> None:
+        """Calculate the CHP state and activate / deactives."""
+        # return device on if minimum operation time is not fulfilled and device was on in previous state
+        if self.state.on_off == 1 and self.state.activation_time_step + self.minimum_runtime_in_timesteps >= timestep:
+            # mandatory on, minimum runtime not reached
+            return
+        if (
+            self.state.on_off == 0
+            and self.state.deactivation_time_step + self.minimum_resting_time_in_timesteps >= timestep
+        ):
+            # mandatory off, minimum resting time not reached
+            return
+        # deactivate when electricity is not needed:
+        if not electricity_threshold_ok:
+            self.state.deactivate(timestep)
+            return
+        # deactivate when state of charge of hydrogen storage is too low:
+        if not hydrogen_soc_ok:
+            self.state.deactivate(timestep)
+            return
+        # control according to set temperatures
+        if (
+            self.heating_season_begin > timestep > self.heating_season_end
+            and t_building >= self.config.t_min_heating_in_celsius - 30
+        ):
+            # only consider water heating in summer
+            if t_dhw < self.config.t_min_dhw_in_celsius:
+                self.state.activate(
+                    timestep
+                )  # activate CHP when storage temperature is too low and electricity is needed
+                return
+            if t_dhw > self.config.t_max_dhw_in_celsius:
+                # deactivate CHP when the storage temperature has reached the top of the drain hot
+                # water band - in summer the water is the only vessel served, so its own maximum is
+                # what bounds the run, not the heating band's.
+                self.state.deactivate(timestep)
+                return
+        else:
+            if t_building < self.config.t_min_heating_in_celsius or t_dhw < self.config.t_min_dhw_in_celsius:
+                # activate heating when either dhw storage or building temperature is too low and electricity is needed
+                self.state.activate(timestep)
+                return
+            if t_building > self.config.t_max_heating_in_celsius and t_dhw > self.config.t_max_dhw_in_celsius:
+                # deactivate heating when dhw storage and building temperature is too high
+                self.state.deactivate(timestep)
+                return
+
+    def write_to_report(self) -> List[str]:
+        """Writes the information of the current component to the report."""
+        return self.config.get_string_dict()

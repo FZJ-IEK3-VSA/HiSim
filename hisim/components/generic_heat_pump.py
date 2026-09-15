@@ -28,7 +28,8 @@ from hisim.components.building import Building
 from hisim.components.weather import Weather
 import hisim.loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
+from hisim.economics.facts import ComponentCostFacts, CostRelevance
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -53,8 +54,8 @@ class GenericHeatPumpConfig(ConfigBase):
     component_id: ComponentID
     manufacturer: str
     heat_pump_name: str
-    min_operation_time: float
-    min_idle_time: float
+    min_operation_time_in_seconds: float
+    min_idle_time_in_seconds: float
 
     @classmethod
     def get_default_generic_heat_pump_config(
@@ -68,8 +69,8 @@ class GenericHeatPumpConfig(ConfigBase):
             component_id=component_id,
             heat_pump_name="Vitocal 300-A AWO-AC 301.B07",
             manufacturer="Viessmann Werke GmbH & Co KG",
-            min_operation_time=60 * 60,
-            min_idle_time=15 * 60,
+            min_operation_time_in_seconds=60 * 60,
+            min_idle_time_in_seconds=15 * 60,
         )
 
 
@@ -168,12 +169,14 @@ class GenericHeatPump(cp.Component):
         Heat pump manufacturer
     name : str
         Heat pump model
-    min_operation_time : int, optional
+    min_operation_time_in_seconds : int, optional
         Minimum time duration that the heat pump operates under one cycle, in seconds. The default is 3600.
-    min_idle_time : int, optional
+    min_idle_time_in_seconds : int, optional
         Minimum time duration that the heat pump has to stay idle, in seconds. The default is 900.
 
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     State = "State"
@@ -212,13 +215,13 @@ class GenericHeatPump(cp.Component):
         )
         self.manufacturer = self.heatpump_config.manufacturer
         self.heatpump_name = self.heatpump_config.heat_pump_name
-        self.min_operation_time = self.heatpump_config.min_operation_time
-        self.min_idle_time = self.heatpump_config.min_idle_time
+        self.min_operation_time_in_seconds = self.heatpump_config.min_operation_time_in_seconds
+        self.min_idle_time_in_seconds = self.heatpump_config.min_idle_time_in_seconds
         self.build(
             self.manufacturer,
             self.heatpump_name,
-            self.min_operation_time,
-            self.min_idle_time,
+            self.min_operation_time_in_seconds,
+            self.min_idle_time_in_seconds,
         )
 
         self.number_of_cycles = 0
@@ -339,8 +342,8 @@ class GenericHeatPump(cp.Component):
         self,
         manufacturer: str,
         name: str,
-        min_operation_time: float,
-        min_idle_time: float,
+        min_operation_time_in_seconds: float,
+        min_idle_time_in_seconds: float,
     ) -> None:
         """Build function.
 
@@ -360,11 +363,11 @@ class GenericHeatPump(cp.Component):
 
         # Interpolates COP data from the database
         self.cop_ref = []
-        self.temperature_outside_ref = []
+        self.temperature_outside_ref_in_celsius = []
         for heat_pump_cops in heat_pump["COP"]:
-            self.temperature_outside_ref.append(float([*heat_pump_cops][0][1:].split("/")[0]))
+            self.temperature_outside_ref_in_celsius.append(float([*heat_pump_cops][0][1:].split("/")[0]))
             self.cop_ref.append(float([*heat_pump_cops.values()][0]))
-        self.cop_coef = np.polyfit(self.temperature_outside_ref, self.cop_ref, 1)
+        self.cop_coef = np.polyfit(self.temperature_outside_ref_in_celsius, self.cop_ref, 1)
 
         self.max_heating_power_in_watt = heat_pump["Nominal Heating Power A2/35"] * 1e3
         # self.max_heating_power = 11 * 1E3
@@ -382,8 +385,8 @@ class GenericHeatPump(cp.Component):
         )
 
         # Sets the time operation restricitions
-        self.min_operation_time = min_operation_time / self.my_simulation_parameters.seconds_per_timestep
-        self.min_idle_time = min_idle_time / self.my_simulation_parameters.seconds_per_timestep
+        self.min_operation_time_in_timesteps = min_operation_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep
+        self.min_idle_time_in_timesteps = min_idle_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep
 
         # Writes info to report
         self.write_to_report()
@@ -420,19 +423,19 @@ class GenericHeatPump(cp.Component):
         if factor != 1:
             self.has_been_converted = True
 
-    def calc_cop(self, t_out: float) -> float:
+    def calc_cop(self, t_out_in_celsius: float) -> float:
         """Compute the coefficient of performance at a given outside temperature.
 
         Uses the linear COP model fitted in :meth:`build` from the heat-pump
         database entries.
 
         Args:
-            t_out: Outside air temperature in degrees Celsius.
+            t_out_in_celsius: Outside air temperature in degrees Celsius.
 
         Returns:
             The coefficient of performance (dimensionless).
         """
-        val: float = self.cop_coef[0] * t_out + self.cop_coef[1]
+        val: float = self.cop_coef[0] * t_out_in_celsius + self.cop_coef[1]
         return val
 
     def i_save_state(self) -> None:
@@ -460,10 +463,10 @@ class GenericHeatPump(cp.Component):
         """Simulate heat pump."""
         # Inputs
         state_c = stsv.get_input_value(self.state_channel)
-        temperature_outside = stsv.get_input_value(self.temperature_outside_channel)
+        temperature_outside_in_celsius = stsv.get_input_value(self.temperature_outside_channel)
         # log.information("State: {}, Temperature: {}".format(stateC, t_out))
         # log.information("State of Activation: {}".format(self.state.activation))
-        # log.information("Timestep special: {}".format(self.state.start_timestep + self.min_idle_time))
+        # log.information("Timestep special: {}".format(self.state.start_timestep + self.min_idle_time_in_timesteps))
         # Calculation
 
         # Calculation.ThermalEnergyStorage
@@ -513,7 +516,7 @@ class GenericHeatPump(cp.Component):
         if self.state.activation != 0:
             number_of_cycles = self.state.cycle_number
             # Checks if the minimum running time has been reached
-            if timestep >= self.state.start_timestep + self.min_operation_time and state_c == 0:
+            if timestep >= self.state.start_timestep + self.min_operation_time_in_timesteps and state_c == 0:
                 self.state = GenericHeatPumpState(start_timestep=timestep, cycle_number=number_of_cycles)
             stsv.set_output_value(
                 self.thermal_power_delivered_channel,
@@ -526,7 +529,7 @@ class GenericHeatPump(cp.Component):
             return
 
         # Heat Pump is Off
-        if state_c != 0 and (timestep >= self.state.start_timestep + self.min_idle_time):
+        if state_c != 0 and (timestep >= self.state.start_timestep + self.min_idle_time_in_timesteps):
             self.number_of_cycles = self.number_of_cycles + 1
             number_of_cycles = self.number_of_cycles
             if state_c == 1:
@@ -534,7 +537,7 @@ class GenericHeatPump(cp.Component):
                 self.state = GenericHeatPumpState(
                     start_timestep=timestep,
                     thermal_power_delivered_in_watt=self.max_heating_power_in_watt,
-                    cop=self.calc_cop(temperature_outside),
+                    cop=self.calc_cop(temperature_outside_in_celsius),
                     cycle_number=number_of_cycles,
                 )
 
@@ -542,7 +545,7 @@ class GenericHeatPump(cp.Component):
                 self.state = GenericHeatPumpState(
                     start_timestep=timestep,
                     thermal_power_delivered_in_watt=self.max_cooling_power_in_watt,
-                    cop=self.calc_cop(temperature_outside),
+                    cop=self.calc_cop(temperature_outside_in_celsius),
                     cycle_number=number_of_cycles,
                 )
 
@@ -594,6 +597,29 @@ class GenericHeatPump(cp.Component):
         capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
         return capex_cost_data_class
 
+    def get_cost_facts(self) -> ComponentCostFacts:
+        """Cost facts for the lifecycle cost engine (cost_spec.md §3.3, §9.1).
+
+        Declares the heat pump as one priced subject of the database's `HEAT_PUMP` class, sized by
+        its nominal heating power in kW.
+
+        It is the hook rather than an entry in `adapter.FactsExtractors.BY_CLASS_NAME`, because an
+        adapter extractor is handed the *config* alone and this config carries no size at all: it
+        names a manufacturer and a model, and the rating is looked up out of the heat-pump database
+        in `build()` into `max_heating_power_in_watt`. Only the component knows how big it is, so
+        only the component can say. The `1e-3` converts the watts held there into the kilowatts the
+        cost database prices in; without it a 10 kW machine would be costed as 10 MW.
+
+        Returns:
+            The facts for this heat pump; never None, since the class declares `PRICED`.
+        """
+        return ComponentCostFacts(
+            asset_class=lt.ComponentType.HEAT_PUMP,
+            size=self.max_heating_power_in_watt * 1e-3,
+            size_unit=lt.Units.KILOWATT,
+            kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+
     def get_component_kpi_entries(
         self,
         all_outputs: List,
@@ -624,8 +650,10 @@ class GenericHeatPumpController(cp.Component):
 
     """
 
+    cost_relevance = CostRelevance.FREE_OF_COST
+
     # Inputs
-    TemperatureMean = "Residence Temperature"
+    TemperatureMean = "ResidenceTemperature"
     ElectricityInput = "ElectricityInput"
 
     # Outputs
@@ -652,8 +680,8 @@ class GenericHeatPumpController(cp.Component):
             my_display_config=my_display_config,
         )
         self.build(
-            temperature_air_cooling=self.heatpump_controller_config.temperature_air_cooling_in_celsius,
-            temperature_air_heating=self.heatpump_controller_config.temperature_air_heating_in_celsius,
+            temperature_air_cooling_in_celsius=self.heatpump_controller_config.temperature_air_cooling_in_celsius,
+            temperature_air_heating_in_celsius=self.heatpump_controller_config.temperature_air_heating_in_celsius,
             offset_in_celsius=self.heatpump_controller_config.offset_in_celsius,
             mode=self.heatpump_controller_config.mode,
         )
@@ -715,8 +743,8 @@ class GenericHeatPumpController(cp.Component):
 
     def build(
         self,
-        temperature_air_heating: float,
-        temperature_air_cooling: float,
+        temperature_air_heating_in_celsius: float,
+        temperature_air_cooling_in_celsius: float,
         offset_in_celsius: float,
         mode: float,
     ) -> None:
@@ -729,8 +757,8 @@ class GenericHeatPumpController(cp.Component):
         self.previous_heatpump_mode = self.controller_heatpumpmode
 
         # Configuration
-        self.temperature_set_heating = temperature_air_heating
-        self.temperature_set_cooling = temperature_air_cooling
+        self.temperature_set_heating_in_celsius = temperature_air_heating_in_celsius
+        self.temperature_set_cooling_in_celsius = temperature_air_cooling_in_celsius
         self.offset_in_celsius = offset_in_celsius
 
         self.mode = mode
@@ -762,13 +790,13 @@ class GenericHeatPumpController(cp.Component):
             pass
         else:
             # Retrieves inputs
-            temperature_mean_old = stsv.get_input_value(self.temperature_mean_channel)
-            electricity_input = stsv.get_input_value(self.electricity_input_channel)
+            temperature_mean_old_in_celsius = stsv.get_input_value(self.temperature_mean_channel)
+            electricity_input_in_watt = stsv.get_input_value(self.electricity_input_channel)
 
             if self.mode == 1:
-                self.conditions(temperature_mean_old)
+                self.conditions(temperature_mean_old_in_celsius)
             elif self.mode == 2:
-                self.smart_conditions(temperature_mean_old, electricity_input)
+                self.smart_conditions(temperature_mean_old_in_celsius, electricity_input_in_watt)
 
         if self.controller_heatpumpmode == "heating":
             state = 1
@@ -778,59 +806,59 @@ class GenericHeatPumpController(cp.Component):
             state = 0
         stsv.set_output_value(self.state_channel, state)
 
-    def conditions(self, set_temperature: float) -> None:
+    def conditions(self, set_temperature_in_celsius: float) -> None:
         """Set conditions for the heat pump controller mode."""
-        maximum_heating_set_temperature = self.temperature_set_heating + self.offset_in_celsius
-        minimum_heating_set_temperature = self.temperature_set_heating
-        minimum_cooling_set_temperature = self.temperature_set_cooling - self.offset_in_celsius
-        maximum_cooling_set_temperature = self.temperature_set_cooling
+        maximum_heating_set_temperature_in_celsius = self.temperature_set_heating_in_celsius + self.offset_in_celsius
+        minimum_heating_set_temperature_in_celsius = self.temperature_set_heating_in_celsius
+        minimum_cooling_set_temperature_in_celsius = self.temperature_set_cooling_in_celsius - self.offset_in_celsius
+        maximum_cooling_set_temperature_in_celsius = self.temperature_set_cooling_in_celsius
 
         if self.controller_heatpumpmode == "heating":  # and daily_avg_temp < 15:
-            if set_temperature > maximum_heating_set_temperature:  # 23
+            if set_temperature_in_celsius > maximum_heating_set_temperature_in_celsius:  # 23
                 self.controller_heatpumpmode = "off"
                 return
         if self.controller_heatpumpmode == "cooling":
-            if set_temperature < minimum_cooling_set_temperature:  # 24
+            if set_temperature_in_celsius < minimum_cooling_set_temperature_in_celsius:  # 24
                 self.controller_heatpumpmode = "off"
                 return
         if self.controller_heatpumpmode == "off":
             # if pvs_surplus > ? and air_temp < minimum_heating_air + 2:
-            if set_temperature < minimum_heating_set_temperature:  # 21
+            if set_temperature_in_celsius < minimum_heating_set_temperature_in_celsius:  # 21
                 self.controller_heatpumpmode = "heating"
                 return
-            if set_temperature > maximum_cooling_set_temperature:  # 26
+            if set_temperature_in_celsius > maximum_cooling_set_temperature_in_celsius:  # 26
                 self.controller_heatpumpmode = "cooling"
                 return
 
-    def smart_conditions(self, set_temperature: float, electricity_input: float) -> None:
+    def smart_conditions(self, set_temperature_in_celsius: float, electricity_input_in_watt: float) -> None:
         """Set smart conditions for the heat pump controller mode."""
-        smart_offset_upper = 3
-        smart_offset_lower = 0.5
-        maximum_heating_set_temperature = self.temperature_set_heating + self.offset_in_celsius
-        if electricity_input < 0:
-            maximum_heating_set_temperature += smart_offset_upper
+        smart_offset_upper_in_celsius = 3
+        smart_offset_lower_in_celsius = 0.5
+        maximum_heating_set_temperature_in_celsius = self.temperature_set_heating_in_celsius + self.offset_in_celsius
+        if electricity_input_in_watt < 0:
+            maximum_heating_set_temperature_in_celsius += smart_offset_upper_in_celsius
         # maximum_heating_set_temp = self.t_set_heating
-        minimum_heating_set_temperature = self.temperature_set_heating
-        if electricity_input < 0:
-            minimum_heating_set_temperature += smart_offset_lower
-        minimum_cooling_set_temperature = self.temperature_set_cooling - self.offset_in_celsius
+        minimum_heating_set_temperature_in_celsius = self.temperature_set_heating_in_celsius
+        if electricity_input_in_watt < 0:
+            minimum_heating_set_temperature_in_celsius += smart_offset_lower_in_celsius
+        minimum_cooling_set_temperature_in_celsius = self.temperature_set_cooling_in_celsius - self.offset_in_celsius
         # minimum_cooling_set_temp = self.t_set_cooling
-        maximum_cooling_set_temperature = self.temperature_set_cooling
+        maximum_cooling_set_temperature_in_celsius = self.temperature_set_cooling_in_celsius
 
         if self.controller_heatpumpmode == "heating":  # and daily_avg_temp < 15:
-            if set_temperature > maximum_heating_set_temperature:  # 23
+            if set_temperature_in_celsius > maximum_heating_set_temperature_in_celsius:  # 23
                 self.controller_heatpumpmode = "off"
                 return
         if self.controller_heatpumpmode == "cooling":
-            if set_temperature < minimum_cooling_set_temperature:  # 24
+            if set_temperature_in_celsius < minimum_cooling_set_temperature_in_celsius:  # 24
                 self.controller_heatpumpmode = "off"
                 return
         if self.controller_heatpumpmode == "off":
             # if pvs_surplus > ? and air_temp < minimum_heating_air + 2:
-            if set_temperature < minimum_heating_set_temperature:  # 21
+            if set_temperature_in_celsius < minimum_heating_set_temperature_in_celsius:  # 21
                 self.controller_heatpumpmode = "heating"
                 return
-            if set_temperature > maximum_cooling_set_temperature:  # 26
+            if set_temperature_in_celsius > maximum_cooling_set_temperature_in_celsius:  # 26
                 self.controller_heatpumpmode = "cooling"
                 return
 
@@ -838,10 +866,10 @@ class GenericHeatPumpController(cp.Component):
 
         # log.information("Final state: {}\n".format(state))
 
-    def prin1t_outpu1t(self, t_m: float, state: Any) -> None:
+    def prin1t_outpu1t(self, t_m_in_celsius: float, state: Any) -> None:
         """Print output of heat pump controller."""
         log.information("==========================================")
-        log.information(f"T m: {t_m}")
+        log.information(f"T m: {t_m_in_celsius}")
         log.information(f"State: {state}")
 
     def get_cost_opex(

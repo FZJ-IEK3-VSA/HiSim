@@ -161,17 +161,16 @@ def test_the_pilot_chain_resolves_without_any_sources_mapping():
         HeatDistributionSystemType,
     )
 
-    building = BuildingConfig.preset_standard("Building")
+    building = BuildingConfig.preset_german_single_family_home("Building")
     heating_load = SizingContext.for_building(building).heating_load_in_watt
-    controller = HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
-        set_heating_temperature_for_building_in_celsius=20.0,
-        set_cooling_temperature_for_building_in_celsius=25.0,
-        heating_load_of_building_in_watt=7780.8,
-        heating_reference_temperature_in_celsius=-7.0,
-    )
-    hds = HeatDistributionConfig.preset_standard("HeatDistributionSystem")
+    controller = HeatDistributionControllerConfig.preset_building_derived("HeatDistributionController")
+    hds = HeatDistributionConfig.preset_building_derived("HeatDistributionSystem")
     boiler = GenericBoilerConfig.preset_condensing_gas("CondensingGasBoiler")
-    resolved = resolve_all([hds, boiler, building, controller])  # deliberately shuffled
+    # The chain has no weather, and the building now records which weather it is computed against, so
+    # that one fact is seeded: the seed is the surrounding system, and here the system is the test.
+    resolved = resolve_all(
+        [hds, boiler, building, controller], seed=SizingContext(weather_identity="pilot weather")
+    )  # deliberately shuffled
     resolved_hds, resolved_boiler = resolved[0], resolved[1]
     assert resolved_hds.water_mass_flow_rate_in_kg_per_second == 0.27
     assert resolved_hds.heating_system is HeatDistributionSystemType.FLOORHEATING

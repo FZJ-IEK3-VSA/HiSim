@@ -1,0 +1,64 @@
+# The module configurations household_heatpump_solar_thermal_building_sizer is recorded under.
+# The heat-pump sizer's list, unchanged: the solar thermal collector and its controller are sized
+# from the dwelling count and from nothing else the probes touch, so adding the participant adds no
+# axis, and the four knobs of the setup's EnergySystemConfig plus the baseline are still the whole
+# configuration space worth recording. The ArcheTypeConfig half is held at its class defaults with
+# one exception, the building code, probed as the representative of the archetype's value cascade
+# because it is the field that reaches furthest - the envelope, the areas and the heating load, and
+# everything sized from them. The probes deliberately toggle each knob on its own, so the grouping
+# report names every pair of them as untested.
+#
+# One branch of this setup is not configuration and no probe can reach it: the heat pump's primary
+# temperature input is wired to the weather only when the hplib database gives the selected pump
+# Group 1 or 4, and raises a KeyError otherwise. That fork follows the shipped heat-pump database,
+# not the module configuration, so every column here stands on the same side of it and the grouping
+# below describes the Group-1-or-4 world alone. A database change moves all five columns together
+# and the byte-for-byte proof is what would notice.
+setup: system_setups/household_heatpump_solar_thermal_building_sizer.py
+defaults: hisim.building_sizer_utils.interface_configs.modular_household_config.ModularHouseholdConfig.get_default_config_for_household_heatpump_solar_thermal
+probes:
+  - column: baseline
+    description: >-
+      The class defaults, recorded with no module configuration at all, which is what makes this
+      column's flat file the committed twin: full rooftop photovoltaics, battery and energy manager
+      on, floor heating, and the heat pump beside the solar thermal collector that preheats the
+      domestic hot water.
+
+  - column: no_battery_ems
+    description: >-
+      The one structural fork configuration can reach. Without the battery and the energy manager
+      the electricity meter is wired straight to every participant instead of through the manager,
+      so the meter is present in both worlds and says something different in each — the case a group
+      cannot express and a variant can. The solar thermal pair is not touched by the fork: the
+      collector's heat never went through the electricity manager.
+    module_config:
+      energy_system_config_.use_battery_and_ems: false
+
+  - column: half_pv
+    description: >-
+      Half the rooftop potential. The photovoltaic array and the battery that is sized from it both
+      change, and nothing appears or disappears: the standing example of a difference that looks
+      structural in a diff and is a number a consumer picks. The solar thermal collector's area is
+      not on this axis at all - it is four square metres per dwelling, and the rooftop share the
+      photovoltaics use does not reach it.
+    module_config:
+      energy_system_config_.share_of_maximum_pv_potential: 0.5
+
+  - column: radiator
+    description: >-
+      Radiators instead of floor heating. A second difference that reads as hardware and is not: it
+      moves the distribution system's and its controller's numbers and adds no component, and it
+      belongs in the same category as the photovoltaic share.
+    module_config:
+      energy_system_config_.heat_distribution_system: Conventional Radiator
+
+  - column: nineties_building
+    description: >-
+      A 1995-2001 single-family house instead of a 1958-1968 one: the same TABULA archetype, one
+      construction-year band later. This is the widest value cascade the setup has. The envelope the
+      code resolves moves the roof area, and with it the photovoltaic power and the battery sized
+      from that power; it moves the heating load, and with it the heat pump, the distribution
+      controller and the hot water storage. Probing it makes every re-recording prove that the whole
+      chain moves numbers only and adds, removes and rewires nothing.
+    module_config:
+      archetype_config_.building_code: DE.N.SFH.09.Gen.ReEx.001.002

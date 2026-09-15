@@ -14,6 +14,7 @@ import copy
 import dataclasses
 import json
 from dataclasses import dataclass
+from typing import Dict
 
 import pytest
 from dataclasses_json import dataclass_json
@@ -53,6 +54,24 @@ class _SizableFixtureConfig(ConfigBase):
     def get_main_classname(cls) -> str:
         """Returns a dummy classname, as the ConfigBase contract requires."""
         return "tests.test_sizing._SizableFixtureConfig"
+
+
+@dataclass_json
+@dataclass
+class _StringSizedFixtureConfig(ConfigBase):
+    """A config with one string-typed sizable field, for the wire-format tests.
+
+    ``str`` is the one type whose constructor accepts the ``AUTO`` sentinel without an error
+    (``str(AUTO)`` is the wire spelling), which is what made the decoder defect below silent.
+    """
+
+    component_id: ComponentID
+    upstream_identity: Sizable[str] = sized_field(rule=Size.WEATHER_IDENTITY, value_type=str)
+
+    @classmethod
+    def get_main_classname(cls) -> str:
+        """Returns the class name, as every config does."""
+        return cls.__name__
 
 
 @dataclass_json
@@ -238,12 +257,40 @@ def test_size_terms_and_sizing_context_fields_are_one_registry():
         assert term.facts_read() == ((field.name, Cardinality.ONE),)
 
 
+#: The facts R2.1 added to the vocabulary ahead of the batches that read them, and what each is
+#: for. Listed here as literals because a fact name is wire format: a ``sizing_sources`` line in a
+#: checked-in energy system spells it out, so a rename is a breaking change and has to fail here.
+BATCH_ONE_FACTS: Dict[str, str] = {
+    "set_heating_threshold_outside_temperature_in_celsius": "the emitter circuit's heating threshold",
+    "roof_area_in_m2": "the building's roof, which sizes a PV array",
+    "pv_peak_power_in_watt": "the array's peak power, which sizes a battery",
+    "energy_carrier": "the fuel the heat generator burns",
+    "heating_value_of_fuel_in_kwh_per_liter": "how much of that fuel a kilowatt hour is",
+    "fuel_density_in_kg_per_m3": "how heavy a litre of it is",
+}
+
+
+@pytest.mark.base
+def test_the_batch_one_facts_are_in_the_shared_vocabulary():
+    """The six facts the first conversion batch reads are fields of the context and Size terms.
+
+    Failure mode caught: a batch declaring a contribution for a fact that is not a
+    ``SizingContext`` field — ``FactContribution`` refuses it, but only when that batch lands,
+    which is exactly the shared-kernel change R2.1 exists to make before anything depends on it.
+    """
+    field_names = {field.name for field in dataclasses.fields(SizingContext)}
+    assert set(BATCH_ONE_FACTS) <= field_names
+    for fact in BATCH_ONE_FACTS:
+        assert getattr(SizingContext(), fact) is None, "a fact is absent until somebody contributes it"
+        assert getattr(Size, fact.upper()).facts_read() == ((fact, Cardinality.ONE),)
+
+
 @pytest.mark.base
 def test_for_building_snapshots_the_derived_building_facts():
     """for_building runs the TABULA lookup once and fills the building-scope facts."""
     from hisim.components.building import BuildingConfig
 
-    ctx = SizingContext.for_building(BuildingConfig.preset_standard("Building"))
+    ctx = SizingContext.for_building(BuildingConfig.preset_german_single_family_home("Building"))
     assert ctx.heating_load_in_watt is not None and ctx.heating_load_in_watt > 0
     assert ctx.number_of_apartments == 1
     assert ctx.conditioned_floor_area_in_m2 == pytest.approx(121.2)
@@ -295,7 +342,7 @@ def test_hds_preset_is_sizing_mandatory_and_enum_typed():
         conditioned_floor_area_in_m2=121.2,
         heat_distribution_system_type=HeatDistributionSystemType.FLOORHEATING,
     )
-    resolved = HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(ctx)
+    resolved = HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").resolve(ctx)
     assert resolved.water_mass_flow_rate_in_kg_per_second == 0.27  # the old factory's round(.., 2)
     assert resolved.heating_system is HeatDistributionSystemType.FLOORHEATING
     # enum-typed sizable field round-trips as a member, thanks to value_type
@@ -312,3 +359,23 @@ def test_ems_preset_has_nothing_to_size():
     assert config.strategy == "optimize_own_consumption"
     with pytest.raises(NothingToSizeError):
         config.resolve(SizingContext(heating_load_in_watt=10_000.0))
+
+
+@pytest.mark.base
+def test_a_string_typed_sizable_field_left_out_of_a_dict_is_still_auto():
+    """A sized field missing from a dict decodes to the ``AUTO`` sentinel, not to the string ``"AUTO"``.
+
+    ``dataclasses_json`` runs the field decoder on a missing key's default too. The decoder used to
+    coerce that default through ``value_type``; for ``str`` that produced the text ``"AUTO"``, which the
+    engine then treated as a set value and never sized.
+    """
+    absent = _StringSizedFixtureConfig.from_dict({"component_id": {"name": "Fixture"}})
+    spelled = _StringSizedFixtureConfig.from_dict({"component_id": {"name": "Fixture"}, "upstream_identity": "AUTO"})
+    concrete = _StringSizedFixtureConfig.from_dict(
+        {"component_id": {"name": "Fixture"}, "upstream_identity": "Aachen/DWD_TRY/aachen_center"}
+    )
+
+    assert absent.upstream_identity is AUTO
+    assert spelled.upstream_identity is AUTO
+    assert concrete.upstream_identity == "Aachen/DWD_TRY/aachen_center"
+    assert sizing.auto_fields(absent) == ("upstream_identity",)

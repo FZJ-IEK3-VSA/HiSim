@@ -50,12 +50,32 @@ building-sizer config, CSV exports, plots/PDF). The module config JSON
 """
 
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple, cast
+from typing import Callable, List, Optional, Protocol, Tuple, runtime_checkable, cast
 
 from hisim.building_sizer_utils.interface_configs.modular_household_config import ModularHouseholdConfig
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.renovisor.schema import SimulationOverrides
 from hisim.simulationparameters import SimulationParameters
+
+
+@runtime_checkable
+class SimulationRunner(Protocol):
+    """Protocol for the in-process simulation runner (e.g. ``hisim_main.main``).
+
+    The ``__call__`` signature mirrors :func:`hisim.hisim_main.main` exactly
+    (keyword names and ``Optional[...] = None`` defaults), so static checkers
+    gain full visibility into the arguments the call site forwards while
+    accepting the real implementation unchanged.
+    """
+
+    def __call__(
+        self,
+        path_to_module: str,
+        my_simulation_parameters: Optional[SimulationParameters] = None,
+        my_module_config: Optional[str] = None,
+    ) -> str:
+        """Run one simulation and return the path of its result directory."""
+
 
 # Defaults per spec section 5; the year matches the Dublin NSRDB weather dataset.
 DEFAULT_YEAR: int = 2019
@@ -137,7 +157,7 @@ def run_simulation(
     modular_household_config: ModularHouseholdConfig,
     simulation_parameters: SimulationParameters,
     result_directory: Path,
-    runner: Optional[Callable[..., str]] = None,
+    runner: Optional[SimulationRunner] = None,
     setup_path_resolver: Callable[[str], Path] = resolve_setup_path,
 ) -> Path:
     """Write the module config and run the setup in-process; return the actual result directory.

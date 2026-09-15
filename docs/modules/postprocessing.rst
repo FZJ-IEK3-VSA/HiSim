@@ -48,10 +48,7 @@ subroutines:
   and written into the report.
 
 * **CSV / Pickle export** — raw time-series data is written to disk for
-  further analysis outside HiSim. Additional CSV exports tailored for
-  building-energy databases are produced by
-  :mod:`hisim.postprocessing.generate_csv_for_housing_database`
-  (:func:`~hisim.postprocessing.generate_csv_for_housing_database.generate_csv_for_database`).
+  further analysis outside HiSim.
 
 * **PDF report** — the :mod:`hisim.postprocessing.reportgenerator` module
   (:class:`~hisim.postprocessing.reportgenerator.ReportGenerator`) assembles
@@ -59,14 +56,6 @@ subroutines:
   Figure metadata is carried by
   :class:`~hisim.postprocessing.report_image_entries.ReportImageEntry` and
   :class:`~hisim.postprocessing.report_image_entries.SystemChartEntry`.
-
-* **Scenario evaluation** — the
-  :mod:`hisim.postprocessing.scenario_evaluation` sub-package collects,
-  processes, and plots aggregated results across multiple simulation runs
-  (:class:`~hisim.postprocessing.scenario_evaluation.result_data_collection.ResultDataCollection`,
-  :class:`~hisim.postprocessing.scenario_evaluation.result_data_processing.ScenarioDataProcessing`,
-  :class:`~hisim.postprocessing.scenario_evaluation.result_data_plotting.ScenarioChartGeneration`,
-  :class:`~hisim.postprocessing.scenario_evaluation.scenario_analysis_complete_with_config.ScenarioAnalysisWithConfig`).
 
 Data flows through the
 :class:`~hisim.postprocessing.postprocessing_datatransfer.PostProcessingDataTransfer`
@@ -124,23 +113,6 @@ Sub-packages and Modules
   and
   :mod:`hisim.postprocessing.cost_and_emission_computation.capex_computation`
   (:class:`~hisim.postprocessing.cost_and_emission_computation.capex_computation.CapexComputationHelperFunctions`).
-
-* :mod:`hisim.postprocessing.scenario_evaluation` — sub-package for
-  comparing results across multiple scenarios:
-  :mod:`hisim.postprocessing.scenario_evaluation.result_data_collection`
-  (:class:`~hisim.postprocessing.scenario_evaluation.result_data_collection.ResultDataCollection`),
-  :mod:`hisim.postprocessing.scenario_evaluation.result_data_processing`
-  (:class:`~hisim.postprocessing.scenario_evaluation.result_data_processing.ScenarioDataProcessing`),
-  :mod:`hisim.postprocessing.scenario_evaluation.result_data_plotting`
-  (:class:`~hisim.postprocessing.scenario_evaluation.result_data_plotting.ScenarioChartGeneration`),
-  and
-  :mod:`hisim.postprocessing.scenario_evaluation.scenario_analysis_complete_with_config`
-  (:class:`~hisim.postprocessing.scenario_evaluation.scenario_analysis_complete_with_config.ScenarioAnalysisWithConfig`,
-  :class:`~hisim.postprocessing.scenario_evaluation.scenario_analysis_complete_with_config.ScenarioAnalysisConfig`).
-
-* :mod:`hisim.postprocessing.generate_csv_for_housing_database` — produces
-  CSV exports tailored for building-energy housing databases via
-  :func:`~hisim.postprocessing.generate_csv_for_housing_database.generate_csv_for_database`.
 
 API Reference
 -------------

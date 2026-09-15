@@ -11,14 +11,14 @@ import numpy as np
 from hisim.components import (
     building,
     generic_pv_system,
-    advanced_heat_pump_hplib,
     advanced_battery_bslib,
+    more_advanced_heat_pump_hplib,
     simple_water_storage,
 )
-from hisim.units import Quantity, Watt
 
 from hisim import log
 from hisim import utils
+from hisim.config import SizingContext, concrete
 
 
 @pytest.mark.buildingtest
@@ -133,7 +133,7 @@ def simulation_for_one_timestep(
 
     # Set Residence
     my_residence_config = (
-        building.BuildingConfig.preset_standard("Building")
+        building.BuildingConfig.preset_german_single_family_home("Building")
     )
     my_residence_config.absolute_conditioned_floor_area_in_m2 = (
         absolute_conditioned_floor_area_in_m2
@@ -144,33 +144,42 @@ def simulation_for_one_timestep(
     _log_building_properties(my_residence_config, my_residence_information)
 
     # Set PV
-    my_pv_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-        rooftop_area_in_m2=my_residence_information.roof_area_in_m2
+    # No weather component in this sweep, so the weather identity -- which only enters the cache
+    # key -- is a stand-in; the roof area is the fact under test.
+    my_pv_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem").resolve(
+        SizingContext(roof_area_in_m2=my_residence_information.roof_area_in_m2, weather_identity="Aachen")
     )
 
     # Set hplib
-    my_hplib_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=Quantity(my_residence_information.max_thermal_building_demand_in_watt, Watt)
+    my_hplib_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
+        heating_load_of_building_in_watt=my_residence_information.max_thermal_building_demand_in_watt
     )
 
     # Set Hot Water Storage
-    my_simple_hot_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=my_hplib_config.set_thermal_output_power_in_watt.value,
-        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
+    my_simple_hot_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer(
+        "SimpleHotWaterStorage"
+    )
+    # The litres-per-kilowatt figure is per kind of generator, and the volume law reads the field,
+    # so the option is set on the preset before the configuration is resolved.
+    my_simple_hot_water_storage_config.sizing_option = (
+        simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
+    )
+    my_simple_hot_water_storage_config = my_simple_hot_water_storage_config.resolve(
+        SizingContext(maximal_thermal_power_in_watt=my_hplib_config.set_thermal_output_power_in_watt)
     )
 
     # Set Battery
-    my_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
-        total_pv_power_in_watt_peak=my_pv_config.power_in_watt
+    my_battery_config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
+        SizingContext(pv_peak_power_in_watt=concrete(my_pv_config.power_in_watt))
     )
 
     # Set DHW Storage
-    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
-        number_of_apartments=my_residence_information.number_of_apartments
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(
+        SizingContext(number_of_apartments=my_residence_information.number_of_apartments)
     )
 
     # Energy system sizes
-    pv_power_in_watt = my_pv_config.power_in_watt
+    pv_power_in_watt = concrete(my_pv_config.power_in_watt)
     hplib_thermal_power_in_watt = my_hplib_config.set_thermal_output_power_in_watt
     simple_hot_water_storage_size_in_liter = (
         my_simple_hot_water_storage_config.volume_heating_water_storage_in_liter
@@ -183,7 +192,7 @@ def simulation_for_one_timestep(
     return {
         "number_of_apartments": my_residence_information.number_of_apartments,
         "pv": pv_power_in_watt,
-        "hplib": hplib_thermal_power_in_watt.value,
+        "hplib": hplib_thermal_power_in_watt,
         "sh_storage": simple_hot_water_storage_size_in_liter,
         "battery": battery_capacity_in_kilowatt_hours,
         "dhw_storage": water_storage_size_for_dhw_in_liter,

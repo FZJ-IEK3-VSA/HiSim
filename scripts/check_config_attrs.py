@@ -271,7 +271,7 @@ def factory_config_class(call: ast.Call, configs: Dict[str, Set[str]]) -> Option
     """Returns the config class a factory-style call produces, or None.
 
     Recognizes ``SomeConfig.get_default_config()`` and module-qualified spellings like
-    ``advanced_battery_bslib.BatteryConfig.get_scaled_battery(...)`` by taking the name
+    ``advanced_battery_bslib.BatteryConfig.preset_sized_to_pv(...)`` by taking the name
     immediately left of the called method and checking it against the config registry.
     A small denylist excludes the classmethods that return strings rather than config
     instances, so that e.g. ``SomeConfig.get_main_classname().split(...)`` is not
@@ -313,7 +313,7 @@ def check_function(
             if source:
                 local.update({t.id: source for t in sub.targets if isinstance(t, ast.Name)})
         # A local bound from a config-class factory call:
-        #   my_config = BatteryConfig.get_default_config()
+        #   my_config = BatteryConfig.preset_sized_to_pv("Battery")
         # This is how virtually every system setup obtains its configs, and it is the
         # binding form under which the ComponentID migration's dead-field writes
         # (``my_config.name = "Battery1"`` after the field was removed) went unnoticed:

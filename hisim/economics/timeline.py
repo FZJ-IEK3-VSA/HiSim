@@ -519,6 +519,46 @@ class CashFlowTimeline:
             result[bucket] = result.get(bucket, UncertainValue.exact(0.0)) + discounted
         return result
 
+    def npv_split_by(
+        self,
+        interest_rate: float,
+        key: Callable[[CashFlowEntry], Any],
+    ) -> Tuple[Dict[Any, float], Dict[Any, float]]:
+        """`npv_by`, with each bucket split into the costs and the credits that filled it.
+
+        The pivot every chart that cannot draw a negative number needs: a treemap has no negative
+        area and a Sankey ribbon has no sign, so a subject that both costs and earns — a PV system
+        with an investment and a feed-in revenue — has to arrive as *two* magnitudes rather than as
+        one netted figure. Splitting by the sign of each contributing entry, before any summation,
+        is what keeps those two apart; netting first and taking the absolute value afterwards would
+        report a small cost where there is a large cost and a large credit.
+
+        It is the BEST_ESTIMATE slot alone, deliberately. The split is a statement about the sign
+        of an entry, and an entry's sign is a property of the booking rather than of a world: the
+        views that use this draw one panel, not three, and a per-slot split would have to decide
+        what to do with a flow whose LOW world is a cost and whose HIGH world is a credit. Callers
+        needing bands use `npv_by`, which stays slot-wise.
+
+        Args:
+            interest_rate: Nominal discount rate, as for `npv`.
+            key: Extractor mapping an entry to its bucket; anything hashable works. It may raise —
+                the display-group lookups that use it do, on a mapping that does not cover a
+                category — and the error travels out unchanged.
+
+        Returns:
+            `(costs, credits)`; both are bucket -> **positive** euros in first-appearance order,
+            and `costs[bucket] - credits[bucket]` is that bucket's `npv_by` figure in the
+            BEST_ESTIMATE slot. A bucket with only costs is absent from `credits` and vice versa.
+        """
+        cost_buckets: Dict[Any, float] = {}
+        credit_buckets: Dict[Any, float] = {}
+        for entry in self.entries:
+            discounted = entry.amount_in_euro.best_estimate * discount_factor(interest_rate, entry.year)
+            bucket = key(entry)
+            side = cost_buckets if discounted >= 0.0 else credit_buckets
+            side[bucket] = side.get(bucket, 0.0) + abs(discounted)
+        return cost_buckets, credit_buckets
+
     def nominal_annual_series(self, horizon_years: int) -> List[UncertainValue]:
         """Nominal euros per year 0..T (index = year); the liquidity view (§4.3).
 

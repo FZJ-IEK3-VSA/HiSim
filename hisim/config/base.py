@@ -18,6 +18,7 @@ delegate to :mod:`hisim.config.sizing`) without closing an import cycle through
 
 from __future__ import annotations
 
+import copy
 import dataclasses as dc
 import enum
 import sys
@@ -34,6 +35,7 @@ from dataclasses_json import dataclass_json
 # line. The aliases keep the module-level functions reachable from the identically named
 # ``ConfigBase`` methods that delegate to them.
 from hisim.config.context import SizingContext
+from hisim.config.names import NameSyntax
 from hisim.config.presets import check_builder_declarations
 from hisim.config.sizing import (
     SizedFieldMetadata,
@@ -181,15 +183,24 @@ class ComponentID:
     DEFAULT_BUILDING_LABEL: ClassVar[str] = "BUI1"
 
     def __post_init__(self) -> None:
-        """Validates the identity right after construction.
+        """Validates the identity right after construction, one field at a time.
 
-        The name is the only mandatory part of a component identity, and an empty or
-        whitespace-only name would silently produce an empty or malformed key later on.
-        Rejecting it here turns a confusing downstream naming problem into an immediate,
-        clearly attributable error.
+        Every present field has to be an identifier on its own, because the key joins them
+        verbatim: a building label with a space or a leading digit would make the joined key
+        fail the name rule at component construction with a message blaming the *name* for a
+        string the author never typed. Rejecting each field here means the refusal names the
+        field that is actually wrong, at the moment the identity is created — and a key built
+        from valid identifier fields is an identifier by construction.
+
+        Raises:
+            ValueError: If ``name``, ``building`` or ``unit`` is present and not an
+                identifier; the message names the offending field and the rule it broke.
         """
-        if not isinstance(self.name, str) or not self.name.strip():
-            raise ValueError(f"A ComponentID needs a non-empty name, but got {self.name!r}.")
+        NameSyntax.require_identifier(self.name, "component")
+        if self.building is not None:
+            NameSyntax.require_identifier(self.building, "building label")
+        if self.unit is not None:
+            NameSyntax.require_identifier(self.unit, "unit label")
 
     @property
     def key(self) -> str:
@@ -221,6 +232,31 @@ class ComponentID:
 #: The concrete configuration class ``resolve`` is called on, so the copy it returns keeps
 #: that class for the type checker instead of widening to the base.
 ConfigBaseT = TypeVar("ConfigBaseT", bound="ConfigBase")
+
+
+def _rendered_for_report(value: Any) -> Any:
+    """Renders one configuration value the way the report should read it.
+
+    The report is prose meant for a human, so an enum-typed field is worth the value it
+    is written and serialized as (``"NominalLoad"``) rather than the member spelling
+    ``str`` gives it (``PtxOperationMode.NOMINAL_LOAD``), which puts a class name and a
+    Python identifier into a line that is meant to name a setting. Containers are walked,
+    because a field can hold a list, a tuple, a set or a dict of enum values; everything
+    else is returned untouched, so every non-enum field renders exactly as before.
+    """
+    if isinstance(value, enum.Enum):
+        return _rendered_for_report(value.value)
+    if isinstance(value, dict):
+        return {_rendered_for_report(key): _rendered_for_report(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_rendered_for_report(item) for item in value]
+    if isinstance(value, tuple):
+        rendered = tuple(_rendered_for_report(item) for item in value)
+        # A namedtuple keeps its class, so the report keeps the field names it prints with.
+        return type(value)(*rendered) if hasattr(value, "_fields") else rendered
+    if isinstance(value, (set, frozenset)):
+        return type(value)(_rendered_for_report(item) for item in value)
+    return value
 
 
 @dataclass
@@ -319,6 +355,42 @@ class ConfigBase:
         """Gets the class name. Helper function for default connections."""
         return cls.__module__ + "." + cls.__name__
 
+    def cache_key_view(self: ConfigBaseT) -> ConfigBaseT:
+        """Return the copy of this configuration that is hashed into its cache key.
+
+        Not every field of a configuration affects the cached result. The base rule, applied to every config,
+        clears ``component_id.building``: the same PV system computes the same series in every house, so the
+        house must not be part of the key. Then the copy is handed to ``_clear_non_key_fields``, which a
+        subclass overrides to remove its own non-key fields. The base rule always runs, whatever the subclass
+        does; this method is not meant to be overridden.
+
+        The copy is deep, so neither this method nor the hook ever modifies the live configuration.
+
+        Returns:
+            A deep copy of this configuration with the non-key fields cleared or normalised.
+        """
+        view = copy.deepcopy(self)
+        component_id = getattr(view, "component_id", None)
+        if component_id is not None:
+            # The identity is frozen, hence the replacement rather than an assignment.
+            setattr(view, "component_id", dc.replace(component_id, building=None))
+        self._clear_non_key_fields(view)
+        return view
+
+    def _clear_non_key_fields(self: ConfigBaseT, view: ConfigBaseT) -> None:
+        """Remove from ``view`` the fields of this configuration that do not decide the cached result.
+
+        ``view`` is the deep copy that ``cache_key_view`` is about to hash, with the building already
+        cleared. A subclass overrides this to clear fields that only place a run (where a result file is
+        written, which worker index was used) and to make file paths portable (relative to the inputs
+        directory instead of absolute), so that an entry computed on one machine can be found on another.
+        The override mutates ``view`` in place and does not need to call ``super()``. The default clears
+        nothing.
+
+        Args:
+            view: the copy to adjust; the live configuration is a different object.
+        """
+
     def to_dict(self) -> Dict[str, Any]:
         """Dumps this configuration as a plain dict of its dataclass fields.
 
@@ -352,13 +424,20 @@ class ConfigBase:
         return sizing_auto_fields(self)
 
     def get_string_dict(self) -> List[str]:
-        """Turns the config into a str list for the report."""
+        """Turns the config into a str list for the report.
+
+        Every field renders as ``str`` gives it, with one exception: an enum value renders
+        as its wire value, through :func:`_rendered_for_report`. A mode field therefore
+        reads ``Operation mode: NominalLoad`` rather than naming the enum class and the
+        member identifier. This holds for every enum-typed field of every config in the
+        repository, values nested in a list or a dict included.
+        """
         my_dict = self.to_dict()
         my_list = []
         if len(my_dict) > 0:
             for entry in my_dict.items():
                 label = " ".join(entry[0].rsplit("_")).capitalize()
-                my_list.append(label + ": " + str(entry[1]))
+                my_list.append(label + ": " + str(_rendered_for_report(entry[1])))
         return my_list
 
 

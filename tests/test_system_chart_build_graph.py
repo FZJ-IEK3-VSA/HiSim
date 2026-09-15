@@ -84,10 +84,10 @@ def _real_nodes(graph: pydot.Dot) -> list:
 def _two_component_setup() -> PostProcessingDataTransfer:
     """A Source -> Controller wiring used by several tests."""
     source = _FakeComponent("Source")
-    controller = _FakeComponent("Controller Thing")
+    controller = _FakeComponent("ControllerThing")
     output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.WATT, component_id=ComponentID("Source"))
     controller_input = _make_input(
-        target_name="Controller Thing",
+        target_name="ControllerThing",
         field_name="In",
         unit=Units.WATT,
         src_object_name="Source",
@@ -117,7 +117,7 @@ def test_build_graph_creates_one_node_per_component() -> None:
     chart = SystemChart(_two_component_setup())
     graph = chart._build_graph(with_labels=False, with_class_names=False, with_results=False)
     names = sorted(n.get_name() for n in _real_nodes(graph))
-    assert names == ["Controller Thing", "Source"]
+    assert names == ["ControllerThing", "Source"]
 
 
 @pytest.mark.base
@@ -127,7 +127,7 @@ def test_build_graph_controller_fillcolor_selection() -> None:
     graph = chart._build_graph(with_labels=False, with_class_names=False, with_results=False)
     fillcolors = {n.get_name(): n.get("fillcolor") for n in _real_nodes(graph)}
     assert fillcolors["Source"] == "darkgray"
-    assert fillcolors["Controller Thing"] == "lightgray"
+    assert fillcolors["ControllerThing"] == "lightgray"
 
 
 @pytest.mark.base
@@ -138,7 +138,7 @@ def test_build_graph_with_class_names_appends_class() -> None:
     names = {n.get_name() for n in _real_nodes(graph)}
     # The class name of the fake component is appended after a newline.
     assert "Source\n_FakeComponent" in names
-    assert "Controller Thing\n_FakeComponent" in names
+    assert "ControllerThing\n_FakeComponent" in names
 
 
 @pytest.mark.base
@@ -149,20 +149,20 @@ def test_build_graph_edge_without_label() -> None:
     edges = graph.get_edges()
     assert len(edges) == 1
     assert edges[0].get_source() == "Source"
-    assert edges[0].get_destination() == "Controller Thing"
+    assert edges[0].get_destination() == "ControllerThing"
     assert edges[0].get("label") in (None, "")
 
 
 @pytest.mark.base
 def test_build_graph_edge_label_format_and_celsius_replacement() -> None:
     """Edge labels combine src-field, target-field and unit, and replace °C with &#8451;."""
-    controller = _FakeComponent("Controller Thing")
+    controller = _FakeComponent("ControllerThing")
     boiler = _FakeComponent("Boiler")
     celsius_input = _make_input(
         target_name="Boiler",
         field_name="TemperatureIn",
         unit=Units.CELSIUS,
-        src_object_name="Controller Thing",
+        src_object_name="ControllerThing",
         src_field_name="TemperatureOut",
     )
     ppdt = _make_ppdt(
@@ -232,10 +232,10 @@ def test_build_graph_with_results_appends_cumulative_value() -> None:
 def _make_two_component_ppdt(output_unit: Units) -> PostProcessingDataTransfer:
     """Build a Source -> Controller wiring whose output uses ``output_unit``."""
     source = _FakeComponent("Source")
-    controller = _FakeComponent("Controller Thing")
+    controller = _FakeComponent("ControllerThing")
     output = ComponentOutput("Source", "Out", LoadTypes.ANY, output_unit, component_id=ComponentID("Source"))
     controller_input = _make_input(
-        target_name="Controller Thing",
+        target_name="ControllerThing",
         field_name="In",
         unit=output_unit,
         src_object_name="Source",
@@ -311,13 +311,13 @@ def test_build_graph_with_results_celsius_mean_annotation() -> None:
 @pytest.mark.base
 def test_build_graph_with_results_without_source_output_omits_value() -> None:
     """An input lacking a ComponentOutput source gets no cumulative value appended."""
-    controller = _FakeComponent("Controller Thing")
+    controller = _FakeComponent("ControllerThing")
     boiler = _FakeComponent("Boiler")
     input_no_output = _make_input(
         target_name="Boiler",
         field_name="In",
         unit=Units.WATT,
-        src_object_name="Controller Thing",
+        src_object_name="ControllerThing",
         src_field_name="Out",
         source_output=None,
     )

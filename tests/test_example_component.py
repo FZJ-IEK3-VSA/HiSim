@@ -1,6 +1,8 @@
 """Test for the Example Component."""
 
 # clean
+from pathlib import Path
+
 import pytest
 
 from hisim import component as cp
@@ -8,7 +10,8 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import example_component
 from hisim.simulationparameters import SimulationParameters
-from hisim.config import ComponentID
+from hisim.simulator import Simulator
+from hisim.config import AUTO, ComponentID, SizableFieldKind, describe_config
 from tests import functions_for_testing as fft
 
 
@@ -26,7 +29,18 @@ def test_example_component() -> None:
 
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
-    my_example_component_config = example_component.ExampleComponentConfig.get_default_example_component()
+    # ``capacity`` is a sizable field, so the factory hands back AUTO and the config has to be
+    # resolved against the facts of the surrounding system before a component may be built from
+    # it. The helper carries the one fact this law reads: the building's conditioned floor area.
+    assert example_component.ExampleComponentConfig.get_default_example_component().capacity is AUTO
+    my_example_component_config = fft.sized_example_component_config()
+    # The law reproduces the literal the module used to carry, exactly: 45 J/K/m2 x 121.2 m2.
+    assert (
+        my_example_component_config.capacity
+        == example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+        * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
+        == 5454.0
+    )
     log.information(f"default example component config {my_example_component_config}\n")
     my_example_component = example_component.ExampleComponent(
         config=my_example_component_config, my_simulation_parameters=mysim
@@ -35,7 +49,7 @@ def test_example_component() -> None:
     # Define outputs
     thermal_energy_delivered_output = cp.ComponentOutput(
         object_name="source",
-        field_name="thermal energy delivered",
+        field_name="ThermalEnergyDelivered",
         load_type=lt.LoadTypes.HEATING,
         unit=lt.Units.WATT,
         component_id=ComponentID("source"),
@@ -91,7 +105,7 @@ def test_display_config_isolation() -> None:
     DisplayConfig instance, not a shared one.
     """
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
-    config = example_component.ExampleComponentConfig.get_default_example_component()
+    config = fft.sized_example_component_config()
 
     comp_a = example_component.ExampleComponent(my_simulation_parameters=mysim, config=config)
     comp_b = example_component.ExampleComponent(my_simulation_parameters=mysim, config=config)
@@ -100,3 +114,91 @@ def test_display_config_isolation() -> None:
     assert (
         comp_a.my_display_config is not comp_b.my_display_config
     ), "my_display_config must not be shared across instances"
+
+
+@pytest.mark.base
+def test_the_default_capacity_resolves_to_the_literal_it_replaced() -> None:
+    """The default config, resolved against the default building, still yields 5454.0 J/K.
+
+    The capacity used to be written as ``45 * 121.2``. That product is now a law over one
+    fact, so this is the assertion that keeps the change neutral for the default building --
+    and it is a base test, because a claim about a number should not need a system setup to
+    be checked.
+    """
+    config = fft.sized_example_component_config()
+    assert config.capacity == 5454.0
+    assert (
+        config.capacity
+        == example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+        * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
+    )
+
+
+@pytest.mark.base
+def test_a_capacity_written_as_a_string_is_coerced_to_a_float() -> None:
+    """``value_type=float`` types the wire value, so a JSON string never reaches arithmetic.
+
+    Without it the field's own AUTO-aware decoder passes whatever the file said straight
+    through, and ``concrete()`` would hand the component the string ``"5454.0"``.
+    """
+    written = {
+        "component_id": {"name": "FromAFile"},
+        "loadtype": "Heating",
+        "unit": "W",
+        "electricity": -1e3,
+        "initial_temperature": 25.0,
+        "capacity": "5454.0",
+    }
+    assert example_component.ExampleComponentConfig.from_dict(written).capacity == 5454.0
+    with pytest.raises(ValueError, match="could not convert string to float"):
+        example_component.ExampleComponentConfig.from_dict({**written, "capacity": "big"})
+
+
+@pytest.mark.base
+def test_capacity_is_described_as_a_sized_field() -> None:
+    """The capacity field describes itself as derived, with its fact and its note.
+
+    This is what a reader of ``hisim energy-system describe`` sees, and what the template
+    claims a component's sizing looks like: the value is not a literal in the module but a
+    law naming the fact it reads. The description is asserted structurally rather than by its
+    rendered text -- the one place the rendering itself is pinned is the template's test.
+    """
+    description = describe_config(example_component.ExampleComponentConfig)
+    capacity = next(field for field in description.sizable_fields if field.name == "capacity")
+    assert capacity.facts_read == (("conditioned_floor_area_in_m2", "ONE"),)
+    assert capacity.fields_read == ()
+    assert capacity.kind is SizableFieldKind.LAW
+    assert capacity.note is not None
+    assert str(example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2) in capacity.note
+
+
+@pytest.mark.base
+def test_the_example_component_runs_inside_a_simulator(tmp_path: Path) -> None:
+    """The example component survives a real run, which every other test here bypasses.
+
+    The rest of this file calls ``i_simulate`` by hand, so for a long time nothing noticed
+    that ``ExampleComponent`` did not implement ``i_prepare_simulation``: the ``Simulator``
+    calls that hook on every component before the first timestep, and the base class raises
+    ``NotImplementedError`` instead of doing nothing. A component copied from this file
+    therefore died at the first thing a run does. One day at hourly resolution, with no
+    post-processing option set, is enough to reach that hook and finish.
+    """
+    my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
+    my_simulation_parameters.result_directory = str(tmp_path / "results")
+    assert not my_simulation_parameters.post_processing_options
+
+    my_sim: Simulator = Simulator(
+        module_directory=str(tmp_path),
+        module_filename="example_component_in_a_simulator",
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    my_sim.set_simulation_parameters(my_simulation_parameters)
+    my_sim.add_component(
+        example_component.ExampleComponent(
+            config=fft.sized_example_component_config(), my_simulation_parameters=my_simulation_parameters
+        )
+    )
+
+    my_sim.run_all_timesteps()
+
+    assert len(my_sim.results_data_frame) == my_simulation_parameters.timesteps == 24

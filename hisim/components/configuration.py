@@ -2,11 +2,10 @@
 
 # clean
 
-from typing import Any, Optional
+from typing import Optional
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 from hisim.loadtypes import LoadTypes, ComponentType
-from hisim.config import ConfigBase, ComponentID
 from hisim import log
 
 """
@@ -319,6 +318,15 @@ Sources for capex techno-economic parameters:
         [45]: https://www.wko.at/netzwerke/infopoint-stromspeicher
         [46]: https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
         [47]: https://www.energieinstitut.at/privatpersonen/photovoltaik-und-solarthermie/solaranlagen
+        [48]: IRENA (2020), "Green Hydrogen Cost Reduction: Scaling up Electrolysers to Meet the
+        1.5C Climate Goal", https://www.irena.org/publications/2020/Dec/Green-hydrogen-cost-reduction
+        [49]: IEA (2023), "Global Hydrogen Review 2023", https://www.iea.org/reports/global-hydrogen-review-2023
+        [50]: ecoinvent-based life-cycle inventories for photovoltaic power electronics (inverter,
+        2500 W to 500 kW), used here as the closest published proxy for a rectifier's embodied
+        emissions: https://www.ecoinvent.org
+        [51]: Clean Hydrogen Partnership (FCH 2 JU), MAWP Key Performance Indicators, "Residential
+        micro-CHP for single family homes and small buildings (0.3-5 kW)", state of the art 2024:
+        https://www.clean-hydrogen.europa.eu/residential-micro-chp-single-family-homes-and-small-buildings-03-5-kw_en
         """
 capex_techno_economic_parameters = {
     "DE": {
@@ -393,6 +401,66 @@ capex_techno_economic_parameters = {
                 # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
                 # that's why we assume 0% subsidy here, source: [31]
             },
+            # PROPOSED VALUES, NOT YET REVIEWED BY THE COST OWNER (added 2026-09-07 so that a
+            # stock all-options run of electrolyzer_with_renewables reaches its KPIs instead of
+            # dying in COMPUTE_OPEX/COMPUTE_CAPEX). Every figure below is the midpoint of a
+            # published range for a megawatt-scale industrial installation, not a measurement, and
+            # the two devices are industrial equipment rather than the household appliances the
+            # rest of this table describes -- so the orders of magnitude differ by design.
+            ComponentType.ELECTROLYZER: {
+                # PEM system at the MW scale including balance of plant; [48] and [49] report
+                # 1400-1800 EUR/kW for European 2023-2024 installations, midpoint taken.
+                "investment_costs_in_euro_per_kw": 1600,
+                # 2-4 % of investment per year, stack replacement included, Source: [48, 49]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.03,
+                # System lifetime; the stack's shorter 10 years, which [19] records for the whole
+                # device, is carried by the maintenance share above rather than by a 10-year
+                # replacement of everything. Source: [48, 49]
+                "technical_lifetime_in_years": 15,
+                "co2_footprint_in_kg_per_kw": 190.5,  # Source: [19]
+                "subsidy_as_percentage_of_investment_costs": 0,
+            },
+            ComponentType.TRANSFORMER_AND_RECTIFIER: {
+                # Grid-side power supply of a large electrolyzer -- step-down transformer plus
+                # rectifier -- at 100-200 EUR/kW, which is the ~10 % share [48] attributes to the
+                # power supply of a MW-scale system; midpoint taken.
+                "investment_costs_in_euro_per_kw": 150,
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.015,  # 1-2 %/year
+                # Grid transformers and industrial rectifiers are 25-30 year assets, Source: [23]
+                "technical_lifetime_in_years": 27,
+                # No published inventory for a rectifier was found; power electronics of the same
+                # duty (a PV inverter) carry roughly this, Source: [50]
+                "co2_footprint_in_kg_per_kw": 60,
+                "subsidy_as_percentage_of_investment_costs": 0,
+            },
+            # PROPOSED VALUES, NOT YET REVIEWED BY THE COST OWNER (added 2026-09-08 so that a
+            # stock all-options run of dynamic_components reaches its KPIs instead of dying in
+            # COMPUTE_OPEX/COMPUTE_CAPEX). The device this row prices is the one the component
+            # models: a residential fuel-cell micro-CHP of a few kW electrical (the component's
+            # own reference machine is a BlueGen-class SOFC), not an engine CHP and not an
+            # industrial unit -- a fuel cell costs several times an engine of the same output, so
+            # the figure below is deliberately far above the household heaters above it.
+            ComponentType.CHP: {
+                # Per kW of *electrical* rating, which is how m-CHP costs are quoted. [51] states
+                # 5500 EUR/kW as the 2024 state of the art for the 0.3-5 kW class, which is the
+                # year and class this table row is for, so it is taken as it stands rather than as
+                # the midpoint of a range. [19] records 6767 EUR/kW for a hydrogen fuel cell,
+                # older and higher, and is what says this is the right order of magnitude.
+                "investment_costs_in_euro_per_kw": 5500,
+                # [51] quotes maintenance per kWh produced (3.5 EUR ct/kWh in 2024) rather than as
+                # a share of the investment, so the share is derived from that source's own
+                # figures: 60000 h of stack durability over a 14-year appliance life is about
+                # 4300 operating hours per year, and 4300 h * 1 kW * 0.035 EUR/kWh = 150 EUR per
+                # kW per year, which is 2.7 % of the 5500 EUR/kW above. Source: [51]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.027,
+                # Appliance lifetime with the stack replaced as maintenance, 2024 state of the
+                # art; the stack's own shorter life is carried by the maintenance share above.
+                # [19] records 5 years for the whole device, which is a stack life, not an
+                # appliance life. Source: [51]
+                "technical_lifetime_in_years": 14,
+                "co2_footprint_in_kg_per_kw": 405.5,  # hydrogen fuel cell, Source: [19]
+                "subsidy_as_percentage_of_investment_costs": 0,
+            },
             # CAPEX per kWh
             ComponentType.BATTERY: {
                 "investment_costs_in_euro_per_kwh": 546,  # Source: [21]
@@ -437,14 +505,18 @@ capex_techno_economic_parameters = {
             # CAPEX per device
             ComponentType.ELECTRICITY_METER: {
                 "investment_costs_in_euro": 100,  # EUR, Source: [26]
-                "maintenance_costs_as_percentage_of_investment_per_year": 2.4,  # assume 20€ per month, check on verivox, meaning 240€/year
+                # A fraction of the investment per year, like every other row:
+                # 2.4 * 100 EUR = 240 EUR/year, i.e. 20 EUR per month (check on verivox).
+                "maintenance_costs_as_percentage_of_investment_per_year": 2.4,
                 "technical_lifetime_in_years": 20,  # no idea, assumption
                 "co2_footprint_in_kg": 0,  # no idea, assume 0
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             ComponentType.GAS_METER: {
                 "investment_costs_in_euro": 200,  # EUR, Source: [27]
-                "maintenance_costs_as_percentage_of_investment_per_year": 1.8,  # assume around 30€ per year, check on verivox, meaning 360€/year
+                # A fraction of the investment per year, like every other row:
+                # 1.8 * 200 EUR = 360 EUR/year, i.e. 30 EUR per month (check on verivox).
+                "maintenance_costs_as_percentage_of_investment_per_year": 1.8,
                 "technical_lifetime_in_years": 20,  # no idea, assumption
                 "co2_footprint_in_kg": 0,  # no idea, assume 0
                 "subsidy_as_percentage_of_investment_costs": 0,
@@ -620,64 +692,6 @@ class EmissionFactorsAndCostsForDevicesConfig:
         return capex_techno_economic_values
 
 
-@dataclass_json
-@dataclass
-class WarmWaterStorageConfig(ConfigBase):
-    """Warm water storage config class."""
-
-    component_id: ComponentID
-    tank_diameter: float  # [m]
-    tank_height: float  # [m]
-    tank_start_temperature: float  # [°C]
-    temperature_difference: float  # [°C]
-    tank_u_value: float  # [W/m^2*K]
-    slice_height_minimum: float  # [m]
-
-    @classmethod
-    def get_default_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Gets a default config."""
-        if component_id is None:
-            component_id = ComponentID(name="WarmWaterStorage")
-        return WarmWaterStorageConfig(
-            component_id=component_id,
-            tank_diameter=1,  # 0.9534        # [m]
-            tank_height=2,  # 3.15              # [m]
-            tank_start_temperature=65,  # [°C]
-            temperature_difference=0.3,  # [°C]
-            tank_u_value=0,  # 0.35                 # [W/m^2*K]
-            slice_height_minimum=0.05,  # [m]
-        )
-
-
-class CHPControllerConfig:
-    """Chp controller config.
-
-    The CHP controller is used to implement an on and off hysteresis
-    Decide if its heat- or electricity-led
-
-    Two temperature sensors in the tank are giving the needed information.
-    They can be set at a height percentage in the tank. =% is the top, 100 % s the bottom of the tank.
-    If the T at the upper sensor is below temperature_switch_on the chp will run until the lower sensor is above temperature_switch_off.
-    A minimum runtime in minutes can be defined for the chp.
-
-    If the chp is electric-led, ths is not needed and the electricity demand is provided directly to the chp
-    """
-
-    method_of_operation = "heat"
-    temperature_switch_on = 60  # [°C]
-    temperature_switch_off = 65  # [°C]
-
-    # in steps of 20 % [0, 20, 40 ,60, 80, 100]
-    heights_in_tank = [0, 20, 40, 60, 80, 100]
-    height_upper_sensor = 20  # [%]
-    height_lower_sensor = 60  # [%]
-
-    minimum_runtime_minutes = 4000  # [min]
-
-
 class GasHeaterConfig:
     """Gas heater config class."""
 
@@ -689,49 +703,6 @@ class GasHeaterConfig:
     delta_temperature = 25
     mass_flow_max = P_th_max / (4180 * delta_temperature)  # kg/s ## -> ~0.07
     temperature_max = 80  # [°C]
-
-
-class GasControllerConfig:
-    """Gas controller config class.
-
-    This controller works like the CHP controller, but switches on later so the CHP is used more often.
-    Gas heater is used as a backup if the CHP power is not high enough.
-    If the minimum_runtime is smaller than the timestep, the minimum_runtime is 1 timestep --> generic_gas_heater.py
-    """
-
-    temperature_switch_on = 55  # [°C]
-    temperature_switch_off = 70  # [°C]
-
-    # in steps of 20 % [0, 20, 40 ,60, 80, 100]
-    height_upper_sensor = 20  # [%]
-    height_lower_sensor = 80  # [%]
-
-    # minimal timestep is minute
-    minimum_runtime_minutes = 7000  # [min]
-
-
-class LoadConfig:
-    """Load config."""
-
-    # massflow_load_minute = 2.5          # [kg/min]
-    # massflow_load = massflow_load_minute / 60   # [kg/s]
-
-    possible_massflows_load = [0.1, 0.2, 0.3, 0.4]  # [kg/s]
-    delta_temperature = 20
-
-    # the returnflow shows if there was enough energy in the water
-    # -> use in load! Not in storage, there the water from WW is included
-    temperature_returnflow_minimum = 30  # [°C]
-
-    kwh_per_year = 20_201
-    demand_factor = kwh_per_year / 1000
-
-
-class ElectricityDemandConfig:
-    """Electricity demand config class."""
-
-    kwh_per_year = 6000
-    demand_factor = kwh_per_year / 1000
 
 
 class HouseholdWarmWaterDemandConfig:
@@ -748,100 +719,6 @@ class HouseholdWarmWaterDemandConfig:
 
     kwh_per_year = 2000
     demand_factor = kwh_per_year / 1000
-
-
-class HydrogenStorageConfig:
-    """Hydrogen storage config class."""
-
-    # combination of
-    min_capacity = 0  # [kg_H2]
-    max_capacity = 500  # [kg_H2]
-
-    starting_fill = 400  # [kg_H2]
-
-    max_charging_rate_hour = 2  # [kg/h]
-    max_discharging_rate_hour = 2  # [kg/h]
-    max_charging_rate = max_charging_rate_hour / 3600
-    max_discharging_rate = max_discharging_rate_hour / 3600
-
-    # ToDo: How does the necessary Heat/Energy come to the Storage?
-    energy_for_charge = 0  # [kWh/kg]
-    energy_for_discharge = 0  # [kWh/kg]
-
-    loss_factor_per_day = 0  # [lost_%/day]
-
-
-class AdvElectrolyzerConfig:
-    """Adv electrolyzer config class."""
-
-    waste_energy = 400  # [W]   # 400
-    min_power = 1_400  # [W]   # 1400
-    max_power = 2_4000  # [W]   # 2400
-    min_power_percent = 60  # [%]
-    max_power_percent = 100  # [%]
-    min_hydrogen_production_rate_hour = 300  # [Nl/h]
-    max_hydrogen_production_rate_hour = 5000  # [Nl/h]   #500
-    min_hydrogen_production_rate = min_hydrogen_production_rate_hour / 3600  # [Nl/s]
-    max_hydrogen_production_rate = max_hydrogen_production_rate_hour / 3600  # [Nl/s]
-    pressure_hydrogen_output = 30  # [bar]     --> max pressure mode at 35 bar
-
-    """
-    The production rate can be converted to an efficiency.
-    eff_electrolyzer = (production_rate_hour * hydrogen_specific_heat_capacity_per_kg[kWh/kg]) / (Power_this_timestep[kWh] * hydrogen_specific_volume [m³kg])
-
-    in the component electrolyzer:
-    hydrogen_output = Power_this_timestep[kWh] * eff_electrolyzer / hydrogen_specific_heat_capacity_per_kg[kWh/kg]
-
-    I think its overengineering because the providers give the needed information and we try to calculate it back and forth
-
-    --> Solution: efficiency of the electrolyzer is calculated and is an Output
-    """
-
-
-class PVConfig:
-    """PV config class."""
-
-    peak_power = 20_000  # [W]
-
-
-@dataclass_json
-@dataclass
-class ExtendedControllerConfig(ConfigBase):
-    """Extended controller config class."""
-
-    component_id: ComponentID
-    # Active Components
-    chp: bool
-    gas_heater: bool
-    electrolyzer: bool
-    # electrolyzer: bool
-
-    # power mode chp
-    # chp_mode: str
-    chp_mode: str
-    chp_power_states_possible: int
-    maximum_autarky: bool
-
-    @classmethod
-    def get_default_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Gets a default ExtendedControllerConfig."""
-        if component_id is None:
-            component_id = ComponentID(name="ExtendedController")
-        return ExtendedControllerConfig(
-            component_id=component_id,
-            chp=True,
-            gas_heater=True,
-            electrolyzer=True,
-            # electrolyzer = False,
-            # power mode chp,
-            # chp_mode = "heat",
-            chp_mode="power",
-            chp_power_states_possible=10,
-            maximum_autarky=False,
-        )
 
 
 @dataclass_json

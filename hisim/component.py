@@ -17,13 +17,14 @@ import os
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 import json
 import pandas as pd
 
 from hisim import config as cfg
 from hisim import loadtypes as lt
 from hisim import log
+from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
@@ -66,7 +67,22 @@ class ComponentOutput:  # noqa: too-few-public-methods
         The identity is deliberately REQUIRED (keyword-only): an output without an owner would
         silently fall into the default building group and corrupt per-building KPIs, so a
         missing identity must fail at construction rather than at aggregation.
+
+        The field name is held to the same identifier rule as the component name, and for the
+        same reason: a declarative energy-system file addresses a producing port as the dotted
+        half of ``from: <component>.<port>``, and that grammar accepts an identifier and nothing
+        else. Checking it here rather than in the recorder means a port nobody could reference
+        fails the moment the class declaring it is built, instead of years later when something
+        first tries to write that system down.
+
+        Raises:
+            ValueError: If ``field_name`` or ``object_name`` is not a well-formed identifier.
+                The prefix is normally the already-validated component name, but a direct
+                construction can pass anything, and an unusable prefix would defeat the rule
+                on the very column name it exists for.
         """
+        cfg.NameSyntax.require_identifier(object_name, "component")
+        cfg.NameSyntax.require_identifier(field_name, "component output")
         self.full_name: str = object_name + " # " + field_name
         self.component_name: str = object_name
         self.field_name: str = field_name
@@ -121,7 +137,17 @@ class ComponentInput:  # noqa: too-few-public-methods
                 this for mandatory inputs whose source output may legitimately
                 not exist (e.g. a heat pump's DHW electrical power output when
                 domestic hot water preparation is disabled).
+
+        Raises:
+            ValueError: If ``field_name`` or ``object_name`` is not a well-formed identifier.
+                An input is written as its own key in a declarative energy-system file rather
+                than behind a dot, so the grammar does not force the rule on it the way it does
+                on an output; it is enforced anyway, because an input and an output of the same
+                flow that spelled their names by different rules would be a trap for every
+                reader of both.
         """
+        cfg.NameSyntax.require_identifier(object_name, "component")
+        cfg.NameSyntax.require_identifier(field_name, "component input")
         self.fullname: str = object_name + " # " + field_name
         self.component_name: str = object_name
         self.field_name: str = field_name
@@ -190,6 +216,15 @@ class SingleTimeStepValues:
 class Component:
     """Base class for all components."""
 
+    # Cost role declaration for the lifecycle cost engine (cost_spec.md §9.2). PRICED
+    # components must return facts from `get_cost_facts()` or have an adapter table entry,
+    # FREE_OF_COST components must return None, METER components provide
+    # `get_energy_flow_facts()`. Every subclass must override this in its own class body:
+    # UNDECLARED is only the loadable default, and a component that still carries it aborts any
+    # lifecycle-cost run it appears in — at simulation start via
+    # `Simulator.check_cost_declarations`, and again in the postprocessing bridge under D7.
+    cost_relevance: ClassVar[CostRelevance] = CostRelevance.UNDECLARED
+
     @classmethod
     def get_classname(cls):
         """Gets the class name. Helper function for default connections."""
@@ -207,7 +242,32 @@ class Component:
         my_config: cfg.ConfigBase,
         my_display_config: cfg.DisplayConfig,
     ) -> None:
-        """Initializes the component class."""
+        """Initializes the component class.
+
+        Args:
+            name: The unique runtime name of this component, normally
+                ``config.component_id.key``. It becomes the prefix of every output name and
+                therefore of every result column, and it is the key a declarative
+                energy-system file addresses this component by, so it has to be a plain
+                identifier.
+            my_simulation_parameters: The simulation-wide parameters (time range, resolution,
+                post-processing options) the component reads and is stepped with.
+            my_config: The component's own configuration; it must be a
+                :class:`~hisim.config.ConfigBase` and must no longer carry any unresolved
+                ``AUTO`` field.
+            my_display_config: How this component is presented in postprocessing, the report
+                and the webtool.
+
+        Raises:
+            ValueError: If ``name`` is not a usable identifier, if ``my_simulation_parameters``
+                is ``None``, or if ``my_config`` is not a ``ConfigBase``.
+            ConfigSizingError: If ``my_config`` still has fields awaiting sizing.
+        """
+        # The single choke point where a component's runtime name becomes real. Enforcing the
+        # identifier rule here catches a name typed in a setup and a name that arrived from a
+        # config class's own default alike, which a check on the declarative file's keys would
+        # never see: a defaulted identity is one nobody has to write down.
+        cfg.NameSyntax.require_identifier(name, "component")
         self.component_name: str = name
         self.inputs: List[ComponentInput] = []
         self.outputs: List[ComponentOutput] = []
@@ -217,7 +277,6 @@ class Component:
         if my_simulation_parameters is None:
             raise ValueError("My Simulation parameters was None.")
         self.simulation_repository: SimRepository
-        # self.singleton_simulation_repository: SingletonSimRepository
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
         if isinstance(my_config, cfg.ConfigBase):
             # The central sizing check: a config that still
@@ -231,7 +290,9 @@ class Component:
                     f"The config of component '{my_config.component_id.key}' "
                     f"({type(my_config).__name__}) still requires sizing in "
                     f"{len(unresolved)} field(s):\n{cfg.describe_auto_fields(my_config)}\n"
-                    "Call .resolve(ctx) with a SizingContext or set the fields explicitly."
+                    "Call .resolve(ctx) with a SizingContext or set the fields explicitly -- for an "
+                    "identity field, from its provider, e.g. "
+                    "config.weather_identity = my_weather_config.identity()."
                 )
             # Subclasses read their concrete config's fields off this base-typed slot; that
             # works for the type checker because ConfigBase carries a checking-only
@@ -449,13 +510,34 @@ class Component:
             raise ValueError("Error: Component " + self.component_name + " has no outputs defined")
         return self.outputs
 
+    #: Set on a component that models no physical device -- a signal generator, a summation
+    #: node, a demonstration transformer. Such a component has nothing to buy, nothing to run
+    #: and no indicators of its own, so the three methods below answer for it instead of
+    #: refusing. Never set it on a component whose cost or KPI model has simply not been
+    #: written: the default is to refuse, so a real device that nobody has modelled stops the
+    #: run rather than being summed into the totals as zero and read as an answer.
+    #: That distinction is the whole point of the flag. The default below still raises, so a device
+    #: with real costs that nobody has modelled fails the run loudly instead of being summed into
+    #: the system total as zero, which would understate it silently and look like an answer.
+    MODELS_NO_DEVICE: ClassVar[bool] = False
+
     def get_cost_opex(
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
-        """Calculates operational cost, operational co2 footprint and consumption in kWh (for Diesel in l) during simulation time frame."""
+        """Calculates operational cost, operational co2 footprint and consumption in kWh (for Diesel in l) during simulation time frame.
+
+        Raises unless the component has declared :attr:`MODELS_NO_DEVICE`. Half the component
+        library does not implement this method, so enabling COMPUTE_OPEX used to be safe only for a
+        system built entirely from the half that does -- and the failure named the component without
+        saying whether its costs were nil or merely unwritten. A component that has none now says so
+        and returns zeros; everything else still stops the run, which is the right outcome for a
+        cost that exists and is missing.
+        """
+        if self.MODELS_NO_DEVICE:
+            return OpexCostDataClass.get_default_opex_cost_data_class()
         raise NotImplementedError(f"{self.component_name} has no opex costs implemented.")
 
     @staticmethod
@@ -464,21 +546,144 @@ class Component:
         """Calculates lifetime, total capital expenditure cost and total co2 footprint of production of device."""
         raise NotImplementedError(f"{config.get_main_classname()} has no capex costs implemented.")
 
+    def get_cost_facts(self) -> Optional[ComponentCostFacts]:
+        """Return cost-relevant facts for the lifecycle cost engine, or None (cost_spec.md §3.3).
+
+        Components declare, the engine computes: no prices, no discounting, no dataframe
+        access here. The default (None) means "this component contributes no cost facts" —
+        controllers, weather and occupancy simply don't override this hook. It does *not* mean
+        "not part of the cost model": that is decided by `cost_relevance` alone, and a component
+        returning None while declaring `PRICED` is a hard failure rather than a free device.
+
+        Called once per component after the simulation and before any legacy cost code runs, via
+        `hisim.economics.adapter.get_cost_facts` (which falls back to a compatibility table for
+        components that have not adopted this hook); the returned facts become one priced subject
+        of every perspective. An overriding component states what it *is* (asset class, size and unit,
+        technical attributes) and at most a per-field override where it genuinely knows better
+        than the cost database — never a price it computed itself. Which of the two behaviors is
+        expected is declared by the class attribute `cost_relevance` above, so a forgotten
+        override is caught by the completeness check instead of silently dropping the component
+        from the cost report. That declaration is mandatory: see `cost_relevance` for the two
+        places an undeclared component aborts.
+        """
+        return None
+
+    def get_energy_flow_facts(
+        self,
+        all_outputs: List,  # pylint: disable=unused-argument
+        postprocessing_results: pd.DataFrame,  # pylint: disable=unused-argument
+    ) -> Optional[EnergyFlowFacts]:
+        """Return the carrier flows a meter measured, or None for non-meters (cost_spec.md §3.4).
+
+        The billing counterpart of `get_cost_facts`: only components sitting at a carrier boundary
+        (the electricity/gas/fuel/heating meters) override it, and they report the energy that
+        actually crossed that boundary over the simulated period. Billing energy exclusively at
+        those boundaries is what makes double counting impossible by construction — a device's own
+        consumption is never priced a second time.
+
+        Unlike `get_cost_facts` this hook needs the results frame, because the answer is an
+        integral over the whole run rather than a property of the configuration.
+
+        It is the *first* thing `hisim.economics.bridge` asks a component about its flows, exactly
+        as `get_cost_facts` is asked before the adapter's cost table (§9.1); only a component that
+        returns None here falls back to the class-name `adapter.get_meter_spec` table. One
+        determinant of the richer `BillingDeterminants` of §8.4 cannot be expressed in this record
+        — the capacity-charge peaks — and it keeps coming from the `MeterSpec` of a component that
+        also has a table entry. The energy itself is always kWh, whatever the carrier; fuels the
+        market quotes per ton or per liter are converted on the price side (D26), so a meter never
+        has to report anything but kWh. A meter with no table entry is billed without capacity
+        charges, and it must declare `cost_relevance = METER` itself, since the relevance
+        inference cannot call a hook that needs the results frame.
+
+        Args:
+            all_outputs: All component outputs, positionally aligned with the result columns.
+            postprocessing_results: The simulation results frame.
+
+        Returns:
+            The measured flows for one carrier, or None if this component is not a meter.
+        """
+        return None
+
     def get_component_kpi_entries(
         self,
         all_outputs: List,  # pylint: disable=unused-argument
         postprocessing_results: pd.DataFrame,  # pylint: disable=unused-argument
     ) -> List[KpiEntry]:
-        """Calculates KPIs for the respective component and return all KPI entries as list."""
-        # if the method is not implemented in the component return an empty list
+        """Calculates KPIs for the respective component and return all KPI entries as list.
+
+        Refuses unless the component has declared :attr:`MODELS_NO_DEVICE`, in which case it has no
+        indicators of its own and contributes none. The comment this replaces said the empty list
+        was the intent for an unimplemented method, and the code beneath it raised -- the two had
+        disagreed long enough that setups built from indicator-less components could not compute
+        KPIs at all.
+        """
+        if self.MODELS_NO_DEVICE:
+            return []
         raise NotImplementedError(f"{self.component_name} has no kpis implemented.")
+
+    def component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Return this component's KPI entries, each of them naming this component as its source.
+
+        Callers use this rather than :meth:`get_component_kpi_entries` directly, because an entry
+        has to know which component produced it and the overridable method cannot be relied on to
+        say so: the source name is what tells two instances of one class apart once their entries
+        meet in one building's KPI collection, and roughly forty components build their entries by
+        hand, so leaving the field to them means every one of them is one forgotten argument away
+        from a KPI that silently overwrites its sibling. Stamping it here, on the instance that
+        knows its own name, makes the field a property of the collection rather than of each
+        component's discipline. An entry that already names a source keeps it, so a component that
+        reports on behalf of another one is not relabelled.
+
+        Args:
+            all_outputs: Every output of the simulation, as the KPI methods expect them.
+            postprocessing_results: The result time series, column-aligned with ``all_outputs``.
+
+        Returns:
+            List[KpiEntry]: the component's entries, with ``name_of_source_component`` filled in.
+        """
+        kpi_entries = self.get_component_kpi_entries(
+            all_outputs=all_outputs, postprocessing_results=postprocessing_results
+        )
+        for kpi_entry in kpi_entries:
+            if kpi_entry.name_of_source_component is None:
+                kpi_entry.name_of_source_component = self.component_name
+        return kpi_entries
+
+    def capital_cost_data(
+        self, simulation_parameters: Optional[SimulationParameters] = None
+    ) -> CapexCostDataClass:
+        """Return this component's capital cost, or zeros when it models no device.
+
+        Callers use this rather than :meth:`get_cost_capex` directly, because the flag that says a
+        component has no costs cannot be read from inside that method: it is a ``staticmethod`` that
+        receives only the configuration, and some thirty components override it as one. Changing
+        that signature to let the base class see the class attribute would mean touching every one
+        of those overrides for the sake of the handful that declare no costs, so the check lives
+        here, on the instance, where the flag is in scope.
+
+        Args:
+            simulation_parameters: the parameters to cost against; the component's own when omitted.
+
+        Returns:
+            CapexCostDataClass: the component's capital cost, or a zeroed instance.
+        """
+        if self.MODELS_NO_DEVICE:
+            return CapexCostDataClass.get_default_capex_cost_data_class()
+        return self.get_cost_capex(
+            config=self.config,
+            simulation_parameters=simulation_parameters or self.my_simulation_parameters,
+        )
 
     def calc_maintenance_cost(self) -> float:
         """Calc maintenance_cost per simulated period as share of capex of component."""
 
-        maintenance_cost_per_simulated_period_in_euro = self.get_cost_capex(
-            config=self.config, simulation_parameters=self.my_simulation_parameters
-        ).maintenance_cost_per_simulated_period_in_euro
+        maintenance_cost_per_simulated_period_in_euro = (
+            self.capital_cost_data().maintenance_cost_per_simulated_period_in_euro
+        )
 
         return maintenance_cost_per_simulated_period_in_euro
 
@@ -566,7 +771,7 @@ class CapexCostDataClass:
     lifetime_in_years: float
     capex_investment_cost_for_simulated_period_in_euro: float
     device_co2_footprint_for_simulated_period_in_kg: float
-    maintenance_costs_in_euro: float = 0.0
+    maintenance_costs_in_euro_per_year: float = 0.0
     maintenance_cost_per_simulated_period_in_euro: float = 0.0
     subsidy_as_percentage_of_investment_costs: float = 0.0
     kpi_tag: Optional[KpiTagEnumClass] = None
@@ -580,7 +785,7 @@ class CapexCostDataClass:
             lifetime_in_years=1,
             capex_investment_cost_for_simulated_period_in_euro=0,
             device_co2_footprint_for_simulated_period_in_kg=0,
-            maintenance_costs_in_euro=0,
+            maintenance_costs_in_euro_per_year=0,
             maintenance_cost_per_simulated_period_in_euro=0,
             subsidy_as_percentage_of_investment_costs=0,
             kpi_tag=None,

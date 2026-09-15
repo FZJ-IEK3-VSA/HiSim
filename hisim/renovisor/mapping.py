@@ -59,7 +59,7 @@ _TABULA_TYPE_BY_DWELLING: Dict[str, Tuple[str, Optional[str]]] = {
 
 _REFURB_VARIANT_BY_ENVELOPE_STATE: Dict[str, int] = {"unrenovated": 1, "usual_refurb": 2, "advanced_refurb": 3}
 
-_AZIMUTH_BY_ORIENTATION: Dict[str, Tuple[float, Optional[str]]] = {
+_AZIMUTH_IN_DEGREES_BY_ORIENTATION: Dict[str, Tuple[float, Optional[str]]] = {
     "south": (180.0, None),
     "south_east": (135.0, None),
     "south_west": (225.0, None),
@@ -273,11 +273,11 @@ def _build_archetype_config(
     """Build the :class:`ArcheTypeConfig` (spec section 4.2)."""
     location = request["location"]
     country = location["countryCode"]
-    weather_location, coordinates = _resolve_weather_location(country, report)
+    weather_location, coordinates_in_degrees = _resolve_weather_location(country, report)
 
     building_code = _resolve_building_code(home, envelope_measure_types, country, report)
     lpg_household = _resolve_lpg_household(home, report)
-    pv_capacity, azimuth, tilt = _resolve_pv(home, report)
+    pv_capacity_in_kilowatt, azimuth_in_degrees, tilt_in_degrees = _resolve_pv(home, report)
 
     report.used("homeInputs.floorAreaM2", "conditioned floor area")
 
@@ -291,9 +291,9 @@ def _build_archetype_config(
     archetype = ArcheTypeConfig(
         building_name="BUI1",
         building_id=job_id,
-        pv_azimuth=azimuth,
-        pv_tilt=tilt,
-        pv_rooftop_capacity_in_kilowatt=pv_capacity,
+        pv_azimuth=azimuth_in_degrees,
+        pv_tilt=tilt_in_degrees,
+        pv_rooftop_capacity_in_kilowatt=pv_capacity_in_kilowatt,
         building_code=building_code,
         conditioned_floor_area_in_m2=float(home["floorAreaM2"]),
         number_of_dwellings_per_building=1,
@@ -303,8 +303,8 @@ def _build_archetype_config(
         lpg_households=[lpg_household],
         construction_year=int(home["constructionYear"]),
     )
-    if coordinates is not None:
-        archetype.coordinates_latitude, archetype.coordinates_longitude = coordinates
+    if coordinates_in_degrees is not None:
+        archetype.coordinates_latitude, archetype.coordinates_longitude = coordinates_in_degrees
     return archetype
 
 
@@ -318,12 +318,12 @@ def _resolve_weather_location(country: str, report: MappingReport) -> Tuple[str,
         raise MappingError(f"No weather location available for country code '{country}'.")
     report.used("location.countryCode", f"weather location '{member_name}'")
 
-    coordinates: Optional[Tuple[float, float]] = None
+    coordinates_in_degrees: Optional[Tuple[float, float]] = None
     weather_file = LocationEnum[member_name].value[3]
     coordinate_match = re.search(r"_(-?\d+\.\d+)_(-?\d+\.\d+)_\d{4}\.csv$", str(weather_file))
     if coordinate_match is not None:
-        coordinates = (float(coordinate_match.group(1)), float(coordinate_match.group(2)))
-    return member_name, coordinates
+        coordinates_in_degrees = (float(coordinate_match.group(1)), float(coordinate_match.group(2)))
+    return member_name, coordinates_in_degrees
 
 
 def _resolve_building_code(home: Dict[str, Any], envelope_measure_types: Set[str], country: str, report: MappingReport) -> str:
@@ -387,31 +387,31 @@ def _resolve_pv(home: Dict[str, Any], report: MappingReport) -> Tuple[Optional[f
     """Resolve PV capacity, azimuth and tilt from the inventory (spec section 4.2)."""
     pv: Dict[str, Any] = home.get("pv") or {}
     kilowatt_peak = float(pv.get("kWp") or 0.0)
-    capacity: Optional[float]
+    capacity_in_kilowatt: Optional[float]
     if kilowatt_peak > 0:
-        capacity = kilowatt_peak
+        capacity_in_kilowatt = kilowatt_peak
         report.used("homeInputs.pv.kWp", f"PV capacity {kilowatt_peak} kWp")
     else:
-        capacity = None
+        capacity_in_kilowatt = None
         report.used("homeInputs.pv.kWp", "0: no PV built (share of PV potential set to 0)")
 
     orientation = pv.get("orientation")
     if orientation is None:
-        azimuth = 180.0
+        azimuth_in_degrees = 180.0
         report.defaulted("homeInputs.pv.orientation", "absent; assuming south (azimuth 180°)")
-    elif orientation in _AZIMUTH_BY_ORIENTATION:
-        azimuth, orientation_note = _AZIMUTH_BY_ORIENTATION[orientation]
+    elif orientation in _AZIMUTH_IN_DEGREES_BY_ORIENTATION:
+        azimuth_in_degrees, orientation_note = _AZIMUTH_IN_DEGREES_BY_ORIENTATION[orientation]
         if orientation_note is not None:
-            report.approximated("homeInputs.pv.orientation", f"{orientation_note} (azimuth {azimuth}°)")
+            report.approximated("homeInputs.pv.orientation", f"{orientation_note} (azimuth {azimuth_in_degrees}°)")
         else:
-            report.used("homeInputs.pv.orientation", f"azimuth {azimuth}°")
+            report.used("homeInputs.pv.orientation", f"azimuth {azimuth_in_degrees}°")
     else:
-        azimuth = 180.0
+        azimuth_in_degrees = 180.0
         report.defaulted("homeInputs.pv.orientation", f"unknown value '{orientation}'; assuming south")
 
     roof_construction = (home.get("roof") or {}).get("construction")
-    tilt = 10.0 if roof_construction == "flat" else 30.0
-    return capacity, azimuth, tilt
+    tilt_in_degrees = 10.0 if roof_construction == "flat" else 30.0
+    return capacity_in_kilowatt, azimuth_in_degrees, tilt_in_degrees
 
 
 def _iter_leaf_paths(value: Any, prefix: str = "") -> Iterator[str]:

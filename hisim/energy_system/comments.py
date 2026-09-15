@@ -1,4 +1,4 @@
-"""Writing a run record with its provenance rendered as end-of-line comments.
+"""Writing a generated energy-system file with its provenance rendered as end-of-line comments.
 
 A realized record is a file of numbers. Every one of them was decided by something — a preset, a
 law reading a building's heating load, an author's override — and the machine-readable account of
@@ -14,6 +14,12 @@ regenerated record regenerates its comments wholesale rather than patching them.
 in generated files — a hand-written energy system carries the author's own comments, and machine
 comments on a file a person maintains would rot.
 
+The second generated file that needs them is the recorded twin, and it needs a narrower thing: not
+an audit but one line of text per pinned configuration field, saying why that number stayed instead
+of being left to the preset's own ``AUTO``. That arrives as the ``notes`` argument, a plain
+component-to-field-to-comment mapping the recorder builds, and it goes through the same attachment
+machinery as an audit's comments so the two cannot come to lay a comment out differently.
+
 The one thing this module must never do is become a second YAML writer. It runs on a different
 library from the canonical emitter, because the canonical one cannot attach comments, and two
 libraries writing the same document is exactly how a format grows two styles. The defence is
@@ -27,7 +33,9 @@ quoting rule, the spelling of a null — exists to keep that equality true.
 from __future__ import annotations
 
 import io
-from typing import Any, ClassVar, List, Optional, Tuple, Type
+from typing import Any, ClassVar, List, Mapping, Optional, Tuple, Type
+
+import numpy as np
 
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
@@ -35,7 +43,7 @@ from ruamel.yaml.representer import RoundTripRepresenter
 
 from hisim.config.introspection import SizableFieldKind
 from hisim.energy_system.audit_records import AuditRecord, BuiltFrom, ComponentAudit
-from hisim.energy_system.emitter import EnergySystemEmitter
+from hisim.energy_system.emitter import CanonicalDumper, EnergySystemEmitter
 from hisim.energy_system.loader import EnergySystemReader, dump_energy_system
 from hisim.energy_system.model import ComponentEntry, EnergySystemFile
 from hisim.energy_system.metadata import RunMetadata
@@ -51,8 +59,14 @@ class CanonicalRepresenter(RoundTripRepresenter):
     YAML version this format's reader uses — is quoted, which the round-trip representer does not
     do on its own because it follows a later version of the specification.
 
-    Neither habit is invented here: the quoting question is put to the canonical writer's own
-    resolver, so the two answers cannot drift apart as that resolver changes.
+    Beyond the two habits it registers the numeric conversions the canonical dumper makes: a numpy
+    integer, float, boolean or array arriving from a configuration value is written as the plain
+    number it stands for. Those are not a style of this writer but a spelling both writers have to
+    share, since an annotated file and a plain one of the same document must be the same bytes.
+
+    Nothing here is invented: the quoting question is put to the canonical writer's own resolver
+    and the numeric representers are that writer's own, so the two cannot drift apart as either
+    changes.
     """
 
     #: Tag under which a null is written.
@@ -69,17 +83,23 @@ class CanonicalRepresenter(RoundTripRepresenter):
 
     @classmethod
     def configured(cls) -> Type["CanonicalRepresenter"]:
-        """Registers the two overrides on this class and returns it.
+        """Register this class's representers and return the class.
 
-        Registration happens here rather than at import time so that importing this module has
-        no side effect, and it is idempotent: registering the same function for the same type
-        twice is the same as registering it once.
+        Two are the spellings described above (``null``, quoted strings). The rest convert numpy scalars and
+        arrays to plain values, borrowed from :class:`CanonicalDumper` so that the annotated writer and the
+        plain writer render a numpy value identically -- a test holds the two writers to the same bytes.
+        Registration is done here instead of at import time so importing this module has no side effect;
+        calling it twice is harmless.
 
         Returns:
-            This class, ready to be handed to a YAML instance.
+            This class, ready to be assigned as a YAML instance's ``Representer``.
         """
         cls.add_representer(type(None), cls.represent_canonical_null)
         cls.add_representer(str, cls.represent_canonical_string)
+        cls.add_multi_representer(np.integer, CanonicalDumper.represent_numpy_integer)
+        cls.add_multi_representer(np.floating, CanonicalDumper.represent_numpy_float)
+        cls.add_multi_representer(np.bool_, CanonicalDumper.represent_numpy_bool)
+        cls.add_representer(np.ndarray, CanonicalDumper.represent_numpy_array)
         return cls
 
     @staticmethod
@@ -286,13 +306,21 @@ class AnnotatedEmitter:
     RECORD_FILENAME: ClassVar[str] = "realized.energy_system.yaml"
 
     @classmethod
-    def render(cls, model: EnergySystemFile, audit: Optional[AuditRecord] = None) -> str:
-        """Renders one energy system, annotated when an audit is given and plain when not.
+    def render(
+        cls,
+        model: EnergySystemFile,
+        audit: Optional[AuditRecord] = None,
+        notes: Optional[Mapping[str, Mapping[str, str]]] = None,
+    ) -> str:
+        """Renders one energy system, annotated when it is given something to say and plain when not.
 
         Args:
             model: The record to write.
             audit: The audit of the same run, whose facts become the comments; omitted for the
                 plain rendering, which must equal the canonical writer's output.
+            notes: Ready-made comments for configuration fields, by component and field, as the
+                recorder produces them for a twin. Attached after the audit's own, so a caller
+                supplying both gets the note where the two name the same field.
 
         Returns:
             The YAML document, ending in a newline.
@@ -300,9 +328,41 @@ class AnnotatedEmitter:
         document = cls._commented(EnergySystemEmitter.to_document(model))
         if audit is not None:
             cls._annotate(document, model, audit)
+        if notes:
+            cls._attach(document, model, notes)
         stream = io.StringIO()
         cls._yaml().dump(document, stream)
         return stream.getvalue()
+
+    @classmethod
+    def _attach(
+        cls, document: CommentedMap, model: EnergySystemFile, notes: Mapping[str, Mapping[str, str]]
+    ) -> None:
+        """Attaches ready-made comments to the configuration lines they belong to.
+
+        A note for a field the entry does not state is silently no comment rather than an error:
+        the caller decides what a field is worth saying and the document decides which fields it
+        has, and making the two agree here would only move the decision.
+
+        Args:
+            document: The commentable document, in the canonical shape.
+            model: The record the document was rendered from, for the entries.
+            notes: The comments, by component and field.
+        """
+        components = document.get(cls.COMPONENTS_KEY) or CommentedMap()
+        blocks = {name: components[name] for name in model.components}
+        groups = document.get(cls.GROUPS_KEY) or CommentedMap()
+        for group_name, group in model.groups.items():
+            grouped = groups[group_name][cls.COMPONENTS_KEY]
+            blocks.update({name: grouped[name] for name in group.components})
+        for name, fields in notes.items():
+            block = blocks.get(name)
+            if block is None or cls.CONFIG_KEY not in block:
+                continue
+            config = block[cls.CONFIG_KEY]
+            for field, comment in fields.items():
+                if field in config:
+                    config.yaml_add_eol_comment(comment, field, column=cls.COMMENT_COLUMN)
 
     @classmethod
     def _yaml(cls) -> YAML:
@@ -439,18 +499,23 @@ class AnnotatedEmitter:
             block.yaml_add_eol_comment(comment, fact, column=cls.COMMENT_COLUMN)
 
 
-def render_record(model: EnergySystemFile, audit: Optional[AuditRecord] = None) -> str:
-    """Renders a realized record as annotated YAML text.
+def render_record(
+    model: EnergySystemFile,
+    audit: Optional[AuditRecord] = None,
+    notes: Optional[Mapping[str, Mapping[str, str]]] = None,
+) -> str:
+    """Renders a generated energy-system file as annotated YAML text.
 
     Args:
         model: The record to write.
         audit: The audit of the same run; without it the rendering is plain and equals the
             canonical writer's output exactly.
+        notes: Ready-made per-field comments, as the recorder produces them for a twin.
 
     Returns:
         The document, ending in a newline.
     """
-    return AnnotatedEmitter.render(model, audit)
+    return AnnotatedEmitter.render(model, audit, notes)
 
 
 def write_record(model: EnergySystemFile, audit: Optional[AuditRecord], path: str) -> str:

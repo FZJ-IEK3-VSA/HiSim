@@ -11,7 +11,7 @@ from hisim.components import building
 from hisim.components import generic_heat_pump
 from hisim.components import electricity_meter
 from hisim import loadtypes
-from hisim.config import ComponentID
+from hisim.config import ComponentID, SizingContext
 
 
 def setup_function(
@@ -55,18 +55,23 @@ def setup_function(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Building
-    my_building_config = building.BuildingConfig.preset_standard("Building")
+    # The weather config is created first: the building and PV configs copy its identity
+    # (weather_identity) and must have it before those components are built. The weather
+    # component itself is still added further down, so the simulator's component order is unchanged.
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
+
+    my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
+    my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_weather)
 
@@ -74,7 +79,13 @@ def setup_function(
     my_sim.add_component(my_building)
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
+    # A demo array with no building to size it from, so the power is stated here rather than
+    # derived: the 10 kW this setup has always run is now written down where it is used (D-13).
+    my_photovoltaic_system_config.power_in_watt = 10000.0
+    my_photovoltaic_system_config = my_photovoltaic_system_config.resolve(
+        SizingContext(weather_identity=my_weather_config.identity())
+    )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -85,7 +96,7 @@ def setup_function(
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
+        config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
     )
 
     my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(

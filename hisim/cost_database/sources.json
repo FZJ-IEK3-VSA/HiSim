@@ -523,6 +523,33 @@
       "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
     },
     {
+      "id": "src_capex_48",
+      "citation": "IRENA (2020): Green Hydrogen Cost Reduction \u2013 Scaling up Electrolysers to Meet the 1.5C Climate Goal",
+      "url": "https://www.irena.org/publications/2020/Dec/Green-hydrogen-cost-reduction",
+      "publication_year": 2020,
+      "retrieved": "2026-09-07",
+      "kind": "LITERATURE",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citation [48], added there with the proposed electrolyzer row."
+    },
+    {
+      "id": "src_capex_49",
+      "citation": "IEA (2023): Global Hydrogen Review 2023",
+      "url": "https://www.iea.org/reports/global-hydrogen-review-2023",
+      "publication_year": 2023,
+      "retrieved": "2026-09-07",
+      "kind": "LITERATURE",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citation [49], added there with the proposed electrolyzer row."
+    },
+    {
+      "id": "src_capex_50",
+      "citation": "ecoinvent: life-cycle inventories for photovoltaic power electronics (inverter, 2500 W to 500 kW), used as the closest published proxy for a rectifier",
+      "url": "https://www.ecoinvent.org",
+      "publication_year": 2024,
+      "retrieved": "2026-09-07",
+      "kind": "LITERATURE",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citation [50], added there with the proposed transformer/rectifier row; a proxy inventory, not a rectifier measurement."
+    },
+    {
       "id": "src_expert_migration",
       "citation": "HiSim team expert estimate / assumption recorded in configuration.py comments",
       "url": null,

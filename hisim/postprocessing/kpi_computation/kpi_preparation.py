@@ -341,12 +341,17 @@ class KpiPreparation:
                 timeresolution=self.simulation_parameters.seconds_per_timestep,
             )
 
-            # compute self consumption rate and autarkie rate
+            # compute self consumption rate and autarkie rate. A system can produce without
+            # consuming anything -- a bare generation chain feeding a converter, like the
+            # electrolyzer setup -- and a rate over zero consumption would raise a
+            # ZeroDivisionError; it is reported as zero, matching the no-production branch below.
             self_consumption_rate_in_percent = 100 * (
                 self_consumption_in_kilowatt_hour / electricity_production_in_kilowatt_hour
             )
-            self_sufficiency_rate_in_percent = 100 * (
-                self_consumption_in_kilowatt_hour / electricity_consumption_in_kilowatt_hour
+            self_sufficiency_rate_in_percent = (
+                100 * (self_consumption_in_kilowatt_hour / electricity_consumption_in_kilowatt_hour)
+                if electricity_consumption_in_kilowatt_hour > 0
+                else 0
             )
             if self_sufficiency_rate_in_percent > 100:
                 raise ValueError(
@@ -556,8 +561,21 @@ class KpiPreparation:
         """Compute the ratio of two values.
 
         ratio = denominator / numerator * 100 [%].
+
+        Every caller divides by a total consumption, and a system can legitimately consume nothing:
+        the simple air-conditioner household has no occupancy and no generation at all, so it
+        reported a total of zero and the division ended the KPI run with ZeroDivisionError. The ratio
+        there is not zero, it is undefined -- there is nothing for the numerator to be a proportion
+        of -- and the entry is emitted with no value, which is what this module already does for a
+        self-consumption rate when there is no production
+        (:meth:`compute_self_consumption_rate_according_to_solar_htw_berlin`). Substituting zero
+        would state a measurement nobody made.
         """
-        ratio_in_percent = denominator_value / numerator_value * 100
+        ratio_in_percent: Optional[float]
+        if numerator_value == 0:
+            ratio_in_percent = None
+        else:
+            ratio_in_percent = denominator_value / numerator_value * 100
         # make kpi entry
         ratio_in_percent_entry = KpiEntry(
             name=kpi_name,
@@ -573,16 +591,29 @@ class KpiPreparation:
 
     def get_total_energy_self_sufficiency(
         self,
-        self_sufficency_rate_for_electricity_in_percent: float,
+        self_sufficency_rate_for_electricity_in_percent: Optional[float],
         total_electricity_consumption_in_kwh: float,
         gas_demand_from_grid_in_kwh: float,
         total_gas_consumption_in_kwh: float,
         other_fuel_consumption_in_kwh: float,
-    ):
+    ) -> Optional[float]:
         """Calculate self-sufficiency including all energy consumptions for all loadtypes.
 
         Please note that the fuel meter has a self-sufficiency of 0% (all energy is pruchased).
+
+        Two of the three inputs can legitimately be absent, and this used to assume neither was.
+        The electricity rate is ``None`` for a system with no electricity meter, because the grid
+        exchange is then unknown -- the two functions that produce it say so deliberately -- and
+        multiplying that ``None`` was the TypeError that stopped every meterless setup in
+        post-processing. The total consumption is zero for a system that consumes no energy at all,
+        and dividing by it is the ZeroDivisionError beside it.
+
+        Both cases mean the same thing: the figure is undefined rather than zero, and the entry is
+        emitted without a value. A system whose electricity balance is unknown does not have a
+        known total-energy self-sufficiency, and reporting one would be inventing it.
         """
+        if self_sufficency_rate_for_electricity_in_percent is None:
+            return None
         total_energy_consumption_in_kwh = (
             total_electricity_consumption_in_kwh + total_gas_consumption_in_kwh + other_fuel_consumption_in_kwh
         )
@@ -597,6 +628,8 @@ class KpiPreparation:
             + self_sufficiency_gas_in_percent * total_gas_consumption_in_kwh
             + self_suffciency_other_fuels_in_percent * other_fuel_consumption_in_kwh
         )
+        if total_energy_consumption_in_kwh == 0:
+            return None
         total_energy_self_sufficiency_in_percent = (
             total_self_sufficient_energy_consumption_in_kwh / total_energy_consumption_in_kwh
         )
@@ -636,43 +669,52 @@ class KpiPreparation:
         This function will read the opex and capex costs from the results.
         """
         # get costs and emissions from electricity meter and gas meter
-        electricity_costs_in_euro: float = 0
-        electricity_co2_in_kg: float = 0
-        electricity_from_grid_in_kwh: float = 0
-        gas_costs_in_euro: float = 0
-        gas_co2_in_kg: float = 0
-        gas_from_grid_in_kwh: float = 0
-        total_gas_consumption_in_kwh: float = 0
-        other_fuel_costs_in_euro: float = 0
-        other_fuel_co2_in_kg: float = 0
-        other_fuel_energy_consumption_kwh: float = 0
+        electricity_costs_in_euro: float = 0.0
+        electricity_co2_in_kg: float = 0.0
+        electricity_from_grid_in_kwh: float = 0.0
+        gas_costs_in_euro: float = 0.0
+        gas_co2_in_kg: float = 0.0
+        gas_from_grid_in_kwh: float = 0.0
+        total_gas_consumption_in_kwh: float = 0.0
+        other_fuel_costs_in_euro: float = 0.0
+        other_fuel_co2_in_kg: float = 0.0
+        other_fuel_energy_consumption_kwh: float = 0.0
 
-        for kpi_name, kpi_entry in self.kpi_collection_dict_unsorted[building_object].items():
+        # Matched on the entry's own "name", never on the collection key: a key is qualified
+        # with the source component as soon as a second component of the building reports the
+        # same KPI name (see keyed_component_entries), and a meter's entries have to be found
+        # whether or not such a collision exists.
+        # Summed rather than assigned, because a building may hold several meters of one tag --
+        # an oil and a pellet fuel meter, say -- and each of them now keeps its own entry under a
+        # qualified key. Assigning let whichever meter came last stand for all of them, so the
+        # building's heating fuel bill was the bill of one arbitrary meter.
+        for kpi_entry in self.kpi_collection_dict_unsorted[building_object].values():
+            kpi_name = kpi_entry["name"]
             if kpi_entry["tag"] == KpiTagEnumClass.ELECTRICITY_METER.value:
                 if kpi_name == "Opex costs of electricity consumption from grid":
-                    electricity_costs_in_euro = kpi_entry["value"]
+                    electricity_costs_in_euro += kpi_entry["value"]
                 if kpi_name == "CO2 footprint of electricity consumption from grid":
-                    electricity_co2_in_kg = kpi_entry["value"]
+                    electricity_co2_in_kg += kpi_entry["value"]
                 if kpi_name == "Total energy from grid":
-                    electricity_from_grid_in_kwh = kpi_entry["value"]
+                    electricity_from_grid_in_kwh += kpi_entry["value"]
 
             elif kpi_entry["tag"] == KpiTagEnumClass.GAS_METER.value:
                 if kpi_name == "Opex costs of gas consumption from grid":
-                    gas_costs_in_euro = kpi_entry["value"]
+                    gas_costs_in_euro += kpi_entry["value"]
                 if kpi_name == "CO2 footprint of gas consumption from grid":
-                    gas_co2_in_kg = kpi_entry["value"]
+                    gas_co2_in_kg += kpi_entry["value"]
                 if kpi_name == "Total gas demand from grid":
-                    gas_from_grid_in_kwh = kpi_entry["value"]
+                    gas_from_grid_in_kwh += kpi_entry["value"]
                 if kpi_name == "Total gas consumption":
-                    total_gas_consumption_in_kwh = kpi_entry["value"]
+                    total_gas_consumption_in_kwh += kpi_entry["value"]
 
             elif kpi_entry["tag"] == KpiTagEnumClass.FUEL_METER.value:
                 if kpi_name == "OPEX - Energy costs":
-                    other_fuel_costs_in_euro = kpi_entry["value"]
+                    other_fuel_costs_in_euro += kpi_entry["value"]
                 if kpi_name == "OPEX - CO2 Footprint":
-                    other_fuel_co2_in_kg = kpi_entry["value"]
+                    other_fuel_co2_in_kg += kpi_entry["value"]
                 if kpi_name == "Total energy consumption":
-                    other_fuel_energy_consumption_kwh = kpi_entry["value"]
+                    other_fuel_energy_consumption_kwh += kpi_entry["value"]
 
         # calculate total energy self-suffciency for gas, heat and electricity
         total_energy_self_sufficiency_in_percent = self.get_total_energy_self_sufficiency(
@@ -700,30 +742,29 @@ class KpiPreparation:
             if self.simulation_parameters.multiple_buildings:
                 total_maintenance_cost_per_simulated_period = self._read_cost_table_value(
                     cost_df=opex_df,
-                    column_name="Maintenance costs per year [EUR]",
+                    column_name="Maintenance costs for simulated period [EUR]",
                     preferred_row_name=building_object + "_Total",
                     fallback_row_name="Total",
                 )
                 total_maintenance_cost_per_simulated_period_without_hp = self._read_cost_table_value(
                     cost_df=opex_df,
-                    column_name="Maintenance costs per year [EUR]",
+                    column_name="Maintenance costs for simulated period [EUR]",
                     preferred_row_name=building_object + "_Total_without_heatpump",
                     fallback_row_name="Total_without_heatpump",
                 )
                 total_maintenance_cost_per_simulated_period_only_hp = self._read_cost_table_value(
                     cost_df=opex_df,
-                    column_name="Maintenance costs per year [EUR]",
+                    column_name="Maintenance costs for simulated period [EUR]",
                     preferred_row_name=building_object + "_Total_only_heatpump",
                     fallback_row_name="Total_only_heatpump",
                 )
             if not self.simulation_parameters.multiple_buildings:
-                total_maintenance_cost_per_simulated_period = opex_df["Maintenance costs per year [EUR]"].loc["Total"]
-                total_maintenance_cost_per_simulated_period_without_hp = opex_df[
-                    "Maintenance costs per year [EUR]"
-                ].loc["Total_without_heatpump"]
-                total_maintenance_cost_per_simulated_period_only_hp = opex_df["Maintenance costs per year [EUR]"].loc[
-                    "Total_only_heatpump"
+                maintenance_column = opex_df["Maintenance costs for simulated period [EUR]"]
+                total_maintenance_cost_per_simulated_period = maintenance_column.loc["Total"]
+                total_maintenance_cost_per_simulated_period_without_hp = maintenance_column.loc[
+                    "Total_without_heatpump"
                 ]
+                total_maintenance_cost_per_simulated_period_only_hp = maintenance_column.loc["Total_only_heatpump"]
         else:
             log.warning("OPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_OPEX")
             total_maintenance_cost_per_simulated_period = 0
@@ -1786,33 +1827,93 @@ class KpiPreparation:
             )
 
     def get_all_component_kpis(self, wrapped_components: List[ComponentWrapper]) -> None:
-        """Go through all components and get their KPIs if implemented."""
+        """Go through all components and get their KPIs if implemented.
+
+        One building's entries are collected first and keyed together at the end, rather than
+        inserted one by one, because the key is what tells two components of one class apart:
+        keying incrementally by bare name is exactly what made a second same-class instance
+        silently overwrite the first (see :meth:`keyed_component_entries`).
+        """
         my_component_kpi_entry_list: List[KpiEntry]
 
-        self.kpi_collection_dict_unsorted = {
-            building_objects: {} for building_objects in self.building_objects_in_district_list
+        entries_per_building: Dict[str, List[KpiEntry]] = {
+            building_objects: [] for building_objects in self.building_objects_in_district_list
         }
 
         for wrapped_component in wrapped_components:
             my_component = wrapped_component.my_component
-            # get KPIs of respective component
-            my_component_kpi_entry_list = my_component.get_component_kpi_entries(
+            # get KPIs of respective component; the base-class method is the one that fills in
+            # each entry's source component, which is what the keying tells instances apart by.
+            my_component_kpi_entry_list = my_component.component_kpi_entries(
                 all_outputs=self.all_outputs, postprocessing_results=self.results
             )
 
             if my_component_kpi_entry_list != []:
-                # add all KPI entries to kpi dict
-                for kpi_entry in my_component_kpi_entry_list:
-
-                    for object_name in self.kpi_collection_dict_unsorted.keys():
-                        # The component's building comes from its structured identity rather than
-                        # from taking its runtime name apart.
-                        if object_name == my_component.component_id.building_label:
-                            self.kpi_collection_dict_unsorted[object_name][kpi_entry.name] = kpi_entry.to_dict()
-                            break
+                # The component's building comes from its structured identity rather than
+                # from taking its runtime name apart.
+                building_label = my_component.component_id.building_label
+                if building_label in entries_per_building:
+                    entries_per_building[building_label].extend(my_component_kpi_entry_list)
             else:
                 log.debug(
                     "KPI generation for "
                     + my_component.component_name
                     + " was not successful. KPI method is maybe not implemented yet."
                 )
+
+        self.kpi_collection_dict_unsorted = {
+            building_objects: self.keyed_component_entries(entries)
+            for building_objects, entries in entries_per_building.items()
+        }
+
+    @staticmethod
+    def keyed_component_entries(kpi_entries: List[KpiEntry]) -> Dict[str, Dict]:
+        """Keys one building's component KPI entries, telling same-named entries apart by source.
+
+        The key is what the report table, the webtool JSON and the flattened golden comparison
+        address a KPI by. Two components of one class emit the same entry names — the two CHPs of
+        the ``dynamic_components`` setup both report "Electrical energy produced" — and keying by
+        name alone let the second instance silently overwrite the first, so one of the two CHPs
+        vanished from every KPI consumer without anything failing. Where several components share
+        an entry name, each of their entries is keyed as ``"<name> (<source component>)"`` instead,
+        so every instance stays visible; a building where a name is emitted by exactly one
+        component keeps the unqualified name, so single-instance setups do not rename anything.
+
+        Args:
+            kpi_entries: Every component KPI entry of one building object.
+
+        Returns:
+            The entries as the collection stores them, ``{key: entry.to_dict()}``.
+
+        Raises:
+            ValueError: If same-named entries collide and one of them names no source component,
+                leaving nothing to tell them apart by — entries collected through
+                :meth:`hisim.component.Component.component_kpi_entries` always name their source,
+                so that can only come from a caller keying entries it built itself; or if two
+                entries still produce one key, which means one component emitted the same KPI
+                name twice and no consumer could have read both of them.
+        """
+        sources_per_name: Dict[str, List[Optional[str]]] = {}
+        for entry in kpi_entries:
+            sources_per_name.setdefault(entry.name, []).append(entry.name_of_source_component)
+
+        keyed: Dict[str, Dict] = {}
+        for entry in kpi_entries:
+            if len(sources_per_name[entry.name]) == 1:
+                key = entry.name
+            elif entry.name_of_source_component is None or None in sources_per_name[entry.name]:
+                raise ValueError(
+                    f"Several components report a KPI named '{entry.name}' and at least one of "
+                    "them carries no name_of_source_component, so their entries cannot be told "
+                    "apart. Every component KPI entry has to name its source component."
+                )
+            else:
+                key = f"{entry.name} ({entry.name_of_source_component})"
+            if key in keyed:
+                raise ValueError(
+                    f"Two KPI entries of one building key as '{key}'. A component must not emit "
+                    "the same KPI name twice, or every consumer would silently read only the "
+                    "last one."
+                )
+            keyed[key] = entry.to_dict()
+        return keyed

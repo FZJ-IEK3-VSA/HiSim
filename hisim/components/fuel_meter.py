@@ -2,7 +2,7 @@
 
 # clean
 from dataclasses import dataclass
-from typing import ClassVar, List, Optional
+from typing import ClassVar, Dict, List, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -10,7 +10,23 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.component import ComponentInput, OpexCostDataClass
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import (
+    ComponentID,
+    ConfigBase,
+    DisplayConfig,
+    Sizable,
+    Size,
+    SizingLaw,
+    concrete,
+    preset,
+    sized_field,
+)
+from hisim.config.channels import (
+    DispatchRule,
+    DynamicConnectionChannel,
+    PortTypeCompatibility,
+    ResolvedDynamicConnection,
+)
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
@@ -20,6 +36,7 @@ from hisim.dynamic_component import (
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -33,43 +50,130 @@ __status__ = ""
 @dataclass_json
 @dataclass
 class FuelMeterConfig(ConfigBase):
-    """Fuel Meter Config."""
+    """Fuel Meter Config.
+
+    Holds the component identity, the fuel this meter measures (oil, pellets, wood chips or
+    district heat) and the two constants its legacy OPEX report turns kilowatt hours back into
+    litres and kilograms with. The named default is :meth:`preset_standard`, and it leaves all
+    three ``AUTO``: a meter accounts what the generator beside it burns, so the carrier and the
+    two constants are copied off that generator's configuration rather than stated a second
+    time (D-15 (b)). A system whose generator is not converted yet states them itself.
+    """
 
     @classmethod
     def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return FuelMeter.get_full_classname()
 
-    component_id: ComponentID
-    fuel_loadtype: lt.LoadTypes
-    heating_value_of_fuel_in_kwh_per_liter: Optional[float]
-    fuel_density_in_kg_per_m3: Optional[float]
+    #: Sizing law of ``fuel_loadtype``: the carrier is copied from the generator that feeds this
+    #: meter, which contributes it as the ``energy_carrier`` fact. An oil boiler beside a meter
+    #: configured for wood chips is what the copy makes unstateable.
+    CARRIER_LAW: ClassVar[SizingLaw] = Size.ENERGY_CARRIER
 
+    #: Sizing law of ``heating_value_of_fuel_in_kwh_per_liter``: copied from the generator, which
+    #: derives it from its carrier **and** its boiler type -- the higher heating value for a
+    #: condensing boiler, the lower one for a conventional one -- so the meter cannot derive it
+    #: from its own carrier alone (survey `FuelMeterConfig` item 5).
+    HEATING_VALUE_LAW: ClassVar[SizingLaw] = Size.HEATING_VALUE_OF_FUEL_IN_KWH_PER_LITER
+
+    #: Sizing law of ``fuel_density_in_kg_per_m3``: copied from the same generator, which reads it
+    #: out of ``PhysicsConfig`` for the carrier it burns.
+    DENSITY_LAW: ClassVar[SizingLaw] = Size.FUEL_DENSITY_IN_KG_PER_M3
+
+    component_id: ComponentID
+    #: The fuel this meter measures. Sizable: left ``AUTO`` it is copied from the generator by
+    #: :data:`CARRIER_LAW`.
+    fuel_loadtype: Sizable[lt.LoadTypes] = sized_field(rule=CARRIER_LAW, value_type=lt.LoadTypes)
+    #: Lower heating value used by this component's *own* legacy OPEX report (`get_cost_opex`),
+    #: which still converts kWh into liters and kilograms to price them against
+    #: `EmissionFactorsAndCostsForFuelsConfig`. It no longer plays any part in lifecycle-cost
+    #: pricing: since decision D26 the cost engine bills every carrier in kWh and converts the
+    #: EUR/l resp. EUR/t database quote itself, using the `PhysicsConfig` heating value as the
+    #: single source. Setting this field therefore changes the legacy OPEX numbers only.
+    #: Sizable and optional: left ``AUTO`` it is copied from the generator by
+    #: :data:`HEATING_VALUE_LAW`, and ``None`` is a legitimate value -- district heat burns
+    #: nothing -- which is why the declaration says ``optional=True``.
+    heating_value_of_fuel_in_kwh_per_liter: Sizable[Optional[float]] = sized_field(
+        rule=HEATING_VALUE_LAW, optional=True
+    )
+    #: Density of the fuel, used by the same legacy OPEX report. Sizable and optional for the
+    #: same two reasons as the heating value above.
+    fuel_density_in_kg_per_m3: Sizable[Optional[float]] = sized_field(rule=DENSITY_LAW, optional=True)
+
+    @preset
     @classmethod
-    def get_fuel_meter_default_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-        fuel_loadtype: lt.LoadTypes = lt.LoadTypes.OIL,
-        heating_value_of_fuel_in_kwh_per_liter: Optional[float] = 9.82,  # configuration.py
-        fuel_density_in_kg_per_m3: Optional[float] = 0.83 * 1e3,  # configuration.py
-    ) -> "FuelMeterConfig":
-        """Gets a default FuelMeter."""
-        if component_id is None:
-            component_id = ComponentID(name="FuelMeter")
-        return FuelMeterConfig(
-            component_id=component_id,
-            fuel_loadtype=fuel_loadtype,
-            heating_value_of_fuel_in_kwh_per_liter=heating_value_of_fuel_in_kwh_per_liter,
-            fuel_density_in_kg_per_m3=fuel_density_in_kg_per_m3
-        )
+    def preset_standard(cls, name: str) -> "FuelMeterConfig":
+        """The fuel meter of a household, accounting whatever its generator burns.
+
+        The only preset the class has, and it pins nothing: the carrier and the two fuel
+        constants stay ``AUTO`` so that :data:`CARRIER_LAW`, :data:`HEATING_VALUE_LAW` and
+        :data:`DENSITY_LAW` copy them off the generator. There are deliberately no
+        ``oil``/``pellets``/``wood_chips``/``district_heating`` presets: with the three values
+        copied there is nothing left for four presets to differ in, and a preset that pinned a
+        carrier would be the second statement of a fact the generator already makes (D-15 (b)).
+
+        The deleted ``get_fuel_meter_default_config`` factory instead defaulted to a rounded oil
+        heating value of 9.82 kWh/l and a density of 830 kg/m3, which every oil, pellet and
+        wood-chip setup overrode with the boiler's own numbers and only the district-heating
+        setup -- which burns nothing -- accepted.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            FuelMeterConfig: The preset configuration, with all three fuel values unsized.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class FuelMeter(DynamicComponent):
     """Fuel meter class."""
 
+    cost_relevance = CostRelevance.METER
+
     # Outputs
     HeatConsumption: ClassVar[str] = "HeatConsumption"
     CumulativeConsumption: ClassVar[str] = "CumulativeConsumption"
+
+    #: Stable key of the one channel this meter has: the fuel a participant burned, reported as
+    #: energy. Named like the electricity meter's channel of the same role so that a reader who
+    #: has seen one aggregator's declaration recognises the other's.
+    CONSUMPTION_UNCONTROLLED_CHANNEL: ClassVar[str] = "consumption_uncontrolled"
+
+    #: The one flow this meter understands, declared so that an energy-system file can address a
+    #: heat source at it. It is a description of the wiring the setups already build through
+    #: :meth:`get_default_connections_from_generic_boiler` and its district-heating twin, and it
+    #: repeats their tag, unit and weight exactly rather than inventing a second vocabulary.
+    #:
+    #: The load type is the wildcard because the carrier of this one flow is not a property of
+    #: the meter: a boiler types its energy-demand outputs by fuel, so the same channel sees oil
+    #: in one household and wood chips in the next, and a district-heating source feeds it space
+    #: heating and hot water — two load types — in a single household. The unit stays strict,
+    #: because the sum in :meth:`i_simulate` is in watt-hours whatever the carrier.
+    #:
+    #: Dispatch is forbidden: a meter measures and never controls, so every participant carries
+    #: the reserved monitored-only weight and none of the meter's outputs is a per-participant
+    #: signal.
+    CHANNELS: Tuple[DynamicConnectionChannel, ...] = (
+        DynamicConnectionChannel(
+            key=CONSUMPTION_UNCONTROLLED_CHANNEL,
+            tags=frozenset({lt.InandOutputType.HEAT_CONSUMPTION}),
+            load_type=lt.LoadTypes.ANY,
+            unit=lt.Units.WATT_HOUR,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+    )
+
+    #: Carriers a feed may bring in beside the configured one, keyed by the configured carrier.
+    #: Only district heating needs an entry, and it is not a relaxation but a restatement of what
+    #: this class's own :meth:`get_default_connections_from_generic_district_heating` declares: a
+    #: district-heating source types its two energy outputs by heat domain — space heating and
+    #: hot water — while the meter is configured for the network it is billed by, so the two names
+    #: legitimately differ. Every other carrier is metered by a source that types its output as
+    #: that carrier, and any other name is exactly the mispricing the carrier check must catch.
+    ADDITIONALLY_ACCEPTED_CARRIERS: ClassVar[Dict[lt.LoadTypes, Tuple[lt.LoadTypes, ...]]] = {
+        lt.LoadTypes.DISTRICTHEATING: (lt.LoadTypes.HEATING, lt.LoadTypes.WARM_WATER),
+    }
 
     def __init__(
         self,
@@ -94,15 +198,24 @@ class FuelMeter(DynamicComponent):
             my_config=config,
             my_display_config=my_display_config,
         )
+        #: The carrier this meter accounts and the two constants its legacy OPEX report turns
+        #: kilowatt hours back into litres and kilograms with, read off the configuration once.
+        #: All three are sizable, so a law may have filled them in; ``concrete`` is the read
+        #: site's statement that they have been resolved by the time a component is built.
+        self.fuel_loadtype: lt.LoadTypes = concrete(self.config.fuel_loadtype)
+        self.heating_value_of_fuel_in_kwh_per_liter: Optional[float] = concrete(
+            self.config.heating_value_of_fuel_in_kwh_per_liter
+        )
+        self.fuel_density_in_kg_per_m3: Optional[float] = concrete(self.config.fuel_density_in_kg_per_m3)
         # check if component has valid fuel loadtype
-        if self.config.fuel_loadtype not in [
+        if self.fuel_loadtype not in [
             lt.LoadTypes.OIL,
             lt.LoadTypes.PELLETS,
             lt.LoadTypes.WOOD_CHIPS,
             lt.LoadTypes.DISTRICTHEATING,
         ]:
             raise ValueError(
-                f"FuelMeter {self.component_name} has invalid fuel loadtype: {self.config.fuel_loadtype}. "
+                f"FuelMeter {self.component_name} has invalid fuel loadtype: {self.fuel_loadtype}. "
                 f"Either use {lt.LoadTypes.OIL}, {lt.LoadTypes.PELLETS}, {lt.LoadTypes.WOOD_CHIPS} or {lt.LoadTypes.DISTRICTHEATING} "
                 "or add new fuel_type (except gas or electricity, for those there are already meters available)"
             )
@@ -135,6 +248,67 @@ class FuelMeter(DynamicComponent):
 
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_district_heating())
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_boiler())
+
+    def resolve_dynamic_connections(self, connections: List[ResolvedDynamicConnection]) -> None:
+        """Checks the carrier of every feed against this meter's own, then creates the ports.
+
+        The channel this meter declares wildcards the load type, because it is a class-level
+        declaration and a class cannot know which fuel the instance in a given household was
+        configured for. The instance does know: :meth:`get_cost_opex` prices and books emissions
+        for ``fuel_loadtype`` alone. Nothing between the two would notice a wood-chip feed
+        arriving at a meter configured for oil — the numbers would be summed, priced as oil and
+        reported without a word — so the mismatch is refused here, where the configured carrier
+        and the feed's carrier are both in hand for the first time.
+
+        The check runs over the whole batch before a single port is created, so a file this meter
+        refuses leaves the component exactly as it was rather than half grown.
+
+        Args:
+            connections: The resolved feeds, already validated against this component's channels
+                by the energy-system resolver.
+
+        Raises:
+            ValueError: If a feed carries a concrete load type this meter is not configured to
+                measure. The resolver turns it into a located energy-system error.
+        """
+        self._check_feeds_carry_the_configured_fuel(connections)
+        super().resolve_dynamic_connections(connections)
+
+    def _check_feeds_carry_the_configured_fuel(
+        self, connections: List[ResolvedDynamicConnection]
+    ) -> None:
+        """Refuses a feed whose carrier this meter would measure but price as something else.
+
+        The legacy default connections are scoped by the participant class they come from, so a
+        setup building them by hand never produced this mismatch. An energy-system file addresses
+        feeds at the meter by tag alone and can therefore hand it any heat source in the system,
+        which is exactly the freedom that has to be paid for with this check. A source port typed
+        as the wildcard stays accepted, because that is what the wildcard is for: a boiler types
+        its energy-demand outputs generically and the meter's configuration decides the carrier.
+        So are the heat-domain names of :attr:`ADDITIONALLY_ACCEPTED_CARRIERS`, which is how a
+        district-heating source's own two outputs reach a district-heating meter.
+
+        Args:
+            connections: The resolved feeds to check, in resolution order.
+
+        Raises:
+            ValueError: On the first feed whose carrier disagrees with ``fuel_loadtype``,
+                naming the participant, its output and both carriers.
+        """
+        configured = self.fuel_loadtype
+        also_accepted = self.ADDITIONALLY_ACCEPTED_CARRIERS.get(configured, ())
+        for connection in connections:
+            carrier = connection.source_port.load_type
+            if PortTypeCompatibility.load_types_agree(carrier, configured):
+                continue
+            if carrier in also_accepted:
+                continue
+            raise ValueError(
+                f"the feed '{connection.source_name}.{connection.source_output}' carries "
+                f"'{carrier.name}', but this meter is configured to measure and price "
+                f"'{configured.name}' (fuel_loadtype); configure the meter for the carrier it "
+                "meters, or feed it the matching source."
+            )
 
     def get_default_connections_from_generic_district_heating(
         self,
@@ -248,7 +422,7 @@ class FuelMeter(DynamicComponent):
         """
 
         if timestep == 0:
-            self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_CONSUMPTION])
+            self.consumption_uncontrolled_inputs = self.get_channel_inputs(self.CONSUMPTION_UNCONTROLLED_CHANNEL)
 
         # get sum of consumptions of all inputs
         consumption_uncontrolled_in_watt_hour = sum(
@@ -297,49 +471,49 @@ class FuelMeter(DynamicComponent):
             self.my_simulation_parameters.year, self.my_simulation_parameters.country
         )
         if (
-            self.config.heating_value_of_fuel_in_kwh_per_liter is not None
-            and self.config.fuel_density_in_kg_per_m3 is not None
+            self.heating_value_of_fuel_in_kwh_per_liter is not None
+            and self.fuel_density_in_kg_per_m3 is not None
         ):
             fuel_consumption_in_liter = round(
-                total_heat_consumed_in_kwh / self.config.heating_value_of_fuel_in_kwh_per_liter, 1
+                total_heat_consumed_in_kwh / self.heating_value_of_fuel_in_kwh_per_liter, 1
             )
-            fuel_consumption_in_kg = round(fuel_consumption_in_liter * 1e-3 * self.config.fuel_density_in_kg_per_m3, 1)
+            fuel_consumption_in_kg = round(fuel_consumption_in_liter * 1e-3 * self.fuel_density_in_kg_per_m3, 1)
 
-        if self.config.fuel_loadtype == lt.LoadTypes.OIL:
+        if self.fuel_loadtype == lt.LoadTypes.OIL:
 
-            co2_per_unit = emissions_and_cost_factors.oil_footprint_in_kg_per_l
-            euro_per_unit = emissions_and_cost_factors.oil_costs_in_euro_per_l
-            opex_cost_per_simulated_period_in_euro = fuel_consumption_in_liter * euro_per_unit
-            co2_per_simulated_period_in_kg = fuel_consumption_in_liter * co2_per_unit
+            co2_footprint_in_kg_per_l = emissions_and_cost_factors.oil_footprint_in_kg_per_l
+            fuel_cost_in_euro_per_l = emissions_and_cost_factors.oil_costs_in_euro_per_l
+            opex_cost_per_simulated_period_in_euro = fuel_consumption_in_liter * fuel_cost_in_euro_per_l
+            co2_per_simulated_period_in_kg = fuel_consumption_in_liter * co2_footprint_in_kg_per_l
 
-        elif self.config.fuel_loadtype == lt.LoadTypes.PELLETS:
+        elif self.fuel_loadtype == lt.LoadTypes.PELLETS:
 
-            co2_per_unit = emissions_and_cost_factors.pellet_footprint_in_kg_per_kwh
-            euro_per_unit = emissions_and_cost_factors.pellet_costs_in_euro_per_t
-            co2_per_simulated_period_in_kg = total_heat_consumed_in_kwh * co2_per_unit
-            opex_cost_per_simulated_period_in_euro = fuel_consumption_in_kg / 1000 * euro_per_unit
+            co2_footprint_in_kg_per_kwh = emissions_and_cost_factors.pellet_footprint_in_kg_per_kwh
+            fuel_cost_in_euro_per_t = emissions_and_cost_factors.pellet_costs_in_euro_per_t
+            co2_per_simulated_period_in_kg = total_heat_consumed_in_kwh * co2_footprint_in_kg_per_kwh
+            opex_cost_per_simulated_period_in_euro = fuel_consumption_in_kg / 1000 * fuel_cost_in_euro_per_t
 
-        elif self.config.fuel_loadtype == lt.LoadTypes.WOOD_CHIPS:
+        elif self.fuel_loadtype == lt.LoadTypes.WOOD_CHIPS:
 
-            co2_per_unit = emissions_and_cost_factors.wood_chip_footprint_in_kg_per_kwh
-            euro_per_unit = emissions_and_cost_factors.wood_chip_costs_in_euro_per_t
-            co2_per_simulated_period_in_kg = total_heat_consumed_in_kwh * co2_per_unit
-            opex_cost_per_simulated_period_in_euro = fuel_consumption_in_kg / 1000 * euro_per_unit
+            co2_footprint_in_kg_per_kwh = emissions_and_cost_factors.wood_chip_footprint_in_kg_per_kwh
+            fuel_cost_in_euro_per_t = emissions_and_cost_factors.wood_chip_costs_in_euro_per_t
+            co2_per_simulated_period_in_kg = total_heat_consumed_in_kwh * co2_footprint_in_kg_per_kwh
+            opex_cost_per_simulated_period_in_euro = fuel_consumption_in_kg / 1000 * fuel_cost_in_euro_per_t
 
-        elif self.config.fuel_loadtype == lt.LoadTypes.DISTRICTHEATING:
-            co2_per_unit = emissions_and_cost_factors.district_heating_footprint_in_kg_per_kwh
-            euro_per_unit = emissions_and_cost_factors.district_heating_costs_in_euro_per_kwh
-            co2_per_simulated_period_in_kg = total_heat_consumed_in_kwh * co2_per_unit
-            opex_cost_per_simulated_period_in_euro = total_heat_consumed_in_kwh * euro_per_unit
+        elif self.fuel_loadtype == lt.LoadTypes.DISTRICTHEATING:
+            co2_footprint_in_kg_per_kwh = emissions_and_cost_factors.district_heating_footprint_in_kg_per_kwh
+            fuel_cost_in_euro_per_kwh = emissions_and_cost_factors.district_heating_costs_in_euro_per_kwh
+            co2_per_simulated_period_in_kg = total_heat_consumed_in_kwh * co2_footprint_in_kg_per_kwh
+            opex_cost_per_simulated_period_in_euro = total_heat_consumed_in_kwh * fuel_cost_in_euro_per_kwh
         else:
-            raise ValueError(f"The loadtype {self.config.fuel_loadtype} is not implemented for the Fuel meter.")
+            raise ValueError(f"The loadtype {self.fuel_loadtype} is not implemented for the Fuel meter.")
 
         opex_cost_data_class = OpexCostDataClass(
             opex_energy_cost_in_euro=round(opex_cost_per_simulated_period_in_euro, 2),
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=round(co2_per_simulated_period_in_kg, 2),
             total_consumption_in_kwh=round(total_heat_consumed_in_kwh, 2),
-            loadtype=self.config.fuel_loadtype,
+            loadtype=self.fuel_loadtype,
             kpi_tag=KpiTagEnumClass.FUEL_METER,
         )
 

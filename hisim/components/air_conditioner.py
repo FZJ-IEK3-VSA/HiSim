@@ -22,14 +22,12 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiTagEnumClass,
 )
 from hisim.simulationparameters import SimulationParameters
-from hisim.loadtypes import LoadTypes, Units
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import prorate_to_simulated_period
+from hisim.loadtypes import InandOutputType, LoadTypes, Units
 from hisim.components.weather import Weather
 from hisim.components.building import Building
 from hisim import utils
-from hisim.sim_repository_singleton import (
-    SingletonSimRepository,
-    SingletonDictKeyEnum,
-)
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Marwa Alfouly, Kristina Dabrock"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -246,6 +244,8 @@ class AirConditionerConfig(ConfigBase):
 class AirConditioner(cp.Component):
     """Simulates an air conditioner that provides heating and cooling based on a modulating signal."""
 
+    cost_relevance = CostRelevance.PRICED
+
     # Input and output channel names
     OperatingState: ClassVar[str] = "State"
     ModulatingPowerSignal: ClassVar[str] = "ModulatingPowerSignal"
@@ -338,6 +338,10 @@ class AirConditioner(cp.Component):
             self.ElectricalPowerConsumption,
             LoadTypes.ELECTRICITY,
             Units.WATT,
+            # Without this flag the KPI layer never counts the air conditioner: it gathers total
+            # electricity consumption from the postprocessing flags, not from the load type, so an
+            # untagged consumer makes grid import exceed total consumption and the KPI run refuses.
+            postprocessing_flag=[InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             output_description="Electrical power consumption",
         )
         self.electrical_energy_consumption_channel = self.add_output(
@@ -389,25 +393,22 @@ class AirConditioner(cp.Component):
         simulation_parameters: SimulationParameters,
     ) -> CapexCostDataClass:
         """Return capital expenditure (CAPEX) and CO2 footprint for the simulation duration."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        duration_ratio = (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
+        prorated = prorate_to_simulated_period(
+            investment_in_euro=config.investment_costs_in_euro,
+            co2_footprint_in_kg=config.co2_emissions_kg_co2_eq,
+            maintenance_in_euro_per_year=config.maintenance_costs_in_euro_per_year,
+            lifetime_in_years=config.lifetime_in_years,
+            simulation_parameters=simulation_parameters,
         )
-
-        capex_per_period = (config.investment_costs_in_euro / config.lifetime_in_years) * duration_ratio
-        co2_per_period = (
-            config.co2_emissions_kg_co2_eq / config.lifetime_in_years
-        ) * duration_ratio
-        maintenance_cost_per_period = config.maintenance_costs_in_euro_per_year * duration_ratio
 
         return CapexCostDataClass(
             capex_investment_cost_in_euro=config.investment_costs_in_euro,
             device_co2_footprint_in_kg=config.co2_emissions_kg_co2_eq,
             lifetime_in_years=config.lifetime_in_years,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_period,
-            device_co2_footprint_for_simulated_period_in_kg=co2_per_period,
-            maintenance_costs_in_euro=config.maintenance_costs_in_euro_per_year,
-            maintenance_cost_per_simulated_period_in_euro=maintenance_cost_per_period,
+            capex_investment_cost_for_simulated_period_in_euro=prorated.investment_for_simulated_period_in_euro,
+            device_co2_footprint_for_simulated_period_in_kg=prorated.co2_footprint_for_simulated_period_in_kg,
+            maintenance_costs_in_euro_per_year=config.maintenance_costs_in_euro_per_year,
+            maintenance_cost_per_simulated_period_in_euro=prorated.maintenance_for_simulated_period_in_euro,
             kpi_tag=KpiTagEnumClass.AIR_CONDITIONER,
         )
 
@@ -462,15 +463,6 @@ class AirConditioner(cp.Component):
         )
         self.heating_capacity_coef = np.polyfit(
             self.config.t_out_heating_ref, self.config.heating_capacity_ref, 1
-        )
-
-        # Save coefficients for use by other components
-        SingletonSimRepository().set_entry(
-            SingletonDictKeyEnum.COEFFICIENT_OF_PERFORMANCE_HEATING,
-            self.cop_coef,
-        )
-        SingletonSimRepository().set_entry(
-            SingletonDictKeyEnum.ENERGY_EFFICIENY_RATIO_COOLING, self.eer_coef
         )
 
     # Interpolation functions
@@ -812,6 +804,8 @@ class AirConditionerControllerState:
 
 class AirConditionerController(cp.Component):
     """Controller component for modulating air conditioner behavior based on temperature."""
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     TemperatureIndoorAir: ClassVar[str] = "TemperatureIndoorAir"
     ElectricityInput: ClassVar[str] = "ElectricityInput"

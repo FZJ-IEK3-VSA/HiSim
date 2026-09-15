@@ -12,7 +12,7 @@ from hisim.building_sizer_utils.interface_configs.modular_household_config impor
     read_in_configs,
 )
 from hisim.simulator import SimulationParameters
-from hisim.config import SizingContext
+from hisim.config import SizingContext, concrete
 from hisim.components import (
     gas_meter,
     generic_boiler,
@@ -24,7 +24,7 @@ from hisim.components import (
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import electricity_meter
-from hisim import loadtypes, log
+from hisim import log
 
 
 __authors__ = "Kristina Dabrock"
@@ -66,13 +66,12 @@ def setup_function(
     year = 2021
     seconds_per_timestep = 60 * 15
 
-    config_filename = my_sim.my_module_config
     # try reading energ system and archetype configs
     my_config = read_in_configs(my_sim.my_module_config)
     if my_config is None:
         my_config = ModularHouseholdConfig().get_default_config_for_household_gas_solar_thermal()
         log.warning(
-            f"Could not read the modular household config from path '{config_filename}'. Using the gas ans solar thermal household default config instead."
+            "No modular household config was given. Using the gas and solar thermal household default config instead."
         )
     assert my_config.archetype_config_ is not None
     assert my_config.energy_system_config_ is not None
@@ -101,33 +100,49 @@ def setup_function(
     # Build Basic Components
 
     # Building
-    my_building_config = building.BuildingConfig.preset_standard("Building")
+    # The weather config is created first: the building and PV configs copy its identity
+    # (weather_identity) and must have it before those components are built. The weather
+    # component itself is still added further down, so the simulator's component order is unchanged.
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
+
+    my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_information = building.BuildingInformation(config=my_building_config)
+    my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(
         config=my_building_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
     my_weather = weather.Weather(
         config=my_weather_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Heat Distribution Controller
-    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
-        set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
-        set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+    my_heat_distribution_controller_config = (
+        heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
+            "HeatDistributionController"
+        ).resolve(
+            SizingContext(
+                heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+                conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+                heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+                set_heating_temperature_in_celsius=(
+                    my_building_information.set_heating_temperature_for_building_in_celsius
+                ),
+                set_cooling_temperature_in_celsius=(
+                    my_building_information.set_cooling_temperature_for_building_in_celsius
+                ),
+            )
+        )
     )
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
@@ -140,7 +155,10 @@ def setup_function(
 
     # Gas Heater (for space heating and DHW) - Component
     my_gas_heater_config = generic_boiler.GenericBoilerConfig.preset_condensing_gas("CondensingGasBoiler").resolve(
-        SizingContext(heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt)
+        SizingContext(
+            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            number_of_apartments=number_of_apartments,
+        )
     )
     my_gas_heater = generic_boiler.GenericBoiler(
         config=my_gas_heater_config,
@@ -148,22 +166,33 @@ def setup_function(
     )
 
     # Gas Heater (for space heating and DHW) - Controller
-    my_gas_heater_controller_config = (
-        generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-            minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt,
-            with_domestic_hot_water_preparation=True,
+    my_gas_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.preset_modulating(
+        "ModulatingBoilerController"
+    ).resolve(
+        SizingContext(
+            minimal_thermal_power_in_watt=concrete(my_gas_heater_config.minimal_thermal_power_in_watt),
+            maximal_thermal_power_in_watt=concrete(my_gas_heater_config.maximal_thermal_power_in_watt),
         )
     )
+    my_gas_heater_controller_config.with_domestic_hot_water_preparation = True
     my_gas_heater_controller = generic_boiler.GenericBoilerController(
         my_simulation_parameters=my_simulation_parameters,
         config=my_gas_heater_controller_config,
     )
 
     # Heat Water Storage
-    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
-        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER,
+    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer(
+        "SimpleHotWaterStorage"
+    )
+    # The litres-per-kilowatt figure is per kind of generator, and the volume law reads the field,
+    # so the option is set on the preset before the configuration is resolved.
+    my_simple_heat_water_storage_config.sizing_option = (
+        simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
+    )
+    my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
+        SizingContext(
+            maximal_thermal_power_in_watt=concrete(my_gas_heater_config.maximal_thermal_power_in_watt)
+        )
     )
 
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
@@ -173,7 +202,7 @@ def setup_function(
 
     # Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(
+        heat_distribution_system.HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").resolve(
             SizingContext(
                 water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                 conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
@@ -187,8 +216,10 @@ def setup_function(
     )
 
     # Solar thermal for DHW
-    my_solar_thermal_system_config = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(
-        area_m2=4
+    my_solar_thermal_system_config = (
+        solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system().resolve(
+            SizingContext(number_of_apartments=number_of_apartments)
+        )
     )
     my_solar_thermal_system = solar_thermal_system.SolarThermalSystem(
         config=my_solar_thermal_system_config,
@@ -206,8 +237,8 @@ def setup_function(
     )
 
     # DHW Storage
-    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
-        number_of_apartments=number_of_apartments
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(
+        SizingContext(number_of_apartments=my_building_information.number_of_apartments)
     )
 
     my_dhw_storage = simple_water_storage.SimpleDHWStorage(
@@ -218,26 +249,27 @@ def setup_function(
     # Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
+        config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
     )
 
     # Gas Meter
     my_gas_meter = gas_meter.GasMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=gas_meter.GasMeterConfig.get_gas_meter_default_config(),
+        # The meter measures what the boiler burns, so the carrier is a fact and not a
+        # second statement of the same thing.
+        config=gas_meter.GasMeterConfig.preset_standard("GasMeter").resolve(
+            SizingContext(energy_carrier=my_gas_heater_config.energy_carrier)
+        ),
     )
 
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 
-    my_electricity_meter.add_component_input_and_connect(
-        source_object_name=my_occupancy.component_name,
-        source_component_output=my_occupancy.ElectricalPowerConsumption,
-        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
-        source_unit=loadtypes.Units.WATT,
-        source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-        source_weight=999,
-    )
+    # The occupancy is not fed to the electricity meter here. The meter declares that exact
+    # connection itself (electricity_meter.py, get_default_connections_from_utsp_occupancy) and is
+    # registered with connect_automatically below, so wiring it by hand as well fed one source into
+    # one meter twice -- and hisim/simulator.py does not de-duplicate, so the sum really was taken
+    # twice. That is what made the relative electricity demand exceed 100 % and stopped the KPI run.
 
     my_dhw_storage.connect_input(
         my_dhw_storage.WaterConsumption,

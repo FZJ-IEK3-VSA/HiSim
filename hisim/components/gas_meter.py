@@ -7,7 +7,7 @@ post-processing cost and emission computation.
 
 # clean
 from dataclasses import dataclass
-from typing import ClassVar, List, Optional
+from typing import ClassVar, List, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -16,7 +16,23 @@ from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim.component import ComponentInput, ComponentOutput, OpexCostDataClass, CapexCostDataClass
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import (
+    ComponentID,
+    ConfigBase,
+    DisplayConfig,
+    Sizable,
+    Size,
+    SizingLaw,
+    concrete,
+    preset,
+    sized_field,
+)
+from hisim.config.channels import (
+    DispatchRule,
+    DynamicConnectionChannel,
+    PortTypeCompatibility,
+    ResolvedDynamicConnection,
+)
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
@@ -26,6 +42,7 @@ from hisim.dynamic_component import (
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+from hisim.economics.facts import CostRelevance
 
 
 @dataclass_json
@@ -33,8 +50,13 @@ from hisim.postprocessing.cost_and_emission_computation.capex_computation import
 class GasMeterConfig(ConfigBase):
     """Configuration dataclass for the GasMeter component.
 
-    Holds the building name, gas load type (GAS or GREEN_HYDROGEN), and optional
-    CAPEX/emission parameters used by the cost computation post-processing.
+    Holds the component identity, the gas this meter measures (``GAS`` or
+    ``GREEN_HYDROGEN``) and the optional CAPEX/emission parameters the cost post-processing
+    reads. The named default is :meth:`preset_standard`, and it leaves the carrier ``AUTO``:
+    a meter measures whatever the generator beside it burns, so :data:`CARRIER_LAW` copies
+    the carrier off that generator's configuration instead of the author stating it twice.
+    Pinning ``gas_loadtype`` is still allowed and is what a system with no converted
+    generator in it does.
     """
 
     @classmethod
@@ -42,9 +64,14 @@ class GasMeterConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return str(GasMeter.get_full_classname())
 
+    #: Sizing law of ``gas_loadtype``: the carrier is copied from the generator that feeds
+    #: this meter, which contributes it as the ``energy_carrier`` fact (D-15 (b)). Named as a
+    #: ClassVar so the field declaration reads as one line. A gas boiler beside a meter
+    #: configured for green hydrogen is what the copy makes unstateable; the meter's own
+    #: ``__init__`` still refuses a carrier it cannot account.
+    CARRIER_LAW: ClassVar[SizingLaw] = Size.ENERGY_CARRIER
+
     component_id: ComponentID
-    total_energy_from_grid_in_kwh: float
-    gas_loadtype: lt.LoadTypes
     #: CO2 footprint of investment in kg
     device_co2_footprint_in_kg: Optional[float]
     #: cost for investment in Euro
@@ -55,20 +82,31 @@ class GasMeterConfig(ConfigBase):
     maintenance_costs_in_euro_per_year: Optional[float]
     # subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: Optional[float]
+    #: The gas this meter measures. Sizable: left ``AUTO`` it is copied from the generator by
+    #: :data:`CARRIER_LAW`. It is declared after the capex fields because a field with a
+    #: default may not precede one without; nothing constructs the class positionally.
+    gas_loadtype: Sizable[lt.LoadTypes] = sized_field(rule=CARRIER_LAW, value_type=lt.LoadTypes)
 
+    @preset
     @classmethod
-    def get_gas_meter_default_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-        gas_loadtype: lt.LoadTypes = lt.LoadTypes.GAS
-    ) -> "GasMeterConfig":
-        """Gets a default GasMeter."""
-        if component_id is None:
-            component_id = ComponentID(name="GasMeter")
-        return GasMeterConfig(
-            component_id=component_id,
-            total_energy_from_grid_in_kwh=0.0,
-            gas_loadtype=gas_loadtype,
+    def preset_standard(cls, name: str) -> "GasMeterConfig":
+        """The gas meter of a household, measuring whatever its generator burns.
+
+        The only preset the class has. It fixes nothing but the capex fields, which stay
+        ``None`` so that post-processing looks the device up in the cost database, exactly as
+        the deleted ``get_gas_meter_default_config`` factory did. ``gas_loadtype`` stays
+        ``AUTO`` so :data:`CARRIER_LAW` copies it from the generator; there are deliberately no
+        ``gas``/``hydrogen`` presets pinning a carrier, because a preset that pins one is a
+        second place to state a fact the generator already states (D-15 (b)).
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            GasMeterConfig: The preset configuration, with the carrier unsized.
+        """
+        return cls(
+            component_id=ComponentID(name=name),
             # capex and device emissions are calculated in get_cost_capex function by default
             device_co2_footprint_in_kg=None,
             investment_costs_in_euro=None,
@@ -85,6 +123,8 @@ class GasMeter(DynamicComponent):
     So far only gas consumers are represented here but gas producers can be added here too.
     """
 
+    cost_relevance = CostRelevance.METER
+
     # Outputs
     GasAvailable: ClassVar[str] = "GasAvailable"
     GasFromGrid: ClassVar[str] = "GasFromGrid"
@@ -92,6 +132,44 @@ class GasMeter(DynamicComponent):
     GasProduction: ClassVar[str] = "GasProduction"
     CumulativeConsumption: ClassVar[str] = "CumulativeConsumption"
     CumulativeProduction: ClassVar[str] = "CumulativeProduction"
+
+    #: Stable key of the channel carrying gas a participant feeds into the system.
+    PRODUCTION_CHANNEL: ClassVar[str] = "production"
+
+    #: Stable key of the channel carrying gas a participant burned.
+    CONSUMPTION_UNCONTROLLED_CHANNEL: ClassVar[str] = "consumption_uncontrolled"
+
+    #: The two flows this meter understands, declared so that an energy-system file can address a
+    #: gas burner or a gas producer at it. The consumption channel's tag, unit and monitored-only
+    #: weight are the ones :meth:`get_default_connections_from_generic_gas_heater` already builds
+    #: and :meth:`i_simulate` already queries; the production channel's are queried by
+    #: :meth:`i_simulate` alone, since no default connection builds a producer and an explicit
+    #: energy-system file is the only thing that wires one today. Declaring both adds no wiring
+    #: and changes none.
+    #:
+    #: The load type is the wildcard on both, because which gas this meter measures is the
+    #: meter's own ``gas_loadtype`` and the burner's own carrier — natural gas in one household,
+    #: green hydrogen in the next — and not a property of the flow the channel describes. The
+    #: unit stays strict: both sums are in watt-hours whichever gas it is.
+    #:
+    #: Dispatch is forbidden on both. A meter is a pure aggregator: it has no control authority
+    #: and no per-participant output to send a signal on.
+    CHANNELS: Tuple[DynamicConnectionChannel, ...] = (
+        DynamicConnectionChannel(
+            key=PRODUCTION_CHANNEL,
+            tags=frozenset({lt.InandOutputType.GAS_PRODUCTION}),
+            load_type=lt.LoadTypes.ANY,
+            unit=lt.Units.WATT_HOUR,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+        DynamicConnectionChannel(
+            key=CONSUMPTION_UNCONTROLLED_CHANNEL,
+            tags=frozenset({lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED}),
+            load_type=lt.LoadTypes.ANY,
+            unit=lt.Units.WATT_HOUR,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+    )
 
     def __init__(
         self,
@@ -115,15 +193,19 @@ class GasMeter(DynamicComponent):
             my_config=config,
             my_display_config=my_display_config,
         )
+        #: The carrier this meter accounts, read off the configuration once. The field is
+        #: sizable, so a law may have filled it in; ``concrete`` is the read site's statement
+        #: that it has been resolved by the time a component is built.
+        self.gas_loadtype: lt.LoadTypes = concrete(self.config.gas_loadtype)
         # check if component has valid gas loadtype
-        if self.config.gas_loadtype not in [lt.LoadTypes.GAS, lt.LoadTypes.GREEN_HYDROGEN]:
-            raise ValueError(f"GasMeter {self.component_name} has invalid gas loadtype: {self.config.gas_loadtype}. "
+        if self.gas_loadtype not in [lt.LoadTypes.GAS, lt.LoadTypes.GREEN_HYDROGEN]:
+            raise ValueError(f"GasMeter {self.component_name} has invalid gas loadtype: {self.gas_loadtype}. "
                              f"Either use {lt.LoadTypes.GAS} or {lt.LoadTypes.GREEN_HYDROGEN} or add new gas_type")
 
         self.production_inputs: List[ComponentInput] = []
         self.consumption_uncontrolled_inputs: List[ComponentInput] = []
 
-        self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        self.timestep_duration_in_s = self.my_simulation_parameters.seconds_per_timestep
         # Component has states
         self.state = GasMeterState(cumulative_production_in_watt_hour=0, cumulative_consumption_in_watt_hour=0)
         self.previous_state = self.state.self_copy()
@@ -132,7 +214,7 @@ class GasMeter(DynamicComponent):
         self.gas_available_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.GasAvailable,
-            load_type=self.config.gas_loadtype,
+            load_type=self.gas_loadtype,
             unit=lt.Units.WATT,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.GasAvailable} will follow.",
@@ -141,7 +223,7 @@ class GasMeter(DynamicComponent):
         self.gas_from_grid_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.GasFromGrid,
-            load_type=self.config.gas_loadtype,
+            load_type=self.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.GasFromGrid} will follow.",
@@ -151,7 +233,7 @@ class GasMeter(DynamicComponent):
         self.gas_consumption_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.GasConsumption,
-            load_type=self.config.gas_loadtype,
+            load_type=self.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.GasConsumption} will follow.",
@@ -160,7 +242,7 @@ class GasMeter(DynamicComponent):
         self.gas_production_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.GasProduction,
-            load_type=self.config.gas_loadtype,
+            load_type=self.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.GasProduction} will follow.",
@@ -169,7 +251,7 @@ class GasMeter(DynamicComponent):
         self.cumulative_gas_consumption_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.CumulativeConsumption,
-            load_type=self.config.gas_loadtype,
+            load_type=self.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeConsumption} will follow.",
@@ -178,13 +260,68 @@ class GasMeter(DynamicComponent):
         self.cumulative_gas_production_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.CumulativeProduction,
-            load_type=self.config.gas_loadtype,
+            load_type=self.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeProduction} will follow.",
         )
 
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_gas_heater())
+
+    def resolve_dynamic_connections(self, connections: List[ResolvedDynamicConnection]) -> None:
+        """Checks the carrier of every feed against this meter's own, then creates the ports.
+
+        Both channels this meter declares wildcard the load type, because they are class-level
+        declarations and a class cannot know which gas the instance in a given household was
+        configured for. The instance does know: :meth:`get_cost_opex` prices and books emissions
+        for ``gas_loadtype`` alone. Nothing between the two would notice a green-hydrogen
+        feed arriving at a meter configured for natural gas — the numbers would be summed, priced
+        as natural gas and reported without a word — so the mismatch is refused here, where the
+        configured carrier and the feed's carrier are both in hand for the first time.
+
+        The check runs over the whole batch before a single port is created, so a file this meter
+        refuses leaves the component exactly as it was rather than half grown.
+
+        Args:
+            connections: The resolved feeds, already validated against this component's channels
+                by the energy-system resolver.
+
+        Raises:
+            ValueError: If a feed carries a concrete load type this meter is not configured to
+                measure. The resolver turns it into a located energy-system error.
+        """
+        self._check_feeds_carry_the_configured_gas(connections)
+        super().resolve_dynamic_connections(connections)
+
+    def _check_feeds_carry_the_configured_gas(
+        self, connections: List[ResolvedDynamicConnection]
+    ) -> None:
+        """Refuses a feed whose carrier this meter would measure but price as something else.
+
+        The legacy default connections type their source by this meter's own ``gas_loadtype``, so
+        a setup building them by hand never produced this mismatch. An energy-system file
+        addresses feeds at the meter by tag alone and can therefore hand it any gas burner or
+        producer in the system, which is exactly the freedom that has to be paid for with this
+        check. A source port typed as the wildcard stays accepted, because that is what the
+        wildcard is for: the meter's configuration, not the port, decides the carrier.
+
+        Args:
+            connections: The resolved feeds to check, in resolution order.
+
+        Raises:
+            ValueError: On the first feed whose carrier disagrees with ``gas_loadtype``,
+                naming the participant, its output and both carriers.
+        """
+        for connection in connections:
+            carrier = connection.source_port.load_type
+            if PortTypeCompatibility.load_types_agree(carrier, self.gas_loadtype):
+                continue
+            raise ValueError(
+                f"the feed '{connection.source_name}.{connection.source_output}' carries "
+                f"'{carrier.name}', but this meter is configured to measure and price "
+                f"'{self.gas_loadtype.name}' (gas_loadtype); configure the meter for the "
+                "carrier it meters, or feed it the matching source."
+            )
 
     def get_default_connections_from_generic_gas_heater(
         self,
@@ -202,7 +339,7 @@ class GasMeter(DynamicComponent):
                 source_component_class=GenericBoiler,
                 source_class_name=gas_heater_class_name,
                 source_component_field_name=GenericBoiler.EnergyDemandSh,
-                source_load_type=self.config.gas_loadtype,
+                source_load_type=self.gas_loadtype,
                 source_unit=lt.Units.WATT_HOUR,
                 source_tags=[lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED],
                 source_weight=999,
@@ -213,7 +350,7 @@ class GasMeter(DynamicComponent):
                 source_component_class=GenericBoiler,
                 source_class_name=gas_heater_class_name,
                 source_component_field_name=GenericBoiler.EnergyDemandDhw,
-                source_load_type=self.config.gas_loadtype,
+                source_load_type=self.gas_loadtype,
                 source_unit=lt.Units.WATT_HOUR,
                 source_tags=[lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED],
                 source_weight=999,
@@ -247,10 +384,8 @@ class GasMeter(DynamicComponent):
         """Simulate the grid energy balancer."""
 
         if timestep == 0:
-            self.production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.GAS_PRODUCTION])
-            self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(
-                tags=[lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED]
-            )
+            self.production_inputs = self.get_channel_inputs(self.PRODUCTION_CHANNEL)
+            self.consumption_uncontrolled_inputs = self.get_channel_inputs(self.CONSUMPTION_UNCONTROLLED_CHANNEL)
 
         # GAS #
 
@@ -328,21 +463,21 @@ class GasMeter(DynamicComponent):
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year, self.my_simulation_parameters.country
         )
-        if self.config.gas_loadtype == lt.LoadTypes.GAS:
-            co2_per_unit = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
-            euro_per_unit = emissions_and_cost_factors.gas_costs_in_euro_per_kwh
-        elif self.config.gas_loadtype == lt.LoadTypes.GREEN_HYDROGEN:
-            co2_per_unit = emissions_and_cost_factors.green_hydrogen_gas_footprint_in_kg_per_kwh
-            euro_per_unit = emissions_and_cost_factors.green_hydrogen_gas_costs_in_euro_per_kwh
+        if self.gas_loadtype == lt.LoadTypes.GAS:
+            co2_footprint_in_kg_per_kwh = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
+            gas_cost_in_euro_per_kwh = emissions_and_cost_factors.gas_costs_in_euro_per_kwh
+        elif self.gas_loadtype == lt.LoadTypes.GREEN_HYDROGEN:
+            co2_footprint_in_kg_per_kwh = emissions_and_cost_factors.green_hydrogen_gas_footprint_in_kg_per_kwh
+            gas_cost_in_euro_per_kwh = emissions_and_cost_factors.green_hydrogen_gas_costs_in_euro_per_kwh
 
-        opex_cost_per_simulated_period_in_euro = total_energy_from_grid_in_kwh * euro_per_unit
-        co2_per_simulated_period_in_kg = total_energy_from_grid_in_kwh * co2_per_unit
+        opex_cost_per_simulated_period_in_euro = total_energy_from_grid_in_kwh * gas_cost_in_euro_per_kwh
+        co2_per_simulated_period_in_kg = total_energy_from_grid_in_kwh * co2_footprint_in_kg_per_kwh
         opex_cost_data_class = OpexCostDataClass(
             opex_energy_cost_in_euro=opex_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            total_consumption_in_kwh=self.config.total_energy_from_grid_in_kwh,
-            loadtype=self.config.gas_loadtype,
+            total_consumption_in_kwh=total_energy_from_grid_in_kwh,
+            loadtype=self.gas_loadtype,
             kpi_tag=KpiTagEnumClass.GAS_METER
         )
 
@@ -358,7 +493,7 @@ class GasMeter(DynamicComponent):
         total_energy_consumption_in_kwh: Optional[float] = None
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.component_name and output.load_type == self.config.gas_loadtype and output.unit == lt.Units.WATT_HOUR:
+            if output.component_name == self.component_name and output.load_type == self.gas_loadtype and output.unit == lt.Units.WATT_HOUR:
                 if output.field_name == self.GasFromGrid:
                     total_energy_from_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
                 elif output.field_name == self.GasConsumption:

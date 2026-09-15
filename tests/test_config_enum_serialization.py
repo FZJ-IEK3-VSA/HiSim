@@ -66,21 +66,21 @@ class ConfigEnumSerializationCases:
 
     #: Config classes owning at least one enum-typed field, with a default factory.
     CONFIG_FACTORIES: Dict[str, Any] = {
-        "WeatherConfig": lambda: weather.WeatherConfig.get_default(weather.LocationEnum.AACHEN),
-        "PVSystemConfig": generic_pv_system.PVSystemConfig.get_default_pv_system,
+        "WeatherConfig": lambda: weather.WeatherConfig.preset_aachen("Weather"),
+        "PVSystemConfig": lambda: generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem"),
         "GenericBoilerConfig": lambda: (
             generic_boiler.GenericBoilerConfig.preset_condensing_gas_12kw("CondensingGasBoiler")
         ),
         "GenericOilBoilerConfig": lambda: generic_boiler.GenericBoilerConfig.preset_oil_12kw("ConventionalOilBoiler"),
-        "SimpleHotWaterStorageConfig": (
-            simple_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config
+        "SimpleHotWaterStorageConfig": lambda: (
+            simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer("SimpleHotWaterStorage")
         ),
         "MoreAdvancedHeatPumpHPLibConfig": (
             more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_default_generic_advanced_hp_lib
         ),
         "SimpleHeatSourceConfig": simple_heat_source.SimpleHeatSourceConfig.get_default_config_const_power,
         "HeatDistributionConfig": lambda: (
-            heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(
+            heat_distribution_system.HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").resolve(
                 SizingContext(
                     water_mass_flow_rate_in_kg_per_second=0.5,
                     conditioned_floor_area_in_m2=120.0,
@@ -89,11 +89,16 @@ class ConfigEnumSerializationCases:
             )
         ),
         "HeatDistributionControllerConfig": lambda: (
-            heat_distribution_system.HeatDistributionControllerConfig
-            .get_default_heat_distribution_controller_config(
-                heating_load_of_building_in_watt=8000.0,
-                set_heating_temperature_for_building_in_celsius=20.0,
-                set_cooling_temperature_for_building_in_celsius=25.0,
+            heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
+                "HeatDistributionController"
+            ).resolve(
+                SizingContext(
+                    heating_load_in_watt=8000.0,
+                    conditioned_floor_area_in_m2=120.0,
+                    heating_reference_temperature_in_celsius=-7.0,
+                    set_heating_temperature_in_celsius=20.0,
+                    set_cooling_temperature_in_celsius=25.0,
+                )
             )
         ),
     }

@@ -1,0 +1,809 @@
+"""Tests for the result view-model (cost-spec-v2 §2.4, W4.1).
+
+Every view is pinned against an *independent* recomputation — brute-force loops written out
+here, never a second call into the view — on one nontrivial evaluated result: banded cost data,
+two priced subjects, a loan, catalog subsidies, feed-in revenue and an actor allocation.
+
+**Surface.** `hisim/economics/views.py`: the ~15 derivations that used to happen on the fly inside
+chart and table code and now live as pure functions of a `LifecycleCostResult`. The view-model is
+what makes "presentation never computes" enforceable (the import lint checks the other half), so
+these functions are the *only* place a displayed number may be derived — and therefore the place
+that has to be verified hardest.
+
+**How it covers it.** Each test recomputes the view's answer from the timeline with an explicit
+loop over entries — the same information, arrived at by the dumbest possible route — and compares.
+That is deliberate: a view and its test written in the same style would agree even when both are
+wrong. Where a closed form exists it is spelled out rather than imported (the annuity factor in
+`test_equivalent_annual_costs_are_npv_times_annuity`, the discount factor `(1+i)**year`). Beyond
+per-view equality the file pins the properties a reviewer actually relies on: the cumulative
+curve ends exactly at the headline NPV, the annual matrix's row sums are the liquidity series,
+folding categories into display groups loses nothing and refuses gaps, the detail table accounts
+for the whole timeline, and the payer pivot's row sums are `npv_by_payer`.
+
+**Error class.** A failure here is a *derivation* bug in the boundary layer between engine and
+presentation — the number the engine computed is fine, the number a chart would draw is not. It
+is distinct from a formula bug (the evaluator's own arithmetic, `test_economics_engine.py`) and
+from a rendering bug (`test_economics_reporting.py` / the goldens). The most consequential cases
+are called out by name: the `min(subsidy, gross)` clamp that used to be duplicated in two chart
+helpers (§7 B8), the D2 switch of `total_subsidies_received` to a timeline-based figure, and the
+S4b decision to scope `year_zero_build_up` like the table beside it.
+"""
+
+# clean
+
+from typing import Dict
+
+import pytest
+
+from hisim.economics import views
+from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.catalog_entries import CostDataError
+from hisim.economics.database import CostDatabase
+from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs, SubjectCostFacts
+from hisim.economics.facts import BillingDeterminants, ComponentCostFacts
+from hisim.economics.financing import FinancingPlan
+from hisim.economics.parameters import EconomicParameters
+from hisim.economics.perspectives import (
+    ActorScope,
+    InstallationContext,
+    Perspective,
+    SubsidyMode,
+)
+from hisim.economics.subsidies import (
+    ApplicantActor,
+    ApplicantProfile,
+    SubsidyBuildingContext,
+    SubsidyCatalog,
+    SubsidyContext,
+    SubsidySchemeLabels,
+)
+from hisim.economics.timeline import Actor, CostCategory
+from hisim.economics.uncertainty import Slot, UncertainValue
+from hisim.loadtypes import ComponentType, Units
+
+pytestmark = pytest.mark.base
+
+
+def make_inputs() -> EvaluationInputs:
+    """Two priced subjects, a banded heat pump, bought *and* sold electricity.
+
+    Every element here exists to keep one view from being tested on a degenerate case: the band on
+    the heat pump makes the min/max slots differ, the second subject makes the per-subject views
+    non-trivial, the sold electricity produces a FEED_IN_REVENUE entry (the one flow shown in a
+    bill but excluded from its effective price), and the applicant/building context is what the DE
+    catalog needs before it will award anything. The physical fields at the bottom — heat demand,
+    areas, cold rent, specific emissions — feed the per-area, LCOH and actor-split views.
+    """
+    heat_pump = ComponentCostFacts(
+        asset_class=ComponentType.HEAT_PUMP,
+        size=10.0,
+        size_unit=Units.KILOWATT,
+        investment_cost_override_in_euro=UncertainValue(16000.0, 12800.0, 20800.0),
+        lifetime_override_in_years=18.0,
+        override_source="test",
+        technical_attributes={"scop": 4.2, "refrigerant": "R290"},
+    )
+    windows = ComponentCostFacts(
+        asset_class=ComponentType.WINDOWS_TRIPLE_GLAZED,
+        size=28.0,
+        size_unit=Units.SQUARE_METER,
+    )
+    return EvaluationInputs(
+        simulation_year=2026,
+        simulated_period_fraction=1.0,
+        cost_facts=[
+            SubjectCostFacts("HeatPump", heat_pump),
+            SubjectCostFacts("Envelope.Windows", windows),
+        ],
+        billing=[
+            BillingDeterminants(
+                carrier=EnergyCarrier.ELECTRICITY,
+                energy_bought_in_kwh=5000.0,
+                energy_sold_in_kwh=2500.0,
+            )
+        ],
+        subsidy_context=SubsidyContext(
+            applicant=ApplicantProfile(
+                actor=ApplicantActor.OWNER_OCCUPIER,
+                taxable_household_income_in_euro=35000.0,
+                main_residence=True,
+            ),
+            building=SubsidyBuildingContext(
+                construction_year=1985,
+                dwelling_units=1,
+                residential_floor_area_in_m2=150.0,
+                commercial_floor_area_in_m2=0.0,
+            ),
+        ),
+        annual_heat_demand_in_kwh=15000.0,
+        living_area_in_m2=150.0,
+        heated_floor_area_in_m2=160.0,
+        current_cold_rent_in_euro_per_m2_month=8.5,
+        building_specific_emissions_in_kg_per_m2_a=25.0,
+    )
+
+
+#: The workhorse perspective: subsidised and 60 % financed, so the timeline carries SUBSIDY,
+#: LOAN_DISBURSEMENT, LOAN_INTEREST and LOAN_PRINCIPAL entries and the loan-amortization and
+#: subsidy views have something to describe. Actor scope stays SYSTEM — the split is exercised by
+#: LANDLORD below, because a scoped result answers several views differently.
+FINANCED = Perspective(
+    id="financed_net",
+    installation_context=InstallationContext.GREENFIELD,
+    subsidy_mode=SubsidyMode.full(),
+    financing=FinancingPlan(financed_share=0.6, nominal_interest_rate=0.035, term_in_years=12),
+)
+
+#: The allocated counterpart: a landlord scope runs the DE_2024 ruleset, so entries carry real
+#: payer tags and the payer pivot, the zero-sum reference and the scoped year-0 build-up become
+#: testable. Unfinanced, to keep the allocation the only difference from FINANCED.
+LANDLORD = Perspective(
+    id="landlord",
+    installation_context=InstallationContext.GREENFIELD,
+    actor_scope=ActorScope.LANDLORD,
+    subsidy_mode=SubsidyMode.full(),
+)
+
+
+@pytest.fixture(name="result", scope="module")
+def fixture_result():
+    """A financed, subsidised, banded greenfield result with feed-in revenue.
+
+    The single object almost every test in this file reads. It is built from the shipped database
+    and the shipped DE catalog on purpose — the views must survive real data with its awkward
+    edges (schedules, caps, degenerate rows) — and `TestFixtureIsNontrivial` asserts up front that
+    it really does contain all the mechanisms, since a view tested on an empty timeline passes
+    vacuously. Module-scoped: one evaluation for the whole file.
+    """
+    evaluator = EconomicEvaluator(
+        CostDatabase(), EconomicParameters(country="DE", price_basis_year=2026), SubsidyCatalog.load("DE")
+    )
+    return evaluator.evaluate(make_inputs(), FINANCED)
+
+
+@pytest.fixture(name="allocated", scope="module")
+def fixture_allocated():
+    """The same inputs under a landlord scope, so the timeline carries payer tags (§6).
+
+    Separate from `result` because scoping changes what several views legitimately answer: the
+    payer pivot only exists here, and `year_zero_build_up` must be read on the *scoped* timeline
+    to stay consistent with the investment table beside it. Same inputs as `result`, so any
+    difference between the two fixtures is attributable to the allocation alone.
+    """
+    evaluator = EconomicEvaluator(
+        CostDatabase(), EconomicParameters(country="DE", price_basis_year=2026), SubsidyCatalog.load("DE")
+    )
+    return evaluator.evaluate(make_inputs(), LANDLORD)
+
+
+class TestFixtureIsNontrivial:
+    """The evidence value of every test below rests on this."""
+
+    def test_fixture_exercises_every_mechanism(self, result, allocated):
+        """Bands, two subjects, a loan, subsidies, feed-in and an allocation are all present."""
+        assert not result.total_npv_in_euro.is_exact()
+        assert len(result.component_breakdowns) >= 3  # 2 devices + the carrier(s)
+        categories = {entry.category for entry in result.timeline.entries}
+        assert CostCategory.LOAN_INTEREST in categories
+        assert CostCategory.LOAN_PRINCIPAL in categories
+        assert CostCategory.SUBSIDY in categories
+        assert CostCategory.FEED_IN_REVENUE in categories
+        assert result.subsidy_decisions
+        assert {entry.payer for entry in allocated.timeline.entries} != {Actor.SYSTEM}
+
+
+class TestTimeSeriesViews:
+    """Cumulative NPV, the annual category matrix, loan amortization, cumulative CO2."""
+
+    def test_cumulative_discounted_cost_matches_manual_discounting(self, result):
+        """Independent cumulative loop per slot."""
+        horizon = result.parameters.observation_period_in_years
+        interest = result.parameters.interest_rate
+        series = views.cumulative_discounted_cost_series(result)
+        for slot, attribute in ((Slot.LOW, "minimum"), (Slot.BEST_ESTIMATE, "best_estimate"), (Slot.HIGH, "maximum")):
+            expected, running = [], 0.0
+            for year in range(horizon + 1):
+                for entry in result.scoped_timeline().entries:
+                    if entry.year == year:
+                        running += getattr(entry.amount_in_euro, attribute) / ((1 + interest) ** year)
+                expected.append(running)
+            assert series[slot] == pytest.approx(expected)
+
+    def test_cumulative_series_ends_at_the_reported_npv(self, result):
+        """The chart's last point is the headline NPV, in every slot."""
+        series = views.cumulative_discounted_cost_series(result)
+        npv = result.total_npv_in_euro
+        assert series[Slot.LOW][-1] == pytest.approx(npv.minimum)
+        assert series[Slot.BEST_ESTIMATE][-1] == pytest.approx(npv.best_estimate)
+        assert series[Slot.HIGH][-1] == pytest.approx(npv.maximum)
+
+    def test_annual_category_matrix_matches_manual_accumulation(self, result):
+        """Year x category, brute-forced from the scoped timeline."""
+        horizon = result.parameters.observation_period_in_years
+        matrix = views.nominal_annual_matrix_by_category(result)
+        assert len(matrix) == horizon + 1
+        for year in range(horizon + 1):
+            expected: Dict[CostCategory, float] = {}
+            for entry in result.scoped_timeline().entries:
+                if entry.year == year:
+                    expected[entry.category] = (
+                        expected.get(entry.category, 0.0) + entry.amount_in_euro.best_estimate
+                    )
+            assert matrix[year] == pytest.approx(expected)
+
+    def test_annual_matrix_row_sums_are_the_liquidity_view(self, result):
+        """Row sums reproduce `annual_cost_series_nominal_in_euro` (same flows, no grouping)."""
+        matrix = views.nominal_annual_matrix_by_category(result)
+        for year, row in enumerate(matrix):
+            assert sum(row.values()) == pytest.approx(
+                result.annual_cost_series_nominal_in_euro[year].best_estimate, abs=1e-9
+            )
+
+    def test_fold_categories_sums_groups_and_rejects_gaps(self, result):
+        """Folding is a pure regroup: nothing gained, nothing lost, no silent default bucket."""
+        mapping = {category: ("energy" if "ENERGY" in category.value else "other") for category in CostCategory}
+        folded = views.fold_categories(result.npv_by_category, mapping)
+        assert sum(band.best_estimate for band in folded.values()) == pytest.approx(
+            sum(band.best_estimate for band in result.npv_by_category.values())
+        )
+        expected_energy = sum(
+            band.best_estimate
+            for category, band in result.npv_by_category.items()
+            if "ENERGY" in category.value
+        )
+        assert folded["energy"].best_estimate == pytest.approx(expected_energy)
+        with pytest.raises(CostDataError, match="No display group declared"):
+            views.fold_categories(result.npv_by_category, {})
+
+    def test_fold_category_matrix_folds_every_year(self, result):
+        """The year x group matrix is the year x category matrix, regrouped."""
+        mapping = {category: category.value[:3] for category in CostCategory}
+        matrix = views.nominal_annual_matrix_by_category(result)
+        folded = views.fold_category_matrix(matrix, mapping)
+        for year, row in enumerate(matrix):
+            assert sum(folded[year].values()) == pytest.approx(sum(row.values()))
+
+    def test_loan_series_matches_manual_split(self, result):
+        """Interest and principal per year, brute-forced."""
+        horizon = result.parameters.observation_period_in_years
+        amortization = views.loan_amortization_series(result)
+        assert amortization.has_flows()
+        for year in range(horizon + 1):
+            for category, series in (
+                (CostCategory.LOAN_INTEREST, amortization.interest_in_euro),
+                (CostCategory.LOAN_PRINCIPAL, amortization.principal_in_euro),
+            ):
+                expected = sum(
+                    entry.amount_in_euro.best_estimate
+                    for entry in result.scoped_timeline().entries
+                    if entry.year == year and entry.category == category
+                )
+                assert series[year] == pytest.approx(expected)
+
+    def test_the_outstanding_balance_starts_at_the_disbursement_and_ends_at_zero(self, result):
+        """The balance line is the disbursement minus the principal booked so far, year by year.
+
+        The docstring used to promise "year 0 carries the full disbursement" while the loop
+        subtracts year-0 principal first; the two agree here because an annuity plan repays
+        nothing in the year it is drawn, and the assertion below pins the *rule* — disbursement
+        minus cumulative principal — rather than the coincidence.
+        """
+        amortization = views.loan_amortization_series(result)
+        assert amortization.disbursement_in_euro > 0.0
+        assert amortization.principal_in_euro[0] == pytest.approx(0.0)
+        assert amortization.outstanding_balance_in_euro[0] == pytest.approx(
+            amortization.disbursement_in_euro
+        )
+        running = 0.0
+        for year, principal in enumerate(amortization.principal_in_euro):
+            running += principal
+            assert amortization.outstanding_balance_in_euro[year] == pytest.approx(
+                amortization.disbursement_in_euro - running
+            )
+        # The fixture's 12-year term fits inside the horizon, so the plan amortizes fully.
+        assert amortization.outstanding_balance_in_euro[-1] == pytest.approx(0.0, abs=1e-6)
+
+    def test_cumulative_operational_co2_is_the_running_total(self, result):
+        """Same numbers as the yearly series, accumulated."""
+        yearly = result.lifecycle_co2_result.operational_co2_by_year_in_kg
+        cumulative = views.cumulative_operational_co2_in_kg(result)
+        assert len(cumulative) == len(yearly)
+        for index in range(len(yearly)):
+            assert cumulative[index] == pytest.approx(sum(yearly[: index + 1]))
+
+
+class TestDetailTable:
+    """The (year, subject, category) verification table."""
+
+    def test_rows_and_subtotals_match_manual_aggregation(self, result):
+        """Every row is a hand-summed cell; every subtotal is the sum of its own rows."""
+        interest = result.parameters.interest_rate
+        years = views.timeline_detail_rows(result)
+        for detail_year in years:
+            for row in detail_year.rows:
+                expected = UncertainValue.sum(
+                    entry.amount_in_euro
+                    for entry in result.scoped_timeline().entries
+                    if entry.year == row.year
+                    and entry.subject == row.subject
+                    and entry.category == row.category
+                )
+                assert row.nominal_in_euro.best_estimate == pytest.approx(expected.best_estimate)
+                assert row.nominal_in_euro.minimum == pytest.approx(expected.minimum)
+                assert row.discounted_best_estimate_in_euro == pytest.approx(
+                    expected.best_estimate / ((1 + interest) ** row.year)
+                )
+            assert detail_year.nominal_total_in_euro.best_estimate == pytest.approx(
+                sum(row.nominal_in_euro.best_estimate for row in detail_year.rows)
+            )
+            assert detail_year.discounted_total_best_estimate_in_euro == pytest.approx(
+                detail_year.nominal_total_in_euro.best_estimate / ((1 + interest) ** detail_year.year)
+            )
+
+    def test_table_covers_the_whole_timeline(self, result):
+        """Nothing but float noise is dropped: the table's total is the nominal total."""
+        years = views.timeline_detail_rows(result)
+        table_total = sum(
+            row.nominal_in_euro.best_estimate for detail_year in years for row in detail_year.rows
+        )
+        timeline_total = sum(
+            entry.amount_in_euro.best_estimate for entry in result.scoped_timeline().entries
+        )
+        assert table_total == pytest.approx(timeline_total, abs=views.ViewTolerances.DETAIL_ROW_EPSILON * 50)
+
+    def test_years_are_ordered_and_rows_sorted_by_amount(self, result):
+        """Presentation relies on the order; it is part of the view's contract."""
+        years = views.timeline_detail_rows(result)
+        assert [detail_year.year for detail_year in years] == sorted(
+            detail_year.year for detail_year in years
+        )
+        for detail_year in years:
+            amounts = [row.nominal_in_euro.best_estimate for row in detail_year.rows]
+            assert amounts == sorted(amounts)
+
+
+class TestTheLevySummaryOfARealLandlordRun:
+    """`LifecycleCostResult.modernization_levy` as an evaluation actually fills it (§6.4, D27).
+
+    Every other test of the levy builds an `AllocationContext` by hand and asks the ruleset
+    directly, which leaves the wiring untested: the evaluator has to derive the context from the
+    inputs, run the ruleset, convert the outcome into the summary record and hang it on the
+    result. A break anywhere along that chain shows up as `modernization_levy is None` and no
+    existing test would have noticed — the timeline still carries the transfer pair.
+
+    The fixture's building is 150 m² at 8.5 EUR/m²·month cold rent, so the general §559 Abs. 3a
+    ceiling is the upper tier (3.00 EUR/m²·month = 5,400 EUR/a) and the §559e one 900 EUR/a.
+    """
+
+    def test_the_summary_reaches_the_result_with_both_legs_and_a_verdict(self, allocated):
+        """The record exists, its legs add up to the amount, and every world has a verdict."""
+        from hisim.economics.results import LevyBindingMechanism
+
+        levy = allocated.modernization_levy
+        assert levy is not None
+        assert levy.annual_amount_in_euro.best_estimate == pytest.approx(
+            levy.general_leg_in_euro.best_estimate + levy.heating_leg_in_euro.best_estimate
+        )
+        assert levy.cap_in_euro_per_m2_per_month == pytest.approx(3.0)
+        assert set(levy.binding_mechanism_by_slot) == {Slot.LOW, Slot.BEST_ESTIMATE, Slot.HIGH}
+        for verdict in levy.binding_mechanism_by_slot.values():
+            assert LevyBindingMechanism.names_a_cap(verdict) or verdict.endswith(
+                LevyBindingMechanism.RATE_BELOW_CAP
+            )
+        assert levy.cap_binding_in_best_estimate == LevyBindingMechanism.names_a_cap(
+            levy.binding_mechanism_by_slot[Slot.BEST_ESTIMATE]
+        )
+
+    def test_the_summary_amount_is_the_amount_the_timeline_books(self, allocated):
+        """The record is a statement about the money, so it has to be the money (§6.4).
+
+        The levy is booked as one transfer pair per year; the summary states the annual figure.
+        A record that drifted from the entries would let the caption and the cash-flow table
+        disagree about the same rent increase.
+        """
+        levied_years = {
+            entry.year
+            for entry in allocated.timeline.entries
+            if entry.category == CostCategory.MODERNIZATION_LEVY and entry.payer == Actor.TENANT
+        }
+        assert levied_years
+        levy = allocated.modernization_levy
+        assert levy is not None
+        for year in sorted(levied_years):
+            booked = UncertainValue.sum(
+                entry.amount_in_euro
+                for entry in allocated.timeline.entries
+                if entry.category == CostCategory.MODERNIZATION_LEVY
+                and entry.payer == Actor.TENANT
+                and entry.year == year
+            )
+            assert booked.best_estimate == pytest.approx(levy.annual_amount_in_euro.best_estimate)
+
+    def test_both_legs_stay_inside_their_own_ceilings(self, allocated):
+        """900 EUR/a on the §559e leg, 5,400 EUR/a on the two together, in every world."""
+        levy = allocated.modernization_levy
+        assert levy is not None
+        for slot in Slot:
+            assert levy.heating_leg_in_euro.slot(slot) <= 900.0 + 1e-6
+            assert levy.annual_amount_in_euro.slot(slot) <= 5400.0 + 1e-6
+
+
+class TestPivotsAndAnnuities:
+    """Payer x category, and the annuitized figures."""
+
+    def test_payer_pivot_matches_manual_discounting(self, allocated):
+        """Each cell is the hand-discounted sum of that payer's entries in that category."""
+        interest = allocated.parameters.interest_rate
+        pivot = views.payer_category_npv_pivot(allocated)
+        assert Actor.SYSTEM not in pivot
+        for payer, by_category in pivot.items():
+            for category, band in by_category.items():
+                expected = UncertainValue.sum(
+                    entry.amount_in_euro.scale(1.0 / ((1 + interest) ** entry.year))
+                    for entry in allocated.timeline.entries
+                    if entry.payer == payer and entry.category == category
+                )
+                assert band.best_estimate == pytest.approx(expected.best_estimate)
+                assert band.maximum == pytest.approx(expected.maximum)
+
+    def test_payer_pivot_reconciles_with_the_payer_npvs(self, allocated):
+        """Row sums are `npv_by_payer` — the §6.5 zero-sum view, unchanged."""
+        pivot = views.payer_category_npv_pivot(allocated)
+        for payer, by_category in pivot.items():
+            row_sum = sum(band.best_estimate for band in by_category.values())
+            assert row_sum == pytest.approx(allocated.npv_by_payer[payer].best_estimate)
+
+    def test_payer_npv_total_is_the_zero_sum_reference(self, allocated):
+        """The system total the §6.5 panel reconciles against — all payers, SYSTEM included."""
+        total = views.payer_npv_total(allocated)
+        expected = UncertainValue.sum(allocated.npv_by_payer.values())
+        assert total.best_estimate == pytest.approx(expected.best_estimate)
+        assert total.minimum == pytest.approx(expected.minimum)
+
+    def test_equivalent_annual_costs_are_npv_times_annuity(self, result):
+        """Per-category and per-subject EAC, recomputed by hand."""
+        annuity = (
+            result.parameters.interest_rate
+            * (1 + result.parameters.interest_rate) ** result.parameters.observation_period_in_years
+            / ((1 + result.parameters.interest_rate) ** result.parameters.observation_period_in_years - 1)
+        )
+        by_category = views.equivalent_annual_cost_by_category(result)
+        for category, band in by_category.items():
+            assert band.best_estimate == pytest.approx(result.npv_by_category[category].best_estimate * annuity)
+        by_subject = views.subject_equivalent_annual_cost_by_category(result)
+        for subject, breakdown in result.component_breakdowns.items():
+            for category, npv in breakdown.npv_by_category.items():
+                assert by_subject[subject][category].minimum == pytest.approx(npv.minimum * annuity)
+
+
+class TestEnergyBills:
+    """Year-1 bills, quantities, effective prices."""
+
+    def test_bill_decomposition_matches_manual_sums(self, result):
+        """Categories, total and price, all recomputed from the timeline."""
+        bills = views.carrier_year_one_bills(result)
+        bill = bills["ELECTRICITY"]
+        expected_by_category: Dict[CostCategory, float] = {}
+        for entry in result.scoped_timeline().entries:
+            if entry.year == 1 and entry.subject in ("ELECTRICITY", "ELECTRICITY_FEED_IN"):
+                expected_by_category[entry.category] = (
+                    expected_by_category.get(entry.category, 0.0) + entry.amount_in_euro.best_estimate
+                )
+        assert bill.by_category_in_euro == pytest.approx(expected_by_category)
+        expected_total = sum(
+            value
+            for category, value in expected_by_category.items()
+            if category != CostCategory.FEED_IN_REVENUE
+        )
+        assert bill.total_excluding_feed_in_in_euro == pytest.approx(expected_total)
+        assert bill.annual_quantity_in_kwh == pytest.approx(5000.0)
+        assert bill.effective_price_in_euro_per_kwh == pytest.approx(expected_total / 5000.0)
+
+    def test_feed_in_is_shown_but_never_priced_into_the_unit_cost(self, result):
+        """The credit appears in the decomposition, not in the numerator or the band."""
+        bill = views.carrier_year_one_bills(result)["ELECTRICITY"]
+        assert bill.by_category_in_euro[CostCategory.FEED_IN_REVENUE] < 0
+        assert bill.effective_price_in_euro_per_kwh > 0
+        band_expected = UncertainValue.sum(
+            entry.amount_in_euro
+            for entry in result.scoped_timeline().entries
+            if entry.year == 1 and entry.subject == "ELECTRICITY"
+        )
+        assert bill.year_one_band_in_euro.best_estimate == pytest.approx(band_expected.best_estimate)
+        assert bill.year_one_band_in_euro.best_estimate == pytest.approx(bill.total_excluding_feed_in_in_euro)
+
+
+class TestYearZeroAndSubsidies:
+    """Investment build-up, the subsidy clamp, the total support KPI."""
+
+    def test_year_zero_build_up_matches_manual_sums(self, result):
+        """Each step and the net outflow, brute-forced from the scoped timeline."""
+        build_ups = views.year_zero_build_up(result)
+        assert "HeatPump" in build_ups
+        for subject, build_up in build_ups.items():
+            expected = {}
+            for category in views.ViewCategories.YEAR_ZERO_CATEGORIES:
+                value = sum(
+                    entry.amount_in_euro.best_estimate
+                    for entry in result.scoped_timeline().entries
+                    if entry.year == 0 and entry.subject == subject and entry.category == category
+                )
+                if value:
+                    expected[category] = value
+            assert build_up.by_category_in_euro == pytest.approx(expected)
+            assert build_up.net_outflow_in_euro == pytest.approx(sum(expected.values()))
+
+    def test_financed_subsidised_purchase_has_a_small_net_outflow(self, result):
+        """Sanity on the fixture: 60 % financed plus support leaves little cash in year 0."""
+        build_up = views.year_zero_build_up(result)["HeatPump"]
+        gross = build_up.by_category_in_euro[CostCategory.INVESTMENT]
+        assert build_up.net_outflow_in_euro < gross
+
+    def test_year_zero_build_up_agrees_with_the_table_beside_it(self, allocated):
+        """S4b: the waterfall and the investment table are scoped alike (§2.4 deferral).
+
+        Under an actor scope the two used to disagree — the build-up read the full timeline
+        while `component_breakdowns` (the table) is derived from the scoped one. A subject with
+        a year-0 build-up must now be a subject the table has an investment row for.
+        """
+        build_ups = views.year_zero_build_up(allocated)
+        table = views.investment_net_of_subsidies(allocated)
+        for subject, build_up in build_ups.items():
+            if build_up.by_category_in_euro.get(CostCategory.INVESTMENT):
+                assert subject in table, subject
+                assert build_up.by_category_in_euro[CostCategory.INVESTMENT] == pytest.approx(
+                    allocated.component_breakdowns[subject].investment_gross_in_euro.best_estimate
+                )
+
+    def test_subsidy_share_matches_manual_ratio(self, result):
+        """Share = nominal support / gross investment, per subject."""
+        shares = views.subsidy_share_of_gross(result)
+        for subject, share in shares.items():
+            breakdown = result.component_breakdowns[subject]
+            gross = breakdown.investment_gross_in_euro.best_estimate
+            subsidy = min(breakdown.subsidies_nominal_in_euro.best_estimate, gross)
+            assert share.gross_in_euro == pytest.approx(gross)
+            assert share.subsidy_in_euro == pytest.approx(subsidy)
+            assert share.net_in_euro == pytest.approx(gross - subsidy)
+            assert share.share_of_gross == pytest.approx(subsidy / gross)
+            assert 0.0 <= share.share_of_gross <= 1.0
+
+    def test_support_above_gross_is_clamped(self, result):
+        """The business rule that used to live in two chart helpers (§5.4, W4.1)."""
+        import copy
+
+        doctored = copy.deepcopy(result)
+        breakdown = doctored.component_breakdowns["HeatPump"]
+        gross = breakdown.investment_gross_in_euro
+        breakdown.subsidies_nominal_in_euro = gross.scale(2.0)
+        share = views.subsidy_share_of_gross(doctored)["HeatPump"]
+        assert share.subsidy_in_euro == pytest.approx(gross.best_estimate)
+        assert share.net_in_euro == pytest.approx(0.0)
+        assert share.share_of_gross == pytest.approx(1.0)
+
+    def test_total_subsidies_received_sums_the_timeline_entries(self, result):
+        """D2 (§8): the nominal support on the scoped timeline, not the solver's awards."""
+        entries = [
+            entry
+            for entry in result.scoped_timeline().entries
+            if entry.category == CostCategory.SUBSIDY
+        ]
+        assert entries  # the fixture really does receive support
+        expected = UncertainValue.sum(entry.amount_in_euro for entry in entries).as_revenue()
+        total = views.total_subsidies_received(result)
+        assert total is not None
+        assert total.best_estimate == pytest.approx(expected.best_estimate)
+        assert total.minimum == pytest.approx(expected.minimum)
+        assert total.maximum == pytest.approx(expected.maximum)
+        assert total.best_estimate > 0  # a received-support figure is reported positive
+
+    def test_total_subsidies_received_includes_support_without_an_award(self, result):
+        """The old award-based KPI omitted every euro that reaches the timeline otherwise.
+
+        Scheduled payouts (a tax credit in instalments), the §10.1 flat shim and operational
+        support all carry `upfront_amount == 0` or no `SubsidyDecision` at all; the timeline
+        figure counts them. This pins the direction of D2: dropping the decisions does not
+        change the KPI, dropping the entries does.
+        """
+        import copy
+
+        awards_only = UncertainValue.exact(0.0)
+        for decision in result.subsidy_decisions:
+            for award in decision.applied:
+                awards_only = awards_only + award.upfront_amount
+        total = views.total_subsidies_received(result)
+        assert total is not None
+        assert total.best_estimate > awards_only.best_estimate  # the fixture has a scheduled payout
+
+        without_decisions = copy.deepcopy(result)
+        without_decisions.subsidy_decisions = []
+        assert views.total_subsidies_received(without_decisions) == total
+
+    def test_investment_net_is_the_unclamped_band_difference(self, result):
+        """The investment table's Net column: gross - support, slot-wise, no clamp."""
+        nets = views.investment_net_of_subsidies(result)
+        for subject, breakdown in result.component_breakdowns.items():
+            if breakdown.investment_gross_in_euro.maximum <= 0:
+                assert subject not in nets  # the table skips these rows
+                continue
+            expected = breakdown.investment_gross_in_euro - breakdown.subsidies_nominal_in_euro
+            assert nets[subject].best_estimate == pytest.approx(expected.best_estimate)
+            assert nets[subject].minimum == pytest.approx(expected.minimum)
+            assert nets[subject].maximum == pytest.approx(expected.maximum)
+
+    def test_award_total_prefers_the_schedule_over_the_upfront_amount(self, result):
+        """A scheduled payout is worth its instalments; everything else its upfront amount."""
+        awards = [award for decision in result.subsidy_decisions for award in decision.applied]
+        assert awards
+        for award in awards:
+            expected = (
+                UncertainValue.sum(award.schedule_amounts)
+                if award.schedule_amounts
+                else award.upfront_amount
+            )
+            assert views.award_total_amount(award).best_estimate == pytest.approx(expected.best_estimate)
+
+    def test_describe_award_values_every_payout_kind(self):
+        """Each payout kind gets a total or an explanation of why it has none (PR-9 finding).
+
+        The renderers used to read `upfront_amount`, which is zero for a tax-credit schedule, a
+        loan-terms award and an operational rate, so those awards were reported as "0.00 EUR" or
+        dropped entirely. `describe_award` is the one place that decides what an award is worth:
+        a euro band where one exists, and None plus the terms where the value is booked by the
+        financing or energy calculators instead.
+        """
+        from hisim.economics.subsidies import PayoutKind, SubsidyAward
+
+        grant = views.describe_award(
+            SubsidyAward(scheme_id="G", payout_kind=PayoutKind.UPFRONT_GRANT,
+                         upfront_amount=UncertainValue(3000.0, 2000.0, 4000.0))
+        )
+        assert grant.total_in_euro is not None
+        assert grant.total_in_euro.best_estimate == pytest.approx(3000.0)
+        assert grant.payout_note == ""
+
+        credit = views.describe_award(
+            SubsidyAward(scheme_id="T", payout_kind=PayoutKind.TAX_CREDIT_SCHEDULE,
+                         schedule_amounts=[UncertainValue.exact(721.14)] * 2
+                         + [UncertainValue.exact(618.12)])
+        )
+        assert credit.total_in_euro is not None
+        assert credit.total_in_euro.best_estimate == pytest.approx(2060.40)
+        assert credit.payout_note == "tax credit paid over 3 years"
+
+        loan = views.describe_award(
+            SubsidyAward(scheme_id="L", payout_kind=PayoutKind.LOAN_TERMS, loan_interest_rate=0.009,
+                         loan_term_in_years=20, loan_repayment_grant_share=0.25)
+        )
+        assert loan.total_in_euro is None
+        assert loan.payout_note == "loan terms: 0.90% interest, 20 years term, 25% repayment grant"
+
+        operational = views.describe_award(
+            SubsidyAward(scheme_id="O", payout_kind=PayoutKind.OPERATIONAL,
+                         operational_rate_per_kwh=0.08, operational_carrier=EnergyCarrier.ELECTRICITY,
+                         operational_duration_years=10)
+        )
+        assert operational.total_in_euro is None
+        assert operational.payout_note == "0.0800 EUR/kWh on ELECTRICITY for 10 years"
+
+        vat = views.describe_award(
+            SubsidyAward(scheme_id="V", payout_kind=PayoutKind.VAT_REDUCTION, reduced_vat_rate=0.07)
+        )
+        assert vat.total_in_euro is None
+        assert vat.payout_note == "reduced VAT rate 7.0%"
+
+    def test_describe_award_keeps_the_caps_that_bound(self):
+        """The binding slots travel with the presentation, so both renderers report them alike."""
+        from hisim.economics.subsidies import PayoutKind, SubsidyAward
+
+        presentation = views.describe_award(
+            SubsidyAward(
+                scheme_id="G",
+                payout_kind=PayoutKind.UPFRONT_GRANT,
+                upfront_amount=UncertainValue(3000.0, 2000.0, 4000.0),
+                caps_binding_per_slot={"low": False, "best_estimate": False, "high": True},
+            )
+        )
+        assert presentation.caps_binding == ("high",)
+
+    def test_describe_award_states_the_arithmetic_and_the_cap_verdict(self):
+        """Q26 F8: an amount a reader can check against the rate and the basis that produced it."""
+        from hisim.economics.subsidies import PayoutKind, SubsidyAward
+
+        capped = views.describe_award(
+            SubsidyAward(
+                scheme_id="S",
+                payout_kind=PayoutKind.UPFRONT_GRANT,
+                upfront_amount=UncertainValue.exact(9000.0),
+                benefit_rate=0.30,
+                eligible_basis_in_euro=UncertainValue.exact(30000.0),
+                eligible_basis_cap_in_euro=30000.0,
+                caps_binding_per_slot={"low": False, "best_estimate": True, "high": True},
+            )
+        )
+        assert capped.arithmetic == "30.0% x 30,000 EUR eligible basis = 9,000 EUR"
+        assert capped.cap_verdict == "capped at 30,000 EUR eligible cost (best_estimate, high)"
+
+        uncapped = views.describe_award(
+            SubsidyAward(
+                scheme_id="L",
+                payout_kind=PayoutKind.UPFRONT_GRANT,
+                upfront_amount=UncertainValue.exact(7500.0),
+                eligible_basis_cap_in_euro=30000.0,
+            )
+        )
+        assert uncapped.arithmetic == ""  # a lump sum states no rate
+        assert uncapped.cap_verdict == "cap not binding (30,000 EUR eligible cost)"
+
+    def test_the_arithmetic_names_both_ceilings_that_cut_the_rate(self):
+        """Q26 F8: a rate cut twice says so twice, so the binding limit is identifiable.
+
+        The EU state-aid overall cap rescales the award's amount after a cumulation group's
+        combined-rate cap has already scaled its rate. Both cuts reach the reader through the same
+        caption, and the product still has to be the amount beside it — which is what the solver's
+        `_apply_overall_cap` guarantees and what this pins on the formatting side.
+        """
+        from hisim.economics.subsidies import PayoutKind, SubsidyAward
+
+        both = views.describe_award(
+            SubsidyAward(
+                scheme_id="S",
+                payout_kind=PayoutKind.UPFRONT_GRANT,
+                upfront_amount=UncertainValue.exact(5000.0),
+                benefit_rate=0.25,
+                benefit_rate_before_group_cap=0.35,
+                benefit_rate_before_overall_cap=0.30,
+                eligible_basis_in_euro=UncertainValue.exact(20000.0),
+            )
+        )
+        assert both.arithmetic == (
+            "25.0% (of 35.0%, cut back by the cumulation group's combined-rate cap) "
+            "(of 30.0%, cut back by the state-aid overall cap) "
+            "x 20,000 EUR eligible basis = 5,000 EUR"
+        )
+
+        only_overall = views.describe_award(
+            SubsidyAward(
+                scheme_id="S",
+                payout_kind=PayoutKind.UPFRONT_GRANT,
+                upfront_amount=UncertainValue.exact(5000.0),
+                benefit_rate=0.25,
+                benefit_rate_before_overall_cap=0.50,
+                eligible_basis_in_euro=UncertainValue.exact(20000.0),
+            )
+        )
+        assert only_overall.arithmetic == (
+            "25.0% (of 50.0%, cut back by the state-aid overall cap) "
+            "x 20,000 EUR eligible basis = 5,000 EUR"
+        )
+
+    def test_scheme_display_names_cover_the_ids_a_report_can_show(self, result):
+        """Q20: every id a renderer can look up resolves to a name, never to an empty cell.
+
+        The per-award names are checked against the *shipped catalog's* `display_name` for that
+        scheme id rather than against the award's own label: the label is what the mapping is built
+        from, so comparing the two would assert nothing at all. Read against the catalog it becomes
+        the claim that matters — the name a report shows is the name the catalog gives the scheme,
+        having travelled with the award through an evaluation that a report need never repeat.
+        """
+        names = views.scheme_display_names(result)
+        catalog = SubsidyCatalog.load(result.parameters.country)
+
+        assert names[""] == SubsidySchemeLabels.UNATTRIBUTED
+        assert names[SubsidySchemeLabels.LEGACY_FLAT_ID] == SubsidySchemeLabels.LEGACY_FLAT
+        applied = [award for decision in result.subsidy_decisions for award in decision.applied]
+        assert applied, "no award was applied — the loop below would prove nothing"
+        for award in applied:
+            scheme = catalog.scheme_by_id(award.scheme_id)
+            assert scheme is not None, award.scheme_id
+            assert names[award.scheme_id] == (scheme.display_name or award.scheme_id)
+
+    def test_total_subsidies_is_none_without_support_flows(self, result):
+        """A timeline without a SUBSIDY entry omits the KPI rather than publishing a zero."""
+        import copy
+
+        without = copy.deepcopy(result)
+        without.timeline.entries = [
+            entry for entry in without.timeline.entries if entry.category != CostCategory.SUBSIDY
+        ]
+        assert views.total_subsidies_received(without) is None

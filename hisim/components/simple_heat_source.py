@@ -21,6 +21,8 @@ from hisim.component import ComponentInput, ComponentConnection, OpexCostDataCla
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components import weather
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import prorate_to_simulated_period
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -227,7 +229,7 @@ _dataclass_json_from_dict: "Callable[..., SimpleHeatSourceConfig]" = (
 @classmethod
 def _from_dict_with_legacy_aliases(
     cls: "type[SimpleHeatSourceConfig]",
-    kvs: Any,
+    config_dict: Any,
     *,
     infer_missing: bool = False,
 ) -> "SimpleHeatSourceConfig":
@@ -238,8 +240,8 @@ def _from_dict_with_legacy_aliases(
     so callers can migrate saved configs. When both the old and the new name are
     present, the new name takes precedence and the legacy key is dropped.
     """
-    if isinstance(kvs, dict):
-        legacy_keys = [old for old in _LEGACY_CONFIG_FIELD_ALIASES if old in kvs]
+    if isinstance(config_dict, dict):
+        legacy_keys = [old for old in _LEGACY_CONFIG_FIELD_ALIASES if old in config_dict]
         if legacy_keys:
             warnings.warn(
                 "SimpleHeatSourceConfig: the JSON field name(s) "
@@ -250,14 +252,14 @@ def _from_dict_with_legacy_aliases(
                 DeprecationWarning,
                 stacklevel=2,
             )
-            kvs = dict(kvs)
+            config_dict = dict(config_dict)
             for old_name in legacy_keys:
                 new_name = _LEGACY_CONFIG_FIELD_ALIASES[old_name]
-                if new_name not in kvs:
-                    kvs[new_name] = kvs.pop(old_name)
+                if new_name not in config_dict:
+                    config_dict[new_name] = config_dict.pop(old_name)
                 else:
-                    kvs.pop(old_name)
-    return _dataclass_json_from_dict(cls, kvs, infer_missing=infer_missing)
+                    config_dict.pop(old_name)
+    return _dataclass_json_from_dict(cls, config_dict, infer_missing=infer_missing)
 
 
 SimpleHeatSourceConfig.from_dict = _from_dict_with_legacy_aliases  # type: ignore[method-assign,assignment]
@@ -277,6 +279,8 @@ class SimpleHeatSourceState:
 
 class SimpleHeatSource(cp.Component):
     """Heat Source implementation."""
+
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
@@ -507,19 +511,21 @@ class SimpleHeatSource(cp.Component):
         simulation_parameters: SimulationParameters
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year_in_s = 365 * 24 * 60 * 60
-        capex_per_simulated_period_in_euro = (config.investment_costs_in_euro / config.lifetime_in_years) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year_in_s
-        )
-        device_co2_footprint_per_simulated_period_in_kg = (config.device_co2_footprint_in_kg / config.lifetime_in_years) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year_in_s
+        prorated = prorate_to_simulated_period(
+            investment_in_euro=config.investment_costs_in_euro,
+            co2_footprint_in_kg=config.device_co2_footprint_in_kg,
+            maintenance_in_euro_per_year=config.maintenance_costs_in_euro_per_year,
+            lifetime_in_years=config.lifetime_in_years,
+            simulation_parameters=simulation_parameters,
         )
         capex_cost_data_class = CapexCostDataClass(
             capex_investment_cost_in_euro=config.investment_costs_in_euro,
             device_co2_footprint_in_kg=config.device_co2_footprint_in_kg,
             lifetime_in_years=config.lifetime_in_years,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period_in_euro,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period_in_kg,
+            capex_investment_cost_for_simulated_period_in_euro=prorated.investment_for_simulated_period_in_euro,
+            device_co2_footprint_for_simulated_period_in_kg=prorated.co2_footprint_for_simulated_period_in_kg,
+            maintenance_costs_in_euro_per_year=config.maintenance_costs_in_euro_per_year,
+            maintenance_cost_per_simulated_period_in_euro=prorated.maintenance_for_simulated_period_in_euro,
             kpi_tag=KpiTagEnumClass.GENERIC_HEAT_SOURCE
         )
         return capex_cost_data_class

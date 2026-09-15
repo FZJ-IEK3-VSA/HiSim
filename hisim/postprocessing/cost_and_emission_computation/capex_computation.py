@@ -9,14 +9,15 @@ Financial Modeling Assumptions
 The CAPEX model uses a **linear straight-line proration** method with a **zero
 discount rate** (no time value of money is applied). Key assumptions:
 
-* **Depreciation:** Straight-line over the technical lifetime in years.
-  The investment cost and CO2 footprint are divided by the technical lifetime
-  and multiplied by the simulated period as a fraction of a year.
+* **Proration:** :func:`prorate_to_simulated_period` is the single authority on
+  how lifetime figures are cut down to the simulated period; its docstring
+  states the rule and why investment and maintenance follow different halves of
+  it.
 * **Discount rate:** 0% -- no discounting or net present value conversion is
   performed.
-* **Year length:** A fixed 365-day year is used
-  (``seconds_per_year = 365 * 24 * 60 * 60``), deliberately ignoring leap years
-  to ensure backward compatibility with historical simulation outputs.
+* **Year length:** A fixed 365-day year is used (:data:`SECONDS_PER_YEAR`),
+  deliberately ignoring leap years to ensure backward compatibility with
+  historical simulation outputs.
 
 Unit Conventions
 ----------------
@@ -37,6 +38,7 @@ costs and CO2 footprints are looked up from
 for the simulation year and country.
 """
 
+from dataclasses import dataclass
 from typing import Optional, TypeVar
 from hisim.component import CapexCostDataClass
 from hisim.config import ConfigBase
@@ -50,6 +52,69 @@ from hisim.units import Quantity
 # The capex overwrite helper hands back the very config it received, so callers keep
 # their concrete config type instead of being widened to ConfigBase.
 ConfigT = TypeVar("ConfigT", bound=ConfigBase)
+
+#: A fixed 365-day year, deliberately ignoring leap years so that the prorated figures of
+#: historical simulation outputs stay reproducible.
+SECONDS_PER_YEAR = 365 * 24 * 60 * 60
+
+
+@dataclass(frozen=True)
+class ProratedCapexFigures:
+    """The three CAPEX figures of one component, cut down to the simulated period.
+
+    Every field is the share attributable to the simulated duration alone, not a lifetime
+    total: a one-week simulation of a device that costs 1000 EUR over 20 years carries
+    roughly 0.96 EUR of investment here.
+    """
+
+    investment_for_simulated_period_in_euro: float
+    co2_footprint_for_simulated_period_in_kg: float
+    maintenance_for_simulated_period_in_euro: float
+
+
+def prorate_to_simulated_period(
+    *,
+    investment_in_euro: float,
+    co2_footprint_in_kg: float,
+    maintenance_in_euro_per_year: float,
+    lifetime_in_years: float,
+    simulation_parameters: SimulationParameters,
+) -> ProratedCapexFigures:
+    """Cut a component's lifetime CAPEX figures down to the simulated period.
+
+    This is the one place in HiSim that decides how a CAPEX figure is prorated, and the two
+    rules it applies differ because the figures have different time bases:
+
+    * The **investment cost** and the **embodied CO2 footprint** are one-time figures that the
+      technical lifetime spreads out. They are annualized by dividing by
+      ``lifetime_in_years`` and then scaled by the simulated fraction of a year, which is
+      straight-line (linear) proration at a zero discount rate.
+    * The **maintenance cost** is already an annual rate that falls due in every year of that
+      lifetime, not a one-time cost. It is therefore scaled by the simulated fraction of a
+      year alone and is never divided by the lifetime -- doing so as well would understate it
+      by exactly a factor of the lifetime.
+
+    The simulated fraction of a year is ``duration.total_seconds() / (365 * 24 * 60 * 60)``,
+    using a fixed 365-day year that ignores leap years so historical outputs stay reproducible.
+
+    Args:
+        investment_in_euro: The component's one-time investment cost over its whole lifetime.
+        co2_footprint_in_kg: The component's one-time embodied CO2 footprint.
+        maintenance_in_euro_per_year: The component's annual maintenance rate.
+        lifetime_in_years: The technical lifetime the two one-time figures are spread over.
+        simulation_parameters: Provides the simulated duration.
+
+    Returns:
+        The three figures for the simulated period, unrounded.
+    """
+    fraction_of_year_simulated = simulation_parameters.duration.total_seconds() / SECONDS_PER_YEAR
+    return ProratedCapexFigures(
+        investment_for_simulated_period_in_euro=(investment_in_euro / lifetime_in_years)
+        * fraction_of_year_simulated,
+        co2_footprint_for_simulated_period_in_kg=(co2_footprint_in_kg / lifetime_in_years)
+        * fraction_of_year_simulated,
+        maintenance_for_simulated_period_in_euro=maintenance_in_euro_per_year * fraction_of_year_simulated,
+    )
 
 
 class CapexComputationHelperFunctions:
@@ -87,7 +152,8 @@ class CapexComputationHelperFunctions:
         Returns:
             A ``CapexCostDataClass`` with total and per-simulated-period investment cost,
             CO2 footprint, maintenance cost, lifetime, and subsidy percentage (rounded to
-            2 decimals).
+            2 decimals). The per-period figures come from
+            :func:`prorate_to_simulated_period`, which states the proration rule.
 
         Raises:
             ValueError: If ``unit`` is not one of the supported units.
@@ -174,7 +240,7 @@ class CapexComputationHelperFunctions:
             # Calculate total values
             capex_investment_cost_in_euro = investment_costs_in_euro_per_size_unit * size_of_energy_system
             device_co2_footprint_in_kg = co2_footprint_in_kg_per_size_unit * size_of_energy_system
-            maintenance_costs_in_euro = (
+            maintenance_costs_in_euro_per_year = (
                 capex_investment_cost_in_euro * maintenance_costs_as_percentage_of_investment_per_year
             )
         else:
@@ -184,7 +250,7 @@ class CapexComputationHelperFunctions:
                 capex_investment_cost_in_euro = config.investment_costs_in_euro
                 device_co2_footprint_in_kg = config.device_co2_footprint_in_kg
                 technical_lifetime_in_years = config.lifetime_in_years
-                maintenance_costs_in_euro = config.maintenance_costs_in_euro_per_year
+                maintenance_costs_in_euro_per_year = config.maintenance_costs_in_euro_per_year
                 subsidy_as_percentage_of_investment_costs = config.subsidy_as_percentage_of_investment_costs
 
             elif all(isinstance(v, Quantity) for v in list_of_config_capex_variables):
@@ -192,30 +258,33 @@ class CapexComputationHelperFunctions:
                 capex_investment_cost_in_euro = config.investment_costs_in_euro.value
                 device_co2_footprint_in_kg = config.device_co2_footprint_in_kg.value
                 technical_lifetime_in_years = config.lifetime_in_years.value
-                maintenance_costs_in_euro = config.maintenance_costs_in_euro_per_year.value
+                maintenance_costs_in_euro_per_year = config.maintenance_costs_in_euro_per_year.value
                 subsidy_as_percentage_of_investment_costs = config.subsidy_as_percentage_of_investment_costs.value
             else:
                 raise ValueError(f"Config values have wrong type: {[type(v) for v in list_of_config_capex_variables]}")
 
-        # Calculate values per simulated period
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (capex_investment_cost_in_euro / technical_lifetime_in_years) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-        device_co2_footprint_per_simulated_period = (device_co2_footprint_in_kg / technical_lifetime_in_years) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-        maintenance_costs_per_simulated_period_in_euro = (maintenance_costs_in_euro / technical_lifetime_in_years) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
+        # Calculate values per simulated period -- see prorate_to_simulated_period for the rule.
+        prorated = prorate_to_simulated_period(
+            investment_in_euro=capex_investment_cost_in_euro,
+            co2_footprint_in_kg=device_co2_footprint_in_kg,
+            maintenance_in_euro_per_year=maintenance_costs_in_euro_per_year,
+            lifetime_in_years=technical_lifetime_in_years,
+            simulation_parameters=simulation_parameters,
         )
         capex_cost_data_class = CapexCostDataClass(
             capex_investment_cost_in_euro=round(capex_investment_cost_in_euro, 2),
             device_co2_footprint_in_kg=round(device_co2_footprint_in_kg, 2),
             lifetime_in_years=round(technical_lifetime_in_years, 2),
-            capex_investment_cost_for_simulated_period_in_euro=round(capex_per_simulated_period, 2),
-            device_co2_footprint_for_simulated_period_in_kg=round(device_co2_footprint_per_simulated_period, 2),
-            maintenance_costs_in_euro=round(maintenance_costs_in_euro, 2),
-            maintenance_cost_per_simulated_period_in_euro=round(maintenance_costs_per_simulated_period_in_euro, 2),
+            capex_investment_cost_for_simulated_period_in_euro=round(
+                prorated.investment_for_simulated_period_in_euro, 2
+            ),
+            device_co2_footprint_for_simulated_period_in_kg=round(
+                prorated.co2_footprint_for_simulated_period_in_kg, 2
+            ),
+            maintenance_costs_in_euro_per_year=round(maintenance_costs_in_euro_per_year, 2),
+            maintenance_cost_per_simulated_period_in_euro=round(
+                prorated.maintenance_for_simulated_period_in_euro, 2
+            ),
             subsidy_as_percentage_of_investment_costs=round(subsidy_as_percentage_of_investment_costs, 2),
             kpi_tag=kpi_tag,
         )
@@ -237,7 +306,7 @@ class CapexComputationHelperFunctions:
         config.investment_costs_in_euro = capex_cost_data_class.capex_investment_cost_in_euro
         config.device_co2_footprint_in_kg = capex_cost_data_class.device_co2_footprint_in_kg
         config.lifetime_in_years = capex_cost_data_class.lifetime_in_years
-        config.maintenance_costs_in_euro_per_year = capex_cost_data_class.maintenance_costs_in_euro
+        config.maintenance_costs_in_euro_per_year = capex_cost_data_class.maintenance_costs_in_euro_per_year
         config.subsidy_as_percentage_of_investment_costs = (
             capex_cost_data_class.subsidy_as_percentage_of_investment_costs
         )

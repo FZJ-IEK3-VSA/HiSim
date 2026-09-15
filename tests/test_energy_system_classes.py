@@ -50,7 +50,7 @@ class Systems:
     #: since it provides the facts a boiler reads.
     BUILDING: ClassVar[str] = """  building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
 """
 
     @classmethod
@@ -80,6 +80,14 @@ class ExpectedFailures:
     ``EF-15`` means it declares no such named constructor, ``EF-10`` means the module the
     entry names does not exist in this repository at all, and ``EF-43`` means the class reads
     no such sizing fact.
+
+    Four entries moved from ``EF-13`` to ``EF-10`` when the component sweep retired
+    ``controller_l1_heatpump`` to ``obsolete/`` (decision D-2, 2026-09-10): the mockups still name
+    ``L1HeatPumpController`` because they are written against the format rather than against the
+    classes that exist today, and the class is now missing outright rather than merely missing a
+    preset. Those entries need a live controller when a conversion reaches them, which is a
+    decision for the batch that converts the heat-pump controllers, not for the sweep that
+    retired a class nothing built.
     """
 
     #: The minimal mockup is empty: every class it names is converted, which is what makes it
@@ -92,20 +100,16 @@ class ExpectedFailures:
         "heat_pump": "EF-13",
         "buffer_storage": "EF-13",
         "dhw_storage": "EF-13",
-        "pv_south": "EF-13",
-        "pv_east": "EF-13",
-        "battery": "EF-13",
         "ems": "EF-43",
         "heating_rod": "EF-13",
-        "heating_rod_controller": "EF-13",
+        # `controller_l1_heatpump` retired to `obsolete/` under D-2: module gone, not preset gone.
+        "heating_rod_controller": "EF-10",
     }
 
     MULTI_FAMILY: ClassVar[Mapping[str, str]] = {
         "heat_pump": "EF-13",
         "heat_pump_controller_sh": "EF-13",
         "buffer_storage": "EF-13",
-        "pv_central": "EF-13",
-        "battery": "EF-13",
         "ems": "EF-43",
         **{
             f"apt{index}_{suffix}": error_id
@@ -115,13 +119,12 @@ class ExpectedFailures:
                 ("hds", "EF-13"),
                 ("dhw_storage", "EF-13"),
                 ("dhw_heater", "EF-13"),
-                ("dhw_controller", "EF-13"),
+                # `controller_l1_heatpump` retired to `obsolete/` under D-2 (see above).
+                ("dhw_controller", "EF-10"),
                 ("car", "EF-13"),
                 ("charger", "EF-13"),
             )
         },
-        "apt1_pv": "EF-13",
-        "apt2_pv": "EF-13",
     }
 
     BY_MOCKUP: ClassVar[Mapping[str, Mapping[str, str]]] = {
@@ -163,7 +166,7 @@ def test_a_file_of_converted_classes_binds_without_complaint() -> None:
     preset: condensing_gas
   hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
-    preset: standard
+    preset: building_derived
   ems:
     class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     preset: optimize_own_consumption

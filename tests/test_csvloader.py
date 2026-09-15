@@ -67,7 +67,7 @@ def test_csvloader_construction_with_dataframe_seam() -> None:
         dataframe=dataframe,
     )
 
-    np.testing.assert_array_equal(loader.column_values, np.asarray(values, dtype=float))
+    np.testing.assert_array_equal(loader.column_values_in_loaded_unit, np.asarray(values, dtype=float))
     assert loader.multiplier == 2.0
     assert loader.column_name == "Profile"
     # The csv_filename is not consulted when a dataframe is supplied.
@@ -148,22 +148,24 @@ def test_csvloader_from_config_file_reads_disk(tmp_path: Path) -> None:
         inputs_dir=tmp_path,
     )
 
-    np.testing.assert_array_equal(loader.column_values, np.asarray(values, dtype=float))
+    np.testing.assert_array_equal(loader.column_values_in_loaded_unit, np.asarray(values, dtype=float))
     assert loader.multiplier == 1.0
     assert loader.column_name == "Profile"
 
 
 @pytest.mark.base
-def test_csvloader_column_deprecated_alias_returns_column_values() -> None:
-    """The deprecated ``column`` attribute aliases ``column_values``.
+def test_csvloader_column_deprecated_alias_returns_loaded_values() -> None:
+    """The deprecated ``column`` attribute aliases ``column_values_in_loaded_unit``.
 
     Issue #758 renamed the misleading public attribute ``self.column`` (an
     np.ndarray of profile values) to ``self.column_values`` to avoid clashing
-    with ``self.csvconfig.column`` (an int index). A repo-wide audit found no
-    remaining in-tree reads of ``.column`` on ``CSVLoader`` instances, but a
-    backward-compatible read-only property is kept so any downstream code that
-    still introspects ``loader.column`` gets a ``DeprecationWarning`` and the
-    same array rather than a silent ``AttributeError``.
+    with ``self.csvconfig.column`` (an int index). Issue #1924 later renamed
+    ``self.column_values`` to ``self.column_values_in_loaded_unit`` to carry
+    its physical unit. A repo-wide audit found no remaining in-tree reads of
+    ``.column`` on ``CSVLoader`` instances, but a backward-compatible
+    read-only property is kept so any downstream code that still introspects
+    ``loader.column`` gets a ``DeprecationWarning`` and the same array rather
+    than a silent ``AttributeError``.
     """
     values = [float(i) for i in range(8)]
     dataframe = pd.DataFrame({"Profile": values})
@@ -176,11 +178,42 @@ def test_csvloader_column_deprecated_alias_returns_column_values() -> None:
         dataframe=dataframe,
     )
 
-    with pytest.warns(DeprecationWarning, match="column_values"):
+    with pytest.warns(DeprecationWarning, match=r"CSVLoader\.column is deprecated"):
         legacy = loader.column
 
     # The alias returns the same underlying array object.
-    assert legacy is loader.column_values
+    assert legacy is loader.column_values_in_loaded_unit
+    np.testing.assert_array_equal(legacy, np.asarray(values, dtype=float))
+
+
+@pytest.mark.base
+def test_csvloader_column_values_deprecated_alias_returns_loaded_values() -> None:
+    """The deprecated ``column_values`` attribute aliases ``column_values_in_loaded_unit``.
+
+    Issue #1924 renamed ``self.column_values`` to
+    ``self.column_values_in_loaded_unit`` to signal that the loaded profile
+    values carry a physical unit (the one declared in
+    :attr:`CSVLoaderConfig.unit`), which is not statically determinable. A
+    backward-compatible read-only property is kept so any downstream code that
+    still references ``loader.column_values`` gets a ``DeprecationWarning``
+    and the same array rather than a silent ``AttributeError``.
+    """
+    values = [float(i) for i in range(8)]
+    dataframe = pd.DataFrame({"Profile": values})
+    sim_params = _make_simulation_parameters(timesteps=len(values))
+    config = _make_config(column=0, multiplier=1.0)
+
+    loader = CSVLoader(
+        config=config,
+        my_simulation_parameters=sim_params,
+        dataframe=dataframe,
+    )
+
+    with pytest.warns(DeprecationWarning, match=r"CSVLoader\.column_values is deprecated"):
+        legacy = loader.column_values
+
+    # The alias returns the same underlying array object.
+    assert legacy is loader.column_values_in_loaded_unit
     np.testing.assert_array_equal(legacy, np.asarray(values, dtype=float))
 
 

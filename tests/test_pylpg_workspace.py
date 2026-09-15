@@ -1,0 +1,551 @@
+"""The index scheme that keeps two local-LPG runs out of each other's working directory.
+
+``pylpg`` computes inside its own installed package, in a directory named after the calculation
+index, so the index is the only isolation available. HiSim defaulted it to ``1`` and the
+multi-household request restarted its own counter at ``1``, which put every concurrent run in
+``pylpg/C1``: sqlite files corrupted each other and a finishing run deleted the folder a running one
+was still using. These tests pin the replacement rule -- distinct base indices give disjoint blocks
+of directories, an occupied directory stops the run by name, and a run releases what it claimed
+whether it succeeded or failed -- and the pool a parallel driver hands those base indices out from.
+
+None of them touch pylpg or start a calculation; they exercise arithmetic and one filesystem check,
+which is why they are ``base`` rather than ``utsp``.
+"""
+
+# clean
+
+import pathlib
+from typing import Any, ClassVar, List, Optional
+
+import pytest
+
+from hisim.components.pylpg_workspace import (
+    LocalLpgCalculationFailedError,
+    LpgBaseIndexPool,
+    PylpgWorkingDirectoryInUseError,
+    PylpgWorkspace,
+)
+
+__authors__ = "Noah Pflugradt"
+__copyright__ = "Copyright 2021-2026, FZJ-IEK-3 "
+__license__ = "MIT"
+__version__ = "1"
+__maintainer__ = "Noah Pflugradt"
+__email__ = "n.pflugradt@fz-juelich.de"
+__status__ = "development"
+
+
+@pytest.mark.base
+def test_the_default_base_index_is_the_process_when_nothing_is_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With no override the base index is the process id, which no two live runs share.
+
+    The point of the change is that the default is no longer a constant. Any process-derived value
+    would do; the process id is chosen because the kernel already guarantees it is unique among
+    running processes, so concurrent runs separate without coordinating.
+    """
+    monkeypatch.delenv(PylpgWorkspace.INDEX_ENVIRONMENT_VARIABLE, raising=False)
+    assert PylpgWorkspace.default_base_index() > 0
+
+
+@pytest.mark.base
+def test_an_explicit_base_index_overrides_the_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A caller that allocates indices itself keeps control of them.
+
+    The parallel scenario regenerator hands each of its workers a small index of its own, which is
+    the one place in the repository that got the working-directory problem right. That has to keep
+    working, so the environment variable still wins over the derivation.
+    """
+    monkeypatch.setenv(PylpgWorkspace.INDEX_ENVIRONMENT_VARIABLE, "17")
+    assert PylpgWorkspace.default_base_index() == 17
+
+
+@pytest.mark.base
+def test_two_base_indices_never_derive_the_same_calculation_index() -> None:
+    """Blocks derived from different base indices are disjoint, which is the whole guarantee.
+
+    Numbering a multi-household request consecutively from the base would collide immediately with a
+    process-derived base, because process ids are handed out in sequence and two runs started back
+    to back would differ by one. The stride is what prevents that, so the disjointness is asserted
+    across the full width of a block rather than on a couple of examples.
+    """
+    first_block = {
+        PylpgWorkspace.calculation_index(4242, ordinal) for ordinal in range(PylpgWorkspace.HOUSEHOLDS_PER_BASE_INDEX)
+    }
+    second_block = {
+        PylpgWorkspace.calculation_index(4243, ordinal) for ordinal in range(PylpgWorkspace.HOUSEHOLDS_PER_BASE_INDEX)
+    }
+    assert len(first_block) == PylpgWorkspace.HOUSEHOLDS_PER_BASE_INDEX
+    assert first_block.isdisjoint(second_block)
+
+
+@pytest.mark.base
+def test_a_request_wider_than_the_stride_is_refused() -> None:
+    """A request that would spill out of its block fails rather than quietly overlapping the next.
+
+    The stride bounds how many households one request can hold. Exceeding it silently would restore
+    exactly the defect the stride exists to prevent, so the arithmetic refuses instead.
+    """
+    with pytest.raises(ValueError):
+        PylpgWorkspace.calculation_index(1, PylpgWorkspace.HOUSEHOLDS_PER_BASE_INDEX)
+
+
+@pytest.mark.base
+def test_claiming_a_free_directory_returns_a_path_that_does_not_exist_yet() -> None:
+    """A claim on a free index yields the path pylpg will create, and creates nothing itself.
+
+    The claim is a check, not a reservation: ``pylpg`` makes the directory when it starts, and
+    creating it here would make the very next claim of the same index fail.
+    """
+    directory = PylpgWorkspace.claim(PylpgWorkspace.calculation_index(987654321, 0))
+    assert not directory.exists()
+    assert directory.name.startswith("C")
+
+
+@pytest.mark.base
+def test_claiming_an_occupied_directory_fails_and_names_the_index(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    """An occupied directory stops the run immediately with a message a reader can act on.
+
+    Letting the calculation start would either destroy a run that is still going -- ``LPGExecutor``
+    clears whatever it finds -- or fail much later with ``Directory not empty``, which is how a
+    development box degraded over a session. The message therefore has to say which index collided
+    and what the two possible causes are.
+    """
+    occupied_index = PylpgWorkspace.calculation_index(555, 0)
+
+    def working_directory_in_tmp(calculation_index: int) -> pathlib.Path:
+        return pathlib.Path(tmp_path) / f"C{calculation_index}"
+
+    monkeypatch.setattr(PylpgWorkspace, "working_directory", staticmethod(working_directory_in_tmp))
+    working_directory_in_tmp(occupied_index).mkdir()
+
+    with pytest.raises(PylpgWorkingDirectoryInUseError) as failure:
+        PylpgWorkspace.claim(occupied_index)
+
+    assert str(occupied_index) in str(failure.value)
+    assert PylpgWorkspace.INDEX_ENVIRONMENT_VARIABLE in str(failure.value)
+
+
+@pytest.mark.base
+def test_release_removes_the_directories_a_run_claimed(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    """Cleanup is driven by the claimed indices, so it works for a run that never got a result folder.
+
+    The old cleanup deleted the parent of the result folder the calculation returned, and skipped
+    itself entirely when the run failed before producing one. That left the directory on disk and the
+    next run failed on ``Directory not empty`` before it started, which is how one failure poisoned
+    the next. Indices are known before the attempt begins, so releasing by index covers both
+    outcomes; an index whose directory is already gone is skipped rather than raising, because this
+    runs in a ``finally`` where an exception would mask the real failure.
+    """
+
+    def working_directory_in_tmp(calculation_index: int) -> pathlib.Path:
+        return pathlib.Path(tmp_path) / f"C{calculation_index}"
+
+    monkeypatch.setattr(PylpgWorkspace, "working_directory", staticmethod(working_directory_in_tmp))
+    claimed = [PylpgWorkspace.calculation_index(31, ordinal) for ordinal in range(2)]
+    working_directory_in_tmp(claimed[0]).mkdir()
+    (working_directory_in_tmp(claimed[0]) / "results").mkdir()
+
+    PylpgWorkspace.release(claimed)
+
+    assert not working_directory_in_tmp(claimed[0]).exists()
+    assert not working_directory_in_tmp(claimed[1]).exists()
+
+
+@pytest.mark.base
+def test_a_calculation_that_left_no_results_is_reported_as_a_calculation_failure(tmp_path: Any) -> None:
+    """A missing result directory names the calculation, not an arbitrary json file.
+
+    ``pylpg`` runs the LoadProfileGenerator with ``subprocess.run`` and neither passes
+    ``check=True`` nor reads the return code, so a calculation that died returns looking like one
+    that worked. Reading its outputs then fails on whichever file is opened first, which is how a
+    dead calculation used to be reported as ``FileNotFoundError`` on
+    ``.../BodilyActivityLevel.High.HH1.json`` with no mention of the generator.
+    """
+    with pytest.raises(LocalLpgCalculationFailedError) as failure:
+        PylpgWorkspace.verify_results_were_produced(200, str(tmp_path / "never_created"))
+
+    assert "200" in str(failure.value), "the message must name the calculation index"
+    assert "produced no results" in str(failure.value)
+
+
+@pytest.mark.base
+def test_the_generators_own_log_is_quoted_into_the_failure(tmp_path: Any) -> None:
+    """The reason a calculation failed is in the generator's log, so the error carries it.
+
+    The log is deleted moments later by :meth:`PylpgWorkspace.release`, and on a CI runner the whole
+    directory goes with the workspace, so a message that merely names the file is a message that
+    tells a later reader nothing.
+    """
+    results = tmp_path / "results" / "Results"
+    results.mkdir(parents=True)
+    (results.parent / PylpgWorkspace.LOG_FILE_NAME).write_text(
+        "Error: database is locked\n", encoding="utf-8"
+    )
+
+    with pytest.raises(LocalLpgCalculationFailedError) as failure:
+        PylpgWorkspace.verify_results_were_produced(300, str(results))
+
+    assert "database is locked" in str(failure.value), "the generator's own reason must be quoted"
+
+
+@pytest.mark.base
+def test_results_that_are_present_pass_silently(tmp_path: Any) -> None:
+    """The check has to be invisible when the calculation worked, which is nearly always."""
+    results = tmp_path / "results" / "Results"
+    results.mkdir(parents=True)
+    (results / "SumProfiles.HH1.Electricity.csv").write_text("x", encoding="utf-8")
+
+    PylpgWorkspace.verify_results_were_produced(400, str(results))
+
+
+@pytest.mark.base
+def test_the_generator_lock_admits_one_process_at_a_time() -> None:
+    """Concurrent installs are what write an executable another process is running.
+
+    ``LPGExecutor.__init__`` checks whether the binaries are on disk and extracts them if not, and
+    those two steps are not atomic with respect to each other. Several processes starting together
+    in a fresh environment all see them missing and all extract into the same directory; the first
+    to finish executes the file the others are still writing, and the kernel refuses that with
+    ``ETXTBSY``. The lock is what makes check-and-install atomic, so this asserts the only property
+    that matters: two holders are never inside it at once.
+    """
+    import multiprocessing  # pylint: disable=import-outside-toplevel
+    import os  # pylint: disable=import-outside-toplevel
+    import time  # pylint: disable=import-outside-toplevel
+
+    def hold(events: Any) -> None:
+        with PylpgWorkspace.exclusive_generator_access():
+            events.append(("enter", os.getpid()))
+            time.sleep(0.4)
+            events.append(("leave", os.getpid()))
+
+    with multiprocessing.Manager() as manager:
+        events = manager.list()
+        processes = [multiprocessing.Process(target=hold, args=(events,)) for _ in range(3)]
+        for process in processes:
+            process.start()
+        for process in processes:
+            process.join()
+        recorded = list(events)
+
+    assert len(recorded) == 6, f"every process must record an enter and a leave, got {recorded}"
+    for first, second in zip(recorded, recorded[1:]):
+        assert not (first[0] == "enter" and second[0] == "enter"), (
+            f"two processes were inside the install lock at once: {recorded}"
+        )
+
+
+@pytest.mark.base
+def test_a_partial_result_set_is_a_calculation_failure(tmp_path: Any) -> None:
+    """Some of the outputs is not enough, and the first version of this check thought it was.
+
+    A calculation can die partway and leave part of its work behind. The directory then exists and
+    holds files, which satisfied the emptiness test, and the absence surfaced much later as
+    ``FileNotFoundError`` on whichever file the reader opened first -- three layers from the cause
+    and naming neither the calculation nor the generator. This is the case that got past it: eleven
+    files present, one missing, reported as a missing CSV rather than as a dead calculation.
+    """
+    results = tmp_path / "results" / "Results"
+    results.mkdir(parents=True)
+    (results / "SumProfiles.HH1.Electricity.csv").write_text("x", encoding="utf-8")
+
+    with pytest.raises(LocalLpgCalculationFailedError) as failure:
+        PylpgWorkspace.verify_results_were_produced(
+            500,
+            str(results),
+            required_files=["SumProfiles.HH1.Electricity.csv", "SumProfiles.HH1.Warm Water.csv"],
+        )
+
+    message = str(failure.value)
+    assert "Warm Water" in message, "the message must name the file that is missing"
+    assert "SumProfiles.HH1.Electricity.csv" not in message.rsplit("needs:", maxsplit=1)[-1], (
+        "only the missing files belong in the list, not the ones that are there"
+    )
+
+
+@pytest.mark.base
+def test_a_complete_result_set_passes(tmp_path: Any) -> None:
+    """Every required file present is the ordinary case and must stay silent."""
+    results = tmp_path / "results" / "Results"
+    results.mkdir(parents=True)
+    for name in ("a.csv", "b.csv"):
+        (results / name).write_text("x", encoding="utf-8")
+
+    PylpgWorkspace.verify_results_were_produced(600, str(results), required_files=["a.csv", "b.csv"])
+
+
+@pytest.mark.base
+def test_optional_files_are_not_required(tmp_path: Any) -> None:
+    """Only the files the run declared indispensable are checked.
+
+    The generator emits flexibility events and per-car series only for systems that have them, and
+    the connector marks those OPTIONAL. Treating them as required would turn every household
+    without a car into a failed calculation.
+    """
+    results = tmp_path / "results" / "Results"
+    results.mkdir(parents=True)
+    (results / "required.csv").write_text("x", encoding="utf-8")
+
+    PylpgWorkspace.verify_results_were_produced(700, str(results), required_files=["required.csv"])
+
+
+class ScriptedGenerator:
+    """Replaces the executor and the result check with a scripted sequence of outcomes.
+
+    Each entry of ``outcomes`` is what one attempt's check does: ``None`` for success, or the message of the
+    ``LocalLpgCalculationFailedError`` to raise. The class counts binary runs, records requested pauses instead
+    of sleeping, and records which folders were discarded instead of deleting them. Nothing touches the
+    filesystem or the generator.
+    """
+
+    def __init__(self, outcomes: List[Optional[str]]) -> None:
+        """Prepares the script.
+
+        Args:
+            outcomes: one entry per attempt, in order.
+        """
+        self.outcomes = list(outcomes)
+        self.runs = 0
+        self.sleeps: List[float] = []
+        self.discarded: List[str] = []
+
+    def execute_lpg_binaries(self) -> None:
+        """Count one run of the binary. The outcome is decided by :meth:`verify`, as in the real flow."""
+        self.runs += 1
+
+    def verify(self, calculation_index: int, result_folder: str, required_files: Any = None) -> None:
+        """Plays back the next scripted outcome.
+
+        Args:
+            calculation_index: ignored.
+            result_folder: ignored.
+            required_files: ignored.
+
+        Raises:
+            LocalLpgCalculationFailedError: when the next scripted outcome is a message.
+        """
+        del calculation_index, result_folder, required_files
+        outcome = self.outcomes.pop(0)
+        if outcome is not None:
+            raise LocalLpgCalculationFailedError(outcome)
+
+    def sleep(self, seconds: float) -> None:
+        """Records a pause instead of taking it."""
+        self.sleeps.append(seconds)
+
+    def discard(self, path: str, ignore_errors: bool = False) -> None:
+        """Records a results folder being discarded instead of deleting it."""
+        del ignore_errors
+        self.discarded.append(path)
+
+    def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Points the workspace's check, pause and folder removal at this script.
+
+        Args:
+            monkeypatch: the test's monkeypatch.
+        """
+        monkeypatch.setattr(PylpgWorkspace, "verify_results_were_produced", self.verify)
+        monkeypatch.setattr("hisim.components.pylpg_workspace.time.sleep", self.sleep)
+        monkeypatch.setattr("hisim.components.pylpg_workspace.shutil.rmtree", self.discard)
+
+
+class LockedLog:
+    """The generator log line that marks a locked database, spelled as the generator writes it."""
+
+    TEXT: ClassVar[str] = (
+        "Unhandled exception. code = Busy (5), message = SQLiteException (0x87AF00AA): database is locked"
+    )
+
+
+@pytest.mark.base
+def test_a_calculation_that_died_on_a_locked_database_is_run_again_after_a_pause(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A locked-database failure followed by success: two runs, the results discarded in between, one 5 s pause.
+
+    The delays are written as literals here and below, so that a change to the policy has to be made in the
+    tests too.
+    """
+    script = ScriptedGenerator([LockedLog.TEXT, None])
+    script.install(monkeypatch)
+
+    PylpgWorkspace.execute_and_verify(script, 7, "/results", required_files=["a.json"])  # type: ignore[arg-type]
+
+    assert script.runs == 2
+    assert script.discarded == ["/results"]
+    assert script.sleeps == [5.0]
+
+
+@pytest.mark.base
+def test_a_database_that_stays_locked_is_given_up_on_after_the_configured_retries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A database locked on every attempt: three runs, two pauses of 5 s and 15 s, then an error naming the count."""
+    script = ScriptedGenerator([LockedLog.TEXT] * 3)
+    script.install(monkeypatch)
+
+    with pytest.raises(LocalLpgCalculationFailedError) as raised:
+        PylpgWorkspace.execute_and_verify(script, 7, "/results", required_files=["a.json"])  # type: ignore[arg-type]
+
+    assert script.runs == 3
+    assert script.discarded == ["/results", "/results"]
+    assert script.sleeps == [5.0, 15.0]
+    assert "attempted 3 times" in str(raised.value)
+    assert "database is locked" in str(raised.value), "the generator's own message must survive"
+
+
+@pytest.mark.base
+def test_any_other_failure_is_raised_at_once_without_a_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failure that is not a locked database is raised after one run, with no pause."""
+    script = ScriptedGenerator(["the results directory is missing 2 of the 9 files the run needs"])
+    script.install(monkeypatch)
+
+    with pytest.raises(LocalLpgCalculationFailedError, match="missing 2 of the 9"):
+        PylpgWorkspace.execute_and_verify(script, 7, "/results", required_files=["a.json"])  # type: ignore[arg-type]
+
+    assert script.runs == 1
+    assert not script.sleeps
+    assert not script.discarded
+
+
+class GeneratorOnDisk:
+    """Stands in for the binary only: it writes files where the real one would, and the real check reads them.
+
+    The first run leaves the generator's log ending in the locked-database line and one of the two required
+    files, the way a run that died partway does. The second run writes both files. What the folder held when
+    each run started is recorded, so a test can see whether the first attempt's leftovers were still there.
+    """
+
+    def __init__(self, calculation_directory: pathlib.Path, result_folder: pathlib.Path) -> None:
+        """Prepares the stand-in.
+
+        Args:
+            calculation_directory: where the generator writes its log.
+            result_folder: where it writes its results.
+        """
+        self.calculation_directory = calculation_directory
+        self.result_folder = result_folder
+        self.runs = 0
+        self.files_present_at_start: List[List[str]] = []
+
+    def execute_lpg_binaries(self) -> None:
+        """Writes what the scripted run of the binary would have left behind."""
+        self.runs += 1
+        self.files_present_at_start.append(
+            sorted(path.name for path in self.result_folder.iterdir()) if self.result_folder.is_dir() else []
+        )
+        self.result_folder.mkdir(parents=True, exist_ok=True)
+        (self.result_folder / "a.json").write_text("{}", encoding="utf-8")
+        if self.runs == 1:
+            (self.calculation_directory / PylpgWorkspace.LOG_FILE_NAME).write_text(
+                "Calculating...\n" + LockedLog.TEXT + "\n", encoding="utf-8"
+            )
+        else:
+            (self.result_folder / "b.json").write_text("{}", encoding="utf-8")
+            (self.calculation_directory / PylpgWorkspace.LOG_FILE_NAME).write_text("Finished.\n", encoding="utf-8")
+
+
+@pytest.mark.base
+def test_the_real_check_recognises_the_locked_database_in_the_log_and_the_retry_starts_clean(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The retry decision runs on the real result check, reading a real log, and the rerun finds no leftovers.
+
+    Catches: the check no longer quoting the log tail into its message, which would turn every locked
+    database into an immediate failure; and a retry that inherits the failed attempt's partial results.
+    """
+    calculation_directory = tmp_path / "C7"
+    result_folder = calculation_directory / "results"
+    calculation_directory.mkdir()
+    generator = GeneratorOnDisk(calculation_directory, result_folder)
+    monkeypatch.setattr("hisim.components.pylpg_workspace.time.sleep", lambda seconds: None)
+
+    PylpgWorkspace.execute_and_verify(
+        generator, 7, str(result_folder), required_files=["a.json", "b.json"]  # type: ignore[arg-type]
+    )
+
+    assert generator.runs == 2
+    assert generator.files_present_at_start == [[], []], "the second run must start without the first one's a.json"
+    assert (result_folder / "b.json").is_file()
+
+
+@pytest.mark.base
+def test_two_borrows_held_at_the_same_time_get_different_base_indices() -> None:
+    """Two borrows held at the same time never share an index.
+
+    If they did, two HiSim processes would compute in the same ``pylpg/C<index>`` directory. Both
+    borrows happen on this one thread; that a second *thread* borrowing sees the same distinctness
+    is the standard library's ``queue.Queue`` guarantee, which a test here could not add to.
+    """
+    pool = LpgBaseIndexPool(slots=2)
+
+    with pool.borrowed() as first, pool.borrowed() as second:
+        assert first != second
+        assert {first, second} == {1, 2}
+
+
+@pytest.mark.base
+def test_an_index_is_lent_again_once_its_slot_is_free() -> None:
+    """A returned index can be borrowed again.
+
+    A script runs more subprocesses than it has workers, so each index is used many times.
+    """
+    pool = LpgBaseIndexPool(slots=1)
+
+    with pool.borrowed() as first:
+        assert first == 1
+    with pool.borrowed() as second:
+        assert second == 1
+
+
+@pytest.mark.base
+def test_a_borrower_that_raises_still_returns_its_index() -> None:
+    """An exception inside the ``with`` block does not lose the index.
+
+    Otherwise every failed subprocess would shrink the pool, and after ``slots`` failures the script
+    would block forever.
+    """
+    pool = LpgBaseIndexPool(slots=1)
+
+    with pytest.raises(RuntimeError):
+        with pool.borrowed():
+            raise RuntimeError("the child failed")
+
+    with pool.borrowed() as reused:
+        assert reused == 1
+
+
+@pytest.mark.base
+def test_a_pool_with_no_slots_is_refused() -> None:
+    """``slots=0`` is rejected at construction instead of blocking on the first borrow."""
+    with pytest.raises(ValueError, match="at least one slot"):
+        LpgBaseIndexPool(slots=0)
+
+
+@pytest.mark.base
+def test_the_child_environment_is_read_back_as_the_default_base_index(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The variable the pool writes is the one the child reads.
+
+    Checked as a round trip through ``PylpgWorkspace.default_base_index`` rather than against the
+    variable's literal name, so the two sides cannot drift apart unnoticed.
+    """
+    child = LpgBaseIndexPool.child_environment(7, {"UNRELATED": "kept"})
+
+    assert child["UNRELATED"] == "kept"
+    for name, value in child.items():
+        monkeypatch.setenv(name, value)
+    assert PylpgWorkspace.default_base_index() == 7
+
+
+@pytest.mark.base
+def test_the_child_environment_is_a_copy() -> None:
+    """The environment passed in is not modified."""
+    original = {"HOME": "/somewhere"}
+
+    LpgBaseIndexPool.child_environment(3, original)
+
+    assert original == {"HOME": "/somewhere"}

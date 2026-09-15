@@ -6,7 +6,7 @@ from typing import Optional
 
 # import hisim.components.random_numbers
 from hisim.simulator import SimulationParameters, Simulator
-from hisim.config import ComponentID
+from hisim.config import ComponentID, SizingContext
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import advanced_battery_bslib
 from hisim.components import weather
@@ -48,15 +48,16 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
-    my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig.get_default_config()
-    my_advanced_battery_config_1.component_id = ComponentID("Battery1")
+    # This setup has no PV array to size a battery from, so neither battery is resolved against a
+    # sizing context: both state their own capacity and inverter power, which is what the two
+    # sizable fields of the preset are left open for.
+    my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery1")
     my_advanced_battery_config_1.system_id = "SG1"
     my_advanced_battery_config_1.custom_battery_capacity_generic_in_kilowatt_hour = 10.0
     my_advanced_battery_config_1.custom_pv_inverter_power_generic_in_watt = 5.0
     my_advanced_battery_config_1.source_weight = 1
 
-    my_advanced_battery_config_2 = advanced_battery_bslib.BatteryConfig.get_default_config()
-    my_advanced_battery_config_2.component_id = ComponentID("Battery2")
+    my_advanced_battery_config_2 = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery2")
     my_advanced_battery_config_2.system_id = "SG1"
     my_advanced_battery_config_2.custom_battery_capacity_generic_in_kilowatt_hour = 5.0
     my_advanced_battery_config_2.custom_pv_inverter_power_generic_in_watt = 2.5
@@ -90,15 +91,21 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     )
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
 
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
+    # A demo array with no building to size it from, so the power is stated here rather than
+    # derived: the 10 kW this setup has always run is now written down where it is used (D-13).
+    my_photovoltaic_system_config.power_in_watt = 10000.0
+    my_photovoltaic_system_config = my_photovoltaic_system_config.resolve(
+        SizingContext(weather_identity=my_weather_config.identity())
+    )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         my_simulation_parameters=my_simulation_parameters,
         config=my_photovoltaic_system_config,

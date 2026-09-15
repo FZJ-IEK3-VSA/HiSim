@@ -26,10 +26,10 @@ from scripts.runner import (
     environment_metadata,
     filter_config,
     load_config,
-    resolve_scenario_path,
+    resolve_twin_path,
     resolve_setup_path,
     run_all,
-    run_all_json,
+    run_all_yaml,
     run_one,
     select_pairs,
 )
@@ -122,7 +122,12 @@ def test_load_config_real_file_setups_and_params() -> None:
     factories = {p.factory for p in cfg.parameter_sets}
     assert factories == {"one_week_only", "full_year"}
     for ps in cfg.parameter_sets:
-        assert set(ps.post_processing_options) == {"COMPUTE_KPIS", "WRITE_KPIS_TO_JSON"}
+        assert set(ps.post_processing_options) == {
+            "COMPUTE_OPEX",
+            "COMPUTE_CAPEX",
+            "COMPUTE_KPIS",
+            "WRITE_KPIS_TO_JSON",
+        }
 
 
 def test_load_config_real_file_setups_exist_on_disk() -> None:
@@ -214,25 +219,18 @@ def test_resolve_setup_path_missing_raises() -> None:
         resolve_setup_path(SetupConfig("ghost", "system_setups/nope.py"), REPO_ROOT)
 
 
-def test_resolve_scenario_path_finds_sibling() -> None:
-    """``resolve_scenario_path`` maps a ``.py`` setup to its ``.scenario.json`` sibling."""
-    setup = SetupConfig("gas", "system_setups/household_gas_building_sizer.py")
-    resolved = resolve_scenario_path(setup, REPO_ROOT)
-    assert resolved.exists() and resolved.name == "household_gas_building_sizer.scenario.json"
-
-
-def test_resolve_scenario_path_missing_raises() -> None:
-    """``resolve_scenario_path`` raises ``FileNotFoundError`` when no sibling exists."""
-    with pytest.raises(FileNotFoundError):
-        resolve_scenario_path(SetupConfig("ghost", "system_setups/nope.py"), REPO_ROOT)
-
-
-def test_all_golden_setups_have_scenario_json_siblings() -> None:
-    """Every setup in the shipped config has a ``.scenario.json`` sibling for JSON mode."""
+def test_all_golden_setups_have_recorded_twins() -> None:
+    """Every setup in the shipped config has a recorded ``.energy_system.yaml`` twin for YAML mode."""
     cfg = load_config(REAL_CONFIG)
     for setup in cfg.setups:
-        # Must not raise: the JSON golden check depends on every sibling existing.
-        resolve_scenario_path(setup, REPO_ROOT)
+        # Must not raise: the YAML golden check depends on every twin existing.
+        resolve_twin_path(setup, REPO_ROOT)
+
+
+def test_resolve_twin_path_names_the_recording_command_when_missing() -> None:
+    """A missing twin fails with the command that produces it, not a bare path."""
+    with pytest.raises(FileNotFoundError, match="hisim energy-system record"):
+        resolve_twin_path(SetupConfig("ghost", "system_setups/nope.py"), REPO_ROOT)
 
 
 # --------------------------------------------------------------------------- #
@@ -274,8 +272,8 @@ def test_run_all_one_result_per_pair(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert results[0].kpis == {"k": 1.0}
 
 
-def test_run_all_json_passes_json_mode_to_run_one(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """``run_all_json`` drives every pair through ``run_one`` with ``mode='json'``."""
+def test_run_all_yaml_passes_yaml_mode_to_run_one(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``run_all_yaml`` drives every pair through ``run_one`` with ``mode='yaml'``."""
     modes: list[str] = []
 
     def fake_run_one(setup, param, result_directory, _repo_root, mode="python"):
@@ -283,9 +281,9 @@ def test_run_all_json_passes_json_mode_to_run_one(tmp_path: Path, monkeypatch: p
         return RunResult(setup.id, param.id, result_directory, kpis={"k": 1.0})
 
     monkeypatch.setattr("scripts.runner.run_one", fake_run_one)
-    results = run_all_json(_sample_config(), tmp_path, REPO_ROOT, "golden-ref-check")
+    results = run_all_yaml(_sample_config(), tmp_path, REPO_ROOT, "golden-ref-check")
     assert len(results) == 4
-    assert set(modes) == {"json"}
+    assert set(modes) == {"yaml"}
 
 
 def test_run_one_captures_error_for_missing_setup(tmp_path: Path) -> None:
@@ -296,3 +294,69 @@ def test_run_one_captures_error_for_missing_setup(tmp_path: Path) -> None:
     assert result.error is not None
     assert "FileNotFoundError" in result.error
     assert not result.kpis
+
+
+@pytest.mark.base
+def test_select_pairs_honours_a_week_only_setup() -> None:
+    """Catches the runner ignoring a setup's horizons and running the full cartesian product.
+
+    A week-only setup joining the expensive full-year run is exactly the cost the restriction
+    exists to spare, and until now nothing on the runner side proved the filter is applied.
+    """
+    config = GoldenConfig(
+        check_subdir="golden-ref-check",
+        setups=[SetupConfig("everywhere", "a.py"), SetupConfig("week_only", "b.py", horizons=["week"])],
+        parameter_sets=[
+            ParameterSetConfig("one_week_60s", "one_week_only", 2021, 60, ["COMPUTE_KPIS"]),
+            ParameterSetConfig("full_year_60s", "full_year", 2021, 60, ["COMPUTE_KPIS"]),
+        ],
+    )
+
+    pairs = {(setup.id, param.id) for setup, param in select_pairs(config)}
+
+    assert pairs == {
+        ("everywhere", "one_week_60s"),
+        ("everywhere", "full_year_60s"),
+        ("week_only", "one_week_60s"),
+    }
+
+
+@pytest.mark.base
+def test_load_config_refuses_malformed_horizons(tmp_path: Path) -> None:
+    """Catches a config mistake silently dropping a setup from every gate.
+
+    An unknown name is a typo, an empty list means the setup runs nothing, and a bare string
+    or number would fail nonsensically far from the config; every one is refused at load with
+    the entry named.
+    """
+    for wrong in (["fortnight"], [], "week", 3):
+        raw = _minimal_config_dict()
+        raw["setups"][0]["horizons"] = wrong
+        path = tmp_path / "config.json"
+        path.write_text(json.dumps(raw))
+        with pytest.raises(ValueError, match="horizons"):
+            load_config(path)
+
+
+@pytest.mark.base
+def test_filter_config_refuses_an_explicitly_requested_excluded_pair() -> None:
+    """Catches the CLI silently running nothing for a pair the setup's horizons exclude.
+
+    Asking for a week-only setup under the full-year parameter set names a pair the gate never
+    contains; a run that quietly did nothing would read as a pass, so the request is refused
+    with the horizons quoted.
+    """
+    config = GoldenConfig(
+        check_subdir="golden-ref-check",
+        setups=[SetupConfig("week_only", "b.py", horizons=["week"])],
+        parameter_sets=[
+            ParameterSetConfig("one_week_60s", "one_week_only", 2021, 60, ["COMPUTE_KPIS"]),
+            ParameterSetConfig("full_year_60s", "full_year", 2021, 60, ["COMPUTE_KPIS"]),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="week_only"):
+        filter_config(config, setup_id="week_only", param_id="full_year_60s")
+
+    narrowed = filter_config(config, setup_id="week_only", param_id="one_week_60s")
+    assert [setup.id for setup in narrowed.setups] == ["week_only"]

@@ -16,7 +16,8 @@ import pytest
 import numpy as np
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
-from hisim.config import SizingContext
+from hisim import loadtypes as lt
+from hisim.config import SizingContext, concrete
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import (
@@ -89,12 +90,12 @@ def test_house(
     heating_reference_temperature_in_celsius: float = -7.0
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-        share_of_maximum_pv_potential=1, rooftop_area_in_m2=120
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem").resolve(
+        SizingContext(roof_area_in_m2=120, weather_identity=my_weather_config.identity())
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
@@ -102,23 +103,35 @@ def test_house(
     )
 
     # Build Building
-    my_building_config = building.BuildingConfig.preset_standard("Building")
+    my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
+    my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     my_building_information = building.BuildingInformation(config=my_building_config)
 
     # Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Heat Distribution Controller
-    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
-        set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
-        set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+    my_heat_distribution_controller_config = (
+        heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
+            "HeatDistributionController"
+        ).resolve(
+            SizingContext(
+                heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+                conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+                heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+                set_heating_temperature_in_celsius=(
+                    my_building_information.set_heating_temperature_for_building_in_celsius
+                ),
+                set_cooling_temperature_in_celsius=(
+                    my_building_information.set_cooling_temperature_for_building_in_celsius
+                ),
+            )
+        )
     )
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
@@ -130,7 +143,7 @@ def test_house(
     )
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(
+        heat_distribution_system.HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").resolve(
             SizingContext(
                 water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                 conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
@@ -152,22 +165,33 @@ def test_house(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    my_oil_heater_controller_config = (
-        generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-            minimal_thermal_power_in_watt=my_oil_heater_config.minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=my_oil_heater_config.maximal_thermal_power_in_watt,
-            with_domestic_hot_water_preparation=True,
+    my_oil_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.preset_modulating(
+        "ModulatingBoilerController"
+    ).resolve(
+        SizingContext(
+            minimal_thermal_power_in_watt=concrete(my_oil_heater_config.minimal_thermal_power_in_watt),
+            maximal_thermal_power_in_watt=concrete(my_oil_heater_config.maximal_thermal_power_in_watt),
         )
     )
+    my_oil_heater_controller_config.with_domestic_hot_water_preparation = True
     my_oil_heater_controller = generic_boiler.GenericBoilerController(
         my_simulation_parameters=my_simulation_parameters,
         config=my_oil_heater_controller_config,
     )
 
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
-        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM,
+    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer(
+        "SimpleHotWaterStorage"
+    )
+    # The litres-per-kilowatt figure is per kind of generator, and the volume law reads the field,
+    # so the option is set on the preset before the configuration is resolved.
+    my_simple_heat_water_storage_config.sizing_option = (
+        simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM
+    )
+    my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
+        SizingContext(
+            maximal_thermal_power_in_watt=concrete(my_oil_heater_config.maximal_thermal_power_in_watt)
+        )
     )
     my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
@@ -175,8 +199,8 @@ def test_house(
     )
 
     # DHW storage
-    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
-        number_of_apartments=my_building_information.number_of_apartments
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(
+        SizingContext(number_of_apartments=my_building_information.number_of_apartments)
     )
 
     my_dhw_storage = simple_water_storage.SimpleDHWStorage(
@@ -188,14 +212,21 @@ def test_house(
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
+        config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
     )
 
     # Build Fuel Meter
-    my_fuel_meter_config = fuel_meter.FuelMeterConfig.get_fuel_meter_default_config(
-        fuel_loadtype=my_oil_heater_config.energy_carrier,
-        heating_value_of_fuel_in_kwh_per_liter=my_oil_heater.heating_value_of_fuel_in_kwh_per_liter,
-        fuel_density_in_kg_per_m3=my_oil_heater.fuel_density_in_kg_per_m3,
+    fuel_heating_value_in_kwh_per_liter, fuel_density_in_kg_per_m3 = (
+        generic_boiler.GenericBoilerConfig.fuel_constants(
+            my_oil_heater_config.energy_carrier, my_oil_heater_config.boiler_type
+        )
+    )
+    my_fuel_meter_config = fuel_meter.FuelMeterConfig.preset_standard("FuelMeter").resolve(
+        SizingContext(
+            energy_carrier=my_oil_heater_config.energy_carrier,
+            heating_value_of_fuel_in_kwh_per_liter=fuel_heating_value_in_kwh_per_liter,
+            fuel_density_in_kg_per_m3=fuel_density_in_kg_per_m3,
+        )
     )
     my_fuel_meter = fuel_meter.FuelMeter(
         my_simulation_parameters=my_simulation_parameters,
@@ -240,20 +271,27 @@ def test_house(
 
     opex_costs_for_heating_in_euro = jsondata["Fuel Meter"]["OPEX - Energy costs"].get("value")
 
-    co2_footprint_due_to_heating_use_in_kg = jsondata["Fuel Meter"]["OPEX - CO2 Footprint"].get("value")
+    # Qualified by its source component: the oil boiler of this setup reports an
+    # "OPEX - CO2 Footprint" of its own, and a KPI name two components share is keyed per
+    # component so neither entry overwrites the other.
+    co2_footprint_due_to_heating_use_in_kg = jsondata["Fuel Meter"][
+        f"OPEX - CO2 Footprint ({my_fuel_meter.component_name})"
+    ].get("value")
+
+    # The carrier is a sizable field now, so the log lines read it through ``concrete``.
+    fuel_carrier = concrete(my_fuel_meter_config.fuel_loadtype)
+    log.information(
+        f"Total {fuel_carrier.value} consumption [kWh] {oil_consumption_in_kilowatt_hour}"
+    )
 
     log.information(
-        f"Total {my_fuel_meter_config.fuel_loadtype.value} consumption [kWh] {oil_consumption_in_kilowatt_hour}"
-    )
-
-    log.information(
-        f"Total {my_fuel_meter_config.fuel_loadtype.value} consumption measured by fuel meter [kWh] {heat_consumption_in_kilowatt_hour}"
+        f"Total {fuel_carrier.value} consumption measured by fuel meter [kWh] {heat_consumption_in_kilowatt_hour}"
     )
     log.information(
-        f"Opex costs for total {my_fuel_meter_config.fuel_loadtype.value} consumption [€] {opex_costs_for_heating_in_euro}"
+        f"Opex costs for total {fuel_carrier.value} consumption [€] {opex_costs_for_heating_in_euro}"
     )
     log.information(
-        f"CO2 footprint for total {my_fuel_meter_config.fuel_loadtype.value} consumption [kg] {co2_footprint_due_to_heating_use_in_kg}"
+        f"CO2 footprint for total {fuel_carrier.value} consumption [kg] {co2_footprint_due_to_heating_use_in_kg}"
     )
 
     # test and compare with relative error of 5%
@@ -262,3 +300,70 @@ def test_house(
         oil_consumption_in_kilowatt_hour,
         rtol=0.05,
     )
+
+    # The qualified key has to hold the meter's real emissions: a lookup that found nothing, or
+    # found an entry the qualification had emptied, would otherwise be logged and pass.
+    assert co2_footprint_due_to_heating_use_in_kg is not None
+    assert co2_footprint_due_to_heating_use_in_kg > 0
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "carrier, expected_heating_value, expected_density",
+    [
+        (lt.LoadTypes.OIL, 9.821666666666667, 830.0),
+        (lt.LoadTypes.PELLETS, 3.25, 650),
+        (lt.LoadTypes.WOOD_CHIPS, 4.333333333333333, 250),
+    ],
+)
+def test_the_preset_copies_carrier_and_fuel_constants_from_the_generator_beside_it(
+    carrier: lt.LoadTypes, expected_heating_value: float, expected_density: float
+) -> None:
+    """Pins the three copy laws against the numbers the boiler derives for each fuel.
+
+    ``preset_standard`` leaves all three fields ``AUTO`` and the boiler contributes
+    ``energy_carrier`` plus the two constants it derives from that carrier and its boiler type,
+    so a pellet boiler produces a pellet meter with the pellet heating value and nothing is
+    stated twice. The expected numbers are the unrounded ones the twins carry -- the deleted
+    factory's 9.82 was a rounded oil value every one of these setups overrode.
+    """
+    heating_value, density = generic_boiler.GenericBoilerConfig.fuel_constants(
+        carrier, generic_boiler.BoilerType.CONVENTIONAL
+    )
+
+    resolved = fuel_meter.FuelMeterConfig.preset_standard("FuelMeter").resolve(
+        SizingContext(
+            energy_carrier=carrier,
+            heating_value_of_fuel_in_kwh_per_liter=heating_value,
+            fuel_density_in_kg_per_m3=density,
+        )
+    )
+
+    assert resolved.fuel_loadtype is carrier
+    assert resolved.heating_value_of_fuel_in_kwh_per_liter == pytest.approx(expected_heating_value)
+    assert resolved.fuel_density_in_kg_per_m3 == pytest.approx(expected_density)
+
+
+@pytest.mark.base
+def test_the_two_fuel_constants_may_legitimately_be_none() -> None:
+    """Pins that a meter for a carrier that burns nothing is a resolved configuration.
+
+    District heat has no heating value and no fuel density, so the two fields are declared
+    ``optional=True``: written as ``None`` they count as resolved and no law runs for them,
+    which is what lets a district-heating meter be built at all. Without the flag a ``None``
+    would read as unresolved and the construction guard would refuse the component.
+    """
+    import dataclasses
+
+    from hisim.config import auto_fields
+
+    config = dataclasses.replace(
+        fuel_meter.FuelMeterConfig.preset_standard("FuelMeter"),
+        heating_value_of_fuel_in_kwh_per_liter=None,
+        fuel_density_in_kg_per_m3=None,
+    ).resolve(SizingContext(energy_carrier=lt.LoadTypes.DISTRICTHEATING))
+
+    assert config.fuel_loadtype is lt.LoadTypes.DISTRICTHEATING
+    assert config.heating_value_of_fuel_in_kwh_per_liter is None
+    assert config.fuel_density_in_kg_per_m3 is None
+    assert not auto_fields(config)

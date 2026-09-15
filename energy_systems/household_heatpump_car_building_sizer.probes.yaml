@@ -1,0 +1,74 @@
+# The module configurations household_heatpump_car_building_sizer is recorded under.
+# The heat-pump sizer's list, unchanged: the cars are built from the occupancy dataset and not from
+# the module configuration, so they add no axis, and the four knobs of the setup's
+# EnergySystemConfig plus the baseline are still the whole configuration space a probe can reach.
+# The ArcheTypeConfig half is held at its class defaults with one exception, the building code,
+# probed as the representative of the archetype's value cascade because it is the field that reaches
+# furthest - the envelope, the areas and the heating load, and everything sized from them. The
+# probes deliberately toggle each knob on its own, so the grouping report names every pair of them
+# as untested.
+#
+# Three branches of this setup are not configuration, and no probe here can reach any of them. They
+# are named so that the grouping below is read as a statement about one side of each rather than
+# about all of them.
+#
+# The heat pump's primary temperature input is wired to the weather only when the hplib database
+# gives the selected pump Group 1 or 4, and raises a KeyError otherwise; that fork follows the
+# shipped database, so every column stands on its Group-1-or-4 side.
+#
+# `car_surplus_charging` is a literal in the setup body, fixed to true. It decides the car
+# controller's state-of-charge threshold and, when the energy manager exists, whether the car is an
+# EMS-controlled consumer or an uncontrolled one - a fork and a knob at once, and one a module
+# configuration cannot move today. Every column records the surplus-charging side.
+#
+# How many cars exist is a property of the occupancy dataset: one component triple per car the
+# recorded household drives. All five columns share one occupancy, so the count is the same in each,
+# and the grouped format has no spelling for a component count that follows a dataset.
+setup: system_setups/household_heatpump_car_building_sizer.py
+defaults: hisim.building_sizer_utils.interface_configs.modular_household_config.ModularHouseholdConfig.get_default_config_for_household_heatpump
+probes:
+  - column: baseline
+    description: >-
+      The class defaults, recorded with no module configuration at all, which is what makes this
+      column's flat file the committed twin: full rooftop photovoltaics, battery and energy manager
+      on, floor heating, and the one car the recorded household drives.
+
+  - column: no_battery_ems
+    description: >-
+      The one structural fork configuration can reach. Without the battery and the energy manager
+      the electricity meter is wired straight to every participant instead of through the manager,
+      so the meter is present in both worlds and says something different in each — the case a group
+      cannot express and a variant can. The car's charging power reaches a balance in both worlds -
+      the energy manager takes it as a controlled consumption when there is one and the meter takes
+      it as an uncontrolled one when there is not - so the car triple itself is identical in the two
+      columns and the difference is recorded on the side that reads it.
+    module_config:
+      energy_system_config_.use_battery_and_ems: false
+
+  - column: half_pv
+    description: >-
+      Half the rooftop potential. The array and the stationary battery that is sized from it both
+      change, and nothing appears or disappears: the standing example of a difference that looks
+      structural in a diff and is a number a consumer picks. The car battery is not on this axis -
+      its capacity is the car's, not the roof's.
+    module_config:
+      energy_system_config_.share_of_maximum_pv_potential: 0.5
+
+  - column: radiator
+    description: >-
+      Radiators instead of floor heating. A second difference that reads as hardware and is not: it
+      moves the distribution system's and its controller's numbers and adds no component, and it
+      belongs in the same category as the photovoltaic share.
+    module_config:
+      energy_system_config_.heat_distribution_system: Conventional Radiator
+
+  - column: nineties_building
+    description: >-
+      A 1995-2001 single-family house instead of a 1958-1968 one: the same TABULA archetype, one
+      construction-year band later. This is the widest value cascade the setup has. The envelope the
+      code resolves moves the roof area, and with it the photovoltaic power and the battery sized
+      from that power; it moves the heating load, and with it the heat pump, the distribution
+      controller and the hot water storage. Probing it makes every re-recording prove that the whole
+      chain moves numbers only and adds, removes and rewires nothing.
+    module_config:
+      archetype_config_.building_code: DE.N.SFH.09.Gen.ReEx.001.002

@@ -18,7 +18,9 @@ from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
-@pytest.mark.base
+# Builds a LoadProfileGenerator occupancy connector and a full year of weather before it
+# simulates, so it is a full-simulation test, not a unit-scale one; see pytest.ini.
+@pytest.mark.extendedbase
 @utils.measure_execution_time
 def test_building() -> None:
     """Verify the building thermal model cools at a bounded rate without heating.
@@ -64,7 +66,7 @@ def test_building() -> None:
     log.profile(f"T2:{t_three - t_two}")
 
     # Set Weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
@@ -72,8 +74,9 @@ def test_building() -> None:
     log.profile(f"T3: {t_four - t_three}")
 
     # Set Residence
-    my_residence_config = building.BuildingConfig.preset_standard("Building")
+    my_residence_config = building.BuildingConfig.preset_german_single_family_home("Building")
 
+    my_residence_config.weather_identity = my_weather_config.identity()
     my_residence = building.Building(
         config=my_residence_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -82,7 +85,7 @@ def test_building() -> None:
     my_residence.i_prepare_simulation()
 
     # Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )

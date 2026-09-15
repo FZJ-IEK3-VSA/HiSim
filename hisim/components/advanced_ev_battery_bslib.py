@@ -25,6 +25,7 @@ from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiHelperClass
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -90,6 +91,8 @@ class CarBattery(Component):
     Components to connect to:
     (1) CarBattery controller (controller_l1_generic_ev_charge)
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     TargetPowerToOrFromBattery = "TargetPowerToOrFromBattery"  # W

@@ -1,0 +1,33 @@
+# GENERATED from feed_in_fixed_tariff_netting.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "feed_in_fixed_tariff_netting"
+group: "tariffs"
+spec_section: "8.4"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "A prosumer household: 2,800 kWh bought at 0.32 EUR/kWh and 3,200 kWh fed in at a fixed 0.082 EUR/kWh tariff. Feed-in revenue is a negative entry under the engine's sign convention, so the bill is purchase cost plus standing charge minus the revenue."
+inputs:
+  supply_kind: "FLAT"
+  energy_bought_in_kwh: 2800
+  energy_sold_in_kwh: 3200
+  working_price_in_euro_per_kwh: 0.32
+  feed_in_kind: "FIXED_TARIFF"
+  feed_in_rate_in_euro_per_kwh: 0.082
+  standing_charge_in_euro_per_year: 110
+expected:
+  energy_working_in_euro:
+    value: 896.00
+    abs_tol: 0.01
+    derivation: "energy_bought_in_kwh*working_price_in_euro_per_kwh"
+  energy_standing_in_euro:
+    value: 110.00
+    abs_tol: 0.01
+    derivation: "standing_charge_in_euro_per_year"
+  feed_in_revenue_in_euro:
+    value: -262.40
+    abs_tol: 0.01
+    derivation: "-energy_sold_in_kwh*feed_in_rate_in_euro_per_kwh"
+    note: "negative: revenue under the cost-positive sign convention"
+  total_bill_in_euro:
+    value: 743.60
+    abs_tol: 0.01
+    derivation: "energy_working_in_euro+energy_standing_in_euro+feed_in_revenue_in_euro"

@@ -8,7 +8,7 @@
 `system_docs/config_defaults_spec.md` (branch `config_presets`) and `system_docs/json_scenario_v2_spec.md`
 (branch `json_v2`) become *solution-design input* for the phases, not requirements.
 **Children:** `roadmap/declarative_energy_systems/plan.md` (phased plan) · `roadmap/declarative_energy_systems/p1_sizing_kernel_requirements.md` ·
-`roadmap/declarative_energy_systems/p2_file_format_requirements.md` · P3/P5 documents are written when P1 is accepted.
+`roadmap/declarative_energy_systems/p2_file_format_requirements.md` · `p3_recording_requirements.md` (draft) · the P5 document is written when P3 is accepted.
 **Companions:** `roadmap/declarative_energy_systems/sizing_fact_inventory.md` (counted survey) · `roadmap/declarative_energy_systems/energy_system_mockup_minimal.yaml`,
 `roadmap/declarative_energy_systems/energy_system_mockup.yaml`, `roadmap/declarative_energy_systems/energy_system_mockup_mfh.yaml` (mockups — the contract for P2).
 
@@ -85,8 +85,8 @@ These hold across all phases; each phase document owns the detailed requirements
 |---|---|---|
 | P1 Sizing kernel | presets, `AUTO`, laws, binding rule as Python API, scalar cardinality, contract tests | `p1_sizing_kernel_requirements.md` |
 | P2 File format & executor | components/inputs/config/preset/sizing_sources/groups, hard errors, schema, paths, realized record, provenance | `p2_file_format_requirements.md` |
-| P3 Recording & setup migration | Python → file recorder, all setups converted, golden parity | written after P1 acceptance |
-| P4 Component sweep | ~85 factories → presets/laws in batches; describe CLI, docs | batch checklist in the plan, no requirements document |
+| P3 Recording & setup migration | Python → file recorder, all setups converted, golden parity | `p3_recording_requirements.md` |
+| P4 Component sweep | ~85 factories → presets/laws in batches; describe CLI, docs | `p4_component_sweep_requirements.md` |
 | P5 Consumer integration | RenoVisor, building sizer, HPC payload; delete `ModularHouseholdConfig` | written after P2 acceptance |
 | Deferred | many-cardinality, climate facts, template layer, multi-zone | parking lot in the plan |
 

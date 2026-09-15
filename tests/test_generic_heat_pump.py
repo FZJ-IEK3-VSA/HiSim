@@ -45,8 +45,8 @@ def test_generic_heat_pump() -> None:
             manufacturer=manufacturer,
             component_id=ComponentID(name="GenericHeatPump"),
             heat_pump_name=heat_pump_name,
-            min_operation_time=minimum_idle_time,
-            min_idle_time=minimum_operation_time,
+            min_operation_time_in_seconds=minimum_idle_time,
+            min_idle_time_in_seconds=minimum_operation_time,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -125,8 +125,8 @@ def test_set_time_correction_raises_runtime_error_when_called_twice() -> None:
             manufacturer="Viessmann Werke GmbH & Co KG",
             component_id=ComponentID(name="GenericHeatPump"),
             heat_pump_name="Vitocal 300-A AWO-AC 301.B07",
-            min_operation_time=30,
-            min_idle_time=15,
+            min_operation_time_in_seconds=30,
+            min_idle_time_in_seconds=15,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )

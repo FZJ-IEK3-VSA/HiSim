@@ -3,201 +3,40 @@
 > **Note:** This README was generated with the assistance of Claude Code. The
 > content was reviewed and approved by Valentin Janser (v.janser@fz-juelich.de).
 
-This folder contains system setup definitions for ETHOS.HiSim simulations. Each setup
-describes which energy system components are used, how they are configured, and how they
-are connected to each other.
+This folder contains HiSim's **imperative** system setups: one `setup_function(my_sim,
+my_simulation_parameters)` per `.py` file, which instantiates components, configures them
+and wires them together. It also holds the shared `*.simulation.json` parameter files,
+which say how a setup is run rather than what it is.
+
+The **declarative** input lives one directory up, in
+[`energy_systems/`](../energy_systems/README.md): one `*.energy_system.yaml` per
+household, including a recorded twin of every setup here. The v1 `*.scenario.json` files
+that used to sit beside each setup retired on 2026-09-12 — every one of them had a
+recorded twin, and the twins are held current by the `energy-system-freshness` gate.
 
 ## Running a simulation
 
 From the repository root (or any working directory), run:
 
 ```bash
-# JSON mode (recommended)
-python hisim/hisim_main.py <scenario>.scenario.json <simulation>.simulation.json
+# Imperative Python setup
+python hisim/hisim_main.py system_setups/<setup>.py
 
-# Legacy Python mode
-python hisim/hisim_main.py <setup>.py
+# Declarative energy system (the recorded twin of the same setup)
+python hisim/hisim_main.py energy_systems/<setup>.energy_system.yaml \
+    system_setups/<simulation>.simulation.json
 ```
 
-### JSON setups (recommended)
-
-A JSON setup is split into two separate files that are passed as the first and second
-command-line arguments respectively:
-
-| File                       | Purpose                                                           |
-| -------------------------- | ----------------------------------------------------------------- |
-| `<name>.scenario.json`   | What will be simulated? Which components, how are they connected? |
-| `<name>.simulation.json` | How is the scenario simulated? Which time range, post-processing? |
-
-Separating these two concerns makes it easy to reuse the same scenario with different
-time ranges or post-processing options, or to compare multiple scenarios under identical
-simulation settings.
-
-### Legacy Python setups
-
-Each file exports a `setup_function(my_sim, my_simulation_parameters)` that imperatively
-instantiates components, configures them, and wires them together. This mode is flexible
-and supports arbitrary Python logic (loops, conditionals, helper functions). It remains
-fully supported for now but is not recommended for new setups.
+A Python setup takes an optional module config and an optional parameters file as its
+second and third arguments; an energy system takes its parameters file as the second.
+Both read either spelling of a parameters file, the `*.simulation.yaml` files beside the
+energy systems and the `*.simulation.json` files here.
 
 ---
 
-# Format of the two JSON files
+# Format of the simulation-parameters file (`*.simulation.json`)
 
-## Scenario JSON (`*.scenario.json`)
-
-Describes the physical system: its components, their configurations, and how they are
-wired together.
-
-### Top-level structure
-
-```json
-{
-    "name": "My scenario",
-    "description": "Short description shown in logs and reports.",
-    "multiple_buildings": false,
-    "components": [ ... ],
-    "connections": [ ... ]
-}
-```
-
-| Field                  | Type   | Required              | Description                                                           |
-| ---------------------- | ------ | --------------------- | --------------------------------------------------------------------- |
-| `name`               | string | yes                   | Human-readable scenario name                                          |
-| `description`        | string | no                    | Short description; shown in the result directory name and reports     |
-| `multiple_buildings` | bool   | no (default`false`) | Enable multi-building mode                                            |
-| `components`         | array  | yes                   | List of component definitions (see below)                             |
-| `connections`        | array  | no                    | Explicit connections between component outputs and inputs (see below) |
-
-### Component definition
-
-Each entry in `components` describes one component instance:
-
-```json
-{
-    "component_full_classname": "hisim.components.weather.Weather",
-    "config_full_classname": "hisim.components.weather.WeatherConfig",
-    "configuration": { ... },
-    "inputs": [ ... ],
-    "outputs": [ ... ],
-    "connect_automatically": true
-}
-```
-
-| Field                        | Type   | Required | Description                                                                                                                           |
-| ---------------------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `component_full_classname` | string | yes      | Fully qualified Python class name of the component                                                                                    |
-| `config_full_classname`    | string | no       | Fully qualified Python class name of the config. Derived automatically from the component's`__init__` type hint if omitted          |
-| `configuration`            | object | no       | Config fields as key-value pairs. If absent or`{}`, the component's `get_default_*` classmethod is called automatically           |
-| `inputs`                   | array  | no       | Additional dynamic or static inputs to register on the component                                                                      |
-| `outputs`                  | array  | no       | Additional dynamic or static outputs to register on the component                                                                     |
-| `connect_automatically`    | bool   | yes      | If`true`, the simulator wires default connections automatically based on the component's `add_default_connections()` declarations |
-
-#### Using default configurations
-
-When `configuration` is absent or empty, HiSim looks for a classmethod whose name
-contains `default` on the config class and calls it with no arguments. This only works
-if the config class has **exactly one** such method; an error is raised if there are
-zero or multiple candidates.
-
-#### Special placeholders in `configuration`
-
-Two components require path placeholders that are resolved at runtime:
-
-- **UtspLpgConnector** — set `result_dir_path` to `"<<utils.HISIMPATH['utsp_results']>>"`;
-  the executor replaces this with the actual UTSP results directory.
-- **Weather** — set `source_path` to a string starting with `"<<utils.get_input_directory()>>"`;
-  the remainder of the path is appended using the OS-appropriate separator.
-
-#### Dynamic input definition
-
-Entries in `inputs` with `"dynamic": true` connect a component to an output of another
-component matched by load type, unit, tags, and weight:
-
-```json
-{
-    "dynamic": true,
-    "source_component_output": "ElectricityOutput",
-    "source_object_name": "PVSystem",
-    "source_load_type": "Electricity",
-    "source_unit": "W",
-    "source_tags": ["PV", "ElectricityProduction"],
-    "source_weight": 999
-}
-```
-
-#### Static input definition
-
-Entries in `inputs` with `"dynamic": false` register a named input port:
-
-```json
-{
-    "dynamic": false,
-    "object_name": "MyComponent",
-    "field_name": "MyInputField",
-    "load_type": "Electricity",
-    "unit": "W",
-    "mandatory": true
-}
-```
-
-#### Dynamic output definition
-
-```json
-{
-    "dynamic": true,
-    "source_output_name": "ElectricityOutput",
-    "source_tags": ["PV", "ElectricityProduction"],
-    "source_load_type": "Electricity",
-    "source_unit": "W",
-    "source_weight": 0,
-    "output_description": "PV electricity production",
-    "source_component_class": null
-}
-```
-
-#### Static output definition
-
-```json
-{
-    "dynamic": false,
-    "object_name": "MyComponent",
-    "field_name": "MyOutputField",
-    "load_type": "Electricity",
-    "unit": "W",
-    "postprocessing_flag": null,
-    "sankey_flow_direction": null,
-    "output_description": "Description shown in reports"
-}
-```
-
-### Connections
-
-Explicit wiring between a named output field of one component and a named input field of
-another. Only needed when `connect_automatically` is `false` and the connection is not
-handled by dynamic input matching.
-
-```json
-{
-    "source": {
-        "component_name": "PVSystem",
-        "field_name": "ElectricityOutput"
-    },
-    "target": {
-        "component_name": "ElectricityMeter",
-        "field_name": "Input_PVSystem_ElectricityOutput_0"
-    }
-}
-```
-
-`component_name` refers to the `name` field inside the component's `configuration`
-(e.g. `"name": "PVSystem"`), not the class name.
-
----
-
-## Simulation JSON (`*.simulation.json`)
-
-Describes how the simulation should run, independently of which scenario is used.
+Describes how the simulation should run, independently of which household is run.
 
 ### Full structure
 
@@ -223,7 +62,7 @@ Describes how the simulation should run, independently of which scenario is used
 | `seconds_per_timestep`    | int                      | yes      | —                  | Duration of each timestep in seconds (e.g.`60` for 1-minute resolution)                         |
 | `post_processing_options` | array of strings         | no       | `[]`              | Post-processing tasks to run after the simulation (see below)                                     |
 | `logging_level`           | int                      | no       | `3` (Information) | Log verbosity:`1` Debug, `2` Profile, `3` Information, `4` Warning, `5` Error           |
-| `result_directory`        | string                   | no       | `""`              | Output directory for results. Auto-generated from the scenario file name if empty                 |
+| `result_directory`        | string                   | no       | `""`              | Output directory for results. Auto-generated from the input file name if empty                 |
 | `skip_finished_results`   | bool                     | no       | `false`           | If`true`, skip recomputation if a result directory already exists                               |
 | `log_connections`         | bool                     | no       | `false`           | If`true`, write component connections to `component_connections.json` in the result directory |
 

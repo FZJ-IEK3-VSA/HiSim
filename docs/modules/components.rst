@@ -44,7 +44,6 @@ is documented via autodoc.
 
 * **Weather & environment** —
   :py:mod:`~hisim.components.weather`,
-  :py:mod:`~hisim.components.weather_data_import`
 
 * **Building physics** —
   :py:mod:`~hisim.components.building`
@@ -52,14 +51,11 @@ is documented via autodoc.
 
 * **Energy generation** —
   PV (:py:mod:`~hisim.components.generic_pv_system`),
-  wind (:py:mod:`~hisim.components.generic_windturbine`),
   CHP (:py:mod:`~hisim.components.generic_chp`),
   solar thermal (:py:mod:`~hisim.components.solar_thermal_system`)
 
 * **Heating** —
   heat pumps (:py:mod:`~hisim.components.generic_heat_pump`,
-  :py:mod:`~hisim.components.generic_heat_pump_modular`,
-  :py:mod:`~hisim.components.advanced_heat_pump_hplib`,
   :py:mod:`~hisim.components.more_advanced_heat_pump_hplib`),
   boilers (:py:mod:`~hisim.components.generic_boiler`),
   electric heating (:py:mod:`~hisim.components.generic_electric_heating`,
@@ -73,22 +69,19 @@ is documented via autodoc.
   :py:mod:`~hisim.components.simple_air_conditioner`
 
 * **Power-to-gas / hydrogen** —
-  electrolyzers (:py:mod:`~hisim.components.generic_electrolyzer`,
-  :py:mod:`~hisim.components.generic_electrolyzer_h2`,
+  electrolyzers (:py:mod:`~hisim.components.generic_electrolyzer_h2`,
   :py:mod:`~hisim.components.generic_electrolyzer_and_h2_storage`),
   fuel cells (:py:mod:`~hisim.components.generic_fuel_cell`,
   :py:mod:`~hisim.components.advanced_fuel_cell`),
-  hydrogen storage (:py:mod:`~hisim.components.generic_hydrogen_storage`)
+  hydrogen storage (:py:mod:`~hisim.components.generic_electrolyzer_and_h2_storage`)
 
 * **Storage** —
   batteries (:py:mod:`~hisim.components.advanced_battery_bslib`),
-  thermal stores (:py:mod:`~hisim.components.generic_heat_water_storage`,
-  :py:mod:`~hisim.components.simple_water_storage`,
+  thermal stores (:py:mod:`~hisim.components.simple_water_storage`,
   :py:mod:`~hisim.components.dual_circuit_system`)
 
 * **Electric mobility** —
   :py:mod:`~hisim.components.generic_car`,
-  :py:mod:`~hisim.components.generic_ev_charger`,
   :py:mod:`~hisim.components.advanced_ev_battery_bslib`
 
 * **Meters** —
@@ -99,31 +92,19 @@ is documented via autodoc.
 
 * **Controllers** —
   L1 device controllers
-  (:py:mod:`~hisim.components.controller_l1_heatpump`,
-  :py:mod:`~hisim.components.controller_l1_building_heating`,
-  :py:mod:`~hisim.components.controller_l1_chp`,
+  (:py:mod:`~hisim.components.generic_chp.controller`,
   :py:mod:`~hisim.components.controller_l1_fuel_cell`,
-  :py:mod:`~hisim.components.controller_l1_electrolyzer`,
   :py:mod:`~hisim.components.controller_l1_electrolyzer_h2`,
   :py:mod:`~hisim.components.controller_l1_generic_ev_charge`,
-  :py:mod:`~hisim.components.controller_l1_generic_runtime`,
-  :py:mod:`~hisim.components.controller_l1_rsoc`,
   :py:mod:`~hisim.components.controller_l1_example_controller`),
   L2 energy-management systems
   (:py:mod:`~hisim.components.controller_l2_energy_management_system`,
   :py:mod:`~hisim.components.controller_l2_ptx_energy_management_system`,
-  :py:mod:`~hisim.components.controller_l2_rsoc_battery_system`,
-  :py:mod:`~hisim.components.controller_l2_smart_controller`,
   :py:mod:`~hisim.components.controller_l2_xtp_fuel_cell_ems`),
-  MPC (:py:mod:`~hisim.components.controller_mpc`),
-  PID (:py:mod:`~hisim.components.controller_pid`),
-  night setback (:py:mod:`~hisim.components.night_setback_controller`),
-  advanced fuel cell (:py:mod:`~hisim.components.advanced_fuel_cell_controller`)
+  night setback (:py:mod:`~hisim.components.night_setback_controller`)
 
 * **Signal sources & utilities** —
-  price signals (:py:mod:`~hisim.components.generic_price_signal`),
-  RSoC (:py:mod:`~hisim.components.generic_rsoc`),
-  smart device (:py:mod:`~hisim.components.generic_smart_device`),
+  tariffs (:py:mod:`~hisim.components.tariff_provider`),
   CSV loader (:py:mod:`~hisim.components.csvloader`),
   sum-builder (:py:mod:`~hisim.components.sumbuilder`),
   transformer/rectifier (:py:mod:`~hisim.components.transformer_rectifier`),

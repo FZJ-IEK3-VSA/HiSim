@@ -1,0 +1,55 @@
+# The module configurations household_oil_building_sizer is recorded under.
+# The same list the heat-pump sizer carries, because the two are one skeleton with the heat
+# generator swapped: one probe per knob of the setup's EnergySystemConfig, plus the baseline. The
+# ArcheTypeConfig half of the module configuration is held at its class defaults with one
+# exception, the building code, probed as the representative of the archetype's value cascade
+# because it is the field that reaches furthest - the envelope, the areas and the heating load, and
+# everything sized from them. The other archetype fields cascade the same way and add, remove and
+# rewire nothing either, so probing them too would only restate values. The probes deliberately
+# toggle each knob on its own, so the grouping report names every pair of them as untested.
+setup: system_setups/household_oil_building_sizer.py
+defaults: hisim.building_sizer_utils.interface_configs.modular_household_config.ModularHouseholdConfig.get_default_config_for_household_oil
+probes:
+  - column: baseline
+    description: >-
+      The class defaults, recorded with no module configuration at all, which is what makes this
+      column's flat file the committed twin: full rooftop photovoltaics, battery and energy manager
+      on, floor heating, and the conventional oil boiler this file's family is named for.
+
+  - column: no_battery_ems
+    description: >-
+      The one structural fork this setup has. Without the battery and the energy manager the
+      electricity meter is wired straight to every participant instead of through the manager, so
+      the meter is present in both worlds and says something different in each — the case a group
+      cannot express and a variant can. The fuel meter is untouched by the fork: the boiler's oil
+      never went through the electricity manager.
+    module_config:
+      energy_system_config_.use_battery_and_ems: false
+
+  - column: half_pv
+    description: >-
+      Half the rooftop potential. The array and the battery that is sized from it both change, and
+      nothing appears or disappears: the standing example of a difference that looks structural in a
+      diff and is a number a consumer picks.
+    module_config:
+      energy_system_config_.share_of_maximum_pv_potential: 0.5
+
+  - column: radiator
+    description: >-
+      Radiators instead of floor heating. A second difference that reads as hardware and is not: it
+      moves the distribution system's and its controller's numbers and adds no component. The boiler
+      follows the distribution temperatures rather than the emitter type, so what the column shows
+      about the generator is a rating and not a rewiring.
+    module_config:
+      energy_system_config_.heat_distribution_system: Conventional Radiator
+
+  - column: nineties_building
+    description: >-
+      A 1995-2001 single-family house instead of a 1958-1968 one: the same TABULA archetype, one
+      construction-year band later. This is the widest value cascade the setup has. The envelope the
+      code resolves moves the roof area, and with it the photovoltaic power and the battery sized
+      from that power; it moves the heating load, and with it the oil boiler, the distribution
+      controller and the hot water storage. Probing it makes every re-recording prove that the whole
+      chain moves numbers only and adds, removes and rewires nothing.
+    module_config:
+      archetype_config_.building_code: DE.N.SFH.09.Gen.ReEx.001.002

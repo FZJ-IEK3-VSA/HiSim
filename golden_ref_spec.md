@@ -61,7 +61,11 @@ scripts/
   golden_check.py           # REWRITE: config-driven, tolerance compare, --setup filter, report, exit codes
   golden_matrix.py          # NEW: emit GH Actions matrix JSON (per-horizon) from golden_config.json
   golden_validate.py        # NEW: vet the manually-listed setups (offline/KPI/deterministic)
+  golden_history.py         # local-only: draw how every golden KPI moved across the blesses (walks git history)
+  golden_kpi_renames.py     # the old-name → new-name table golden_history.py stitches renamed series with
   ci_all_green.sh           # NEW: gh-api helper — did quality+tests+golden-check all pass for a SHA?
+  # [2026-09-12: ci_all_green.sh was never wired into any workflow — the gate polls with
+  #  scripts/ci_wait_all.sh instead — and the unused helper was removed on that date.]
 .github/workflows/
   golden-check.yml          # NEW: Tier 1 — week pairs, every PR + push
   golden-year.yml           # NEW: Tier 2 — full-year pairs, PR→main only, gated on all CI green
@@ -85,8 +89,9 @@ tests/
   Pick whichever setups you want to protect; the only hard requirements are that
   each is **offline-runnable** and **KPI-complete** (see §9 for the validator
   that checks this for you).
-- Every parameter set: `post_processing_options: ["COMPUTE_KPIS", "WRITE_KPIS_TO_JSON"]`
-  — nothing else (no plots/CSV/PDF).
+- Every parameter set: `post_processing_options: ["COMPUTE_OPEX", "COMPUTE_CAPEX",
+  "COMPUTE_KPIS", "WRITE_KPIS_TO_JSON"]` — the cost stages plus the KPIs, so the
+  building-level cost KPIs are pinned too, and nothing else (no plots/CSV/PDF).
 - Keep per-parameter-set `nondeterministic: false`; add optional `weight`/`slow`
   hint for shard balancing.
 - **Two parameter sets per setup** (decision §14.5): `one_week_60s`
@@ -117,6 +122,22 @@ tests/
 ### 6.4 `golden_update.py`
 - Run all (or `--setup`/`--param`-filtered) pairs; write each pair's KPIs to
   `golden_references/<setup>__<param>.json` (sorted keys, indented).
+- **Sticky bless**: where a golden already exists, keep the stored value of every
+  KPI whose fresh value `compare` accepts at the gate's own tolerances (§7), and
+  write the file only when its values change — so a bless diff shows what moved,
+  not the container's last-digit float noise. The file always carries the full
+  mapping; only the *diff* is limited to the keys that moved or appeared.
+- **Never drop**: a KPI the fresh run no longer produces keeps its stored value
+  instead of disappearing, so the gate goes on failing with "missing KPI" until
+  someone retires it deliberately. Such keys are reported as `absent` in the pair's
+  summary line, always by name.
+- A stored golden that exists but cannot be merged onto — unreadable, not a JSON
+  object, or not the flat scalar mapping `flatten` produces — fails its pair like a
+  failed run (counted as errored, named with its reason, non-zero exit), rather than
+  being silently replaced.
+- `--force-rewrite` dumps the fresh values verbatim, ignoring whatever is on disk:
+  the deliberate noise clear-out, the only sanctioned way to retire a KPI, and the
+  repair path for a golden that has become unusable.
 - Write `manifest.json` (commit, python, platform, config hash, timestamp) as
   informational sidecar.
 - Print a summary; this is the deliberate "bless" button, **invoked only by the

@@ -1,8 +1,8 @@
 """Wraps components for use in the simulator."""
 
-# clean
-from typing import List
+from __future__ import annotations
 
+# clean
 import hisim.component as cp
 import hisim.loadtypes as lt
 from hisim import log
@@ -16,7 +16,7 @@ class ComponentWrapper:
     save/restore and simulation calls to the wrapped component.
     """
 
-    def __init__(self, component: cp.Component, is_cachable: bool, connect_automatically: bool):
+    def __init__(self, component: cp.Component, is_cachable: bool, connect_automatically: bool) -> None:
         """Initialize the wrapper with a component and caching/connect flags.
 
         Args:
@@ -26,8 +26,13 @@ class ComponentWrapper:
                 during wiring.
         """
         self.my_component: cp.Component = component
-        self.component_inputs: List[cp.ComponentInput] = []
-        self.component_outputs: List[cp.ComponentOutput] = []
+        self.component_inputs: list[cp.ComponentInput] = []
+        self.component_outputs: list[cp.ComponentOutput] = []
+        #: Identities of the ports the component had when it was registered. A dynamic component
+        #: grows its dispatch outputs later, while it is being wired, and those have to be
+        #: registered too; the ports seen here were already offered once and are not offered
+        #: again, so an output deliberately skipped at registration stays skipped.
+        self._outputs_present_at_registration: set[int] = set()
         # self.cachedict: = {}
         self.is_cachable: bool = is_cachable
         self.connect_automatically: bool = connect_automatically
@@ -39,7 +44,7 @@ class ComponentWrapper:
         del self.component_outputs
 
     def register_component_outputs(
-        self, all_outputs: List[cp.ComponentOutput], wrapped_components_so_far: List["ComponentWrapper"]
+        self, all_outputs: list[cp.ComponentOutput], wrapped_components_so_far: list[ComponentWrapper]
     ) -> None:
         """Register the wrapped component's outputs in the global outputs list.
 
@@ -84,6 +89,7 @@ class ComponentWrapper:
 
         # register and process the output column
         outputs = self.my_component.get_outputs()
+        self._outputs_present_at_registration = {id(output) for output in outputs}
         for output in outputs:
             if (
                 output.source_component_class is not None
@@ -96,19 +102,58 @@ class ComponentWrapper:
                     "Therefore, this output will be skipped."
                 )
                 continue  # skip this output, because the source component is not wrapped yet
-            if any(output.full_name == out.full_name for out in all_outputs):
-                raise ValueError(
-                    f"Trying to register the same key twice: {output.full_name}. "
-                    "Check if more than one building is being modeled."
-                )
-            # set the global index of the output column
-            output.global_index = len(all_outputs)  # noqa
-            # add the output column to the global list of outputs
-            all_outputs.append(output)
-            self.component_outputs.append(output)
-            log.debug(f"Registered output {output.full_name}")
+            self._register_output(output, all_outputs)
             if not self.component_outputs:
                 raise ValueError(f"The component {self.my_component.component_name} has no outputs registered.")
+
+    def _register_output(self, output: cp.ComponentOutput, all_outputs: list[cp.ComponentOutput]) -> None:
+        """Gives one output its global index and adds it to the global and the wrapper's list.
+
+        The single place a port becomes a result column, so that registering a port the component
+        grew while it was wired cannot drift from registering one it was born with.
+
+        Args:
+            output: The output to register.
+            all_outputs: Global list of all ComponentOutput objects registered so far.
+
+        Raises:
+            ValueError: If an output of that full name is already registered.
+        """
+        if any(output.full_name == out.full_name for out in all_outputs):
+            raise ValueError(
+                f"Trying to register the same key twice: {output.full_name}. "
+                "Check if more than one building is being modeled."
+            )
+        # set the global index of the output column
+        output.global_index = len(all_outputs)  # noqa
+        # add the output column to the global list of outputs
+        all_outputs.append(output)
+        self.component_outputs.append(output)
+        log.debug(f"Registered output {output.full_name}")
+
+    def register_outputs_grown_while_wiring(self, all_outputs: list[cp.ComponentOutput]) -> None:
+        """Register the outputs the component grew after it was added to the simulator.
+
+        A dynamic component's dispatch outputs belong to the participants it actually steers, so
+        they cannot all exist when the component is added: the participants are resolved later,
+        when the simulator applies the default connections, and the ports for them are created
+        there. Whatever appeared since registration is registered here, before the values vector
+        is sized from the global output list, so a port grown while wiring is a result column like
+        any other. Ports that already existed at registration are not reconsidered — one that was
+        skipped then, because the component it names is not in this run, stays skipped.
+
+        Args:
+            all_outputs: Global list of all ComponentOutput objects registered so far.
+
+        Raises:
+            ValueError: If a grown output's full name is already registered.
+        """
+        for output in self.my_component.get_outputs():
+            if id(output) in self._outputs_present_at_registration:
+                continue
+            self._outputs_present_at_registration.add(id(output))
+            self._register_output(output, all_outputs)
+            log.debug(f"The output {output.full_name} was grown while wiring")
 
     def register_component_inputs(self, global_column_dict: dict[str, cp.ComponentInput]) -> None:
         """Register the wrapped component's inputs from the global column dict.
@@ -120,7 +165,7 @@ class ComponentWrapper:
 
         log.debug(f"Registering component inputs for {self.my_component.component_name}")
         # look up input columns and cache, so we only have the correct columns saved
-        input_columns: List[cp.ComponentInput] = self.my_component.get_input_definitions()
+        input_columns: list[cp.ComponentInput] = self.my_component.get_input_definitions()
         for col in input_columns:
             global_column_entry = global_column_dict[col.fullname]
             self.component_inputs.append(global_column_entry)
@@ -166,7 +211,7 @@ class ComponentWrapper:
         log.information(f"Preparing {self.my_component.component_name} for simulation.")
         self.my_component.i_prepare_simulation()
 
-    def connect_inputs(self, all_outputs: List[cp.ComponentOutput]) -> None:
+    def connect_inputs(self, all_outputs: list[cp.ComponentOutput]) -> None:
         """Connect each of the component's inputs to a matching global output.
 
         Matches by source component name and field name, verifying load-type and unit

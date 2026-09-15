@@ -22,12 +22,13 @@ Each test states the failure mode it catches.
 # clean
 
 from pathlib import Path
-from typing import ClassVar, Tuple
+from typing import ClassVar, Tuple, cast
 
 import pytest
 
 from hisim import loadtypes as lt
 from hisim.components.electricity_meter import ElectricityMeter, ElectricityMeterConfig
+from hisim.dynamic_component import DynamicComponent
 from hisim.components.loadprofilegenerator_utsp_connector import (
     UtspLpgConnector,
     UtspLpgConnectorConfig,
@@ -59,13 +60,13 @@ class Systems:
     #: A weather station, which needs nothing and provides the building's mandatory inputs.
     WEATHER: ClassVar[str] = """  weather:
     class: hisim.components.weather.Weather
-    preset: standard
+    preset: aachen
 """
 
     #: A second weather station, for the one rule that needs two sources of the same port.
     OTHER_WEATHER: ClassVar[str] = """  other_weather:
     class: hisim.components.weather.Weather
-    preset: standard
+    preset: aachen
 """
 
     #: A building taking the weather through its declared defaults. Its remaining inputs — the
@@ -73,7 +74,7 @@ class Systems:
     #: pair is a complete, wireable system on its own.
     BUILDING: ClassVar[str] = """  building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
     inputs:
       - weather
 """
@@ -82,7 +83,7 @@ class Systems:
     #: participant.
     OCCUPANCY: ClassVar[str] = """  occupancy:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    preset: standard
+    preset: couple_both_at_work
 """
 
     @classmethod
@@ -167,7 +168,7 @@ def test_an_explicit_wire_connects_exactly_the_two_ports_it_names(tmp_path: Path
         + Systems.BUILDING
         + """  hds_controller:
     class: hisim.components.heat_distribution_system.HeatDistributionController
-    preset: standard
+    preset: building_derived
     inputs:
       - building
       - input: DailyAverageOutsideTemperature
@@ -211,13 +212,21 @@ def test_a_feed_grows_a_derived_input_on_the_aggregator(tmp_path: Path) -> None:
 
 
 @pytest.mark.base
-def test_a_dispatch_block_grows_the_back_channel_output(tmp_path: Path) -> None:
-    """Catches a controlled participant getting an input but no signal back.
+def test_a_dispatch_block_grows_exactly_one_target_port(tmp_path: Path) -> None:
+    """Catches a second control output existing beside the one the feed describes.
 
-    A participant on a channel the aggregator dispatches to is ranked and served, which only
-    works if the aggregator has somewhere to publish the power it wants that participant to
-    draw. Without the derived output the participant would be ranked and then never told
-    anything, which reads at runtime as a controller that simply never activates.
+    An aggregator finds the output it steers a participant through by tags and weight, never by
+    name, so two outputs carrying the same tags at the same weight are not a name collision that
+    anything would refuse — they are one extra entry in the list the aggregator zips against its
+    participants, and every participant after it is steered through somebody else's port. The
+    energy management system used to publish a residents' target from its own constructor, which
+    a feed describing that participant had to take over rather than ask for a second one; it
+    publishes nothing before resolution any more (F-1), so the feed's own port is the only one
+    there is.
+
+    What the test pins is that invariant from both ends: the port is the one the derived template
+    names, and the aggregator's own tag-and-weight lookup — the one the dispatch uses at run time
+    — returns it and nothing else.
     """
     entries = (
         Systems.OCCUPANCY
@@ -235,15 +244,25 @@ def test_a_dispatch_block_grows_the_back_channel_output(tmp_path: Path) -> None:
 
     wired = Systems.build(entries, tmp_path)
 
-    ems = wired.component_of("ems")
+    ems = cast(DynamicComponent, wired.component_of("ems"))
     assert "ElectricalPowerConsumptionFromoccupancy" in {port.field_name for port in ems.inputs}
-    assert "DispatchForoccupancy_ElectricalPowerConsumption" in {
-        port.field_name for port in ems.outputs
-    }
     resolved = wired.resolved_feeds[0][1][0]
     assert resolved.dispatch is not None
     assert lt.InandOutputType.ELECTRICITY_TARGET in resolved.dispatch.tags
     assert lt.ComponentType.RESIDENTS in resolved.dispatch.tags
+    assert resolved.dispatch_output_name == "DispatchForoccupancy_ElectricalPowerConsumption"
+    served = [
+        entry
+        for entry in ems.my_component_outputs
+        if entry.source_weight == 1
+        and lt.InandOutputType.ELECTRICITY_TARGET in entry.source_tags
+        and lt.ComponentType.RESIDENTS in entry.source_tags
+    ]
+    assert [entry.source_output_field_name for entry in served] == [resolved.dispatch_output_name]
+    found = ems.get_all_dynamic_outputs(
+        tags=[lt.ComponentType.RESIDENTS, lt.InandOutputType.ELECTRICITY_TARGET], weight_counter=1
+    )
+    assert [port.field_name for port in found] == [resolved.dispatch_output_name]
 
 
 @pytest.mark.base
@@ -257,7 +276,7 @@ def test_a_bare_item_whose_consumer_declares_no_defaults_is_rejected(tmp_path: P
         Systems.WEATHER
         + """  building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
     inputs:
       - weather
       - meter
@@ -284,7 +303,7 @@ def test_a_wire_naming_an_output_the_source_does_not_have_is_rejected(tmp_path: 
         Systems.WEATHER
         + """  building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
     inputs:
       - input: TemperatureOutside
         from: weather.TemperatureOutsid
@@ -310,7 +329,7 @@ def test_a_wire_naming_an_input_the_consumer_does_not_have_is_rejected(tmp_path:
         Systems.WEATHER
         + """  building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
     inputs:
       - input: TemperatureOutsideAir
         from: weather.TemperatureOutside
@@ -337,7 +356,7 @@ def test_a_wire_whose_ends_carry_different_quantities_is_rejected(tmp_path: Path
         Systems.WEATHER
         + """  building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
     inputs:
       - input: Altitude
         from: weather.TemperatureOutside
@@ -365,13 +384,17 @@ def test_an_input_fed_by_two_sources_is_rejected(tmp_path: Path) -> None:
         + Systems.OTHER_WEATHER
         + """  building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
+    sizing_sources:
+      weather_identity: weather.weather_identity
     inputs:
       - weather
       - input: TemperatureOutside
         from: other_weather.TemperatureOutside
 """
     )
+    # Two weathers make the building's weather_identity ambiguous, and sizing runs before wiring, so the
+    # fixture names its source: this test is about the second feed, not about which weather sizes it.
 
     with pytest.raises(EnergySystemWiringError) as failure:
         Systems.build(entries, tmp_path)
@@ -393,7 +416,7 @@ def test_a_mandatory_input_nothing_feeds_is_rejected(tmp_path: Path) -> None:
         + Systems.BUILDING
         + """  hds_controller:
     class: hisim.components.heat_distribution_system.HeatDistributionController
-    preset: standard
+    preset: building_derived
     inputs:
       - building
 """
@@ -419,7 +442,7 @@ def test_a_feed_addressed_at_a_component_that_aggregates_nothing_is_rejected(tmp
         + Systems.OCCUPANCY
         + """  building:
     class: hisim.components.building.Building
-    preset: standard
+    preset: german_single_family_home
     inputs:
       - weather
       - from: occupancy.ElectricalPowerConsumption
@@ -560,7 +583,7 @@ def test_a_component_whose_constructor_refuses_its_configuration_is_rejected(tmp
     """
     entries = """  occupancy:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    preset: standard
+    preset: couple_both_at_work
     config:
       name_of_predefined_loadprofile: NoSuchHousehold
 """
@@ -585,7 +608,7 @@ def test_a_derived_port_name_colliding_with_an_existing_one_is_rejected() -> Non
     parameters = SimulationParameters.one_day_only(2021, 900)
     occupancy = UtspLpgConnector(
         my_simulation_parameters=parameters,
-        config=UtspLpgConnectorConfig.preset_standard("occupancy"),
+        config=UtspLpgConnectorConfig.preset_couple_both_at_work("occupancy"),
     )
     meter = ElectricityMeter(
         my_simulation_parameters=parameters,

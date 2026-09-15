@@ -2,7 +2,7 @@
 # clean
 from __future__ import annotations
 import os
-from typing import List, Optional, Sequence
+from typing import Any, List, Optional, Sequence
 import enum
 
 import datetime
@@ -94,6 +94,52 @@ class SimulationParameters:
         self.multiple_buildings = multiple_buildings
         self.figure_format = FigureFormat.PNG
         self.log_connections = log_connections
+        # Parameters of the parallel lifecycle cost engine (cost_spec.md §3.2). Deliberately a
+        # plain attribute (not a dataclass field) so *.simulation.json round-trips stay
+        # byte-identical during the parallel phase; set via set_economic_parameters() or the
+        # RenoVisor request (see cost_module_issues.md #5).
+        self.economic_parameters: Optional[Any] = None
+        # Optional hisim.economics.bridge.EconomicContext: existing assets, subsidy context,
+        # envelope measures, tenancy data and scenario sets a system setup declares for the
+        # lifecycle cost engine (see system_setups/economic_example/).
+        self.economic_context: Optional[Any] = None
+
+    def set_economic_parameters(self, economic_parameters: Any) -> None:
+        """Attaches EconomicParameters for the lifecycle cost engine (cost_spec.md §3.2).
+
+        The economy-wide assumptions of a run — country, price basis year, horizon, discount and
+        escalation rates, subsidy catalog path — travel with the simulation parameters because
+        that is the one object postprocessing already receives; the setter exists so a system
+        setup does not have to know that they are carried as a plain attribute rather than a
+        dataclass field (which is what keeps `*.simulation.json` round-trips byte-identical).
+
+        Attaching nothing is valid: the engine then falls back to its documented defaults for the
+        simulation's country. Typed as `Any` on purpose, so `hisim.simulationparameters` does not
+        import the economics package.
+
+        Args:
+            economic_parameters: A `hisim.economics.EconomicParameters` instance.
+        """
+        self.economic_parameters = economic_parameters
+
+    def set_economic_context(self, economic_context: Any) -> None:
+        """Attaches an EconomicContext for the lifecycle cost engine (cost_spec.md §4-§6).
+
+        The counterpart to the parameters above: not the economy, but *this* decision situation —
+        what already stands in the building, who applies for which subsidy, which non-simulated
+        envelope measures belong to the package, how the building is tenanted, which scenarios to
+        sweep. None of it is derivable from a physics simulation, so whoever defines the variant
+        declares it once here and `hisim.economics.bridge` merges it into the simulation-derived
+        inputs after the run.
+
+        Without a context the run still produces lifecycle costs, but only greenfield ones — every
+        device charged as a new purchase into an empty building. See
+        `system_setups/economic_example/` for a fully worked attachment.
+
+        Args:
+            economic_context: A `hisim.economics.bridge.EconomicContext` instance.
+        """
+        self.economic_context = economic_context
 
     @classmethod
     def full_year(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
@@ -184,13 +230,64 @@ class SimulationParameters:
         return simulation_parameters
 
     @classmethod
-    def one_week_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
-        """Generates a parameter set for a single week, primarily for unit testing."""
+    def _first_week_of(cls, year: int, month: int, seconds_per_timestep: int) -> SimulationParameters:
+        """Builds the parameter set of the first seven days of one month.
+
+        The one spelling of "a week starting on the first", shared by the January and the July
+        window so an off-by-one fixed in one cannot survive in the other.
+
+        Args:
+            year: Calendar year the week is taken from.
+            month: The month whose first week is covered.
+            seconds_per_timestep: Resolution of the simulation in seconds.
+
+        Returns:
+            Parameters covering the 1st to the 8th of that month.
+        """
         return cls(
-            datetime.datetime(year, 1, 1),
-            datetime.datetime(year, 1, 8),
+            datetime.datetime(year, month, 1),
+            datetime.datetime(year, month, 8),
             seconds_per_timestep,
         )
+
+    @classmethod
+    def one_week_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
+        """Generates a parameter set for a single week, primarily for unit testing."""
+        return cls._first_week_of(year, 1, seconds_per_timestep)
+
+    @classmethod
+    def one_week_july(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
+        """Generates a parameter set whose dates are the first week of July. It does not yet deliver July.
+
+        The intent was a summer counterpart to ``one_week_only``: every week- and day-sized
+        parameter set of this class starts on the first of January, which measures a cooling
+        device, a solar-thermal collector or an air conditioner at its annual minimum, and a
+        component that does nothing for the whole run proves nothing about itself. Shifting the
+        same seven days into July was meant to exercise the cooling side. (The two three-month
+        sets do start mid-year — and are wrong in exactly the way described below.)
+
+        **It does not do that today, and a caller must not assume it does.** HiSim has never
+        supported a mid-year start date. Every profile-driven component — the weather sources, the
+        PV model, the building, the LoadProfileGenerator occupancy, the cars, the smart devices,
+        the CSV loader, the seasonal gates of the heat pump and the CHP — indexes its year-long
+        profile by the timestep number, so timestep 0 is read as the 1st of January whatever this
+        start date says. A run over these dates therefore reproduces January for every component
+        that reads a profile, and pairs a July sun position with January irradiance in the few
+        that do compute from the date, such as a solar-thermal collector's geometry.
+
+        The set is kept, and only the parity rig used it: the rig has fenced its July window
+        (``scripts/p3_parity_matrix.py``) until the mid-year-start epic makes the profiles follow
+        the start date, at which point this becomes the window it was meant to be. Until then it
+        belongs in nothing that reports physics.
+
+        Args:
+            year: Calendar year the week is taken from.
+            seconds_per_timestep: Resolution of the simulation in seconds.
+
+        Returns:
+            Parameters covering the 1st to the 8th of July of that year.
+        """
+        return cls._first_week_of(year, 7, seconds_per_timestep)
 
     @classmethod
     def one_week_with_only_plots(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:

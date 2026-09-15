@@ -14,7 +14,7 @@ import pandas as pd
 import pytest
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
-from hisim.config import SizingContext
+from hisim.config import SizingContext, concrete
 from hisim import utils
 from hisim import log
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -178,12 +178,12 @@ def test_cluster_house_for_several_time_resolutions():
     # which builds the variable name from the component output's pretty name
     # (object_name == component_name). The load-profile generator is configured
     # with the name "UTSPConnector"
-    # (see UtspLpgConnectorConfig.get_default_utsp_connector_config), so its class
+    # (the name every setup passes to UtspLpgConnectorConfig.preset_couple_both_at_work), so its class
     # name "UtspLpgConnector" does not appear in the yearly-result keys -- match
     # the configured name instead. PVSystem's and Weather's configured names equal
     # their class names, so their get_classname() matches their yearly-result keys.
     utsp_connector_name = (
-        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config().component_id.name
+        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector").component_id.name
     )
     # Predefined-input components whose aggregated yearly results must be stable
     # across the three time resolutions (15/30/60 min).
@@ -233,7 +233,7 @@ def test_cluster_house_for_several_time_resolutions():
     # configured component name (Component.component_name == config.component_id.name for this
     # single-building simulation), not by the Python class name. The load-profile
     # generator is configured with the name "UTSPConnector"
-    # (see UtspLpgConnectorConfig.get_default_utsp_connector_config), so its class
+    # (the name every setup passes to UtspLpgConnectorConfig.preset_couple_both_at_work), so its class
     # name "UtspLpgConnector" does not appear in the opex keys -- match the
     # configured name instead. PVSystem's configured name equals its class name, so
     # PVSystem.get_classname() matches its opex key. The opex CSV also contains
@@ -347,15 +347,21 @@ def run_cluster_house(
     # =================================================================================================================================
     # Build Basic Components
     # Build Building
-    my_building_config = building.BuildingConfig.preset_standard("Building")
+    # The weather config is created first: the building and PV configs copy its identity
+    # (weather_identity) and must have it before those components are built. The weather
+    # component itself is still added further down, so the simulator's component order is unchanged.
+    my_weather_config = weather.WeatherConfig.for_location("Weather", weather.LocationEnum[weather_location])
+
+    my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
     my_building_information = building.BuildingInformation(config=my_building_config)
+    my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_building, connect_automatically=True)
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     my_occupancy_config.data_acquisition_mode = (
         loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
     )
@@ -367,16 +373,18 @@ def run_cluster_house(
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_weather)
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-        rooftop_area_in_m2=my_building_information.roof_area_in_m2,
-        share_of_maximum_pv_potential=1,
-        location=weather_location,
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
+    my_photovoltaic_system_config.location = weather_location
+    my_photovoltaic_system_config = my_photovoltaic_system_config.resolve(
+        SizingContext(
+            roof_area_in_m2=my_building_information.roof_area_in_m2,
+            weather_identity=my_weather_config.identity(),
+        )
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config, my_simulation_parameters=my_simulation_parameters,
@@ -385,11 +393,22 @@ def run_cluster_house(
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
 
     # Build Heat Distribution Controller
-    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
-        set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
-        set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+    my_heat_distribution_controller_config = (
+        heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
+            "HeatDistributionController"
+        ).resolve(
+            SizingContext(
+                heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+                conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+                heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+                set_heating_temperature_in_celsius=(
+                    my_building_information.set_heating_temperature_for_building_in_celsius
+                ),
+                set_cooling_temperature_in_celsius=(
+                    my_building_information.set_cooling_temperature_for_building_in_celsius
+                ),
+            )
+        )
     )
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
@@ -449,8 +468,8 @@ def run_cluster_house(
     my_sim.add_component(my_heatpump, connect_automatically=True)
 
     # DHW storage configs
-    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
-        number_of_apartments=my_building_information.number_of_apartments
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(
+        SizingContext(number_of_apartments=my_building_information.number_of_apartments)
     )
 
     my_dhw_storage = simple_water_storage.SimpleDHWStorage(
@@ -460,9 +479,16 @@ def run_cluster_house(
     my_sim.add_component(my_dhw_storage, connect_automatically=True)
 
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
-        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
+    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer(
+        "SimpleHotWaterStorage"
+    )
+    # The litres-per-kilowatt figure is per kind of generator, and the volume law reads the field,
+    # so the option is set on the preset before the configuration is resolved.
+    my_simple_heat_water_storage_config.sizing_option = (
+        simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
+    )
+    my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
+        SizingContext(maximal_thermal_power_in_watt=my_heatpump_config.set_thermal_output_power_in_watt)
     )
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
@@ -472,7 +498,7 @@ def run_cluster_house(
     my_sim.add_component(my_simple_water_storage, connect_automatically=True)
 
     # Build Heat Distribution System
-    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.preset_standard(
+    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.preset_building_derived(
         "HeatDistributionSystem"
     ).resolve(
         SizingContext(
@@ -490,7 +516,7 @@ def run_cluster_house(
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
+        config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
     )
 
     # Build EMS
@@ -505,8 +531,8 @@ def run_cluster_house(
     )
 
     # Build Battery
-    my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
-        total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
+    my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
+        SizingContext(pv_peak_power_in_watt=concrete(my_photovoltaic_system_config.power_in_watt))
     )
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config,

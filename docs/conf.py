@@ -55,6 +55,12 @@ napoleon_use_ivar: bool = True
 # components.rst and postprocessing.rst (written to docs/_autosummary).
 autosummary_generate: bool = True
 
+# Package ``__init__`` re-exports must not be documented a second time under
+# the facade name: two targets for one class make every short-form cross
+# reference to it ambiguous. Ignoring ``__all__`` keeps each object documented
+# only in the module that defines it.
+autodoc_default_options: dict[str, bool] = {'ignore-module-all': True}
+
 # wetterdienst is commented out in requirements.txt until
 # weather_data_import.py is migrated to its new API, so mock it here to keep
 # hisim.components.weather_data_import importable for autodoc.

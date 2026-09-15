@@ -10,7 +10,7 @@ pytestmark = pytest.mark.hpcharness
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 
 
-# ------------------------------------------------- system-setup runner & submit script
+# ------------------------------------------------- system-setup runner & submit scripts
 
 
 def test_setup_runner_builds_one_week_parameters():
@@ -55,40 +55,45 @@ def test_find_setups_skips_init_and_excludes(tmp_path):
     assert [p.name for p in found] == ["a_setup.py"]
 
 
-def test_find_json_setups_filters_by_name(tmp_path):
-    """find_json_setups keeps only *.scenario.json whose name contains the (case-insensitive) filter."""
+def test_find_energy_systems_filters_by_name_and_skips_grouped(tmp_path):
+    """find_energy_systems keeps matching flat twins and drops grouped ones and other files."""
     sys.path.insert(0, str(SCRIPTS / "hpc_harness"))
-    from submit_json_setups import find_json_setups  # pylint: disable=import-error
+    from submit_energy_systems import find_energy_systems  # pylint: disable=import-error
 
-    for name in ("household_gas_building_sizer.scenario.json", "Household_HP_Building_Sizer.scenario.json",
-                 "basic_household.scenario.json", "household_gas_building_sizer.py",
+    for name in ("household_gas_building_sizer.energy_system.yaml",
+                 "Household_HP_Building_Sizer.energy_system.yaml",
+                 "household_gas_building_sizer.grouped.energy_system.yaml",
+                 "basic_household.energy_system.yaml",
+                 "household_gas_building_sizer.py",
                  "notes.txt"):
-        (tmp_path / name).write_text("{}", encoding="utf-8")
-    found = {p.name for p in find_json_setups(tmp_path, "building_sizer")}
-    assert found == {"Household_HP_Building_Sizer.scenario.json",
-                     "household_gas_building_sizer.scenario.json"}  # case-insensitive; .py/non-matching excluded
+        (tmp_path / name).write_text("", encoding="utf-8")
+    found = {p.name for p in find_energy_systems(tmp_path, "building_sizer")}
+    # case-insensitive; the grouped twin, the .py and the non-matching file are excluded
+    assert found == {"Household_HP_Building_Sizer.energy_system.yaml",
+                     "household_gas_building_sizer.energy_system.yaml"}
 
 
-def test_submit_json_setups_dry_run_builds_one_job_per_matching_scenario(tmp_path, capsys):
-    """main() --dry-run resolves each matching scenario once and lists one job per setup.
+def test_submit_energy_systems_dry_run_builds_one_job_per_matching_system(tmp_path, capsys):
+    """main() --dry-run resolves each matching energy system once and lists one job per file.
 
-    Guards the jobs loop (resolve() cached per scenario, str(sim_params) hoisted out of
-    the loop) against regressions: it must select only matching *.scenario.json files,
-    strip the suffix for the label, report the shared sim-params name, and short-circuit
-    before contacting the harness server.
+    Guards the jobs loop (resolve() cached per file, str(sim_params) hoisted out of the
+    loop) against regressions: it must select only matching, non-grouped
+    *.energy_system.yaml files, strip the suffix for the label, report the shared
+    sim-params name, and short-circuit before contacting the harness server.
     """
     sys.path.insert(0, str(SCRIPTS / "hpc_harness"))
-    from submit_json_setups import main  # pylint: disable=import-error
+    from submit_energy_systems import main  # pylint: disable=import-error
 
-    for name in ("alpha_building_sizer.scenario.json",
-                 "beta_building_sizer.scenario.json",
-                 "basic_household.scenario.json"):
-        (tmp_path / name).write_text("{}", encoding="utf-8")
-    sim_params_name = "test_dry_run.simulation.json"
-    (tmp_path / sim_params_name).write_text("{}", encoding="utf-8")
+    for name in ("alpha_building_sizer.energy_system.yaml",
+                 "beta_building_sizer.energy_system.yaml",
+                 "alpha_building_sizer.grouped.energy_system.yaml",
+                 "basic_household.energy_system.yaml"):
+        (tmp_path / name).write_text("", encoding="utf-8")
+    sim_params_name = "test_dry_run.simulation.yaml"
+    (tmp_path / sim_params_name).write_text("", encoding="utf-8")
 
     rc = main([
-        "--setup-dir", str(tmp_path),
+        "--energy-system-dir", str(tmp_path),
         "--name-filter", "building_sizer",
         "--sim-params", sim_params_name,
         "--dry-run",
@@ -96,10 +101,11 @@ def test_submit_json_setups_dry_run_builds_one_job_per_matching_scenario(tmp_pat
 
     assert rc == 0
     out = capsys.readouterr().out
-    # only the two matching scenarios, labels strip the .scenario.json suffix
+    # only the two matching flat twins, labels strip the .energy_system.yaml suffix
     assert "  - alpha_building_sizer" in out
     assert "  - beta_building_sizer" in out
+    assert "grouped" not in out
     assert "basic_household" not in out
-    assert "2 JSON scenario" in out
+    assert "2 energy system" in out
     assert sim_params_name in out
     assert "nothing submitted" in out

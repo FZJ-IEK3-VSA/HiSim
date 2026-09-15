@@ -174,11 +174,14 @@ behaviour:
    (charts, KPIs, cost/emission computation, scenario evaluation, CSV export,
    PDF report generation).
 
-5. **JSON-based simulation** — the
-   :py:mod:`~hisim.json_generator` module can serialise a running simulation
-   into ``.scenario.json`` and ``.simulation.json`` files;
-   :py:mod:`~hisim.json_executor` can reconstruct and replay it.  This
-   provides a language-agnostic configuration seam for external tools.
+5. **Declarative simulation** — an ``*.energy_system.yaml`` file in
+   :file:`energy_systems/` describes a household with no Python involved and is
+   built by :py:mod:`hisim.energy_system`; every Python setup has a recorded
+   twin there.  This is the language-agnostic configuration seam for external
+   tools.  (The v1 ``*.scenario.json`` files and their reader retired on
+   2026-09-12; :py:mod:`~hisim.json_generator` survives only as an *output*
+   writer, serialising a finished run into the result directory for scenario
+   evaluation.)
 
 Module Index
 ------------

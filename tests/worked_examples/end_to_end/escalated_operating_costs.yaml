@@ -1,0 +1,108 @@
+# GENERATED from escalated_operating_costs.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "escalated_operating_costs"
+group: "end_to_end"
+spec_section: "3.6"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-09-08"
+description: "A 20,000 EUR device with a 10-year service life over a 10-year horizon at 3 % interest, with 1.5 % annual maintenance, 4,000 kWh of electricity at 0.30 EUR/kWh and a 120 EUR standing charge - and, unlike every other example in the library, escalation switched on: 3 % on energy and 2 % on everything general. All rates are nominal (§3.2), so every figure labelled nominal_* is in euros of its own year and the nominal series grows. The exponent convention is what this example pins: recurring payments are quoted at year-1 prices and escalate with (1+rate)^(t-1), so year 1 is unescalated and year 10 carries nine steps. Energy escalation deliberately equals the discount rate, which makes every year's discounted energy cost identical and the energy NPV exactly T times the year-1 figure over (1+i)."
+inputs:
+  investment_in_euro: 20000
+  lifetime_in_years: 10
+  maintenance_rate: 0.015
+  horizon_in_years: 10
+  interest_rate: 0.03
+  general_price_escalation_rate: 0.02
+  investment_price_escalation_rate: 0
+  energy_price_escalation_rate: 0.03
+  energy_bought_in_kwh: 4000
+  electricity_price_in_euro_per_kwh: 0.3
+  standing_charge_in_euro_per_year: 120
+  months_per_year: 12
+expected:
+  present_value_factor_sum:
+    value: 8.530203
+    abs_tol: 0.000001
+    derivation: "(1-(1+interest_rate)^-horizon_in_years)/interest_rate"
+    note: "sum of the discount factors of years 1..10; no escalated series uses it, each has its own factor below"
+  nominal_maintenance_year_1_in_euro:
+    value: 300.00
+    abs_tol: 0.01
+    derivation: "investment_in_euro*maintenance_rate"
+    note: "recurring payments are quoted at year-1 prices, so year 1 carries the exponent 0 and escalation only starts in year 2 (§3.6 rule 4)"
+  nominal_maintenance_year_10_in_euro:
+    value: 358.53
+    abs_tol: 0.01
+    derivation: "nominal_maintenance_year_1_in_euro*(1+general_price_escalation_rate)^(horizon_in_years-1)"
+    note: "exponent horizon-1, not horizon: nine escalation steps lie between year 1 and year 10"
+  nominal_energy_working_year_1_in_euro:
+    value: 1200.00
+    abs_tol: 0.01
+    derivation: "energy_bought_in_kwh*electricity_price_in_euro_per_kwh"
+  nominal_energy_working_year_10_in_euro:
+    value: 1565.73
+    abs_tol: 0.01
+    derivation: "nominal_energy_working_year_1_in_euro*(1+energy_price_escalation_rate)^(horizon_in_years-1)"
+    note: "the working price escalates at the carrier rate, also from the year-1 level (§3.6 rule 5)"
+  nominal_energy_standing_year_1_in_euro:
+    value: 120.00
+    abs_tol: 0.01
+    derivation: "standing_charge_in_euro_per_year"
+  nominal_energy_standing_year_10_in_euro:
+    value: 143.41
+    abs_tol: 0.01
+    derivation: "standing_charge_in_euro_per_year*(1+general_price_escalation_rate)^(horizon_in_years-1)"
+    note: "the standing charge escalates with the general rate, not with the carrier rate"
+  npv_investment_in_euro:
+    value: 20000.00
+    abs_tol: 0.01
+    derivation: "investment_in_euro"
+    note: "paid at year 0, undiscounted"
+  npv_maintenance_in_euro:
+    value: 2788.61
+    abs_tol: 0.01
+    derivation: "nominal_maintenance_year_1_in_euro*(1-((1+general_price_escalation_rate)/(1+interest_rate))^horizon_in_years)/(interest_rate-general_price_escalation_rate)"
+    note: "closed form of the sum over t=1..T of (1+general)^(t-1)/(1+interest)^t"
+  npv_energy_standing_in_euro:
+    value: 1115.44
+    abs_tol: 0.01
+    derivation: "standing_charge_in_euro_per_year*(1-((1+general_price_escalation_rate)/(1+interest_rate))^horizon_in_years)/(interest_rate-general_price_escalation_rate)"
+  npv_energy_working_in_euro:
+    value: 11650.49
+    abs_tol: 0.01
+    derivation: "nominal_energy_working_year_1_in_euro*horizon_in_years/(1+interest_rate)"
+    note: "the energy escalation equals the discount rate, so every year discounts to the same amount and the sum is T times it; the closed form above would divide by zero here"
+  npv_replacement_in_euro:
+    value: 0.00
+    abs_tol: 0.01
+    note: "constant, not a formula: the service life equals the horizon, so nothing is re-purchased"
+  npv_residual_value_in_euro:
+    value: 0.00
+    abs_tol: 0.01
+    note: "constant, not a formula: the year-0 unit is exactly used up at the horizon, so there is no unused remainder to write back"
+  total_npv_in_euro:
+    value: 35554.54
+    abs_tol: 0.01
+    derivation: "npv_investment_in_euro+npv_maintenance_in_euro+npv_energy_working_in_euro+npv_energy_standing_in_euro"
+  annuity_factor:
+    value: 0.117231
+    abs_tol: 0.000001
+    derivation: "interest_rate*(1+interest_rate)^horizon_in_years/((1+interest_rate)^horizon_in_years-1)"
+  eac_in_euro:
+    value: 4168.08
+    abs_tol: 0.01
+    derivation: "total_npv_in_euro*annuity_factor"
+  annual_cost_year_1_in_euro:
+    value: 1620.00
+    abs_tol: 0.01
+    derivation: "nominal_maintenance_year_1_in_euro+nominal_energy_working_year_1_in_euro+nominal_energy_standing_year_1_in_euro"
+    note: "nominal, not discounted: the liquidity view of year 1"
+  annual_cost_year_10_in_euro:
+    value: 2067.67
+    abs_tol: 0.01
+    derivation: "nominal_maintenance_year_10_in_euro+nominal_energy_working_year_10_in_euro+nominal_energy_standing_year_10_in_euro"
+    note: "the same liquidity view ten years on, and the point of the example: the nominal series grows, so year 1 and year 10 are different numbers"
+  monthly_cost_year_1_in_euro:
+    value: 135.00
+    abs_tol: 0.01
+    derivation: "annual_cost_year_1_in_euro/months_per_year"
+    note: "year 1 only; a later year's monthly figure would be larger"

@@ -1,14 +1,15 @@
 """Test for generic pv system."""
 
+import dataclasses
 import os
 
 import pytest
 from tests import functions_for_testing as fft
 from hisim import sim_repository
 from hisim import component
-from hisim import utils
 from hisim.components import weather
 from hisim.components import generic_pv_system
+from hisim.config import ConfigSizingError, SizingContext, concrete
 from hisim import simulator as sim
 from hisim import log
 
@@ -44,15 +45,14 @@ def _run_pv_at_timestep_655(
     # Weather: 6 outputs
     # PVS:  1 output
 
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=mysim
     )
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
 
+    pvs_config.weather_identity = my_weather_config.identity()
     my_pvs = generic_pv_system.PVSystem(
         config=pvs_config, my_simulation_parameters=mysim
     )
@@ -110,12 +110,11 @@ def test_photovoltaic_sandia() -> None:
     component, and asserts the electricity output (~334.88 W) and energy output
     at timestep 655.
     """
-    my_pvs_config = generic_pv_system.PVSystemConfig.get_default_pv_system(
-        module_name="Hanwha HSL60P6-PA-4-250T [2013]",
-        module_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,  # noqa: E501
-        inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-        inverter_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,  # noqa: E501
-    )
+    my_pvs_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
+    my_pvs_config.module_name = "Hanwha HSL60P6-PA-4-250T [2013]"
+    my_pvs_config.module_database = generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE
+    my_pvs_config.inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
+    my_pvs_config.inverter_database = generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE
     my_pvs_config.power_in_watt = 10 * 1e3
     _run_pv_at_timestep_655(
         pvs_config=my_pvs_config, expected_power_w=334.8800144821672
@@ -130,7 +129,7 @@ def test_photovoltaic_cec() -> None:
     wires it to an Aachen weather component, and asserts the electricity output
     (~340.55 W) and energy output at timestep 655.
     """
-    my_pvs_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
+    my_pvs_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
     my_pvs_config.power_in_watt = 10 * 1e3
     _run_pv_at_timestep_655(
         pvs_config=my_pvs_config, expected_power_w=340.552602382255
@@ -156,36 +155,37 @@ def test_photovoltaic_cache_roundtrip(tmp_path) -> None:
     my_sim_params.cache_dir_path = str(tmp_path)
 
     repo = sim_repository.SimRepository()
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_sim_params
     )
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
 
-    my_pvs_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
+    my_pvs_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
+    my_pvs_config.power_in_watt = 10 * 1e3
+    my_pvs_config.weather_identity = my_weather_config.identity()
     my_pvs = generic_pv_system.PVSystem(
         config=my_pvs_config, my_simulation_parameters=my_sim_params
     )
     my_pvs.set_sim_repo(repo)
 
-    file_exists, cache_filepath = utils.get_cache_file(
-        my_pvs_config.component_id.name, my_pvs_config, my_sim_params
-    )
-    assert not file_exists, "The isolated cache directory must start out empty."
+    # The entry the run will look for, derived the way the component derives it: from the producer's
+    # code and inputs (roadmap/cache_service_spec.md §3), the weather's artifact key among them.
+    entry = my_pvs.cache_entry(my_pvs.build_calculation_inputs())
+    assert not entry.exists, "The isolated cache directory must start out empty."
 
     my_pvs.i_prepare_simulation()
 
     # The cache must be written during preparation, not at the end of the
     # simulation loop, so that interrupted runs still populate it.
-    assert os.path.exists(cache_filepath)
+    assert os.path.exists(entry.path)
     assert (
         len(my_pvs.ac_power_ratios_for_all_timesteps_output)
         == my_sim_params.timesteps
     )
 
+    my_pvs_config.weather_identity = my_weather_config.identity()
     my_pvs_cached = generic_pv_system.PVSystem(
         config=my_pvs_config, my_simulation_parameters=my_sim_params
     )
@@ -195,3 +195,170 @@ def test_photovoltaic_cache_roundtrip(tmp_path) -> None:
     assert my_pvs_cached.ac_power_ratios_for_all_timesteps_output == pytest.approx(
         my_pvs.ac_power_ratios_for_all_timesteps_output
     )
+
+
+@pytest.mark.base
+def test_a_rooftop_array_records_the_share_it_was_sized_with() -> None:
+    """Test that a rooftop-sized config states the share it was sized with, applied exactly once.
+
+    The rooftop law multiplies the roof's maximum by ``share_of_maximum_pv_potential`` and writes
+    the *result* into ``power_in_watt``, while the share stays beside it as the provenance of that
+    number. This test asserts both halves: a configuration resolved at half the rooftop potential
+    still carries ``0.5``, and its power is the singly-applied power -- exactly what
+    ``size_pv_system`` returns for the same share, and half (up to the two decimals that function
+    rounds to) of the power the same rooftop yields at a share of ``1.0``.
+    """
+    rooftop_area_in_m2 = 120.0
+    module_name = "Trina Solar TSM-435NE09RC.05"
+    module_database = generic_pv_system.PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE
+
+    half = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
+    half.share_of_maximum_pv_potential = 0.5
+    half_config = half.resolve(
+        SizingContext(roof_area_in_m2=rooftop_area_in_m2, weather_identity="Aachen")
+    )
+    full_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem").resolve(
+        SizingContext(roof_area_in_m2=rooftop_area_in_m2, weather_identity="Aachen")
+    )
+
+    assert half_config.share_of_maximum_pv_potential == 0.5
+    assert full_config.share_of_maximum_pv_potential == 1.0
+
+    expected_power_in_watt = generic_pv_system.PVSystemConfig.size_pv_system(
+        rooftop_area_in_m2=rooftop_area_in_m2,
+        share_of_maximum_pv_potential=0.5,
+        module_name=module_name,
+        module_database=module_database,
+    )
+    assert half_config.power_in_watt == expected_power_in_watt
+    assert half_config.power_in_watt == pytest.approx(concrete(full_config.power_in_watt) / 2, abs=0.01)
+
+
+@pytest.mark.base
+def test_a_rooftop_record_re_executes_to_the_same_power() -> None:
+    """Catches a scaled array whose own record would rebuild a differently sized array.
+
+    A share is only worth recording if the record it lands in reproduces the run it describes.
+    The share must survive because it is the provenance, and the power must survive *unscaled*,
+    because the block already carries the scaled number: a reader that applied the recorded share
+    to the recorded power a second time would halve a half-share array on every re-run.
+    """
+    half = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
+    half.share_of_maximum_pv_potential = 0.5
+    scaled_config = half.resolve(SizingContext(roof_area_in_m2=120.0, weather_identity="Aachen"))
+
+    re_executed = fft.round_trip_config_block(
+        scaled_config, generic_pv_system.PVSystemConfig, "PVSystem"
+    )
+
+    assert re_executed.share_of_maximum_pv_potential == 0.5
+    assert re_executed.power_in_watt == scaled_config.power_in_watt
+    assert re_executed == scaled_config
+
+
+@pytest.mark.base
+def test_the_rooftop_preset_reproduces_the_array_the_scaled_factory_built() -> None:
+    """Pins the numbers the deleted ``get_scaled_pv_system`` factory produced for the fleet.
+
+    The conversion is only neutral if the preset plus the law lands on the same array the factory
+    did. The archetype roof of the building sizers is 168.9 m2, which the factory turned into
+    22 272.28 W of Trina modules; the preset resolved against that roof area has to agree, digit
+    for digit, or every recorded twin in the fleet moved.
+    """
+    config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem").resolve(
+        SizingContext(roof_area_in_m2=168.9, weather_identity="Aachen")
+    )
+
+    assert config.power_in_watt == 22272.28
+    assert config.module_name == "Trina Solar TSM-435NE09RC.05"
+    assert config.module_database is generic_pv_system.PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE
+    assert config.inverter_name == "Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]"
+    assert config.inverter_database is generic_pv_system.PVLibModuleAndInverterEnum.CEC_INVERTER_DATABASE
+    assert (config.azimuth, config.tilt, config.time, config.source_weight) == (180, 30, 2019, 0)
+    assert config.location == "Aachen"
+    assert config.integrate_inverter is True
+    assert config.load_module_data is False
+
+
+@pytest.mark.base
+def test_a_pinned_power_survives_the_rooftop_law() -> None:
+    """Catches the law overwriting a power the author stated.
+
+    An array whose power is known is configured by pinning ``power_in_watt``; the roof then says
+    nothing about it, and a context without a roof area at all must still resolve. This is the
+    path the three demo setups take (D-13) and the one an archetype with a stated PV capacity
+    takes.
+    """
+    config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
+    config.power_in_watt = 10000.0
+
+    resolved = config.resolve(SizingContext(weather_identity="Aachen"))
+
+    assert resolved.power_in_watt == 10000.0
+
+
+@pytest.mark.base
+def test_the_rooftop_law_contributes_the_resolved_peak_power() -> None:
+    """The fact the battery reads is the array that was built, not the roof's maximum.
+
+    Failure mode caught: the contribution reading a field that is still ``AUTO``, or reporting the
+    rooftop maximum rather than the share of it that was installed -- the battery would then be
+    sized for an array nobody has.
+    """
+    half = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
+    half.share_of_maximum_pv_potential = 0.5
+    resolved = half.resolve(SizingContext(roof_area_in_m2=120.0, weather_identity="Aachen"))
+
+    contribution = generic_pv_system.PVSystemConfig.SIZING_CONTRIBUTIONS[0]
+    assert contribution.facts == ("pv_peak_power_in_watt",)
+    assert contribution.compute(resolved, SizingContext()) == {
+        "pv_peak_power_in_watt": resolved.power_in_watt
+    }
+
+
+@pytest.mark.base
+def test_the_rooftop_law_refuses_a_context_without_a_roof() -> None:
+    """Catches an unsized array reaching a simulation because nothing provided the roof area.
+
+    The law has exactly one fact to work from, so a context without it cannot produce a number.
+    The refusal has to name the fact, because a setup that forgot to resolve against its building
+    has no other clue as to what is missing.
+    """
+    config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
+
+    with pytest.raises(ConfigSizingError, match="roof_area_in_m2"):
+        config.resolve(SizingContext(weather_identity="Aachen"))
+
+
+@pytest.mark.base
+def test_the_rooftop_law_refuses_a_module_it_has_no_area_for() -> None:
+    """Catches a ``config:`` override of the module alone silently sizing the wrong array.
+
+    The module table carries two pairs and nothing else, so overriding ``module_name`` without the
+    database it belongs to -- or naming a module the repository has no area and rating for -- has
+    to stop the build rather than fall through to a default panel. The message names the module,
+    because that is the value the author has to correct.
+    """
+    config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
+    config.module_name = "No Such Module [2099]"
+
+    with pytest.raises(ConfigSizingError, match="No Such Module"):
+        config.resolve(SizingContext(roof_area_in_m2=120.0, weather_identity="Aachen"))
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("impossible_share", [2.0, -0.5])
+def test_a_share_that_is_not_a_share_is_refused(impossible_share: float) -> None:
+    """Catches a share outside [0, 1] sizing an array in silence instead of stopping.
+
+    The share is multiplied onto the roof's maximum, so a percentage typed as a fraction or a
+    negative value produces a run that finishes and reports plausible numbers for an array nobody
+    asked for. The refusal has to name the value, because the number that is wrong is the only
+    clue. It lives in ``__post_init__``, so every construction path reaches it -- the preset, a
+    ``dataclasses.replace`` and a configuration read back from a file alike.
+    """
+    with pytest.raises(ValueError, match=str(impossible_share)):
+        dataclasses.replace(
+            generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem"),
+            share_of_maximum_pv_potential=impossible_share,
+        )

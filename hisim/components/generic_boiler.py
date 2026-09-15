@@ -14,7 +14,7 @@ and as non-modulating on_off controller (which is used especially for pellet and
 # Owned
 import importlib
 from dataclasses import dataclass
-from typing import Any, ClassVar, List, Optional, Tuple
+from typing import ClassVar, List, Optional, Tuple
 from enum import Enum, unique
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -69,6 +69,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiTagEnumClass,
 )
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Frank Burkrad, Maximilian Hillen, Markus Blasberg, Katharina Rieck, Kristina Dabrock"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -134,6 +135,67 @@ class GenericBoilerConfig(ConfigBase):
             maximal_thermal_power_in_watt *= 1.1  # add 10% when used for both SH and DHW
         return maximal_thermal_power_in_watt
 
+    @staticmethod
+    def heating_value_in_joule_per_m3(
+        energy_carrier: lt.LoadTypes, boiler_type: "BoilerType"
+    ) -> float:
+        """Returns the heating value of the fuel the way this boiler type exploits it.
+
+        A condensing boiler recovers the latent heat of the flue gas and is therefore
+        rated on the higher heating value; a conventional one loses it and is rated on the
+        lower. Which of the two applies is a property of the configured device, so the
+        choice lives here rather than in the component that later divides by it.
+
+        Args:
+            energy_carrier: The fuel burnt.
+            boiler_type: Condensing or conventional.
+
+        Returns:
+            The heating value in joule per cubic metre.
+
+        Raises:
+            ValueError: If the carrier has no entry in ``PhysicsConfig`` (district heating
+                burns nothing), or if the boiler type is neither of the two.
+        """
+        properties = PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=energy_carrier)
+        if boiler_type == BoilerType.CONDENSING:
+            return properties.higher_heating_value_in_joule_per_m3
+        if boiler_type == BoilerType.CONVENTIONAL:
+            return properties.lower_heating_value_in_joule_per_m3
+        raise ValueError(f"Boiler type {boiler_type} is not implemented.")
+
+    @classmethod
+    def fuel_constants(
+        cls, energy_carrier: lt.LoadTypes, boiler_type: "BoilerType"
+    ) -> Tuple[Optional[float], Optional[float]]:
+        """Returns the fuel's heating value in kWh per litre and its density in kg per m3.
+
+        The pair the fuel meter needs to turn kilowatt hours back into litres and
+        kilograms. It is derived at *build* time rather than inside the component, so a
+        meter can read the same two numbers off the generator's configuration through the
+        sizing facts instead of repeating them — a gas boiler beside an oil meter is what
+        the repetition used to produce (D-15).
+
+        District heating is the one carrier that burns nothing: it has no heating value
+        and no fuel density, and both are ``None`` rather than a stand-in number that
+        would be accounted as litres of something.
+
+        Args:
+            energy_carrier: The fuel burnt.
+            boiler_type: Condensing or conventional, which picks the heating value.
+
+        Returns:
+            ``(heating value in kWh/l, density in kg/m3)``, both ``None`` for district heating.
+        """
+        if energy_carrier == lt.LoadTypes.DISTRICTHEATING:
+            return None, None
+        # J = kWh/(3.6 * 1e6) and m3 = 1e3 l
+        heating_value_in_kwh_per_liter = cls.heating_value_in_joule_per_m3(energy_carrier, boiler_type) / (3.6 * 1e9)
+        density_in_kg_per_m3 = PhysicsConfig.get_properties_for_energy_carrier(
+            energy_carrier=energy_carrier
+        ).density_in_kg_per_m3
+        return heating_value_in_kwh_per_liter, density_in_kg_per_m3
+
     #: Sizing law of the maximal thermal power: cover space heating or DHW, whichever is
     #: larger (see :meth:`scale_thermal_power`). Named as a ClassVar so that the field
     #: declaration reads as one line and the law can be described in one place.
@@ -158,9 +220,11 @@ class GenericBoilerConfig(ConfigBase):
     consumption_in_kilowatt_hour: float = 0.0
 
     #: Sizing facts this config contributes: its resolved power band, for consumers that
-    #: size from this boiler (its controller). With two boilers in one scenario each is
-    #: addressable as "<its name>.maximal_thermal_power_in_watt" and a consumer must say
-    #: which one it means; assigned below the class.
+    #: size from this boiler (its controller), and its fuel — the carrier plus the two
+    #: constants derived from it — for the meter that accounts what it burns. With two
+    #: boilers in one scenario each is addressable as
+    #: "<its name>.maximal_thermal_power_in_watt" and a consumer must say which one it
+    #: means; assigned below the class.
     SIZING_CONTRIBUTIONS: ClassVar[Tuple["FactContribution", ...]] = ()
 
     #: The named default boilers, one per fuel plus the nominal catalogue devices, are
@@ -257,6 +321,8 @@ class GenericBoiler(Component):
 
     Get Control Signal and calculate on base of it Massflow and Temperature of Massflow.
     """
+
+    cost_relevance = CostRelevance.PRICED
 
     # Input
     ControlSignal = "ControlSignal"  # at which Procentage is the GenericBoiler modulating [0..1]
@@ -517,23 +583,21 @@ class GenericBoiler(Component):
             ).specific_heat_capacity_in_joule_per_kg_per_kelvin
         )
 
-        # Here use higher heating value for condesing boiler and lower heating value for conventional boiler
-        if self.config.boiler_type == BoilerType.CONDENSING:
-            self.heating_value_of_fuel_in_joule_per_m3 = PhysicsConfig.get_properties_for_energy_carrier(
-                energy_carrier=self.energy_carrier
-            ).higher_heating_value_in_joule_per_m3
-        elif self.config.boiler_type == BoilerType.CONVENTIONAL:
-            self.heating_value_of_fuel_in_joule_per_m3 = PhysicsConfig.get_properties_for_energy_carrier(
-                energy_carrier=self.energy_carrier
-            ).lower_heating_value_in_joule_per_m3
-        else:
-            raise ValueError(f"Boiler type {self.config.boiler_type} is not implemented.")
-
-        # J = kWh/(3.6 * 1e6) and m3 = 1e3 l
-        self.heating_value_of_fuel_in_kwh_per_liter = self.heating_value_of_fuel_in_joule_per_m3 / (3.6 * 1e9)
-        self.fuel_density_in_kg_per_m3 = PhysicsConfig.get_properties_for_energy_carrier(
-            energy_carrier=self.config.energy_carrier
-        ).density_in_kg_per_m3
+        # The fuel constants are derived by the config, which is also what contributes them
+        # as sizing facts, so the meter accounting this boiler's consumption reads exactly
+        # the numbers the boiler itself burns by. Condensing/conventional picks the higher
+        # or the lower heating value; an unknown carrier still raises here, as it always did.
+        self.heating_value_of_fuel_in_joule_per_m3 = GenericBoilerConfig.heating_value_in_joule_per_m3(
+            self.energy_carrier, self.config.boiler_type
+        )
+        heating_value_in_kwh_per_liter, density_in_kg_per_m3 = GenericBoilerConfig.fuel_constants(
+            self.energy_carrier, self.config.boiler_type
+        )
+        # ``fuel_constants`` returns None only for district heating, and the line above already
+        # refused that carrier the way it always did, so both values are numbers here.
+        assert heating_value_in_kwh_per_liter is not None and density_in_kg_per_m3 is not None
+        self.heating_value_of_fuel_in_kwh_per_liter = heating_value_in_kwh_per_liter
+        self.fuel_density_in_kg_per_m3 = density_in_kg_per_m3
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -1063,120 +1127,6 @@ class GenericBoilerControllerConfig(ConfigBase):
             minimum_resting_time_in_seconds=0,
         )
 
-    @classmethod
-    def get_default_modulating_generic_boiler_controller_config(
-        cls,
-        maximal_thermal_power_in_watt: Sizable[float],
-        minimal_thermal_power_in_watt: Sizable[float],
-        component_id: Optional[ComponentID] = None,
-        secondary_mode: bool = False,
-        with_domestic_hot_water_preparation: bool = False,
-        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
-    ) -> Any:
-        """Gets a default Generic Boiler Controller, for example for gas and oil boilers."""
-        if component_id is None:
-            component_id = ComponentID(name="ModulatingBoilerController")
-        return GenericBoilerControllerConfig(
-            component_id=component_id,
-            is_modulating=True,
-            # get min and max thermal power from Generic Boiler config
-            minimal_thermal_power_in_watt=concrete(minimal_thermal_power_in_watt),
-            maximal_thermal_power_in_watt=concrete(maximal_thermal_power_in_watt),
-            set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
-            minimum_runtime_in_seconds=1800,
-            minimum_resting_time_in_seconds=1800,
-            secondary_mode=secondary_mode,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
-            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-            hysteresis_water_temperature_offset=10,
-        )
-
-    @classmethod
-    def get_default_on_off_generic_boiler_controller_config(
-        cls,
-        maximal_thermal_power_in_watt: Sizable[float],
-        minimal_thermal_power_in_watt: Sizable[float],
-        with_domestic_hot_water_preparation: bool = False,
-        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Gets a default Generic Boiler Controller.
-
-        The power band is usually read off a resolved boiler config, whose fields are typed
-        as sizable; the values must be concrete by the time a controller is built, and
-        ``concrete`` asserts exactly that instead of a cast at every call site.
-        """
-        if component_id is None:
-            component_id = ComponentID(name="OnOffBoilerController")
-        return GenericBoilerControllerConfig(
-            component_id=component_id,
-            is_modulating=False,
-            # get min and max thermal power from Generic Boiler config
-            minimal_thermal_power_in_watt=concrete(minimal_thermal_power_in_watt),
-            maximal_thermal_power_in_watt=concrete(maximal_thermal_power_in_watt),
-            set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
-            minimum_resting_time_in_seconds=0,
-            minimum_runtime_in_seconds=0,
-            secondary_mode=False,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
-            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-            hysteresis_water_temperature_offset=10,
-        )
-
-    @classmethod
-    def get_default_pellet_controller_config(
-        cls,
-        maximal_thermal_power_in_watt: Sizable[float],
-        minimal_thermal_power_in_watt: Sizable[float],
-        with_domestic_hot_water_preparation: bool = False,
-        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Gets a default controller for pellet boiler."""
-        if component_id is None:
-            component_id = ComponentID(name="PelletBoilerController")
-        return GenericBoilerControllerConfig(
-            component_id=component_id,
-            is_modulating=False,
-            # get min and max thermal power from Generic Boiler config
-            minimal_thermal_power_in_watt=concrete(minimal_thermal_power_in_watt),
-            maximal_thermal_power_in_watt=concrete(maximal_thermal_power_in_watt),
-            set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
-            minimum_resting_time_in_seconds=15 * 60,
-            minimum_runtime_in_seconds=30 * 60,
-            secondary_mode=False,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
-            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-            hysteresis_water_temperature_offset=10,
-        )
-
-    @classmethod
-    def get_default_wood_chip_controller_config(
-        cls,
-        maximal_thermal_power_in_watt: Sizable[float],
-        minimal_thermal_power_in_watt: Sizable[float],
-        with_domestic_hot_water_preparation: bool = False,
-        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Gets a default controller for wood chip boiler."""
-        if component_id is None:
-            component_id = ComponentID(name="WoodChipBoilerController")
-        return GenericBoilerControllerConfig(
-            component_id=component_id,
-            is_modulating=False,
-            # get min and max thermal power from Generic Boiler config
-            minimal_thermal_power_in_watt=concrete(minimal_thermal_power_in_watt),
-            maximal_thermal_power_in_watt=concrete(maximal_thermal_power_in_watt),
-            set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
-            minimum_resting_time_in_seconds=30 * 60,
-            minimum_runtime_in_seconds=60 * 60,
-            secondary_mode=False,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
-            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-            hysteresis_water_temperature_offset=10,
-        )
-
 
 class GenericBoilerControllerState:
     """Data class that saves the state of the controller."""
@@ -1232,6 +1182,8 @@ class GenericBoilerController(Component):
     (1) Generic_boiler (control_signal)
 
     """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     WaterTemperatureInputFromWaterStorage = "WaterTemperatureInputFromWaterStorage"
@@ -1494,14 +1446,14 @@ class GenericBoilerController(Component):
         self.controller_mode = DiverterValve.determine_operating_mode(
             with_domestic_hot_water_preparation=self.config.with_domestic_hot_water_preparation,
             current_controller_mode=previous_controller_mode,
-            daily_average_outside_temperature=daily_avg_outside_temperature_in_celsius,
+            daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
             water_temperature_input_sh_in_celsius=water_temperature_input_from_space_heating_water_storage_in_celsius,
             water_temperature_input_dhw_in_celsius=water_temperature_input_from_dhw_water_storage_in_celsius,
             set_temperatures=SetTemperatureConfig(
-                set_temperature_space_heating=heating_flow_temperature_from_heat_distribution_system,
-                set_temperature_dhw=self.warm_water_temperature_aim_in_celsius,
-                hysteresis_water_temperature_offset=self.config.hysteresis_water_temperature_offset,
-                outside_temperature_threshold=self.config.set_heating_threshold_outside_temperature_in_celsius
+                set_temperature_space_heating_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                set_temperature_dhw_in_celsius=self.warm_water_temperature_aim_in_celsius,
+                hysteresis_water_temperature_offset_in_celsius=self.config.hysteresis_water_temperature_offset,
+                outside_temperature_threshold_in_celsius=self.config.set_heating_threshold_outside_temperature_in_celsius
             ),
             parallel_space_heating_and_dhw_option=False
         )
@@ -1627,21 +1579,39 @@ class GenericBoilerController(Component):
 
 
 def _boiler_sizing_facts(config: GenericBoilerConfig, ctx: SizingContext) -> dict:
-    """Contributes the boiler's resolved power band for connected consumers.
+    """Contributes the boiler's resolved power band and fuel for connected consumers.
 
     Computed after the boiler itself resolved, so the values are the final concrete
     numbers whether they came from a law, a preset constant or a manual override.
+
+    The fuel half — the carrier and the two constants
+    :meth:`GenericBoilerConfig.fuel_constants` derives from it and from the boiler type —
+    is what the gas and fuel meters copy instead of repeating (D-15): a meter accounting
+    this boiler's consumption then cannot state a different fuel from the one it burns.
+    Both constants are ``None`` for district heating, which burns nothing.
     """
     del ctx
+    heating_value_in_kwh_per_liter, density_in_kg_per_m3 = GenericBoilerConfig.fuel_constants(
+        config.energy_carrier, config.boiler_type
+    )
     return {
         "maximal_thermal_power_in_watt": concrete(config.maximal_thermal_power_in_watt),
         "minimal_thermal_power_in_watt": concrete(config.minimal_thermal_power_in_watt),
+        "energy_carrier": config.energy_carrier,
+        "heating_value_of_fuel_in_kwh_per_liter": heating_value_in_kwh_per_liter,
+        "fuel_density_in_kg_per_m3": density_in_kg_per_m3,
     }
 
 
 GenericBoilerConfig.SIZING_CONTRIBUTIONS = (
     FactContribution(
-        facts=("maximal_thermal_power_in_watt", "minimal_thermal_power_in_watt"),
+        facts=(
+            "maximal_thermal_power_in_watt",
+            "minimal_thermal_power_in_watt",
+            "energy_carrier",
+            "heating_value_of_fuel_in_kwh_per_liter",
+            "fuel_density_in_kg_per_m3",
+        ),
         compute=_boiler_sizing_facts,
     ),
 )

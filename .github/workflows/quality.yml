@@ -8,6 +8,11 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  # Runnable by hand as well, because the two automatic triggers above only fire for pull
+  # requests that target main. A stacked pull request — one whose base is the branch below it
+  # in a chain — therefore gets no run at all, and a whole stack can reach main having never
+  # been tested. Dispatching this workflow against such a branch is how that is avoided.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -28,7 +33,12 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
+    # Wall time, CPU time and peak memory for this job; see the action.
+    - name: Start the resource monitor
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: start
     - name: Mark workspace as safe for git
       run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
     - name: Install dependencies
@@ -44,6 +54,13 @@ jobs:
     - name: mypy tests
       if: always()
       run: mypy --config-file mypy_moderate.ini tests/
+    # Kept on failure too: a job killed for running out of memory is the one
+    # whose measurement matters most.
+    - name: Report the resource usage
+      if: always()
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: report
 
   pylint:
     name: pylint
@@ -54,7 +71,12 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
+    # Wall time, CPU time and peak memory for this job; see the action.
+    - name: Start the resource monitor
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: start
     - name: Mark workspace as safe for git
       run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
     - name: Install dependencies
@@ -63,6 +85,13 @@ jobs:
     - name: Analysing the code with pylint
       run: |
         pylint --rcfile pylintrc-critical-only $(git ls-files '*.py')
+    # Kept on failure too: a job killed for running out of memory is the one
+    # whose measurement matters most.
+    - name: Report the resource usage
+      if: always()
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: report
 
   config-attrs:
     name: config attributes
@@ -73,7 +102,12 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
+    # Wall time, CPU time and peak memory for this job; see the action.
+    - name: Start the resource monitor
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: start
     - name: Mark workspace as safe for git
       run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
     # Catches reads of config fields that do not exist -- e.g. 'config.lifetime' after
@@ -82,6 +116,13 @@ jobs:
     # class ends up with an 'Any' base and accepts any attribute. Pure AST, no deps.
     - name: Check config attribute accesses
       run: python scripts/check_config_attrs.py
+    # Kept on failure too: a job killed for running out of memory is the one
+    # whose measurement matters most.
+    - name: Report the resource usage
+      if: always()
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: report
 
   codequality:
     name: prospector
@@ -92,7 +133,12 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
+    # Wall time, CPU time and peak memory for this job; see the action.
+    - name: Start the resource monitor
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: start
     - name: Mark workspace as safe for git
       run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
     - name: Install dependencies
@@ -123,6 +169,13 @@ jobs:
     - name: Lint docs
       if: always()
       run: prospector docs/
+    # Kept on failure too: a job killed for running out of memory is the one
+    # whose measurement matters most.
+    - name: Report the resource usage
+      if: always()
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: report
 
   basic-execution:
     name: basic execution
@@ -133,13 +186,38 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
+    # Wall time, CPU time and peak memory for this job; see the action.
+    - name: Start the resource monitor
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: start
     - name: Mark workspace as safe for git
       run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
     - name: Install HiSim package
       run: |
         uv pip install --system -e .
+    # The previous run's weather series and LoadProfileGenerator profiles; see the action.
+    - name: Restore the HiSim inputs cache
+      uses: ./.github/actions/hisim-cache
+      with:
+        mode: restore
+        scope: ${{ github.workflow }}-basic-execution
     - name: Run hisim_main.py directly from the command line
       working-directory: ./system_setups/
       run: |
         python ../hisim/hisim_main.py household_heatpump_building_sizer.py
+    # Kept even when the job failed; see the action for why that is safe.
+    - name: Save the HiSim inputs cache
+      if: always()
+      uses: ./.github/actions/hisim-cache
+      with:
+        mode: save
+        scope: ${{ github.workflow }}-basic-execution
+    # Kept on failure too: a job killed for running out of memory is the one
+    # whose measurement matters most.
+    - name: Report the resource usage
+      if: always()
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: report

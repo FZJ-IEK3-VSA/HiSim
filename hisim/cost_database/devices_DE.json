@@ -469,6 +469,62 @@
       "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
     },
     {
+      "component_type": "ELECTROLYZER",
+      "valid_from_year": 2024,
+      "specific_investment": {
+        "value": 1500,
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.03,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 15,
+      "embodied_co2": {
+        "value": 190.5,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.19,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_48",
+        "src_capex_49",
+        "src_capex_19"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters, whose row is marked PROPOSED VALUES, NOT YET REVIEWED BY THE COST OWNER: midpoints of published ranges for a megawatt-scale industrial PEM installation, not measurements, and industrial equipment rather than the household appliances the rest of this file describes. Review before any published figure rests on it."
+    },
+    {
+      "component_type": "TRANSFORMER_AND_RECTIFIER",
+      "valid_from_year": 2024,
+      "specific_investment": {
+        "value": 150,
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.015,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 27,
+      "embodied_co2": {
+        "value": 60,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.19,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_48",
+        "src_capex_23",
+        "src_capex_50"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters, whose row is marked PROPOSED VALUES, NOT YET REVIEWED BY THE COST OWNER: the grid-side power supply of a MW-scale electrolyzer at the midpoint of a published range, with the embodied CO2 taken from PV power electronics as the closest proxy. Review before any published figure rests on it."
+    },
+    {
       "component_type": "HEAT_PUMP",
       "valid_from_year": 2026,
       "specific_investment": {

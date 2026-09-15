@@ -1,0 +1,635 @@
+"""Golden-file oracle for the rendered reports (cost-spec-v2 §2.4, package S4b).
+
+The switch-over of `reporting.py`/`report_plots.py` onto the view-model (W4.7) must not move a
+single rendered digit. This module is the proof: it evaluates one deterministic, deliberately
+rich in-memory fixture — no simulation run, no result directory — renders `cost_summary.md` and
+`lifecycle_report.html` from it, and byte-compares both against files checked in under
+`tests/goldens/`.
+
+**Normalization.** Exactly one thing in the output is not a function of the fixture: the
+generation date, which both reports stamp via `datetime.date.today()`. It is replaced by the
+literal ``<DATE>`` — the *only* substitution made, and a targeted one (today's ISO date string,
+not "any date-shaped text"), so the `retrieved` dates of the §3.10 source registry stay in the
+golden and a data PR that changes one shows up as a diff. Everything else — every euro figure,
+every SVG coordinate, every tooltip — is compared exactly. The PNG companions are not goldens
+(matplotlib output is not byte-stable across versions); `report_plots` is covered by the
+numbers it now reads out of the view-model plus `tests/test_economics_report_plots.py`, which
+checks that the files are written and that what they plot still reconciles.
+
+Regenerate deliberately with ``HISIM_REGEN_GOLDENS=1 pytest tests/test_economics_report_goldens.py``.
+Any regeneration outside a change that is *meant* to move numbers is a bug being papered over.
+
+**Error class.** A failure here is a *presentation* failure: something a reader sees changed. It
+says nothing about whether the underlying research numbers are right — that is what the engine,
+view and property tests are for — and conversely a reporting bug caught here can mislead a reader
+but can never corrupt a stored result (cost-spec-v2 §2.4). Read a diff in that light: if the
+engine tests are green and only this file fails, the arithmetic is fine and the rendering moved.
+`TestFixtureIsRich` guards the one way this oracle could quietly lose its value — a fixture that
+stops reaching a section still compares two empty renderings and passes — and
+`TestStoredResultsRoundTrip` extends the same comparison to the reload path (W4.5), which is what
+lets the `report` CLI render stored files instead of re-running the evaluator.
+"""
+
+# clean
+
+import datetime
+import os
+
+import pytest
+
+from hisim.economics.audit import build_input_audit
+from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.database import CostDatabase
+from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs, SubjectCostFacts
+from hisim.economics.facts import (
+    BillingDeterminants,
+    ComponentCostFacts,
+    ExistingAsset,
+    ExistingAssetRegister,
+)
+from hisim.economics.financing import FinancingPlan
+from hisim.economics.parameters import EconomicParameters
+from hisim.economics.perspectives import (
+    ActorScope,
+    InstallationContext,
+    Perspective,
+    SubsidyMode,
+)
+from hisim.economics.plausibility import run_plausibility_checks
+from hisim.economics.reporting import build_cost_summary_markdown, build_lifecycle_report_html
+from hisim.economics.results import EvaluationMatrix, compare
+from hisim.economics.scenarios import ScenarioSet, evaluate_cube
+from hisim.economics.subsidies import (
+    ApplicantActor,
+    ApplicantProfile,
+    SubsidyBuildingContext,
+    SubsidyCatalog,
+    SubsidyContext,
+)
+from hisim.economics.uncertainty import UncertainValue
+from hisim.loadtypes import ComponentType, Units
+
+pytestmark = pytest.mark.base
+
+GOLDEN_DIRECTORY = os.path.join(os.path.dirname(__file__), "goldens")
+SUMMARY_GOLDEN = "cost_summary.md"
+REPORT_GOLDEN = "lifecycle_report.html"
+
+#: Pinned explicitly rather than defaulted: the price basis year decides which device and energy
+#: entries are read, so leaving it implicit would let the default-year policy re-baseline the
+#: goldens. 2026 is the vintage that carries real min/best_estimate/max bands, which the report needs to
+#: draw whiskers and band polygons at all.
+PARAMETERS = EconomicParameters(country="DE", price_basis_year=2026)
+
+
+def make_inputs(energy_kwh: float = 5200.0, investment: float = 16000.0) -> EvaluationInputs:
+    """A brownfield retrofit that exercises every report section.
+
+    Banded heat-pump investment (whiskers), a second envelope subject (per-subject charts), an
+    existing gas heater and old windows (removal, anyway credits, residual value), bought *and*
+    sold electricity (feed-in in the year-1 bill), a subsidy context the DE catalog can price
+    (decision cards, awards table) and tenancy data (the §6.5 actor split).
+    """
+    heat_pump = ComponentCostFacts(
+        asset_class=ComponentType.HEAT_PUMP,
+        size=10.0,
+        size_unit=Units.KILOWATT,
+        investment_cost_override_in_euro=UncertainValue(investment, investment * 0.8, investment * 1.3),
+        lifetime_override_in_years=18.0,
+        override_source="golden fixture",
+        technical_attributes={"scop": 4.2, "refrigerant": "R290"},
+    )
+    windows = ComponentCostFacts(
+        asset_class=ComponentType.WINDOWS_TRIPLE_GLAZED,
+        size=28.0,
+        size_unit=Units.SQUARE_METER,
+    )
+    register = ExistingAssetRegister(
+        assets=[
+            ExistingAsset(
+                asset_class=ComponentType.GAS_HEATER,
+                size=18.0,
+                size_unit=Units.KILOWATT,
+                installation_year=2009,
+                replaced_by_asset_classes=[ComponentType.HEAT_PUMP],
+            ),
+            ExistingAsset(
+                asset_class=ComponentType.WINDOWS_TRIPLE_GLAZED,
+                size=28.0,
+                size_unit=Units.SQUARE_METER,
+                installation_year=1993,
+                replaced_by_asset_classes=[ComponentType.WINDOWS_TRIPLE_GLAZED],
+            ),
+        ]
+    )
+    return EvaluationInputs(
+        simulation_year=2026,
+        simulated_period_fraction=1.0,
+        cost_facts=[
+            SubjectCostFacts("HeatPump", heat_pump),
+            SubjectCostFacts("Envelope.Windows", windows),
+        ],
+        billing=[
+            BillingDeterminants(
+                carrier=EnergyCarrier.ELECTRICITY,
+                energy_bought_in_kwh=energy_kwh,
+                energy_sold_in_kwh=2500.0,
+            )
+        ],
+        existing_assets=register,
+        subsidy_context=SubsidyContext(
+            applicant=ApplicantProfile(
+                actor=ApplicantActor.OWNER_OCCUPIER,
+                taxable_household_income_in_euro=35000.0,
+                main_residence=True,
+            ),
+            building=SubsidyBuildingContext(
+                construction_year=1985,
+                dwelling_units=1,
+                residential_floor_area_in_m2=150.0,
+                commercial_floor_area_in_m2=0.0,
+            ),
+        ),
+        annual_heat_demand_in_kwh=15000.0,
+        living_area_in_m2=150.0,
+        heated_floor_area_in_m2=160.0,
+        current_cold_rent_in_euro_per_m2_month=8.5,
+        building_specific_emissions_in_kg_per_m2_a=25.0,
+    )
+
+
+#: Fixed perspective set — not the shipped bundle, so a bundle data PR cannot silently
+#: re-baseline the oracle. Covers gross/net, financing, and both sides of the actor split.
+PERSPECTIVES = [
+    Perspective(
+        id="brownfield_gross",
+        installation_context=InstallationContext.BROWNFIELD,
+        subsidy_mode=SubsidyMode.none(),
+    ),
+    Perspective(
+        id="brownfield_net",
+        installation_context=InstallationContext.BROWNFIELD,
+        subsidy_mode=SubsidyMode.full(),
+    ),
+    Perspective(
+        id="financed_net",
+        installation_context=InstallationContext.BROWNFIELD,
+        subsidy_mode=SubsidyMode.full(),
+        financing=FinancingPlan(financed_share=0.6, nominal_interest_rate=0.035, term_in_years=12),
+    ),
+    Perspective(
+        id="landlord",
+        installation_context=InstallationContext.BROWNFIELD,
+        actor_scope=ActorScope.LANDLORD,
+        subsidy_mode=SubsidyMode.full(),
+    ),
+    Perspective(
+        id="tenant",
+        installation_context=InstallationContext.BROWNFIELD,
+        actor_scope=ActorScope.TENANT,
+        subsidy_mode=SubsidyMode.full(),
+    ),
+]
+
+#: The year-1 device energy record the household energy balance is drawn from, hand-written
+#: because it is the one input of the report that no in-memory fixture produces: `bridge.py`
+#: collects it from the simulation's own output columns. A PV roof over the meter, a battery that
+#: gives back less than it took, a heat pump and the household under it.
+#:
+#: The two grid roles are **not** free: `views.energy_balance_flows` reconciles them against the
+#: metered `annual_energy_quantities_by_carrier` of `make_inputs` and refuses the diagram if they
+#: disagree, so they are that fixture's bought and sold quantities exactly. The rest are chosen so
+#: that the two sides of the bus do *not* close by construction — 15,200 kWh/a in against 14,700
+#: out — because the residual terminal the balance books for the difference is part of what the
+#: golden is there to pin.
+DEVICE_ENERGY_FLOWS = {
+    "PVSystem": {"PV_GENERATION": 9000.0},
+    "Battery": {"BATTERY_CHARGE": 1400.0, "BATTERY_DISCHARGE": 1200.0},
+    "ElectricityMeter": {"GRID_IMPORT": 5200.0, "GRID_EXPORT": 2500.0},
+    "HeatPump": {"HEAT_PUMP_ELECTRICITY": 6000.0},
+    "UTSPConnector": {"HOUSEHOLD_ELECTRICITY": 4800.0},
+}
+
+#: The smallest scenario set that still renders section 9 (tornado + robustness): one axis, two
+#: levels, ONE_AT_A_TIME — three evaluations. Interest rate is chosen because it moves every
+#: perspective, so no scenario row can come out empty.
+SCENARIO_SET = ScenarioSet.from_json(
+    {
+        "base": "central",
+        "mode": "ONE_AT_A_TIME",
+        "axes": [
+            {"name": "interest", "field": "interest_rate", "levels": {"low": 0.01, "high": 0.05}},
+        ],
+    }
+)
+
+
+class RenderedReports:
+    """The two rendered documents plus the objects they were rendered from.
+
+    A plain container, not a builder: the fixture renders once and hands the result around, so
+    every test in this module looks at the *same* two strings. Keeping the matrix, comparison and
+    reference result alongside the text is what lets `TestFixtureIsRich` assert that the fixture
+    really exercised loans, subsidies, feed-in and an actor split — checks that would otherwise
+    have to re-evaluate and could then drift from what was rendered.
+    """
+
+    def __init__(self, summary: str, report: str, matrix, comparison, reference) -> None:
+        """Holds the fixture's rendered output and its inputs, for the richness assertions."""
+        self.summary = summary
+        self.report = report
+        self.matrix = matrix
+        self.comparison = comparison
+        self.reference = reference
+
+
+@pytest.fixture(name="rendered", scope="module")
+def fixture_rendered() -> RenderedReports:
+    """Evaluates the fixture and renders both documents.
+
+    Everything happens inside this one fixture, in a fixed order, so the rendered output does
+    not depend on which subset of the tests below pytest was asked to run.
+    """
+    database = CostDatabase()
+    catalog = SubsidyCatalog.load("DE")
+    evaluator = EconomicEvaluator(database, PARAMETERS, catalog)
+    inputs = make_inputs()
+
+    matrix = EvaluationMatrix()
+    for perspective in PERSPECTIVES:
+        result = evaluator.evaluate(inputs, perspective)
+        # The one field the evaluator cannot fill from `EvaluationInputs` here: it is collected
+        # from the simulation's output columns, which this fixture does not run. Attaching it to
+        # a freshly evaluated (and therefore unshared) result is the whole of what the bridge
+        # would have done, and it is what puts the energy balance in the golden at all.
+        result.annual_energy_attribution_by_subject_in_kwh = {
+            subject: dict(by_role) for subject, by_role in DEVICE_ENERGY_FLOWS.items()
+        }
+        matrix.results[perspective.id] = result
+
+    reference_inputs = make_inputs(energy_kwh=15000.0, investment=2000.0)
+    reference = evaluator.evaluate(reference_inputs, PERSPECTIVES[1])
+    comparison = compare(reference, matrix.results["brownfield_net"], "base", "measures")
+
+    cube = evaluate_cube(inputs, PARAMETERS, PERSPECTIVES[:2], SCENARIO_SET, database, catalog)
+    plausibility = run_plausibility_checks(matrix)
+
+    audit = build_input_audit(inputs, database, PARAMETERS, matrix.results["brownfield_gross"])
+    summary = build_cost_summary_markdown(matrix, plausibility, comparison)
+    report = build_lifecycle_report_html(
+        matrix, plausibility, audit, comparison, scenario_cube=cube, reference_result=reference
+    )
+    return RenderedReports(summary, report, matrix, comparison, reference)
+
+
+def _normalize(text: str) -> str:
+    """The single documented substitution: today's date -> `<DATE>` (see the module docstring)."""
+    return text.replace(datetime.date.today().isoformat(), "<DATE>")
+
+
+def _assert_matches_golden(file_name: str, text: str) -> None:
+    """Compares one rendered document against its checked-in golden.
+
+    Regeneration is deliberate and explicit: the file is written only when `HISIM_REGEN_GOLDENS=1`
+    is set, and that path reports a *skip*, never a pass, so a freshly written golden can never be
+    mistaken for a verified one.
+
+    A **missing** golden fails. It used to be written and the test skipped, which is the same
+    reflex applied to a case it does not fit: a regeneration under the env var is someone saying
+    "these numbers moved on purpose", while an absent golden is an oracle with nothing to compare
+    against — on a fresh checkout, after a bad merge, or because the file was never committed — and
+    a green-with-skips run is exactly how that goes unnoticed for a release. The failure says how to
+    create the file deliberately.
+
+    On mismatch the failure carries a unified diff capped at 80 lines: enough to name the section
+    and the figure that moved, without dumping a large HTML document into the test log.
+    """
+    path = os.path.join(GOLDEN_DIRECTORY, file_name)
+    normalized = _normalize(text)
+    if os.environ.get("HISIM_REGEN_GOLDENS") == "1":
+        os.makedirs(GOLDEN_DIRECTORY, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as file:
+            file.write(normalized)
+        pytest.skip(f"regenerated golden {file_name}")
+    if not os.path.isfile(path):
+        pytest.fail(
+            f"The golden {file_name} is missing from {GOLDEN_DIRECTORY}, so this oracle verified "
+            "nothing. Create it deliberately with "
+            "`HISIM_REGEN_GOLDENS=1 pytest tests/test_economics_report_goldens.py` and review the "
+            "file that appears before committing it."
+        )
+    with open(path, encoding="utf-8") as file:
+        expected = file.read()
+    if normalized == expected:
+        return
+    import difflib
+
+    diff = "\n".join(
+        list(
+            difflib.unified_diff(
+                expected.splitlines(), normalized.splitlines(), "golden", "rendered", lineterm="", n=1
+            )
+        )[:80]
+    )
+    raise AssertionError(f"{file_name} drifted from its golden:\n{diff}")
+
+
+class TestFixtureIsRich:
+    """The oracle is only worth its runtime if the fixture reaches every rendering path."""
+
+    def test_every_report_section_is_present(self, rendered):
+        """All sections the switch-over touches actually render on this fixture.
+
+        Asserted on the anchors rather than on the headings, because an anchor is what a table-of
+        -contents link and a cross-reference resolve against: a section whose heading is right but
+        whose anchor moved is a broken document, and only the anchor catches that. The sections
+        are named rather than numbered since the mnemonic switch-over, so this list is also the
+        readable inventory of what the fixture reaches.
+
+        Anchors carry their chapter prefix since the Q24 restructure, so this list is also the
+        statement of which chapter each section is expected to be told in — a perspective-scoped
+        section that drifted back into the perspective-free chapter fails here rather than in a
+        golden diff nobody reads line by line.
+
+        The energy balance used to be absent from it — its quantities come from the simulation's
+        own output columns, which `bridge.py` collects and no in-memory fixture produces, so the
+        section skipped itself here and the oracle pinned nothing about a diagram the report
+        draws for every real run. `DEVICE_ENERGY_FLOWS` supplies that record by hand instead,
+        reconciled against the fixture's own meter, and the balance is now asserted like every
+        other section of its chapter.
+
+        One section of the set is still deliberately absent. The society statement needs a
+        macroeconomic perspective, which this fixture's perspective set does not carry — adding
+        one would put a whole extra perspective into every table in both goldens — so the society
+        chapter is covered by `tests/test_economics_sections_c.py` instead.
+        """
+        for anchor in (
+            "building-how-to-read",
+            "building-at-a-glance",
+            "building-plausibility",
+            "building-input-audit",
+            "building-assumptions",
+            "building-investment-build-up",
+            "building-lifetimes",
+            "building-cash-flow-timeline",
+            "building-energy-bill",
+            "building-energy-balance",
+            "building-co2",
+            "building-subsidies",
+            "building-uncertainty-drivers",
+            "building-component-breakdown",
+            "building-cost-structure",
+            "building-cost-shapes",
+            "building-scenarios",
+            "building-perspectives",
+            "building-kpis",
+            "owner-owner-statement",
+            "owner-funding",
+            "owner-cash-curve",
+            "owner-loan",
+            "owner-cost-of-credit",
+            "owner-monthly-burden",
+            "owner-equity-build-up",
+            "rented-landlord-statement",
+            "rented-tenant-statement",
+            "rented-who-pays-what",
+            "rented-who-pays-whom",
+            "vs-reference-comparison",
+            "vs-reference-npv-bridge",
+            "vs-reference-bank-benchmark",
+        ):
+            assert f'id="{anchor}"' in rendered.report, anchor
+        assert "sources used" in rendered.report  # §3.10 registry table, inside the input audit
+
+    def test_every_story_this_fixture_has_is_told_as_its_own_chapter(self, rendered):
+        """Q24: the chapters the fixture's perspectives support all render, with their lead-ins.
+
+        A chapter is not decoration — it decides which perspectives a section is drawn on — so the
+        oracle checks the structure and not only the sections inside it. The society chapter is
+        the one this fixture cannot reach (no macroeconomic perspective) and is asserted absent
+        rather than ignored, because a chapter that rendered on no perspectives at all would be
+        the failure this skip exists to prevent.
+        """
+        from hisim.economics.report_prose import ReportProse
+        from hisim.economics.reporting import ReportChapters
+
+        positions = []
+        for anchor, name in ReportChapters.ORDER:
+            heading = f"<h2 class='chapter' id=\"{anchor}\">"
+            if (anchor, name) == ReportChapters.SOCIETY:
+                assert heading not in rendered.report
+                continue
+            assert heading in rendered.report, name
+            positions.append(rendered.report.index(heading))
+            if (anchor, name) not in ReportChapters.WITHOUT_INTRO:
+                assert ReportProse.to_html(ReportProse.for_chapter(name)) in rendered.report, name
+        assert positions == sorted(positions)
+
+    def test_the_contents_link_every_rendered_section(self, rendered):
+        """Navigation replaced the numbering, so it has to reach every section that rendered.
+
+        Two levels since Q24: every chapter that rendered is a top-level entry linked exactly
+        once, and every section under it is linked from that entry. Both halves matter — a
+        section missing from the contents is unreachable, and a chapter listed twice would send
+        a reader to the wrong one of two identically named sections.
+        """
+        import re
+
+        from hisim.economics.reporting import ReportChapters
+
+        contents = rendered.report.split("</nav>")[0]
+        anchors = re.findall(r'<section id="([^"]+)"', rendered.report)
+        assert anchors, "the report rendered no anchored section at all"
+        for anchor in anchors:
+            assert f'href="#{anchor}"' in contents, anchor
+        rendered_chapters = [
+            chapter for chapter, _name in ReportChapters.ORDER
+            if any(anchor.startswith(f"{chapter}-") for anchor in anchors)
+        ]
+        assert len(rendered_chapters) == 4  # every story but society, which this fixture lacks
+        for chapter in rendered_chapters:
+            assert contents.count(f"<a href=\"#{chapter}\">") == 1, chapter
+
+    def test_every_computation_path_is_exercised(self, rendered):
+        """Bands, a loan, subsidies, feed-in, anyway credits and an allocation are all present."""
+        from hisim.economics.timeline import Actor, CostCategory
+
+        financed = rendered.matrix.results["financed_net"]
+        categories = {entry.category for entry in financed.timeline.entries}
+        assert not financed.total_npv_in_euro.is_exact()  # banded -> whiskers + band polygon
+        assert CostCategory.LOAN_INTEREST in categories  # loan amortization chart
+        assert CostCategory.SUBSIDY in categories  # subsidy composition chart
+        assert CostCategory.FEED_IN_REVENUE in categories  # year-1 bill credit
+        assert CostCategory.ANYWAY_COST_CREDIT in categories  # brownfield credit rows
+        assert financed.subsidy_decisions  # decision cards + awards table
+        landlord = rendered.matrix.results["landlord"]
+        assert landlord.scope_payer == Actor.LANDLORD  # scoped charts differ from the full timeline
+        assert {entry.payer for entry in landlord.timeline.entries} != {Actor.SYSTEM}
+        assert rendered.comparison.npv_delta_by_subject  # delta waterfall + payback curve
+
+    def test_rendering_is_deterministic(self, rendered):
+        """Rendering the same objects twice yields the same bytes (no set-ordering leaks)."""
+        plausibility = run_plausibility_checks(rendered.matrix)
+        again = build_cost_summary_markdown(rendered.matrix, plausibility, rendered.comparison)
+        assert again == rendered.summary
+
+
+class TestStoredResultsRoundTrip:
+    """W4.5: a report rendered from stored files is the report rendered from memory."""
+
+    def test_reloaded_matrix_renders_identically(self, rendered, tmp_path):
+        """Write the export set, read it back, render — byte-identical to the direct render.
+
+        This is what lets `python -m hisim.economics report` stop re-running the engine: if the
+        stored files could not reproduce the rendering, the CLI would be quietly reporting on a
+        second evaluation rather than on the one that was stored.
+        """
+        from hisim.economics.exports import (
+            write_cash_flow_timeline,
+            write_lifecycle_costs_json,
+            write_provenance_ledger,
+        )
+        from hisim.economics.input_audit import read_input_audit, write_input_audit
+        from hisim.economics.serialization import read_results
+
+        directory = str(tmp_path)
+        write_lifecycle_costs_json(rendered.matrix, directory)
+        write_cash_flow_timeline(rendered.matrix, directory)
+        write_provenance_ledger(rendered.matrix, directory)
+        database = CostDatabase()
+        audit = build_input_audit(
+            make_inputs(), database, PARAMETERS, rendered.matrix.results["brownfield_gross"]
+        )
+        write_input_audit(audit, directory)
+
+        reloaded = read_results(directory)
+        assert reloaded is not None and list(reloaded.results) == list(rendered.matrix.results)
+        reloaded_audit = read_input_audit(directory)
+        plausibility = run_plausibility_checks(reloaded)
+        assert build_cost_summary_markdown(reloaded, plausibility, rendered.comparison) == rendered.summary
+        # Section 9 needs a fresh cube (it is a set of evaluations, not a stored result), so the
+        # comparison here is against the same report without it.
+        direct = build_lifecycle_report_html(
+            rendered.matrix, run_plausibility_checks(rendered.matrix), audit, rendered.comparison
+        )
+        assert build_lifecycle_report_html(
+            reloaded, plausibility, reloaded_audit, rendered.comparison
+        ) == direct
+
+    def test_reload_preserves_scope_and_physical_context(self, rendered, tmp_path):
+        """The fields the reports need but a naive DTO reload would silently drop."""
+        from hisim.economics.exports import write_cash_flow_timeline, write_lifecycle_costs_json
+        from hisim.economics.serialization import read_results
+        from hisim.economics.timeline import Actor
+
+        directory = str(tmp_path)
+        write_lifecycle_costs_json(rendered.matrix, directory)
+        write_cash_flow_timeline(rendered.matrix, directory)
+        reloaded = read_results(directory)
+        assert reloaded is not None
+        landlord = reloaded.results["landlord"]
+        original = rendered.matrix.results["landlord"]
+        assert landlord.scope_payer == Actor.LANDLORD
+        assert landlord.simulation_year == 2026
+        assert len(landlord.timeline.entries) == len(original.timeline.entries)
+        assert len(landlord.scoped_timeline().entries) == len(original.scoped_timeline().entries)
+        assert landlord.timeline.entries[0].subject_kind == original.timeline.entries[0].subject_kind
+        assert (
+            landlord.annual_energy_quantities_by_carrier.keys()
+            == original.annual_energy_quantities_by_carrier.keys()
+        )
+        assert landlord.subsidy_decisions[0].applied[0].scheme_id == (
+            original.subsidy_decisions[0].applied[0].scheme_id
+        )
+
+    def test_a_result_written_before_the_award_fields_existed_still_renders(self, rendered, tmp_path):
+        """Q20/Q26 F8: an archived `lifecycle_costs.json` predates every award field added since.
+
+        The fields the award caption is built from — the display name, the two factors, the two
+        pre-cap rates, the eligible-cost ceiling — were all added after results had already been
+        written, and `serialization` reads each with `dict.get` for exactly that reason. This
+        strips them back out of a freshly written file and renders both documents from what
+        remains, which is the archived shape: the awards still have to be listed, under their raw
+        scheme ids since no friendly name survives, and the caption has to say nothing at all
+        rather than print a multiplication with missing factors.
+        """
+        import json
+
+        from hisim.economics.exports import write_cash_flow_timeline, write_lifecycle_costs_json
+        from hisim.economics.serialization import read_results
+
+        directory = str(tmp_path)
+        write_lifecycle_costs_json(rendered.matrix, directory)
+        write_cash_flow_timeline(rendered.matrix, directory)
+        path = os.path.join(directory, "lifecycle_costs.json")
+        with open(path, encoding="utf-8") as file:
+            document = json.load(file)
+        removed = (
+            "display_name",
+            "benefit_rate",
+            "benefit_rate_before_group_cap",
+            "benefit_rate_before_overall_cap",
+            "eligible_basis_in_euro",
+            "eligible_basis_cap_in_euro",
+        )
+        stripped = 0
+        for result in document.values():
+            for decision in result.get("subsidy_decisions", []):
+                for award in decision.get("applied", []):
+                    stripped += sum(award.pop(field, None) is not None for field in removed)
+        assert stripped > 0, "the fixture wrote no award fields — nothing was stripped"
+        with open(path, "w", encoding="utf-8") as file:
+            json.dump(document, file)
+
+        reloaded = read_results(directory)
+        assert reloaded is not None
+        summary = build_cost_summary_markdown(reloaded, run_plausibility_checks(reloaded), None)
+        report = build_lifecycle_report_html(reloaded, run_plausibility_checks(reloaded), None, None)
+        applied = [
+            award
+            for result in reloaded.results.values()
+            for decision in result.subsidy_decisions
+            for award in decision.applied
+        ]
+        assert applied
+        for award in applied:
+            assert award.display_name == ""
+            assert award.label == award.scheme_id  # the id is what a reader gets, never a blank
+            assert award.scheme_id in summary
+            assert award.scheme_id in report
+        # No caption at all: both halves of the phrase `_award_arithmetic_str` appends are keyed
+        # on fields that are gone. The control is the unstripped rendering, which carries both —
+        # without it these would pass on any report that simply lost its subsidy section.
+        assert "EUR eligible basis" in rendered.summary and "EUR eligible cost" in rendered.summary
+        for document in (summary, report):
+            assert "EUR eligible basis" not in document
+            assert "EUR eligible cost" not in document
+
+    def test_report_cli_prefers_stored_results(self, rendered, tmp_path, capsys):
+        """`report` on a directory with stored results does not re-evaluate."""
+        from hisim.economics.__main__ import main
+        from hisim.economics.exports import write_cash_flow_timeline, write_lifecycle_costs_json
+        from hisim.economics.serialization import write_inputs
+
+        directory = tmp_path / "stored"
+        directory.mkdir()
+        write_inputs(make_inputs(), str(directory))
+        write_lifecycle_costs_json(rendered.matrix, str(directory))
+        write_cash_flow_timeline(rendered.matrix, str(directory))
+        assert main(["report", str(directory)]) == 0
+        assert "re-evaluating" not in capsys.readouterr().out
+        summary = (directory / "cost_summary.md").read_text(encoding="utf-8")
+        # The perspective set is the stored one, not the default bundle's.
+        assert "financed_net" in summary and "landlord" in summary
+
+
+class TestGoldenFiles:
+    """The oracle itself."""
+
+    def test_cost_summary_markdown_matches_golden(self, rendered):
+        """`cost_summary.md`, byte-for-byte."""
+        _assert_matches_golden(SUMMARY_GOLDEN, rendered.summary)
+
+    def test_lifecycle_report_html_matches_golden(self, rendered):
+        """`lifecycle_report.html`, byte-for-byte (numbers, SVG geometry, tooltips)."""
+        _assert_matches_golden(REPORT_GOLDEN, rendered.report)

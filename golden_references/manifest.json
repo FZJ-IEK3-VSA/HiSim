@@ -1,15 +1,26 @@
 {
-  "config_sha256": "05d95c63ffa8c6070692370729f48365c5e0230842d2f64f002aace6bc8588da",
-  "generated_at": "2026-07-14T12:15:09.932989+00:00",
+  "config_sha256": "15ff311a3d0ef9d2b14062ccfbb03b08762b1dbe052d91c8265b109c58f9c742",
+  "generated_at": "2026-09-13T07:47:54.702201+00:00",
   "golden_files": [
+    "air_conditioned_house__one_week_60s.json",
+    "automatic_default_connections__one_week_60s.json",
+    "basic_household__one_week_60s.json",
+    "basic_household_only_heating__one_week_60s.json",
+    "default_connections__one_week_60s.json",
+    "dynamic_components__one_week_60s.json",
+    "electrolyzer_with_renewables__one_week_60s.json",
     "household_district_heating_building_sizer__full_year_60s.json",
     "household_district_heating_building_sizer__one_week_60s.json",
     "household_electric_heating_building_sizer__full_year_60s.json",
     "household_electric_heating_building_sizer__one_week_60s.json",
     "household_gas_building_sizer__full_year_60s.json",
     "household_gas_building_sizer__one_week_60s.json",
+    "household_gas_solar_thermal__one_week_60s.json",
+    "household_gas_solar_thermal_building_sizer__one_week_60s.json",
     "household_heatpump_building_sizer__full_year_60s.json",
     "household_heatpump_building_sizer__one_week_60s.json",
+    "household_heatpump_car_building_sizer__one_week_60s.json",
+    "household_heatpump_solar_thermal_building_sizer__one_week_60s.json",
     "household_hydrogen_boiler_building_sizer__full_year_60s.json",
     "household_hydrogen_boiler_building_sizer__one_week_60s.json",
     "household_oil_building_sizer__full_year_60s.json",
@@ -17,9 +28,12 @@
     "household_pellets_building_sizer__full_year_60s.json",
     "household_pellets_building_sizer__one_week_60s.json",
     "household_wood_chips_building_sizer__full_year_60s.json",
-    "household_wood_chips_building_sizer__one_week_60s.json"
+    "household_wood_chips_building_sizer__one_week_60s.json",
+    "simple_air_conditioner_household_building_sizer__one_week_60s.json",
+    "simple_system_setup_one__one_week_60s.json",
+    "simple_system_setup_two__one_week_60s.json"
   ],
-  "hisim_commit": "e77a28e50d67562ddac8cf912d3c4e9d955b5fa0",
-  "platform": "Linux-6.17.0-1018-azure-x86_64-with-glibc2.36",
-  "python_version": "3.11.15"
+  "hisim_commit": "b87ac2a3f784bdca434c0436394144f65bd6a1c7",
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.36",
+  "python_version": "3.11.16"
 }

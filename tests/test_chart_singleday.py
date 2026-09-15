@@ -47,7 +47,7 @@ def test_build_day_slice_first_day_of_january_with_hourly_resolution() -> None:
     # 1 / time_correction_factor_in_hours == 1 -> one timestep per hour.
     data = _make_series(24 * 31)  # 31 days of hourly data
     data_slice, plot_title = ChartSingleDay.build_day_slice(
-        data=data,
+        data_with_units=data,
         month=0,
         day=0,
         time_correction_factor_in_hours=1.0,
@@ -67,7 +67,7 @@ def test_build_day_slice_slice_path_requires_more_than_one_day_of_data() -> None
     """
     data = _make_series(24)
     data_slice, _ = ChartSingleDay.build_day_slice(
-        data=data,
+        data_with_units=data,
         month=0,
         day=0,
         time_correction_factor_in_hours=1.0,
@@ -86,19 +86,19 @@ def test_build_day_slice_ordinal_suffixes() -> None:
     """
     data = _make_series(5)  # len <= 24 -> fall-through, no slicing
     _, t1 = ChartSingleDay.build_day_slice(
-        data=data, month=0, day=0, time_correction_factor_in_hours=1.0,
+        data_with_units=data, month=0, day=0, time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS, title="X")
     _, t2 = ChartSingleDay.build_day_slice(
-        data=data, month=0, day=1, time_correction_factor_in_hours=1.0,
+        data_with_units=data, month=0, day=1, time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS, title="X")
     _, t3 = ChartSingleDay.build_day_slice(
-        data=data, month=0, day=2, time_correction_factor_in_hours=1.0,
+        data_with_units=data, month=0, day=2, time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS, title="X")
     _, t4 = ChartSingleDay.build_day_slice(
-        data=data, month=0, day=3, time_correction_factor_in_hours=1.0,
+        data_with_units=data, month=0, day=3, time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS, title="X")
     _, t11 = ChartSingleDay.build_day_slice(
-        data=data, month=0, day=10, time_correction_factor_in_hours=1.0,
+        data_with_units=data, month=0, day=10, time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS, title="X")
 
     assert t1 == "X January 1st"
@@ -112,7 +112,7 @@ def test_build_day_slice_month_label_and_offset_in_title() -> None:
     """Month index selects the label and the day offset is encoded in the title."""
     data = _make_series(5)  # fall-through path
     _, plot_title = ChartSingleDay.build_day_slice(
-        data=data,
+        data_with_units=data,
         month=1,
         day=2,
         time_correction_factor_in_hours=1.0,
@@ -129,7 +129,7 @@ def test_build_day_slice_firstindex_offset_for_subhourly_resolution() -> None:
     time_correction_factor_in_hours = seconds_per_timestep / 3600.0  # 0.25
     data = _make_series(96 * 31)
     data_slice, plot_title = ChartSingleDay.build_day_slice(
-        data=data,
+        data_with_units=data,
         month=0,
         day=0,
         time_correction_factor_in_hours=time_correction_factor_in_hours,
@@ -146,7 +146,7 @@ def test_build_day_slice_returns_full_data_when_slice_exceeds_length() -> None:
     # Only 5 timesteps available, but the requested slice needs 24 -> out of bounds.
     short_data = _make_series(5)
     data_slice, plot_title = ChartSingleDay.build_day_slice(
-        data=short_data,
+        data_with_units=short_data,
         month=0,
         day=0,
         time_correction_factor_in_hours=1.0,
@@ -165,7 +165,7 @@ def test_build_day_slice_does_not_mutate_input_series() -> None:
     original_index = list(data.index)
     original_values = list(data.values)
     ChartSingleDay.build_day_slice(
-        data=data,
+        data_with_units=data,
         month=0,
         day=0,
         time_correction_factor_in_hours=1.0,
@@ -189,7 +189,7 @@ def test_get_day_data_delegates_to_build_day_slice(tmp_path: Path) -> None:
         directory_path=str(tmp_path),
         time_correction_factor_in_hours=1.0 / timesteps_per_hour,
         output_description="temperature",
-        data=data,
+        data_with_units=data,
         day=0,
         month=0,
         figure_format=FigureFormat.PNG,
@@ -201,7 +201,7 @@ def test_get_day_data_delegates_to_build_day_slice(tmp_path: Path) -> None:
 
     # Consistency with the pure helper.
     expected_slice, expected_title = ChartSingleDay.build_day_slice(
-        data=data,
+        data_with_units=data,
         month=0,
         day=0,
         time_correction_factor_in_hours=1.0 / timesteps_per_hour,

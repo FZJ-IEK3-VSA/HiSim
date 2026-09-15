@@ -147,9 +147,9 @@ def _is_usable_by_building_component(row: Dict[str, str]) -> bool:
     ``Building`` computes area-weighted door/window U-values and crashes with a
     ``ZeroDivisionError`` on rows without a door (``A_Door_1`` = 0) or without windows.
     """
-    door_area = _parse_decimal(row.get("A_Door_1"))
-    window_area = _parse_decimal(row.get("A_Window_1")) + _parse_decimal(row.get("A_Window_2"))
-    return door_area > 0 and window_area > 0
+    door_area_in_m2 = _parse_decimal(row.get("A_Door_1"))
+    window_area_in_m2 = _parse_decimal(row.get("A_Window_1")) + _parse_decimal(row.get("A_Window_2"))
+    return door_area_in_m2 > 0 and window_area_in_m2 > 0
 
 
 def _parse_decimal(raw: object) -> float:
@@ -189,7 +189,7 @@ def select_building_code(
 
     band = next((entry for entry in bands if entry.year_start <= construction_year <= entry.year_end), None)
     if band is None:
-        band = min(bands, key=lambda entry: _distance_to_range(construction_year, entry))
+        band = min(bands, key=lambda entry: _distance_to_range_in_years(construction_year, entry))
         exact_band = next(
             (entry for entry in all_bands if entry.year_start <= construction_year <= entry.year_end), None
         )
@@ -217,7 +217,7 @@ def select_building_code(
     return BuildingCodeSelection(building_code=code, notes=selection_notes)
 
 
-def _distance_to_range(year: int, band: AgeBand) -> int:
+def _distance_to_range_in_years(year: int, band: AgeBand) -> int:
     """Distance in years between *year* and the band's year range (0 if inside)."""
     if year < band.year_start:
         return band.year_start - year

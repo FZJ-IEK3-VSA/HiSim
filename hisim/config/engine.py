@@ -1,9 +1,9 @@
 """The sizing-fact engine: cross-component sizing resolved to a fixed point over configs.
 
 Cross-component sizing dependencies nest deeply (building → HDS controller → HDS;
-building → boiler → boiler controller), and the incumbent mechanism — the global
-``SingletonSimRepository`` with untyped enum-keyed entries and silent fallbacks — has
-already rotted in production. This engine is its typed, hard-erroring successor, in three
+building → boiler → boiler controller), and the mechanism this one replaces — the global
+``SingletonSimRepository`` with untyped enum-keyed entries and silent fallbacks, emptied and
+deleted on 2026-09-12 — had already rotted in production. This engine is its typed, hard-erroring successor, in three
 phases: **registration** reads every config's inputs from its laws' ``facts_read`` and
 its outputs from the :class:`~hisim.config.contributions.FactContribution` declarations
 on its class; **validation** rejects a fact nobody provides before anything is computed;
@@ -41,7 +41,7 @@ from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Set, 
 from hisim import log
 from hisim.config import sizing
 from hisim.config.context import SizingContext
-from hisim.config.contributions import FactContribution
+from hisim.config.contributions import FactContribution, declared_facts_of
 from hisim.config.laws import Cardinality, ConfigSizingError, SizingError, SizingLaw
 from hisim.config.report import (
     ContributionRecord,
@@ -180,9 +180,8 @@ class SizingFactEngine:
                 )
             seen[name] = type(config).__name__
             contributions = tuple(getattr(type(config), FactContribution.CLASS_ATTRIBUTE, ()))
-            for contribution in contributions:
-                for fact in contribution.facts:
-                    self._providers.setdefault(fact, set()).add(name)
+            for fact in declared_facts_of(type(config)):
+                self._providers.setdefault(fact, set()).add(name)
             nodes.append(_Node(
                 name=name,
                 config=config,

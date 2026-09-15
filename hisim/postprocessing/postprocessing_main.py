@@ -58,9 +58,9 @@ import pandas as pd
 from hisim import log
 from hisim import utils
 from hisim.component import ComponentOutput
+from hisim.components.weather import Weather
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 if TYPE_CHECKING:
     from hisim.postprocessing import reportgenerator
@@ -68,9 +68,70 @@ if TYPE_CHECKING:
     from hisim.simulator import Simulator
 
 
+#: KPI that only a ``Building`` component produces. The building-sizer JSON normalizes almost
+#: every field by it, so a building object whose KPI collection lacks it has no Building at all.
+BUILDING_OWN_KPI_NAME: str = "Conditioned floor area"
+
+
+def region_of(ppdt: PostProcessingDataTransfer) -> str:
+    """Return the region the run is reported under: the locations its Weathers are configured for.
+
+    The region is report metadata only -- the ``region`` field of the pyam export written by
+    ``prepare_results_for_scenario_evaluation`` and of the scenario-evaluation config JSON written
+    by ``write_config_data_for_scenario_evaluation``. It is read off the run's own components
+    rather than a process-wide global, so both writers share one answer and cannot drift apart.
+
+    A run without a Weather has no region and gets ``""``. A run with one Weather is reported under
+    that Weather's configured location. A run with several -- a district drawing on more than one
+    station -- is reported under all of them, joined in component order with ``" / "``, so that the
+    answer is deterministic and no station is silently dropped.
+
+    Args:
+        ppdt: The data transfer object of the finished run, whose ``wrapped_components``
+            carry the components the simulation was built from.
+
+    Returns:
+        The configured locations of the run's Weathers joined in component order, or ``""``
+        if the run has no Weather.
+    """
+    locations: List[str] = []
+    for wrapped_component in ppdt.wrapped_components:
+        component = wrapped_component.my_component
+        if isinstance(component, Weather):
+            # Under this repository's mypy configuration the config attribute resolves to Any
+            # (see the dataclasses_json note in mypy.ini), so the annotation is what pins the
+            # value to a string rather than letting Any spread into the joined region.
+            location: str = component.weather_config.location
+            locations.append(location)
+    return " / ".join(locations)
+
+
 def _load_attribute(module_name: str, attribute_name: str) -> Any:
     """Import an optional postprocessing helper only when its feature is used."""
     return getattr(importlib.import_module(module_name), attribute_name)
+
+
+def _propagating_cost_errors() -> Tuple[type, ...]:
+    """Exception types a lifecycle-cost failure must propagate instead of logging and continuing.
+
+    Computing lifecycle costs is opt-in, so a cost model that cannot describe the simulated fleet
+    is a failed run rather than a log line (cost_spec.md §9.2, decision D7). `CostDataError` is
+    the typed marker for exactly that class of failure — `UnresolvableSubjectsError`, raised for
+    an undeclared or otherwise undescribable component, is one — while everything else coming out
+    of the engine is an accident that must still not cost a user their simulation results.
+
+    Resolved through `_load_attribute` and behind a guard so that the *handler* can never fail:
+    if `hisim.economics` itself will not import, there is no typed error to recognize and the
+    caller's broad handler should log whatever went wrong rather than re-raise blindly.
+
+    Returns:
+        A tuple usable directly as the second argument of `isinstance`; empty when the cost
+        package could not be imported, which makes every exception fall through to the log.
+    """
+    try:
+        return (_load_attribute("hisim.economics.catalog_entries", "CostDataError"),)
+    except Exception:  # pylint: disable=broad-except
+        return ()
 
 
 class PostProcessor:
@@ -99,7 +160,6 @@ class PostProcessor:
         self.scenario: str = ""
         self.region: str = ""
         self.year: int = 2021
-        self.description: str = ""
 
     def set_results_directory(self, dirname: Optional[str] = None) -> None:
         """Sets the results directory."""
@@ -293,6 +353,47 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Writing network charts to report took " + f"{duration:1.2f}s.")
+        # Parallel lifecycle cost engine (cost_spec.md §10): strictly additive, writes only new
+        # files. It runs BEFORE the legacy COMPUTE_OPEX/COMPUTE_CAPEX blocks because the legacy
+        # get_cost_capex mutates component configs as a side effect (overwrite_config_values...)
+        # and would contaminate the facts the new engine reads (§10.0 rule 4). The parity
+        # report, which needs the legacy CSVs, is written in a second block further down.
+        # LIFECYCLE_COST_REPORT implies the computation and adds the human-readable reports.
+        if (
+            PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS in ppdt.post_processing_options
+            or PostProcessingOptions.LIFECYCLE_COST_REPORT in ppdt.post_processing_options
+        ):
+            log.information("Computing lifecycle costs (parallel cost engine).")
+            start = timer()
+            try:
+                compute_lifecycle_costs = _load_attribute("hisim.economics.bridge", "compute_lifecycle_costs")
+                compute_lifecycle_costs(
+                    wrapped_components=ppdt.wrapped_components,
+                    all_outputs=ppdt.all_outputs,
+                    postprocessing_results=ppdt.results,
+                    simulation_parameters=ppdt.simulation_parameters,
+                    generate_report=(
+                        PostProcessingOptions.LIFECYCLE_COST_REPORT in ppdt.post_processing_options
+                    ),
+                )
+            except Exception as err:  # pylint: disable=broad-except
+                # Asking for lifecycle costs is opt-in, so an answer that cannot be produced is a
+                # failed run rather than a log line: a CostDataError — and hence the D7
+                # UnresolvableSubjectsError raised for an undeclared or otherwise undescribable
+                # component (cost_spec.md §9.2, §8) — propagates and fails postprocessing.
+                # Everything else is an accident in the parallel engine and must still not cost a
+                # user their simulation results, so it stays a logged error. What that leniency
+                # must not do is leave a *partial* cost export set behind for a later reader to
+                # take as complete, and it does not: `compute_lifecycle_costs` removes the files it
+                # had already written before letting anything propagate, so this branch is reached
+                # with the cost files either all there or none of them.
+                if isinstance(err, _propagating_cost_errors()):
+                    raise
+                log.error(f"Lifecycle cost engine failed (legacy outputs are unaffected): {err}")
+            end = timer()
+            duration = end - start
+            log.information("Computing lifecycle costs took " + f"{duration:1.2f}s.")
+
         if PostProcessingOptions.COMPUTE_OPEX in ppdt.post_processing_options:
             log.information(
                 "Computing and writing operational costs and C02 emissions produced in operation to report."
@@ -324,6 +425,21 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Computing and writing KPIs to report took " + f"{duration:1.2f}s.")
+
+        # Shadow-mode parity (cost_spec.md §9.7): compares the legacy CSVs written above
+        # (read-only) against the facts the lifecycle engine captured BEFORE the legacy path
+        # ran, so legacy config mutation cannot fake agreement.
+        if (
+            PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS in ppdt.post_processing_options
+            or PostProcessingOptions.LIFECYCLE_COST_REPORT in ppdt.post_processing_options
+        ) and PostProcessingOptions.COMPUTE_CAPEX in ppdt.post_processing_options:
+            try:
+                write_parity_from_stored_inputs = _load_attribute(
+                    "hisim.economics.bridge", "write_parity_from_stored_inputs"
+                )
+                write_parity_from_stored_inputs(simulation_parameters=ppdt.simulation_parameters)
+            except Exception as err:  # pylint: disable=broad-except
+                log.error(f"Lifecycle cost parity report failed (legacy outputs are unaffected): {err}")
 
         # only a single day has been calculated. This gets special charts for debugging.
         if (
@@ -383,35 +499,23 @@ class PostProcessor:
         report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Makes special plots for debugging if only a single day was calculated."""
+        # A special-case arm once compared full_name against a hard-coded "Dummy" component
+        # that nothing in the repository constructs; the branch could never fire and was
+        # removed rather than have its magic string maintained through every rename.
         chart_single_day_class = _load_attribute("hisim.postprocessing.chart_singleday", "ChartSingleDay")
         for index, output in enumerate(ppdt.all_outputs):
-            if output.full_name == "Dummy # Residence Temperature":
-                my_days = chart_single_day_class(
-                    output=output.full_name,
-                    component_name=output.component_name,
-                    units=output.unit,
-                    directory_path=ppdt.simulation_parameters.result_directory,
-                    time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
-                    data=ppdt.results.iloc[:, index],
-                    day=0,
-                    month=0,
-                    output2=ppdt.results.iloc[:, 11],
-                    output_description=output.output_description,
-                    figure_format=ppdt.simulation_parameters.figure_format,
-                )
-            else:
-                my_days = chart_single_day_class(
-                    output=output.full_name,
-                    component_name=output.component_name,
-                    units=output.unit,
-                    directory_path=ppdt.simulation_parameters.result_directory,
-                    time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
-                    data=ppdt.results.iloc[:, index],
-                    day=0,
-                    month=0,
-                    output_description=output.output_description,
-                    figure_format=ppdt.simulation_parameters.figure_format,
-                )
+            my_days = chart_single_day_class(
+                output=output.full_name,
+                component_name=output.component_name,
+                units=output.unit,
+                directory_path=ppdt.simulation_parameters.result_directory,
+                time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
+                data_with_units=ppdt.results.iloc[:, index],
+                day=0,
+                month=0,
+                output_description=output.output_description,
+                figure_format=ppdt.simulation_parameters.figure_format,
+            )
             my_entry = my_days.plot(close=True)
             report_image_entries.append(my_entry)
 
@@ -443,7 +547,7 @@ class PostProcessor:
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
-            my_entry = my_bar.plot(data=ppdt.results_monthly.iloc[:, index])
+            my_entry = my_bar.plot(data_in_self_units=ppdt.results_monthly.iloc[:, index])
             report_image_entries.append(my_entry)
 
     def make_single_day_plots(
@@ -463,7 +567,7 @@ class PostProcessor:
                 time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
                 day=days["day"],
                 month=days["month"],
-                data=ppdt.results.iloc[:, index],
+                data_with_units=ppdt.results.iloc[:, index],
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
@@ -491,7 +595,7 @@ class PostProcessor:
 
             my_entry = my_carpet.plot(
                 xdims=int((ppdt.simulation_parameters.end_date - ppdt.simulation_parameters.start_date).days),
-                data=ppdt.results.iloc[:, index],
+                data_in_self_units=ppdt.results.iloc[:, index],
             )
             report_image_entries.append(my_entry)
 
@@ -515,7 +619,7 @@ class PostProcessor:
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
-            my_entry = my_line.plot(data=ppdt.results.iloc[:, index])
+            my_entry = my_line.plot(data_in_self_units=ppdt.results.iloc[:, index])
             report_image_entries.append(my_entry)
             del my_line
 
@@ -912,16 +1016,8 @@ class PostProcessor:
 
         # Set meta info
         self.model = f"HiSim_{ppdt.module_filename}"
-        self.scenario = (
-            SingletonSimRepository().get_entry(SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
-            if SingletonSimRepository().entry_exists(SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
-            else ""
-        )
-        self.region = (
-            SingletonSimRepository().get_entry(SingletonDictKeyEnum.LOCATION)
-            if SingletonSimRepository().entry_exists(SingletonDictKeyEnum.LOCATION)
-            else ""
-        )
+        self.scenario = ppdt.scenario_name
+        self.region = region_of(ppdt)
         self.year = ppdt.simulation_parameters.year
 
         # Time series
@@ -994,22 +1090,10 @@ class PostProcessor:
         self.model = "".join(["HiSim_", ppdt.module_filename])
 
         # set pyam scenario name
-        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME):
-            self.scenario = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
-        else:
-            self.scenario = ""
+        self.scenario = ppdt.scenario_name
 
         # set region
-        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.LOCATION):
-            self.region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
-        else:
-            self.region = ""
-
-        # set description
-        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.DESCRIPTION):
-            self.description = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.DESCRIPTION)
-        else:
-            self.description = ""
+        self.region = region_of(ppdt)
 
         # set year or timeseries
         self.year = ppdt.simulation_parameters.year
@@ -1027,11 +1111,22 @@ class PostProcessor:
         write_standalone_simulation_json(my_sim, path=os.path.join(result_data_folder_for_scenario_evaluation, "simulation.json"))
 
         # Here, the my_sim could maybe be replaced by an altered ppdt
-        write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=self.description,
-                                       path=os.path.join(result_data_folder_for_scenario_evaluation, "scenario.json"))
+        write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=ppdt.description,
+                                       path=os.path.join(result_data_folder_for_scenario_evaluation, "scenario.json"),
+                                       scenario_name=ppdt.scenario_name)
 
     def write_component_configurations_to_json(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:
-        """Collect all component configurations and write into JSON file in result directory."""
+        """Collect all component configurations and write into JSON file in result directory.
+
+        The run's name and description are read off the transfer object here rather than off
+        ``self``, because this option is selected independently of the scenario-evaluation one:
+        a run asking only for the component configurations would otherwise write an anonymous,
+        undescribed ``scenario.json``, the two attributes still holding their empty defaults.
+
+        Args:
+            ppdt: The finished run, for its results directory and its metadata.
+            my_sim: The simulator whose components and connections are written out.
+        """
 
         write_standalone_simulation_json = _load_attribute(
             "hisim.json_generator",
@@ -1045,10 +1140,10 @@ class PostProcessor:
             ppdt.simulation_parameters.result_directory,
             "simulation.json",
         ))
-        write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=self.description, path=os.path.join(
+        write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=ppdt.description, path=os.path.join(
             ppdt.simulation_parameters.result_directory,
             "scenario.json",
-        ))
+        ), scenario_name=ppdt.scenario_name)
 
     def write_kpis_in_dict(
         self,
@@ -1158,7 +1253,13 @@ class PostProcessor:
     def write_kpis_to_json_for_building_sizer(
         self, ppdt: PostProcessingDataTransfer, building_objects_in_district_list: list
     ) -> None:
-        """Write KPIs to json file for building sizer."""
+        """Write KPIs to json file for building sizer.
+
+        Every field of the sizer JSON that is normalized per square metre divides by the
+        "Conditioned floor area" KPI, which only a ``Building`` component produces. A building
+        object whose KPI collection carries no such entry therefore has no Building in the run,
+        and is skipped with one log line instead of writing a file the sizer cannot use.
+        """
 
         def get_kpi_entries_for_building_sizer(data, target_key):
             """Get kpi entries for building sizer."""
@@ -1174,6 +1275,14 @@ class PostProcessor:
                 raise KeyError(f"No key is matching the target key {target_key}.")
             return result
 
+        def building_kpis_were_computed(data) -> bool:
+            """Say whether a Building component contributed its own KPIs to this collection."""
+            try:
+                get_kpi_entries_for_building_sizer(data=data, target_key=BUILDING_OWN_KPI_NAME)
+            except KeyError:
+                return False
+            return True
+
         kpi_dict = {}
 
         # Check if important options were set
@@ -1182,9 +1291,15 @@ class PostProcessor:
                 # Get KPIs from ppdt
 
                 kpi_collection_dict = ppdt.kpi_collection_dict[building_object]
+                if not building_kpis_were_computed(kpi_collection_dict):
+                    log.information(
+                        f"Skipping the building-sizer KPI JSON for {building_object}: the run has no "
+                        "Building component, so there is nothing for the building sizer to consume."
+                    )
+                    continue
                 # conditioned floor area
                 conditioned_floor_area_in_m2 = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Conditioned floor area"
+                    data=kpi_collection_dict, target_key=BUILDING_OWN_KPI_NAME
                 )
                 # Total costs
                 annualized_total_costs_in_euro = get_kpi_entries_for_building_sizer(

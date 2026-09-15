@@ -23,10 +23,10 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         directory_path: str,
         time_correction_factor_in_hours: float,
         output_description: str,
-        data: pd.Series,
+        data_with_units: pd.Series,
         day: int = 0,
         month: int = 0,
-        output2: pd.Series | None = None,
+        output2_with_units: pd.Series | None = None,
         figure_format: str | None = None,
         path_checker: Callable[[str], None] | None = None,
     ) -> None:
@@ -39,15 +39,17 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
             directory_path: Directory path for saving the chart.
             time_correction_factor_in_hours: Factor for time step correction.
             output_description: Description of the output.
-            data: Time-series data to visualize.
+            data_with_units: Time-series data to visualize; its physical unit
+                is carried separately by the ``units`` argument.
             day: Day of the month to display (default 0).
             month: Month of the year to display (default 0).
-            output2: Optional secondary output data for comparison.
+            output2_with_units: Optional secondary output data for comparison;
+                its physical unit is carried separately by ``units``.
             figure_format: Format for the output figure (e.g., '.png').
             path_checker: Optional callable to validate path length; defaults to
                 the global ``result_path_provider.check_path_length``.
         """
-        if output2 is not None:
+        if output2_with_units is not None:
             super().__init__(
                 output=output,
                 component_name=component_name,
@@ -56,7 +58,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
                 directory_path=directory_path,
                 time_correction_factor_in_hours=time_correction_factor_in_hours,
                 output_description=output_description,
-                output2=output2,
+                output2=output2_with_units,
                 figure_format=figure_format,
                 path_checker=path_checker,
             )
@@ -75,7 +77,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
 
         self.month: int = month
         self.day: int = day
-        self.data: pd.Series = data
+        self.data_with_units: pd.Series = data_with_units
         self.plot_title: str = ""
         self.filename: str = f"{self.type.lower()}_m" f"{self.month}_d{self.day}{self.figure_format}"
 
@@ -84,14 +86,14 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
 
     @staticmethod
     def build_day_slice(
-        data: "pd.Series",
+        data_with_units: "pd.Series",
         month: int,
         day: int,
         time_correction_factor_in_hours: float,
         label_months_lowercase: List[str],
         title: str,
     ) -> Tuple["pd.Series", str]:
-        """Compute the slice of ``data`` for a single day and the matching plot title.
+        """Compute the slice of ``data_with_units`` for a single day and the matching plot title.
 
         This is the pure, side-effect-free core of :meth:`get_day_data`. It does
         neither touch ``self`` nor the filesystem, so it can be unit-tested with a
@@ -100,7 +102,8 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         ``result_path_provider`` singleton).
 
         Args:
-            data: The full time-series to slice.
+            data_with_units: The full time-series to slice; its physical unit
+                is carried separately by the caller (here via ``units``).
             month: Zero-based month index (0 = January, ... 11 = December).
             day: Zero-based day-of-month index within that month (0 = 1st).
             time_correction_factor_in_hours: ``seconds_per_timestep / 3600``; its reciprocal
@@ -110,7 +113,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
 
         Returns:
             A ``(data_slice, plot_title)`` tuple, where ``data_slice`` is the
-            sub-series covering the requested day (or the original ``data`` when
+            sub-series covering the requested day (or the original ``data_with_units`` when
             the computed slice would exceed the available data) and ``plot_title``
             is the assembled title string ``"{title} {month} {day}{ordinal}"``.
         """
@@ -129,34 +132,34 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         date = f"{label_months_lowercase[month]} {day_number}{ordinal}"
         plot_title = f"{title} {date}"
 
-        if abs(lastindex - firstindex) < len(data):
-            data_slice = data[firstindex:lastindex]
+        if abs(lastindex - firstindex) < len(data_with_units):
+            data_slice = data_with_units[firstindex:lastindex]
             data_index = data_slice.index[firstindex:lastindex]
             data_slice.index = data_index
             return data_slice, plot_title
-        return data, plot_title
+        return data_with_units, plot_title
 
     def get_day_data(self) -> pd.Series:
         """Extract the sub-series for the configured month and day.
 
         Delegates to :meth:`build_day_slice` using the instance's ``month``,
-        ``day``, ``data``, ``time_correction_factor_in_hours``, ``label_months_lowercase``,
+        ``day``, ``data_with_units``, ``time_correction_factor_in_hours``, ``label_months_lowercase``,
         and ``title``. As a side effect, sets ``self.plot_title`` to the
         assembled title string returned by ``build_day_slice``.
 
         Returns:
             The pandas Series slice covering the requested day, or the full
-            ``self.data`` when the computed slice would exceed the available data.
+            ``self.data_with_units`` when the computed slice would exceed the available data.
         """
-        data, self.plot_title = self.build_day_slice(
-            data=self.data,
+        data_with_units, self.plot_title = self.build_day_slice(
+            data_with_units=self.data_with_units,
             month=self.month,
             day=self.day,
             time_correction_factor_in_hours=self.time_correction_factor_in_hours,
             label_months_lowercase=self.label_months_lowercase,
             title=self.title,
         )
-        return data
+        return data_with_units
 
     def close(self) -> None:
         """Save the current matplotlib figure to disk and close it.
@@ -184,18 +187,18 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
             output type, and the file path the figure was written to.
         """
         self.ensure_output_dir()
-        single_day_data = self.get_day_data()
+        single_day_data_with_units = self.get_day_data()
         plt.rcParams["font.size"] = "30"
         plt.rcParams["agg.path.chunksize"] = 10000
         _fig, a_x = plt.subplots(figsize=self.figsize, dpi=self.dpi)
         plt.xticks(fontsize=self.fontsize_ticks)
         plt.yticks(fontsize=self.fontsize_ticks)
 
-        single_day_data, self.units = self.rescale_y_axis(y_values=single_day_data, units=self.units)
+        single_day_data_with_units, self.units = self.rescale_y_axis(y_values=single_day_data_with_units, units=self.units)
         plt.title(self.title, fontsize=self.fontsize_title)
         plt.plot(
-            single_day_data.index,
-            single_day_data,
+            single_day_data_with_units.index,
+            single_day_data_with_units,
             color="green",
             linewidth=1.0,
             label=self.property,

@@ -42,7 +42,7 @@ def test_carpet_plot_returns_none_on_invalid_data() -> None:
         invalid_data = pd.Series([1.0, 2.0, 3.0])  # length 3, not divisible by any xdims > 1
         xdims = 2  # ydims = 3 / 2 = 1 (non-integer), reshape will fail
 
-        result = carpet.plot(xdims=xdims, data=invalid_data)
+        result = carpet.plot(xdims=xdims, data_in_self_units=invalid_data)
 
         assert result is None, "Carpet.plot should return None on invalid data"
 

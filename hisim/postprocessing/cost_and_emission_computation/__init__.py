@@ -25,13 +25,16 @@ with the following inputs and assumptions:
   are used directly, either as plain numbers or as
   :class:`~hisim.units.Quantity` objects.
 
-The total values are then prorated to the simulated period by dividing by the
-technical lifetime in years and multiplying by the simulated duration as a
-fraction of a year (``duration.total_seconds() / seconds_per_year``). This is
+The figures are then cut down to the simulated period by
+:func:`~hisim.postprocessing.cost_and_emission_computation.capex_computation.prorate_to_simulated_period`,
+the single authority on the proration rule: the investment cost and the embodied
+CO2 footprint are one-time figures, so they are divided by the technical lifetime
+and multiplied by the simulated fraction of a year, whereas the maintenance cost
+is already an annual rate and is multiplied by that fraction alone. This is
 straight-line (linear) proration -- no discount rate is applied and the values
-are not converted to a net present value (NPV) or expressed as a levelised
-cost of energy (LCOE). The returned data class therefore carries both the
-full lifetime investment and the share attributable to the simulated period.
+are not converted to a net present value (NPV) or expressed as a levelised cost
+of energy (LCOE). The returned data class therefore carries both the full
+lifetime investment and the share attributable to the simulated period.
 
 OPEX model
 ----------
@@ -41,8 +44,10 @@ Operational expenditure is computed per component from its simulation outputs.
 calls each component's ``get_cost_opex`` to obtain an
 :class:`~hisim.component.OpexCostDataClass` and collects the total energy
 consumption, the CO2 emissions of that consumption, the energy cost, and the
-annual maintenance cost. The per-fuel CO2 emission factors and energy prices
-underlying these consumptions are sourced per component from
+maintenance cost for the simulated period -- the annual rate cut down to the
+simulated duration, which is what the ``Maintenance costs for simulated period
+[EUR]`` column of the CSV carries. The per-fuel CO2 emission factors and energy
+prices underlying these consumptions are sourced per component from
 :class:`~hisim.components.configuration.EmissionFactorsAndCostsForFuelsConfig`
 for the simulation year and country (via its ``get_values_for_year`` lookup,
 which raises :class:`KeyError` for year/country pairs that have no tabulated
@@ -92,19 +97,20 @@ are exactly the years tabulated for the requested country:
   :class:`~hisim.components.configuration.EmissionFactorsAndCostsForFuelsConfig`.
   An unsupported country or year raises :class:`KeyError`.
 
-No discounting is applied at any stage: the CAPEX investment cost, CO2
-footprint, and maintenance cost are prorated linearly (straight-line) over the
-technical lifetime to the simulated duration, as described in the CAPEX model
-above. OPEX energy consumption, cost, and emissions are accumulated directly
-over the simulated period without annualisation or discounting.
+No discounting is applied at any stage: the CAPEX figures are prorated linearly
+(straight-line) to the simulated duration under the rule described in the CAPEX
+model above. OPEX energy consumption, cost, and emissions are accumulated
+directly over the simulated period without annualisation or discounting.
 
 Submodules
 ----------
 
 * :mod:`~hisim.postprocessing.cost_and_emission_computation.capex_computation`
   provides
+  :func:`~hisim.postprocessing.cost_and_emission_computation.capex_computation.prorate_to_simulated_period`,
+  which every CAPEX site prorates through, and
   :class:`~hisim.postprocessing.cost_and_emission_computation.capex_computation.CapexComputationHelperFunctions`
-  for building and prorating CAPEX data classes.
+  for building CAPEX data classes.
 * :mod:`~hisim.postprocessing.cost_and_emission_computation.opex_and_capex_cost_calculation`
   provides
   :func:`~hisim.postprocessing.cost_and_emission_computation.opex_and_capex_cost_calculation.opex_calculation`

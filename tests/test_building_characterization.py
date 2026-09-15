@@ -31,7 +31,7 @@ What is covered:
 The config used for the sweep is built field by field instead of through the named
 default. The harness had to survive the config-presets redesign that followed the cleanup
 and replaced ``get_default_german_single_family_home`` with
-``BuildingConfig.preset_standard("Building")``: a harness that has to be edited
+``BuildingConfig.preset_german_single_family_home("Building")``: a harness that has to be edited
 mid-refactor proves nothing, because the edit itself could hide the change it is meant to
 catch -- and this one was not edited: the 3006 golden assertions did not move.
 
@@ -210,7 +210,6 @@ class CharacterizationConfigs:
             window_area_in_m2=None,
             door_u_value_in_watt_per_m2_per_kelvin=None,
             door_area_in_m2=None,
-            predictive=False,
             set_heating_temperature_in_celsius=cls.SET_HEATING_TEMPERATURE_IN_CELSIUS,
             set_cooling_temperature_in_celsius=cls.SET_COOLING_TEMPERATURE_IN_CELSIUS,
             enable_opening_windows=False,

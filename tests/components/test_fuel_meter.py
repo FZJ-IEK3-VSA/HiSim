@@ -4,7 +4,7 @@ These tests pin down small, deterministic, side-effect-free callables in the
 ``fuel_meter`` module that previously had no dedicated coverage:
 
 * :func:`FuelMeterConfig.get_main_classname`
-* :func:`FuelMeterConfig.get_fuel_meter_default_config`
+* :func:`FuelMeterConfig.preset_standard`
 * :meth:`FuelMeter.get_cost_capex`
 * :meth:`FuelMeterState.self_copy`
 
@@ -14,13 +14,15 @@ simulation, so they are fast and free of external dependencies.
 
 # clean
 
+import dataclasses
+
 import pytest
 
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.fuel_meter import FuelMeter, FuelMeterConfig, FuelMeterState
-from hisim.config import ComponentID, DisplayConfig
+from hisim.config import ComponentID, DisplayConfig, SizingContext, auto_fields
 
 # Heating-oil density expressed in kg per liter. The stored field
 # ``fuel_density_in_kg_per_m3`` uses kg/m^3, and since 1 L == 1e-3 m^3 the
@@ -42,42 +44,57 @@ def test_get_main_classname_returns_full_class_path() -> None:
     assert actual == "hisim.components.fuel_meter.FuelMeter"
 
 
-def test_get_fuel_meter_default_config_with_no_arguments() -> None:
-    """Default factory produces the documented hardcoded defaults."""
-    config = FuelMeterConfig.get_fuel_meter_default_config()
+def test_the_preset_leaves_every_fuel_value_open() -> None:
+    """The preset names the instance and pins nothing else, so the three laws can do the work.
+
+    The deleted ``get_fuel_meter_default_config`` factory shipped a rounded oil heating value
+    and an oil density whatever carrier it was asked for; the preset ships neither, which is
+    what makes a meter for pellets or wood chips impossible to get wrong.
+    """
+    config = FuelMeterConfig.preset_standard("FuelMeter")
 
     assert config.component_id.name == "FuelMeter"
-    assert config.fuel_loadtype == lt.LoadTypes.OIL
-    assert config.heating_value_of_fuel_in_kwh_per_liter == 9.82
-    assert config.fuel_density_in_kg_per_m3 == OIL_DENSITY_IN_KG_PER_LITER * 1e3  # kg/L -> kg/m^3
     assert config.component_id.building is None
+    assert sorted(auto_fields(config)) == [
+        "fuel_density_in_kg_per_m3",
+        "fuel_loadtype",
+        "heating_value_of_fuel_in_kwh_per_liter",
+    ]
 
 
-def test_get_fuel_meter_default_config_with_custom_building() -> None:
-    """Passing a component_id with a building only changes that, keeping the rest."""
-    config = FuelMeterConfig.get_fuel_meter_default_config(component_id=ComponentID(name="FuelMeter", building="BUI2"))
+def test_the_preset_resolves_against_the_generators_fuel_facts() -> None:
+    """Resolving the preset against one context fills all three fields and nothing else.
 
-    assert config.component_id.building == "BUI2"
-    # All other defaults are preserved.
-    assert config.component_id.name == "FuelMeter"
-    assert config.fuel_loadtype == lt.LoadTypes.OIL
-    assert config.heating_value_of_fuel_in_kwh_per_liter == 9.82
-    assert config.fuel_density_in_kg_per_m3 == OIL_DENSITY_IN_KG_PER_LITER * 1e3  # kg/L -> kg/m^3
-
-
-def test_get_fuel_meter_default_config_with_custom_fuel_loadtype() -> None:
-    """Passing ``fuel_loadtype`` propagates it while numeric defaults stay put."""
-    config = FuelMeterConfig.get_fuel_meter_default_config(
-        fuel_loadtype=lt.LoadTypes.PELLETS
+    The carrier and the two constants arrive as facts, which is how a converted generator hands
+    them over; a hand-built context is the same thing written out.
+    """
+    config = FuelMeterConfig.preset_standard("FuelMeter").resolve(
+        SizingContext(
+            energy_carrier=lt.LoadTypes.PELLETS,
+            heating_value_of_fuel_in_kwh_per_liter=3.25,
+            fuel_density_in_kg_per_m3=650.0,
+        )
     )
 
     assert config.fuel_loadtype == lt.LoadTypes.PELLETS
-    # Numeric defaults unchanged.
-    assert config.heating_value_of_fuel_in_kwh_per_liter == 9.82
-    assert config.fuel_density_in_kg_per_m3 == OIL_DENSITY_IN_KG_PER_LITER * 1e3  # kg/L -> kg/m^3
-    # And the other defaults are preserved too.
+    assert config.heating_value_of_fuel_in_kwh_per_liter == 3.25
+    assert config.fuel_density_in_kg_per_m3 == 650.0
+    assert not auto_fields(config)
+
+
+def test_a_meter_built_for_one_carrier_can_be_named_per_building() -> None:
+    """The instance name carries the building label, which the factory took as a whole identity.
+
+    ``preset_standard`` takes only a name, so a second building's meter is built by replacing
+    the identity -- the one thing the deleted factory's ``component_id`` argument was used for.
+    """
+    config = dataclasses.replace(
+        FuelMeterConfig.preset_standard("FuelMeter"),
+        component_id=ComponentID(name="FuelMeter", building="BUI2"),
+    )
+
+    assert config.component_id.building == "BUI2"
     assert config.component_id.name == "FuelMeter"
-    assert config.component_id.building is None
 
 
 def test_get_cost_capex_returns_default_capex_and_ignores_none_inputs() -> None:
@@ -121,7 +138,13 @@ def test_fuel_meter_display_config_not_shared() -> None:
     my_simulation_parameters = SimulationParameters.one_day_only(
         2017, seconds_per_timestep
     )
-    config = FuelMeterConfig.get_fuel_meter_default_config()
+    config = FuelMeterConfig.preset_standard("FuelMeter").resolve(
+        SizingContext(
+            energy_carrier=lt.LoadTypes.OIL,
+            heating_value_of_fuel_in_kwh_per_liter=9.821666666666667,
+            fuel_density_in_kg_per_m3=OIL_DENSITY_IN_KG_PER_LITER * 1e3,
+        )
+    )
 
     meter_a = FuelMeter(
         my_simulation_parameters=my_simulation_parameters, config=config

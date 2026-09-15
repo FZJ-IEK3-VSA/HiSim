@@ -27,7 +27,7 @@ components:
 
   weather:
     class: hisim.components.weather.Weather
-    preset: standard
+    preset: aachen
 
   building:
     class: hisim.components.building.Building
@@ -101,7 +101,7 @@ groups:
     components:
       pv_central:
         class: hisim.components.generic_pv_system.PVSystem
-        preset: standard                    # power_in_watt AUTO <- building.conditioned_floor_area_in_m2 (roof of
+        preset: rooftop                     # power_in_watt AUTO <- building.roof_area_in_m2 (roof of
         inputs:                             # the whole building — correct for the central system)
           - weather
 
@@ -260,7 +260,7 @@ groups:
 
       apt1_pv:
         class: hisim.components.generic_pv_system.PVSystem
-        preset: standard
+        preset: rooftop
         config:
           power_in_watt: 1000               # small balcony/roof-share system: concrete, not law-sized
         inputs:
@@ -337,7 +337,7 @@ groups:
 
       apt2_pv:
         class: hisim.components.generic_pv_system.PVSystem
-        preset: standard
+        preset: rooftop
         config:
           power_in_watt: 1000               # small balcony/roof-share system: concrete, not law-sized
         inputs:

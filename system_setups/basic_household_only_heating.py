@@ -3,8 +3,10 @@
 # clean
 from typing import Optional, Any
 from hisim.simulator import SimulationParameters
-from hisim.config import SizingContext
+from hisim.config import SizingContext, concrete
 from hisim.components import (
+    electricity_meter,
+    gas_meter,
     heat_distribution_system,
     loadprofilegenerator_utsp_connector,
     simple_water_storage,
@@ -36,9 +38,11 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     - Components
         - Occupancy (Residents' Demands)
         - Weather
-        - GasHeater
+        - GasHeater and its controller
         - HeatingStorage
-        - Controller2EMS
+        - Heat distribution system and its controller
+        - Electricity meter
+        - Gas meter
     """
 
     # =================================================================================================================================
@@ -59,31 +63,56 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
-    # Build Building
+    # Build Building. The weather config comes first because the building config copies its identity
+    # (weather_identity); the weather component itself is added further down.
+    my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
+    my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
+    my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(
-        config=building.BuildingConfig.preset_standard("Building"),
+        config=my_building_config,
         my_simulation_parameters=my_simulation_parameters,
     )
     my_building_information = my_building.my_building_information
 
     # Build occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Weather
     my_weather = weather.Weather(
-        config=weather.WeatherConfig.get_default(weather.LocationEnum.AACHEN),
+        config=my_weather_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Heat Distribution
-    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
-        set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
-        set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+    # Build Heat Distribution. Every fact the controller sizes from is the building's own, so that
+    # the context here says exactly what the building contributes. The design outside temperature is
+    # the one number this setup does not take from the building: it has always run its heating curve
+    # against -12.2 °C while the building itself is the default -7.0 °C, and that is an assignment on
+    # top of the sized configuration rather than a different fact, so a recorded twin writes it as
+    # the override it is instead of claiming a law produced it.
+    my_heat_distribution_controller_config = (
+        heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
+            "HeatDistributionController"
+        ).resolve(
+            SizingContext(
+                heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+                conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+                heating_reference_temperature_in_celsius=(
+                    my_building_config.heating_reference_temperature_in_celsius
+                ),
+                set_heating_temperature_in_celsius=(
+                    my_building_information.set_heating_temperature_for_building_in_celsius
+                ),
+                set_cooling_temperature_in_celsius=(
+                    my_building_information.set_cooling_temperature_for_building_in_celsius
+                ),
+            )
+        )
+    )
+    my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = (
+        heating_reference_temperature_in_celsius
     )
     my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
 
@@ -95,7 +124,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         config=my_heat_distribution_controller_config
     )
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(
+        heat_distribution_system.HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").resolve(
             SizingContext(
                 water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                 conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
@@ -114,11 +143,12 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         config=my_gas_heater_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-    my_gas_heater_controller_config = (
-        generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-            minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt,
-            with_domestic_hot_water_preparation=False,
+    my_gas_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.preset_modulating(
+        "ModulatingBoilerController"
+    ).resolve(
+        SizingContext(
+            minimal_thermal_power_in_watt=concrete(my_gas_heater_config.minimal_thermal_power_in_watt),
+            maximal_thermal_power_in_watt=concrete(my_gas_heater_config.maximal_thermal_power_in_watt),
         )
     )
     my_gas_heater_controller = generic_boiler.GenericBoilerController(
@@ -127,14 +157,41 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     # Build Storage
-    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
-        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER,
+    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer(
+        "SimpleHotWaterStorage"
+    )
+    # The litres-per-kilowatt figure is per kind of generator, and the volume law reads the field,
+    # so the option is set on the preset before the configuration is resolved.
+    my_simple_heat_water_storage_config.sizing_option = (
+        simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
+    )
+    my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
+        SizingContext(
+            maximal_thermal_power_in_watt=concrete(my_gas_heater_config.maximal_thermal_power_in_watt)
+        )
     )
 
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
+    )
+
+    # Build Meters
+    # Both meters exist for the sake of the KPI layer, which derives every energy-balance
+    # figure from a meter rather than from the components themselves. Without the electricity
+    # meter the grid exchange is unknown, the self-sufficiency chain in kpi_preparation.py has
+    # nothing to work from, and the run dies in post-processing.
+    my_electricity_meter = electricity_meter.ElectricityMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
+    )
+    my_gas_meter = gas_meter.GasMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        # The meter measures what the boiler burns, so the carrier is a fact and not a
+        # second statement of the same thing.
+        config=gas_meter.GasMeterConfig.preset_standard("GasMeter").resolve(
+            SizingContext(energy_carrier=my_gas_heater_config.energy_carrier)
+        ),
     )
 
     # =================================================================================================================================
@@ -153,3 +210,9 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_sim.add_component(my_building)
     my_sim.add_component(my_weather)
     my_sim.add_component(my_occupancy)
+    # Both meters are wired by their own default connections and nothing else. Feeding a meter
+    # explicitly *and* registering it automatically is how household_gas_solar_thermal came to
+    # count the occupancy's electricity twice (P3 finding F-4): the simulator does not
+    # de-duplicate two feeds of one source, so the sum is genuinely taken twice.
+    my_sim.add_component(my_electricity_meter, connect_automatically=True)
+    my_sim.add_component(my_gas_meter, connect_automatically=True)

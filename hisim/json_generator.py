@@ -4,7 +4,7 @@ from __future__ import annotations
 import dataclasses
 import re
 import json
-from typing import List, Any, Dict, Tuple, cast, overload, TYPE_CHECKING
+from typing import List, Any, Dict, Tuple, overload, TYPE_CHECKING
 from pathlib import Path
 # 3rd party imports
 from pydantic import BaseModel, Field
@@ -12,9 +12,6 @@ import humps
 # 1st party imports
 from hisim import log
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
-from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
-from hisim.components.generic_car import Car, GenericCarInformation
 from hisim.config import ConfigBase, ComponentID
 import hisim.component as cp
 import hisim.dynamic_component as dcp
@@ -64,29 +61,6 @@ class Scenario(BaseModel):
     connections: dict[str, Any] | list[Any] | None = None
 
 
-def count_outputs_created_by_constructor(component: L2GenericEnergyManagementSystem) -> int:
-    """Count the outputs the EMS builds for itself, before any system setup adds more.
-
-    The EMS creates dynamic outputs from inside its own ``__init__``, one per
-    ``get_default_connections_from_*`` helper. Those must not be written to the scenario
-    JSON, because the JSON executor instantiates the component the same way and would end
-    up with each of them twice. Outputs a system setup appended afterwards must be written,
-    and they are exactly the ones whose ``OutputN`` index runs past this count.
-
-    The count is measured rather than assumed: a pristine instance of the same class is
-    built from the same config and its outputs are counted. ``Component.__init__`` only
-    populates the instance -- it registers nothing globally -- so the throwaway instance is
-    free of side effects. Hard-coding the number instead silently rotted once already, when
-    retiring the modular DHW heat pump removed one of the EMS helpers and shifted every
-    setup-added output down by one index.
-    """
-    pristine_instance = type(component)(
-        my_simulation_parameters=component.my_simulation_parameters,
-        config=component.ems_config,
-    )
-    return len(pristine_instance.outputs)
-
-
 # Adapted from old json_generator.py
 def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tuple[Component, list[Any], list[Any]]:
     """Converts a component to a JSON-compatible dictionary."""
@@ -103,19 +77,9 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
             config_json_str["source_path"] = f"<<utils.get_input_directory()>>/{relative_input_path}"
         else:
             log.warning(f"Could not find 'inputs' in absolute weather source path {config_json_str['source_path']}, leaving it unchanged in JSON output...")
-    # Car information can be generated using Occupancy (see class GenericCarInformation)
-    # However, then each car must be assigned to an occupancy
-    elif config.get_main_classname() == "hisim.components.generic_car.Car":
-        config_json_str["household_name"] = cast(Car, component).car_information_dict["household_name"]
 
     outs = []
     ins = []
-    # Used by the EMS special case inside the output loop below; see the comment there.
-    number_of_outputs_built_by_constructor = (
-        count_outputs_created_by_constructor(component)
-        if isinstance(component, L2GenericEnergyManagementSystem)
-        else 0
-    )
     for out in component.outputs:
         if isinstance(component, DynamicComponent):
             output_matches = [
@@ -128,30 +92,29 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
                     f"Multiple dynamic outputs found for field '{out.field_name}' in component '{component.component_name}'"
                 )
             if len(output_matches) == 1:
-                match = re.search(r"Output(\d+)$", out.field_name)
-                number = int(match.group(1)) if match else 100
-
-                # Handle special case for EMS: its constructor already builds a batch of
-                # dynamic outputs (one per `get_default_connections_from_*` helper), and the
-                # JSON executor gets those back for free when it instantiates the component.
-                # Re-declaring them here would duplicate them, so only the outputs a system
-                # setup added on top of the constructor's belong in the file. The cut-off is
-                # read off a pristine instance instead of hard-coded, because it shifts
-                # whenever a default-connection helper is added or retired.
-                if isinstance(component, L2GenericEnergyManagementSystem):
-                    if number <= number_of_outputs_built_by_constructor:
-                        continue
-
-                # add_component_output has been used
                 dynamic_output = output_matches[0]
-                # Extract source_output_name from the field_name
-                match = re.match(r"^(.*?)(Output\d+)$", out.field_name)
-                if not match:
-                    raise ValueError(f"Invalid field_name format: {out.field_name}")
-                source_object_name = match.group(1)
+                # A target port the aggregator grows for itself when the executor applies its
+                # default connections is left out; writing it down would create it twice. The
+                # port says so itself -- the bookkeeping entry records that a default connection
+                # grew it -- rather than the writer rebuilding names to recognise it.
+                if dynamic_output.grown_by_a_default_connection:
+                    continue
+
+                # add_component_output has been used, and recorded the prefix it named the port
+                # from; that prefix is what the scenario JSON has to give back to it.
+                source_output_name = dynamic_output.source_output_name_prefix
+                if source_output_name is None:
+                    raise ValueError(
+                        f"The dynamic output '{out.field_name}' of '{component.component_name}' was "
+                        f"not named from a prefix and a weight, so no add_component_output call "
+                        f"describes it and the scenario JSON has nothing to write. Ports named by "
+                        f"the declarative energy-system format's dispatch templates are of that "
+                        f"kind: a run built from an energy-system file is written down by that "
+                        f"format, and the scenario JSON is the legacy path's own file."
+                    )
                 outs.append({
                     "dynamic": True,
-                    "source_output_name": source_object_name,
+                    "source_output_name": source_output_name,
                     "source_tags": dynamic_output.source_tags,
                     "source_load_type": dynamic_output.source_load_type.value,
                     "source_unit": dynamic_output.source_unit.value,
@@ -250,27 +213,16 @@ def write_standalone_simulation_json(my_sim: "Simulator", path="recent_simulatio
         f.close()
 
 
-def add_component_to_scenario(scenario: Scenario, config: ConfigBase, component: cp.Component, my_sim: "Simulator") -> None:
-    """Add a simulator component to the scenario JSON object."""
+def add_component_to_scenario(scenario: Scenario, config: ConfigBase, component: cp.Component) -> None:
+    """Add a simulator component to the scenario JSON object.
+
+    Args:
+        scenario: The scenario being assembled.
+        config: The component's configuration, which is what gets written down.
+        component: The live component, read for its inputs and outputs.
+    """
 
     component_entry, ins, outs = convert_component_to_json(config, component)
-    if config.get_main_classname() == "hisim.components.generic_car.Car":
-        # Handle special case for Car component, link to LPG connector
-        for idx, comp in enumerate(scenario.components):
-            if comp.component_full_classname == "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector":
-                car_info = cast(Car, component).car_information_dict
-                lpg_connector = cast(UtspLpgConnector, my_sim.wrapped_components[idx].my_component)  # For mypy, we know that this is an UtspLpgConnector
-                new_car_info = GenericCarInformation(my_occupancy_instance=lpg_connector).data_dict_for_car_component[car_info["household_name"]]
-
-                if new_car_info["time_resolution"] == car_info["time_resolution"] and \
-                new_car_info["car_location"] == car_info["car_location"] and new_car_info["driven_meters"] == car_info["driven_meters"]:
-                    # Cannot include car inside LPG connector, then not found for connections/inputs/outputs etc.
-                    comp.configuration["cars"] = (
-                        (comp.configuration.get("cars") or []) + [component_entry.configuration["component_id"]["name"]]
-                    )
-                    log.information(f"Added car information to LPG connector config for car {component.component_name}")
-
-    # Always do:
     scenario.components.append(component_entry)
     log.debug(
         "Added component " + config.component_id.name + " with " + str(len(ins))
@@ -484,11 +436,24 @@ def remove_automatic_connections(my_sim: "Simulator", scenario: Scenario, unique
     log.information(f"Removed {removed} automatic connections from JSON output.")
 
 
-def write_standalone_scenario_json(module_filename: str, my_sim: "Simulator", desc: str, path: str) -> None:
-    """Write the scenario JSON file based on the components and connections of the simulator."""
+def write_standalone_scenario_json(
+    module_filename: str, my_sim: "Simulator", desc: str, path: str, scenario_name: str = ""
+) -> None:
+    """Write the scenario JSON file based on the components and connections of the simulator.
 
-    # Get prettified name for the scenario from the module filename
-    nice_name = module_filename.replace("_", " ").capitalize()
+    Args:
+        module_filename: Name of the module that ran, used to name the scenario when the run
+            carries no name of its own.
+        my_sim: The simulator whose components and connections are written out.
+        desc: The run's description.
+        path: Where the file goes.
+        scenario_name: The name the run gave itself — the pyam "scenario" column — so that the
+            two artifacts of one run agree on what the run is called; a name prettified from
+            the module filename when the run has none.
+    """
+
+    # The run's own name, or — for a run that never named itself — a prettified module filename
+    nice_name = scenario_name or module_filename.replace("_", " ").capitalize()
 
     scenario = Scenario(
         name=nice_name,
@@ -498,7 +463,7 @@ def write_standalone_scenario_json(module_filename: str, my_sim: "Simulator", de
     log.information(f"Writing component configurations to JSON file {path}.")
     component_connections = []
     for component in my_sim.wrapped_components:
-        add_component_to_scenario(scenario=scenario, config=component.my_component.config, component=component.my_component, my_sim=my_sim)
+        add_component_to_scenario(scenario=scenario, config=component.my_component.config, component=component.my_component)
 
         for connection in component.my_component.log_connections:
             component_connections += [Connection(

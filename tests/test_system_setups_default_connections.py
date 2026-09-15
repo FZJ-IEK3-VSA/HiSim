@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 
+from tests import functions_for_testing as fft
 from hisim import hisim_main
 from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.simulationparameters import SimulationParameters
 
 
 @pytest.mark.system_setups
@@ -27,11 +27,10 @@ def test_basic_household_with_default_connections() -> None:
     """
     path = "../system_setups/default_connections.py"
 
-    simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    # ``one_day_only`` enables no post-processing options by default, so no result artifacts
-    # (CSV/JSON/PDF) would be written. Enable CSV export (combined into a single file) so the
-    # test can assert that the simulation actually emitted result data, not just a
-    # ``finished.flag`` marker.
+    # The shared helper switches on the KPI and cost options, so this exercises post-processing
+    # rather than only the timestep loop. CSV export is added on top because this test also asserts
+    # that result data was actually emitted, not just a ``finished.flag`` marker.
+    simulation_parameters = fft.SetupTestParameters.one_day_with_kpis()
     simulation_parameters.post_processing_options.extend(
         [
             PostProcessingOptions.EXPORT_TO_CSV,

@@ -404,7 +404,14 @@ def test_describe_config_reports_fields_presets_laws_and_facts_of_the_pilots():
     assert presets["condensing_gas_12kw"].note == "nominal catalogue device"
     # the pellet preset overrides one field's law, which is still "to be sized", not pinned
     assert presets["pellets"].auto == ("minimal_thermal_power_in_watt", "maximal_thermal_power_in_watt")
-    assert description.facts_provided == ("maximal_thermal_power_in_watt", "minimal_thermal_power_in_watt")
+    assert description.facts_provided == (
+        "maximal_thermal_power_in_watt",
+        "minimal_thermal_power_in_watt",
+        # the fuel half, which the gas and fuel meters copy instead of repeating (D-15)
+        "energy_carrier",
+        "heating_value_of_fuel_in_kwh_per_liter",
+        "fuel_density_in_kg_per_m3",
+    )
     maximal = next(f for f in description.sizable_fields if f.name == "maximal_thermal_power_in_watt")
     assert maximal.kind is SizableFieldKind.LAW
     assert maximal.facts_read == (("heating_load_in_watt", "ONE"), ("number_of_apartments", "ONE"))
@@ -443,7 +450,7 @@ def test_describe_config_covers_the_other_pilots_and_rejects_a_non_dataclass():
     from hisim.components.heat_distribution_system import HeatDistributionConfig
 
     heat_distribution = describe_config(HeatDistributionConfig)
-    assert [preset.name for preset in heat_distribution.presets] == ["standard"]
+    assert [preset.name for preset in heat_distribution.presets] == ["building_derived"]
     assert heat_distribution.presets[0].pinned == ()
     assert len(heat_distribution.sizable_fields) == 3
     assert not heat_distribution.facts_provided
@@ -455,13 +462,14 @@ def test_describe_config_covers_the_other_pilots_and_rejects_a_non_dataclass():
     assert not energy_management.sizable_fields
 
     building = describe_config(BuildingConfig)
-    assert [info.name for info in building.presets] == ["standard"]
+    assert [info.name for info in building.presets] == ["german_single_family_home"]
     assert [info.name for info in building.constructors] == ["for_tabula_code"]
     tabula = building.constructors[0]
     assert tabula.parameters[0].name == "building_code"
     assert tabula.parameters[0].default is dataclasses.MISSING
     assert {parameter.name for parameter in tabula.parameters} >= {"number_of_apartments", "building_code"}
-    assert not building.sizable_fields
+    # The building sizes exactly one field from the system: which weather it is computed against.
+    assert [field.name for field in building.sizable_fields] == ["weather_identity"]
     assert "heating_load_in_watt" in building.facts_provided
 
     with pytest.raises(TypeError, match="config dataclass"):
@@ -470,7 +478,7 @@ def test_describe_config_covers_the_other_pilots_and_rejects_a_non_dataclass():
 
 @pytest.mark.base
 def test_the_building_preset_is_exactly_its_tabula_constructor_call():
-    """``preset_standard`` builds the same building as the constructor it delegates to.
+    """``preset_german_single_family_home`` builds the same building as the constructor it delegates to.
 
     Failure mode caught: the preset and the constructor drifting apart — the reference
     single-family house is what every setup and every stored result of this repository was
@@ -484,8 +492,8 @@ def test_the_building_preset_is_exactly_its_tabula_constructor_call():
         building_code="DE.N.SFH.05.Gen.ReEx.001.002",
         absolute_conditioned_floor_area_in_m2=121.2,
     )
-    assert BuildingConfig.preset_standard("Building") == delegated
-    assert preset_provenance(BuildingConfig.preset_standard("Building")) == "standard"
+    assert BuildingConfig.preset_german_single_family_home("Building") == delegated
+    assert preset_provenance(BuildingConfig.preset_german_single_family_home("Building")) == "german_single_family_home"
     assert preset_provenance(delegated) is None
 
 
@@ -499,9 +507,10 @@ def test_a_config_class_outside_the_kernel_resolves_through_resolve_all():
     """
     from hisim.components.building import BuildingConfig
 
-    building = BuildingConfig.preset_standard("Building")
+    building = BuildingConfig.preset_german_single_family_home("Building")
     storage = _StorageConfig.preset_standard("Tank")
-    resolved = resolve_all([building, storage])
+    # No weather in this scenario, so the fact the building now reads is seeded by the test.
+    resolved = resolve_all([building, storage], seed=SizingContext(weather_identity="test weather"))
     resolved_storage = next(config for config in resolved if isinstance(config, _StorageConfig))
     volume = cast(float, resolved_storage.volume_in_liter)  # resolved: nothing left to size
     assert volume > 0.0

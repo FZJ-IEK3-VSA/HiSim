@@ -19,7 +19,7 @@ from typing import ClassVar, Optional
 
 from dataclasses_json import dataclass_json
 
-from hisim.config import ComponentID, ConfigBase, constructor, preset
+from hisim.config import ComponentID, ConfigBase, Sizable, Size, constructor, preset, sized_field
 
 
 @dataclass_json
@@ -27,7 +27,7 @@ from hisim.config import ComponentID, ConfigBase, constructor, preset
 class BuildingConfig(ConfigBase):
     """Configuration of the Building class.
 
-    The named default variant is :meth:`preset_standard`, which replaced the former
+    The named default variant is :meth:`preset_german_single_family_home`, which replaced the former
     ``get_default_german_single_family_home`` factory, and any other building comes from
     :meth:`for_tabula_code`. The building is the *source* of the
     sizing facts every other component sizes against (see :attr:`SIZING_CONTRIBUTIONS`) and
@@ -62,7 +62,6 @@ class BuildingConfig(ConfigBase):
     window_area_in_m2: Optional[float]
     door_u_value_in_watt_per_m2_per_kelvin: Optional[float]
     door_area_in_m2: Optional[float]
-    predictive: bool
     set_heating_temperature_in_celsius: float
     set_cooling_temperature_in_celsius: float
     enable_opening_windows: bool
@@ -77,6 +76,15 @@ class BuildingConfig(ConfigBase):
     # subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: Optional[float]
 
+    #: The weather this building is computed with, as ``WeatherConfig.identity()`` spells it. Sized
+    #: from the weather by the sizing engine (``roadmap/pylpg_flakiness.md`` F7). It exists because
+    #: the legacy solar-gains cache key was a hash of this config and nothing else, so without it two
+    #: buildings under different weathers shared one entry. The gains are keyed by their producer
+    #: now, under the weather's own artifact key, and this field is no longer part of that key -- but
+    #: it stays: it is sizing wire format, spelled out in every recorded energy-system twin and in the
+    #: generated schema, and removing it would move all of them.
+    weather_identity: Sizable[str] = sized_field(rule=Size.WEATHER_IDENTITY, value_type=str)
+
     #: Sizing facts this config contributes to the scenario-wide fact pool.
     #: Computed from the config alone via BuildingInformation, so the TABULA lookup runs
     #: once per resolution, never per consumer, and never needs a constructed component.
@@ -85,7 +93,7 @@ class BuildingConfig(ConfigBase):
 
     @preset(note="TABULA/EPISCOPE German single-family reference house")
     @classmethod
-    def preset_standard(cls, name: str) -> "BuildingConfig":
+    def preset_german_single_family_home(cls, name: str) -> "BuildingConfig":
         """The German single-family reference house, the repo's default building."""
         return cls.for_tabula_code(
             name,
@@ -156,7 +164,6 @@ class BuildingConfig(ConfigBase):
             door_area_in_m2=None,
             total_base_area_in_m2=total_base_area_in_m2,
             number_of_apartments=number_of_apartments,
-            predictive=False,
             set_heating_temperature_in_celsius=20.0,
             set_cooling_temperature_in_celsius=25.0,
             enable_opening_windows=False,

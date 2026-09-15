@@ -12,7 +12,7 @@ from __future__ import annotations
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from dataclasses import dataclass
-from typing import Optional
+from typing import ClassVar, Optional
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
@@ -20,6 +20,7 @@ from hisim.component import Component, SingleTimeStepValues, ComponentInput, Com
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+from hisim.economics.facts import CostRelevance
 
 
 @dataclass_json
@@ -45,14 +46,14 @@ class ExampleTransformerConfig(ConfigBase):
 
         Args:
             component_id: Structured identity (name, building, unit) of the transformer.
-                Defaults to a building-less identity named ``"Example Transformer default"``.
+                Defaults to a building-less identity named ``"ExampleTransformerDefault"``.
 
         Returns:
             A config with ``LoadTypes.ANY`` / ``Units.ANY`` and the name
-            ``"Example Transformer default"``.
+            ``"ExampleTransformerDefault"``.
         """
         if component_id is None:
-            component_id = ComponentID(name="Example Transformer default")
+            component_id = ComponentID(name="ExampleTransformerDefault")
         return ExampleTransformerConfig(
             component_id=component_id,
             loadtype=lt.LoadTypes.ANY,
@@ -98,8 +99,15 @@ class ExampleTransformer(Component):
 
     """
 
+    cost_relevance = CostRelevance.FREE_OF_COST
+
+    # A demonstration component that scales one signal by a constant. It models no device, so
+    # it has no operating cost -- as opposed to one whose cost model is merely unwritten.
+    # See Component.MODELS_NO_DEVICE.
+    MODELS_NO_DEVICE: ClassVar[bool] = True
+
     TransformerInput1: str = "Input1"
-    TransformerInput2: str = "Optional Input1"
+    TransformerInput2: str = "OptionalInput1"
     TransformerOutput1: str = "MyTransformerOutput"
     TransformerOutput2: str = "MyTransformerOutput2"
 
@@ -183,7 +191,11 @@ class ExampleTransformer(Component):
 
         - ``output1 = input1 * OUTPUT1_GAIN``. :attr:`OUTPUT1_GAIN` (5) is a
           dimensionless gain, so ``output1`` has the *same* unit as
-          ``input1`` (for example W -> W, or kW -> kW).
+          ``input1`` (for example W -> W, or kW -> kW). Both ``input1`` and
+          ``output1`` are declared :attr:`lt.Units.ANY`, so the concrete unit
+          of ``input1`` is unresolved and the local ``input_value_1`` is
+          intentionally left without a fabricated unit suffix (see the in-body
+          note and GitLab issue #1932).
         - ``output2 = input2 * KW_TO_W``. :attr:`KW_TO_W` (1000) converts a
           value in kilowatts (kW) to watts (W); the contract is therefore
           ``output2 [W] = input2 [kW] * 1000``. Because the declared unit is
@@ -191,10 +203,17 @@ class ExampleTransformer(Component):
           reading ``output2`` as kW silently yields incorrect results.
 
         """
+        # ``input1``/``output1`` are declared lt.Units.ANY and OUTPUT1_GAIN is
+        # dimensionless, so input_value_1 carries whatever unit the caller
+        # supplies. Its concrete unit cannot be confirmed from this component
+        # (the only wiring feeds unit-less random numbers), so this remains an
+        # UNRESOLVED missing-unit defect (GitLab #1932): do NOT silently
+        # append a fabricated _in_watt / _in_kw suffix without a confirmed
+        # wiring contract -- that would mask the ambiguity rather than fix it.
         input_value_1 = stsv.get_input_value(self.input1)
-        input_value_2 = stsv.get_input_value(self.input2)
+        input_value_2_in_kw = stsv.get_input_value(self.input2)
         stsv.set_output_value(self.output1, input_value_1 * ExampleTransformer.OUTPUT1_GAIN)
-        stsv.set_output_value(self.output2, input_value_2 * ExampleTransformer.KW_TO_W)
+        stsv.set_output_value(self.output2, input_value_2_in_kw * ExampleTransformer.KW_TO_W)
 
     def write_to_report(self) -> list[str]:
         """Returns report lines describing this transformer.

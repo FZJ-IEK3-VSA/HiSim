@@ -1,17 +1,15 @@
 """Controller L1 for the fuel cell."""
 
 # clean
-from pathlib import Path
 from typing import Optional, List, Any
-import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
 
 from hisim import loadtypes as lt
-from hisim import utils
 from hisim.simulationparameters import SimulationParameters
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, IEK-3"
@@ -50,7 +48,7 @@ class FuelCellControllerConfig(ConfigBase):
     ) -> Any:
         """Get a default electrolyzer controller config."""
         if component_id is None:
-            component_id = ComponentID(name="Default fuel cell controller")
+            component_id = ComponentID(name="DefaultFuelCellController")
         config = FuelCellControllerConfig(
             component_id=component_id,
             nom_output=100.0,
@@ -62,41 +60,11 @@ class FuelCellControllerConfig(ConfigBase):
         )
         return config
 
-    @staticmethod
-    def read_config(fuel_cell_name):
-        """Opens the according JSON-file, based on the fuel_cell_name."""
-
-        config_file = Path(utils.HISIMPATH["inputs"]) / "fuel_cell_manufacturer_config.json"
-        with open(config_file, "r", encoding="utf-8") as json_file:
-            data = json.load(json_file)
-            return data.get("Fuel Cell variants", {}).get(fuel_cell_name, {})
-
-    @classmethod
-    def control_fuel_cell(
-        cls,
-        fuel_cell_name: str,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Initializes the config variables based on the JSON-file."""
-
-        if component_id is None:
-            component_id = ComponentID(name="Fuel Cell Controller")
-        config_json = cls.read_config(fuel_cell_name)
-
-        config = FuelCellControllerConfig(
-            component_id=component_id,  # config_json.get("name", "")
-            nom_output=config_json.get("nom_output", 0.0),
-            min_output=config_json.get("min_output", 0.0),
-            max_output=config_json.get("max_output", 0.0),
-            standby_load=config_json.get("standby_load", 0.0),
-            warm_start_time=config_json.get("warm_start_time", 0.0),
-            cold_start_time=config_json.get("cold_start_time", 0.0),
-        )
-        return config
-
 
 class FuelCellController(Component):
     """Fuel Cell Controller class."""
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     DemandProfile = "DemandProfile"

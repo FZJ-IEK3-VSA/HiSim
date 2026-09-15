@@ -19,6 +19,7 @@ and `LoadTypes` (the adapter and the meter components make that mapping where th
 from __future__ import annotations
 
 import enum
+from typing import Dict
 
 
 @enum.unique
@@ -50,3 +51,64 @@ class EnergyCarrier(str, enum.Enum):
     DISTRICT_HEATING = "DISTRICT_HEATING"
     HYDROGEN = "HYDROGEN"
     DIESEL = "DIESEL"
+
+
+@enum.unique
+class EnergyFlowRole(str, enum.Enum):
+    """What a measured device flow *is* in the household's energy balance.
+
+    The vocabulary of the per-subject energy record the extraction fills and the household energy
+    balance draws: not what a device is priced as, but which side of the electricity balance its
+    kilowatt hours sit on. It lives beside `EnergyCarrier` because it is the same kind of thing —
+    a small, serialization-stable vocabulary that both the extraction side and the presentation
+    side have to agree on — and because both sides can import this leaf module without dragging
+    anything along.
+
+    Roles carry **positive magnitudes**; direction is the role, not the sign, which is why the
+    battery has two of them. `GRID_IMPORT`/`GRID_EXPORT` are the meter's own two flows and are
+    the only roles that also correspond to a priced carrier boundary; the rest are internal
+    device flows that no bill is ever computed from. A flow that carries no role is simply not
+    recorded — this enum is deliberately not a total classification of everything a simulation
+    moves.
+    """
+
+    PV_GENERATION = "PV_GENERATION"
+    BATTERY_CHARGE = "BATTERY_CHARGE"
+    BATTERY_DISCHARGE = "BATTERY_DISCHARGE"
+    HEAT_PUMP_ELECTRICITY = "HEAT_PUMP_ELECTRICITY"
+    HOUSEHOLD_ELECTRICITY = "HOUSEHOLD_ELECTRICITY"
+    GRID_IMPORT = "GRID_IMPORT"
+    GRID_EXPORT = "GRID_EXPORT"
+
+
+def validate_energy_attribution(attribution: Dict[str, Dict[str, float]], context: str) -> None:
+    """Refuses a per-subject energy record carrying a negative quantity.
+
+    Every value in the attribution map is a **magnitude**: direction is the role, which is exactly
+    why the battery has two of them. A negative number therefore has no meaning the balance can
+    draw — it would shrink the side it sits on and silently move the residual node by twice its
+    size, which reads as a smaller loss rather than as a defect. The check is applied at each of
+    the three places a map can enter the system (the extraction that builds one, the annualization
+    that rescales one, the deserializer that reads one back), because each is reachable without
+    the other two.
+
+    Args:
+        attribution: Subject -> `EnergyFlowRole` value -> kWh.
+        context: What is being validated, for the message — the field or the function name.
+
+    Raises:
+        ValueError: If any quantity is negative, naming every one of them.
+    """
+    negative = [
+        f"{subject}.{role}={value!r}"
+        for subject, by_role in attribution.items()
+        for role, value in by_role.items()
+        if value < 0
+    ]
+    if negative:
+        raise ValueError(
+            f"{context} carries negative energy: {', '.join(sorted(negative))}. Attribution "
+            "values are magnitudes and the direction is the role (a battery charges under one "
+            "role and discharges under another), so a negative quantity would be drawn on the "
+            "wrong side of the household balance."
+        )

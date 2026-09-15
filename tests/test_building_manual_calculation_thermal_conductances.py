@@ -47,10 +47,13 @@ def test_building_thermal_conductance_calculation() -> None:
 
     # Set Residence
     my_residence_config = (
-        building.BuildingConfig.preset_standard("Building")
+        building.BuildingConfig.preset_german_single_family_home("Building")
     )
     my_residence_config.building_code = building_code
     my_residence_config.building_heat_capacity_class = building_heat_capacity_class
+    # No weather component takes part in this test; the identity only has to be set for the building to be
+    # buildable, and a description is more honest than a fake station name.
+    my_residence_config.weather_identity = "no weather component in this test"
     my_residence = building.Building(
         config=my_residence_config, my_simulation_parameters=my_simulation_parameters
     )

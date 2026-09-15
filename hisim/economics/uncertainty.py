@@ -30,7 +30,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, ClassVar, Iterable, Union
+from typing import Any, ClassVar, Iterable, Optional, Union
 
 
 class Slot(str, Enum):
@@ -159,6 +159,47 @@ class UncertainValue:
         if self.minimum == self.best_estimate == self.maximum:
             return self.best_estimate
         return {"min": self.minimum, "best_estimate": self.best_estimate, "max": self.maximum}
+
+    @staticmethod
+    def optional_to_json(value: Optional["UncertainValue"]) -> Any:
+        """Serializes an optional band, preserving the None/zero distinction.
+
+        Every monetary override and every audited unit price is optional, and "no value" is a
+        different statement from "a value of zero euro": the first means the run never resolved
+        one, the second means it resolved one and it was free. So `None` survives as JSON null
+        rather than collapsing to a zero band, which is what keeps an unresolved audit row
+        distinguishable from a zero-priced one after a round trip.
+
+        Lives on the type rather than as a private helper in each writer because both
+        `serialization.py` and `input_audit.py` need it and each had its own copy — two copies of
+        one rule that only stayed in agreement by luck.
+
+        Args:
+            value: The band to serialize, or None.
+
+        Returns:
+            What `to_json` returns for a band, or None.
+        """
+        return value.to_json() if value is not None else None
+
+    @staticmethod
+    def optional_from_json(value: Any) -> Optional["UncertainValue"]:
+        """The inverse of `optional_to_json`: JSON null stays None, anything else becomes a band.
+
+        Used by every loader of an optional monetary field, so a missing key and an explicit null
+        both come back as None while a number or a `{"min", "best_estimate", "max"}` object goes
+        through the ordinary `from_json` validation.
+
+        Args:
+            value: The parsed JSON value, or None for an absent or null field.
+
+        Returns:
+            The parsed band, or None.
+
+        Raises:
+            ValueError: If a non-null value is neither a number nor a well-formed band object.
+        """
+        return UncertainValue.from_json(value) if value is not None else None
 
     def is_exact(self) -> bool:
         """True when the band is degenerate (min = best_estimate = max).

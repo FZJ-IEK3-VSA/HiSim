@@ -6,13 +6,15 @@ from pathlib import Path
 import shutil
 from typing import Iterator
 
+import pandas as pd
 import pytest
 
 from hisim import hisim_main
+from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.result_path_provider import ResultPathProviderSingleton
-from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 
+from tests.functions_for_testing import SetupTestParameters
 from tests.testing_utils import TestingUtils
 
 
@@ -20,6 +22,34 @@ REPO_ROOT: Path = Path(__file__).resolve().parent.parent
 ELECTROLYZER_SETUP_PATH: str = str(
     REPO_ROOT / "system_setups" / "electrolyzer_with_renewables.py"
 )
+#: The runtime names the setup gives its two costed devices, which are also how they are written
+#: into the "Component" column of both cost tables.
+TRANSFORMER_COMPONENT_NAME: str = "StandardTransformerAndRectifier"
+ELECTROLYZER_COMPONENT_NAME: str = "Electrolyzer"
+
+
+def _cost_row(table: pd.DataFrame, component_name: str, table_name: str) -> pd.Series:
+    """Return the one row of a cost table that belongs to ``component_name``.
+
+    The cost tables carry the component's runtime name -- and nothing else -- in their leading
+    "Component" column, so the row is matched on equality rather than on a substring: this setup
+    also runs an ``L1ElectrolyzerController``, whose name contains "Electrolyzer", and a substring
+    match would accept its row instead. The separator and total rows the writer appends carry no
+    component name and simply do not match.
+
+    Args:
+        table: the parsed cost table.
+        component_name: the runtime component name whose row is wanted.
+        table_name: the file the table was read from, for the failure message.
+
+    Returns:
+        pd.Series: the single matching row, indexed by the table's column headers.
+    """
+    matching = table[table["Component"].astype(str).str.strip() == component_name]
+    assert len(matching) == 1, (
+        f"Expected exactly one {component_name} row in {table_name}, found {len(matching)}"
+    )
+    return matching.iloc[0]
 
 
 @pytest.fixture(name="isolated_result_directory")
@@ -58,7 +88,7 @@ def fixture_isolated_result_directory() -> Iterator[str]:
 @pytest.mark.system_setups
 @utils.measure_execution_time
 def test_electrolyzer_with_renewables(isolated_result_directory: str) -> None:
-    """Test the electrolyzer with renewables system setup for a single day.
+    """Test the electrolyzer with renewables system setup for a single day, costs and KPIs included.
 
     Runs the system setup defined in ``system_setups/electrolyzer_with_renewables.py``
     using one-day simulation parameters (year=2021, 60 seconds per timestep) and verifies
@@ -67,10 +97,23 @@ def test_electrolyzer_with_renewables(isolated_result_directory: str) -> None:
     without explicit assertions a silent no-op would still pass; pinning the result
     directory, the ``finished.flag`` completion marker and the simulation log turns this
     into a real smoke test of the full run.
+
+    The parameters come from :class:`tests.functions_for_testing.SetupTestParameters`, which
+    switches on COMPUTE_OPEX, COMPUTE_CAPEX and the two KPI options. That matters here
+    specifically: those three run *before* the KPIs in post-processing, and until the
+    transformer/rectifier and the electrolyzer had cost models a stock all-options run of this
+    setup died in COMPUTE_OPEX before any KPI was computed. The cost tables asserted below are
+    what catches that regression -- the log and the flag alone would not, because they are
+    written even by a run whose cost stage was never asked to answer.
+
+    WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER is switched on here on top of those options because
+    this setup has no Building component: the sizer writer used to die on the missing
+    "Conditioned floor area" KPI, and now skips the building object with a log line instead.
     """
     path = ELECTROLYZER_SETUP_PATH
 
-    sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    sim_params = SetupTestParameters.one_day_with_kpis(year=2021, seconds_per_timestep=60)
+    sim_params.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER)
     # Route results into the isolated, test-scoped directory provided by the fixture so
     # that stale artefacts from a previous run cannot mask a regression and so the test
     # cleans up after itself.
@@ -91,12 +134,45 @@ def test_electrolyzer_with_renewables(isolated_result_directory: str) -> None:
     # The simulator always writes a simulation log (hisim_simulation.log) via
     # log.logger.setup at the start of run_all_timesteps, so its presence confirms the run
     # produced concrete output artifacts rather than merely not crashing.
-    # Note: CSV/JSON exports are gated behind post-processing options
-    # (EXPORT_TO_CSV / WRITE_KPIS_TO_JSON / ...) that SimulationParameters.one_day_only
-    # does not enable, so they cannot be asserted on here.
     assert (results_dir / "hisim_simulation.log").is_file(), (
         f"hisim_simulation.log missing in results directory: {results_dir}"
     )
     assert any(results_dir.iterdir()), (
         f"Result directory is empty: {results_dir}"
+    )
+    # The cost stages write one table each (semicolon-separated, one header row, the component
+    # name in the leading "Component" column), and only if they were reached and answered. Both
+    # devices have to appear by name and with figures above zero: a component whose cost model
+    # went missing again would either raise or drop out of the table, and one that answered zero
+    # would understate the system total while still looking like an answer. This is what tells
+    # those apart from a run that merely finished.
+    operational_costs = pd.read_csv(results_dir / "operational_costs_co2_footprint.csv", sep=";")
+    investment_costs = pd.read_csv(results_dir / "investment_cost_co2_footprint.csv", sep=";")
+    for component in (TRANSFORMER_COMPONENT_NAME, ELECTROLYZER_COMPONENT_NAME):
+        opex_row = _cost_row(operational_costs, component, "operational_costs_co2_footprint.csv")
+        assert opex_row["Costs of energy consumption [EUR]"] > 0.0, (
+            f"{component} reports no energy cost in operational_costs_co2_footprint.csv"
+        )
+        assert opex_row["CO2-emissions of energy consumption [kg]"] > 0.0, (
+            f"{component} reports no energy CO2 in operational_costs_co2_footprint.csv"
+        )
+        capex_row = _cost_row(investment_costs, component, "investment_cost_co2_footprint.csv")
+        assert capex_row["Investment [EUR]"] > 0.0, (
+            f"{component} reports no investment in investment_cost_co2_footprint.csv"
+        )
+        assert capex_row["Device CO2-footprint [kg]"] > 0.0, (
+            f"{component} reports no device CO2 in investment_cost_co2_footprint.csv"
+        )
+    # WRITE_KPIS_TO_JSON is on, so the KPI stage after the cost stages ran too.
+    assert (results_dir / "all_kpis.json").is_file(), (
+        f"all_kpis.json missing in results directory: {results_dir}"
+    )
+    # No Building means no conditioned floor area, so the building-sizer writer has nothing to
+    # normalize by: it must skip the building object out loud rather than write a file or raise.
+    assert not list(results_dir.glob("*_kpi_config_for_building_sizer.json")), (
+        f"A building-sizer KPI JSON was written for a setup without a Building: {results_dir}"
+    )
+    simulation_log = (results_dir / "hisim_simulation.log").read_text(encoding="utf-8")
+    assert "Skipping the building-sizer KPI JSON" in simulation_log, (
+        f"The skipped building object was not reported in the simulation log: {results_dir}"
     )

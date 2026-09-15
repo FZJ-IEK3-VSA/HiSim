@@ -8,6 +8,11 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  # Runnable by hand as well, because the two automatic triggers above only fire for pull
+  # requests that target main. A stacked pull request — one whose base is the branch below it
+  # in a chain — therefore gets no run at all, and a whole stack can reach main having never
+  # been tested. Dispatching this workflow against such a branch is how that is avoided.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -37,8 +42,8 @@ jobs:
             marker: "buildingtest"
           - name: extendedbase
             marker: "extendedbase"
-          - name: jsonconfig
-            marker: "jsonconfig"
+          - name: extendedbase2
+            marker: "extendedbase2"
           - name: postprocessingoptions
             marker: "postprocessingoptions"
             durations: "40"
@@ -47,11 +52,17 @@ jobs:
           - name: utsp
             marker: "utsp"
           - name: others
-            marker: "not base and not buildingtest and not system_setups and not extendedbase and not utsp and not jsonconfig and not postprocessingoptions"
+            marker: "not base and not buildingtest and not system_setups and not extendedbase and not extendedbase2 and not utsp and not postprocessingoptions"
             allow_empty: "true"
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
+    # Wall time, CPU time and peak memory for this job; see the action.
+    - name: Start the resource monitor
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: start
+        scope: ${{ matrix.name }}
     - name: Mark workspace as safe for git
       # The container runs as a different user than the one that owns the
       # checked-out workspace, so git would otherwise refuse with
@@ -60,6 +71,12 @@ jobs:
     - name: Install HiSim package
       run: |
         uv pip install --system -e .
+    # The previous run's weather series and LoadProfileGenerator profiles; see the action.
+    - name: Restore the HiSim inputs cache
+      uses: ./.github/actions/hisim-cache
+      with:
+        mode: restore
+        scope: ${{ github.workflow }}-${{ matrix.name }}
     - name: Test with pytest
       working-directory: ./tests/
       env:
@@ -76,14 +93,34 @@ jobs:
           ret=0
         fi
         exit "$ret"
+    # The one upload that must stay unconditional, because the combine job below consumes it.
+    # It is diagnostics all the same, so a failure to store it must not turn a passing test
+    # matrix red: without continue-on-error a 403 from the artifact service is indistinguishable
+    # from a failing test, and it also fails the gate job that waits on this one.
     - name: Upload coverage data
       if: always()
-      uses: actions/upload-artifact@v6
+      continue-on-error: true
+      uses: actions/upload-artifact@v7
       with:
         name: coverage-${{ matrix.name }}
         path: tests/.coverage.*
         include-hidden-files: true
         if-no-files-found: warn
+    # Kept even when the job failed; see the action for why that is safe.
+    - name: Save the HiSim inputs cache
+      if: always()
+      uses: ./.github/actions/hisim-cache
+      with:
+        mode: save
+        scope: ${{ github.workflow }}-${{ matrix.name }}
+    # Kept on failure too: a job killed for running out of memory is the one
+    # whose measurement matters most.
+    - name: Report the resource usage
+      if: always()
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: report
+        scope: ${{ matrix.name }}
 
   coverage:
     name: combine coverage
@@ -97,11 +134,16 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
+    # Wall time, CPU time and peak memory for this job; see the action.
+    - name: Start the resource monitor
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: start
     - name: Mark workspace as safe for git
       run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
     - name: Download coverage data from the pytest jobs
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         pattern: coverage-*
         path: coverage-data
@@ -119,10 +161,17 @@ jobs:
         coverage xml -o coverage.xml
         coverage html -d htmlcov
     - name: Upload combined coverage report
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: combined-coverage-report
         path: |
           coverage.xml
           htmlcov/
         if-no-files-found: error
+    # Kept on failure too: a job killed for running out of memory is the one
+    # whose measurement matters most.
+    - name: Report the resource usage
+      if: always()
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: report

@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union
 
 from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
@@ -49,15 +50,155 @@ class CostRelevance(str, enum.Enum):
     registration — an `UNDECLARED` component, or a `PRICED` one whose facts do not build, aborts the
     run before the timestep loop starts rather than producing a quietly incomplete cost report.
 
-    `UNDECLARED` is the base-class default and exists only so that not-yet-migrated components stay
-    loadable during the parallel phase; strictness is configurable so CI can treat it as an error
-    while legacy system setups get a warning.
+    `UNDECLARED` exists only as the base-class default, so that a component class is loadable
+    before anyone has classified it. It is not a tolerated state and there is no lenient mode: a
+    component that reaches the cost engine still carrying `UNDECLARED` aborts the evaluation
+    (decision D7), and every component in this repository must name its role explicitly. Three
+    things now hold that line together — `adapter.effective_cost_relevance` reports the
+    declaration verbatim and infers nothing,
+    `tests/test_economics_adapter_contract.py::test_every_component_class_declares_cost_relevance`
+    fails on any `Component` subclass in `hisim.components` without a declaration in its own class
+    body, and `simulator.Simulator.check_cost_declarations` aborts a `COMPUTE_LIFECYCLE_COSTS` run
+    before the first timestep if one slipped through anyway.
     """
 
     UNDECLARED = "UNDECLARED"
     PRICED = "PRICED"  # must return ComponentCostFacts
     FREE_OF_COST = "FREE_OF_COST"  # controllers, weather, idealized devices
     METER = "METER"  # must provide EnergyFlowFacts / BillingDeterminants
+
+
+class UndeclaredCostRelevanceError(ValueError):
+    """A component in the run declares no `cost_relevance`, so the cost model cannot describe it.
+
+    Raised by the pre-run completeness check (`simulator.check_cost_declarations`, §9.2) when a
+    lifecycle-cost run is requested and some registered component class still carries the
+    `UNDECLARED` base-class default. It is a `ValueError` because that is what
+    `Simulator.run_all_timesteps` already documents as its refusal type, and it carries the
+    offending classes so a caller can report them rather than re-parse the message.
+
+    The bridge does not raise this: a component that reaches *it* undeclared becomes an
+    `UnresolvedSubject` and fails through the same D7 path as any other undescribable subject.
+    This error exists so that a year-long simulation refuses in the first second instead of
+    running for hours and dying in postprocessing.
+    """
+
+    def __init__(self, component_classes: List[type]) -> None:
+        """Renders one bullet per offending class, in the order the components were registered."""
+        self.component_classes: Tuple[type, ...] = tuple(component_classes)
+        bullets = "\n".join(f"  - {describe_undeclared_class(cls)}" for cls in self.component_classes)
+        super().__init__(
+            f"Lifecycle cost computation was requested, but {len(self.component_classes)} "
+            "component class(es) in this simulation declare no cost_relevance, so the cost model "
+            "cannot describe them (cost_spec.md §9.2). The run is refused before the first "
+            "timestep rather than after the last one.\n" + bullets
+        )
+
+
+class UnpriceableComponentError(ValueError):
+    """A component declares `PRICED` but nothing in the code base can say what it is.
+
+    Raised by the pre-run completeness check (`simulator.check_cost_declarations`, §9.2) alongside
+    `UndeclaredCostRelevanceError`, and for the same reason: a lifecycle-cost run that cannot
+    describe one of its devices is going to abort in postprocessing on the D7 check, and finding
+    that out after a year-long simulation costs hours for a defect that is visible before the first
+    timestep. The two errors are separate because the fixes are: an undeclared class needs one line
+    naming its role, an unpriceable one needs a `get_cost_facts` hook or an adapter entry plus, in
+    most cases, a `devices_<COUNTRY>.json` row to price it against.
+
+    It is a `ValueError` for the same reason as its sibling — that is what
+    `Simulator.run_all_timesteps` documents as its refusal type — and it carries the offending
+    classes so a caller can report them rather than re-parse the message.
+    """
+
+    def __init__(self, component_classes: List[type]) -> None:
+        """Renders one bullet per offending class, in the order the components were registered."""
+        self.component_classes: Tuple[type, ...] = tuple(component_classes)
+        bullets = "\n".join(f"  - {describe_unpriceable_class(cls)}" for cls in self.component_classes)
+        super().__init__(
+            f"Lifecycle cost computation was requested, but {len(self.component_classes)} "
+            "component class(es) in this simulation declare cost_relevance PRICED while nothing "
+            "can produce cost facts for them, so the evaluation would abort after the run "
+            "(cost_spec.md §9.1/§9.2, decision D7). The run is refused before the first timestep "
+            "rather than after the last one.\n" + bullets
+        )
+
+
+def describe_undeclared_class(component_class: type) -> str:
+    """One sentence naming an undeclared component class and what its author has to write.
+
+    Shared by the pre-run completeness check and the postprocessing bridge so that both failure
+    paths say the same thing about the same defect, and so the message always carries the module
+    the class lives in — without it the reader of a failed run has to grep for a class name.
+
+    Args:
+        component_class: The `Component` subclass that carries no own `cost_relevance`.
+
+    Returns:
+        The message, without a trailing newline and without bullet punctuation, so a caller can
+        embed it in a list or use it as an `UnresolvedSubject.reason` unchanged.
+    """
+    return (
+        f"{component_class.__name__} (module {component_class.__module__}) declares no "
+        "cost_relevance, so nothing can say whether it costs money: declare "
+        "cost_relevance = CostRelevance.PRICED, CostRelevance.METER or "
+        "CostRelevance.FREE_OF_COST in the class body (cost_spec.md §9.2)"
+    )
+
+
+def describe_unpriceable_class(component_class: type) -> str:
+    """One sentence naming a PRICED class with no facts source and what its author has to write.
+
+    The counterpart of `describe_undeclared_class` for the second half of the §9.1 contract, and
+    shared for the same reason: the pre-run check and the adapter's own refusal should say the same
+    thing about the same defect, and the message has to carry the module the class lives in so the
+    reader of a failed run does not have to grep for a class name.
+
+    Args:
+        component_class: The `Component` subclass declaring PRICED with no facts source.
+
+    Returns:
+        The message, without a trailing newline and without bullet punctuation.
+    """
+    return (
+        f"{component_class.__name__} (module {component_class.__module__}) declares "
+        "cost_relevance PRICED, but it implements no get_cost_facts() of its own and has no entry "
+        "in hisim.economics.adapter.FactsExtractors.BY_CLASS_NAME, so nothing can tell the cost "
+        "model what it is: implement get_cost_facts() on the class or register an extractor for it "
+        "(cost_spec.md §9.1)"
+    )
+
+
+def missing_meter_column_error(component_name: str, field_name: str, role: str) -> CostDataError:
+    """The refusal for a meter output the meter's class declares but the run does not contain.
+
+    A meter is the only place a carrier can be billed from (§3.4), so a column it declares and the
+    run does not hold is not a gap the engine may work around: summing what is there and skipping
+    what is not publishes a bill that is quietly missing a flow — an unbilled carrier, a feed-in
+    revenue silently zero, a capacity charge silently dropped. Raising instead makes the meter an
+    unresolved subject in `bridge.build_evaluation_inputs`, and the D7 check refuses to price the
+    rest of the fleet around the hole.
+
+    It lives here rather than in the bridge because both halves of the §3.4 boundary need it and
+    they sit on opposite sides of the wiring: the bridge raises it for a meter it reads through a
+    `MeterSpec`, and a meter that has adopted `get_energy_flow_facts` raises it for itself — and a
+    component may not import the postprocessing bridge that walks it. Two wordings for one defect
+    is how the hook came to report a silent zero where the fallback aborted.
+
+    Args:
+        component_name: The meter instance whose column is missing, named in the message.
+        field_name: The output field name that was looked for.
+        role: What that column carries, in the message's words ("bought energy", "peak power").
+
+    Returns:
+        The `CostDataError` to raise; the caller raises it so the traceback points at the lookup.
+    """
+    return CostDataError(
+        f"Meter {component_name}: the {role} column {field_name!r} declared by its class "
+        "is not among this run's outputs, so the flow it measures cannot be read. Billing the "
+        "carrier without it would publish a bill that silently omits that flow, so the meter "
+        "becomes an unresolved subject and the evaluation aborts instead (D7)."
+    )
 
 
 def _coerce_uncertain(
@@ -136,9 +277,15 @@ class ComponentCostFacts:
         cost database actually has an entry for this asset class and whether its `per_unit` matches
         `size_unit` is the pre-run resolution check's job, since that needs the database.
 
+        A size of exactly zero is deliberately *not* an error: a setup that always builds a PV
+        system and then configures it at 0 kWp has said "not installed", which is a statement
+        about the modelled building rather than corrupt data, and `is_not_installed` is how the
+        extraction side recognizes it. Negative and non-finite sizes stay hard errors, because
+        neither can mean anything.
+
         Raises:
-            ValueError: If the asset class is not a `ComponentType`, the size is not finite and
-                positive, the size unit is not priceable, `count` is below 1, the maintenance-rate
+            ValueError: If the asset class is not a `ComponentType`, the size is negative or not
+                finite, the size unit is not priceable, `count` is below 1, the maintenance-rate
                 override is negative in any slot, a non-positive lifetime override was given, or the
                 technical attributes are not JSON-serializable.
         """
@@ -150,8 +297,11 @@ class ComponentCostFacts:
         )
         if not isinstance(self.asset_class, ComponentType):
             raise ValueError(f"asset_class must be a ComponentType, got {self.asset_class!r}.")
-        if not math.isfinite(self.size) or self.size <= 0:
-            raise ValueError(f"ComponentCostFacts.size must be finite and > 0, got {self.size!r}.")
+        if not math.isfinite(self.size) or self.size < 0:
+            raise ValueError(
+                f"ComponentCostFacts.size must be finite and >= 0, got {self.size!r} "
+                "(a size of exactly 0 is allowed and means 'not installed')."
+            )
         if self.size_unit not in ComponentCostFacts.SUPPORTED_SIZE_UNITS:
             raise ValueError(
                 f"size_unit {self.size_unit!r} is not supported for costing; "
@@ -169,6 +319,20 @@ class ComponentCostFacts:
             json.dumps(self.technical_attributes)
         except (TypeError, ValueError) as err:
             raise ValueError("technical_attributes must be JSON-serializable.") from err
+
+    def is_not_installed(self) -> bool:
+        """True when the component is configured at zero size, i.e. declared but not built.
+
+        System setups routinely instantiate a device unconditionally and then size it from a
+        parameter — a building sizer with `share_of_maximum_pv_potential = 0` still constructs a
+        PV system, at 0 kWp. Such a device is absent from the building, not mis-declared, so the
+        extraction side turns this into a skip with a reason rather than pricing a zero-size asset
+        or failing the whole evaluation.
+
+        Returns:
+            True when `size` is exactly zero.
+        """
+        return self.size == 0.0
 
     def has_overrides(self) -> bool:
         """True if any per-field override is set (then `override_source` is required in strict mode).
@@ -296,6 +460,11 @@ class ExistingAsset:
     declaration of which measure supersedes this asset: without it a same-class register entry means
     "kept", and only with it does a like-for-like replacement (old windows → new windows) get
     recognized as a replacement with its avoided future cost credited (§3.2b).
+
+    `anyway_share` is how honest that credit is. See its own comment below: crediting 100 % of an
+    insulation measure against a facade that was never insulated was methodologically wrong, and
+    the share is the field that says how much of the new measure the counterfactual would really
+    have bought.
     """
 
     asset_class: ComponentType
@@ -310,16 +479,35 @@ class ExistingAsset:
     # a component with one of these classes is charged full investment + this asset's removal
     # cost, and triggers the sunk-cost / anyway-cost logic of §4.1):
     replaced_by_asset_classes: List[ComponentType] = field(default_factory=list)
+    #: Sowieso-Kosten share: the fraction of the *new* measure's cost that the counterfactual —
+    #: the world in which the renovation does not happen — would truly have spent on this asset.
+    #: `1.0` is a genuine like-for-like replacement: dead windows are replaced by windows, so the
+    #: whole price of the new windows was going to be paid anyway. A **first-time improvement** is
+    #: not like-for-like and must be well below 1: a facade that was never insulated would have
+    #: been *repaired*, not insulated, so only the repair share — scaffolding, render, paint — is a
+    #: cost the building would have caused regardless, and crediting the full insulation price
+    #: against it credits money nobody would ever have spent. The default keeps the historical
+    #: behaviour, so every register written before this field existed is unchanged.
+    anyway_share: float = 1.0
 
     def __post_init__(self) -> None:
-        """Validation: normalizes the replacement-cost override and rejects a non-positive size.
+        """Validation: normalizes the replacement-cost override and rejects impossible inputs.
 
         Raises:
-            ValueError: If the size is not finite and greater than zero.
+            ValueError: If the size is not finite and greater than zero, or if `anyway_share` is
+                outside `(0, 1]` — a share of zero is spelled by not declaring the asset as
+                replaced at all, and a share above one would credit the renovation with more than
+                the measure costs.
         """
         self.replacement_cost_override_in_euro = _coerce_uncertain(self.replacement_cost_override_in_euro)
         if self.size <= 0 or not math.isfinite(self.size):
             raise ValueError("ExistingAsset.size must be finite and > 0.")
+        if not math.isfinite(self.anyway_share) or not 0.0 < self.anyway_share <= 1.0:
+            raise ValueError(
+                f"ExistingAsset.anyway_share must be in (0, 1], got {self.anyway_share!r} for "
+                f"{self.asset_class.value}: it is the share of the new measure's cost the "
+                "counterfactual would truly have spent (§4.1)."
+            )
 
     def age_in_years(self, reference_year: int) -> int:
         """Age at the reference (simulation) year, floored at 0.

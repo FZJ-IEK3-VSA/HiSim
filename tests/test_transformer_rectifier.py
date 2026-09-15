@@ -8,6 +8,9 @@ simulation, no I/O.
 
 # clean
 
+import json
+
+import pandas as pd
 import pytest
 
 from hisim.components.transformer_rectifier import Transformer, TransformerConfig
@@ -29,8 +32,16 @@ def test_get_default_transformer_config_returns_config_with_documented_defaults(
     config = TransformerConfig.get_default_transformer_config()
     assert isinstance(config, TransformerConfig)
     assert config.component_id.building is None
-    assert config.component_id.name == "Generic Transformer and rectifier Unit"
+    assert config.component_id.name == "GenericTransformerAndRectifier"
     assert config.efficiency == pytest.approx(0.95)
+    assert config.rated_power_in_kilowatt == pytest.approx(1000.0)
+    # All five cost fields stay unset so that postprocessing looks the figures up from the device
+    # database for the simulated year and country instead of freezing them into every caller.
+    assert config.device_co2_footprint_in_kg is None
+    assert config.investment_costs_in_euro is None
+    assert config.lifetime_in_years is None
+    assert config.maintenance_costs_in_euro_per_year is None
+    assert config.subsidy_as_percentage_of_investment_costs is None
 
 
 @pytest.mark.base
@@ -152,7 +163,9 @@ def test_transformer_simulate_scales_input_by_efficiency() -> None:
     and i_simulate is called without an external orchestrator.
     """
     mysim = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
-    config = TransformerConfig(component_id=ComponentID(name="Transformer"), efficiency=0.9)
+    config = TransformerConfig(
+        component_id=ComponentID(name="Transformer"), efficiency=0.9, rated_power_in_kilowatt=100.0
+    )
     transformer = Transformer(my_simulation_parameters=mysim, config=config)
 
     # Create a source output that feeds the transformer's single input.
@@ -180,26 +193,200 @@ def test_transformer_simulate_scales_input_by_efficiency() -> None:
 
 
 @pytest.mark.base
-def test_transformer_simulate_zero_efficiency_produces_zero_output() -> None:
-    """An efficiency of 0 produces a zero output regardless of the input power."""
-    mysim = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
-    config = TransformerConfig(component_id=ComponentID(name="Transformer"), efficiency=0.0)
-    transformer = Transformer(my_simulation_parameters=mysim, config=config)
+def test_transformer_config_refuses_an_efficiency_outside_the_fraction_range() -> None:
+    """An efficiency that is not a fraction in (0, 1] is refused at construction, by value.
 
-    source_output = ComponentOutput(
-        object_name="Source",
-        field_name="Input1",
+    A percentage (95) would silently scale the output a hundredfold, a zero would make the
+    conversion-loss indicator divide by zero, and a negative value would invert the power flow --
+    all three used to run as plausible simulations and could only be discovered in the numbers.
+    The configuration is where they stop.
+    """
+    for wrong in (0.0, -0.5, 1.5, 95.0):
+        with pytest.raises(ValueError, match="fraction"):
+            TransformerConfig(
+                component_id=ComponentID(name="Transformer"), efficiency=wrong, rated_power_in_kilowatt=100.0
+            )
+    assert (
+        TransformerConfig(
+            component_id=ComponentID(name="Transformer"), efficiency=1.0, rated_power_in_kilowatt=100.0
+        ).efficiency
+        == 1.0
+    )
+
+
+@pytest.mark.base
+def test_transformer_kpi_entries_integrate_output_and_derive_losses() -> None:
+    """The two transformer KPIs integrate the delivered kilowatts and derive the losses from the efficiency.
+
+    Two timesteps of 60 s at 100 kW are 3.333 kWh delivered; at 80 % efficiency one quarter of
+    the delivered energy was lost on the way (1/0.8 - 1 = 0.25), so the losses are 0.833 kWh.
+    Both are hand-derived literals over an explicit non-default efficiency, so a wrong-but-
+    consistent losses formula, or a drifted config default, cannot agree with the test.
+
+    A foreign component's kilowatt column is prepended the way the real caller hands the whole
+    run's outputs over, so the component_name filter is load-bearing here too.
+    """
+    mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = TransformerConfig(
+        component_id=ComponentID(name="Transformer"), efficiency=0.8, rated_power_in_kilowatt=100.0
+    )
+    transformer = Transformer(my_simulation_parameters=mysim, config=config)
+    foreign = ComponentOutput(
+        object_name="OtherUnit",
+        field_name="TransformerOutput",
         load_type=lt.LoadTypes.ELECTRICITY,
         unit=lt.Units.KILOWATT,
-        output_description="Source power",
-        component_id=ComponentID("Source"),
+        output_description="a stranger's output",
+        component_id=ComponentID(name="OtherUnit"),
     )
-    transformer.electricity_input.source_output = source_output
+    frame = pd.DataFrame({0: [999.0, 999.0], 1: [100.0, 100.0]})
 
-    number_of_outputs = fft.get_number_of_outputs([transformer, source_output])
-    stsv = SingleTimeStepValues(number_of_outputs)
-    fft.add_global_index_of_components([transformer, source_output])
+    entries = {
+        e.name: e
+        for e in transformer.get_component_kpi_entries([foreign, transformer.electricity_output], frame)
+    }
 
-    stsv.values[source_output.global_index] = 42.0
-    transformer.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
-    assert stsv.values[transformer.electricity_output.global_index] == pytest.approx(0.0)
+    assert entries["Electrical energy delivered"].value == pytest.approx(3.333)
+    assert entries["Conversion losses"].value == pytest.approx(0.833)
+    assert all(e.name_of_source_component == transformer.component_name for e in entries.values()), (
+        "the source component is the disambiguator a future multi-instance collision fix keys on"
+    )
+    for entry in entries.values():
+        json.dumps(entry.to_dict())  # the webtool writer serializes exactly this; it must not raise
+
+
+@pytest.mark.base
+def test_transformer_kpi_entries_refuse_nan_instead_of_understating() -> None:
+    """A NaN in the output column raises instead of being silently dropped from the sum.
+
+    pandas sums with skipna by default, so a NaN timestep would understate the delivered energy
+    and the derived losses while looking exactly like a real figure; a KPI is either computed
+    from complete values or refused by name.
+    """
+    mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = TransformerConfig(
+        component_id=ComponentID(name="Transformer"), efficiency=0.8, rated_power_in_kilowatt=100.0
+    )
+    transformer = Transformer(my_simulation_parameters=mysim, config=config)
+    frame = pd.DataFrame({0: [100.0, float("nan")]})
+
+    with pytest.raises(ValueError, match="NaN"):
+        transformer.get_component_kpi_entries([transformer.electricity_output], frame)
+
+
+@pytest.mark.base
+def test_transformer_kpi_entries_refuse_a_missing_output() -> None:
+    """A missing output column raises naming the component instead of reporting nothing."""
+    mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    transformer = Transformer(my_simulation_parameters=mysim, config=TransformerConfig.get_default_transformer_config())
+
+    with pytest.raises(ValueError, match="transformer output column"):
+        transformer.get_component_kpi_entries([], pd.DataFrame())
+
+
+@pytest.mark.base
+def test_transformer_config_refuses_a_non_positive_rated_power() -> None:
+    """A rating of zero or less is refused at construction, by value.
+
+    The investment cost is the rating times a price per kilowatt, so an unrated unit would be
+    costed at zero euros and reported as an answer -- a device that reads as free rather than as
+    unsized. The configuration is where that stops.
+    """
+    for wrong in (0.0, -1.0):
+        with pytest.raises(ValueError, match="rated power"):
+            TransformerConfig(
+                component_id=ComponentID(name="Transformer"), efficiency=0.95, rated_power_in_kilowatt=wrong
+            )
+
+
+@pytest.mark.base
+def test_transformer_capex_scales_with_the_rated_power() -> None:
+    """The investment cost, embodied CO2 and maintenance cost are all linear in the rating.
+
+    The device database prices this unit per kilowatt of nameplate rating, so doubling the rating
+    has to double all three figures exactly. Asserting the ratio rather than the euros keeps the
+    test meaningful when the owner revises the proposed price per kilowatt, while still catching
+    a capex that ignores the rating (the failure this whole cost model exists to prevent) or one
+    that scales by a squared or halved rating.
+    """
+    mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    small = Transformer.get_cost_capex(
+        TransformerConfig(
+            component_id=ComponentID(name="Small"), efficiency=0.95, rated_power_in_kilowatt=500.0
+        ),
+        mysim,
+    )
+    large = Transformer.get_cost_capex(
+        TransformerConfig(
+            component_id=ComponentID(name="Large"), efficiency=0.95, rated_power_in_kilowatt=1000.0
+        ),
+        mysim,
+    )
+
+    assert small.capex_investment_cost_in_euro > 0.0
+    assert small.device_co2_footprint_in_kg > 0.0
+    assert small.maintenance_costs_in_euro_per_year > 0.0
+    assert 20.0 < small.lifetime_in_years < 40.0, "a transformer and rectifier are a multi-decade asset"
+    assert large.capex_investment_cost_in_euro == pytest.approx(2 * small.capex_investment_cost_in_euro)
+    assert large.device_co2_footprint_in_kg == pytest.approx(2 * small.device_co2_footprint_in_kg)
+    assert large.maintenance_costs_in_euro_per_year == pytest.approx(2 * small.maintenance_costs_in_euro_per_year)
+    # The rating is stated in kilowatts, so the price per kilowatt has to land in the range the
+    # database entry cites (100-200 EUR/kW) rather than being off by a factor of a thousand.
+    assert 100.0 <= small.capex_investment_cost_in_euro / 500.0 <= 200.0
+
+
+@pytest.mark.base
+def test_transformer_capex_prefers_explicit_config_values_over_the_database() -> None:
+    """A configuration carrying all five cost fields is used verbatim, with no database lookup.
+
+    This is the escape hatch for a specific quoted unit, and it is all-or-nothing: the helper
+    consults the database only while all five fields are ``None``. Pinning it here keeps a future
+    change to the shared helper from silently overriding a user's own numbers.
+    """
+    mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = TransformerConfig(
+        component_id=ComponentID(name="Quoted"),
+        efficiency=0.95,
+        rated_power_in_kilowatt=500.0,
+        device_co2_footprint_in_kg=1234.0,
+        investment_costs_in_euro=45000.0,
+        lifetime_in_years=30.0,
+        maintenance_costs_in_euro_per_year=900.0,
+        subsidy_as_percentage_of_investment_costs=0.1,
+    )
+
+    capex = Transformer.get_cost_capex(config, mysim)
+
+    assert capex.capex_investment_cost_in_euro == pytest.approx(45000.0)
+    assert capex.device_co2_footprint_in_kg == pytest.approx(1234.0)
+    assert capex.lifetime_in_years == pytest.approx(30.0)
+    assert capex.maintenance_costs_in_euro_per_year == pytest.approx(900.0)
+    assert capex.subsidy_as_percentage_of_investment_costs == pytest.approx(0.1)
+
+
+@pytest.mark.base
+def test_transformer_opex_prices_the_conversion_losses_only() -> None:
+    """The operating cost covers the losses, not the throughput, and carries a maintenance share.
+
+    Everything the unit does not lose it passes on, and the consumer downstream reports that
+    share as its own consumption, so the two are disjoint and the system total may add them.
+    Reporting the throughput here instead would count the same kilowatt-hours twice, which is the
+    failure this test catches: two timesteps of 60 s at 100 kW are 3.333 kWh delivered, and at
+    80 % efficiency the losses are 0.833 kWh -- the consumption reported must be the latter.
+    """
+    mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = TransformerConfig(
+        component_id=ComponentID(name="Transformer"), efficiency=0.8, rated_power_in_kilowatt=500.0
+    )
+    transformer = Transformer(my_simulation_parameters=mysim, config=config)
+    frame = pd.DataFrame({0: [100.0, 100.0]})
+
+    opex = transformer.get_cost_opex([transformer.electricity_output], frame)
+
+    assert opex.total_consumption_in_kwh == pytest.approx(0.833)
+    assert opex.loadtype == lt.LoadTypes.ELECTRICITY
+    # Both the cost and the footprint are the same kilowatt-hours times a positive per-kWh
+    # factor, so each must be a positive fraction of a euro / kilogram rather than zero.
+    assert 0.0 < opex.opex_energy_cost_in_euro < 1.0
+    assert 0.0 < opex.co2_footprint_in_kg < 1.0
+    assert opex.opex_maintenance_cost_in_euro > 0.0

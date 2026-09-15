@@ -31,11 +31,12 @@ from hisim.economics.subsidies import (
     SubsidyContext,
     SubsidyDataError,
     SubsidyScheme,
+    TaxCreditBenefit,
     required_questions,
     solve_cumulation,
 )
 from hisim.economics.timeline import CostCategory
-from hisim.economics.uncertainty import UncertainValue
+from hisim.economics.uncertainty import Slot, UncertainValue
 from hisim.loadtypes import ComponentType, Units
 
 pytestmark = pytest.mark.base
@@ -313,6 +314,195 @@ class TestSubsidyEngine:
         schedule = awards[0].schedule_amounts
         # 20 % of 10,000 EUR = 2,000 EUR, paid out 35 % / 35 % / 30 % over three tax years.
         assert [amount.best_estimate for amount in schedule] == pytest.approx([700.0, 700.0, 600.0])
+
+
+class TestAwardsRecordTheArithmeticBehindTheirAmount:
+    """§5.4 Q26 F8: the factors an award states must be the ones that produced its euros.
+
+    The report's award caption (`views.award_arithmetic`) prints "rate x eligible basis = amount"
+    straight from three fields the solver writes — it re-derives nothing, so a rate or a basis
+    recorded next to the wrong amount reaches the reader as a multiplication whose result is not
+    the number beside it, and nothing downstream would notice. The solver is therefore the only
+    place the identity can be checked, and these tests check it against the real catalog.
+    """
+
+    def test_every_share_award_records_the_factors_that_multiply_to_its_amount(self, catalog):
+        """Every applied share award satisfies `basis x rate = amount`, in all three slots.
+
+        Catches a recorded rate or basis that does not belong to the amount beside it: a rate
+        stored before the group cap scaled it, a basis stored before proration or before the
+        per-dwelling-unit ceiling clamped it. The cost band is deliberately non-degenerate (and
+        wide enough that the 30 kEUR ceiling bites in the HIGH world only), because a bug that
+        records the *unclamped* basis is invisible while every slot holds the same number.
+        """
+        measure = make_measure(cost=20000.0)
+        measure.cost_by_category[CostCategory.INVESTMENT] = UncertainValue(
+            best_estimate=20000.0, minimum=14000.0, maximum=35000.0
+        )
+        decision = solve_cumulation(catalog, measure, full_context(), 2024, DISCOUNT)
+        benefit_kinds = {scheme.id: scheme.benefit_kind for scheme in catalog.schemes}
+        share_awards = [
+            award
+            for award in decision.applied
+            if benefit_kinds[award.scheme_id] in (BenefitKind.SHARE_OF_ELIGIBLE_COST, BenefitKind.BONUS_SHARE)
+        ]
+        assert share_awards, "no share award was applied — the loop below would prove nothing"
+        for award in share_awards:
+            assert award.benefit_rate is not None, award.scheme_id
+            assert award.eligible_basis_in_euro is not None, award.scheme_id
+            expected = award.eligible_basis_in_euro.scale(award.benefit_rate)
+            for slot in Slot:
+                assert award.upfront_amount.slot(slot) == pytest.approx(expected.slot(slot)), (
+                    f"{award.scheme_id} in slot {slot.value}"
+                )
+
+    def test_a_group_cap_scales_the_recorded_rate_and_keeps_the_scheme_rate_beside_it(self, catalog):
+        """Under the 70 % cap each award reports the applied rate and the scheme's own rate.
+
+        The bonuses stack past the BEG's combined-rate cap (30 + 20 + 30 %), so every award in the
+        group is scaled back by the same factor. Catches the two ways the pair can lie: reporting
+        the catalog rate as the one that produced the euros (the caption would then multiply to
+        more than was awarded), and claiming a scale-down where none happened — checked on a
+        second, uncapped solve, where the pre-cap field must stay empty.
+        """
+        scheme_rates = {
+            scheme.id: scheme.benefit.rate
+            for scheme in catalog.schemes
+            if isinstance(scheme.benefit, ShareBenefit)
+        }
+        decision = solve_cumulation(catalog, make_measure(cost=20000.0), full_context(), 2024, DISCOUNT)
+        scaled = [award for award in decision.applied if award.benefit_rate_before_group_cap is not None]
+        assert {award.scheme_id for award in scaled} == {
+            "DE_BEG_EM_HP_BASE_2024",
+            "DE_BEG_EM_HP_SPEED_2024",
+            "DE_BEG_EM_HP_INCOME_2024",
+        }
+        scale_down = 0.70 / sum(scheme_rates[award.scheme_id] for award in scaled)
+        for award in scaled:
+            scheme_rate = award.benefit_rate_before_group_cap
+            assert scheme_rate is not None and award.benefit_rate is not None
+            assert award.eligible_basis_in_euro is not None
+            assert scheme_rate == pytest.approx(scheme_rates[award.scheme_id])
+            assert award.benefit_rate < scheme_rate
+            assert award.benefit_rate / scheme_rate == pytest.approx(scale_down)
+            # The identity of the test above still has to hold, with the *scaled* rate.
+            assert award.upfront_amount.best_estimate == pytest.approx(
+                award.eligible_basis_in_euro.best_estimate * award.benefit_rate
+            )
+        # Without the income bonus the stack is 30 + 20 + 5 %, under the cap: nothing is scaled.
+        uncapped = solve_cumulation(
+            catalog, make_measure(cost=20000.0), full_context(income=80000.0), 2024, DISCOUNT
+        )
+        assert uncapped.applied
+        for award in uncapped.applied:
+            assert award.benefit_rate_before_group_cap is None, award.scheme_id
+            assert award.benefit_rate == pytest.approx(scheme_rates[award.scheme_id])
+
+    def test_a_tax_credit_schedule_sums_to_rate_times_basis(self, catalog):
+        """§35c states the same multiplication, and its instalments add up to it.
+
+        A tax credit pays over three years, so its amount lives in `schedule_amounts` rather than
+        in `upfront_amount`; the caption still prints "rate x basis". Catches a schedule whose
+        instalments no longer sum to the product the caption shows — a split rebased on something
+        other than the recorded basis, or a rate recorded that the schedule was not built from.
+        """
+        from hisim.economics.subsidies import _combination_awards  # noqa: PLC2701 — targeted unit test
+
+        scheme = next(scheme for scheme in catalog.schemes if scheme.id == "DE_TAX_35C_2024")
+        award = _combination_awards([scheme], make_measure(cost=10000.0), full_context(), None)[0]
+        assert award.benefit_rate is not None and award.eligible_basis_in_euro is not None
+        assert sum(amount.best_estimate for amount in award.schedule_amounts) == pytest.approx(
+            award.eligible_basis_in_euro.best_estimate * award.benefit_rate
+        )
+
+
+class TestTheOverallCapKeepsTheAwardArithmeticTrue:
+    """Q26 F8 / §7 B12: the state-aid ceiling moves an award's recorded rate with its amount.
+
+    The overall cap rescales `upfront_amount` and used to leave `benefit_rate` and
+    `eligible_basis_in_euro` exactly as the share stage had written them, so wherever the ceiling
+    bound, `views.award_arithmetic` printed a multiplication whose product was not the amount
+    beside it — "50.0 % x 20,000 EUR = 5,000 EUR". The cap is the second of the two ceilings that
+    can cut a rate down, and like the first it now states both figures.
+
+    No shipped catalog is affected: DE and AT both declare `overall_cap_share: null`, which is why
+    these cases are synthetic.
+    """
+
+    def test_a_capped_share_award_states_the_rate_that_produced_its_euros(self):
+        """The ceiling halves the grant, so the recorded rate halves with it.
+
+        A 50 % grant on an exact 20 000 EUR measure under a 25 % state-aid ceiling: 10 000 EUR of
+        support is cut to 5 000. The pre-cap rate is kept beside the effective one, and the
+        effective one is what multiplies the basis back to the amount — which is exactly the
+        identity `TestAwardsRecordTheArithmeticBehindTheirAmount` checks everywhere else.
+        """
+        measure = banded_measure(UncertainValue.exact(20000.0))
+        catalog = make_catalog(
+            [make_scheme("CAP_SHARE", ALWAYS_ELIGIBLE, benefit=ShareBenefit(rate=0.5))],
+            overall_cap_share=0.25,
+        )
+        decision = solve_cumulation(catalog, measure, SubsidyContext(), 2024, DISCOUNT)
+        award = next(award for award in decision.applied if award.scheme_id == "CAP_SHARE")
+        # The cap really bound — without this the assertions below would pass vacuously.
+        assert award.upfront_amount.best_estimate == pytest.approx(0.25 * 20000.0)
+        assert award.benefit_rate_before_overall_cap == pytest.approx(0.5)
+        assert award.benefit_rate is not None and award.eligible_basis_in_euro is not None
+        assert award.upfront_amount.best_estimate == pytest.approx(
+            award.eligible_basis_in_euro.best_estimate * award.benefit_rate
+        )
+        assert award.benefit_rate == pytest.approx(0.25)
+        # The group cap is a different ceiling and did not bite here, so it stays unclaimed.
+        assert award.benefit_rate_before_group_cap is None
+
+    def test_an_uncapped_solve_leaves_the_overall_cap_field_empty(self):
+        """The control: claiming a cut that did not happen is the other way the pair can lie."""
+        measure = banded_measure(UncertainValue.exact(20000.0))
+        catalog = make_catalog(
+            [make_scheme("CAP_SHARE", ALWAYS_ELIGIBLE, benefit=ShareBenefit(rate=0.5))],
+            overall_cap_share=0.8,
+        )
+        decision = solve_cumulation(catalog, measure, SubsidyContext(), 2024, DISCOUNT)
+        award = next(award for award in decision.applied if award.scheme_id == "CAP_SHARE")
+        assert award.benefit_rate_before_overall_cap is None
+        assert award.benefit_rate == pytest.approx(0.5)
+        assert award.upfront_amount.best_estimate == pytest.approx(0.5 * 20000.0)
+
+    def test_a_tax_credit_keeps_its_rate_because_the_cap_never_touched_its_schedule(self):
+        """The cap bounds *upfront* support only, so a schedule's arithmetic is already true.
+
+        A tax credit's amounts live in `schedule_amounts`; its `upfront_amount` is zero and scaling
+        zero leaves zero. Rewriting its rate to the cap ratio — the naive "every award that has a
+        rate" reading — would therefore introduce the very falsehood the fix removes: instalments
+        that no longer sum to the rate times the basis the caption prints beside them.
+        """
+        measure = banded_measure(UncertainValue.exact(20000.0))
+        catalog = make_catalog(
+            [
+                make_scheme("CAP_SHARE", ALWAYS_ELIGIBLE, benefit=ShareBenefit(rate=0.5)),
+                make_scheme(
+                    "CAP_CREDIT",
+                    ALWAYS_ELIGIBLE,
+                    benefit_kind=BenefitKind.TAX_CREDIT,
+                    benefit=TaxCreditBenefit(rate=0.2, years=3),
+                ),
+            ],
+            overall_cap_share=0.25,
+        )
+        from hisim.economics.subsidies import _combination_awards  # noqa: PLC2701 — targeted unit test
+
+        awards = {
+            award.scheme_id: award
+            for award in _combination_awards(catalog.schemes, measure, SubsidyContext(), 0.25)
+        }
+        assert awards["CAP_SHARE"].benefit_rate_before_overall_cap == pytest.approx(0.5)
+        credit = awards["CAP_CREDIT"]
+        assert credit.benefit_rate_before_overall_cap is None
+        assert credit.benefit_rate is not None and credit.benefit_rate == pytest.approx(0.2)
+        assert credit.eligible_basis_in_euro is not None
+        assert sum(amount.best_estimate for amount in credit.schedule_amounts) == pytest.approx(
+            credit.eligible_basis_in_euro.best_estimate * credit.benefit_rate
+        )
 
 
 class TestOverallCapIsAppliedPerSlot:

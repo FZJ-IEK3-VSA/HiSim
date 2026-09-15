@@ -4,7 +4,7 @@
 # Owned
 import importlib
 from dataclasses import dataclass
-from typing import List, Any, Tuple, Optional
+from typing import ClassVar, Dict, List, Any, Tuple, Optional
 from enum import Enum, unique
 import numpy as np
 import pandas as pd
@@ -20,13 +20,27 @@ from hisim.component import (
     OpexCostDataClass,
     CapexCostDataClass,
 )
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import (
+    ComponentID,
+    ConfigBase,
+    ConfigSizingError,
+    DisplayConfig,
+    OwnFields,
+    Sizable,
+    Size,
+    SizingContext,
+    SizingLaw,
+    concrete,
+    law,
+    preset,
+    sized_field,
+)
 from hisim.components.configuration import PhysicsConfig
 from hisim.components import configuration
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiHelperClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -68,21 +82,109 @@ class PositionHotWaterStorageInSystemSetup(str, Enum):
     SERIES_TO_HEAT_SOURCE = "SERIES_TO_HEAT_SOURCE"
 
 
+def _buffer_volume_in_liter(ctx: SizingContext, own: OwnFields) -> float:
+    """Computes a buffer vessel's volume from the generator it buffers and the kind that generator is.
+
+    The law behind the ``volume_heating_water_storage_in_liter`` field of
+    :class:`SimpleHotWaterStorageConfig`. It is the sizing the deleted
+    ``get_scaled_hot_water_storage`` factory performed, moved to the field that carries the
+    result: the generator's maximal thermal power in kilowatt times the litres-per-kilowatt
+    figure its kind is buffered at, rounded to two decimals. The figures themselves live in
+    :attr:`SimpleHotWaterStorageConfig.LITRES_PER_KILOWATT_BY_SIZING_OPTION` with their sources,
+    so they are written down once.
+
+    The power read is the *generator's*, never the building's heating load -- passing the load
+    was the C11 defect (P4 decision D-9), fixed setup-side in 2026-09-11 and now stated by the
+    law itself.
+
+    Args:
+        ctx: The sizing facts of the surrounding system; ``maximal_thermal_power_in_watt`` is
+            read from it, contributed by the heat generator this vessel buffers.
+        own: The sibling fields of the configuration being resolved, for the ``sizing_option``
+            that selects the litres-per-kilowatt figure.
+
+    Returns:
+        float: The vessel's volume in litres, rounded to two decimals.
+
+    Raises:
+        ConfigSizingError: If the context carries no maximal thermal power, so the law has
+            nothing to size from.
+        ValueError: If ``sizing_option`` is not one of the five kinds the table covers.
+    """
+    maximal_thermal_power_in_watt = ctx.maximal_thermal_power_in_watt
+    if maximal_thermal_power_in_watt is None:
+        raise ConfigSizingError(
+            "a buffer vessel is sized from 'maximal_thermal_power_in_watt', which this context "
+            "does not carry. Resolve the storage configuration against a context the heat "
+            "generator contributed to, or pin 'volume_heating_water_storage_in_liter' to the "
+            "vessel's volume."
+        )
+    sizing_option = own.value_of("sizing_option")
+    litres_per_kilowatt = SimpleHotWaterStorageConfig.LITRES_PER_KILOWATT_BY_SIZING_OPTION.get(sizing_option)
+    if litres_per_kilowatt is None:
+        raise ValueError(f"Sizing option for Simple Hot Water Storage {sizing_option} is unvalid.")
+    return round(maximal_thermal_power_in_watt / 1e3 * litres_per_kilowatt, 2)
+
+
 @dataclass_json
 @dataclass
 class SimpleHotWaterStorageConfig(ConfigBase):
-    """Configuration of the SimpleHotWaterStorage class."""
+    """Configuration of the SimpleHotWaterStorage class.
+
+    The space-heating buffer vessel. The named default is :meth:`preset_buffer`, and
+    ``volume_heating_water_storage_in_liter`` is sizable: the preset leaves it ``AUTO`` and
+    ``.resolve(ctx)`` computes it from the maximal thermal power of the generator the vessel
+    buffers, which is what the deleted ``get_scaled_hot_water_storage`` factory did setup-side.
+    An author who knows the vessel pins the field instead, which is what the deleted
+    ``get_default_simplehotwaterstorage_config`` factory was for.
+
+    ``sizing_option`` is new with the conversion (P4 decision D-10 (a)). It used to be an
+    argument of the scaled factory alone, so a finished configuration recorded a volume without
+    recording which litres-per-kilowatt figure had produced it; as a field it is part of the
+    record and the law reads it as a sibling.
+    """
 
     @classmethod
     def get_main_classname(cls):
         """Return the full class name of the base class."""
         return SimpleHotWaterStorage.get_full_classname()
 
+    #: Litres of buffer volume per kilowatt of installed generator power, by the kind of
+    #: generator the vessel buffers. Heat pumps and wood chip boilers get the largest vessel
+    #: (50 l/kW): a heat pump wants a long, flat run, and a wood chip boiler must not cycle.
+    #: Pellet boilers are next (40 l/kW) for the same on-off reason, and gas heaters and the
+    #: general case are the smallest (20 l/kW), a gas heater carrying more inertia of its own.
+    #: The information for scaling the buffer storage is taken from the heating system
+    #: guidelines from Buderus:
+    #: https://www.baunetzwissen.de/heizung/fachwissen/speicher/dimensionierung-von-pufferspeichern-161296
+    #: Or from here:
+    #: https://www.flexiheatuk.com/buffer-vessel-sizing-for-hydronic-heating-systems/#:~:text=20%2D25%20litres%20per%20kW,kW%20for%20heat%20pump%20systems
+    LITRES_PER_KILOWATT_BY_SIZING_OPTION: ClassVar[Dict[HotWaterStorageSizingEnum, float]] = {
+        HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP: 50.0,
+        HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM: 20.0,
+        HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_PELLET_HEATING: 40.0,
+        HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_WOOD_CHIP_HEATING: 50.0,
+        HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER: 20.0,
+    }
+
+    #: Sizing law of the vessel's volume: :func:`_buffer_volume_in_liter`, the generator's power
+    #: times the litres-per-kilowatt figure of the sibling ``sizing_option``. Named as a ClassVar
+    #: so that the field declaration reads as one line.
+    VOLUME_LAW: ClassVar[SizingLaw] = law(
+        _buffer_volume_in_liter,
+        reads=(Size.MAXIMAL_THERMAL_POWER_IN_WATT,),
+        fields=("sizing_option",),
+    )
+
     component_id: ComponentID
-    volume_heating_water_storage_in_liter: float
     heat_transfer_coefficient_in_watt_per_m2_per_kelvin: float
     heat_exchanger_is_present: bool
     position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup
+    #: Which kind of generator this vessel buffers, and so which litres-per-kilowatt figure of
+    #: :attr:`LITRES_PER_KILOWATT_BY_SIZING_OPTION` the volume law applies. A plain field, not a
+    #: sizable one: nothing in the system contributes it, the author states it beside the
+    #: generator they installed.
+    sizing_option: HotWaterStorageSizingEnum
     # it should be checked how much energy the storage lost during the simulated period (see guidelines below, p.2, accepted loss in kWh/days)
     # https://www.bdh-industrie.de/fileadmin/user_upload/ISH2019/Infoblaetter/Infoblatt_Nr_74_Energetische_Bewertung_Warmwasserspeicher.pdf
     #: CO2 footprint of investment in kg
@@ -95,88 +197,44 @@ class SimpleHotWaterStorageConfig(ConfigBase):
     maintenance_costs_in_euro_per_year: Optional[float]
     # subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: Optional[float]
+    #: Volume of the vessel. Sizable: left ``AUTO`` it is computed by :data:`VOLUME_LAW` from the
+    #: generator's maximal thermal power. It is declared here rather than beside the other vessel
+    #: properties because a field with a default may not precede one without.
+    volume_heating_water_storage_in_liter: Sizable[float] = sized_field(rule=VOLUME_LAW)
 
+    @preset
     @classmethod
-    def get_default_simplehotwaterstorage_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "SimpleHotWaterStorageConfig":
-        """Get a default simplehotwaterstorage config."""
-        if component_id is None:
-            component_id = ComponentID(name="SimpleHotWaterStorage")
-        volume_heating_water_storage_in_liter: float = 500
-        position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup = (
-            PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE
-        )
-        config = SimpleHotWaterStorageConfig(
-            component_id=component_id,
-            volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
-            heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
-            heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
-            position_hot_water_storage_in_system=position_hot_water_storage_in_system,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-        )
-        return config
+    def preset_buffer(cls, name: str) -> "SimpleHotWaterStorageConfig":
+        """The fleet's space-heating buffer vessel, scaled to the generator it buffers.
 
-    @classmethod
-    def get_scaled_hot_water_storage(
-        cls,
-        max_thermal_power_in_watt_of_heating_system: float,
-        name: str = "SimpleHotWaterStorage",
-        component_id: Optional[ComponentID] = None,
-        sizing_option: HotWaterStorageSizingEnum = HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM,
-    ) -> "SimpleHotWaterStorageConfig":
-        """Gets a default storage with scaling according to the heating load of the building.
+        A tank losing 2.0 watt per square metre and kelvin, standing parallel to the heat source
+        and fitted with a heat exchanger, buffering a generator of no particular kind
+        (``SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM``, 20 l/kW). What it does not fix is how
+        large the tank is: ``volume_heating_water_storage_in_liter`` stays ``AUTO`` so that
+        :data:`VOLUME_LAW` derives it from the generator's maximal thermal power, and an author
+        who knows the vessel pins the field instead. Capex fields stay ``None`` so
+        post-processing looks them up in the device database, exactly as the deleted factories
+        did.
 
-        The information for scaling the buffer storage is taken from the heating system guidelines from Buderus:
-        https://www.baunetzwissen.de/heizung/fachwissen/speicher/dimensionierung-von-pufferspeichern-161296
-        Or from here:
-        https://www.flexiheatuk.com/buffer-vessel-sizing-for-hydronic-heating-systems/#:~:text=20%2D25%20litres%20per%20kW,kW%20for%20heat%20pump%20systems
+        The two pinned flags are the ones both deleted factories agreed on and every setup used.
+        ``heat_exchanger_is_present`` is physics: with the exchanger the outlet temperature is
+        the vessel's mean, without it the vessel stratifies and a mixing factor is computed
+        instead -- the stratified mode still causes problems, which is why the exchanger is the
+        default. ``position_hot_water_storage_in_system`` is wiring: only
+        ``PARALLEL_TO_HEAT_SOURCE`` gives the component its four heat-generator inputs.
 
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            SimpleHotWaterStorageConfig: The preset configuration, with the volume unsized.
         """
-
-        # if the used heating system is a heat pump use formular
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        if sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP:
-
-            volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 50
-            # https://www.flexiheatuk.com/buffer-vessel-sizing-for-hydronic-heating-systems/#:~:text=20%2D25%20litres%20per%20kW,kW%20for%20heat%20pump%20systems
-
-        # otherwise use approximation: 60l per kw thermal power
-        elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM:
-            volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 20
-
-        # large storage for pellet heating to avoid frequent on-off
-        elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_PELLET_HEATING:
-            volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 40
-
-        # large storage even more important than for pellets, as on-off behavior should be avoided
-        elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_WOOD_CHIP_HEATING:
-            volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 50
-
-        # or for gas heaters make hws smaller because gas heaters are a bigger inertia than heat pump
-        elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER:
-            volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 20
-
-        else:
-            raise ValueError(f"Sizing option for Simple Hot Water Storage {sizing_option} is unvalid.")
-
-        position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup = (
-            PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE
-        )
-
-        config = SimpleHotWaterStorageConfig(
-            component_id=component_id,
-            volume_heating_water_storage_in_liter=round(volume_heating_water_storage_in_liter, 2),
+        return cls(
+            component_id=ComponentID(name=name),
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
-            position_hot_water_storage_in_system=position_hot_water_storage_in_system,
+            position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE,
+            sizing_option=HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM,
             # capex and device emissions are calculated in get_cost_capex function by default
             device_co2_footprint_in_kg=None,
             investment_costs_in_euro=None,
@@ -184,44 +242,40 @@ class SimpleHotWaterStorageConfig(ConfigBase):
             maintenance_costs_in_euro_per_year=None,
             subsidy_as_percentage_of_investment_costs=None,
         )
-        return config
-
-
-@dataclass_json
-@dataclass
-class SimpleHotWaterStorageControllerConfig(ConfigBase):
-    """Configuration of the SimpleHotWaterStorageController class."""
-
-    @classmethod
-    def get_main_classname(cls):
-        """Return the full class name of the base class."""
-        return SimpleHotWaterStorageController.get_full_classname()
-
-    component_id: ComponentID
-
-    @classmethod
-    def get_default_simplehotwaterstoragecontroller_config(
-        cls,
-    ) -> Any:
-        """Get a default simplehotwaterstorage controller config."""
-        config = SimpleHotWaterStorageControllerConfig(
-            component_id=ComponentID(name="SimpleHotWaterStorageController"),
-        )
-        return config
 
 
 @dataclass_json
 @dataclass
 class SimpleDHWStorageConfig(ConfigBase):
-    """Configuration of the SimpleHotWaterStorage class."""
+    """Configuration of the SimpleDHWStorage class.
+
+    The domestic-hot-water vessel of a household. The named default is
+    :meth:`preset_standard`, and ``volume_heating_water_storage_in_liter`` is sizable: the
+    preset leaves it ``AUTO`` and ``.resolve(ctx)`` computes it from the number of apartments
+    the building contributes, which is what the deleted ``get_scaled_dhw_storage`` factory did
+    setup-side. An author who knows the vessel pins the field instead, which is what the
+    deleted ``get_default_simpledhwstorage_config`` factory was for.
+    """
 
     @classmethod
     def get_main_classname(cls):
         """Return the full class name of the base class."""
         return SimpleDHWStorage.get_full_classname()
 
+    #: Litres of domestic hot water storage per apartment. The deleted
+    #: ``get_scaled_dhw_storage`` factory carried this as its ``default_volume_in_liter``
+    #: argument and recorded no source for it; every one of its nineteen call sites accepted
+    #: the default, so the number is the fleet's convention rather than a cited standard.
+    VOLUME_PER_APARTMENT_IN_LITER: ClassVar[float] = 250.0
+
+    #: Sizing law of the vessel's volume: :data:`VOLUME_PER_APARTMENT_IN_LITER` for every
+    #: apartment the building has, and for at least one apartment -- the clamp the factory
+    #: wrote as ``max(number_of_apartments, 1)``, so a context reporting zero apartments still
+    #: sizes one household's vessel instead of a storage of no volume. Named as a ClassVar so
+    #: that the field declaration reads as one line.
+    VOLUME_LAW: ClassVar[SizingLaw] = Size.NUMBER_OF_APARTMENTS.at_least(1) * VOLUME_PER_APARTMENT_IN_LITER
+
     component_id: ComponentID
-    volume_heating_water_storage_in_liter: float
     heat_transfer_coefficient_in_watt_per_m2_per_kelvin: float
     #: CO2 footprint of investment in kg
     device_co2_footprint_in_kg: Optional[float]
@@ -233,20 +287,31 @@ class SimpleDHWStorageConfig(ConfigBase):
     maintenance_costs_in_euro_per_year: Optional[float]
     # subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: Optional[float]
+    #: Volume of the vessel. Sizable: left ``AUTO`` it is computed by :data:`VOLUME_LAW` from
+    #: the apartment count the building contributes. It is declared here rather than beside the
+    #: heat transfer coefficient because a field with a default may not precede one without.
+    volume_heating_water_storage_in_liter: Sizable[float] = sized_field(rule=VOLUME_LAW)
 
+    @preset
     @classmethod
-    def get_default_simpledhwstorage_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "SimpleDHWStorageConfig":
-        """Get a default simplehotwaterstorage config."""
-        if component_id is None:
-            component_id = ComponentID(name="DHWStorage")
-        volume_heating_water_storage_in_liter: float = 250
+    def preset_standard(cls, name: str) -> "SimpleDHWStorageConfig":
+        """The fleet's domestic-hot-water vessel, scaled to the building it stands in.
 
-        config = SimpleDHWStorageConfig(
-            component_id=component_id,
-            volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
+        A tank losing 0.36 watt per square metre and kelvin to its surroundings. What it does
+        not fix is how large the tank is: ``volume_heating_water_storage_in_liter`` stays
+        ``AUTO`` so that :data:`VOLUME_LAW` derives it from the building's apartment count, and
+        an author who knows the vessel pins the field instead. Capex fields stay ``None`` so
+        post-processing looks them up in the device database, exactly as the deleted factories
+        did.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            SimpleDHWStorageConfig: The preset configuration, with the volume unsized.
+        """
+        return cls(
+            component_id=ComponentID(name=name),
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=0.36,
             # capex and device emissions are calculated in get_cost_capex function by default
             device_co2_footprint_in_kg=None,
@@ -255,35 +320,6 @@ class SimpleDHWStorageConfig(ConfigBase):
             maintenance_costs_in_euro_per_year=None,
             subsidy_as_percentage_of_investment_costs=None,
         )
-        return config
-
-    @classmethod
-    def get_scaled_dhw_storage(
-        cls,
-        number_of_apartments: int = 1,
-        default_volume_in_liter: float = 250.0,
-        name: str = "DHWStorage",
-        component_id: Optional[ComponentID] = None,
-    ) -> "SimpleDHWStorageConfig":
-        """Gets a default storage with scaling according to number of apartments."""
-
-        # if the used heating system is a heat pump use formular
-
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        volume = default_volume_in_liter * max(number_of_apartments, 1)
-        config = SimpleDHWStorageConfig(
-            component_id=component_id,
-            volume_heating_water_storage_in_liter=volume,
-            heat_transfer_coefficient_in_watt_per_m2_per_kelvin=0.36,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-        )
-        return config
 
 
 @dataclass
@@ -305,6 +341,8 @@ class SimpleWaterStorageState:
 
 class SimpleWaterStorage(cp.Component):
     """SimpleWaterStorage class with generic functions."""
+
+    cost_relevance = CostRelevance.PRICED
 
     @utils.measure_execution_time
     def __init__(
@@ -542,6 +580,8 @@ class SimpleWaterStorage(cp.Component):
 class SimpleHotWaterStorage(SimpleWaterStorage):
     """SimpleHotWaterStorage class."""
 
+    cost_relevance = CostRelevance.PRICED
+
     # Input
     # A hot water storage can be used also with more than one heat generator. In this case you need to add a new input and output.
     WaterTemperatureToHeatDistribution = "WaterTemperatureToHeatDistribution"
@@ -595,13 +635,6 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         self.waterstorageconfig = config
 
         self.mean_water_temperature_in_water_storage_in_celsius: float = 35
-
-        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR):
-            self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = (
-                SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR)
-            )
-        else:
-            self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = None
 
         self.position_hot_water_storage_in_system = self.waterstorageconfig.position_hot_water_storage_in_system
         self.build(heat_exchanger_is_present=self.waterstorageconfig.heat_exchanger_is_present)
@@ -769,7 +802,6 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         )
 
         self.add_default_connections(self.get_default_connections_from_heat_distribution_system())
-        self.add_default_connections(self.get_default_connections_from_advanced_heat_pump())
         self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
         self.add_default_connections(self.get_default_connections_from_generic_boiler())
 
@@ -796,33 +828,6 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
                 SimpleHotWaterStorage.WaterMassFlowRateFromHeatDistributionSystem,
                 hds_classname,
                 component_class.WaterMassFlowHDS,
-            )
-        )
-        return connections
-
-    def get_default_connections_from_advanced_heat_pump(
-        self,
-    ) -> List[cp.ComponentConnection]:
-        """Get advanced het pump default connections."""
-
-        # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.advanced_heat_pump_hplib"
-        component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "HeatPumpHplib")
-        connections = []
-        hp_classname = component_class.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator,
-                hp_classname,
-                component_class.TemperatureOutput,
-            )
-        )
-        connections.append(
-            cp.ComponentConnection(
-                SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator,
-                hp_classname,
-                component_class.MassFlowOutput,
             )
         )
         return connections
@@ -922,18 +927,12 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
                 self.water_temperature_secondary_heat_generator_input_channel
             )
 
-            # get water mass flow rate of heat generator either from singleton sim repo or from input value
-            if self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo is not None:
-                water_mass_flow_rate_from_heat_generator_in_kg_per_second = (
-                    self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo
-                )
-            else:
-                water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
-                    self.water_mass_flow_rate_heat_generator_input_channel
-                )
-                water_mass_flow_rate_from_secondary_heat_generator_in_kg_per_second = stsv.get_input_value(
-                    self.water_mass_flow_rate_secondary_heat_generator_input_channel
-                )
+            water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
+                self.water_mass_flow_rate_heat_generator_input_channel
+            )
+            water_mass_flow_rate_from_secondary_heat_generator_in_kg_per_second = stsv.get_input_value(
+                self.water_mass_flow_rate_secondary_heat_generator_input_channel
+            )
         else:
             water_temperature_from_heat_generator_in_celsius = 0
             water_mass_flow_rate_from_heat_generator_in_kg_per_second = 0
@@ -1197,13 +1196,13 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         # physical parameters of storage
         self.water_mass_in_storage_in_kg = (
             self.density_water_at_40_degree_celsius_in_kg_per_liter
-            * self.waterstorageconfig.volume_heating_water_storage_in_liter
+            * concrete(self.waterstorageconfig.volume_heating_water_storage_in_liter)
         )
         self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin = (
             self.config.heat_transfer_coefficient_in_watt_per_m2_per_kelvin
         )
         self.storage_surface_in_m2 = self.calculate_surface_area_of_storage(
-            storage_volume_in_liter=self.waterstorageconfig.volume_heating_water_storage_in_liter,
+            storage_volume_in_liter=concrete(self.waterstorageconfig.volume_heating_water_storage_in_liter),
         )
 
         # the ambient temperature is here assumed as the basement temperature which is all year 17°C, this is where the water storage is located
@@ -1232,7 +1231,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         kpi_tag = KpiTagEnumClass.STORAGE_HOT_WATER_SPACE_HEATING
         component_type = lt.ComponentType.THERMAL_ENERGY_STORAGE
         unit = lt.Units.LITER
-        size_of_energy_system = config.volume_heating_water_storage_in_liter
+        size_of_energy_system = concrete(config.volume_heating_water_storage_in_liter)
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
         simulation_parameters=simulation_parameters,
@@ -1297,140 +1296,10 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         return list_of_kpi_entries
 
 
-class SimpleHotWaterStorageController(cp.Component):
-    """SimpleHotWaterStorageController Class."""
-
-    # Inputs
-    WaterMassFlowRateFromHeatGenerator = "WaterMassFlowRateFromHeatGenerator"
-
-    # Outputs
-    State = "State"
-
-    def __init__(
-        self,
-        my_simulation_parameters: SimulationParameters,
-        config: SimpleHotWaterStorageControllerConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
-    ) -> None:
-        """Construct all the neccessary attributes."""
-
-        self.my_simulation_parameters = my_simulation_parameters
-        self.config = config
-        component_name = self.get_component_name()
-        super().__init__(
-            name=component_name,
-            my_simulation_parameters=my_simulation_parameters,
-            my_config=config,
-            my_display_config=my_display_config,
-        )
-        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR):
-            self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = (
-                SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR)
-            )
-        else:
-            self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = None
-
-        self.controller_mode: str = "off"
-        # Inputs
-        self.water_mass_flow_rate_heat_generator_input_channel: ComponentInput = self.add_input(
-            self.component_name,
-            self.WaterMassFlowRateFromHeatGenerator,
-            lt.LoadTypes.WARM_WATER,
-            lt.Units.KG_PER_SEC,
-            False,
-        )
-        # Outputs
-        self.state_channel: ComponentOutput = self.add_output(
-            self.component_name,
-            self.State,
-            lt.LoadTypes.ANY,
-            lt.Units.ANY,
-            output_description=f"here a description for {self.State} will follow.",
-        )
-
-    def build(self) -> None:
-        """Build function.
-
-        The function sets important constants and parameters for the calculations.
-        """
-        pass
-
-    def i_prepare_simulation(self) -> None:
-        """Prepare the simulation."""
-        pass
-
-    def i_save_state(self) -> None:
-        """Save the current state."""
-        pass
-
-    def i_restore_state(self) -> None:
-        """Restore the previous state."""
-        pass
-
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
-        """Doublecheck."""
-        pass
-
-    def write_to_report(self) -> None:
-        """Write important variables to report."""
-        pass
-
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulate the heat pump comtroller."""
-
-        if force_convergence:
-            pass
-        else:
-            # Retrieves inputs
-
-            # get water mass flow rate of heat generator either from singleton sim repo or from input value
-            if self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo is not None:
-                water_mass_flow_rate_from_heat_generator_in_kg_per_second = (
-                    self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo
-                )
-            else:
-                water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
-                    self.water_mass_flow_rate_heat_generator_input_channel
-                )
-
-            self.conditions_on_off(
-                water_mass_flow_rate_from_heat_generator_in_kg_per_second=water_mass_flow_rate_from_heat_generator_in_kg_per_second
-            )
-
-            if self.controller_mode == "on":
-                state = 1
-            elif self.controller_mode == "off":
-                state = 0
-
-            else:
-                raise ValueError("Controller State unknown.")
-
-            stsv.set_output_value(self.state_channel, state)
-
-    def conditions_on_off(
-        self,
-        water_mass_flow_rate_from_heat_generator_in_kg_per_second: float,
-    ) -> None:
-        """Set conditions for the simple hot water storage controller mode."""
-
-        if self.controller_mode == "on":
-            # turn mode off when heat generator delivers no water
-            if water_mass_flow_rate_from_heat_generator_in_kg_per_second == 0:
-                self.controller_mode = "off"
-                return
-
-        elif self.controller_mode == "off":
-            # turn mode on if water from heat generator is flowing
-            if water_mass_flow_rate_from_heat_generator_in_kg_per_second != 0:
-                self.controller_mode = "on"
-                return
-
-        else:
-            raise ValueError("unknown controller mode")
-
-
 class SimpleDHWStorage(SimpleWaterStorage):
     """SimpleHotWaterStorage class."""
+
+    cost_relevance = CostRelevance.PRICED
 
     # Input
     # A hot water storage can be used also with more than one heat generator. In this case you need to add a new input and output.
@@ -1851,13 +1720,13 @@ class SimpleDHWStorage(SimpleWaterStorage):
         # physical parameters of storage
         self.water_mass_in_storage_in_kg = (
             self.density_water_at_40_degree_celsius_in_kg_per_liter
-            * self.waterstorageconfig.volume_heating_water_storage_in_liter
+            * concrete(self.waterstorageconfig.volume_heating_water_storage_in_liter)
         )
         self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin = (
             self.waterstorageconfig.heat_transfer_coefficient_in_watt_per_m2_per_kelvin
         )
         self.storage_surface_in_m2 = self.calculate_surface_area_of_storage(
-            storage_volume_in_liter=self.waterstorageconfig.volume_heating_water_storage_in_liter,
+            storage_volume_in_liter=concrete(self.waterstorageconfig.volume_heating_water_storage_in_liter),
         )
 
         self.ambient_temperature_in_celsius = 20.0
@@ -2124,7 +1993,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         kpi_tag = KpiTagEnumClass.STORAGE_DOMESTIC_HOT_WATER
         component_type = lt.ComponentType.THERMAL_ENERGY_STORAGE
         unit = lt.Units.LITER
-        size_of_energy_system = config.volume_heating_water_storage_in_liter
+        size_of_energy_system = concrete(config.volume_heating_water_storage_in_liter)
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
         simulation_parameters=simulation_parameters,

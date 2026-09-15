@@ -7,7 +7,7 @@ from hisim.components import advanced_battery_bslib
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from hisim.config import ComponentID
+from hisim.config import ComponentID, ConfigSizingError, SizingContext, auto_fields, concrete
 from tests import functions_for_testing as fft
 
 
@@ -168,3 +168,90 @@ def test_advanced_battery_bslib_get_cost_capex_zero_lifetime_in_cycles() -> None
         f"Expected co2_footprint_per_simulated_period to be {expected_co2_per_simulated_period}, "
         f"got {result.device_co2_footprint_for_simulated_period_in_kg}"
     )
+
+
+#: The array the rooftop PV law builds on the fleet's archetype roof of 168.9 m2. Every battery
+#: of the eleven building sizers is sized from exactly this number, so it is what the two laws
+#: below are pinned against.
+FLEET_PV_PEAK_POWER_IN_WATT = 22272.28
+
+
+@pytest.mark.base
+def test_the_sized_to_pv_preset_sizes_both_power_numbers_from_the_pv_peak_power() -> None:
+    """Test that the preset reproduces the fleet's battery from the array's peak power.
+
+    The two laws are the arithmetic the deleted ``get_scaled_battery`` factory performed: one
+    kilowatt hour of storage per kilowatt peak, and a C-rate of 0.5 on the array's peak power.
+    On the archetype roof the fleet's eleven building sizers stand on this is 22.27 kWh behind
+    an 11 136.14 W inverter, which is the pair every recorded twin of those setups carries.
+    """
+    config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
+        SizingContext(pv_peak_power_in_watt=FLEET_PV_PEAK_POWER_IN_WATT)
+    )
+
+    assert config.custom_battery_capacity_generic_in_kilowatt_hour == 22.27
+    assert config.custom_pv_inverter_power_generic_in_watt == 11136.14
+
+
+@pytest.mark.base
+def test_the_inverter_law_reads_the_fact_and_not_the_rounded_capacity() -> None:
+    """Test that the inverter power is derived from the array, not from the stored capacity.
+
+    The capacity is rounded to two decimals before it is stored, so multiplying the *stored*
+    capacity by 500 W/kWh is not the same number as applying the C-rate to the array itself.
+    On the fleet archetype the difference is 1.14 W -- invisible to a reader and far outside
+    the golden suites' relative tolerance of 1e-9 -- so the law has to read the fact. This
+    test pins the difference rather than only the result, so that a later rewrite of the law
+    into a sibling read fails here with the reason spelled out.
+    """
+    config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
+        SizingContext(pv_peak_power_in_watt=FLEET_PV_PEAK_POWER_IN_WATT)
+    )
+
+    from_the_stored_capacity = round(
+        concrete(config.custom_battery_capacity_generic_in_kilowatt_hour) * 0.5 * 1e3, 2
+    )
+    assert from_the_stored_capacity == 11135.0
+    assert config.custom_pv_inverter_power_generic_in_watt != from_the_stored_capacity
+
+
+@pytest.mark.base
+def test_the_sized_to_pv_preset_pins_the_device_and_leaves_the_size_open() -> None:
+    """Test that the preset fixes the device's constants and nothing else.
+
+    What the preset states is the bslib system it is, its place in the energy management
+    hierarchy, its empty starting charge and its cycle life; what it deliberately does not
+    state is how big it is. The two power numbers stay unresolved until a sizing context
+    supplies the array's peak power, and the capex fields stay ``None`` so post-processing
+    looks the device up in the cost database.
+    """
+    config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery")
+
+    assert config.component_id == ComponentID(name="Battery")
+    assert config.system_id == "SG1"
+    assert config.source_weight == 1
+    assert config.charge_in_kwh == 0
+    assert config.discharge_in_kwh == 0
+    assert config.lifetime_in_cycles == 5e3
+    assert config.device_co2_footprint_in_kg is None
+    assert config.investment_costs_in_euro is None
+    assert config.lifetime_in_years is None
+    assert config.maintenance_costs_in_euro_per_year is None
+    assert config.subsidy_as_percentage_of_investment_costs is None
+    assert set(auto_fields(config)) == {
+        "custom_battery_capacity_generic_in_kilowatt_hour",
+        "custom_pv_inverter_power_generic_in_watt",
+    }
+
+
+@pytest.mark.base
+def test_a_battery_cannot_be_sized_without_an_array_beside_it() -> None:
+    """Test that a context carrying no PV peak power is refused, naming the missing fact.
+
+    The battery has no size of its own: both laws read ``pv_peak_power_in_watt``, which the PV
+    configuration contributes. Resolving against a context without it has to fail loudly rather
+    than leave a battery of zero capacity in the system, which would divide by zero in the
+    aging calculation and price a device that is not there.
+    """
+    with pytest.raises(ConfigSizingError, match="pv_peak_power_in_watt"):
+        advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(SizingContext())

@@ -2,21 +2,33 @@
 
 # clean
 from pathlib import Path
-from typing import Optional, List, Any
+from typing import Any, ClassVar, Dict, List, Optional, Sequence, Tuple
+import difflib
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from scipy.interpolate import interp1d
 import numpy as np
+import pandas as pd
 
 # Import modules from HiSim
-from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.component import (
+    CapexCostDataClass,
+    ComponentInput,
+    ComponentOutput,
+    OpexCostDataClass,
+    SingleTimeStepValues,
+)
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim import loadtypes as lt
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 
 from hisim import component as cp
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -27,10 +39,86 @@ __maintainer__ = "Franz Oldopp"
 __status__ = "development"
 
 
+ELECTROLYZER_TABLE_FILE_NAME = "electrolyzer_manufacturer_config.json"
+ELECTROLYZER_VARIANTS_SECTION = "Electrolyzer variants"
+
+
+def electrolyzer_table_path() -> Path:
+    """Returns the path of the manufacturer table every electrolyzer reader looks a device up in."""
+    return Path(utils.HISIMPATH["inputs"]) / ELECTROLYZER_TABLE_FILE_NAME
+
+
+def read_electrolyzer_variant(
+    electrolyzer_name: str,
+    required_fields: Sequence[str] = (),
+) -> Dict[str, Any]:
+    """Returns one device's row of the manufacturer table, or refuses naming the rows that exist.
+
+    The three configurations built from that table -- the electrolyzer's own, its L1 controller's
+    and the L2 PtX controller's -- share this one lookup so that a device name is accepted or
+    refused identically wherever it is written. Two of them used to answer a name the table does
+    not carry with an empty dictionary, which the per-field ``.get(key, 0.0)`` fallbacks behind it
+    turned into a machine rated at zero kW: a mistyped name produced a plausible-looking run with
+    an idle electrolyzer instead of an error. Both the unknown name and a row missing a field a
+    caller asked for are refused here, with the message naming what is missing and what exists,
+    the way the energy-system error catalogue words its rejections.
+
+    A missing table file is not caught: the ``FileNotFoundError`` carries the path it looked for,
+    which is what a caller needs, and no substitute for the file exists. Only the presence of a
+    required field is checked, not its value: five of the nine rows write ``standby_load`` as
+    ``null``, which the readers have always passed through as it stands, and reading a written
+    ``null`` as an absent field would refuse machines that run today.
+
+    Args:
+        electrolyzer_name: the device name as written by the setup or the configuration file.
+        required_fields: the field names the caller is about to read out of the row. Each one is
+            checked here so that a row missing a field is refused by name rather than silently
+            read as a zero.
+
+    Returns:
+        The row of "Electrolyzer variants" belonging to that device.
+
+    Raises:
+        ValueError: if no device of that name is in the table, or if the device's row does not
+            carry one of ``required_fields``.
+    """
+    config_file = electrolyzer_table_path()
+    with config_file.open("r", encoding="utf-8") as json_file:
+        data = json.load(json_file)
+    electrolyzer_variants: Dict[str, Dict[str, Any]] = data[ELECTROLYZER_VARIANTS_SECTION]
+
+    if electrolyzer_name not in electrolyzer_variants:
+        available = sorted(electrolyzer_variants)
+        hint = difflib.get_close_matches(electrolyzer_name, available, n=3)
+        did_you_mean = f"Did you mean: {', '.join(hint)}? " if hint else ""
+        raise ValueError(
+            f"Electrolyzer {electrolyzer_name!r} is not in {config_file}. "
+            f"{did_you_mean}"
+            f"Available: {', '.join(available)}."
+        )
+
+    variant: Dict[str, Any] = electrolyzer_variants[electrolyzer_name]
+    missing = [field_name for field_name in required_fields if field_name not in variant]
+    if missing:
+        raise ValueError(
+            f"The entry for electrolyzer {electrolyzer_name!r} in {config_file} carries no "
+            f"{', '.join(missing)}. Present: {', '.join(sorted(variant))}."
+        )
+    return variant
+
+
 @dataclass_json
 @dataclass
 class ElectrolyzerConfig(ConfigBase):
-    """Configuration of the Electrolyzer."""
+    """Configuration of the Electrolyzer.
+
+    Besides the electrochemical parameters, the configuration carries the five cost fields every
+    costed component in the library declares. They are read as a set: while all five are ``None``
+    — the default, and what both config-building classmethods below produce — postprocessing
+    looks the figures up from the device database for the simulated year and country and scales
+    them by ``nom_load``, the electrolyzer's rating in kW. Setting all five overrides that lookup
+    with the values given here, for a specific quoted machine.
+    """
 
     @classmethod
     def get_main_classname(cls):
@@ -47,6 +135,40 @@ class ElectrolyzerConfig(ConfigBase):
     ramp_up_rate: float  # [%/s]
     ramp_down_rate: float  # [%/s]
     # H_s_h2 = 33.33 #kWh/kg
+    #: CO2 footprint of investment in kg
+    device_co2_footprint_in_kg: Optional[float] = None
+    #: cost for investment in Euro
+    investment_costs_in_euro: Optional[float] = None
+    #: lifetime in years
+    lifetime_in_years: Optional[float] = None
+    #: maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float] = None
+    #: subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float] = None
+
+    def __post_init__(self) -> None:
+        """Refuses a non-positive nominal load, or a maximum load below it.
+
+        The capex scales by ``nom_load``, so a machine rated at zero or less would be costed at
+        zero euros and reported as an answer -- a device that reads as free rather than as
+        unrated; and a maximum load below the nominal one describes a machine that cannot reach
+        its own rating, which the load distribution would follow into wrong numbers instead of
+        stopping. The configuration is where both stop.
+
+        Raises:
+            ValueError: For a ``nom_load`` that is not strictly positive, or a ``max_load``
+                below ``nom_load``.
+        """
+        if self.nom_load <= 0.0:
+            raise ValueError(
+                f"The electrolyzer nominal load must be strictly positive, not {self.nom_load} kW. "
+                "It is what the investment cost is scaled by, so an unrated machine would be costed as free."
+            )
+        if self.max_load < self.nom_load:
+            raise ValueError(
+                "The electrolyzer maximum load must not be below its nominal load: "
+                f"{self.max_load} kW < {self.nom_load} kW describes a machine that cannot reach its own rating."
+            )
 
     @classmethod
     def get_default_alkaline_electrolyzer_config(
@@ -70,24 +192,25 @@ class ElectrolyzerConfig(ConfigBase):
         )
         return config
 
+    #: the manufacturer-table fields this configuration reads without a fallback, checked first.
+    TABLE_FIELDS: ClassVar[Tuple[str, ...]] = ("electrolyzer_type", "nom_load", "max_load")
+
     @staticmethod
-    def read_config(electrolyzer_name):
-        """Opens the according JSON-file, based on the electrolyzer_name."""
+    def read_config(electrolyzer_name: str) -> Dict[str, Any]:
+        """Returns the manufacturer table's row for that device; see :func:`read_electrolyzer_variant`.
 
-        config_file = Path(utils.HISIMPATH["inputs"]) / "electrolyzer_manufacturer_config.json"
-        with config_file.open("r", encoding="utf-8") as json_file:
-            data = json.load(json_file)
-            electrolyzer_variants = data["Electrolyzer variants"]
-            if electrolyzer_name not in electrolyzer_variants:
-                raise KeyError(
-                    f"The electrolyzer {electrolyzer_name} could not be found in the input data. Please check the input data for electrolyzer names."
-                )
+        Args:
+            electrolyzer_name: the device name as written by the setup or the configuration file.
 
-            for key, values in electrolyzer_variants.items():
-                if key == electrolyzer_name:
-                    data_for_specific_electrolyzer = values
+        Returns:
+            The row of "Electrolyzer variants" belonging to that device, carrying every field in
+            :attr:`TABLE_FIELDS`.
 
-            return data_for_specific_electrolyzer
+        Raises:
+            ValueError: if no device of that name is in the table, or its row lacks the type or
+                one of the two ratings, which are read without a fallback.
+        """
+        return read_electrolyzer_variant(electrolyzer_name, required_fields=ElectrolyzerConfig.TABLE_FIELDS)
 
     @classmethod
     def config_electrolyzer(
@@ -103,9 +226,13 @@ class ElectrolyzerConfig(ConfigBase):
 
         config = ElectrolyzerConfig(
             component_id=component_id,  # config_json.get("name", "")
-            electrolyzer_type=config_json.get("electrolyzer_type"),
-            nom_load=config_json.get("nom_load", 0.0),
-            max_load=config_json.get("max_load", 0.0),
+            # The type and the two ratings are read without a fallback: a variant that carries
+            # neither is a broken input file, and defaulting them would silently produce a machine
+            # that is refused above -- or, worse, costed as free -- instead of naming the key.
+            # read_config has already checked all three are there, naming the device if not.
+            electrolyzer_type=config_json["electrolyzer_type"],
+            nom_load=config_json["nom_load"],
+            max_load=config_json["max_load"],
             nom_h2_flow_rate=config_json.get("nom_h2_flow_rate", 0.0),
             faraday_eff=config_json.get("faraday_eff", 0.0),
             i_cell_nom=config_json.get("i_cell_nom", 0.0),
@@ -150,6 +277,8 @@ class Electrolyzer(cp.Component):
 
     """
 
+    cost_relevance = CostRelevance.PRICED
+
     # Inputs
     LoadInput = "LoadInput"
     InputState = "InputState"
@@ -174,6 +303,18 @@ class Electrolyzer(cp.Component):
     ColdStartCycles = "ColdStartCycles"
     TotalRampUpTime = "TotalRampUpTime"
     TotalRampDownTime = "TotalRampDownTime"
+
+    #: The three outputs the component integrates itself, keyed by output field name and mapped
+    #: to the KPI name, the KPI unit string and the unit the column must declare. That expected
+    #: unit is matched when a column is selected, because a component may publish the same
+    #: quantity in two units and reading the wrong one would be off by a factor rather than
+    #: absent. Both the KPI entries and the operating costs read these, through
+    #: :meth:`Electrolyzer.read_cumulative_totals`.
+    CUMULATIVE_TOTALS: ClassVar[Dict[str, Tuple[str, str, lt.Units]]] = {
+        TotalHydrogenProduced: ("Hydrogen produced", "kg", lt.Units.KG),
+        TotalEnergyConsumed: ("Electrical energy consumed", "kWh", lt.Units.KWH),
+        OperatingTime: ("Operating time", "h", lt.Units.HOURS),
+    }
 
     def __init__(
         self,
@@ -208,7 +349,7 @@ class Electrolyzer(cp.Component):
         # =================================================================================================================================
         # Input channels
         self.load_input: ComponentInput = self.add_input(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.LoadInput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
@@ -217,7 +358,7 @@ class Electrolyzer(cp.Component):
 
         # get the state from the controller
         self.input_state: ComponentInput = self.add_input(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.InputState,
             lt.LoadTypes.ACTIVATION,
             lt.Units.ANY,
@@ -227,7 +368,7 @@ class Electrolyzer(cp.Component):
         # Output channels
 
         self.current_load: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.CurrentLoad,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,  # for EMS
@@ -235,7 +376,7 @@ class Electrolyzer(cp.Component):
         )
 
         self.total_energy_consumed: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.TotalEnergyConsumed,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KWH,
@@ -244,7 +385,7 @@ class Electrolyzer(cp.Component):
 
         # Set total ramp-up time output
         self.total_ramp_up_time: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.TotalRampUpTime,
             lt.LoadTypes.TIME,
             lt.Units.SECONDS,
@@ -253,7 +394,7 @@ class Electrolyzer(cp.Component):
 
         # Set total ramp-down time output
         self.total_ramp_down_time: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.TotalRampDownTime,
             lt.LoadTypes.TIME,
             lt.Units.SECONDS,
@@ -262,7 +403,7 @@ class Electrolyzer(cp.Component):
 
         # Set state output
         self.electrolyzer_state: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.ElectrolyzerState,
             lt.LoadTypes.ACTIVATION,
             lt.Units.ANY,
@@ -271,7 +412,7 @@ class Electrolyzer(cp.Component):
 
         # current hydrogen output
         self.hydrogen_flow_rate: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.CurrentHydrogenFlowRate,
             lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG_PER_SEC,
@@ -279,7 +420,7 @@ class Electrolyzer(cp.Component):
         )
         # Total hydrogen produced
         self.total_hydrogen: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.TotalHydrogenProduced,
             lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG,
@@ -287,7 +428,7 @@ class Electrolyzer(cp.Component):
         )
         # current oxygen output
         self.oxygen_flow_rate: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.CurrentOxygenFlowRate,
             lt.LoadTypes.OXYGEN,
             lt.Units.KG_PER_SEC,
@@ -295,7 +436,7 @@ class Electrolyzer(cp.Component):
         )
         # Total oxygen produced
         self.total_oxygen: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.TotalOxygenProduced,
             lt.LoadTypes.OXYGEN,
             lt.Units.KG,
@@ -303,7 +444,7 @@ class Electrolyzer(cp.Component):
         )
         # current water demand
         self.water_flow_rate: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.CurrentWaterFlowRate,
             lt.LoadTypes.WATER,
             lt.Units.KG_PER_SEC,
@@ -311,7 +452,7 @@ class Electrolyzer(cp.Component):
         )
         # Total water demand
         self.total_water: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.TotalWaterDemand,
             lt.LoadTypes.WATER,
             lt.Units.KG,
@@ -319,7 +460,7 @@ class Electrolyzer(cp.Component):
         )
         # Current efficiency
         self.current_efficiency_state: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.CurrentEfficiency,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
@@ -328,7 +469,7 @@ class Electrolyzer(cp.Component):
 
         # Total operating time
         self.operating_time: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.component_id.name,
+            self.component_name,
             Electrolyzer.OperatingTime,
             lt.LoadTypes.TIME,
             lt.Units.HOURS,
@@ -760,6 +901,165 @@ class Electrolyzer(cp.Component):
             stsv.set_output_value(self.current_efficiency_state, current_sys_eff_soec)
         else:
             stsv.set_output_value(self.current_efficiency_state, current_eff)
+
+    def read_cumulative_totals(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> Dict[str, float]:
+        """Read the final value of each of the electrolyzer's three cumulative outputs.
+
+        The component integrates hydrogen, electricity and operating time per timestep itself, so
+        the total over the run is the last value of each column rather than its sum -- summing
+        would count every earlier timestep again. Both the KPI entries and the operating costs
+        need these totals, which is why they are read once here.
+
+        Args:
+            all_outputs: every output column of the run, searched for this component's outputs
+                by name.
+            postprocessing_results: the per-timestep values of those columns.
+
+        Returns:
+            Dict[str, float]: the total per output field name, keyed by the field names in
+            :attr:`CUMULATIVE_TOTALS`.
+
+        Raises:
+            ValueError: if one of the three columns is missing, empty or carries NaN — a value
+                pandas would otherwise drop silently — so a total is either read from complete
+                values or refused by name, never reported wrongly in silence.
+        """
+        found: Dict[str, float] = {}
+        for index, output in enumerate(all_outputs):
+            if output.component_name != self.component_name or output.field_name not in self.CUMULATIVE_TOTALS:
+                continue
+            name, _, expected_unit = self.CUMULATIVE_TOTALS[output.field_name]
+            if output.unit == expected_unit:
+                column = postprocessing_results.iloc[:, index]
+                if column.empty or bool(column.isna().any()):
+                    raise ValueError(
+                        f"The electrolyzer output for the KPI '{name}' of {self.component_name} is "
+                        f"{'empty' if column.empty else 'carrying NaN'}; the KPI would be silently "
+                        "wrong rather than absent, so it is refused instead."
+                    )
+                found[output.field_name] = float(column.iat[-1])
+        missing = [name for field, (name, _, _) in self.CUMULATIVE_TOTALS.items() if field not in found]
+        if missing:
+            raise ValueError(
+                f"The electrolyzer outputs for the KPI(s) {missing} were not found for "
+                f"{self.component_name}; they cannot be reported as absent silently."
+            )
+        return found
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the electrolyzer and returns all KPI entries as a list.
+
+        Three indicators describe what the unit did over the simulated period, all three read by
+        :meth:`read_cumulative_totals`: the hydrogen it produced, the electrical energy it
+        consumed doing so, and how long it actually operated.
+
+        Args:
+            all_outputs: every output column of the run, searched for this component's outputs
+                by name.
+            postprocessing_results: the per-timestep values of those columns.
+
+        Returns:
+            List[KpiEntry]: the three entries, tagged as Electrolyzer.
+
+        Raises:
+            ValueError: if one of the three columns is missing, empty or carries NaN, via
+                :meth:`read_cumulative_totals`.
+        """
+        found = self.read_cumulative_totals(all_outputs, postprocessing_results)
+        return [
+            KpiEntry(
+                name=name,
+                unit=unit,
+                value=found[field],
+                tag=KpiTagEnumClass.ELECTROLYZER,
+                description=self.component_name,
+                name_of_source_component=self.component_name,
+            )
+            for field, (name, unit, _) in self.CUMULATIVE_TOTALS.items()
+        ]
+
+    @staticmethod
+    def get_cost_capex(
+        config: ElectrolyzerConfig, simulation_parameters: SimulationParameters
+    ) -> CapexCostDataClass:
+        """Return the electrolyzer's investment cost, embodied CO2, lifetime and maintenance cost.
+
+        The electrolyzer is priced per kilowatt of nominal electrical load
+        (``ComponentType.ELECTROLYZER``), which is how published electrolyzer costs are quoted, so
+        the figures scale by ``nom_load``. Where they come from is the all-or-nothing rule stated
+        on :class:`ElectrolyzerConfig`: the device database unless all five cost fields carry
+        values.
+
+        Args:
+            config: the electrolyzer configuration, read for ``nom_load`` and its cost fields.
+            simulation_parameters: the simulated year, country and duration, which decide which
+                database row applies and what share of the investment falls in the run.
+
+        Returns:
+            CapexCostDataClass: the investment cost and embodied CO2, both in total and prorated
+            over the simulated period, tagged as Electrolyzer.
+        """
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+            simulation_parameters=simulation_parameters,
+            component_type=lt.ComponentType.ELECTROLYZER,
+            unit=lt.Units.KILOWATT,
+            size_of_energy_system=config.nom_load,
+            config=config,
+            kpi_tag=KpiTagEnumClass.ELECTROLYZER,
+        )
+        CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(
+            config=config, capex_cost_data_class=capex_cost_data_class
+        )
+        return capex_cost_data_class
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
+        """Return the electrolyzer's operating cost: the electricity it drew, plus maintenance.
+
+        The electricity is the machine's own cumulative ``TotalEnergyConsumed`` output, which is
+        the load it was actually given rather than its rating, priced and carbon-accounted at the
+        electricity factors for the simulated year and country. The water the process consumes is
+        deliberately left unpriced: the fuels table carries no water tariff, and a named gap is
+        better than an invented number -- report it from ``TotalWaterDemand`` once one exists.
+
+        Args:
+            all_outputs: every output column of the run, searched for this component's outputs.
+            postprocessing_results: the per-timestep values of those columns.
+
+        Returns:
+            OpexCostDataClass: the cost, CO2 and consumption of the electricity drawn, plus the
+            maintenance cost for the simulated period, tagged as Electrolyzer.
+
+        Raises:
+            ValueError: if one of the cumulative columns is missing, empty or carries NaN, via
+                :meth:`read_cumulative_totals`.
+        """
+        totals = self.read_cumulative_totals(all_outputs, postprocessing_results)
+        consumption_in_kilowatt_hour = totals[Electrolyzer.TotalEnergyConsumed]
+        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+            self.my_simulation_parameters.year, self.my_simulation_parameters.country
+        )
+        return OpexCostDataClass(
+            opex_energy_cost_in_euro=consumption_in_kilowatt_hour
+            * emissions_and_cost_factors.electricity_costs_in_euro_per_kwh,
+            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
+            co2_footprint_in_kg=consumption_in_kilowatt_hour
+            * emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh,
+            total_consumption_in_kwh=consumption_in_kilowatt_hour,
+            loadtype=lt.LoadTypes.ELECTRICITY,
+            kpi_tag=KpiTagEnumClass.ELECTROLYZER,
+        )
 
     def write_to_report(self) -> List[str]:
         """Writes a report."""

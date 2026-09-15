@@ -7,15 +7,12 @@ battery storage (optional), and energy management system. Supports building
 sizer workflows for scenario evaluation.
 """
 
-from typing import Optional, Any, Union, List
-import re
 import os
-from utspclient.helpers.lpgdata import (
-    Households,
-)
+import re
+from typing import Optional, Any, Union, List
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim.simulator import SimulationParameters
-from hisim.config import SizingContext
+from hisim.config import SizingContext, concrete
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
@@ -31,7 +28,6 @@ from hisim.components import (
 )
 from hisim.components.heat_distribution_system import PositionHotWaterStorageInSystemSetup
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.loadtypes import HeatingSystems, ComponentType
@@ -112,12 +108,23 @@ def setup_function(
         my_config = ModularHouseholdConfig().get_default_config_for_household_district_heating()
         my_sim.my_module_config = my_config.to_dict()
         log.warning(
-            f"Could not read the modular household config from path '{config_filename}'. Using the district heating household default config instead."
+            "No modular household config was given. Using the district heating household default config instead."
         )
     assert my_config.archetype_config_ is not None
     assert my_config.energy_system_config_ is not None
     arche_type_config_ = my_config.archetype_config_
     energy_system_config_ = my_config.energy_system_config_
+
+    # A rooftop share of zero used to switch off the battery and the energy management system as a
+    # side effect further down, so the run silently became the metered household while the config
+    # still said otherwise. Refuse the combination here, before a single component is built.
+    if energy_system_config_.share_of_maximum_pv_potential == 0 and energy_system_config_.use_battery_and_ems:
+        raise ValueError(
+            "share_of_maximum_pv_potential is 0 while use_battery_and_ems is true. The zero share used to "
+            "switch off the battery and the energy manager as a side effect, so this configuration silently "
+            "built the metered household instead of the one it asked for. Set use_battery_and_ems to false to "
+            "build the metered household explicitly, or give share_of_maximum_pv_potential a value above zero."
+        )
 
     # Set Simulation Parameters
     default_year = 2021
@@ -209,26 +216,30 @@ def setup_function(
         cache_dir_path_utsp = None
 
     # get household attribute jsonreferences from list of strings
-    lpg_households: Union[JsonReference, List[JsonReference]]
-    if isinstance(arche_type_config_.lpg_households, list):
-        if len(arche_type_config_.lpg_households) == 1:
-            lpg_households = getattr(Households, arche_type_config_.lpg_households[0])
-        elif len(arche_type_config_.lpg_households) > 1:
-            lpg_households = []
-            for household_string in arche_type_config_.lpg_households:
-                if hasattr(Households, household_string):
-                    lpg_household = getattr(Households, household_string)
-                    lpg_households.append(lpg_household)
-                    print(lpg_household)
-        else:
-            raise ValueError("Config list with lpg household is empty.")
-    else:
-        raise TypeError(f"Type {type(arche_type_config_.lpg_households)} is incompatible. Should be List[str].")
+    lpg_households: Union[JsonReference, List[JsonReference]] = arche_type_config_.resolve_lpg_households()
 
     # =================================================================================================================================
     # Build Basic Components
     # Build Building
-    my_building_config = building.BuildingConfig.preset_standard("Building")
+    # The weather config is created first: the building and PV configs copy its identity
+    # (weather_identity) and must have it before those components are built. The weather
+    # component itself is still added further down, so the simulator's component order is unchanged.
+    # A catalogue station wins when the archetype names one; the archetype's weather file is
+    # the fallback, for a climate LocationEnum does not carry.
+    weather_station = getattr(weather.LocationEnum, weather_location.strip(), None)
+    if weather_station is not None:
+        my_weather_config = weather.WeatherConfig.for_location("Weather", weather_station)
+    elif weather_filepath is not None and weather_datasource is not None:
+        my_weather_config = weather.WeatherConfig.for_data_file(
+            "Weather", weather_filepath, weather_datasource
+        )
+    else:
+        raise ValueError(
+            f"Weather location '{weather_location}' is no station of LocationEnum, and the "
+            "archetype names no weather file with its data source to read instead."
+        )
+
+    my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
     my_building_config.max_thermal_building_demand_in_watt = max_thermal_building_demand_in_watt
     my_building_config.set_heating_temperature_in_celsius = building_set_heating_temperature_in_celsius
@@ -256,12 +267,16 @@ def setup_function(
         my_building_config.building_heat_capacity_class = arche_type_config_.building_heat_capacity_class
 
     my_building_information = building.BuildingInformation(config=my_building_config)
+    my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_building, connect_automatically=True)
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    # Mode, households and cache directory stay explicit fields rather than for_household()
+    # arguments: the constructor also clears name_of_predefined_loadprofile once the generator
+    # computes the household, and that name is part of the recorded occupancy identity.
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
     my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_LOCAL_LPG
     my_occupancy_config.household = lpg_households
     my_occupancy_config.cache_dir_path = cache_dir_path_utsp
@@ -286,33 +301,28 @@ def setup_function(
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    # my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather_location,
-        weather_direct_filepath=weather_filepath,
-        weather_direct_data_source=weather_datasource,
-    )
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_weather)
 
     # Build PV
-    if pv_power_in_watt is None:
-        my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-            rooftop_area_in_m2=my_building_information.roof_area_in_m2,
-            share_of_maximum_pv_potential=share_of_maximum_pv_potential,
-            location=weather_location,
-        )
-    else:
-        my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system(
-            power_in_watt=pv_power_in_watt,
-            share_of_maximum_pv_potential=share_of_maximum_pv_potential,
-            location=weather_location,
-        )
-
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
+    # Orientation, site and share are the archetype's, not the preset's, so they are set on top
+    # of it; the share has to be set before resolving, because the rooftop law reads it.
+    my_photovoltaic_system_config.location = weather_location
+    my_photovoltaic_system_config.share_of_maximum_pv_potential = share_of_maximum_pv_potential
     my_photovoltaic_system_config.azimuth = azimuth
     my_photovoltaic_system_config.tilt = tilt
-
+    if pv_power_in_watt is not None:
+        # The archetype states the array's capacity, so the roof law is not asked: the share is
+        # applied to that capacity instead, exactly once, and the field holds the result.
+        my_photovoltaic_system_config.power_in_watt = pv_power_in_watt * share_of_maximum_pv_potential
+    my_photovoltaic_system_config = my_photovoltaic_system_config.resolve(
+        SizingContext(
+            roof_area_in_m2=my_building_information.roof_area_in_m2,
+            weather_identity=my_weather_config.identity(),
+        )
+    )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -321,15 +331,19 @@ def setup_function(
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
 
     # Build Heat Distribution Controller
-    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_config_based_on_building_efficiency(
-        set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
-        set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-        heating_system=my_hds_system,
-        specific_heating_load_of_building_in_watt_per_m2=my_building_information.max_thermal_building_demand_in_watt
-        / my_building_information.scaled_conditioned_floor_area_in_m2,
+    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
+        "HeatDistributionController"
+    ).resolve(
+        SizingContext(
+            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+            set_heating_temperature_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
+            set_cooling_temperature_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
+        )
     )
+    # The emitter is the author's choice, not a property of the building, so it stays a plain field.
+    my_heat_distribution_controller_config.heating_system = my_hds_system
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
@@ -365,8 +379,8 @@ def setup_function(
     )
     my_sim.add_component(my_district_heating, connect_automatically=True)
 
-    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
-        number_of_apartments=number_of_apartments
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(
+        SizingContext(number_of_apartments=my_building_information.number_of_apartments)
     )
     my_dhw_storage = simple_water_storage.SimpleDHWStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
@@ -375,7 +389,7 @@ def setup_function(
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(
+        heat_distribution_system.HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").resolve(
             SizingContext(
                 water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                 conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
@@ -394,8 +408,16 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
 
     # Build Heating Meter
-    my_fuel_meter_config = fuel_meter.FuelMeterConfig.get_fuel_meter_default_config(
-        fuel_loadtype=lt.LoadTypes.DISTRICTHEATING
+    # The district-heating class is not converted yet, so nothing in this setup contributes the
+    # meter's fuel constants and the setup states them itself, on top of the preset and before
+    # resolving. District heat burns nothing, so it has neither a heating value nor a fuel
+    # density: both are None, which is what `GenericBoilerConfig.fuel_constants` returns for
+    # this carrier and what a converted district-heating class will contribute.
+    my_fuel_meter_config = fuel_meter.FuelMeterConfig.preset_standard("FuelMeter")
+    my_fuel_meter_config.heating_value_of_fuel_in_kwh_per_liter = None
+    my_fuel_meter_config.fuel_density_in_kg_per_m3 = None
+    my_fuel_meter_config = my_fuel_meter_config.resolve(
+        SizingContext(energy_carrier=lt.LoadTypes.DISTRICTHEATING)
     )
     my_fuel_meter = fuel_meter.FuelMeter(
         my_simulation_parameters=my_simulation_parameters,
@@ -408,11 +430,12 @@ def setup_function(
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
+        config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
     )
 
-    # use ems and battery only when PV is used
-    if share_of_maximum_pv_potential != 0 and energy_system_config_.use_battery_and_ems:
+    # The battery and the energy manager are one decision. A zero rooftop share can no longer reach
+    # this point with the manager switched on: it is refused at the top of the setup.
+    if energy_system_config_.use_battery_and_ems:
 
         # Build EMS
         my_electricity_controller_config = (
@@ -427,8 +450,8 @@ def setup_function(
         )
 
         # Build Battery
-        my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
-            total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
+        my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
+            SizingContext(pv_peak_power_in_watt=concrete(my_photovoltaic_system_config.power_in_watt))
         )
         my_advanced_battery = advanced_battery_bslib.Battery(
             my_simulation_parameters=my_simulation_parameters,
@@ -471,7 +494,7 @@ def setup_function(
         my_sim.add_component(my_advanced_battery)
         my_sim.add_component(my_electricity_controller, connect_automatically=True)
 
-    # when no PV is used, connect electricty meter automatically
+    # without an energy manager, connect the electricity meter automatically to every participant
     else:
         my_sim.add_component(my_electricity_meter, connect_automatically=True)
 
@@ -499,10 +522,9 @@ def setup_function(
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
         further_result_folder_description = "default_config"
 
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-        entry=f"{scenario_hash_string}",
-    )
+    # The scenario hash names this run; post-processing reads it off the simulator as the
+    # pyam "scenario" column.
+    my_sim.scenario_name = scenario_hash_string
 
     if my_simulation_parameters.result_directory == "":
 

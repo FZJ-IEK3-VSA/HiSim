@@ -73,8 +73,6 @@ files for specific component models:
 * **electrolyzer_polarization_curve_data.json** — polarisation curve data for
   electrolysers.
 * **polarization_curve_data_fc.json** — polarisation curve data for fuel cells.
-* **rSOC_efficiency_curve_data.json** — round-trip state-of-charge efficiency
-  curves for battery storage.
 
 Additional time-series data (e.g. ``wind_generated_power_1_min.csv``) is
 stored alongside these configuration files.

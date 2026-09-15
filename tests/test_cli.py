@@ -14,11 +14,13 @@ file. And ``run`` has to leave a result directory holding the three artifacts ev
 
 # clean
 
+import os
 from pathlib import Path
 from typing import ClassVar
 
 import pytest
 
+from hisim import cli
 from hisim.cli import ExitCodes, main
 from hisim.energy_system.audit import AuditWriter
 from hisim.energy_system.comments import AnnotatedEmitter
@@ -72,6 +74,36 @@ def test_describe_prints_the_presets_sizable_fields_and_facts_of_a_class(capsys)
     assert "maximal_thermal_power_in_watt" in printed
     assert "heating_load_in_watt (ONE)" in printed
     assert "facts provided" in printed
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "class_path, fact",
+    [
+        (
+            "hisim.components.heat_distribution_system.HeatDistributionControllerConfig",
+            "set_heating_threshold_outside_temperature_in_celsius",
+        ),
+        ("hisim.components.building.BuildingConfig", "roof_area_in_m2"),
+        ("hisim.components.generic_pv_system.PVSystemConfig", "pv_peak_power_in_watt"),
+        ("hisim.components.generic_boiler.GenericBoilerConfig", "energy_carrier"),
+        ("hisim.components.generic_boiler.GenericBoilerConfig", "heating_value_of_fuel_in_kwh_per_liter"),
+        ("hisim.components.generic_boiler.GenericBoilerConfig", "fuel_density_in_kg_per_m3"),
+    ],
+)
+def test_describe_lists_each_batch_one_fact_under_its_provider(capsys, class_path: str, fact: str) -> None:
+    """Every fact R2.1 added is visible as provided by the class that computes it.
+
+    ``describe`` is where an author finds out which component can supply the fact a
+    ``sizing_sources`` line has to name, so a contributed fact that does not reach this output is
+    a fact nobody can be pointed at.
+    """
+    code = main(["energy-system", "describe", class_path])
+    printed = capsys.readouterr().out
+
+    assert code == ExitCodes.OK
+    provided = printed.split("facts provided", 1)[1]
+    assert fact in provided
 
 
 @pytest.mark.base
@@ -185,3 +217,40 @@ def test_a_command_line_naming_no_verb_is_a_usage_error(capsys) -> None:
     assert main([]) == ExitCodes.USAGE
     assert main(["energy-system"]) == ExitCodes.USAGE
     capsys.readouterr()
+
+
+#: A variable no real environment holds, so the test can tell a file that was read from one that
+#: was not without touching the two variables a developer may legitimately have set.
+DOTENV_SENTINEL = "HISIM_TEST_DOTENV_SENTINEL"
+
+
+@pytest.mark.base
+def test_the_command_line_reads_the_environment_file_on_start_up(tmp_path: Path, monkeypatch, capsys) -> None:
+    """Catches the console script running without the credentials the module entry point has.
+
+    ``hisim/hisim_main.py`` reads the ``.env`` that holds ``UTSP_URL`` and ``UTSP_API_KEY``, so a
+    run started the other documented way has to read the same file or the UTSP occupancy fails for
+    want of credentials rather than saying what is missing. python-dotenv resolves that file by
+    walking up from the directory of the module that calls it, and from the working directory
+    instead whenever a tracer is installed, so the sentinel is planted on both paths: what is
+    asserted is that the file was read, not which of the two python-dotenv happened to take.
+    """
+    beside_the_package = Path(cli.__file__).parent / ".env"
+    if beside_the_package.exists():  # a real one, which a test must never overwrite
+        pytest.skip(f"{beside_the_package} exists")
+    written = f"{DOTENV_SENTINEL}=read\n"
+    beside_the_package.write_text(written, encoding="utf-8")
+    (tmp_path / ".env").write_text(written, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv(DOTENV_SENTINEL, raising=False)
+
+    try:
+        code = main(["energy-system", "schema", "--out", str(tmp_path / "exported.schema.json")])
+        loaded = os.environ.get(DOTENV_SENTINEL)
+    finally:
+        beside_the_package.unlink()
+        os.environ.pop(DOTENV_SENTINEL, None)
+    capsys.readouterr()
+
+    assert code == ExitCodes.OK
+    assert loaded == "read"

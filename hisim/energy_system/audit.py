@@ -9,10 +9,12 @@ What a reader wants to know about a run divides into four questions, and the aud
 in that order. Where did each component's configuration come from — which preset, which named
 constructor with which arguments, or a block the file wrote out in full — and which of its
 fields did the file override, against what default. Which fields did a law compute, from which
-law, reading which value from which component, and what did it produce. What did the off switches
-remove: which groups, which components with them, which input items and which sizing lists that
-shrank rather than vanished. And what did the aggregators end up with: one entry per resolved
+law, reading which value from which component, and what did it produce. What did the switches
+remove: which groups were off, which option each variant chose, which components went with them,
+which input items and which sizing lists that shrank rather than vanished. And what did the aggregators end up with: one entry per resolved
 feed, with the weight, the tags and the port names resolution derived rather than any file wrote.
+The switches are two, so that section answers for both: which groups were off, and which option
+each variant selected together with the components that selection brought into the system.
 
 A third artifact travels with the two: the flat wire log, one entry per connection in the same
 ``From``/``To`` shape the older machinery appends when connection logging is switched on. It is
@@ -38,6 +40,8 @@ import yaml
 
 from hisim import log
 from hisim.config.introspection import SizableFieldKind
+from hisim.config.sizing import AUTO, _encode_sizable  # pylint: disable=protected-access
+from hisim.config.laws import SizingLaw
 from hisim.energy_system.audit_records import (
     AuditRecord,
     BuiltFrom,
@@ -96,6 +100,15 @@ class AuditBuilder:
                 self.component(name) for name in self.built.model.all_components()
             ),
             disabled_groups=expansion.disabled_groups,
+            variant_selections=tuple(
+                {
+                    "variant": selection.variant,
+                    "selected": selection.selected,
+                    "components": list(selection.components),
+                    "rejected": list(selection.rejected),
+                }
+                for selection in expansion.selections
+            ),
             dropped_components=expansion.dropped_components,
             dropped_input_items=tuple(
                 {
@@ -183,11 +196,38 @@ class AuditBuilder:
         return tuple(
             OverriddenField(
                 field=field,
-                preset_default=ConfigBlockWriter.plain(getattr(origin, field, None), name, field),
+                preset_default=self.origin_value(getattr(origin, field, None), name, field),
                 value=ConfigBlockWriter.plain(getattr(final, field, None), name, field),
             )
             for field in binding.entry.config
         )
+
+    @classmethod
+    def origin_value(cls, value: Any, name: str, field: str) -> Any:
+        """Renders what a preset or a constructor had put in one field before the file overrode it.
+
+        The value a record writes is always concrete, but the value it *replaced* need not be: a
+        preset routinely leaves a field for a law to compute, and an entry that pins such a field
+        is exactly the interesting kind of override. Writing that as the sentinel's own spelling
+        says "the preset left this open" instead of refusing to describe the entry at all, which is
+        what the plain-data writer does when it meets a sentinel it may not put into a record.
+
+        Args:
+            value: The value the origin produced for the field.
+            name: The component's name, for the message when the value is not plain data.
+            field: The field's name, likewise.
+
+        Returns:
+            The sentinel's wire spelling for a value awaiting sizing, the law's own description for
+            a law, and the plain form of anything else.
+        """
+        if value is AUTO:
+            # The one mapping from the sentinel to its wire spelling lives in the sizing layer;
+            # rendering it here through the same encoder keeps a future respelling in one place.
+            return _encode_sizable(value)
+        if isinstance(value, SizingLaw):
+            return value.describe()
+        return ConfigBlockWriter.plain(value, name, field)
 
     @classmethod
     def sized_fields(cls, name: str, config: Any) -> Tuple[SizedField, ...]:

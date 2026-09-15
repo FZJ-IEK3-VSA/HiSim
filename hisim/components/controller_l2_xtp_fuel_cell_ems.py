@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 # clean
-from pathlib import Path
-from typing import Optional, Any, cast
-import json
+from enum import Enum, unique
 import math
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -13,8 +11,8 @@ from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
 
 from hisim import loadtypes as lt
-from hisim import utils
 from hisim.simulationparameters import SimulationParameters
+from hisim.economics.facts import CostRelevance
 
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, IEK-3"
@@ -26,10 +24,36 @@ __email__ = "f.oldopp@fz-juelich.de"
 __status__ = "development"
 
 
+@unique
+class XtpOperationMode(str, Enum):
+    """How the XtP fuel cell is driven by the L2 controller.
+
+    Every member carries the operating-mode name as its value, so a serialized
+    configuration keeps spelling the mode out exactly as the string-typed field
+    did before -- the wire format is unchanged.
+
+    STANDBY_LOAD: serve the demand, but never fall below the standby load, so
+        the system is not switched off.
+    STANDBY_AND_OFF_LOAD: like STANDBY_LOAD, but switch off once the standby
+        load has been held for the standby operation time.
+    """
+
+    STANDBY_LOAD = "StandbyLoad"
+    STANDBY_AND_OFF_LOAD = "StandbyandOffLoad"
+
+
 @dataclass_json
 @dataclass
 class XTPControllerConfig(ConfigBase):
-    """Configuration of the PtX  Controller."""
+    """Configuration of the PtX  Controller.
+
+    This class has **no default builder**. Its only factory read
+    `hisim/inputs/fuel_cell_manufacturer_config.json`, a file that is not in this repository
+    and never was, so the factory raised `FileNotFoundError` on every call; component sweep
+    decision D-25 removed it and archived its text in
+    `obsolete/components/fuel_cell_manufacturer_table.py`. Until the conversion batch gives
+    this class a preset, a caller builds it by naming every field.
+    """
 
     @classmethod
     def get_main_classname(cls) -> str:
@@ -41,41 +65,35 @@ class XTPControllerConfig(ConfigBase):
     min_output: float
     max_output: float
     standby_load: float
-    operation_mode: str
+    operation_mode: XtpOperationMode
 
-    @staticmethod
-    def read_config(fuel_cell_name: str) -> dict[str, Any]:
-        """Read config."""
-        config_file = Path(utils.HISIMPATH["inputs"]) / "fuel_cell_manufacturer_config.json"
-        with config_file.open("r", encoding="utf-8") as json_file:
-            data = json.load(json_file)
-            return cast(dict[str, Any], data.get("Fuel Cell variants", {}).get(fuel_cell_name, {}))
+    def __post_init__(self) -> None:
+        """Normalises the operation mode into a :class:`XtpOperationMode` member.
 
-    @classmethod
-    def control_fuel_cell(
-        cls,
-        fuel_cell_name: str,
-        operation_mode: str,
-        component_id: Optional[ComponentID] = None,
-    ) -> XTPControllerConfig:
-        """Sets the according parameters for the chosen fuel cell."""
-        if component_id is None:
-            component_id = ComponentID(name="L2XTPController")
-        config_json = cls.read_config(fuel_cell_name)
+        The mode is wire format: a configuration read from JSON, from HDF5 or written by
+        hand arrives carrying the plain string the field has always been serialized as,
+        while a caller in Python passes the member. Both are accepted here and both leave
+        as the member, so only one kind of value ever reaches the control law. A value
+        that names no mode is refused where it was written, instead of travelling into a
+        controller that has no branch for it.
 
-        config = XTPControllerConfig(
-            component_id=component_id,  # config_json.get("name", "")
-            nom_output=config_json.get("nom_output", 0.0),
-            min_output=config_json.get("min_output", 0.0),
-            max_output=config_json.get("max_output", 0.0),
-            standby_load=config_json.get("standby_load", 0.0),
-            operation_mode=operation_mode,
-        )
-        return config
+        Raises:
+            ValueError: For an ``operation_mode`` that is neither a member of
+                :class:`XtpOperationMode` nor one of the members' wire values.
+        """
+        try:
+            self.operation_mode = XtpOperationMode(self.operation_mode)
+        except ValueError:
+            raise ValueError(
+                f"Unknown XtP controller operation mode {self.operation_mode!r}. "
+                f"Write one of {[mode.value for mode in XtpOperationMode]}."
+            ) from None
 
 
 class XTPController(Component):
     """XtP  Controller."""
+
+    cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     DemandLoad = "DemandLoad"
@@ -158,9 +176,9 @@ class XTPController(Component):
         self.threshold_exceeded_previous: bool = self.threshold_exceeded
         self.standby_time_count_previous: float = self.standby_time_count
 
-    def system_operation(self, operation_mode: str, demand_load: float) -> tuple[float, float]:
+    def system_operation(self, operation_mode: XtpOperationMode, demand_load: float) -> tuple[float, float]:
         """System operation."""
-        if operation_mode == "StandbyLoad":
+        if operation_mode == XtpOperationMode.STANDBY_LOAD:
             if self.min_output <= demand_load <= self.max_output:
                 demand_to_system = demand_load
                 power_from_battery = 0.0
@@ -175,7 +193,7 @@ class XTPController(Component):
                 demand_to_system = self.standby_load
                 power_from_battery = -self.standby_load
 
-        elif operation_mode == "StandbyandOffLoad":
+        elif operation_mode == XtpOperationMode.STANDBY_AND_OFF_LOAD:
             if self.min_output <= demand_load <= self.max_output:
                 self.standby_time_count = 0.0
                 demand_to_system = demand_load
@@ -199,8 +217,9 @@ class XTPController(Component):
                     self.standby_time_count += self.my_simulation_parameters.seconds_per_timestep
 
         else:
-            demand_to_system = demand_load
-            power_from_battery = 0.0
+            # Unreachable for every member above; it only guards a member added
+            # later that nobody wrote a branch for.
+            raise ValueError(f"XtP controller: unknown operation mode {operation_mode!r}")
 
         return demand_to_system, power_from_battery
 

@@ -49,14 +49,8 @@ components:
       - DHWStorage
   ElectricHeating:
     class: hisim.components.generic_electric_heating.ElectricHeating
+    preset: resistive
     config:
-      maximum_electric_power_w: 7780.752200000001
-      efficiency: 1.0
-      device_co2_footprint_in_kg: null
-      investment_costs_in_euro: null
-      lifetime_in_years: null
-      maintenance_costs_in_euro_per_year: null
-      subsidy_as_percentage_of_investment_costs: null
       with_domestic_hot_water_preparation: true
     inputs:
       - ElectricHeatingController

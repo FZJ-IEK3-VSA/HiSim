@@ -14,7 +14,6 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components.csvloader import CSVLoader, CSVLoaderConfig
 from hisim.simulationparameters import SimulationParameters
-from hisim.config import ComponentID
 
 # Conversion factors used to derive the seconds-per-timestep of a
 # full-year simulation from the requested number of timesteps:
@@ -30,17 +29,14 @@ def _make_config(
     column_name: str = "Profile",
 ) -> CSVLoaderConfig:
     """Build a minimal :class:`CSVLoaderConfig` for the tests."""
-    return CSVLoaderConfig(
-        component_id=ComponentID(name="CSV"),
+    return CSVLoaderConfig.for_csv_file(
+        "CSV",
         csv_filename="fake_profile.csv",
         column=column,
         loadtype=lt.LoadTypes.ELECTRICITY,
         unit=lt.Units.WATT,
         column_name=column_name,
-        sep=",",
-        decimal=".",
         multiplier=multiplier,
-        output_description="Values from CSV",
     )
 
 

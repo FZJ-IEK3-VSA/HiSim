@@ -223,6 +223,14 @@ class PilotWireFormat:
         "CarBatteryConfig": ("standard",),
         "CSVLoaderConfig": (),
         "ChargingStationConfig": (),
+        "ElectrolyzerConfig": ("alkaline",),
+        "ElectrolyzerControllerConfig": ("standard",),
+        "PTXControllerConfig": (),
+        "XTPControllerConfig": ("standard",),
+        "FuelCellConfig": ("pem",),
+        "FuelCellControllerConfig": ("pem",),
+        "ElectrolyzerWithStorageConfig": ("standard",),
+        "ElectrolyzerWithHydrogenStorageConfig": ("standard",),
     }
 
     #: Config class name → its named constructors, in declaration order. A constructor's
@@ -272,6 +280,14 @@ class PilotWireFormat:
         "CarBatteryConfig": (),
         "CSVLoaderConfig": ("for_csv_file",),
         "ChargingStationConfig": ("for_charging_station_set",),
+        "ElectrolyzerConfig": ("for_device",),
+        "ElectrolyzerControllerConfig": ("for_device",),
+        "PTXControllerConfig": ("for_device",),
+        "XTPControllerConfig": (),
+        "FuelCellConfig": (),
+        "FuelCellControllerConfig": (),
+        "ElectrolyzerWithStorageConfig": (),
+        "ElectrolyzerWithHydrogenStorageConfig": (),
     }
 
     #: The scanned classes that legitimately ship no preset at all. Zero presets is a legal
@@ -282,7 +298,14 @@ class PilotWireFormat:
     #: (D-23, 2026-08-31). ``CSVLoaderConfig`` has no default profile — every field of it is a
     #: parameter of the file it reads — and ``ChargingStationConfig`` no default station, the
     #: rating in a station set's name being its identity (D-24, 2026-09-11).
-    CLASSES_WITHOUT_PRESETS: Tuple[str, ...] = ("CSVLoaderConfig", "CarConfig", "ChargingStationConfig")
+    #: ``PTXControllerConfig`` joined them in B7: all four of its loads come out of one row of
+    #: the electrolyzer manufacturer table, so there is no default plant to name.
+    CLASSES_WITHOUT_PRESETS: Tuple[str, ...] = (
+        "CSVLoaderConfig",
+        "CarConfig",
+        "ChargingStationConfig",
+        "PTXControllerConfig",
+    )
 
     #: Config class name → the facts it contributes, in declaration order.
     FACT_NAMES: Dict[str, Tuple[str, ...]] = {
@@ -346,6 +369,14 @@ class PilotWireFormat:
         "SimpleHeatSourceConfig": (),
         "SumBuilderConfig": (),
         "TransformerConfig": (),
+        "ElectrolyzerConfig": (),
+        "ElectrolyzerControllerConfig": (),
+        "PTXControllerConfig": (),
+        "XTPControllerConfig": (),
+        "FuelCellConfig": (),
+        "FuelCellControllerConfig": (),
+        "ElectrolyzerWithStorageConfig": (),
+        "ElectrolyzerWithHydrogenStorageConfig": (),
     }
 
 
@@ -668,6 +699,16 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     from hisim.components.advanced_ev_battery_bslib import CarBatteryConfig
     from hisim.components.controller_l1_generic_ev_charge import ChargingStationConfig
     from hisim.components.csvloader import CSVLoaderConfig
+    from hisim.components.controller_l1_electrolyzer_h2 import ElectrolyzerControllerConfig
+    from hisim.components.controller_l1_fuel_cell import FuelCellControllerConfig
+    from hisim.components.controller_l2_ptx_energy_management_system import PTXControllerConfig
+    from hisim.components.controller_l2_xtp_fuel_cell_ems import XTPControllerConfig
+    from hisim.components.generic_electrolyzer_and_h2_storage import (
+        ElectrolyzerWithHydrogenStorageConfig,
+        ElectrolyzerWithStorageConfig,
+    )
+    from hisim.components.generic_electrolyzer_h2 import ElectrolyzerConfig
+    from hisim.components.generic_fuel_cell import FuelCellConfig
 
     by_name: Dict[str, Any] = {
         "GenericBoilerConfig": GenericBoilerConfig,
@@ -715,6 +756,14 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "CarBatteryConfig": CarBatteryConfig,
         "CSVLoaderConfig": CSVLoaderConfig,
         "ChargingStationConfig": ChargingStationConfig,
+        "ElectrolyzerConfig": ElectrolyzerConfig,
+        "ElectrolyzerControllerConfig": ElectrolyzerControllerConfig,
+        "PTXControllerConfig": PTXControllerConfig,
+        "XTPControllerConfig": XTPControllerConfig,
+        "FuelCellConfig": FuelCellConfig,
+        "FuelCellControllerConfig": FuelCellControllerConfig,
+        "ElectrolyzerWithStorageConfig": ElectrolyzerWithStorageConfig,
+        "ElectrolyzerWithHydrogenStorageConfig": ElectrolyzerWithHydrogenStorageConfig,
     }
     for class_name, expected in PilotWireFormat.PRESET_NAMES.items():
         assert tuple(presets_of(by_name[class_name])) == expected

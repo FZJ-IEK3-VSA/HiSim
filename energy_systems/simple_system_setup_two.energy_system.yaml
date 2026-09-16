@@ -18,9 +18,7 @@ components:
       seed: 2
   ExampleTransformerDefault:
     class: hisim.components.example_transformer.ExampleTransformer
-    config:
-      loadtype: ANY
-      unit: ANY
+    preset: standard
     inputs:
       - input: Input1
         from: RandomNumbers10To20.RandomNumbers

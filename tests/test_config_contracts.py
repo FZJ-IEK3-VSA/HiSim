@@ -220,6 +220,9 @@ class PilotWireFormat:
         "SumBuilderConfig": ("standard",),
         "TransformerConfig": ("standard",),
         "CarConfig": (),
+        "CarBatteryConfig": ("standard",),
+        "CSVLoaderConfig": (),
+        "ChargingStationConfig": (),
     }
 
     #: Config class name → its named constructors, in declaration order. A constructor's
@@ -266,15 +269,20 @@ class PilotWireFormat:
         "SumBuilderConfig": (),
         "TransformerConfig": (),
         "CarConfig": ("for_household",),
+        "CarBatteryConfig": (),
+        "CSVLoaderConfig": ("for_csv_file",),
+        "ChargingStationConfig": ("for_charging_station_set",),
     }
 
     #: The scanned classes that legitimately ship no preset at all. Zero presets is a legal
     #: state and this tuple is where that decision is recorded rather than discovered.
-    #: ``CarConfig`` is the first and so far only one: a preset takes nothing but the instance
-    #: name, and a car cannot be configured without naming the household and the car whose
-    #: LoadProfileGenerator driving profile it drives by, so every one of its builders has to
-    #: be a constructor (D-23, 2026-08-31).
-    CLASSES_WITHOUT_PRESETS: Tuple[str, ...] = ("CarConfig",)
+    #: ``CarConfig`` was the first: a preset takes nothing but the instance name, and a car
+    #: cannot be configured without naming the household and the car whose LoadProfileGenerator
+    #: driving profile it drives by, so every one of its builders has to be a constructor
+    #: (D-23, 2026-08-31). ``CSVLoaderConfig`` has no default profile — every field of it is a
+    #: parameter of the file it reads — and ``ChargingStationConfig`` no default station, the
+    #: rating in a station set's name being its identity (D-24, 2026-09-11).
+    CLASSES_WITHOUT_PRESETS: Tuple[str, ...] = ("CSVLoaderConfig", "CarConfig", "ChargingStationConfig")
 
     #: Config class name → the facts it contributes, in declaration order.
     FACT_NAMES: Dict[str, Tuple[str, ...]] = {
@@ -657,6 +665,9 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         SolarThermalSystemControllerConfig,
     )
     from hisim.components.weather import WeatherConfig
+    from hisim.components.advanced_ev_battery_bslib import CarBatteryConfig
+    from hisim.components.controller_l1_generic_ev_charge import ChargingStationConfig
+    from hisim.components.csvloader import CSVLoaderConfig
 
     by_name: Dict[str, Any] = {
         "GenericBoilerConfig": GenericBoilerConfig,
@@ -701,6 +712,9 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "SumBuilderConfig": SumBuilderConfig,
         "TransformerConfig": TransformerConfig,
         "CarConfig": CarConfig,
+        "CarBatteryConfig": CarBatteryConfig,
+        "CSVLoaderConfig": CSVLoaderConfig,
+        "ChargingStationConfig": ChargingStationConfig,
     }
     for class_name, expected in PilotWireFormat.PRESET_NAMES.items():
         assert tuple(presets_of(by_name[class_name])) == expected

@@ -127,12 +127,15 @@
         "class": {
           "enum": [
             "hisim.components.advanced_battery_bslib.Battery",
+            "hisim.components.advanced_ev_battery_bslib.CarBattery",
             "hisim.components.advanced_fuel_cell.CHP",
             "hisim.components.air_conditioner.AirConditioner",
             "hisim.components.air_conditioner.AirConditionerController",
             "hisim.components.building.Building",
             "hisim.components.building.building.Building",
+            "hisim.components.controller_l1_generic_ev_charge.L1Controller",
             "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
+            "hisim.components.csvloader.CSVLoader",
             "hisim.components.electricity_meter.ElectricityMeter",
             "hisim.components.fuel_meter.FuelMeter",
             "hisim.components.gas_meter.GasMeter",
@@ -313,6 +316,61 @@
                   "enum": [
                     "pv_peak_power_in_watt"
                   ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.advanced_ev_battery_bslib.CarBattery"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "source_weight": {
+                    "type": "integer"
+                  },
+                  "system_id": {
+                    "type": "string"
+                  },
+                  "p_inv_custom": {
+                    "type": "number"
+                  },
+                  "e_bat_custom": {
+                    "type": "number"
+                  },
+                  "total_charged_energy_in_kilowatthour": {
+                    "type": "number"
+                  },
+                  "total_discharged_energy_in_kilowatthour": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
                 }
               }
             }
@@ -944,6 +1002,85 @@
             "properties": {
               "class": {
                 "enum": [
+                  "hisim.components.controller_l1_generic_ev_charge.L1Controller"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": false,
+              "constructor": {
+                "type": "object",
+                "minProperties": 1,
+                "maxProperties": 1,
+                "propertyNames": {
+                  "enum": [
+                    "for_charging_station_set"
+                  ]
+                },
+                "properties": {
+                  "for_charging_station_set": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "charging_station_set"
+                    ],
+                    "properties": {
+                      "charging_station_set": {}
+                    }
+                  }
+                }
+              },
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "charging_station_set": {},
+                  "lower_threshold_charging_power_in_watt": {
+                    "type": "number"
+                  },
+                  "source_weight": {
+                    "type": "integer"
+                  },
+                  "battery_set_soc": {
+                    "type": "number"
+                  },
+                  "device_co2_footprint_in_kg": {
+                    "type": "number"
+                  },
+                  "investment_costs_in_euro": {
+                    "type": "number"
+                  },
+                  "lifetime_in_years": {
+                    "type": "number"
+                  },
+                  "maintenance_costs_in_euro_per_year": {
+                    "type": "number"
+                  },
+                  "subsidy_as_percentage_of_investment_costs": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
                   "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem"
                 ]
               }
@@ -1029,6 +1166,233 @@
                         "type": "null"
                       }
                     ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.csvloader.CSVLoader"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": false,
+              "constructor": {
+                "type": "object",
+                "minProperties": 1,
+                "maxProperties": 1,
+                "propertyNames": {
+                  "enum": [
+                    "for_csv_file"
+                  ]
+                },
+                "properties": {
+                  "for_csv_file": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "csv_filename",
+                      "column",
+                      "loadtype",
+                      "unit",
+                      "column_name"
+                    ],
+                    "properties": {
+                      "csv_filename": {
+                        "type": "string"
+                      },
+                      "column": {
+                        "type": "integer"
+                      },
+                      "loadtype": {
+                        "enum": [
+                          "ANY",
+                          "ELECTRICITY",
+                          "IRRADIANCE",
+                          "SPEED",
+                          "HEATING",
+                          "COOLING",
+                          "TEMPERATURE",
+                          "PRESSURE",
+                          "TIME",
+                          "PRICE",
+                          "GAS",
+                          "AIR",
+                          "GREEN_HYDROGEN",
+                          "OXYGEN",
+                          "WATER",
+                          "WARM_WATER",
+                          "DIESEL",
+                          "OIL",
+                          "PELLETS",
+                          "WOOD_CHIPS",
+                          "DISTRICTHEATING",
+                          "ON_OFF",
+                          "ACTIVATION"
+                        ]
+                      },
+                      "unit": {
+                        "enum": [
+                          "ANY",
+                          "PERCENT",
+                          "WATT",
+                          "KILOWATT",
+                          "KWH_PER_TIMESTEP",
+                          "WATT_PER_METER",
+                          "WATT_PER_SQUARE_METER",
+                          "WATT_HOUR_PER_SQUARE_METER",
+                          "METER_PER_SECOND",
+                          "METER",
+                          "SQUARE_METER",
+                          "WATT_HOUR",
+                          "KWH",
+                          "JOULE",
+                          "KILOJOULE",
+                          "LITER",
+                          "CUBICMETERS",
+                          "LITER_PER_TIMESTEP",
+                          "CUBICMETERS_PER_SECOND",
+                          "KG",
+                          "KG_PER_SEC",
+                          "CELSIUS",
+                          "KELVIN",
+                          "DEGREES",
+                          "BAR",
+                          "PASCAL",
+                          "SECONDS",
+                          "HOURS",
+                          "TIMESTEPS",
+                          "YEARS",
+                          "EUR_PER_KWH",
+                          "EURO",
+                          "BINARY"
+                        ]
+                      },
+                      "column_name": {
+                        "type": "string"
+                      },
+                      "sep": {
+                        "type": "string"
+                      },
+                      "decimal": {
+                        "type": "string"
+                      },
+                      "multiplier": {
+                        "type": "number"
+                      },
+                      "output_description": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "csv_filename": {
+                    "type": "string"
+                  },
+                  "column": {
+                    "type": "integer"
+                  },
+                  "loadtype": {
+                    "enum": [
+                      "ANY",
+                      "ELECTRICITY",
+                      "IRRADIANCE",
+                      "SPEED",
+                      "HEATING",
+                      "COOLING",
+                      "TEMPERATURE",
+                      "PRESSURE",
+                      "TIME",
+                      "PRICE",
+                      "GAS",
+                      "AIR",
+                      "GREEN_HYDROGEN",
+                      "OXYGEN",
+                      "WATER",
+                      "WARM_WATER",
+                      "DIESEL",
+                      "OIL",
+                      "PELLETS",
+                      "WOOD_CHIPS",
+                      "DISTRICTHEATING",
+                      "ON_OFF",
+                      "ACTIVATION"
+                    ]
+                  },
+                  "unit": {
+                    "enum": [
+                      "ANY",
+                      "PERCENT",
+                      "WATT",
+                      "KILOWATT",
+                      "KWH_PER_TIMESTEP",
+                      "WATT_PER_METER",
+                      "WATT_PER_SQUARE_METER",
+                      "WATT_HOUR_PER_SQUARE_METER",
+                      "METER_PER_SECOND",
+                      "METER",
+                      "SQUARE_METER",
+                      "WATT_HOUR",
+                      "KWH",
+                      "JOULE",
+                      "KILOJOULE",
+                      "LITER",
+                      "CUBICMETERS",
+                      "LITER_PER_TIMESTEP",
+                      "CUBICMETERS_PER_SECOND",
+                      "KG",
+                      "KG_PER_SEC",
+                      "CELSIUS",
+                      "KELVIN",
+                      "DEGREES",
+                      "BAR",
+                      "PASCAL",
+                      "SECONDS",
+                      "HOURS",
+                      "TIMESTEPS",
+                      "YEARS",
+                      "EUR_PER_KWH",
+                      "EURO",
+                      "BINARY"
+                    ]
+                  },
+                  "column_name": {
+                    "type": "string"
+                  },
+                  "sep": {
+                    "type": "string"
+                  },
+                  "decimal": {
+                    "type": "string"
+                  },
+                  "multiplier": {
+                    "type": "number"
+                  },
+                  "output_description": {
+                    "type": "string"
                   }
                 }
               },

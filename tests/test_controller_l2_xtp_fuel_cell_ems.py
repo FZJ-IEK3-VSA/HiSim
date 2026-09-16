@@ -30,19 +30,14 @@ def _build_controller(
             (e.g. ``XtpOperationMode.STANDBY_LOAD``).
 
     Returns:
-        A configured ``XTPController`` instance with nominal output 10 kW,
-        min output 2 kW, max output 10 kW, and standby load 1 kW.
+        A configured ``XTPController`` instance built from ``preset_standard`` -- nominal
+        output 10 kW, min output 2 kW, max output 10 kW, standby load 1 kW -- with the
+        requested mode assigned on top of the preset's own ``STANDBY_LOAD``.
     """
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
-    config = controller_l2_xtp_fuel_cell_ems.XTPControllerConfig(
-        component_id=ComponentID(name="L2XTPController"),
-        nom_output=10.0,  # kW
-        min_output=2.0,  # kW
-        max_output=10.0,  # kW
-        standby_load=1.0,  # kW
-        operation_mode=operation_mode,
-    )
+    config = controller_l2_xtp_fuel_cell_ems.XTPControllerConfig.preset_standard("L2XTPController")
+    config.operation_mode = operation_mode
     return controller_l2_xtp_fuel_cell_ems.XTPController(
         my_simulation_parameters=my_simulation_parameters,
         config=config,

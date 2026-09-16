@@ -108,25 +108,19 @@ components:
       occupancy_identity: use_local_lpg/CHR01 Couple both at Work/EnergySaving/Travel Route Set for 10km Commuting Distance/Bus and one 30 km/h Car/Charging At Home with 11 kW/with-appliances/CHR01 Couple both at Work/-/-
   CarBattery_1:
     class: hisim.components.advanced_ev_battery_bslib.CarBattery
-    config:
-      source_weight: 1
-      system_id: SG1
-      p_inv_custom: 10000.0
-      e_bat_custom: 30.0
-      total_charged_energy_in_kilowatthour: 0.0
-      total_discharged_energy_in_kilowatthour: 0.0
+    preset: standard
     inputs:
       - L1EVChargeControl_1
   L1EVChargeControl_1:
     class: hisim.components.controller_l1_generic_ev_charge.L1Controller
     config:
-      source_weight: 1
       charging_station_set:
         Name: Charging At Home with 11 kW
         Guid:
           StrVal: 78dae308-24c4-45cc-8bdf-b001d61f45c2
-      battery_set_soc: 0.4
       lower_threshold_charging_power_in_watt: 1100.0
+      source_weight: 1
+      battery_set_soc: 0.4
       device_co2_footprint_in_kg: 100.0
       investment_costs_in_euro: 1000.0
       lifetime_in_years: 10.0

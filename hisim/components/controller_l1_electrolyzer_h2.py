@@ -43,9 +43,9 @@ class ElectrolyzerControllerConfig(ConfigBase):
     #: Load the machine is held at while it is idle but not switched off, in kW.
     standby_load: float = 5.0
     #: Seconds a warm machine needs before it produces again.
-    warm_start_time: float = 30.0
+    warm_start_time: float = 70.0
     #: Seconds a cold machine needs before it produces again.
-    cold_start_time: float = 600.0
+    cold_start_time: float = 1800.0
 
     @preset(note="a 100 kW machine between 10 and 110 kW")
     @classmethod

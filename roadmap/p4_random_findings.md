@@ -762,7 +762,7 @@ telling name, which is free but still only names a function. Field notes don't r
 so neither is wire format. Not done here: it changes `hisim/config/laws.py`, outside a batch's
 remit.
 
-### F-23 — two sibling controllers derive the heating threshold from the fact, a third recomputes it **[reported]**
+### F-23 — two sibling controllers derive the heating threshold from the fact, a third recomputes it **[reported; the third has no provider to read]**
 
 Found on 2026-09-16 in the same review. R2.1 added the fact
 `set_heating_threshold_outside_temperature_in_celsius`, contributed by
@@ -779,6 +779,13 @@ threshold by hand: the fact then carries the pinned number, the two sibling cont
 and the electric heating controller keeps the step table's. A system where one generator heats
 below 18 °C and its emitter circuit below a hand-set 12 °C is a system nobody described.
 
-The fix is one line — read `Size.SET_HEATING_THRESHOLD_OUTSIDE_TEMPERATURE_IN_CELSIUS`, as the
-siblings do — but it is a behaviour change (R5) for any system that pins the emitter threshold,
-and it needs the golden fleet to say so. Not done in B8, which is behaviour-N.
+The one-line fix — read `Size.SET_HEATING_THRESHOLD_OUTSIDE_TEMPERATURE_IN_CELSIUS`, as the
+siblings do — is not available to this class as things stand. Direct electric heating has no
+water circuit, so `household_electric_heating_building_sizer` builds no heat-distribution
+controller and nothing in that system contributes the fact; a copy law would fail to resolve.
+That is why B5/2 (2026-09-16) chose the re-derivation and struck the R3 row's "removes a
+cross-module import" clause. The divergence described above therefore needs a system that has
+both an emitter controller and an electric heater, which no shipped setup does. Two ways out if
+one appears: a law that reads the fact when a provider exists and falls back to the step table
+otherwise (new kernel semantics), or an emitter-less system stating the threshold as a plain
+override. Recorded; not a B8 change.

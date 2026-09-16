@@ -76,6 +76,29 @@ def test_describe_prints_the_presets_sizable_fields_and_facts_of_a_class(capsys)
 
 
 @pytest.mark.base
+def test_describe_shows_a_preset_the_law_that_preset_assigns(capsys) -> None:
+    """A preset that computes a field its own way says so beside that preset (F-18).
+
+    The pellet and wood-chip boilers derive their minimum power from their maximum, where the
+    field itself declares a constant zero. Before this line existed, the presets section filed
+    the field under ``AUTO`` and said nothing else, so an author reading the description was
+    told the pellet boiler used the condensing gas boiler's arithmetic.
+    """
+    code = main(["energy-system", "describe", Fixtures.BOILER_CONFIG])
+    printed = capsys.readouterr().out
+
+    assert code == ExitCodes.OK
+    presets = printed.split("presets", 1)[1].split("constructors", 1)[0]
+    pellets = presets.split("pellets", 1)[1].split("wood_chips", 1)[0]
+    assert 'law: minimal_thermal_power_in_watt = 0.08333333333333333 * Self("maximal_thermal_power_in_watt")' in pellets
+    # the preset that assigns no law of its own keeps its two lines and gains no third
+    condensing = presets.split("condensing_gas", 1)[1].split("condensing_gas_12kw", 1)[0]
+    assert "law:" not in condensing
+    # and the field's own declared law is still what the sizable fields section prints
+    assert "law: 0.0" in printed.split("sizable fields", 1)[1]
+
+
+@pytest.mark.base
 @pytest.mark.parametrize(
     "class_path, fact",
     [

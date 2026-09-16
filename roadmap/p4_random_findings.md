@@ -648,7 +648,7 @@ preset whose digits belong to a device designation, and rule 2 keeps refusing ev
 number that is a *value* still fails. A second such preset costs one line and a moment's thought
 about whether the device is real — which is the check R4 actually wants.
 
-### F-18 — `describe` renders a per-preset law as plain `AUTO`, so the preset that changes the arithmetic looks identical to the one that does not **[verified]**
+### F-18 — `describe` renders a per-preset law as plain `AUTO`, so the preset that changes the arithmetic looks identical to the one that does not **[verified, fixed]**
 
 Found on 2026-09-15 while converting the generic CHP (B4). A preset may replace a field's law by
 assigning a `SizingLaw` as the field value — the spelling `GenericBoilerConfig.preset_pellets` has
@@ -670,6 +670,15 @@ preset to classify its fields, so the branch that files a field under `AUTO:` ca
 built value is a `SizingLaw` and, if it is, print that law's `describe()` beside the preset. Left
 alone here because it changes a shared introspection surface rather than the class under
 conversion, and because the number of classes with per-preset laws is still three.
+
+**Fixed 2026-09-16** (B8), as the entry proposed: `PresetInfo` gained a `laws` tuple that
+`_describe_presets` fills from the instance it already builds — the sizable fields holding a
+`SizingLaw`, each paired with that law's own `describe()` — and the renderer prints one `law:`
+line per pair beside `pinned:` and `AUTO:`. The field stays in `auto`, because a law is still
+something to be resolved and not a pinned value, and the `sizable fields` section still prints
+the declared law. `generic_chp.CHPConfig` now reads `hydrogen … law: p_el = 1.1162790697674418 *
+Self("p_th")` against the declared `0.66`, and both pellet presets of `GenericBoilerConfig` show
+their twelfth. The JSON schema carries no laws and did not change.
 
 ### F-19 — a `dataclasses_json` field alias is invisible to `describe`, the schema and the energy-system file **[reported]**
 

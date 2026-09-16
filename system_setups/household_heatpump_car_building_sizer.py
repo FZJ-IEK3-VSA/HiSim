@@ -449,9 +449,10 @@ def setup_function(
     car_number = 1
 
     for car in my_cars:
-        my_car_battery_config = advanced_ev_battery_bslib.CarBatteryConfig.get_default_config()
+        my_car_battery_config = advanced_ev_battery_bslib.CarBatteryConfig.preset_standard(
+            f"CarBattery_{car_number}"
+        )
         my_car_battery_config.source_weight = car.config.source_weight
-        my_car_battery_config.component_id = ComponentID(f"CarBattery_{car_number}")
         my_car_battery = advanced_ev_battery_bslib.CarBattery(
             my_simulation_parameters=my_simulation_parameters,
             config=my_car_battery_config,

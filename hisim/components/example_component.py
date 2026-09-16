@@ -78,6 +78,7 @@ class ExampleComponentConfig(ConfigBase):
         """
         return cls(component_id=ComponentID(name=name))
 
+
 class ExampleComponent(Component):
     """Example Component class.
 

@@ -1993,44 +1993,79 @@ class CalculationRequest:
 @dataclass_json
 @dataclass
 class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
-    """HeatPump Controller Config Class for building heating."""
+    """Configuration of the hplib heat pump's space-heating controller.
 
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return MoreAdvancedHeatPumpHPLibControllerSpaceHeating.get_full_classname()
+    The on/off logic in front of the machine's space-heating side: it compares the buffer
+    vessel's water temperature with the flow temperature the heat distribution system asks
+    for, and it stops heating once the daily average outside temperature has risen above
+    the heating threshold. The named default is :meth:`preset_standard`; the two fields
+    that belong to the emitter circuit rather than to the machine --
+    :attr:`heat_distribution_system_type` and
+    :attr:`set_heating_threshold_outside_temperature_in_celsius` -- are sizable, so the
+    preset leaves them ``AUTO`` and ``.resolve(ctx)`` copies them from the heat
+    distribution controller's facts::
+
+        MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
+            "MoreAdvancedHeatPumpHPLibControllerSH"
+        ).resolve(
+            SizingContext(
+                heat_distribution_system_type=HeatDistributionSystemType.FLOORHEATING,
+                set_heating_threshold_outside_temperature_in_celsius=18.0,
+            )
+        )
+
+    Copying rather than restating is the point: the emitter circuit already decides which
+    emitter it feeds and above which outside temperature nothing heats, and a generator
+    controller that disagreed with it would heat into a circuit that has switched off.
+    """
+
+    MAIN_CLASS = "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating"
 
     component_id: ComponentID
-    mode: int
-    set_heating_threshold_outside_temperature_in_celsius: Optional[float]
-    set_cooling_threshold_outside_temperature_in_celsius: Optional[float]
-    upper_temperature_offset_for_state_conditions_in_celsius: float
-    lower_temperature_offset_for_state_conditions_in_celsius: float
-    heat_distribution_system_type: Any
+    #: Which control law runs: 1 is the plain on/off switch, 2 adds a cooling state and is
+    #: only admissible for floor heating, which is what the component checks before using it.
+    mode: int = 1
+    #: Daily average outside temperature above which nothing heats, copied from the emitter
+    #: circuit. Sizable: left ``AUTO`` it is the threshold the heat distribution controller
+    #: resolved to, so both switch off on the same day. ``None`` is a legal value and means
+    #: the machine never stops for the season, whatever the weather does.
+    set_heating_threshold_outside_temperature_in_celsius: Sizable[Optional[float]] = sized_field(
+        rule=Size.SET_HEATING_THRESHOLD_OUTSIDE_TEMPERATURE_IN_CELSIUS, optional=True
+    )
+    #: Daily average outside temperature below which the machine does not cool in ``mode``
+    #: 2. ``None`` means cooling is available at any outside temperature.
+    set_cooling_threshold_outside_temperature_in_celsius: Optional[float] = 20.0
+    #: How far the water temperature may rise above the flow temperature the distribution
+    #: system asks for before the machine switches off, in kelvin.
+    upper_temperature_offset_for_state_conditions_in_celsius: float = 5.0
+    #: How far it may fall below that flow temperature before the machine switches on, in
+    #: kelvin. Together with the upper offset this is the hysteresis band.
+    lower_temperature_offset_for_state_conditions_in_celsius: float = 5.0
+    #: Which emitter the circuit this controller heats into feeds, copied from the emitter
+    #: circuit. Sizable: left ``AUTO`` it is the heat distribution controller's own emitter
+    #: type. The component reads it to decide whether ``mode`` 2 is admissible at all.
+    heat_distribution_system_type: Sizable[HeatDistributionSystemType] = sized_field(
+        rule=Size.HEAT_DISTRIBUTION_SYSTEM_TYPE, value_type=HeatDistributionSystemType
+    )
 
+    @preset
     @classmethod
-    def get_default_space_heating_controller_config(
-        cls,
-        heat_distribution_system_type: Any,
-        name: str = "MoreAdvancedHeatPumpHPLibControllerSH",
-        component_id: Optional[ComponentID] = None,
-        upper_temperature_offset_for_state_conditions_in_celsius: float = 5.0,
-        lower_temperature_offset_for_state_conditions_in_celsius: float = 5.0,
-        set_heating_threshold_outside_temperature_in_celsius=16.0,
-        set_cooling_threshold_outside_temperature_in_celsius=20.0,
-    ) -> "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig":
-        """Gets a default Generic Heat Pump Controller."""
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        return MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(
-            component_id=component_id,
-            mode=1,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
-            set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_in_celsius,
-            upper_temperature_offset_for_state_conditions_in_celsius=upper_temperature_offset_for_state_conditions_in_celsius,
-            lower_temperature_offset_for_state_conditions_in_celsius=lower_temperature_offset_for_state_conditions_in_celsius,
-            heat_distribution_system_type=heat_distribution_system_type,
-        )
+    def preset_standard(cls, name: str) -> "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig":
+        """The one space-heating controller the fleet runs, taking its limits from the emitter circuit.
+
+        The field defaults are that controller: the plain on/off law, a five-kelvin
+        hysteresis band either side of the requested flow temperature, and no cooling below
+        20 °C outside. What the preset does not fix is the emitter type and the heating
+        threshold, which stay ``AUTO`` so that both are copied from the heat distribution
+        controller instead of repeating its choices here.
+
+        Args:
+            name: Instance name of the controller in the simulation.
+
+        Returns:
+            The configuration, with its two sizable fields still ``AUTO``.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
@@ -2272,7 +2307,9 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
             # turning heat pump off when the average daily outside temperature is above a certain threshold (if threshold is set in the config)
             summer_heating_mode = self.summer_heating_condition(
                 daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-                set_heating_threshold_temperature_in_celsius=self.heatpump_controller_config.set_heating_threshold_outside_temperature_in_celsius,
+                set_heating_threshold_temperature_in_celsius=concrete(
+                    self.heatpump_controller_config.set_heating_threshold_outside_temperature_in_celsius
+                ),
             )
 
             # mode 1 is on/off controller
@@ -2504,39 +2541,49 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
 @dataclass_json
 @dataclass
 class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
-    """HeatPump Controller Config Class."""
+    """Configuration of the hplib heat pump's domestic-hot-water controller.
 
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return MoreAdvancedHeatPumpHPLibControllerDHW.get_full_classname()
+    The hysteresis in front of the machine's hot-water side: it switches the machine on
+    when the DHW vessel has cooled to :attr:`t_min_dhw_storage_in_celsius` and off again
+    when it has reached :attr:`t_max_dhw_storage_in_celsius`. The named default is
+    :meth:`preset_standard`, the 40/60 °C band the fleet runs::
+
+        MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard("HeatPumpControllerDHW")
+
+    Nothing here depends on the building or on the machine beside it, which is why no
+    field is sizable and the preset takes nothing but the instance name.
+    """
+
+    MAIN_CLASS = "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW"
 
     component_id: ComponentID
     #: lower set temperature of DHW Storage, given in °C
-    t_min_dhw_storage_in_celsius: float
+    t_min_dhw_storage_in_celsius: float = 40.0
     #: upper set temperature of DHW Storage, given in °C
-    t_max_dhw_storage_in_celsius: float
-    #: set thermal power delivered for dhw on constant value --> max. Value of heatpump
-    thermalpower_dhw_is_constant: bool
-    #: max. Power of Heatpump for not modulation dhw production
-    p_th_max_dhw_in_watt: float
+    t_max_dhw_storage_in_celsius: float = 60.0
+    #: set thermal power delivered for dhw on constant value --> max. Value of heatpump.
+    #: false: modulation, true: constant power for dhw
+    thermalpower_dhw_is_constant: bool = False
+    #: max. Power of Heatpump for not modulation dhw production; only read when
+    #: ``thermalpower_dhw_is_constant`` is true
+    p_th_max_dhw_in_watt: float = 5000.0
 
+    @preset
     @classmethod
-    def get_default_dhw_controller_config(
-        cls,
-        name: str = "HeatPumpControllerDHW",
-        component_id: Optional[ComponentID] = None,
-    ) -> "MoreAdvancedHeatPumpHPLibControllerDHWConfig":
-        """Gets a default Generic Heat Pump Controller."""
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        return MoreAdvancedHeatPumpHPLibControllerDHWConfig(
-            component_id=component_id,
-            t_min_dhw_storage_in_celsius=40.0,
-            t_max_dhw_storage_in_celsius=60.0,
-            thermalpower_dhw_is_constant=False,  # false: modulation, true: constant power for dhw
-            p_th_max_dhw_in_watt=5000.0,  # only if true
-        )
+    def preset_standard(cls, name: str) -> "MoreAdvancedHeatPumpHPLibControllerDHWConfig":
+        """The one hot-water controller the fleet runs, reheating the vessel from 40 to 60 °C.
+
+        The field defaults are that controller: a modulating machine, so the constant-power
+        limit below is not read, and the 40/60 °C band that keeps the vessel above the
+        legionella temperature without cycling the machine on every tap.
+
+        Args:
+            name: Instance name of the controller in the simulation.
+
+        Returns:
+            The configuration, fully concrete -- the class has no sizable field.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class MoreAdvancedHeatPumpHPLibControllerDHW(Component):

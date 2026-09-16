@@ -161,9 +161,9 @@ def given_default_controller_testee(
     simulation_parameters = sim.SimulationParameters.full_year(
         year=2021, seconds_per_timestep=60
     )
-    config = DistrictHeatingControllerConfig.get_default_district_heating_controller_config(
-        with_domestic_hot_water_preparation=with_warm_water
-    )
+    config = DistrictHeatingControllerConfig.preset_standard("DistrictHeatingController")
+    config.with_domestic_hot_water_preparation = with_warm_water
+    config.set_heating_threshold_outside_temperature_in_celsius = 16.0
     return DistrictHeatingController(simulation_parameters, config)
 
 

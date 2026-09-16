@@ -311,9 +311,17 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build Heat Pump Controller for space heating
-    my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
-        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
-        set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
+    my_heatpump_controller_sh_config = (
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
+            "MoreAdvancedHeatPumpHPLibControllerSH"
+        ).resolve(
+            SizingContext(
+                heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
+                set_heating_threshold_outside_temperature_in_celsius=(
+                    my_hds_controller_information.set_heating_threshold_temperature_in_celsius
+                ),
+            )
+        )
     )
     my_heatpump_controller_sh_config.mode = hp_controller_mode
 
@@ -323,7 +331,9 @@ def setup_function(
     my_sim.add_component(my_heatpump_controller_sh, connect_automatically=True)
 
     my_heatpump_controller_dhw_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.get_default_dhw_controller_config()
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
+            "HeatPumpControllerDHW"
+        )
     )
 
     # Build Heat Pump Controller for dhw

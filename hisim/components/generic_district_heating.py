@@ -9,7 +9,7 @@ supply to space heating and domestic hot water circuits.
 # import importlib
 from dataclasses import dataclass
 import logging
-from typing import ClassVar, List, Any, Optional, Tuple
+from typing import ClassVar, List, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -918,37 +918,60 @@ class DistrictHeating(Component):
 @dataclass_json
 @dataclass
 class DistrictHeatingControllerConfig(ConfigBase):
-    """District Heating Controller Config Class."""
+    """Configuration of the district heating connection's controller.
 
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return DistrictHeatingController.get_full_classname()
+    The valve logic in front of the connection: it decides each time step whether the heat
+    taken from the network goes to space heating, to domestic hot water, to both at once or
+    nowhere, and it stops space heating once the daily average outside temperature has
+    risen above the heating threshold. The named default is :meth:`preset_standard`; the
+    threshold belongs to the emitter circuit rather than to the connection, so it is
+    sizable and ``.resolve(ctx)`` copies it from the heat distribution controller's facts::
+
+        DistrictHeatingControllerConfig.preset_standard("DistrictHeatingController").resolve(
+            SizingContext(set_heating_threshold_outside_temperature_in_celsius=18.0)
+        )
+
+    Copying rather than restating is the point: a generator controller that switched off on
+    a different day than the circuit it feeds would heat into a circuit that has stopped.
+    """
+
+    MAIN_CLASS = "hisim.components.generic_district_heating.DistrictHeatingController"
 
     component_id: ComponentID
-    set_heating_threshold_outside_temperature_in_celsius: float
-    with_domestic_hot_water_preparation: bool
-    hysteresis_water_temperature_offset_in_celsius: float
-    parallel_space_heating_and_dhw_option: bool
+    #: Daily average outside temperature above which nothing heats, copied from the emitter
+    #: circuit. Sizable: left ``AUTO`` it is the threshold the heat distribution controller
+    #: resolved to, so both switch off on the same day.
+    set_heating_threshold_outside_temperature_in_celsius: Sizable[float] = sized_field(
+        rule=Size.SET_HEATING_THRESHOLD_OUTSIDE_TEMPERATURE_IN_CELSIUS
+    )
+    #: Whether the connection this controls also prepares domestic hot water, in which case
+    #: the controller reads the vessel's temperature and can prioritise it over space heating.
+    with_domestic_hot_water_preparation: bool = False
+    #: Width of the hysteresis band on the water temperature, in kelvin: how far below the
+    #: requested flow temperature the water may fall before heat is taken again.
+    hysteresis_water_temperature_offset_in_celsius: float = 15.0
+    #: Whether space heating and hot water may be served in the same time step. False makes
+    #: the two exclusive, with hot water taking precedence.
+    parallel_space_heating_and_dhw_option: bool = False
 
+    @preset
     @classmethod
-    def get_default_district_heating_controller_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-        with_domestic_hot_water_preparation=False,
-        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
-        parallel_space_heating_and_dhw_option: bool = False,
-    ) -> Any:
-        """Gets a default district heating controller."""
-        if component_id is None:
-            component_id = ComponentID(name="DistrictHeatingController")
-        return DistrictHeatingControllerConfig(
-            component_id=component_id,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
-            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-            hysteresis_water_temperature_offset_in_celsius=15,
-            parallel_space_heating_and_dhw_option=parallel_space_heating_and_dhw_option,
-        )
+    def preset_standard(cls, name: str) -> "DistrictHeatingControllerConfig":
+        """The one district heating controller the fleet runs, taking its limit from the emitter circuit.
+
+        The field defaults are that controller: space heating only, exclusive of hot water
+        where the connection prepares it as well, and a fifteen-kelvin hysteresis band on
+        the water temperature. What the preset does not fix is the heating threshold, which
+        stays ``AUTO`` so that it is copied from the heat distribution controller instead of
+        repeating its choice here.
+
+        Args:
+            name: Instance name of the controller in the simulation.
+
+        Returns:
+            The configuration, with its one sizable field still ``AUTO``.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class DistrictHeatingController(Component):
@@ -1227,7 +1250,9 @@ class DistrictHeatingController(Component):
                 set_temperature_space_heating_in_celsius=sh_set_temperature_deg_c,
                 set_temperature_dhw_in_celsius=self.warm_water_temperature_aim_in_celsius,
                 hysteresis_water_temperature_offset_in_celsius=self.config.hysteresis_water_temperature_offset_in_celsius,
-                outside_temperature_threshold_in_celsius=self.district_heating_controller_config.set_heating_threshold_outside_temperature_in_celsius,
+                outside_temperature_threshold_in_celsius=concrete(
+                    self.district_heating_controller_config.set_heating_threshold_outside_temperature_in_celsius
+                ),
             ),
             parallel_space_heating_and_dhw_option=self.config.parallel_space_heating_and_dhw_option,
         )

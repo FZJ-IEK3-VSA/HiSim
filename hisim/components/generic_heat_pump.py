@@ -124,31 +124,50 @@ class GenericHeatPumpConfig(ConfigBase):
 @dataclass_json
 @dataclass
 class GenericHeatPumpControllerConfig(ConfigBase):
-    """Configuration for the generic heat pump controller."""
+    """Configuration of the generic heat pump's controller.
 
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return GenericHeatPumpController.get_full_classname()
+    The thermostat in front of the machine: it watches the building's indoor air
+    temperature and switches the heat pump to heating below
+    :attr:`temperature_air_heating_in_celsius`, to cooling above
+    :attr:`temperature_air_cooling_in_celsius`, and off inside the band between them. The
+    named default is :meth:`preset_standard`::
+
+        GenericHeatPumpControllerConfig.preset_standard("GenericHeatPumpController")
+
+    Nothing here is derived from the building it heats -- these are the temperatures the
+    residents ask for -- so no field is sizable and the preset takes nothing but the
+    instance name.
+    """
+
+    MAIN_CLASS = "hisim.components.generic_heat_pump.GenericHeatPumpController"
 
     component_id: ComponentID
-    temperature_air_heating_in_celsius: float
-    temperature_air_cooling_in_celsius: float
-    offset_in_celsius: float
-    mode: int
+    #: Indoor air temperature below which the machine heats, in °C.
+    temperature_air_heating_in_celsius: float = 19.0
+    #: Indoor air temperature above which the machine cools, in °C. Only read in ``mode`` 2.
+    temperature_air_cooling_in_celsius: float = 24.0
+    #: Half-width of the hysteresis band around either setpoint, in kelvin: the machine
+    #: keeps running until the air is this far past the temperature that started it.
+    offset_in_celsius: float = 0.5
+    #: Which control law runs: 1 heats only, 2 heats and cools.
+    mode: int = 2
 
+    @preset
     @classmethod
-    def get_default_generic_heat_pump_controller_config(cls, component_id: Optional[ComponentID] = None,) -> Any:
-        """Gets a default Generic Heat Pump Controller."""
-        if component_id is None:
-            component_id = ComponentID(name="HeatPumpController")
-        return GenericHeatPumpControllerConfig(
-            component_id=component_id,
-            temperature_air_heating_in_celsius=18.0,
-            temperature_air_cooling_in_celsius=26.0,
-            offset_in_celsius=0.5,
-            mode=1,
-        )
+    def preset_standard(cls, name: str) -> "GenericHeatPumpControllerConfig":
+        """The one thermostat the fleet runs: heating below 19 °C, cooling above 24 °C.
+
+        The field defaults are that thermostat, with half a kelvin of hysteresis either
+        side of the setpoint that started the machine, and both the heating and the cooling
+        law enabled.
+
+        Args:
+            name: Instance name of the controller in the simulation.
+
+        Returns:
+            The configuration, fully concrete -- the class has no sizable field.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class GenericHeatPumpState:

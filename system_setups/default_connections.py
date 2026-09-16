@@ -9,7 +9,7 @@ from hisim.components import building
 from hisim.components import generic_heat_pump
 from hisim.components import electricity_meter
 from hisim import loadtypes
-from hisim.config import ComponentID, SizingContext
+from hisim.config import SizingContext
 
 
 def setup_function(
@@ -36,12 +36,6 @@ def setup_function(
     # Set simulation parameters
     year = 2021
     seconds_per_timestep = 60
-
-    # Set heat pump controller
-    temperature_air_heating_in_celsius = 16.0
-    temperature_air_cooling_in_celsius = 24.0
-    temperature_offset_in_kelvin = 0.5  # K, hysteresis band around the setpoint
-    hp_mode = 2
 
     # ==== Build Components ====
 
@@ -97,14 +91,14 @@ def setup_function(
         config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
     )
 
+    my_heat_pump_controller_config = generic_heat_pump.GenericHeatPumpControllerConfig.preset_standard(
+        "GenericHeatPumpController"
+    )
+    # This setup lets the house cool to 16 °C before the machine heats, three kelvin below the
+    # preset's setpoint.
+    my_heat_pump_controller_config.temperature_air_heating_in_celsius = 16.0
     my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
-        config=generic_heat_pump.GenericHeatPumpControllerConfig(
-            component_id=ComponentID(name="GenericHeatPumpController"),
-            temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
-            temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-            offset_in_celsius=temperature_offset_in_kelvin,
-            mode=hp_mode,
-        ),
+        config=my_heat_pump_controller_config,
         my_simulation_parameters=my_simulation_parameters,
     )
     my_heat_pump_controller.connect_only_predefined_connections(my_building)

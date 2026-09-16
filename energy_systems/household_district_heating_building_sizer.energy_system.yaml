@@ -44,10 +44,9 @@ components:
       - Building
   DistrictHeatingController:
     class: hisim.components.generic_district_heating.DistrictHeatingController
+    preset: standard
     config:
-      set_heating_threshold_outside_temperature_in_celsius: 18.0
       with_domestic_hot_water_preparation: true
-      hysteresis_water_temperature_offset_in_celsius: 15.0
       parallel_space_heating_and_dhw_option: true
     inputs:
       - Weather

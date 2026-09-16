@@ -13,6 +13,7 @@ file. And ``run`` has to leave a result directory holding the three artifacts ev
 """
 
 import os
+import re
 from pathlib import Path
 from typing import ClassVar
 
@@ -160,12 +161,18 @@ def test_facts_prints_where_every_sized_value_of_a_file_comes_from(capsys) -> No
 
 @pytest.mark.base
 def test_facts_refuses_a_file_the_executor_refuses_and_says_why(capsys) -> None:
-    """Catches the command being more permissive than a run, which would be worse than useless."""
+    """Catches the command being more permissive than a run, which would be worse than useless.
+
+    The mockup is refused for whichever of its known gaps the executor meets first (see
+    ``ExpectedFailures`` in ``test_energy_system_classes``); which one that is moves as the
+    component sweep converts classes, so the assertion is on a refusal code being reported, not
+    on a particular one.
+    """
     code = main(["energy-system", "facts", str(Fixtures.HEAT_PUMP)])
     captured = capsys.readouterr()
 
     assert code == ExitCodes.FILE_REJECTED
-    assert "EF-13" in captured.err
+    assert re.search(r"\bEF-\d+\b", captured.err), captured.err
 
 
 @pytest.mark.base

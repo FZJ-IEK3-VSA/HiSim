@@ -29,11 +29,9 @@ components:
       - Weather
   GenericHeatPumpController:
     class: hisim.components.generic_heat_pump.GenericHeatPumpController
+    preset: standard
     config:
       temperature_air_heating_in_celsius: 16.0
-      temperature_air_cooling_in_celsius: 24.0
-      offset_in_celsius: 0.5
-      mode: 2
     inputs:
       - ElectricityMeter
       - Building

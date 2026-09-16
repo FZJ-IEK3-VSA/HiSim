@@ -86,6 +86,13 @@ class ExpectedFailures:
     preset. Those entries need a live controller when a conversion reaches them, which is a
     decision for the batch that converts the heat-pump controllers, not for the sweep that
     retired a class nothing built.
+
+    The two hplib heat-pump controllers moved from ``EF-13`` to ``EF-43`` when they gained their
+    ``standard`` preset: the preset they name now exists, and what is left is the
+    ``sizing_sources`` block the mockups write for them. Neither controller reads
+    ``maximal_thermal_power_in_watt`` -- the space-heating one reads the emitter type and the
+    heating threshold, the hot-water one reads nothing -- so the block has to go from the mockups,
+    which is a change to the normative files and not to a class.
     """
 
     #: The minimal mockup is empty: every class it names is converted, which is what makes it
@@ -93,8 +100,8 @@ class ExpectedFailures:
     MINIMAL: ClassVar[Mapping[str, str]] = {}
 
     HEAT_PUMP: ClassVar[Mapping[str, str]] = {
-        "heat_pump_controller_sh": "EF-13",
-        "heat_pump_controller_dhw": "EF-13",
+        "heat_pump_controller_sh": "EF-43",
+        "heat_pump_controller_dhw": "EF-43",
         "buffer_storage": "EF-13",
         "dhw_storage": "EF-13",
         "ems": "EF-43",
@@ -104,7 +111,7 @@ class ExpectedFailures:
     }
 
     MULTI_FAMILY: ClassVar[Mapping[str, str]] = {
-        "heat_pump_controller_sh": "EF-13",
+        "heat_pump_controller_sh": "EF-43",
         "buffer_storage": "EF-13",
         "ems": "EF-43",
         **{

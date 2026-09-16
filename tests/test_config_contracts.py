@@ -196,6 +196,10 @@ class PilotWireFormat:
         "ElectricHeatingConfig": ("resistive",),
         "DistrictHeatingConfig": ("standard",),
         "GenericHeatPumpConfig": ("vitocal_300_a",),
+        "GenericHeatPumpControllerConfig": ("standard",),
+        "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig": ("standard",),
+        "MoreAdvancedHeatPumpHPLibControllerDHWConfig": ("standard",),
+        "DistrictHeatingControllerConfig": ("standard",),
         "AirConditionerConfig": ("samsung_ac120",),
         "SimpleAirConditionerConfig": ("standard",),
         "SolarThermalSystemConfig": ("flat_plate",),
@@ -234,6 +238,10 @@ class PilotWireFormat:
         "ElectricHeatingConfig": (),
         "DistrictHeatingConfig": (),
         "GenericHeatPumpConfig": ("for_device",),
+        "GenericHeatPumpControllerConfig": (),
+        "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig": (),
+        "MoreAdvancedHeatPumpHPLibControllerDHWConfig": (),
+        "DistrictHeatingControllerConfig": (),
         "AirConditionerConfig": ("for_device", "for_building_load"),
         "SimpleAirConditionerConfig": (),
         "SolarThermalSystemConfig": (),
@@ -295,6 +303,10 @@ class PilotWireFormat:
         "ElectricityMeterConfig": (),
         "GenericBoilerControllerConfig": (),
         "GenericHeatPumpConfig": (),
+        "GenericHeatPumpControllerConfig": (),
+        "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig": (),
+        "MoreAdvancedHeatPumpHPLibControllerDHWConfig": (),
+        "DistrictHeatingControllerConfig": (),
         "AirConditionerConfig": (),
         "SimpleAirConditionerConfig": (),
         "SolarThermalSystemConfig": (),
@@ -582,10 +594,13 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     from hisim.components.heating_meter import HeatingMeterConfig
     from hisim.components.generic_boiler import GenericBoilerConfig, GenericBoilerControllerConfig
     from hisim.components.generic_car import CarConfig
-    from hisim.components.generic_district_heating import DistrictHeatingConfig
+    from hisim.components.generic_district_heating import (
+        DistrictHeatingConfig,
+        DistrictHeatingControllerConfig,
+    )
     from hisim.components.generic_electric_heating import ElectricHeatingConfig
     from hisim.components.air_conditioner import AirConditionerConfig
-    from hisim.components.generic_heat_pump import GenericHeatPumpConfig
+    from hisim.components.generic_heat_pump import GenericHeatPumpConfig, GenericHeatPumpControllerConfig
     from hisim.components.simple_air_conditioner import SimpleAirConditionerConfig
     from hisim.components.heat_distribution_system import (
         HeatDistributionConfig,
@@ -594,7 +609,11 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     from hisim.components.generic_pv_system import PVSystemConfig
     from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnectorConfig
     from hisim.components.idealized_electric_heater import IdealizedHeaterConfig
-    from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLibConfig
+    from hisim.components.more_advanced_heat_pump_hplib import (
+        MoreAdvancedHeatPumpHPLibConfig,
+        MoreAdvancedHeatPumpHPLibControllerDHWConfig,
+        MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig,
+    )
     from hisim.components.simple_heat_source import SimpleHeatSourceConfig
     from hisim.components.advanced_fuel_cell import CHPConfig as FuelCellCHPConfig
     from hisim.components.generic_chp.chp import CHPConfig as GenericCHPConfig
@@ -623,6 +642,12 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "ElectricHeatingConfig": ElectricHeatingConfig,
         "DistrictHeatingConfig": DistrictHeatingConfig,
         "GenericHeatPumpConfig": GenericHeatPumpConfig,
+        "GenericHeatPumpControllerConfig": GenericHeatPumpControllerConfig,
+        "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig": (
+            MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig
+        ),
+        "MoreAdvancedHeatPumpHPLibControllerDHWConfig": MoreAdvancedHeatPumpHPLibControllerDHWConfig,
+        "DistrictHeatingControllerConfig": DistrictHeatingControllerConfig,
         "AirConditionerConfig": AirConditionerConfig,
         "SimpleAirConditionerConfig": SimpleAirConditionerConfig,
         "SolarThermalSystemConfig": SolarThermalSystemConfig,

@@ -77,14 +77,14 @@ def test_every_reader_refuses_an_unknown_device_naming_the_ones_that_exist() -> 
 def test_the_three_factories_refuse_an_unknown_device_too() -> None:
     """The refusal reaches the config builders, not only the readers under them.
 
-    A setup calls ``for_device`` and the two ``control_electrolyzer`` classmethods; the
+    A setup calls the two ``for_device`` classmethods and ``control_electrolyzer``; the
     zero-filled config was built there, so that is where the failure has to arrive.
     """
     with pytest.raises(ValueError, match=UNKNOWN_DEVICE):
         electrolyzer.ElectrolyzerConfig.for_device("Electrolyzer", UNKNOWN_DEVICE)
 
     with pytest.raises(ValueError, match=UNKNOWN_DEVICE):
-        l1.ElectrolyzerControllerConfig.control_electrolyzer(UNKNOWN_DEVICE)
+        l1.ElectrolyzerControllerConfig.for_device("L1ElectrolyzerController", UNKNOWN_DEVICE)
 
     with pytest.raises(ValueError, match=UNKNOWN_DEVICE):
         l2.PTXControllerConfig.control_electrolyzer(UNKNOWN_DEVICE, l2.PtxOperationMode.NOMINAL_LOAD)
@@ -112,7 +112,7 @@ def test_the_known_device_still_builds_the_values_the_table_carries() -> None:
     assert machine.nom_h2_flow_rate == 18.875
     assert machine.faraday_eff == 0.999
 
-    controller = l1.ElectrolyzerControllerConfig.control_electrolyzer(KNOWN_DEVICE)
+    controller = l1.ElectrolyzerControllerConfig.for_device("L1ElectrolyzerController", KNOWN_DEVICE)
     assert controller.nom_load == 987.0
     assert controller.min_load == 205.462
     assert controller.max_load == 1028.225
@@ -159,7 +159,7 @@ def test_a_row_missing_a_field_is_refused_by_the_name_of_the_field(
     monkeypatch.setattr(electrolyzer, "electrolyzer_table_path", lambda: broken)
 
     with pytest.raises(ValueError) as raised:
-        l1.ElectrolyzerControllerConfig.control_electrolyzer("OnlyDevice")
+        l1.ElectrolyzerControllerConfig.for_device("L1ElectrolyzerController", "OnlyDevice")
     message = str(raised.value)
     assert "OnlyDevice" in message
     assert "standby_load" in message and "cold_start_time" in message
@@ -203,7 +203,10 @@ def test_a_field_written_as_null_is_passed_through_unchanged(
     )
     monkeypatch.setattr(electrolyzer, "electrolyzer_table_path", lambda: with_null)
 
-    assert l1.ElectrolyzerControllerConfig.control_electrolyzer("NullStandby").standby_load is None
+    assert (
+        l1.ElectrolyzerControllerConfig.for_device("L1ElectrolyzerController", "NullStandby").standby_load
+        is None
+    )
 
 
 @pytest.mark.base

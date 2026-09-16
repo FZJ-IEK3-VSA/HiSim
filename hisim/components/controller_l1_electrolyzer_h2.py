@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Optional
+from typing import Any, ClassVar
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor, preset
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
 from hisim.components.generic_electrolyzer_h2 import read_electrolyzer_variant
 
@@ -14,52 +14,56 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim.economics.facts import CostRelevance
 
-__authors__ = "Franz Oldopp"
-__copyright__ = "Copyright 2023, IEK-3"
-__credits__ = ["Franz Oldopp"]
-__license__ = "MIT"
-__version__ = "0.5"
-__maintainer__ = "Franz Oldopp"
-__email__ = "f.oldopp@fz-juelich.de"
-__status__ = "development"
-
 
 @dataclass_json
 @dataclass
 class ElectrolyzerControllerConfig(ConfigBase):
-    """Configutation of the Simple Electrolyzer Controller."""
+    """Load band and start-up times the L1 controller drives one electrolyzer within.
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the base class."""
-        return ElectrolyzerController.get_full_classname()
+    The controller hands the machine whatever load it is offered, clipped into the band
+    ``min_load`` … ``max_load``, holds it at ``standby_load`` when the offer falls short and
+    counts the warm or cold start time off before it lets the machine produce again. Every
+    figure is a property of the machine rather than of the scenario, so a controller is
+    usually built from the same manufacturer-table row the electrolyzer itself is built from::
+
+        ElectrolyzerControllerConfig.for_device("L1ElectrolyzerController", "HTecME450")
+
+    :meth:`preset_standard` states a 100 kW machine instead of reading one.
+    """
+
+    MAIN_CLASS = "hisim.components.controller_l1_electrolyzer_h2.ElectrolyzerController"
 
     component_id: ComponentID
-    nom_load: float
-    min_load: float
-    max_load: float
-    standby_load: float
-    warm_start_time: float
-    cold_start_time: float
+    #: Nominal electrical load of the controlled machine, in kW.
+    nom_load: float = 100.0
+    #: Lowest load the machine may be run at, in kW; below it the controller goes to standby.
+    min_load: float = 10.0
+    #: Highest load the controller hands over, in kW; anything above it is curtailed.
+    max_load: float = 110.0
+    #: Load the machine is held at while it is idle but not switched off, in kW.
+    standby_load: float = 5.0
+    #: Seconds a warm machine needs before it produces again.
+    warm_start_time: float = 30.0
+    #: Seconds a cold machine needs before it produces again.
+    cold_start_time: float = 600.0
 
+    @preset(note="a 100 kW machine between 10 and 110 kW")
     @classmethod
-    def get_default_electrolyzer_controller_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "ElectrolyzerControllerConfig":
-        """Get a default electrolyzer controller config."""
-        if component_id is None:
-            component_id = ComponentID(name="DefaultElectrolyzerController")
-        config = ElectrolyzerControllerConfig(
-            component_id=component_id,
-            nom_load=100.0,
-            min_load=10.0,
-            max_load=110.0,
-            standby_load=5.0,
-            warm_start_time=70.0,
-            cold_start_time=1800.0,
-        )
-        return config
+    def preset_standard(cls, name: str) -> "ElectrolyzerControllerConfig":
+        """The controller of a 100 kW electrolyzer running between 10 and 110 kW.
+
+        The field defaults are that band, a 5 kW standby load and start times of 30 s warm and
+        600 s cold. Nothing here names a technology or a manufacturer -- the band belongs to
+        the electrolyzer this controller is sized to, and the name would only repeat it -- so
+        the preset stays ``standard``.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            ElectrolyzerControllerConfig: The preset configuration.
+        """
+        return cls(component_id=ComponentID(name=name))
 
     #: the manufacturer-table fields this controller is built from, checked before any is read.
     TABLE_FIELDS: ClassVar[tuple[str, ...]] = (
@@ -96,41 +100,45 @@ class ElectrolyzerControllerConfig(ConfigBase):
             required_fields=ElectrolyzerControllerConfig.TABLE_FIELDS,
         )
 
+    @constructor(note="the band and start times one device of the manufacturer table states")
     @classmethod
-    def control_electrolyzer(
-        cls,
-        electrolyzer_name: str,
-        component_id: Optional[ComponentID] = None,
-    ) -> "ElectrolyzerControllerConfig":
-        """Initializes the config variables based on the JSON-file.
+    def for_device(cls, name: str, electrolyzer_name: str) -> "ElectrolyzerControllerConfig":
+        """Builds the controller of the machine one row of the manufacturer table describes.
+
+        Both the controller and the electrolyzer it drives are built by naming the same
+        device, which is what keeps the band the controller clips to and the band the machine
+        accepts from drifting apart::
+
+            ElectrolyzerControllerConfig.for_device("L1ElectrolyzerController", "HTecME450")
 
         Every field is read straight out of the row, which :meth:`read_config` has already
-        checked carries all of them: a table entry missing one is an error naming the field and
-        the device, not a load of zero.
+        checked carries all of them: a table entry missing one is an error naming the field
+        and the device, not a load of zero.
 
         Args:
-            electrolyzer_name: the device name to look up in the manufacturer table.
-            component_id: the identity to give the controller, defaulted when not supplied.
+            name: Instance name of the controller; its ``ComponentID`` is built from it.
+            electrolyzer_name: The device name as the manufacturer table spells it, e.g.
+                ``"HTecME450"``.
 
         Returns:
-            The controller configuration of that device.
+            A fresh configuration of that device's controller; nothing about it is shared with
+            any other instance.
+
+        Raises:
+            ValueError: If no device of that name is in the table, or its row lacks one of the
+                six fields this controller reads.
         """
-
-        if component_id is None:
-            component_id = ComponentID(name="L1ElectrolyzerController")
-        config_json = cls.read_config(electrolyzer_name)
-        log.information(f"Electrolyzer config: {config_json}")
-
-        config = ElectrolyzerControllerConfig(
-            component_id=component_id,  # config_json.get("name", "")
-            nom_load=config_json["nom_load"],
-            min_load=config_json["min_load"],
-            max_load=config_json["max_load"],
-            standby_load=config_json["standby_load"],
-            warm_start_time=config_json["warm_start_time"],
-            cold_start_time=config_json["cold_start_time"],
+        row = cls.read_config(electrolyzer_name)
+        log.information(f"Electrolyzer config: {row}")
+        return cls(
+            component_id=ComponentID(name=name),
+            nom_load=row["nom_load"],
+            min_load=row["min_load"],
+            max_load=row["max_load"],
+            standby_load=row["standby_load"],
+            warm_start_time=row["warm_start_time"],
+            cold_start_time=row["cold_start_time"],
         )
-        return config
 
 
 class ElectrolyzerController(Component):

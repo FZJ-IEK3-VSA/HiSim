@@ -111,7 +111,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     # Setup the controller
     my_controller = ElectrolyzerController(
-        config=ElectrolyzerControllerConfig.control_electrolyzer(electrolyzer_name),
+        config=ElectrolyzerControllerConfig.for_device("L1ElectrolyzerController", electrolyzer_name),
         my_simulation_parameters=my_simulation_parameters,
     )
 

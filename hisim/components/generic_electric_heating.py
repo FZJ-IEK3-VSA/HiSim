@@ -815,7 +815,11 @@ class ElectricHeatingControllerConfig(ConfigBase):
     #: insulated house cools out in the mornings and evenings of the shoulder season and has to
     #: be heated earlier in the year.
     set_heating_threshold_outside_temperature_in_celsius: Sizable[float] = sized_field(
-        rule=HeatDistributionControllerConfig.HEATING_THRESHOLD_LAW
+        rule=HeatDistributionControllerConfig.HEATING_THRESHOLD_LAW,
+        note=(
+            "the heat distribution controller's step table: 16 °C up to 50 W/m² of specific"
+            " heating load, 18 °C up to 80 W/m², 20 °C above that"
+        ),
     )
     #: Whether the appliance this controls also prepares domestic hot water, in which case the
     #: controller reads the vessel's temperature and can prioritise it over space heating.
@@ -832,7 +836,8 @@ class ElectricHeatingControllerConfig(ConfigBase):
     #: provenance for the threshold above, which the same ratio decides. Sizable so that the
     #: number recorded is the one the threshold was derived from, and not a second hand-typed one.
     specific_heating_load_of_building_in_watt_per_m2: Sizable[float] = sized_field(
-        rule=SPECIFIC_HEATING_LOAD_LAW
+        rule=SPECIFIC_HEATING_LOAD_LAW,
+        note="the building's heating load per m² of conditioned floor area",
     )
 
     @preset

@@ -5,8 +5,6 @@ HiSim :class:`~hisim.component.Component` reads inputs, applies fixed gains,
 and writes outputs each timestep.
 """
 
-from __future__ import annotations
-
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from dataclasses import dataclass
@@ -47,7 +45,7 @@ class ExampleTransformerConfig(ConfigBase):
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> ExampleTransformerConfig:
+    def preset_standard(cls, name: str) -> "ExampleTransformerConfig":
         """Scaler of an unstated quantity: ``ANY`` over ``ANY``, the field defaults.
 
         This is the transformer of the example setups, which scale a series of plain numbers.

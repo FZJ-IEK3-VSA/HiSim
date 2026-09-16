@@ -193,7 +193,10 @@ class GenericBoilerConfig(ConfigBase):
     energy_carrier: lt.LoadTypes
     boiler_type: BoilerType
     minimal_thermal_power_in_watt: Sizable[float] = sized_field(rule=0.0)
-    maximal_thermal_power_in_watt: Sizable[float] = sized_field(rule=MAXIMAL_POWER_LAW)
+    maximal_thermal_power_in_watt: Sizable[float] = sized_field(
+        rule=MAXIMAL_POWER_LAW,
+        note="the larger of the building's heating load and 2.5 kW per apartment, plus 10 % when it serves both",
+    )
     eff_th_min: float = 0.60
     eff_th_max: float = 0.90
     temperature_delta_in_celsius: float = 20.0

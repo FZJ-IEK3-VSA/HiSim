@@ -875,7 +875,8 @@ class HeatDistributionControllerConfig(ConfigBase):
     heating_system: HeatDistributionSystemType = HeatDistributionSystemType.FLOORHEATING
     #: Derived from the building's efficiency by :meth:`heating_threshold_for`.
     set_heating_threshold_outside_temperature_in_celsius: Sizable[float] = sized_field(
-        rule=HEATING_THRESHOLD_LAW
+        rule=HEATING_THRESHOLD_LAW,
+        note="16 °C up to 50 W/m² of specific heating load, 18 °C up to 80 W/m², 20 °C above that",
     )
     heating_reference_temperature_in_celsius: Sizable[float] = sized_field(
         rule=Size.HEATING_REFERENCE_TEMPERATURE_IN_CELSIUS

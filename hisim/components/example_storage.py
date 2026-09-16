@@ -2,13 +2,12 @@
 
 # Generic/Built-in
 import copy
-from typing import Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Owned
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim.economics.facts import CostRelevance
@@ -62,32 +61,41 @@ class ExampleStorageState:
 @dataclass_json
 @dataclass
 class SimpleStorageConfig(ConfigBase):
-    """Configuration of the Simple Storage."""
+    """Configuration of the example storage: what it holds, in what unit, and how much of it.
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the base class."""
-        return SimpleStorage.get_full_classname()
+    The component is a vessel with two ports and a fill level, indifferent to what it stores, so
+    the medium is what distinguishes one instance from another. The one preset it ships::
+
+        SimpleStorageConfig.preset_thermal("SimpleThermalStorage")
+
+    is the 50 kWh warm-water store the example setups use, and ``thermal`` names the medium
+    rather than the size: a store of another medium would be another preset, a store of another
+    size overrides ``capacity_in_kwh``.
+    """
+
+    MAIN_CLASS = "hisim.components.example_storage.SimpleStorage"
 
     component_id: ComponentID
-    loadtype: lt.LoadTypes
-    unit: lt.Units
-    capacity_in_kwh: float
+    #: Physical quantity the two ports and the fill level carry.
+    loadtype: lt.LoadTypes = lt.LoadTypes.WARM_WATER
+    #: Unit that quantity is in.
+    unit: lt.Units = lt.Units.KWH
+    #: How much the vessel holds, in the unit above. The fill level is capped at it and the
+    #: percentage output is measured against it.
+    capacity_in_kwh: float = 50
 
+    @preset
     @classmethod
-    def get_default_thermal_storage(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "SimpleStorageConfig":
-        """Gets a default Simple Storage."""
-        if component_id is None:
-            component_id = ComponentID(name="SimpleThermalStorage")
-        return SimpleStorageConfig(
-            component_id=component_id,
-            loadtype=lt.LoadTypes.WARM_WATER,
-            unit=lt.Units.KWH,
-            capacity_in_kwh=50,
-        )
+    def preset_thermal(cls, name: str) -> "SimpleStorageConfig":
+        """The 50 kWh warm-water store of the example setups, on every field default.
+
+        Args:
+            name: Instance name of the storage in the simulation.
+
+        Returns:
+            The configuration, fully concrete -- the class has no sizable field.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class SimpleStorage(Component):

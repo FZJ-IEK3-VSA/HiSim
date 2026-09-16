@@ -21,69 +21,33 @@ from hisim.config import ComponentID, DisplayConfig
 def test_hydrogen_generator() -> None:
     """Verify electrolyzer output and hydrogen-storage charging at one fixed timestep.
 
-    Builds an AdvancedElectrolyzer and a HydrogenStorage from hardcoded
-    ElectrolyzerWithStorageConfig / ElectrolyzerWithHydrogenStorageConfig
-    values, wires fake ComponentOutputs (4000 W electricity input, zero
-    hydrogen-not-stored, zero discharge target), runs a single simulate
-    step at timestep 1000, and asserts the resulting water demand,
-    unused power, and storage delta match the expected constants.
+    Builds an AdvancedElectrolyzer and a HydrogenStorage from the two
+    presets -- the 2.4 kW machine and the 500 kg tank -- wires fake
+    ComponentOutputs (4000 W electricity input, zero hydrogen-not-stored,
+    zero discharge target), runs a single simulate step at timestep 1000,
+    and asserts the resulting water demand, unused power, and storage
+    delta match the expected constants.
     """
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
-    # HydrogenStorageConfig
-    min_capacity = 0  # [kg_H2]
-    max_capacity = 500  # [kg_H2]
-    starting_fill = 0  # [kg_H2]
-    max_charging_rate_hour = 2  # [kg/h]
-    max_discharging_rate_hour = 2  # [kg/h]
-    # max_charging_rate = max_charging_rate_hour / 3600
-    # max_discharging_rate = max_discharging_rate_hour / 3600
-    energy_for_charge = 0  # [kWh/kg]
-    energy_for_discharge = 0  # [kWh/kg]
-    loss_factor_per_day = 0  # [lost_%/day]
-
-    # ElectrolyzerConfig
-    waste_energy = 400  # [W]   # 400
-    min_power = 1_200  # [W]   # 1400
-    max_power = 2_400  # [W]   # 2400
-    min_power_percent = 60  # [%]
-    max_power_percent = 100  # [%]
-    min_hydrogen_production_rate_hour = 300  # [Nl/h]
-    max_hydrogen_production_rate_hour = 5000  # [Nl/h]   #500
-
-    # min_hydrogen_production_rate = min_hydrogen_production_rate_hour / 3600  # [Nl/s]
-    # max_hydrogen_production_rate = max_hydrogen_production_rate_hour / 3600   # [Nl/s]
-    pressure_hydrogen_output = 30  # [bar]     --> max pressure mode at 35 bar
-
     # ===================================================================================================================
     # Set Hydrogen Generator
-    my_electrolyzer_config = generic_electrolyzer_and_h2_storage.ElectrolyzerWithStorageConfig(
-        component_id=ComponentID(name="ElectrolyzerWithStorage"),
-        waste_energy=waste_energy,
-        min_power=min_power,
-        max_power=max_power,
-        min_power_percent=min_power_percent,
-        max_power_percent=max_power_percent,
-        min_hydrogen_production_rate_hour=min_hydrogen_production_rate_hour,
-        max_hydrogen_production_rate_hour=max_hydrogen_production_rate_hour,
-        pressure_hydrogen_output=pressure_hydrogen_output,
+    my_electrolyzer_config = generic_electrolyzer_and_h2_storage.ElectrolyzerWithStorageConfig.preset_standard(
+        "ElectrolyzerWithStorage"
     )
     my_electrolyzer = generic_electrolyzer_and_h2_storage.AdvancedElectrolyzer(
         my_simulation_parameters=my_simulation_parameters, config=my_electrolyzer_config
     )
-    my_hydrogen_storage_config = generic_electrolyzer_and_h2_storage.ElectrolyzerWithHydrogenStorageConfig(
-        component_id=ComponentID(name="ElectrolyzerWithHydrogenStorage"),
-        min_capacity=min_capacity,
-        max_capacity=max_capacity,
-        starting_fill=starting_fill,
-        max_charging_rate_hour=max_charging_rate_hour,
-        max_discharging_rate_hour=max_discharging_rate_hour,
-        energy_for_charge=energy_for_charge,
-        energy_for_discharge=energy_for_discharge,
-        loss_factor_per_day=loss_factor_per_day,
+    my_hydrogen_storage_config = (
+        generic_electrolyzer_and_h2_storage.ElectrolyzerWithHydrogenStorageConfig.preset_standard(
+            "ElectrolyzerWithHydrogenStorage"
+        )
     )
+    # The expected storage delta below is the charge into an empty tank, which is the one
+    # figure the preset does not carry: it ships the 400 kg the module has always defaulted to.
+    my_hydrogen_storage_config.starting_fill = 0
 
     my_hydrogen_storage = generic_electrolyzer_and_h2_storage.HydrogenStorage(
         my_simulation_parameters=my_simulation_parameters,
@@ -171,29 +135,16 @@ def test_display_config_instance_isolation() -> None:
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
-    electrolyzer_config = generic_electrolyzer_and_h2_storage.ElectrolyzerWithStorageConfig(
-        component_id=ComponentID(name="ElectrolyzerWithStorage"),
-        waste_energy=400,
-        min_power=1_200,
-        max_power=2_400,
-        min_power_percent=60,
-        max_power_percent=100,
-        min_hydrogen_production_rate_hour=300,
-        max_hydrogen_production_rate_hour=5000,
-        pressure_hydrogen_output=30,
+    electrolyzer_config = generic_electrolyzer_and_h2_storage.ElectrolyzerWithStorageConfig.preset_standard(
+        "ElectrolyzerWithStorage"
     )
 
-    storage_config = generic_electrolyzer_and_h2_storage.ElectrolyzerWithHydrogenStorageConfig(
-        component_id=ComponentID(name="HydrogenStorage"),
-        min_capacity=0,
-        max_capacity=500,
-        starting_fill=0,
-        max_charging_rate_hour=2,
-        max_discharging_rate_hour=2,
-        energy_for_charge=0,
-        energy_for_discharge=0,
-        loss_factor_per_day=0,
+    storage_config = generic_electrolyzer_and_h2_storage.ElectrolyzerWithHydrogenStorageConfig.preset_standard(
+        "HydrogenStorage"
     )
+    # The tank starts empty here, which is the one figure the preset does not carry: it ships
+    # the 400 kg the module has always defaulted to.
+    storage_config.starting_fill = 0
 
     # Create multiple instances without passing my_display_config
     electrolyzer_1 = generic_electrolyzer_and_h2_storage.AdvancedElectrolyzer(

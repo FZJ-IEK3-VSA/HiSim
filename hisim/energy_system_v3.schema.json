@@ -138,12 +138,15 @@
             "hisim.components.generic_car.Car",
             "hisim.components.generic_district_heating.DistrictHeating",
             "hisim.components.generic_electric_heating.ElectricHeating",
+            "hisim.components.generic_heat_pump.GenericHeatPump",
             "hisim.components.generic_pv_system.PVSystem",
             "hisim.components.heat_distribution_system.HeatDistribution",
             "hisim.components.heat_distribution_system.HeatDistributionController",
             "hisim.components.heating_meter.HeatingMeter",
+            "hisim.components.idealized_electric_heater.IdealizedElectricHeater",
             "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
             "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib",
+            "hisim.components.simple_heat_source.SimpleHeatSource",
             "hisim.components.simple_water_storage.SimpleDHWStorage",
             "hisim.components.simple_water_storage.SimpleHotWaterStorage",
             "hisim.components.weather.Weather"
@@ -1657,6 +1660,82 @@
             "properties": {
               "class": {
                 "enum": [
+                  "hisim.components.generic_heat_pump.GenericHeatPump"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "vitocal_300_a"
+                ]
+              },
+              "constructor": {
+                "type": "object",
+                "minProperties": 1,
+                "maxProperties": 1,
+                "propertyNames": {
+                  "enum": [
+                    "for_device"
+                  ]
+                },
+                "properties": {
+                  "for_device": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "manufacturer",
+                      "heat_pump_name"
+                    ],
+                    "properties": {
+                      "manufacturer": {
+                        "type": "string"
+                      },
+                      "heat_pump_name": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "manufacturer": {
+                    "type": "string"
+                  },
+                  "heat_pump_name": {
+                    "type": "string"
+                  },
+                  "min_operation_time_in_seconds": {
+                    "type": "number"
+                  },
+                  "min_idle_time_in_seconds": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
                   "hisim.components.generic_pv_system.PVSystem"
                 ]
               }
@@ -2098,6 +2177,49 @@
             "properties": {
               "class": {
                 "enum": [
+                  "hisim.components.idealized_electric_heater.IdealizedElectricHeater"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "set_heating_temperature_for_building_in_celsius": {
+                    "type": "number"
+                  },
+                  "set_cooling_temperature_for_building_in_celsius": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
                   "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector"
                 ]
               }
@@ -2424,6 +2546,116 @@
                     "heating_load_in_watt",
                     "heating_reference_temperature_in_celsius"
                   ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.simple_heat_source.SimpleHeatSource"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "constant_thermal_power",
+                  "constant_temperature",
+                  "near_surface_brine"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "heat_source_type": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "CONSTANT_THERMAL_POWER",
+                          "CONSTANT_TEMPERATURE",
+                          "NEAR_SURFACE_BRINE_TEMPERATURE"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "power_th_in_watt": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "temperature_output_in_celsius": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "fluid_type": {
+                    "enum": [
+                      "WATER",
+                      "ETHYLENE_GLYCOL",
+                      "PROPYLEN_GLYCOL",
+                      "ETHANOL",
+                      "METHANOL"
+                    ]
+                  },
+                  "mass_fraction_of_fluid_mixed_in_water": {
+                    "type": "number"
+                  },
+                  "massflow_nominal_in_kg_per_s": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "use_external_massflow_as_signal_input_for_nominal_massflow": {
+                    "type": "boolean"
+                  },
+                  "device_co2_footprint_in_kg": {
+                    "type": "number"
+                  },
+                  "investment_costs_in_euro": {
+                    "type": "number"
+                  },
+                  "lifetime_in_years": {
+                    "type": "number"
+                  },
+                  "maintenance_costs_in_euro_per_year": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
                 }
               }
             }

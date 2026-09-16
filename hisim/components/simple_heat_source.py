@@ -18,20 +18,11 @@ from hisim import loadtypes as lt
 from hisim.loadtypes import Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import ComponentInput, ComponentConnection, OpexCostDataClass, CapexCostDataClass
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.components import weather
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import prorate_to_simulated_period
 from hisim.economics.facts import CostRelevance
-
-__authors__ = "Jonas Hoppe"
-__copyright__ = ""
-__credits__ = [""]
-__license__ = ""
-__version__ = ""
-__maintainer__ = ""
-__email__ = ""
-__status__ = ""
 
 
 class SimpleHeatSourceType(str, Enum):
@@ -65,7 +56,20 @@ class FluidMediaType(str, Enum):
 @dataclass_json
 @dataclass
 class SimpleHeatSourceConfig(ConfigBase):
-    """Configuration of a generic HeatSource.
+    """Configuration of the Simple Heat Source class.
+
+    The cold side of a heat pump: a brine circuit that hands the machine a massflow at some
+    temperature. What it is depends on :attr:`heat_source_type`, and the presets are one per
+    kind -- :meth:`preset_constant_thermal_power` puts a fixed thermal power into the circuit,
+    :meth:`preset_constant_temperature` holds a fixed output temperature, and
+    :meth:`preset_near_surface_brine` derives the output temperature from the daily average
+    outside temperature, the way a shallow ground collector behaves::
+
+        SimpleHeatSourceConfig.preset_near_surface_brine("HeatSource")
+
+    Everything the three share -- the fluid, its mixing ratio, the nominal massflow and the
+    four investment figures -- is a field default, so a preset states only the kind of source
+    it is and the one number that kind needs.
 
     JSON field-name migrations (issue #1603):
         ``const_source``              -> ``heat_source_type``
@@ -76,129 +80,98 @@ class SimpleHeatSourceConfig(ConfigBase):
     always emit the current names.
     """
 
+    MAIN_CLASS = "hisim.components.simple_heat_source.SimpleHeatSource"
+
     component_id: ComponentID
-    power_th_in_watt: Optional[float]
-    temperature_output_in_celsius: Optional[float]
+    #: Which kind of source this is, and therefore which of the two numbers below the
+    #: component reads. The component refuses to start on ``None``.
     heat_source_type: Optional[SimpleHeatSourceType]
-    fluid_type: FluidMediaType
-    mass_fraction_of_fluid_mixed_in_water: float
-    massflow_nominal_in_kg_per_s: Optional[float]
-    use_external_massflow_as_signal_input_for_nominal_massflow: bool
-    #: CO2 footprint of investment in kg
-    device_co2_footprint_in_kg: float
-    #: cost for investment in Euro
-    investment_costs_in_euro: float
-    #: lifetime in years
-    lifetime_in_years: float
-    # maintenance cost in euro per year
-    maintenance_costs_in_euro_per_year: float
+    #: Thermal power put into the circuit, read only by a ``CONSTANT_THERMAL_POWER`` source.
+    power_th_in_watt: Optional[float] = None
+    #: Temperature the circuit is held at, read only by a ``CONSTANT_TEMPERATURE`` source.
+    temperature_output_in_celsius: Optional[float] = None
+    #: Fluid circulating on the source side; its heat capacity is looked up from pygfunction.
+    fluid_type: FluidMediaType = FluidMediaType.PROPYLEN_GLYCOL
+    #: Share of that fluid in the water it is mixed with, as a fraction.
+    mass_fraction_of_fluid_mixed_in_water: float = 0.20
+    #: Massflow the circuit runs at when the external signal below is used instead of the
+    #: measured massflow input.
+    massflow_nominal_in_kg_per_s: Optional[float] = 0.5
+    #: Whether a non-zero massflow input is a mere on signal, the circuit then running at
+    #: :attr:`massflow_nominal_in_kg_per_s` rather than at the value handed in.
+    use_external_massflow_as_signal_input_for_nominal_massflow: bool = False
+    #: CO2 footprint of investment in kg. Todo: check value
+    device_co2_footprint_in_kg: float = 100
+    #: cost for investment in Euro. Value from
+    #: https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick
+    #: for an earth collector.
+    investment_costs_in_euro: float = 2000
+    #: lifetime in years, value from emission_factors_and_costs_devices.csv
+    lifetime_in_years: float = 25
+    #: maintenance cost in euro per year, from
+    #: https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick
+    #: for an earth collector.
+    maintenance_costs_in_euro_per_year: float = 10
 
+    @preset
     @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return SimpleHeatSource.get_full_classname()
+    def preset_constant_thermal_power(cls, name: str) -> "SimpleHeatSourceConfig":
+        """A source that puts a constant 5 kW of heat into the brine circuit.
 
-    @classmethod
-    def get_default_config_const_power(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "SimpleHeatSourceConfig":
-        """Returns default configuration of a Heat Source used for heating."""
-        if component_id is None:
-            component_id = ComponentID(name="HeatSourceConstPower")
-        config = SimpleHeatSourceConfig(
-            component_id=component_id,
-            heat_source_type=SimpleHeatSourceType.CONSTANT_THERMAL_POWER,  # type: ignore
+        The output temperature follows from that power and the massflow the circuit carries,
+        so :attr:`temperature_output_in_celsius` stays unset.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            SimpleHeatSourceConfig: The preset configuration.
+        """
+        return cls(
+            component_id=ComponentID(name=name),
+            heat_source_type=SimpleHeatSourceType.CONSTANT_THERMAL_POWER,
             power_th_in_watt=5000.0,
-            temperature_output_in_celsius=None,
-            fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
-            mass_fraction_of_fluid_mixed_in_water=0.20,
-            massflow_nominal_in_kg_per_s=0.5,
-            use_external_massflow_as_signal_input_for_nominal_massflow=False,
-            device_co2_footprint_in_kg=100,  # Todo: check value
-            investment_costs_in_euro=2000,  # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
-            lifetime_in_years=25,
-            maintenance_costs_in_euro_per_year=10,  # from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
         )
-        return config
 
+    @preset
     @classmethod
-    def get_default_config_const_temperature(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "SimpleHeatSourceConfig":
-        """Returns default configuration of a Heat Source used for heating."""
-        if component_id is None:
-            component_id = ComponentID(name="HeatSourceConstTemperature")
-        config = SimpleHeatSourceConfig(
-            component_id=component_id,
-            heat_source_type=SimpleHeatSourceType.CONSTANT_TEMPERATURE,  # type: ignore
-            power_th_in_watt=None,
+    def preset_constant_temperature(cls, name: str) -> "SimpleHeatSourceConfig":
+        """A source that holds the brine circuit at a constant 5 °C.
+
+        The thermal power follows from that temperature and the massflow the circuit carries,
+        so :attr:`power_th_in_watt` stays unset.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            SimpleHeatSourceConfig: The preset configuration.
+        """
+        return cls(
+            component_id=ComponentID(name=name),
+            heat_source_type=SimpleHeatSourceType.CONSTANT_TEMPERATURE,
             temperature_output_in_celsius=5,
-            fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
-            mass_fraction_of_fluid_mixed_in_water=0.20,
-            massflow_nominal_in_kg_per_s=0.5,
-            use_external_massflow_as_signal_input_for_nominal_massflow=False,
-            device_co2_footprint_in_kg=100,  # Todo: check value
-            investment_costs_in_euro=2000,
-            # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
-            lifetime_in_years=25,  # value from emission_factors_and_costs_devices.csv
-            maintenance_costs_in_euro_per_year=10,
-            # from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
         )
-        return config
 
+    @preset
     @classmethod
-    def get_default_config_near_surface_brine_temperature(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "SimpleHeatSourceConfig":
-        """Return the default config for a near-surface brine heat source.
+    def preset_near_surface_brine(cls, name: str) -> "SimpleHeatSourceConfig":
+        """A shallow ground collector, its brine temperature following the weather.
 
-        Sets ``heat_source_type`` to
-        :attr:`SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE`, which
-        models a variable brine temperature derived from the daily average
-        outside temperature.
+        Neither a power nor a temperature is pinned: the component derives the output
+        temperature from the daily average outside temperature with the cubic fit hplib
+        uses for soil temperature, and the thermal power follows from it and the massflow.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            SimpleHeatSourceConfig: The preset configuration.
         """
-        if component_id is None:
-            component_id = ComponentID(name="HeatSourceVarBrineTemperature")
-        config = SimpleHeatSourceConfig(
-            component_id=component_id,
-            heat_source_type=SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE,  # type: ignore
-            power_th_in_watt=None,
-            temperature_output_in_celsius=None,
-            fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
-            mass_fraction_of_fluid_mixed_in_water=0.20,
-            massflow_nominal_in_kg_per_s=0.5,
-            use_external_massflow_as_signal_input_for_nominal_massflow=False,
-            device_co2_footprint_in_kg=100,  # Todo: check value
-            investment_costs_in_euro=2000,
-            # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
-            lifetime_in_years=25,  # value from emission_factors_and_costs_devices.csv
-            maintenance_costs_in_euro_per_year=10,
-            # from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
+        return cls(
+            component_id=ComponentID(name=name),
+            heat_source_type=SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE,
         )
-        return config
-
-    @classmethod
-    def get_default_config_var_brinetemperature(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "SimpleHeatSourceConfig":
-        """Deprecated alias for :meth:`get_default_config_near_surface_brine_temperature`.
-
-        The original abbreviated name ``get_default_config_var_brinetemperature``
-        was renamed for clarity (issue #1603). This shim keeps older callers
-        working and emits a :class:`DeprecationWarning`.
-        """
-        warnings.warn(
-            "SimpleHeatSourceConfig.get_default_config_var_brinetemperature is "
-            "deprecated; use get_default_config_near_surface_brine_temperature "
-            "instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return cls.get_default_config_near_surface_brine_temperature(component_id)
 
 
 # Backward-compatible deserialization for config fields renamed in issue #1603.

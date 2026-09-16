@@ -10,12 +10,12 @@ from __future__ import annotations
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from dataclasses import dataclass
-from typing import ClassVar, Optional
+from typing import ClassVar
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.economics.facts import CostRelevance
@@ -24,39 +24,41 @@ from hisim.economics.facts import CostRelevance
 @dataclass_json
 @dataclass
 class ExampleTransformerConfig(ConfigBase):
-    """Configuration of the Example Transformer."""
+    """Configuration of the example transformer: the quantity it scales, and the unit it is in.
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the base class."""
-        return str(ExampleTransformer.get_full_classname())
+    The component scales two arbitrary series by two fixed gains, so the one preset it ships::
+
+        ExampleTransformerConfig.preset_standard("ExampleTransformerDefault")
+
+    states no quantity at all -- ``ANY`` over ``ANY`` -- which is what the two example setups
+    feed it. A transformer of a stated quantity says so by overriding the two fields, and the
+    framework then refuses at wiring time to connect it to a port of another quantity: a
+    connected ``ComponentInput`` and ``ComponentOutput`` must agree on load type and unit.
+    """
+
+    MAIN_CLASS = "hisim.components.example_transformer.ExampleTransformer"
 
     component_id: ComponentID
-    loadtype: lt.LoadTypes
-    unit: lt.Units
+    #: Physical quantity the two inputs and the two outputs carry. ``ANY`` scales whatever it
+    #: is fed; the gains of :class:`ExampleTransformer` are what give the values their meaning.
+    loadtype: lt.LoadTypes = lt.LoadTypes.ANY
+    #: Unit that quantity is in. ``ANY`` for the same reason as ``loadtype``.
+    unit: lt.Units = lt.Units.ANY
 
+    @preset
     @classmethod
-    def get_default_transformer(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> ExampleTransformerConfig:
-        """Returns a default :class:`ExampleTransformerConfig`.
+    def preset_standard(cls, name: str) -> ExampleTransformerConfig:
+        """Scaler of an unstated quantity: ``ANY`` over ``ANY``, the field defaults.
+
+        This is the transformer of the example setups, which scale a series of plain numbers.
 
         Args:
-            component_id: Structured identity (name, building, unit) of the transformer.
-                Defaults to a building-less identity named ``"ExampleTransformerDefault"``.
+            name: Instance name of the transformer in the simulation.
 
         Returns:
-            A config with ``LoadTypes.ANY`` / ``Units.ANY`` and the name
-            ``"ExampleTransformerDefault"``.
+            The configuration, fully concrete -- the class has no sizable field.
         """
-        if component_id is None:
-            component_id = ComponentID(name="ExampleTransformerDefault")
-        return ExampleTransformerConfig(
-            component_id=component_id,
-            loadtype=lt.LoadTypes.ANY,
-            unit=lt.Units.ANY,
-        )
+        return cls(component_id=ComponentID(name=name))
 
 
 class ExampleTransformer(Component):

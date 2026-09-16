@@ -41,15 +41,6 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, 
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.economics.facts import CostRelevance
 
-__authors__ = "Jonas Hoppe"
-__copyright__ = ""
-__credits__ = [""]
-__license__ = ""
-__version__ = ""
-__maintainer__ = ""
-__email__ = ""
-__status__ = ""
-
 
 @unique
 class HotWaterStorageSizingEnum(str, Enum):
@@ -85,16 +76,14 @@ def _buffer_volume_in_liter(ctx: SizingContext, own: OwnFields) -> float:
     """Computes a buffer vessel's volume from the generator it buffers and the kind that generator is.
 
     The law behind the ``volume_heating_water_storage_in_liter`` field of
-    :class:`SimpleHotWaterStorageConfig`. It is the sizing the deleted
-    ``get_scaled_hot_water_storage`` factory performed, moved to the field that carries the
-    result: the generator's maximal thermal power in kilowatt times the litres-per-kilowatt
-    figure its kind is buffered at, rounded to two decimals. The figures themselves live in
+    :class:`SimpleHotWaterStorageConfig`: the generator's maximal thermal power in kilowatt
+    times the litres-per-kilowatt figure its kind is buffered at, rounded to two decimals. The
+    figures themselves live in
     :attr:`SimpleHotWaterStorageConfig.LITRES_PER_KILOWATT_BY_SIZING_OPTION` with their sources,
     so they are written down once.
 
-    The power read is the *generator's*, never the building's heating load -- passing the load
-    was the C11 defect (P4 decision D-9), fixed setup-side in 2026-09-11 and now stated by the
-    law itself.
+    The power read is the *generator's*, never the building's heating load: a vessel buffers the
+    machine that fills it, not the house it stands in.
 
     Args:
         ctx: The sizing facts of the surrounding system; ``maximal_thermal_power_in_watt`` is
@@ -121,7 +110,12 @@ def _buffer_volume_in_liter(ctx: SizingContext, own: OwnFields) -> float:
     sizing_option = own.value_of("sizing_option")
     litres_per_kilowatt = SimpleHotWaterStorageConfig.LITRES_PER_KILOWATT_BY_SIZING_OPTION.get(sizing_option)
     if litres_per_kilowatt is None:
-        raise ValueError(f"Sizing option for Simple Hot Water Storage {sizing_option} is unvalid.")
+        known = ", ".join(option.name for option in SimpleHotWaterStorageConfig.LITRES_PER_KILOWATT_BY_SIZING_OPTION)
+        raise ValueError(
+            f"No litres-per-kilowatt figure is known for the sizing option {sizing_option}, so a "
+            f"buffer vessel for it cannot be sized. The kinds of generator this table covers "
+            f"are: {known}."
+        )
     return round(maximal_thermal_power_in_watt / 1e3 * litres_per_kilowatt, 2)
 
 
@@ -133,20 +127,14 @@ class SimpleHotWaterStorageConfig(ConfigBase):
     The space-heating buffer vessel. The named default is :meth:`preset_buffer`, and
     ``volume_heating_water_storage_in_liter`` is sizable: the preset leaves it ``AUTO`` and
     ``.resolve(ctx)`` computes it from the maximal thermal power of the generator the vessel
-    buffers, which is what the deleted ``get_scaled_hot_water_storage`` factory did setup-side.
-    An author who knows the vessel pins the field instead, which is what the deleted
-    ``get_default_simplehotwaterstorage_config`` factory was for.
+    buffers. An author who knows the vessel pins the field instead.
 
-    ``sizing_option`` is new with the conversion (P4 decision D-10 (a)). It used to be an
-    argument of the scaled factory alone, so a finished configuration recorded a volume without
-    recording which litres-per-kilowatt figure had produced it; as a field it is part of the
-    record and the law reads it as a sibling.
+    ``sizing_option`` says which kind of generator the vessel buffers, and so which
+    litres-per-kilowatt figure the volume law applies. It is a field rather than an argument of
+    the law so that a finished configuration records the figure its volume came from.
     """
 
-    @classmethod
-    def get_main_classname(cls):
-        """Return the full class name of the base class."""
-        return SimpleHotWaterStorage.get_full_classname()
+    MAIN_CLASS = "hisim.components.simple_water_storage.SimpleHotWaterStorage"
 
     #: Litres of buffer volume per kilowatt of installed generator power, by the kind of
     #: generator the vessel buffers. Heat pumps and wood chip boilers get the largest vessel
@@ -176,29 +164,38 @@ class SimpleHotWaterStorageConfig(ConfigBase):
     )
 
     component_id: ComponentID
-    heat_transfer_coefficient_in_watt_per_m2_per_kelvin: float
-    heat_exchanger_is_present: bool
-    position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup
+    #: Heat the vessel loses to its surroundings, per square metre of surface and kelvin of
+    #: difference. It should be checked how much energy the storage lost over the simulated
+    #: period; the accepted loss in kWh/day is on p. 2 of
+    #: https://www.bdh-industrie.de/fileadmin/user_upload/ISH2019/Infoblaetter/Infoblatt_Nr_74_Energetische_Bewertung_Warmwasserspeicher.pdf
+    heat_transfer_coefficient_in_watt_per_m2_per_kelvin: float = 2.0
+    #: With the exchanger the outlet temperature is the vessel's mean; without it the vessel
+    #: stratifies and a mixing factor is computed instead. The stratified mode still causes
+    #: problems, which is why the exchanger is the default.
+    heat_exchanger_is_present: bool = True
+    #: Where the vessel sits, which decides its wiring: only ``PARALLEL_TO_HEAT_SOURCE`` gives
+    #: the component its four heat-generator inputs.
+    position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup = (
+        PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE
+    )
     #: Which kind of generator this vessel buffers, and so which litres-per-kilowatt figure of
     #: :attr:`LITRES_PER_KILOWATT_BY_SIZING_OPTION` the volume law applies. A plain field, not a
     #: sizable one: nothing in the system contributes it, the author states it beside the
     #: generator they installed.
-    sizing_option: HotWaterStorageSizingEnum
-    # it should be checked how much energy the storage lost during the simulated period (see guidelines below, p.2, accepted loss in kWh/days)
-    # https://www.bdh-industrie.de/fileadmin/user_upload/ISH2019/Infoblaetter/Infoblatt_Nr_74_Energetische_Bewertung_Warmwasserspeicher.pdf
-    #: CO2 footprint of investment in kg
-    device_co2_footprint_in_kg: Optional[float]
+    sizing_option: HotWaterStorageSizingEnum = HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM
+    #: CO2 footprint of investment in kg. Unset throughout the repository, which is what makes
+    #: postprocessing look the vessel up in the cost database instead.
+    device_co2_footprint_in_kg: Optional[float] = None
     #: cost for investment in Euro
-    investment_costs_in_euro: Optional[float]
+    investment_costs_in_euro: Optional[float] = None
     #: lifetime in years
-    lifetime_in_years: Optional[float]
+    lifetime_in_years: Optional[float] = None
     # maintenance cost in euro per year
-    maintenance_costs_in_euro_per_year: Optional[float]
+    maintenance_costs_in_euro_per_year: Optional[float] = None
     # subsidies as percentage of investment costs
-    subsidy_as_percentage_of_investment_costs: Optional[float]
+    subsidy_as_percentage_of_investment_costs: Optional[float] = None
     #: Volume of the vessel. Sizable: left ``AUTO`` it is computed by :data:`VOLUME_LAW` from the
-    #: generator's maximal thermal power. It is declared here rather than beside the other vessel
-    #: properties because a field with a default may not precede one without.
+    #: generator's maximal thermal power.
     volume_heating_water_storage_in_liter: Sizable[float] = sized_field(rule=VOLUME_LAW)
 
     @preset
@@ -206,21 +203,13 @@ class SimpleHotWaterStorageConfig(ConfigBase):
     def preset_buffer(cls, name: str) -> "SimpleHotWaterStorageConfig":
         """The fleet's space-heating buffer vessel, scaled to the generator it buffers.
 
-        A tank losing 2.0 watt per square metre and kelvin, standing parallel to the heat source
-        and fitted with a heat exchanger, buffering a generator of no particular kind
-        (``SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM``, 20 l/kW). What it does not fix is how
-        large the tank is: ``volume_heating_water_storage_in_liter`` stays ``AUTO`` so that
-        :data:`VOLUME_LAW` derives it from the generator's maximal thermal power, and an author
-        who knows the vessel pins the field instead. Capex fields stay ``None`` so
-        post-processing looks them up in the device database, exactly as the deleted factories
-        did.
-
-        The two pinned flags are the ones both deleted factories agreed on and every setup used.
-        ``heat_exchanger_is_present`` is physics: with the exchanger the outlet temperature is
-        the vessel's mean, without it the vessel stratifies and a mixing factor is computed
-        instead -- the stratified mode still causes problems, which is why the exchanger is the
-        default. ``position_hot_water_storage_in_system`` is wiring: only
-        ``PARALLEL_TO_HEAT_SOURCE`` gives the component its four heat-generator inputs.
+        The field defaults are this vessel: a tank losing 2.0 watt per square metre and kelvin,
+        standing parallel to the heat source and fitted with a heat exchanger, buffering a
+        generator of no particular kind (``SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM``, 20 l/kW).
+        What the preset does not fix is how large the tank is:
+        ``volume_heating_water_storage_in_liter`` stays ``AUTO`` so that :data:`VOLUME_LAW`
+        derives it from the generator's maximal thermal power, and an author who knows the vessel
+        pins the field instead.
 
         Args:
             name: The instance name, which becomes the configuration's component identity.
@@ -228,19 +217,7 @@ class SimpleHotWaterStorageConfig(ConfigBase):
         Returns:
             SimpleHotWaterStorageConfig: The preset configuration, with the volume unsized.
         """
-        return cls(
-            component_id=ComponentID(name=name),
-            heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
-            heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
-            position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE,
-            sizing_option=HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-        )
+        return cls(component_id=ComponentID(name=name))
 
 
 @dataclass_json
@@ -251,20 +228,13 @@ class SimpleDHWStorageConfig(ConfigBase):
     The domestic-hot-water vessel of a household. The named default is
     :meth:`preset_standard`, and ``volume_heating_water_storage_in_liter`` is sizable: the
     preset leaves it ``AUTO`` and ``.resolve(ctx)`` computes it from the number of apartments
-    the building contributes, which is what the deleted ``get_scaled_dhw_storage`` factory did
-    setup-side. An author who knows the vessel pins the field instead, which is what the
-    deleted ``get_default_simpledhwstorage_config`` factory was for.
+    the building contributes. An author who knows the vessel pins the field instead.
     """
 
-    @classmethod
-    def get_main_classname(cls):
-        """Return the full class name of the base class."""
-        return SimpleDHWStorage.get_full_classname()
+    MAIN_CLASS = "hisim.components.simple_water_storage.SimpleDHWStorage"
 
-    #: Litres of domestic hot water storage per apartment. The deleted
-    #: ``get_scaled_dhw_storage`` factory carried this as its ``default_volume_in_liter``
-    #: argument and recorded no source for it; every one of its nineteen call sites accepted
-    #: the default, so the number is the fleet's convention rather than a cited standard.
+    #: Litres of domestic hot water storage per apartment. The number is the fleet's convention
+    #: rather than a cited standard: every household in the repository uses it.
     VOLUME_PER_APARTMENT_IN_LITER: ClassVar[float] = 250.0
 
     #: Sizing law of the vessel's volume: :data:`VOLUME_PER_APARTMENT_IN_LITER` for every
@@ -275,20 +245,22 @@ class SimpleDHWStorageConfig(ConfigBase):
     VOLUME_LAW: ClassVar[SizingLaw] = Size.NUMBER_OF_APARTMENTS.at_least(1) * VOLUME_PER_APARTMENT_IN_LITER
 
     component_id: ComponentID
-    heat_transfer_coefficient_in_watt_per_m2_per_kelvin: float
-    #: CO2 footprint of investment in kg
-    device_co2_footprint_in_kg: Optional[float]
+    #: Heat the vessel loses to its surroundings, per square metre of surface and kelvin of
+    #: difference.
+    heat_transfer_coefficient_in_watt_per_m2_per_kelvin: float = 0.36
+    #: CO2 footprint of investment in kg. Unset throughout the repository, which is what makes
+    #: postprocessing look the vessel up in the cost database instead.
+    device_co2_footprint_in_kg: Optional[float] = None
     #: cost for investment in Euro
-    investment_costs_in_euro: Optional[float]
+    investment_costs_in_euro: Optional[float] = None
     #: lifetime in years
-    lifetime_in_years: Optional[float]
+    lifetime_in_years: Optional[float] = None
     # maintenance cost in euro per year
-    maintenance_costs_in_euro_per_year: Optional[float]
+    maintenance_costs_in_euro_per_year: Optional[float] = None
     # subsidies as percentage of investment costs
-    subsidy_as_percentage_of_investment_costs: Optional[float]
+    subsidy_as_percentage_of_investment_costs: Optional[float] = None
     #: Volume of the vessel. Sizable: left ``AUTO`` it is computed by :data:`VOLUME_LAW` from
-    #: the apartment count the building contributes. It is declared here rather than beside the
-    #: heat transfer coefficient because a field with a default may not precede one without.
+    #: the apartment count the building contributes.
     volume_heating_water_storage_in_liter: Sizable[float] = sized_field(rule=VOLUME_LAW)
 
     @preset
@@ -296,12 +268,11 @@ class SimpleDHWStorageConfig(ConfigBase):
     def preset_standard(cls, name: str) -> "SimpleDHWStorageConfig":
         """The fleet's domestic-hot-water vessel, scaled to the building it stands in.
 
-        A tank losing 0.36 watt per square metre and kelvin to its surroundings. What it does
-        not fix is how large the tank is: ``volume_heating_water_storage_in_liter`` stays
-        ``AUTO`` so that :data:`VOLUME_LAW` derives it from the building's apartment count, and
-        an author who knows the vessel pins the field instead. Capex fields stay ``None`` so
-        post-processing looks them up in the device database, exactly as the deleted factories
-        did.
+        The field defaults are this vessel: a tank losing 0.36 watt per square metre and kelvin
+        to its surroundings. What the preset does not fix is how large the tank is:
+        ``volume_heating_water_storage_in_liter`` stays ``AUTO`` so that :data:`VOLUME_LAW`
+        derives it from the building's apartment count, and an author who knows the vessel pins
+        the field instead.
 
         Args:
             name: The instance name, which becomes the configuration's component identity.
@@ -309,16 +280,7 @@ class SimpleDHWStorageConfig(ConfigBase):
         Returns:
             SimpleDHWStorageConfig: The preset configuration, with the volume unsized.
         """
-        return cls(
-            component_id=ComponentID(name=name),
-            heat_transfer_coefficient_in_watt_per_m2_per_kelvin=0.36,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-        )
+        return cls(component_id=ComponentID(name=name))
 
 
 @dataclass

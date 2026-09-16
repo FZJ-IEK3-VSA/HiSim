@@ -41,7 +41,7 @@ class BuildingConfig(ConfigBase):
     the field.
     """
 
-    MAIN_CLASS = "hisim.components.building.Building"
+    MAIN_CLASS = "hisim.components.building.building.Building"
 
     component_id: ComponentID
     #: Outside design temperature the heating load is computed for.

@@ -53,8 +53,9 @@ def _rooftop_power_in_watt(ctx: SizingContext, own: OwnFields) -> float:
     :meth:`PVSystemConfig.size_pv_system`, which this function only feeds, so a module's area and
     rating are written down in one place.
 
-    The share is applied exactly once, here, so what the field ends up holding is the array that
-    is built rather than a maximum, and a record of this configuration replays to the same array.
+    The share is applied exactly once, in :meth:`PVSystemConfig.size_pv_system`, so what the field
+    ends up holding is the array that is built rather than a maximum, and a record of this
+    configuration replays to the same array.
 
     Args:
         ctx: The sizing facts of the surrounding system; ``roof_area_in_m2`` is read from it,
@@ -233,7 +234,7 @@ class PVSystemConfig(ConfigBase):
         the array that is built, not a maximum.
 
         Example: a 120 m² roof covered with Trina Solar TSM-435NE09RC.05 modules at a share of
-        1.0 gives ``120 * 0.6 / 1.98 * 435.16``, i.e. 15 823.27 watt.
+        1.0 gives ``120 * 0.6 / 1.98 * 435.16``, i.e. 15 824.0 watt.
 
         Args:
             rooftop_area_in_m2: The building's gross roof area.
@@ -252,9 +253,10 @@ class PVSystemConfig(ConfigBase):
         module = cls.MODULES.get((module_name, module_database))
         if module is None:
             known = ", ".join(f"({name!r}, {database.name})" for name, database in cls.MODULES)
+            database_name = getattr(module_database, "name", module_database)
             raise ValueError(
                 f"No area and rating are known for the module ({module_name!r}, "
-                f"{module_database.name}), so an array of it cannot be sized. The module and "
+                f"{database_name}), so an array of it cannot be sized. The module and "
                 f"database pairs this repository carries are: {known}."
             )
         effective_rooftop_area_in_m2 = rooftop_area_in_m2 * cls.USABLE_ROOF_FRACTION

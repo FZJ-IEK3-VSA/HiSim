@@ -133,8 +133,8 @@ every golden pair unchanged in both modes, `describe` output identical except th
 their defaults, `hisim energy-system schema` unchanged, and the line count of each touched
 configuration module reported before and after.
 
-Executed 2026-09-15: the fourteen touched modules lose 240 lines (13 589 → 13 349; the PV
-configuration alone 342 → 268), `ConfigBase` gains 47 for `MAIN_CLASS` and the one
+Executed 2026-09-15: the fourteen touched modules lose 249 lines (13 589 → 13 340; the PV
+configuration alone 340 → 264), `ConfigBase` gains 52 for `MAIN_CLASS` and the one
 `get_main_classname`; twins, goldens (both modes, `one_week_60s`) and the schema unchanged.
 
 ### R2 — Gates that touch shared code `[proposed; survey A Gate 0, B Gate B-0, C D-19]`

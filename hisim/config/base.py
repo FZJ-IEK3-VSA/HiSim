@@ -356,14 +356,17 @@ class ConfigBase:
         """Returns the fully qualified name of the component class this configuration configures.
 
         Serialized scenarios and postprocessing spell a component by this string, so it has to be
-        the one the rest of HiSim uses. It is derived from :py:attr:`MAIN_CLASS`: the named module
-        is imported at call time (a component module imports its configuration, so a module-level
-        import here would close the cycle) and the resolved class supplies its own module and
-        name. Resolving instead of echoing the path is what lets a component re-exported under a
-        shorter package path (``PVSystem``, ``Weather``) come out under the path HiSim uses.
+        the one the rest of HiSim uses: the component's own ``get_full_classname()``. The class is
+        found through :py:attr:`MAIN_CLASS`, imported at call time (a component module imports its
+        configuration, so a module-level import here would close the cycle), and asked for its own
+        name. The declared path is where the class is imported from; the returned path is the
+        module the class was defined in, and the two agree only where a package pins the class's
+        ``__module__`` to the shorter path (``PVSystem``, ``Weather`` do; the building does not).
 
         Example: ``PVSystemConfig.MAIN_CLASS`` is ``"hisim.components.generic_pv_system.PVSystem"``
-        and this returns that same string.
+        and this returns that same string. ``BuildingConfig.MAIN_CLASS`` is
+        ``"hisim.components.building.building.Building"``, the defining module, so that it too
+        reads as what the method returns.
 
         Returns:
             str: ``<module of the component class>.<name of the component class>``.
@@ -371,7 +374,9 @@ class ConfigBase:
         Raises:
             NotImplementedError: If the class neither declares ``MAIN_CLASS`` nor overrides this
                 method; the message names the class.
-            ValueError: If ``MAIN_CLASS`` is not a dotted path and so names no module.
+            ValueError: If ``MAIN_CLASS`` is not a dotted path, names a module that cannot be
+                imported, or names an attribute the module does not have; the message names the
+                class and the path.
         """
         if not cls.MAIN_CLASS:
             raise NotImplementedError(
@@ -386,8 +391,14 @@ class ConfigBase:
                 "the dotted path of the component class, for example "
                 "\"hisim.components.generic_pv_system.PVSystem\"."
             )
-        component_class = getattr(importlib.import_module(module_name), class_name)
-        return f"{component_class.__module__}.{component_class.__name__}"
+        try:
+            component_class = getattr(importlib.import_module(module_name), class_name)
+        except (ImportError, AttributeError) as error:
+            raise ValueError(
+                f"{cls.__name__}.MAIN_CLASS is {cls.MAIN_CLASS!r}, but that class could not be "
+                f"imported: {error}"
+            ) from error
+        return str(component_class.get_full_classname())
 
     @classmethod
     def get_config_classname(cls):

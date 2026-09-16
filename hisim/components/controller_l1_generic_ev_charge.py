@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
 """Controller of EV battery with configuration and state."""
 
-from typing import List, Optional
+from typing import ClassVar, List, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 import pandas as pd
 
 from utspclient.helpers.lpgpythonbindings import JsonReference
-from utspclient.helpers.lpgdata import ChargingStationSets
 
 from hisim.simulationparameters import SimulationParameters
 from hisim import component as cp
@@ -20,75 +19,137 @@ from hisim.loadtypes import Units, ComponentType, InandOutputType
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.component import OpexCostDataClass, CapexCostDataClass
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor
 from hisim.economics.facts import CostRelevance
-
-__authors__ = "Johanna Ganglbauer"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = ""
-__version__ = ""
-__maintainer__ = "Johanna Ganglbauer"
-__email__ = "johanna.ganglbauer@4wardenergy.at"
-__status__ = "development"
 
 
 @dataclass_json
 @dataclass
 class ChargingStationConfig(ConfigBase):
-    """Definition of the configuration of Charging Station and the set point for the control."""
+    """Configuration of the wallbox one electric car charges at, and the SOC it charges to.
+
+    The charging station is picked out of the LoadProfileGenerator's ``ChargingStationSets``,
+    whose members carry their rating in their name — "Charging At Home with 11 kW". That rating
+    is the identity of the station, so there is no default station to name and no preset: a
+    charger is built by naming its set::
+
+        ChargingStationConfig.for_charging_station_set(
+            "L1EVChargeControl_1", ChargingStationSets.Charging_At_Home_with_11_kW
+        )
+
+    The controller charges the car whenever it is at the station and its state of charge is
+    below :attr:`battery_set_soc`, and refuses a charging power below
+    :attr:`lower_threshold_charging_power_in_watt`, at which the station's efficiency collapses.
+    """
+
+    MAIN_CLASS = "hisim.components.controller_l1_generic_ev_charge.L1Controller"
+
+    #: Share of a station's rated power below which charging is not worth starting: below it
+    #: the conversion efficiency goes down. 10 % of the rating.
+    LOWER_THRESHOLD_AS_SHARE_OF_CHARGING_POWER: ClassVar[float] = 0.1
 
     component_id: ComponentID
-    #: priority of the device in hierachy: the higher the number the lower the priority
-    source_weight: int
     #: definition of the charging station, in line with definitions from LoadProfileGenerator
     charging_station_set: JsonReference
-    #: set point for state of charge of battery
-    battery_set_soc: float
-    #: lower threshold for charging power (below efficiency goes down)
+    #: lower threshold for charging power (below efficiency goes down), in Watt. Computed by
+    #: :meth:`for_charging_station_set` from the rating in the station set's name.
     lower_threshold_charging_power_in_watt: float
-    #: CO2 footprint of investment in kg
-    device_co2_footprint_in_kg: float
-    #: cost for investment in Euro
-    investment_costs_in_euro: float
-    #: lifetime of charging station in years
-    lifetime_in_years: float
-    # maintenance cost in euro per year
-    maintenance_costs_in_euro_per_year: float
-    # subsidies as percentage of investment
-    subsidy_as_percentage_of_investment_costs: float
+    #: priority of the device in hierachy: the higher the number the lower the priority
+    source_weight: int = 1
+    #: set point for state of charge of battery
+    battery_set_soc: float = 0.8
+    #: CO2 footprint of investment in kg. estimated value  # Todo: check value
+    device_co2_footprint_in_kg: float = 100.0
+    #: cost for investment in Euro  # Todo: check value
+    investment_costs_in_euro: float = 1000.0
+    #: lifetime of charging station in years. estimated value  # Todo: check value
+    lifetime_in_years: float = 10.0
+    #: maintenance cost in euro per year: 5 % of the investment costs.
+    #: SOURCE: https://photovoltaik.one/wallbox-kosten (estimated value)
+    maintenance_costs_in_euro_per_year: float = 50.0
+    #: subsidies as percentage of investment
+    subsidy_as_percentage_of_investment_costs: float = 0.0
 
     @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the base class."""
-        return L1Controller.get_full_classname()
+    def charging_power_in_watt_of(cls, charging_station_set: JsonReference) -> float:
+        """Reads the rated charging power, in Watt, out of a station set's name.
 
-    @staticmethod
-    def get_default_config(
-        charging_station_set: JsonReference = ChargingStationSets.Charging_At_Home_with_03_7_kW,
-        component_id: Optional[ComponentID] = None,
+        The LoadProfileGenerator states a charging station's rating nowhere but in its display
+        name, spelled "Charging At Home with 11 kW", so the number has to be parsed back out of
+        it::
+
+            ChargingStationConfig.charging_power_in_watt_of(
+                ChargingStationSets.Charging_At_Home_with_11_kW
+            )  # 11000.0
+
+        Args:
+            charging_station_set: One member of ``utspclient.helpers.lpgdata
+                .ChargingStationSets``.
+
+        Returns:
+            The rated charging power in Watt.
+
+        Raises:
+            ValueError: If the set has no name, or if its name does not spell a rating in the
+                "… with <number> kW" form this parser knows.
+        """
+        name = charging_station_set.Name or ""
+        _, separator, remainder = name.partition("with ")
+        rating, kilowatt, _ = remainder.partition(" kW")
+        if not separator or not kilowatt:
+            raise ValueError(
+                f"the charging station set {name!r} does not state its rating: a set's name has "
+                "to read '… with <number> kW', which is how the LoadProfileGenerator spells the "
+                "rating and the only place it states it."
+            )
+        try:
+            return float(rating) * 1e3
+        except ValueError as error:
+            raise ValueError(
+                f"the charging station set {name!r} states {rating!r} where its rating in kW "
+                "belongs, which is no number."
+            ) from error
+
+    @constructor(
+        note="one of ChargingStationSets; the rating in its name sets the lower charging threshold"
+    )
+    @classmethod
+    def for_charging_station_set(
+        cls, name: str, charging_station_set: JsonReference
     ) -> "ChargingStationConfig":
-        """Returns default configuration of charging station and desired SOC Level."""
-        if component_id is None:
-            component_id = ComponentID(name="L1EVChargeControl")
-        charging_power_in_kilowatt = float((charging_station_set.Name or "").split("with ")[1].split(" kW")[0])
-        lower_threshold_charging_power_in_watt = (
-            charging_power_in_kilowatt * 1e3 * 0.1
-        )  # 10 % of charging power for acceptable efficiencies
-        config = ChargingStationConfig(
-            component_id=component_id,
-            source_weight=1,
+        """Builds the configuration of the wallbox one car charges at.
+
+        The station set is the only thing that distinguishes one charger from another — it names
+        the rating, and the rating is what the lower charging threshold is
+        :attr:`LOWER_THRESHOLD_AS_SHARE_OF_CHARGING_POWER` of — so this is the only builder the
+        class has::
+
+            ChargingStationConfig.for_charging_station_set(
+                "L1EVChargeControl_1", ChargingStationSets.Charging_At_Home_with_11_kW
+            )
+
+        Args:
+            name: Instance name of the charge controller; its ``ComponentID`` is built from it.
+            charging_station_set: One member of ``utspclient.helpers.lpgdata
+                .ChargingStationSets``, the same catalogue the car's driving profile is
+                generated against.
+
+        Returns:
+            A fresh configuration of that station; nothing about it is shared with any other
+            instance.
+
+        Raises:
+            ValueError: If the set's name does not state a rating, see
+                :meth:`charging_power_in_watt_of`.
+        """
+        return cls(
+            component_id=ComponentID(name=name),
             charging_station_set=charging_station_set,
-            battery_set_soc=0.8,
-            lower_threshold_charging_power_in_watt=lower_threshold_charging_power_in_watt,
-            device_co2_footprint_in_kg=100,  # estimated value  # Todo: check value
-            investment_costs_in_euro=1000,  # Todo: check value
-            lifetime_in_years=10,  # estimated value  # Todo: check value
-            maintenance_costs_in_euro_per_year=0.05
-            * 1000,  # SOURCE: https://photovoltaik.one/wallbox-kosten (estimated value)
-            subsidy_as_percentage_of_investment_costs=0,
+            lower_threshold_charging_power_in_watt=(
+                cls.charging_power_in_watt_of(charging_station_set)
+                * cls.LOWER_THRESHOLD_AS_SHARE_OF_CHARGING_POWER
+            ),
         )
-        return config
 
 
 class L1ControllerState:

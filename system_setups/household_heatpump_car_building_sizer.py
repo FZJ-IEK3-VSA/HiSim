@@ -9,7 +9,7 @@ from utspclient.helpers.lpgdata import (
     ChargingStationSets,
 )
 from hisim.simulator import SimulationParameters
-from hisim.config import ComponentID, SizingContext, concrete
+from hisim.config import SizingContext, concrete
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
@@ -459,11 +459,12 @@ def setup_function(
         )
         my_car_batteries.append(my_car_battery)
 
-        my_car_battery_controller_config = controller_l1_generic_ev_charge.ChargingStationConfig.get_default_config(
-            charging_station_set=charging_station_set
+        my_car_battery_controller_config = (
+            controller_l1_generic_ev_charge.ChargingStationConfig.for_charging_station_set(
+                f"L1EVChargeControl_{car_number}", charging_station_set=charging_station_set
+            )
         )
         my_car_battery_controller_config.source_weight = car.config.source_weight
-        my_car_battery_controller_config.component_id = ComponentID(f"L1EVChargeControl_{car_number}")
         if car_surplus_charging:
             # lower threshold for soc of car battery in clever case. This enables more surplus charging
             my_car_battery_controller_config.battery_set_soc = 0.4

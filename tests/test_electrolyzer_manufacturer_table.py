@@ -24,7 +24,6 @@ import pytest
 from hisim.components import controller_l1_electrolyzer_h2 as l1
 from hisim.components import controller_l2_ptx_energy_management_system as l2
 from hisim.components import generic_electrolyzer_h2 as electrolyzer
-from hisim.config import ComponentID
 
 #: the device the live setup ``electrolyzer_with_renewables`` builds, through two of the readers.
 KNOWN_DEVICE = "HTecME450"
@@ -78,11 +77,11 @@ def test_every_reader_refuses_an_unknown_device_naming_the_ones_that_exist() -> 
 def test_the_three_factories_refuse_an_unknown_device_too() -> None:
     """The refusal reaches the config builders, not only the readers under them.
 
-    A setup calls ``config_electrolyzer`` and the two ``control_electrolyzer`` classmethods; the
+    A setup calls ``for_device`` and the two ``control_electrolyzer`` classmethods; the
     zero-filled config was built there, so that is where the failure has to arrive.
     """
     with pytest.raises(ValueError, match=UNKNOWN_DEVICE):
-        electrolyzer.ElectrolyzerConfig.config_electrolyzer(UNKNOWN_DEVICE)
+        electrolyzer.ElectrolyzerConfig.for_device("Electrolyzer", UNKNOWN_DEVICE)
 
     with pytest.raises(ValueError, match=UNKNOWN_DEVICE):
         l1.ElectrolyzerControllerConfig.control_electrolyzer(UNKNOWN_DEVICE)
@@ -106,9 +105,7 @@ def test_the_known_device_still_builds_the_values_the_table_carries() -> None:
     The figures are written out rather than read back off the JSON, so that an edit to the table
     or to a reader has to be intentional to pass. They are the ones the live setup runs on.
     """
-    machine = electrolyzer.ElectrolyzerConfig.config_electrolyzer(
-        KNOWN_DEVICE, component_id=ComponentID(name=KNOWN_DEVICE)
-    )
+    machine = electrolyzer.ElectrolyzerConfig.for_device(KNOWN_DEVICE, KNOWN_DEVICE)
     assert machine.electrolyzer_type == "PEM"
     assert machine.nom_load == 987.0
     assert machine.max_load == 1028.225

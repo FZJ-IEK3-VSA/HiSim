@@ -18,7 +18,7 @@ from hisim.component import (
     OpexCostDataClass,
     SingleTimeStepValues,
 )
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor, preset
 from hisim import loadtypes as lt
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
@@ -28,15 +28,6 @@ from hisim.simulationparameters import SimulationParameters
 
 from hisim import component as cp
 from hisim.economics.facts import CostRelevance
-
-__authors__ = "Franz Oldopp"
-__copyright__ = "Copyright 2023, FZJ-IEK-3"
-__credits__ = ["Franz Oldopp"]
-__license__ = "-"
-__version__ = "1.0"
-__maintainer__ = "Franz Oldopp"
-__status__ = "development"
-
 
 ELECTROLYZER_TABLE_FILE_NAME = "electrolyzer_manufacturer_config.json"
 ELECTROLYZER_VARIANTS_SECTION = "Electrolyzer variants"
@@ -109,30 +100,42 @@ def read_electrolyzer_variant(
 @dataclass_json
 @dataclass
 class ElectrolyzerConfig(ConfigBase):
-    """Configuration of the Electrolyzer.
+    """Configuration of one water electrolyzer: its technology, its load band and its cell.
+
+    The machine is either one of the nine devices of the bundled manufacturer table, named
+    through :meth:`for_device`, or the alkaline machine :meth:`preset_alkaline` builds::
+
+        ElectrolyzerConfig.for_device("Electrolyzer", electrolyzer_name="HTecME450")
+        ElectrolyzerConfig.preset_alkaline("Electrolyzer")
 
     Besides the electrochemical parameters, the configuration carries the five cost fields every
     costed component in the library declares. They are read as a set: while all five are ``None``
-    — the default, and what both config-building classmethods below produce — postprocessing
-    looks the figures up from the device database for the simulated year and country and scales
-    them by ``nom_load``, the electrolyzer's rating in kW. Setting all five overrides that lookup
-    with the values given here, for a specific quoted machine.
+    — the default, and what both builders below produce — postprocessing looks the figures up
+    from the device database for the simulated year and country and scales them by ``nom_load``,
+    the electrolyzer's rating in kW. Setting all five overrides that lookup with the values given
+    here, for a specific quoted machine.
     """
 
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return Electrolyzer.get_full_classname()
+    MAIN_CLASS = "hisim.components.generic_electrolyzer_h2.Electrolyzer"
 
     component_id: ComponentID
-    electrolyzer_type: str
-    nom_load: float  # [kW]
-    max_load: float  # [kW]
-    nom_h2_flow_rate: float  # [kg/h]
-    faraday_eff: float
-    i_cell_nom: float
-    ramp_up_rate: float  # [%/s]
-    ramp_down_rate: float  # [%/s]
+    #: Technology of the cell stack as the manufacturer table spells it, e.g. ``"Alkaline"``,
+    #: ``"PEM"`` or ``"SolidOxide"``. Reported, not simulated: no code path branches on it.
+    electrolyzer_type: str = "Alkaline"
+    #: Nominal electrical load of the machine in kW, the rating its investment cost scales by.
+    nom_load: float = 100.0  # [kW]
+    #: Highest electrical load the machine accepts in kW; never below ``nom_load``.
+    max_load: float = 110.0  # [kW]
+    #: Hydrogen mass flow at the nominal load, in kg/h.
+    nom_h2_flow_rate: float = 100.0  # [kg/h]
+    #: Faraday efficiency of the cell, the share of the current that actually splits water.
+    faraday_eff: float = 1.0
+    #: Nominal current density of the cell in A/cm2.
+    i_cell_nom: float = 0.3
+    #: How fast the load may rise, in percent of the nominal load per second.
+    ramp_up_rate: float = 0.1  # [%/s]
+    #: How fast the load may fall, in percent of the nominal load per second.
+    ramp_down_rate: float = 0.2  # [%/s]
     # H_s_h2 = 33.33 #kWh/kg
     #: CO2 footprint of investment in kg
     device_co2_footprint_in_kg: Optional[float] = None
@@ -169,27 +172,24 @@ class ElectrolyzerConfig(ConfigBase):
                 f"{self.max_load} kW < {self.nom_load} kW describes a machine that cannot reach its own rating."
             )
 
+    @preset(note="alkaline stack, 100 kW nominal")
     @classmethod
-    def get_default_alkaline_electrolyzer_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Gets a default Alkaline Eletrolyzer."""
-        if component_id is None:
-            component_id = ComponentID(name="Alkaline_electrolyzer")
-        config = ElectrolyzerConfig(
-            component_id=component_id,
-            electrolyzer_type="Alkaline",
-            nom_load=100.0,  # [kW]
-            max_load=110.0,  # [kW]
-            nom_h2_flow_rate=100.0,  # [kg/h]
-            faraday_eff=1.0,
-            i_cell_nom=0.3,
-            ramp_up_rate=0.1,  # [%/s]
-            ramp_down_rate=0.2,  # [%/s]
-            # H_s_h2 = 33.33,
-        )
-        return config
+    def preset_alkaline(cls, name: str) -> "ElectrolyzerConfig":
+        """The 100 kW alkaline machine, the one electrolyzer this library states rather than reads.
+
+        The field defaults are that machine: an alkaline stack rated at 100 kW and accepting up
+        to 110 kW, 100 kg of hydrogen an hour at the nominal point, a Faraday efficiency of 1.0,
+        0.3 A/cm2 of nominal current density and ramps of 0.1 and 0.2 %/s. It is named after the
+        technology rather than ``standard`` because the technology is what distinguishes it from
+        the table's PEM and solid-oxide devices, which :meth:`for_device` reaches.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            ElectrolyzerConfig: The preset configuration.
+        """
+        return cls(component_id=ComponentID(name=name))
 
     #: the manufacturer-table fields this configuration reads without a fallback, checked first.
     TABLE_FIELDS: ClassVar[Tuple[str, ...]] = ("electrolyzer_type", "nom_load", "max_load")
@@ -211,34 +211,51 @@ class ElectrolyzerConfig(ConfigBase):
         """
         return read_electrolyzer_variant(electrolyzer_name, required_fields=ElectrolyzerConfig.TABLE_FIELDS)
 
+    @constructor(note="one device of the bundled electrolyzer manufacturer table")
     @classmethod
-    def config_electrolyzer(
-        cls,
-        electrolyzer_name: str,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Initializes the config variables based on the JSON-file."""
+    def for_device(cls, name: str, electrolyzer_name: str) -> "ElectrolyzerConfig":
+        """Builds the machine one row of the manufacturer table describes.
 
-        if component_id is None:
-            component_id = ComponentID(name="Electrolyzer")
-        config_json = cls.read_config(electrolyzer_name)
+        The table ships nine devices and a preset name is wire format forever, so the eight the
+        preset does not pin are reached by naming them::
 
-        config = ElectrolyzerConfig(
-            component_id=component_id,  # config_json.get("name", "")
-            # The type and the two ratings are read without a fallback: a variant that carries
-            # neither is a broken input file, and defaulting them would silently produce a machine
-            # that is refused above -- or, worse, costed as free -- instead of naming the key.
-            # read_config has already checked all three are there, naming the device if not.
-            electrolyzer_type=config_json["electrolyzer_type"],
-            nom_load=config_json["nom_load"],
-            max_load=config_json["max_load"],
-            nom_h2_flow_rate=config_json.get("nom_h2_flow_rate", 0.0),
-            faraday_eff=config_json.get("faraday_eff", 0.0),
-            i_cell_nom=config_json.get("i_cell_nom", 0.0),
-            ramp_up_rate=config_json.get("ramp_up_rate", 0.0),
-            ramp_down_rate=config_json.get("ramp_down_rate", 0.0),
+            ElectrolyzerConfig.for_device("Electrolyzer", electrolyzer_name="HTecME450")
+
+        An unknown name is refused here, by :meth:`read_config`, with the names the table does
+        carry -- the configuration is where a mistyped device stops, rather than a machine rated
+        at zero kW reaching the simulation.
+
+        Args:
+            name: Instance name of the electrolyzer; its ``ComponentID`` is built from it.
+            electrolyzer_name: The device name as the manufacturer table spells it, e.g.
+                ``"HTecME450"``.
+
+        Returns:
+            A fresh configuration of that device; nothing about it is shared with any other
+            instance.
+
+        Raises:
+            ValueError: If no device of that name is in the table, or its row lacks the type or
+                one of the two ratings.
+        """
+        # The type and the two ratings are read without a fallback: a variant that carries
+        # neither is a broken input file, and defaulting them would silently produce a machine
+        # that __post_init__ refuses -- or, worse, one costed as free -- instead of naming the
+        # key. read_config has already checked all three are there, naming the device if not.
+        # The five remaining figures read as zero from a row that omits them, which is what the
+        # table's readers have always done; every shipped row carries all five.
+        row = cls.read_config(electrolyzer_name)
+        return cls(
+            component_id=ComponentID(name=name),
+            electrolyzer_type=row["electrolyzer_type"],
+            nom_load=row["nom_load"],
+            max_load=row["max_load"],
+            nom_h2_flow_rate=row.get("nom_h2_flow_rate", 0.0),
+            faraday_eff=row.get("faraday_eff", 0.0),
+            i_cell_nom=row.get("i_cell_nom", 0.0),
+            ramp_up_rate=row.get("ramp_up_rate", 0.0),
+            ramp_down_rate=row.get("ramp_down_rate", 0.0),
         )
-        return config
 
 
 class Electrolyzer(cp.Component):

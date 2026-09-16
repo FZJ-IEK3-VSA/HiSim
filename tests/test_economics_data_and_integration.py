@@ -657,7 +657,7 @@ class TestTheAdapterEntriesAddedWithThoseRows:
         """Its config states `nom_load` in kW, which is what the ELECTROLYZER row prices per."""
         from hisim.components.generic_electrolyzer_h2 import ElectrolyzerConfig
 
-        config = ElectrolyzerConfig.get_default_alkaline_electrolyzer_config()
+        config = ElectrolyzerConfig.preset_alkaline("Alkaline_electrolyzer")
         facts = FactsExtractors.BY_CLASS_NAME["Electrolyzer"](config)
 
         assert facts is not None

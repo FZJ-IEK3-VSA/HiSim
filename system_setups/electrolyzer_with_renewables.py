@@ -97,7 +97,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     # The electrolyzer configuration is read first because the transformer and rectifier in front
     # of it is rated for it: the conversion stage has to carry the machine's maximum load, which is
     # also what its investment cost is scaled by.
-    my_electrolyzer_config = ElectrolyzerConfig.config_electrolyzer(electrolyzer_name)
+    my_electrolyzer_config = ElectrolyzerConfig.for_device("Electrolyzer", electrolyzer_name=electrolyzer_name)
 
     # Setup the transformer and rectifier unit
     # The preset's 95 % efficiency is the figure from the literature this setup runs on.

@@ -142,6 +142,7 @@
             "hisim.components.generic_district_heating.DistrictHeating",
             "hisim.components.generic_district_heating.DistrictHeatingController",
             "hisim.components.generic_electric_heating.ElectricHeating",
+            "hisim.components.generic_electric_heating.ElectricHeatingController",
             "hisim.components.generic_heat_pump.GenericHeatPump",
             "hisim.components.generic_heat_pump.GenericHeatPumpController",
             "hisim.components.generic_pv_system.PVSystem",
@@ -2052,6 +2053,75 @@
                 "$ref": "#/$defs/sizing_sources",
                 "propertyNames": {
                   "enum": [
+                    "heating_load_in_watt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.generic_electric_heating.ElectricHeatingController"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "set_heating_threshold_outside_temperature_in_celsius": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "with_domestic_hot_water_preparation": {
+                    "type": "boolean"
+                  },
+                  "hysteresis_water_temperature_offset": {
+                    "type": "number"
+                  },
+                  "parallel_space_heating_and_dhw_option": {
+                    "type": "boolean"
+                  },
+                  "specific_heating_load_of_building_in_watt_per_m2": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": [
+                    "conditioned_floor_area_in_m2",
                     "heating_load_in_watt"
                   ]
                 }

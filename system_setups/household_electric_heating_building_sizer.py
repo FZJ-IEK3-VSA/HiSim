@@ -288,12 +288,19 @@ def setup_function(
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
 
     # Build electric heating controller
-    my_electric_heating_controller_sh_config = generic_electric_heating.ElectricHeatingControllerConfig.get_electric_heating_config_based_on_building_efficiency(
-        with_domestic_hot_water_preparation=True,
-        specific_heating_load_of_building_in_watt_per_m2=my_building_information.max_thermal_building_demand_in_watt
-        / my_building_information.scaled_conditioned_floor_area_in_m2,
-        parallel_space_heating_and_dhw_option=True,
+    my_electric_heating_controller_sh_config = (
+        generic_electric_heating.ElectricHeatingControllerConfig.preset_standard(
+            "ElectricHeatingController"
+        ).resolve(
+            SizingContext(
+                heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+                conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+            )
+        )
     )
+    # This house heats its water electrically as well, and serves both circuits at once.
+    my_electric_heating_controller_sh_config.with_domestic_hot_water_preparation = True
+    my_electric_heating_controller_sh_config.parallel_space_heating_and_dhw_option = True
     my_electric_heating_controller = generic_electric_heating.ElectricHeatingController(
         my_simulation_parameters=my_simulation_parameters, config=my_electric_heating_controller_sh_config
     )

@@ -129,7 +129,7 @@ class InterchangeableProviders:
     #: boiler family is converted; the heat pump, electric and district heating generators
     #: join this entry as they are converted.
     ALLOWED: Dict[str, Set[str]] = {
-        "maximal_thermal_power_in_watt": {"GenericBoilerConfig"},
+        "maximal_thermal_power_in_watt": {"GenericBoilerConfig", "MoreAdvancedHeatPumpHPLibConfig"},
         "minimal_thermal_power_in_watt": {"GenericBoilerConfig"},
     }
 
@@ -169,6 +169,7 @@ class PilotWireFormat:
         "HeatingMeterConfig": ("standard",),
         "SimpleDHWStorageConfig": ("standard",),
         "SimpleHotWaterStorageConfig": ("buffer",),
+        "MoreAdvancedHeatPumpHPLibConfig": ("air_water",),
         "CarConfig": (),
     }
 
@@ -192,6 +193,7 @@ class PilotWireFormat:
         "HeatingMeterConfig": (),
         "SimpleDHWStorageConfig": (),
         "SimpleHotWaterStorageConfig": (),
+        "MoreAdvancedHeatPumpHPLibConfig": (),
         "CarConfig": ("for_household",),
     }
 
@@ -227,6 +229,7 @@ class PilotWireFormat:
             "set_cooling_temperature_in_celsius",
         ),
         "PVSystemConfig": ("pv_peak_power_in_watt",),
+        "MoreAdvancedHeatPumpHPLibConfig": ("maximal_thermal_power_in_watt",),
         "BatteryConfig": (),
         "GasMeterConfig": (),
         "FuelMeterConfig": (),
@@ -512,6 +515,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     )
     from hisim.components.generic_pv_system import PVSystemConfig
     from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnectorConfig
+    from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLibConfig
     from hisim.components.simple_water_storage import SimpleDHWStorageConfig, SimpleHotWaterStorageConfig
     from hisim.components.weather import WeatherConfig
 
@@ -532,6 +536,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "HeatingMeterConfig": HeatingMeterConfig,
         "SimpleDHWStorageConfig": SimpleDHWStorageConfig,
         "SimpleHotWaterStorageConfig": SimpleHotWaterStorageConfig,
+        "MoreAdvancedHeatPumpHPLibConfig": MoreAdvancedHeatPumpHPLibConfig,
         "CarConfig": CarConfig,
     }
     for class_name, expected in PilotWireFormat.PRESET_NAMES.items():

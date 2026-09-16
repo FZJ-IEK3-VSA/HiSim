@@ -1,6 +1,6 @@
 # P4 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-13 (9 findings)
+**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-15 (10 findings)
 **Context:** things that surfaced while working through
 `roadmap/declarative_energy_systems/p4_component_sweep_requirements.md` — the component sweep, decisions
 D-1 … D-32 — and were **not** what the work set out to do. Kept separately so the requirements stay about
@@ -603,3 +603,22 @@ Decided as A-P3.1 (`p3_recording_requirements.md` §11): the recorder leaves a
 law-computed field unwritten when its facts have a declared provider in the recorded system, so the
 preset's `AUTO` stands; assigned fields stay concrete, a pinned law field says why; a twin whose
 left-to-the-preset fields do not resolve to the run's values fails the recording. Implemented on `twins_resize`.
+
+### F-15 — the parity rig cannot run any occupancy-driven setup on a machine whose local LoadProfileGenerator does not work **[reported]**
+
+Found on 2026-09-15 while accepting the hplib heat-pump conversion (B4). `scripts/p3_parity_check.py`
+gives each of its two sides a private, empty cache directory and deletes the whole work directory at the
+start of every triple (`p3_parity_check.py:159`, `p3_parity_runs.py:324`), which is right for the question
+it asks: a shared cache would let one side answer from the other side's result. The consequence is that
+every setup whose occupancy comes from `USE_LOCAL_LPG` must actually run the LoadProfileGenerator binary,
+twice, on every invocation. On a machine where that binary fails — here the root filesystem was 98 % full and the binary died
+with `System.IO.IOException: No space left on device`, leaving no results and no log — no such setup can be measured, and the rig reports a parity failure rather than an unrunnable
+environment: three identical `FAIL` rows whose note is `the python run did not finish`. The golden gate
+has no such problem, since it uses the normal cache directory and a seeded entry answers both modes.
+
+Two things would help, neither of them a change to the isolation the rig needs: a verdict that
+distinguishes "the run could not start" from "the two sides disagree" (the note already carries the
+distinction, the verdict does not), and an opt-in read-only *seed* directory the private caches are
+pre-filled from, so a profile that is an input to both sides rather than a result of either can be
+supplied once.
+

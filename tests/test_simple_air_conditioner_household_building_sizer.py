@@ -28,6 +28,7 @@ from hisim.components import building
 from hisim.components import weather
 from hisim.components.simple_air_conditioner import (
     SimpleAirConditioner,
+    SimpleAirConditionerConfig,
     SimpleAirConditionerController,
 )
 from hisim import hisim_main
@@ -245,11 +246,14 @@ def test_recorded_twin_structure() -> None:
     assert components["Building"]["preset"] == "german_single_family_home"
     assert components["Building"]["config"]["number_of_apartments"] == 1.0
 
-    # SimpleAirConditioner config sanity
-    ac_config = components["SimpleAirConditioner"]["config"]
-    assert ac_config["nominal_cooling_power_w"] == 2000.0
-    assert ac_config["eta_carnot"] == 0.3
-    assert ac_config["temperature_epsilon_k"] == 0.01
+    # SimpleAirConditioner config sanity: the preset states all three numbers, so the twin
+    # carries the preset name and no override at all.
+    assert components["SimpleAirConditioner"]["preset"] == "standard"
+    assert "config" not in components["SimpleAirConditioner"]
+    built = SimpleAirConditionerConfig.preset_standard("SimpleAirConditioner")
+    assert built.nominal_cooling_power_w == 2000.0
+    assert built.eta_carnot == 0.3
+    assert built.temperature_epsilon_k == 0.01
 
     # Controller config sanity
     ctrl_config = components["SimpleAirConditionerController"]["config"]

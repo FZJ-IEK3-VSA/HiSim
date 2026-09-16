@@ -114,8 +114,8 @@ def setup_function(
 
     # =================================================================================================================================
     # Build Simple Air Conditioner
-    my_air_conditioner_config = (
-        simple_air_conditioner.SimpleAirConditionerConfig.get_default_simple_air_conditioner_config()
+    my_air_conditioner_config = simple_air_conditioner.SimpleAirConditionerConfig.preset_standard(
+        "SimpleAirConditioner"
     )
     my_air_conditioner = simple_air_conditioner.SimpleAirConditioner(
         config=my_air_conditioner_config,

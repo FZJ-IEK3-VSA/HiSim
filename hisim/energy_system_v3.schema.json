@@ -127,6 +127,7 @@
         "class": {
           "enum": [
             "hisim.components.advanced_battery_bslib.Battery",
+            "hisim.components.air_conditioner.AirConditioner",
             "hisim.components.building.Building",
             "hisim.components.building.building.Building",
             "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
@@ -146,6 +147,7 @@
             "hisim.components.idealized_electric_heater.IdealizedElectricHeater",
             "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
             "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib",
+            "hisim.components.simple_air_conditioner.SimpleAirConditioner",
             "hisim.components.simple_heat_source.SimpleHeatSource",
             "hisim.components.simple_water_storage.SimpleDHWStorage",
             "hisim.components.simple_water_storage.SimpleHotWaterStorage",
@@ -294,6 +296,117 @@
                   "enum": [
                     "pv_peak_power_in_watt"
                   ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.air_conditioner.AirConditioner"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "samsung_ac120"
+                ]
+              },
+              "constructor": {
+                "type": "object",
+                "minProperties": 1,
+                "maxProperties": 1,
+                "propertyNames": {
+                  "enum": [
+                    "for_device",
+                    "for_building_load"
+                  ]
+                },
+                "properties": {
+                  "for_device": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "manufacturer",
+                      "model_name"
+                    ],
+                    "properties": {
+                      "manufacturer": {
+                        "type": "string"
+                      },
+                      "model_name": {
+                        "type": "string"
+                      },
+                      "scale_factor": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "for_building_load": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "heating_load_in_watt",
+                      "heating_reference_temperature_in_celsius"
+                    ],
+                    "properties": {
+                      "heating_load_in_watt": {
+                        "type": "number"
+                      },
+                      "heating_reference_temperature_in_celsius": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              },
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "manufacturer": {
+                    "type": "string"
+                  },
+                  "model_name": {
+                    "type": "string"
+                  },
+                  "scale_factor": {
+                    "type": "number"
+                  },
+                  "t_out_cooling_ref": {},
+                  "t_out_heating_ref": {},
+                  "eer_ref": {},
+                  "cop_ref": {},
+                  "cooling_capacity_ref": {},
+                  "heating_capacity_ref": {},
+                  "investment_costs_in_euro": {
+                    "type": "number"
+                  },
+                  "lifetime_in_years": {
+                    "type": "integer"
+                  },
+                  "co2_emissions_kg_co2_eq": {
+                    "type": "number"
+                  },
+                  "maintenance_costs_in_euro_per_year": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
                 }
               }
             }
@@ -2546,6 +2659,52 @@
                     "heating_load_in_watt",
                     "heating_reference_temperature_in_celsius"
                   ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.simple_air_conditioner.SimpleAirConditioner"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "nominal_cooling_power_w": {
+                    "type": "number"
+                  },
+                  "eta_carnot": {
+                    "type": "number"
+                  },
+                  "temperature_epsilon_k": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
                 }
               }
             }

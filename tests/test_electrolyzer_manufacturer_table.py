@@ -77,8 +77,8 @@ def test_every_reader_refuses_an_unknown_device_naming_the_ones_that_exist() -> 
 def test_the_three_factories_refuse_an_unknown_device_too() -> None:
     """The refusal reaches the config builders, not only the readers under them.
 
-    A setup calls the two ``for_device`` classmethods and ``control_electrolyzer``; the
-    zero-filled config was built there, so that is where the failure has to arrive.
+    A setup calls the three ``for_device`` classmethods; the zero-filled config was built
+    there, so that is where the failure has to arrive.
     """
     with pytest.raises(ValueError, match=UNKNOWN_DEVICE):
         electrolyzer.ElectrolyzerConfig.for_device("Electrolyzer", UNKNOWN_DEVICE)
@@ -87,7 +87,7 @@ def test_the_three_factories_refuse_an_unknown_device_too() -> None:
         l1.ElectrolyzerControllerConfig.for_device("L1ElectrolyzerController", UNKNOWN_DEVICE)
 
     with pytest.raises(ValueError, match=UNKNOWN_DEVICE):
-        l2.PTXControllerConfig.control_electrolyzer(UNKNOWN_DEVICE, l2.PtxOperationMode.NOMINAL_LOAD)
+        l2.PTXControllerConfig.for_device("L2PtXController", UNKNOWN_DEVICE, l2.PtxOperationMode.NOMINAL_LOAD)
 
 
 @pytest.mark.base
@@ -120,7 +120,7 @@ def test_the_known_device_still_builds_the_values_the_table_carries() -> None:
     assert controller.warm_start_time == 30.0
     assert controller.cold_start_time == 600.0
 
-    ptx = l2.PTXControllerConfig.control_electrolyzer(KNOWN_DEVICE, l2.PtxOperationMode.NOMINAL_LOAD)
+    ptx = l2.PTXControllerConfig.for_device("L2PtXController", KNOWN_DEVICE, l2.PtxOperationMode.NOMINAL_LOAD)
     assert ptx.nom_load == 987.0
     assert ptx.min_load == 205.462
     assert ptx.max_load == 1028.225
@@ -165,7 +165,7 @@ def test_a_row_missing_a_field_is_refused_by_the_name_of_the_field(
     assert "standby_load" in message and "cold_start_time" in message
 
     with pytest.raises(ValueError, match="standby_load"):
-        l2.PTXControllerConfig.control_electrolyzer("OnlyDevice", l2.PtxOperationMode.NOMINAL_LOAD)
+        l2.PTXControllerConfig.for_device("L2PtXController", "OnlyDevice", l2.PtxOperationMode.NOMINAL_LOAD)
 
     # The name lookup keeps working against the substituted table, so the two failures are told
     # apart: an unknown name lists the one device this table does carry.

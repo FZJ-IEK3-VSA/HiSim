@@ -1,25 +1,16 @@
 """ L2 Controller for PtX Buffer Battery operation. """
 
 from enum import Enum, unique
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
 from hisim.components.generic_electrolyzer_h2 import read_electrolyzer_variant
 
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.economics.facts import CostRelevance
-
-__authors__ = "Franz Oldopp"
-__copyright__ = "Copyright 2023, IEK-3"
-__credits__ = ["Franz Oldopp"]
-__license__ = "MIT"
-__version__ = "0.1"
-__maintainer__ = "Franz Oldopp"
-__email__ = "f.oldopp@fz-juelich.de"
-__status__ = "development"
 
 
 @unique
@@ -47,18 +38,33 @@ class PtxOperationMode(str, Enum):
 @dataclass_json
 @dataclass
 class PTXControllerConfig(ConfigBase):
-    """Configutation of the PtX  Controller."""
+    """Load band of a power-to-X plant and the mode the L2 controller drives it in.
 
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return PTXController.get_full_classname()
+    The controller splits the renewable power it is offered between the plant and a buffer
+    battery, and :attr:`operation_mode` is how it does that; the four loads say what the plant
+    can take. All four come out of one row of the electrolyzer manufacturer table, so the only
+    builder is :meth:`for_device`::
+
+        PTXControllerConfig.for_device(
+            "L2PtXController", "HTecME450", PtxOperationMode.NOMINAL_LOAD
+        )
+
+    There is no preset: every number belongs to a device the table names, so there is no
+    default plant to state.
+    """
+
+    MAIN_CLASS = "hisim.components.controller_l2_ptx_energy_management_system.PTXController"
 
     component_id: ComponentID
+    #: Nominal electrical load of the plant, in kW.
     nom_load: float
+    #: Lowest load the plant may be run at, in kW.
     min_load: float
+    #: Highest load the controller hands over, in kW.
     max_load: float
+    #: Load the plant is held at while it is idle but not switched off, in kW.
     standby_load: float
+    #: Which of the four control laws of :class:`PtxOperationMode` the plant is driven by.
     operation_mode: PtxOperationMode
 
     def __post_init__(self) -> None:
@@ -108,41 +114,50 @@ class PTXControllerConfig(ConfigBase):
         """
         return read_electrolyzer_variant(electrolyzer_name, required_fields=PTXControllerConfig.TABLE_FIELDS)
 
+    @constructor(note="one device of the manufacturer table, driven in one operating mode")
     @classmethod
-    def control_electrolyzer(
+    def for_device(
         cls,
+        name: str,
         electrolyzer_name: str,
         operation_mode: PtxOperationMode,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Sets the according parameters for the chosen electrolyzer.
+    ) -> "PTXControllerConfig":
+        """Builds the PtX controller of the plant one row of the manufacturer table describes.
 
-        The operation mode selects how the electrolyser is operated; see
-        :class:`PtxOperationMode` for what each member means. The four loads are read straight
-        out of the row, which :meth:`read_config` has already checked carries all of them: a
-        table entry missing one is an error naming the field and the device, not a load of zero.
+        The mode selects how the plant is driven; see :class:`PtxOperationMode` for what each
+        member means::
+
+            PTXControllerConfig.for_device(
+                "L2PtXController", "HTecME450", PtxOperationMode.NOMINAL_LOAD
+            )
+
+        The four loads are read straight out of the row, which :meth:`read_config` has already
+        checked carries all of them: a table entry missing one is an error naming the field and
+        the device, not a load of zero.
 
         Args:
-            electrolyzer_name: the device name to look up in the manufacturer table.
-            operation_mode: how the PtX system is to be driven.
-            component_id: the identity to give the controller, defaulted when not supplied.
+            name: Instance name of the controller; its ``ComponentID`` is built from it.
+            electrolyzer_name: The device name as the manufacturer table spells it, e.g.
+                ``"HTecME450"``.
+            operation_mode: How the PtX system is to be driven.
 
         Returns:
-            The PtX controller configuration of that device.
-        """
-        if component_id is None:
-            component_id = ComponentID(name="L2PtXController")
-        config_json = cls.read_config(electrolyzer_name)
+            A fresh configuration of that device's PtX controller; nothing about it is shared
+            with any other instance.
 
-        config = PTXControllerConfig(
-            component_id=component_id,  # config_json.get("name", "")
-            nom_load=config_json["nom_load"],
-            min_load=config_json["min_load"],
-            max_load=config_json["max_load"],
-            standby_load=config_json["standby_load"],
+        Raises:
+            ValueError: If no device of that name is in the table, or its row lacks one of the
+                four loads this controller reads.
+        """
+        row = cls.read_config(electrolyzer_name)
+        return cls(
+            component_id=ComponentID(name=name),
+            nom_load=row["nom_load"],
+            min_load=row["min_load"],
+            max_load=row["max_load"],
+            standby_load=row["standby_load"],
             operation_mode=operation_mode,
         )
-        return config
 
 
 class PTXController(Component):

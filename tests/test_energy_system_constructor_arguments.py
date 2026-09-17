@@ -43,8 +43,14 @@ from hisim import loadtypes as lt
 from hisim.component import Component, SingleTimeStepValues
 from hisim.components.building.config import BuildingConfig
 from hisim.components.controller_l1_generic_ev_charge import ChargingStationConfig
+from hisim.components.controller_l1_electrolyzer_h2 import ElectrolyzerControllerConfig
+from hisim.components.controller_l2_ptx_energy_management_system import (
+    PTXControllerConfig,
+    PtxOperationMode,
+)
 from hisim.components.csvloader import CSVLoaderConfig
 from hisim.components.generic_car import CarConfig
+from hisim.components.generic_electrolyzer_h2 import ElectrolyzerConfig
 from hisim.components.loadprofilegenerator_utsp_connector import (
     LpgDataAcquisitionMode,
     UtspLpgConnectorConfig,
@@ -149,6 +155,27 @@ CHARGING_STATION_ENTRY = """  L1EVChargeControl:
           Name: Charging At Home with 11 kW
           Guid:
             StrVal: 78dae308-24c4-45cc-8bdf-b001d61f45c2
+"""
+
+
+#: The three readers of the electrolyzer manufacturer table, all naming the same device. The
+#: PtX controller additionally takes its operating mode, written by member name.
+ELECTROLYZER_ENTRIES = """  Electrolyzer:
+    class: hisim.components.generic_electrolyzer_h2.Electrolyzer
+    constructor:
+      for_device:
+        electrolyzer_name: HTecME450
+  L1ElectrolyzerController:
+    class: hisim.components.controller_l1_electrolyzer_h2.ElectrolyzerController
+    constructor:
+      for_device:
+        electrolyzer_name: HTecME450
+  L2PtXController:
+    class: hisim.components.controller_l2_ptx_energy_management_system.PTXController
+    constructor:
+      for_device:
+        electrolyzer_name: HTecME450
+        operation_mode: NOMINAL_LOAD
 """
 
 
@@ -392,6 +419,37 @@ def test_the_charging_station_constructor_derives_its_threshold_from_a_written_r
     )
     # Hand-derived: 10 % of the 11 kW the set's name states.
     assert origins["L1EVChargeControl"].lower_threshold_charging_power_in_watt == 1100.0
+
+
+@pytest.mark.base
+def test_the_three_electrolyzer_constructors_read_the_same_row_from_a_file() -> None:
+    """One device name in a file builds the machine, its L1 controller and its PtX controller.
+
+    All three read the same row of ``electrolyzer_manufacturer_config.json``, so this is the
+    case where a device name that reached the builder mangled -- or an operating mode left as
+    the string that spells it -- would show up as three configurations of one plant that no
+    longer agree on its load band.
+    """
+    origins = origins_of(ELECTROLYZER_ENTRIES)
+
+    assert origins["Electrolyzer"] == ElectrolyzerConfig.for_device(
+        "Electrolyzer", electrolyzer_name="HTecME450"
+    )
+    assert origins["L1ElectrolyzerController"] == ElectrolyzerControllerConfig.for_device(
+        "L1ElectrolyzerController", electrolyzer_name="HTecME450"
+    )
+    assert origins["L2PtXController"] == PTXControllerConfig.for_device(
+        "L2PtXController",
+        electrolyzer_name="HTecME450",
+        operation_mode=PtxOperationMode.NOMINAL_LOAD,
+    )
+    # Hand-derived from the table row rather than from the constructors, so they are not the
+    # only oracle: the three agree on the machine's 987 kW and its 1028.225 kW ceiling, and the
+    # mode arrives as the member rather than as the name the file spelled.
+    assert origins["Electrolyzer"].nom_load == 987.0
+    assert origins["L1ElectrolyzerController"].max_load == 1028.225
+    assert origins["L2PtXController"].min_load == 205.462
+    assert origins["L2PtXController"].operation_mode is PtxOperationMode.NOMINAL_LOAD
 
 
 @pytest.mark.base

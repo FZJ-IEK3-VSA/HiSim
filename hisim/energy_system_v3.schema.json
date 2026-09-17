@@ -133,8 +133,12 @@
             "hisim.components.air_conditioner.AirConditionerController",
             "hisim.components.building.Building",
             "hisim.components.building.building.Building",
+            "hisim.components.controller_l1_electrolyzer_h2.ElectrolyzerController",
+            "hisim.components.controller_l1_fuel_cell.FuelCellController",
             "hisim.components.controller_l1_generic_ev_charge.L1Controller",
             "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
+            "hisim.components.controller_l2_ptx_energy_management_system.PTXController",
+            "hisim.components.controller_l2_xtp_fuel_cell_ems.XTPController",
             "hisim.components.csvloader.CSVLoader",
             "hisim.components.electricity_meter.ElectricityMeter",
             "hisim.components.fuel_meter.FuelMeter",
@@ -148,6 +152,10 @@
             "hisim.components.generic_district_heating.DistrictHeatingController",
             "hisim.components.generic_electric_heating.ElectricHeating",
             "hisim.components.generic_electric_heating.ElectricHeatingController",
+            "hisim.components.generic_electrolyzer_and_h2_storage.AdvancedElectrolyzer",
+            "hisim.components.generic_electrolyzer_and_h2_storage.HydrogenStorage",
+            "hisim.components.generic_electrolyzer_h2.Electrolyzer",
+            "hisim.components.generic_fuel_cell.FuelCell",
             "hisim.components.generic_heat_pump.GenericHeatPump",
             "hisim.components.generic_heat_pump.GenericHeatPumpController",
             "hisim.components.generic_pv_system.PVSystem",
@@ -1002,6 +1010,139 @@
             "properties": {
               "class": {
                 "enum": [
+                  "hisim.components.controller_l1_electrolyzer_h2.ElectrolyzerController"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": {
+                "type": "object",
+                "minProperties": 1,
+                "maxProperties": 1,
+                "propertyNames": {
+                  "enum": [
+                    "for_device"
+                  ]
+                },
+                "properties": {
+                  "for_device": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "electrolyzer_name"
+                    ],
+                    "properties": {
+                      "electrolyzer_name": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "nom_load": {
+                    "type": "number"
+                  },
+                  "min_load": {
+                    "type": "number"
+                  },
+                  "max_load": {
+                    "type": "number"
+                  },
+                  "standby_load": {
+                    "type": "number"
+                  },
+                  "warm_start_time": {
+                    "type": "number"
+                  },
+                  "cold_start_time": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.controller_l1_fuel_cell.FuelCellController"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "pem"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "nom_output": {
+                    "type": "number"
+                  },
+                  "min_output": {
+                    "type": "number"
+                  },
+                  "max_output": {
+                    "type": "number"
+                  },
+                  "standby_load": {
+                    "type": "number"
+                  },
+                  "warm_start_time": {
+                    "type": "number"
+                  },
+                  "cold_start_time": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
                   "hisim.components.controller_l1_generic_ev_charge.L1Controller"
                 ]
               }
@@ -1165,6 +1306,146 @@
                       {
                         "type": "null"
                       }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.controller_l2_ptx_energy_management_system.PTXController"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": false,
+              "constructor": {
+                "type": "object",
+                "minProperties": 1,
+                "maxProperties": 1,
+                "propertyNames": {
+                  "enum": [
+                    "for_device"
+                  ]
+                },
+                "properties": {
+                  "for_device": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "electrolyzer_name",
+                      "operation_mode"
+                    ],
+                    "properties": {
+                      "electrolyzer_name": {
+                        "type": "string"
+                      },
+                      "operation_mode": {
+                        "enum": [
+                          "NOMINAL_LOAD",
+                          "MINIMUM_LOAD",
+                          "STANDBY_LOAD",
+                          "STANDBY_AND_OFF_LOAD"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "nom_load": {
+                    "type": "number"
+                  },
+                  "min_load": {
+                    "type": "number"
+                  },
+                  "max_load": {
+                    "type": "number"
+                  },
+                  "standby_load": {
+                    "type": "number"
+                  },
+                  "operation_mode": {
+                    "enum": [
+                      "NOMINAL_LOAD",
+                      "MINIMUM_LOAD",
+                      "STANDBY_LOAD",
+                      "STANDBY_AND_OFF_LOAD"
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.controller_l2_xtp_fuel_cell_ems.XTPController"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "nom_output": {
+                    "type": "number"
+                  },
+                  "min_output": {
+                    "type": "number"
+                  },
+                  "max_output": {
+                    "type": "number"
+                  },
+                  "standby_load": {
+                    "type": "number"
+                  },
+                  "operation_mode": {
+                    "enum": [
+                      "STANDBY_LOAD",
+                      "STANDBY_AND_OFF_LOAD"
                     ]
                   }
                 }
@@ -2652,6 +2933,326 @@
                     "conditioned_floor_area_in_m2",
                     "heating_load_in_watt"
                   ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.generic_electrolyzer_and_h2_storage.AdvancedElectrolyzer"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "waste_energy": {
+                    "type": "number"
+                  },
+                  "min_power": {
+                    "type": "number"
+                  },
+                  "max_power": {
+                    "type": "number"
+                  },
+                  "min_power_percent": {
+                    "type": "number"
+                  },
+                  "max_power_percent": {
+                    "type": "number"
+                  },
+                  "min_hydrogen_production_rate_hour": {
+                    "type": "number"
+                  },
+                  "max_hydrogen_production_rate_hour": {
+                    "type": "number"
+                  },
+                  "pressure_hydrogen_output": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.generic_electrolyzer_and_h2_storage.HydrogenStorage"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "min_capacity": {
+                    "type": "number"
+                  },
+                  "max_capacity": {
+                    "type": "number"
+                  },
+                  "starting_fill": {
+                    "type": "number"
+                  },
+                  "max_charging_rate_hour": {
+                    "type": "number"
+                  },
+                  "max_discharging_rate_hour": {
+                    "type": "number"
+                  },
+                  "energy_for_charge": {
+                    "type": "number"
+                  },
+                  "energy_for_discharge": {
+                    "type": "number"
+                  },
+                  "loss_factor_per_day": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.generic_electrolyzer_h2.Electrolyzer"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "alkaline"
+                ]
+              },
+              "constructor": {
+                "type": "object",
+                "minProperties": 1,
+                "maxProperties": 1,
+                "propertyNames": {
+                  "enum": [
+                    "for_device"
+                  ]
+                },
+                "properties": {
+                  "for_device": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "electrolyzer_name"
+                    ],
+                    "properties": {
+                      "electrolyzer_name": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "electrolyzer_type": {
+                    "type": "string"
+                  },
+                  "nom_load": {
+                    "type": "number"
+                  },
+                  "max_load": {
+                    "type": "number"
+                  },
+                  "nom_h2_flow_rate": {
+                    "type": "number"
+                  },
+                  "faraday_eff": {
+                    "type": "number"
+                  },
+                  "i_cell_nom": {
+                    "type": "number"
+                  },
+                  "ramp_up_rate": {
+                    "type": "number"
+                  },
+                  "ramp_down_rate": {
+                    "type": "number"
+                  },
+                  "device_co2_footprint_in_kg": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "investment_costs_in_euro": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lifetime_in_years": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maintenance_costs_in_euro_per_year": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "subsidy_as_percentage_of_investment_costs": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.generic_fuel_cell.FuelCell"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "pem"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "type": {
+                    "type": "string"
+                  },
+                  "nom_output_in_kilowatt": {
+                    "type": "number"
+                  },
+                  "max_output_in_kilowatt": {
+                    "type": "number"
+                  },
+                  "min_output_in_kilowatt": {
+                    "type": "number"
+                  },
+                  "nom_h2_flow_rate_in_m3_per_h": {
+                    "type": "number"
+                  },
+                  "faraday_eff": {
+                    "type": "number"
+                  },
+                  "i_cell_nom_in_ampere_per_cm2": {
+                    "type": "number"
+                  },
+                  "ramp_up_rate_in_percent_per_s": {
+                    "type": "number"
+                  },
+                  "ramp_down_rate_in_percent_per_s": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
                 }
               }
             }

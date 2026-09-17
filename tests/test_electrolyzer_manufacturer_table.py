@@ -24,7 +24,6 @@ import pytest
 from hisim.components import controller_l1_electrolyzer_h2 as l1
 from hisim.components import controller_l2_ptx_energy_management_system as l2
 from hisim.components import generic_electrolyzer_h2 as electrolyzer
-from hisim.config import ComponentID
 
 #: the device the live setup ``electrolyzer_with_renewables`` builds, through two of the readers.
 KNOWN_DEVICE = "HTecME450"
@@ -78,17 +77,17 @@ def test_every_reader_refuses_an_unknown_device_naming_the_ones_that_exist() -> 
 def test_the_three_factories_refuse_an_unknown_device_too() -> None:
     """The refusal reaches the config builders, not only the readers under them.
 
-    A setup calls ``config_electrolyzer`` and the two ``control_electrolyzer`` classmethods; the
-    zero-filled config was built there, so that is where the failure has to arrive.
+    A setup calls the three ``for_device`` classmethods; the zero-filled config was built
+    there, so that is where the failure has to arrive.
     """
     with pytest.raises(ValueError, match=UNKNOWN_DEVICE):
-        electrolyzer.ElectrolyzerConfig.config_electrolyzer(UNKNOWN_DEVICE)
+        electrolyzer.ElectrolyzerConfig.for_device("Electrolyzer", UNKNOWN_DEVICE)
 
     with pytest.raises(ValueError, match=UNKNOWN_DEVICE):
-        l1.ElectrolyzerControllerConfig.control_electrolyzer(UNKNOWN_DEVICE)
+        l1.ElectrolyzerControllerConfig.for_device("L1ElectrolyzerController", UNKNOWN_DEVICE)
 
     with pytest.raises(ValueError, match=UNKNOWN_DEVICE):
-        l2.PTXControllerConfig.control_electrolyzer(UNKNOWN_DEVICE, l2.PtxOperationMode.NOMINAL_LOAD)
+        l2.PTXControllerConfig.for_device("L2PtXController", UNKNOWN_DEVICE, l2.PtxOperationMode.NOMINAL_LOAD)
 
 
 @pytest.mark.base
@@ -106,16 +105,14 @@ def test_the_known_device_still_builds_the_values_the_table_carries() -> None:
     The figures are written out rather than read back off the JSON, so that an edit to the table
     or to a reader has to be intentional to pass. They are the ones the live setup runs on.
     """
-    machine = electrolyzer.ElectrolyzerConfig.config_electrolyzer(
-        KNOWN_DEVICE, component_id=ComponentID(name=KNOWN_DEVICE)
-    )
+    machine = electrolyzer.ElectrolyzerConfig.for_device(KNOWN_DEVICE, KNOWN_DEVICE)
     assert machine.electrolyzer_type == "PEM"
     assert machine.nom_load == 987.0
     assert machine.max_load == 1028.225
     assert machine.nom_h2_flow_rate == 18.875
     assert machine.faraday_eff == 0.999
 
-    controller = l1.ElectrolyzerControllerConfig.control_electrolyzer(KNOWN_DEVICE)
+    controller = l1.ElectrolyzerControllerConfig.for_device("L1ElectrolyzerController", KNOWN_DEVICE)
     assert controller.nom_load == 987.0
     assert controller.min_load == 205.462
     assert controller.max_load == 1028.225
@@ -123,7 +120,7 @@ def test_the_known_device_still_builds_the_values_the_table_carries() -> None:
     assert controller.warm_start_time == 30.0
     assert controller.cold_start_time == 600.0
 
-    ptx = l2.PTXControllerConfig.control_electrolyzer(KNOWN_DEVICE, l2.PtxOperationMode.NOMINAL_LOAD)
+    ptx = l2.PTXControllerConfig.for_device("L2PtXController", KNOWN_DEVICE, l2.PtxOperationMode.NOMINAL_LOAD)
     assert ptx.nom_load == 987.0
     assert ptx.min_load == 205.462
     assert ptx.max_load == 1028.225
@@ -162,13 +159,13 @@ def test_a_row_missing_a_field_is_refused_by_the_name_of_the_field(
     monkeypatch.setattr(electrolyzer, "electrolyzer_table_path", lambda: broken)
 
     with pytest.raises(ValueError) as raised:
-        l1.ElectrolyzerControllerConfig.control_electrolyzer("OnlyDevice")
+        l1.ElectrolyzerControllerConfig.for_device("L1ElectrolyzerController", "OnlyDevice")
     message = str(raised.value)
     assert "OnlyDevice" in message
     assert "standby_load" in message and "cold_start_time" in message
 
     with pytest.raises(ValueError, match="standby_load"):
-        l2.PTXControllerConfig.control_electrolyzer("OnlyDevice", l2.PtxOperationMode.NOMINAL_LOAD)
+        l2.PTXControllerConfig.for_device("L2PtXController", "OnlyDevice", l2.PtxOperationMode.NOMINAL_LOAD)
 
     # The name lookup keeps working against the substituted table, so the two failures are told
     # apart: an unknown name lists the one device this table does carry.
@@ -206,7 +203,10 @@ def test_a_field_written_as_null_is_passed_through_unchanged(
     )
     monkeypatch.setattr(electrolyzer, "electrolyzer_table_path", lambda: with_null)
 
-    assert l1.ElectrolyzerControllerConfig.control_electrolyzer("NullStandby").standby_load is None
+    assert (
+        l1.ElectrolyzerControllerConfig.for_device("L1ElectrolyzerController", "NullStandby").standby_load
+        is None
+    )
 
 
 @pytest.mark.base

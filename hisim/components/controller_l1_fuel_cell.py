@@ -1,63 +1,63 @@
 """Controller L1 for the fuel cell."""
 
-from typing import Optional, List, Any
+from typing import List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
 
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.economics.facts import CostRelevance
 
-__authors__ = "Franz Oldopp"
-__copyright__ = "Copyright 2023, IEK-3"
-__credits__ = ["Franz Oldopp"]
-__license__ = "MIT"
-__version__ = "0.1"
-__maintainer__ = "Franz Oldopp"
-__email__ = "f.oldopp@fz-juelich.de"
-__status__ = "development"
-
 
 @dataclass_json
 @dataclass
 class FuelCellControllerConfig(ConfigBase):
-    """Configutation of the Fuel Cell Controller."""
+    """Output band and start-up times the L1 controller drives one fuel cell within.
 
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return FuelCellController.get_full_classname()
+    The controller asks the cell for the demand it is handed, clipped into the band
+    ``min_output`` … ``max_output``, holds it at ``standby_load`` when the demand falls short
+    and counts the warm or cold start time off before it lets the cell produce again. The
+    machine it is sized to is :meth:`preset_pem`'s::
+
+        FuelCellControllerConfig.preset_pem("FuelCellController")
+    """
+
+    MAIN_CLASS = "hisim.components.controller_l1_fuel_cell.FuelCellController"
 
     component_id: ComponentID
-    nom_output: float
-    min_output: float
-    max_output: float
-    standby_load: float
-    warm_start_time: float
-    cold_start_time: float
-    # standby_load: float
+    #: Nominal electrical output of the controlled cell, in kW.
+    nom_output: float = 100.0
+    #: Lowest output the cell may be run at, in kW; below it the controller goes to standby.
+    min_output: float = 10.0
+    #: Highest output the controller asks for, in kW; anything above it is not provided.
+    max_output: float = 110.0
+    #: Output the cell is held at while it is idle but not switched off, in kW.
+    standby_load: float = 10.0
+    #: Seconds a warm cell needs before it produces again.
+    warm_start_time: float = 70.0
+    #: Seconds a cold cell needs before it produces again.
+    cold_start_time: float = 1800.0
     # control_strategy_deactivation: str <-- 'standby' or 'off'
 
+    @preset(note="the 100 kW PEM cell of generic_fuel_cell")
     @classmethod
-    def get_default_fuel_cell_controller_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Get a default electrolyzer controller config."""
-        if component_id is None:
-            component_id = ComponentID(name="DefaultFuelCellController")
-        config = FuelCellControllerConfig(
-            component_id=component_id,
-            nom_output=100.0,
-            min_output=10.0,
-            max_output=110.0,
-            standby_load=10.0,
-            warm_start_time=70.0,
-            cold_start_time=1800.0,
-        )
-        return config
+    def preset_pem(cls, name: str) -> "FuelCellControllerConfig":
+        """The controller of the 100 kW PEM cell, running between 10 and 110 kW.
+
+        The field defaults match :meth:`FuelCellConfig.preset_pem` band for band, with a 10 kW
+        standby output and start times of 70 s warm and 1800 s cold. The preset is named after
+        that machine rather than ``standard``: the band is the cell's, and the two are meant to
+        be read together.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            FuelCellControllerConfig: The preset configuration.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class FuelCellController(Component):

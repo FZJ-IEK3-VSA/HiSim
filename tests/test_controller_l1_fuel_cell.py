@@ -29,13 +29,13 @@ class _ControllerSetup(NamedTuple):
 def build_controller(seconds_per_timestep: int = 3600) -> _ControllerSetup:
     """Build and wire a ``FuelCellController`` with a fake demand input.
 
-    Constructs a controller from the default config (min 10 kW, max 110 kW,
+    Constructs a controller from ``preset_pem`` (min 10 kW, max 110 kW,
     standby 10 kW) for the requested timestep resolution, connects a fake
     ``ComponentOutput`` source to its ``DemandProfile`` input channel,
     allocates a ``SingleTimeStepValues`` buffer, and assigns global indices.
     """
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
-    config = fc.FuelCellControllerConfig.get_default_fuel_cell_controller_config()
+    config = fc.FuelCellControllerConfig.preset_pem("DefaultFuelCellController")
     controller = fc.FuelCellController(my_simulation_parameters=my_simulation_parameters, config=config)
 
     demand = cp.ComponentOutput(

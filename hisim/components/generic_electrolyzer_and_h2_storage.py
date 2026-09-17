@@ -1,11 +1,11 @@
 """Generic electrolyzer and h2 storage module."""
 
 # Owned
-from typing import Optional, List, Any
+from typing import List, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -14,99 +14,108 @@ from hisim.components.configuration import PhysicsConfig
 from hisim import log
 from hisim.economics.facts import CostRelevance
 
-__authors__ = "Frank Burkrad, Maximilian Hillen"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = ""
-__version__ = ""
-__maintainer__ = "Maximilian Hillen"
-__email__ = "maximilian.hillen@rwth-aachen.de"
-__status__ = ""
-#
-
 
 @dataclass_json
 @dataclass
 class ElectrolyzerWithStorageConfig(ConfigBase):
-    """Electrolyzer wit storage config class."""
+    """Power band and hydrogen output of the electrolyzer that feeds a hydrogen storage.
+
+    The machine runs between ``min_power`` and ``max_power``, produces between the two
+    hydrogen rates in proportion to where in that band it sits, and loses ``waste_energy`` as
+    heat nothing in the household uses. The one machine this library states is
+    :meth:`preset_standard`::
+
+        ElectrolyzerWithStorageConfig.preset_standard("ElectrolyzerWithStorage")
+    """
+
+    MAIN_CLASS = "hisim.components.generic_electrolyzer_and_h2_storage.AdvancedElectrolyzer"
 
     component_id: ComponentID
-    waste_energy: float  # [W]
-    min_power: float  # [W]
-    max_power: float  # [W]
-    min_power_percent: float  # [%]
-    max_power_percent: float  # [W]
-    min_hydrogen_production_rate_hour: float  # [Nl/h]
-    max_hydrogen_production_rate_hour: float  # [Nl/h]
-    pressure_hydrogen_output: float  # [bar]
+    #: Electrical power lost as heat while the machine runs, in W.
+    waste_energy: float = 400  # [W]
+    #: Lowest electrical power the machine may be run at, in W.
+    min_power: float = 1_200  # [W]
+    #: Highest electrical power the machine accepts, in W.
+    max_power: float = 2_400  # [W]
+    #: Part load ``min_power`` corresponds to, in percent of the machine's rating.
+    min_power_percent: float = 60  # [%]
+    #: Part load ``max_power`` corresponds to, in percent of the machine's rating.
+    max_power_percent: float = 100  # [%]
+    #: Hydrogen produced at ``min_power``, in normal litres per hour.
+    min_hydrogen_production_rate_hour: float = 300  # [Nl/h]
+    #: Hydrogen produced at ``max_power``, in normal litres per hour.
+    max_hydrogen_production_rate_hour: float = 5000  # [Nl/h]
+    #: Pressure the hydrogen leaves at, in bar. Recorded, not simulated.
+    pressure_hydrogen_output: float = 30  # [bar]
 
+    @preset(note="the 2.4 kW household machine")
     @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return AdvancedElectrolyzer.get_full_classname()
+    def preset_standard(cls, name: str) -> "ElectrolyzerWithStorageConfig":
+        """The 2.4 kW household electrolyzer, the only one this module has ever built.
 
-    @classmethod
-    def get_default_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Get default config."""
-        if component_id is None:
-            component_id = ComponentID(name="ElectrolyzerWithStorage")
-        config = ElectrolyzerWithStorageConfig(
-            component_id=component_id,
-            waste_energy=400,  # [W]
-            min_power=1_200,  # [W]
-            max_power=2_400,  # [W]
-            min_power_percent=60,  # [%],
-            max_power_percent=100,  # [W]
-            min_hydrogen_production_rate_hour=300,  # [Nl/h]
-            max_hydrogen_production_rate_hour=5000,  # [Nl/h]
-            pressure_hydrogen_output=30,  # [bar]
-        )
-        return config
+        The field defaults are that machine: 1.2 to 2.4 kW, which is 60 to 100 % of its
+        rating, 300 to 5000 normal litres of hydrogen an hour, 400 W of waste heat and 30 bar
+        at the outlet. ``standard`` is the name -- the machine names no manufacturer, no
+        technology and no catalogue row, and nothing here is derived from the scenario.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            ElectrolyzerWithStorageConfig: The preset configuration.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 @dataclass_json
 @dataclass
 class ElectrolyzerWithHydrogenStorageConfig(ConfigBase):
-    """Electrolyzer with hydrogen storage config class."""
+    """Capacity, fill and charging rates of the hydrogen tank behind the electrolyzer.
+
+    The tank holds between ``min_capacity`` and ``max_capacity`` kilograms of hydrogen,
+    accepts and releases at most the two rates per hour, and starts a simulation holding
+    ``starting_fill``. The one tank this library states is :meth:`preset_standard`::
+
+        ElectrolyzerWithHydrogenStorageConfig.preset_standard("HydrogenStorage")
+    """
+
+    MAIN_CLASS = "hisim.components.generic_electrolyzer_and_h2_storage.HydrogenStorage"
 
     component_id: ComponentID
-    min_capacity: float  # [kg_H2]
-    max_capacity: float  # [kg_H2]
-    starting_fill: float  # [kg_H2]
-    max_charging_rate_hour: float  # [kg/h]
-    max_discharging_rate_hour: float  # [kg/h]
-    energy_for_charge: float  # [kWh/kg]
-    energy_for_discharge: float  # [kWh/kg]
-    loss_factor_per_day: float  # [lost_%/day]
+    #: Hydrogen that always stays in the tank, in kg; withdrawal stops here.
+    min_capacity: float = 0  # [kg_H2]
+    #: Hydrogen the tank holds when it is full, in kg.
+    max_capacity: float = 500  # [kg_H2]
+    #: Hydrogen in the tank when the simulation starts, in kg.
+    starting_fill: float = 400  # [kg_H2]
+    #: Most hydrogen the tank takes in an hour, in kg/h.
+    max_charging_rate_hour: float = 2  # [kg/h]
+    #: Most hydrogen the tank gives out in an hour, in kg/h.
+    max_discharging_rate_hour: float = 2  # [kg/h]
+    #: Electricity spent compressing a kilogram into the tank, in kWh/kg.
+    energy_for_charge: float = 0  # [kWh/kg]
+    #: Electricity spent releasing a kilogram from the tank, in kWh/kg.
+    energy_for_discharge: float = 0  # [kWh/kg]
+    #: Share of the stored hydrogen lost per day, in percent.
+    loss_factor_per_day: float = 0  # [lost_%/day]
 
+    @preset(note="the 500 kg tank, four fifths full at the start")
     @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return HydrogenStorage.get_full_classname()
+    def preset_standard(cls, name: str) -> "ElectrolyzerWithHydrogenStorageConfig":
+        """The 500 kg hydrogen tank, the only one this module has ever built.
 
-    @classmethod
-    def get_default_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Get default config."""
-        if component_id is None:
-            component_id = ComponentID(name="ElectrolyzerWithHydrogenStorage")
-        config = ElectrolyzerWithHydrogenStorageConfig(
-            component_id=component_id,
-            min_capacity=0,
-            max_capacity=500,
-            starting_fill=400,
-            max_charging_rate_hour=2,
-            max_discharging_rate_hour=2,
-            energy_for_charge=0,
-            energy_for_discharge=0,
-            loss_factor_per_day=0,
-        )
-        return config
+        The field defaults are that tank: 500 kg of capacity down to an empty floor, 400 kg in
+        it when the simulation starts, 2 kg an hour in and out, and neither compression work
+        nor a daily loss. ``standard`` is the name -- a tank of this size names no
+        manufacturer and nothing here is derived from the scenario.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            ElectrolyzerWithHydrogenStorageConfig: The preset configuration.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class ElectrolyzerSimulation:

@@ -23,6 +23,7 @@ from dataclasses_json import dataclass_json
 
 from hisim.config import (
     AUTO,
+    Cardinality,
     ComponentID,
     ConfigBase,
     FactContribution,
@@ -31,10 +32,12 @@ from hisim.config import (
     SizableFieldKind,
     Size,
     SizingContext,
+    SizingError,
     canonical_preset,
     constructor,
     constructors_of,
     describe_config,
+    law,
     preset,
     preset_provenance,
     presets_of,
@@ -501,6 +504,31 @@ def test_a_sizable_field_a_preset_pins_is_reported_once_and_not_as_a_plain_setti
     catalogue = presets["condensing_gas_12kw"]
     assert catalogue.pinned == ("minimal_thermal_power_in_watt", "maximal_thermal_power_in_watt")
     assert [name for name, _ in catalogue.sets] == ["energy_carrier", "boiler_type"]
+
+
+@pytest.mark.base
+def test_a_function_law_describes_itself_by_its_declared_description():
+    """``law(description=...)`` is what an opaque law renders as, and only a callable may have one.
+
+    Failure mode caught: a lambda law describing itself as ``<Class>.<lambda>``, which says that
+    a law exists and nothing about what it computes — and, where one class borrows another's law,
+    names a class that has nothing to do with the field (F-22). The refusal is the other half: an
+    expression law already renders as the formula it is, so a description on one would be a
+    second spelling of the same thing, free to drift.
+    """
+    described = law(
+        lambda ctx: ctx.heating_load_in_watt / 2,
+        reads=(Size.HEATING_LOAD_IN_WATT,),
+        description="Size.HEATING_LOAD_IN_WATT / 2",
+    )
+    assert described.describe() == "Size.HEATING_LOAD_IN_WATT / 2"
+    assert described.facts_read() == (("heating_load_in_watt", Cardinality.ONE),)
+    # without one, the callable's qualified name is still what it renders as
+    assert "<lambda>" in law(lambda ctx: 1.0, reads=()).describe()
+    with pytest.raises(SizingError, match="not a function law"):
+        law(Size.HEATING_LOAD_IN_WATT, description="the heating load")
+    with pytest.raises(SizingError, match="not a function law"):
+        law(42.0, description="forty-two")
 
 
 @pytest.mark.base

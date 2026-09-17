@@ -1,8 +1,10 @@
 """The weather configuration: which station, which data set, which reader.
 
-Holds :class:`WeatherConfig`, the catalogue of stations :class:`LocationEnum` names, and the sizing
+Holds :class:`WeatherConfig`, the catalogue of stations :class:`LocationEnum` names, the sizing
 fact ``weather_identity`` that every component whose result depends on the weather copies into its
-own configuration. :class:`WeatherDataSourceEnum`, which names the reader, lives in
+own configuration, and the sizing fact ``heating_reference_temperature_in_celsius``, the outside
+design condition the place is heated for, which the building and the two generator-side readers
+size from. :class:`WeatherDataSourceEnum`, which names the reader, lives in
 :mod:`hisim.components.weather.calculation` and is imported from there; the package ``__init__``
 explains why.
 """
@@ -358,6 +360,12 @@ class WeatherConfig(ConfigBase):
     #: with the extension for the sub-hourly readers, the stem for the ones that append their own.
     source_path: str
     data_source: WeatherDataSourceEnum
+    #: The outside design condition a heating system at this place is sized for, in degrees
+    #: Celsius. It is a property of the place rather than of a weather year -- it is the
+    #: condition a heating load is computed against and it does not move from one year's time
+    #: series to the next -- so it is stated and never computed: no table lookup, no law, and
+    #: no default, which is why a weather nobody gave a design temperature cannot be built.
+    heating_reference_temperature_in_celsius: float
     #: Whether the component publishes its 24 h forecast for predictive controllers to read.
     predictive_control: bool = False
 
@@ -403,10 +411,41 @@ class WeatherConfig(ConfigBase):
         del ctx
         return {"weather_identity": config.identity()}
 
-    #: Every scenario has exactly one weather, so the bare fact ``weather_identity`` binds to this
-    #: contribution without any consumer naming a source.
+    @staticmethod
+    def design_temperature_facts(config: "WeatherConfig", ctx: Any) -> Dict[str, Any]:
+        """Provide :attr:`heating_reference_temperature_in_celsius` as the sizing fact of that name.
+
+        Registered in :attr:`SIZING_CONTRIBUTIONS`; the sizing engine calls it with the resolved
+        config and hands the number on to the building, the heat-distribution controller and the
+        hplib heat pump, each of which reads it as a sized field.
+
+        The value is the field's own, verbatim. It is a separate contribution from
+        :meth:`identity_facts` rather than a second fact of that one because the two answer
+        different questions -- which weather data a result was computed with, and what design
+        condition the place is heated for -- and a compute function named after identity that also
+        returned a temperature would be misnamed.
+
+        Args:
+            config: this weather configuration.
+            ctx: the sizing context; unused, the number is stated on the field.
+
+        Returns:
+            Dict[str, Any]: ``{"heating_reference_temperature_in_celsius":
+            config.heating_reference_temperature_in_celsius}``.
+        """
+        del ctx
+        return {
+            "heating_reference_temperature_in_celsius": config.heating_reference_temperature_in_celsius
+        }
+
+    #: Every scenario has exactly one weather, so the bare facts ``weather_identity`` and
+    #: ``heating_reference_temperature_in_celsius`` bind to these contributions without any
+    #: consumer naming a source.
     SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
         FactContribution(facts=("weather_identity",), compute=identity_facts),
+        FactContribution(
+            facts=("heating_reference_temperature_in_celsius",), compute=design_temperature_facts
+        ),
     )
 
     @staticmethod
@@ -435,8 +474,14 @@ class WeatherConfig(ConfigBase):
         so it is the one climate a file may reference without saying anything further. Any other
         station is an open identifier space rather than a variant, which is why this class ships
         exactly this one preset and :meth:`for_location` for everything else.
+
+        The design temperature it states is -7.0 °C, the conventional DIN 12831 figure for the
+        Rhineland. It belongs to the station and not to the preset: another station states its
+        own number at the :meth:`for_location` call that builds it.
         """
-        return cls.for_location(name, location=LocationEnum.AACHEN)
+        return cls.for_location(
+            name, location=LocationEnum.AACHEN, heating_reference_temperature_in_celsius=-7.0
+        )
 
     @constructor(note="the stations of LocationEnum and their shipped data sets")
     @classmethod
@@ -444,6 +489,7 @@ class WeatherConfig(ConfigBase):
         cls,
         name: str,
         location: LocationEnum,
+        heating_reference_temperature_in_celsius: float,
         data_source: Optional[WeatherDataSourceEnum] = None,
     ) -> "WeatherConfig":
         """Builds the weather of one catalogue station, with its shipped data set and reader.
@@ -458,6 +504,9 @@ class WeatherConfig(ConfigBase):
         Args:
             name: Instance name of the component being configured; it becomes its identity.
             location: The catalogue station to read the weather of.
+            heating_reference_temperature_in_celsius: The outside design condition a heating
+                system at this station is sized for; stated by the caller, because the
+                catalogue carries time series and not design conditions.
             data_source: Reader to use instead of the one the catalogue entry names, for a data
                 set that was re-exported in another format; the catalogue's own reader when
                 omitted.
@@ -473,6 +522,7 @@ class WeatherConfig(ConfigBase):
                 utils.get_input_directory(), "weather", directory, subdirectory, file_stem
             ),
             data_source=data_source if data_source is not None else catalogue_source,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         )
 
     @constructor(note="a weather file this repository does not ship, named by path and reader")
@@ -482,6 +532,7 @@ class WeatherConfig(ConfigBase):
         name: str,
         path: str,
         data_source: WeatherDataSourceEnum,
+        heating_reference_temperature_in_celsius: float,
     ) -> "WeatherConfig":
         """Builds the weather of a data file that is not one of the catalogue's shipped sets.
 
@@ -514,6 +565,9 @@ class WeatherConfig(ConfigBase):
             name: Instance name of the component being configured; it becomes its identity.
             path: The weather file as it lies on this machine, extension included.
             data_source: The reader that understands the file's format.
+            heating_reference_temperature_in_celsius: The outside design condition a heating
+                system at the place this file describes is sized for; stated by the caller,
+                because a data file carries a weather year and not a design condition.
 
         Returns:
             A configuration reading that file.
@@ -533,4 +587,5 @@ class WeatherConfig(ConfigBase):
             location=os.path.splitext(os.path.basename(path))[0],
             source_path=source_path,
             data_source=data_source,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         )

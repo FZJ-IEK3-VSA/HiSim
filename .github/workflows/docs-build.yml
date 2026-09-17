@@ -23,16 +23,31 @@
 # against docs/conf.py, with the package installed the way .readthedocs.yaml installs
 # it ('python.install: path: .') -- so a green job here means a green build there.
 #
-# Warnings are NOT errors here, deliberately. The tree currently produces ~4330
-# docstring and reST warnings (mostly Google-style docstring sections that Napoleon
-# cannot parse and indentation in long parameter lists), so '-W' would paint this red
-# on day one and it would be switched off within the week. Sphinx exits non-zero on
-# errors and zero on warnings, and errors are exactly the three failure modes above,
-# so exit status is the right oracle today. The job prints the warning count to the
-# run summary and uploads the full log, which is how the number gets paid down; once
-# it reaches zero, add '-W --keep-going' here and the gate tightens to
-# warnings-as-errors, which would additionally catch a broken cross-reference, a
-# document missing from a toctree, and a diagram directive that silently degraded.
+# Warnings are NOT errors here yet, and the reason has changed since this file was
+# first written. It then read that the tree produced about 4330 docstring and reST
+# warnings, so '-W' would paint the gate red on day one and it would be switched off
+# within the week. The P4 component sweep rewrote the docstrings of 56 configuration
+# classes in the meantime, and the count is now zero: the last four are fixed in this
+# pull request (a pipe character read as an undefined substitution, an enum member
+# list read as a block quote, and a bare 'name' cross-reference matching three
+# classes).
+#
+# So the condition the paragraph above set for tightening is met, and one thing is
+# still missing: evidence from this image. The zero was measured locally against
+# Sphinx 9.1.0, while requirements.txt pins no version and the container carries
+# whatever it was built with. The first green run of this job is that evidence; after
+# it, adding '-W --keep-going' to the build step is a one-line change, and the gate
+# then also catches a broken cross-reference, a document missing from a toctree and a
+# diagram directive that silently degraded. Until then Sphinx's exit status is the
+# oracle -- non-zero on exactly the three failure modes above -- and the job prints
+# the warning count to the run summary, so a regression away from zero is visible in
+# the run that causes it.
+#
+# A local-only nuisance worth knowing, because it does not happen here: docs/_autosummary/
+# is generated and gitignored, and Sphinx does not delete a stub whose module has gone.
+# A working copy that built the documentation before a module was retired keeps warning
+# about that module, four times over, until the directory is deleted. CI checks out clean
+# every time and so never sees it.
 #
 # One honest gap: this job runs in the prebuilt test image, which is Python 3.11,
 # while Read the Docs builds on 3.12 (see .readthedocs.yaml). The three failure modes
@@ -78,7 +93,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       # Mirrors .readthedocs.yaml's 'python.install: path: .'. The image already carries
@@ -113,7 +128,7 @@ jobs:
           echo "Sphinx warnings: ${count:-0}"
       - name: Upload the build log
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: docs-build-log
           path: docs-build.log

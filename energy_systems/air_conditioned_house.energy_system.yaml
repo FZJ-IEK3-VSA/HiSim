@@ -13,6 +13,7 @@ components:
       location: Seville
       source_path: ${inputs}/weather/NSRDB/Seville/Seville
       data_source: NSRDB
+      heating_reference_temperature_in_celsius: 5.7
       predictive_control: false
   PVSystem:
     class: hisim.components.generic_pv_system.PVSystem
@@ -80,7 +81,6 @@ components:
   Building:
     class: hisim.components.building.building.Building
     config:
-      heating_reference_temperature_in_celsius: 5.7
       building_code: ES.ME.SFH.04.Gen.ReEx.001.003
       building_heat_capacity_class: medium
       initial_internal_temperature_in_celsius: 22.0
@@ -106,6 +106,7 @@ components:
       lifetime_in_years: null
       maintenance_costs_in_euro_per_year: null
       subsidy_as_percentage_of_investment_costs: null
+      heating_reference_temperature_in_celsius: 5.7
       weather_identity: Seville/NSRDB/weather/NSRDB/Seville/Seville
     inputs:
       - Weather

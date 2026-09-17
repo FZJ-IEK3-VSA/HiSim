@@ -28,6 +28,7 @@ components:
       location: Aachen
       source_path: ${inputs}/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
       data_source: DWD_TRY
+      heating_reference_temperature_in_celsius: -7.0
       predictive_control: false
   PVSystem:
     class: hisim.components.generic_pv_system.PVSystem

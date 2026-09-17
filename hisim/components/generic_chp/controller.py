@@ -10,96 +10,87 @@ CHP is controlled by both (i) thermal demand and (ii) electricity demand - it is
 import dataclasses
 import importlib
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import ClassVar, List
 from dataclasses_json import dataclass_json
 
 # Generic/Built-in
 from hisim import component as cp
 from hisim import utils
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.economics.facts import CostRelevance
 
 
-#: Julian day of the simulation year on which the heating season begins.
-_DAY_OF_HEATING_SEASON_BEGIN = 270
-#: Julian day on which the heating season begins when a buffer storage is present: one day before
-#: the building's, so that the buffer has heated up a day ahead of the building it feeds.
-_BUFFER_DAY_OF_HEATING_SEASON_BEGIN = _DAY_OF_HEATING_SEASON_BEGIN - 1
-#: Upper set temperature of the buffer storage, given in °C.
-_BUFFER_T_MAX_HEATING_IN_CELSIUS = 40.0
-
-
-def _with_buffer_storage(
-    config: "L1CHPControllerConfig",
-    *,
-    t_min_heating_in_celsius: float,
-    t_min_dhw_in_celsius: float,
-) -> "L1CHPControllerConfig":
-    """Returns a copy of ``config`` regulated against a buffer storage rather than the building.
-
-    Two of the four changes are the same whichever fuel is burnt, and are taken from the module
-    constants here: the upper bound of the regulated band, which moves from the building's room
-    temperature up to the buffer's water temperature, and the start of the heating season, which
-    comes one day early so that the buffer is warm a day before the building calls for it.
-
-    The two lower bounds are *not* the same for both fuels - the gas and the hydrogen factory have
-    carried different ones since 2023, for reasons nothing on record explains, see
-    :class:`L1CHPControllerConfig` - so the caller passes them rather than this function choosing.
-    ``config`` itself is never modified.
-    """
-    return dataclasses.replace(
-        config,
-        t_min_heating_in_celsius=t_min_heating_in_celsius,
-        t_max_heating_in_celsius=_BUFFER_T_MAX_HEATING_IN_CELSIUS,
-        t_min_dhw_in_celsius=t_min_dhw_in_celsius,
-        day_of_heating_season_begin=_BUFFER_DAY_OF_HEATING_SEASON_BEGIN,
-    )
-
-
 @dataclass_json
 @dataclass
 class L1CHPControllerConfig(ConfigBase):
-    """CHP Controller Config.
+    """Configuration of the controller in front of a CHP or a fuel cell.
 
-    The four default configurations cross two fuels - gas and green hydrogen, which differ in
-    ``use`` and in the hydrogen storage threshold that is only non-zero for the fuel cell - with
-    the presence of a buffer storage. Each of the four carries the temperature thresholds it was
-    written with in 2023, and they are not symmetric: the lower drain hot water bound runs 42 / 50
-    / 50 / 42 °C over chp, fuel cell, chp-with-buffer and fuel-cell-with-buffer, and a buffer
-    raises the lower heating bound to 35.0 °C on the gas axis but to 31.0 °C on the hydrogen one,
-    so the buffer axis differs per fuel. Nothing in this module, in the sibling controllers, in the
-    tests or in the commit history says why, and the values are kept as they stand rather than
-    guessed at: normalising them would change the behaviour of every simulation that uses them on
+    The controller watches two vessels - the drain hot water storage and either the building
+    or the buffer storage that feeds it - and runs the machine when one of them has fallen
+    below its lower set temperature and electricity is wanted at the same time. Each preset
+    is one such installation::
+
+        L1CHPControllerConfig.preset_gas("CHPController")
+
+    builds the controller of a gas-driven CHP heating the building directly, while
+    :meth:`preset_hydrogen_with_buffer` builds the one of a fuel cell heating a buffer
+    storage. The four presets cross two fuels - gas and green hydrogen, which differ in
+    ``use`` and in the hydrogen storage threshold that is only non-zero for the fuel cell -
+    with the presence of a buffer storage.
+
+    Each of the four carries the temperature thresholds it was written with in 2023, and they
+    are not symmetric: the lower drain hot water bound runs 42 / 50 / 50 / 42 °C over gas,
+    hydrogen, gas-with-buffer and hydrogen-with-buffer, and a buffer raises the lower heating
+    bound to 35.0 °C on the gas axis but to 31.0 °C on the hydrogen one, so the buffer axis
+    differs per fuel. Nothing in this module, in the sibling controllers, in the tests or in
+    the commit history says why, and the values are kept as they stand rather than guessed at:
+    normalising them would change the behaviour of every simulation that uses them on
     inference alone.
     """
 
+    MAIN_CLASS = "hisim.components.generic_chp.controller.L1CHPController"
+
+    #: Julian day of the simulation year on which the heating season begins.
+    DAY_OF_HEATING_SEASON_BEGIN: ClassVar[int] = 270
+    #: Julian day on which the heating season begins when a buffer storage is present: one day
+    #: before the building's, so that the buffer has heated up a day ahead of the building it feeds.
+    BUFFER_DAY_OF_HEATING_SEASON_BEGIN: ClassVar[int] = DAY_OF_HEATING_SEASON_BEGIN - 1
+    #: Upper set temperature of the buffer storage, given in °C.
+    BUFFER_T_MAX_HEATING_IN_CELSIUS: ClassVar[float] = 40.0
+
     component_id: ComponentID
-    #: priority of the device in hierachy: the higher the number the lower the priority
-    source_weight: int
-    #: type of CHP: hydrogen or gas (hydrogen than considers also SOC of hydrogen storage)
+    #: Fuel the machine burns: gas for a CHP, green hydrogen for a fuel cell. Only a fuel cell
+    #: reads the hydrogen storage below, so the two travel together and a preset states both.
     use: LoadTypes
-    #: minimal electricity demand to start operating, given in W:
-    electricity_threshold: float
-    #: minimal state of charge of the hydrogen storage to start operating in percent (only relevant for fuel cell):
+    #: Minimal state of charge of the hydrogen storage at which the machine may run, in percent.
+    #: Zero for a gas CHP, which has no hydrogen storage to read.
     h2_soc_threshold: float
-    #: lower set temperature of building (or buffer storage), given in °C
-    t_min_heating_in_celsius: float
-    #: upper set temperature of building (or buffer storage), given in °C
-    t_max_heating_in_celsius: float
-    #: lower set temperature of drain hot water storage, given in °C
+    #: Lower bound of the drain hot water band, given in °C: below it the machine is switched on.
     t_min_dhw_in_celsius: float
-    #: upper set temperature of drain hot water storage, given in °C
-    t_max_dhw_in_celsius: float
-    # julian day of simulation year, where heating season begins
-    day_of_heating_season_begin: int
-    # julian day of simulation year, where heating season ends
-    day_of_heating_season_end: int
-    # minimal operation time of heat source
-    min_operation_time_in_seconds: int
-    # minimal resting time of heat source
-    min_idle_time_in_seconds: int
+    #: Priority of the device in the hierarchy: the higher the number, the lower the priority.
+    source_weight: int = 1
+    #: Minimal electricity demand at which the machine may start, given in W.
+    electricity_threshold: float = 300
+    #: Lower bound of the heating band, given in °C: below it the machine is switched on. The
+    #: band regulates the building's room temperature, or the buffer storage's water temperature
+    #: where one is present.
+    t_min_heating_in_celsius: float = 20.0
+    #: Upper bound of the heating band, given in °C: above it, and above the drain hot water
+    #: band as well, the machine is switched off.
+    t_max_heating_in_celsius: float = 20.5
+    #: Upper bound of the drain hot water band, given in °C: above it the storage is full, and in
+    #: summer that alone switches the machine off.
+    t_max_dhw_in_celsius: float = 60
+    #: Julian day of the simulation year on which the heating season begins.
+    day_of_heating_season_begin: int = DAY_OF_HEATING_SEASON_BEGIN
+    #: Julian day of the simulation year on which the heating season ends.
+    day_of_heating_season_end: int = 150
+    #: Minimal operation time of the heat source, given in seconds.
+    min_operation_time_in_seconds: int = 3600 * 4
+    #: Minimal resting time of the heat source, given in seconds.
+    min_idle_time_in_seconds: int = 3600 * 2
 
     def __post_init__(self) -> None:
         """Refuses a set temperature band whose bounds are equal or the wrong way round.
@@ -129,72 +120,123 @@ class L1CHPControllerConfig(ConfigBase):
                 f"t_max_dhw_in_celsius is {self.t_max_dhw_in_celsius} °C."
             )
 
-    @staticmethod
-    def get_default_config_chp(
-        component_id: Optional[ComponentID] = None,
+    @classmethod
+    def _with_buffer_storage(
+        cls,
+        config: "L1CHPControllerConfig",
+        *,
+        t_min_heating_in_celsius: float,
+        t_min_dhw_in_celsius: float,
     ) -> "L1CHPControllerConfig":
-        """Returns default configuration for the CHP controller."""
-        if component_id is None:
-            component_id = ComponentID(name="CHPController")
-        config = L1CHPControllerConfig(
-            component_id=component_id,
-            source_weight=1,
+        """Returns a copy of ``config`` regulated against a buffer storage rather than the building.
+
+        Two of the four changes are the same whichever fuel is burnt and are taken from the class
+        constants: the upper bound of the regulated band, which moves from the building's room
+        temperature up to the buffer's water temperature, and the start of the heating season,
+        which comes one day early so that the buffer is warm a day before the building calls for
+        it. The two lower bounds are *not* the same for both fuels - see the class docstring - so
+        the caller passes them rather than this method choosing. ``config`` itself is never
+        modified.
+
+        Args:
+            config: The building-regulated configuration to start from.
+            t_min_heating_in_celsius: Lower bound of the buffer's temperature band, in °C.
+            t_min_dhw_in_celsius: Lower bound of the drain hot water band, in °C.
+
+        Returns:
+            A fresh configuration, identical to ``config`` but for those four values.
+        """
+        return dataclasses.replace(
+            config,
+            t_min_heating_in_celsius=t_min_heating_in_celsius,
+            t_max_heating_in_celsius=cls.BUFFER_T_MAX_HEATING_IN_CELSIUS,
+            t_min_dhw_in_celsius=t_min_dhw_in_celsius,
+            day_of_heating_season_begin=cls.BUFFER_DAY_OF_HEATING_SEASON_BEGIN,
+        )
+
+    @preset
+    @classmethod
+    def preset_gas(cls, name: str) -> "L1CHPControllerConfig":
+        """Gas-driven CHP heating the building directly, between 20.0 and 20.5 °C.
+
+        The field defaults are this controller but for the two values a gas machine states: it
+        burns gas, so there is no hydrogen storage to wait for, and it reheats the drain hot
+        water storage from 42 °C.
+
+        Args:
+            name: Instance name of the controller in the simulation.
+
+        Returns:
+            The configuration, fully concrete -- the class has no sizable field.
+        """
+        return cls(
+            component_id=ComponentID(name=name),
             use=LoadTypes.GAS,
-            electricity_threshold=300,
             h2_soc_threshold=0,
-            t_min_heating_in_celsius=20.0,
-            t_max_heating_in_celsius=20.5,
             t_min_dhw_in_celsius=42,
-            t_max_dhw_in_celsius=60,
-            day_of_heating_season_begin=_DAY_OF_HEATING_SEASON_BEGIN,
-            day_of_heating_season_end=150,
-            min_operation_time_in_seconds=3600 * 4,
-            min_idle_time_in_seconds=3600 * 2,
         )
-        return config
 
-    @staticmethod
-    def get_default_config_fuel_cell(
-        component_id: Optional[ComponentID] = None,
-    ) -> "L1CHPControllerConfig":
-        """Returns default configuration for the fuel cell controller."""
-        if component_id is None:
-            component_id = ComponentID(name="FuelCellController")
-        config = L1CHPControllerConfig(
-            component_id=component_id,
-            source_weight=1,
+    @preset
+    @classmethod
+    def preset_hydrogen(cls, name: str) -> "L1CHPControllerConfig":
+        """Hydrogen fuel cell heating the building directly, between 20.0 and 20.5 °C.
+
+        Differs from :meth:`preset_gas` in the three values a fuel cell states: it burns green
+        hydrogen, it runs only while its hydrogen storage is at least 8 % full, and it reheats
+        the drain hot water storage from 50 °C rather than 42 °C.
+
+        Args:
+            name: Instance name of the controller in the simulation.
+
+        Returns:
+            The configuration, fully concrete -- the class has no sizable field.
+        """
+        return cls(
+            component_id=ComponentID(name=name),
             use=LoadTypes.GREEN_HYDROGEN,
-            electricity_threshold=300,
             h2_soc_threshold=8.0,
-            t_min_heating_in_celsius=20.0,
-            t_max_heating_in_celsius=20.5,
             t_min_dhw_in_celsius=50,
-            t_max_dhw_in_celsius=60,
-            day_of_heating_season_begin=_DAY_OF_HEATING_SEASON_BEGIN,
-            day_of_heating_season_end=150,
-            min_operation_time_in_seconds=3600 * 4,
-            min_idle_time_in_seconds=3600 * 2,
         )
-        return config
 
-    @staticmethod
-    def get_default_config_chp_with_buffer(
-        component_id: Optional[ComponentID] = None,
-    ) -> "L1CHPControllerConfig":
-        """Returns default configuration for the CHP controller, when buffer storage for heating is available."""
-        return _with_buffer_storage(
-            L1CHPControllerConfig.get_default_config_chp(component_id=component_id),
+    @preset
+    @classmethod
+    def preset_gas_with_buffer(cls, name: str) -> "L1CHPControllerConfig":
+        """Gas-driven CHP heating a buffer storage, between 35.0 and 40.0 °C.
+
+        :meth:`preset_gas` regulated against a buffer rather than the building: the band is the
+        vessel's water temperature, the heating season starts a day early, and the drain hot
+        water storage is reheated from 50 °C rather than 42 °C.
+
+        Args:
+            name: Instance name of the controller in the simulation.
+
+        Returns:
+            The configuration, fully concrete -- the class has no sizable field.
+        """
+        return cls._with_buffer_storage(
+            cls.preset_gas(name),
             t_min_heating_in_celsius=35.0,
             t_min_dhw_in_celsius=50,
         )
 
-    @staticmethod
-    def get_default_config_fuel_cell_with_buffer(
-        component_id: Optional[ComponentID] = None,
-    ) -> "L1CHPControllerConfig":
-        """Returns default configuration for the fuel cell controller, when buffer storage for heating is available."""
-        return _with_buffer_storage(
-            L1CHPControllerConfig.get_default_config_fuel_cell(component_id=component_id),
+    @preset
+    @classmethod
+    def preset_hydrogen_with_buffer(cls, name: str) -> "L1CHPControllerConfig":
+        """Hydrogen fuel cell heating a buffer storage, between 31.0 and 40.0 °C.
+
+        :meth:`preset_hydrogen` regulated against a buffer rather than the building: the band is
+        the vessel's water temperature, the heating season starts a day early, and the drain hot
+        water storage is reheated from 42 °C rather than 50 °C. Neither the lower bound of the
+        band nor that of the drain hot water is the gas machine's -- see the class docstring.
+
+        Args:
+            name: Instance name of the controller in the simulation.
+
+        Returns:
+            The configuration, fully concrete -- the class has no sizable field.
+        """
+        return cls._with_buffer_storage(
+            cls.preset_hydrogen(name),
             t_min_heating_in_celsius=31.0,
             t_min_dhw_in_celsius=42,
         )

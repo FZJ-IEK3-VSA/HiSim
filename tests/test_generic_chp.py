@@ -5,12 +5,12 @@ under various demand/hydrogen scenarios, plus unit checks of the ``gas`` and ``h
 presets -- whose electrical power and fuel input are laws over the thermal power the
 author states -- and of ``GenericCHPState.clone``.
 
-``L1CHPControllerConfig`` carries four default configurations whose thresholds are not
-symmetric: ``t_min_dhw_in_celsius`` runs 42/50/50/42 over chp, fuel cell, chp-with-buffer and
-fuel-cell-with-buffer, and a buffer raises ``t_min_heating_in_celsius`` to 35.0 for gas but to
+``L1CHPControllerConfig`` carries four presets whose thresholds are not symmetric:
+``t_min_dhw_in_celsius`` runs 42/50/50/42 over gas, hydrogen, gas-with-buffer and
+hydrogen-with-buffer, and a buffer raises ``t_min_heating_in_celsius`` to 35.0 for gas but to
 31.0 for hydrogen. Nothing in the module, the tests or the commit history explains either, so
 the values stand as they were written in 2023 and ``test_chp_controller_default_thresholds``
-pins all four as literals - a pin that read its expectation off a sibling factory would agree
+pins all four as literals - a pin that read its expectation off a sibling preset would agree
 with any drift that happened to move both.
 """
 
@@ -70,7 +70,7 @@ def test_chp_system() -> None:
     my_chp = generic_chp.SimpleCHP(my_simulation_parameters=my_simulation_parameters, config=chp_config)
 
     # configure chp controller
-    chp_controller_config = generic_chp.L1CHPControllerConfig.get_default_config_fuel_cell_with_buffer()
+    chp_controller_config = generic_chp.L1CHPControllerConfig.preset_hydrogen_with_buffer("FuelCellController")
     chp_controller_config.electricity_threshold = concrete(chp_config.p_el) / 2
     my_chp_controller = generic_chp.L1CHPController(
         my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
@@ -253,7 +253,7 @@ def test_chp_heats_the_water_to_the_dhw_maximum_in_summer() -> None:
     chp_config = chp_config.resolve(SizingContext())
     my_chp = generic_chp.SimpleCHP(my_simulation_parameters=my_simulation_parameters, config=chp_config)
 
-    chp_controller_config = generic_chp.L1CHPControllerConfig.get_default_config_chp()
+    chp_controller_config = generic_chp.L1CHPControllerConfig.preset_gas("CHPController")
     my_chp_controller = generic_chp.L1CHPController(
         my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
     )
@@ -505,7 +505,7 @@ def test_generic_chp_state_clone_independence() -> None:
 
 @pytest.mark.base
 def test_chp_controller_default_thresholds() -> None:
-    """Pins every threshold that the four default controller configurations carry.
+    """Pins every threshold that the four controller presets carry.
 
     They cross two fuels with the presence of a buffer storage, and the numbers are not
     symmetric: the lower drain hot water bound runs 42 / 50 / 50 / 42 °C down the list below, and
@@ -513,13 +513,13 @@ def test_chp_controller_default_thresholds() -> None:
     Nothing on record says why, so the values are kept as they were written in 2023 rather than
     guessed at, and pinned here so that any later change to one of them has to be deliberate.
 
-    Every expectation is a literal. Checking one factory against another would pass just as
-    happily if both of them drifted, which is the change this is meant to catch.
+    Every expectation is a literal. Checking one preset against another would pass just as
+    happily if both of them drifted, which is the change this is meant to catch. The instance
+    name is not pinned: a preset takes it from its caller rather than carrying one.
     """
     config_class = generic_chp.L1CHPControllerConfig
     expected: dict[str, dict[str, object]] = {
-        "chp": {
-            "component_name": "CHPController",
+        "gas": {
             "use": lt.LoadTypes.GAS,
             "h2_soc_threshold": 0,
             "t_min_heating_in_celsius": 20.0,
@@ -531,8 +531,7 @@ def test_chp_controller_default_thresholds() -> None:
             "min_operation_time_in_seconds": 3600 * 4,
             "min_idle_time_in_seconds": 3600 * 2,
         },
-        "fuel_cell": {
-            "component_name": "FuelCellController",
+        "hydrogen": {
             "use": lt.LoadTypes.GREEN_HYDROGEN,
             "h2_soc_threshold": 8.0,
             "t_min_heating_in_celsius": 20.0,
@@ -544,8 +543,7 @@ def test_chp_controller_default_thresholds() -> None:
             "min_operation_time_in_seconds": 3600 * 4,
             "min_idle_time_in_seconds": 3600 * 2,
         },
-        "chp_with_buffer": {
-            "component_name": "CHPController",
+        "gas_with_buffer": {
             "use": lt.LoadTypes.GAS,
             "h2_soc_threshold": 0,
             "t_min_heating_in_celsius": 35.0,
@@ -557,8 +555,7 @@ def test_chp_controller_default_thresholds() -> None:
             "min_operation_time_in_seconds": 3600 * 4,
             "min_idle_time_in_seconds": 3600 * 2,
         },
-        "fuel_cell_with_buffer": {
-            "component_name": "FuelCellController",
+        "hydrogen_with_buffer": {
             "use": lt.LoadTypes.GREEN_HYDROGEN,
             "h2_soc_threshold": 8.0,
             "t_min_heating_in_celsius": 31.0,
@@ -572,13 +569,10 @@ def test_chp_controller_default_thresholds() -> None:
         },
     }
 
-    for factory_name, fields in expected.items():
-        config = getattr(config_class, "get_default_config_" + factory_name)()
-        actual: dict[str, object] = {
-            field: config.component_id.name if field == "component_name" else getattr(config, field)
-            for field in fields
-        }
-        assert actual == fields, factory_name
+    for preset_name, fields in expected.items():
+        config = getattr(config_class, "preset_" + preset_name)("Controller")
+        actual: dict[str, object] = {field: getattr(config, field) for field in fields}
+        assert actual == fields, preset_name
 
 
 @pytest.mark.base
@@ -589,7 +583,7 @@ def test_chp_controller_config_refuses_a_heating_band_of_zero_width() -> None:
     position inside the band divided by the band's width, so a band of zero width would raise
     only in the middle of a simulation, if at all.
     """
-    config = generic_chp.L1CHPControllerConfig.get_default_config_chp()
+    config = generic_chp.L1CHPControllerConfig.preset_gas("CHPController")
 
     with pytest.raises(ValueError, match="t_min_heating_in_celsius"):
         dataclasses.replace(config, t_min_heating_in_celsius=config.t_max_heating_in_celsius)
@@ -603,7 +597,7 @@ def test_chp_controller_config_refuses_an_inverted_dhw_band() -> None:
     level, so the controller would quietly serve the fuller vessel and the run would look like a
     working simulation of a differently configured house.
     """
-    config = generic_chp.L1CHPControllerConfig.get_default_config_chp()
+    config = generic_chp.L1CHPControllerConfig.preset_gas("CHPController")
 
     with pytest.raises(ValueError, match="t_min_dhw_in_celsius"):
         dataclasses.replace(config, t_min_dhw_in_celsius=config.t_max_dhw_in_celsius + 1)

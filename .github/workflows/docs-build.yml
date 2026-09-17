@@ -115,6 +115,12 @@ jobs:
       # The Read the Docs build command. docs/_build/ is gitignored, so it does not
       # disturb any freshness gate that looks for a dirty tree.
       - name: Build the HTML documentation
+        # bash by name, the third step in this repository to need it: a `run:` step falls back to
+        # sh in this container and dies on the bash-only `set -o pipefail` ("Illegal option -o
+        # pipefail"), though bash is installed -- see the same comment on p3-parity.yml's summary
+        # step and energy-system-freshness.yml's recorder step. pipefail is what keeps Sphinx's own
+        # exit code, the whole oracle of this gate, which `tee` would otherwise replace with its 0.
+        shell: bash
         run: |
           set -o pipefail
           python -m sphinx -b html docs docs/_build/html 2>&1 | tee docs-build.log

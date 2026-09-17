@@ -776,30 +776,46 @@ class SolarThermalSystemState:
 @dataclass_json
 @dataclass
 class SolarThermalSystemControllerConfig(ConfigBase):
-    """Config class for controller of solar thermal system."""
+    """Configuration of the solar thermal system's controller: when the solar pump runs.
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the base class."""
-        return SolarThermalSystemController.get_full_classname()
+    The differential thermostat in front of the collector loop. It starts the pump once the
+    collector is more than :attr:`set_temperature_difference_for_on` warmer than the water in
+    the hot water vessel, and stops it again when the collector has cooled back to the
+    vessel's temperature or the vessel has reached its 60 °C aim. Running the pump against a
+    smaller difference would cost more electricity than the loop brings in heat.
+
+    The named default is :meth:`preset_standard`::
+
+        SolarThermalSystemControllerConfig.preset_standard("SolarThermalSystemController")
+
+    The switch-on difference is a property of the loop's pump and piping, not of the building
+    or the collector area, so the one field is a plain default and the preset takes nothing
+    but the instance name.
+    """
+
+    MAIN_CLASS = "hisim.components.solar_thermal_system.SolarThermalSystemController"
 
     component_id: ComponentID
-    set_temperature_difference_for_on: float
+    #: Temperature difference between the collector and the mean water temperature in the
+    #: vessel, in kelvin, above which the solar pump is switched on.
+    set_temperature_difference_for_on: float = 10.0
 
+    @preset
     @classmethod
-    def get_solar_thermal_system_controller_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-        name: str = "SolarThermalSystemController",
-        set_temperature_difference_for_on: float = 10,
-    ) -> "SolarThermalSystemControllerConfig":
-        """Gets a default SolarThermalSystemController for DHW."""
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        return SolarThermalSystemControllerConfig(
-            component_id=component_id,
-            set_temperature_difference_for_on=set_temperature_difference_for_on,
-        )
+    def preset_standard(cls, name: str) -> "SolarThermalSystemControllerConfig":
+        """The one differential thermostat the fleet runs: ten kelvin to switch the pump on.
+
+        The single field default is the whole controller. The preset is called ``standard``
+        because a switch-on difference describes no device and no standard — there is nothing
+        else to name it after.
+
+        Args:
+            name: Instance name of the controller in the simulation.
+
+        Returns:
+            The configuration, fully concrete — the class has no sizable field.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class SolarThermalSystemController(Component):

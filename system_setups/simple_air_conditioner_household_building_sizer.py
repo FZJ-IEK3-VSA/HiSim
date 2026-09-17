@@ -125,7 +125,7 @@ def setup_function(
     # =================================================================================================================================
     # Build Simple Air Conditioner Controller
     my_air_conditioner_controller_config = (
-        simple_air_conditioner.SimpleAirConditionerControllerConfig.get_default_simple_air_conditioner_controller_config()
+        simple_air_conditioner.SimpleAirConditionerControllerConfig.preset_standard("SimpleAirConditionerController")
     )
     my_air_conditioner_controller = simple_air_conditioner.SimpleAirConditionerController(
         config=my_air_conditioner_controller_config,

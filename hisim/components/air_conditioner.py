@@ -797,38 +797,65 @@ class AirConditioner(cp.Component):
 @dataclass_json
 @dataclass
 class AirConditionerControllerConfig(ConfigBase):
-    """Configuration class for the air conditioner controller."""
+    """Configuration of the air conditioner's controller: a comfort band with minimum run times.
+
+    The controller watches the building's indoor air temperature and puts the unit into
+    heating below :attr:`heating_set_temperature_deg_c`, into cooling above
+    :attr:`cooling_set_temperature_deg_c`, and off in the band between them. Two things
+    soften that switch: ``offset`` widens the band the unit stays in once it has started, so
+    it does not stop the moment the setpoint is reached, and the two minimum times keep it
+    running, or keep it off, for a while whatever the air says. Within the running band the
+    power is modulated quadratically, reaching full power
+    ``temperature_difference_full_power_deg_c`` kelvin past the setpoint that started it.
+
+    The named default is :meth:`preset_standard`::
+
+        AirConditionerControllerConfig.preset_standard("AirConditionerController")
+
+    Nothing here is derived from the building. These are the temperatures the residents ask
+    for and the cycling limits of the machine, so no field is sizable and the preset takes
+    nothing but the instance name.
+    """
+
+    MAIN_CLASS = "hisim.components.air_conditioner.AirConditionerController"
 
     component_id: ComponentID
-    heating_set_temperature_deg_c: float
-    cooling_set_temperature_deg_c: float
-    minimum_runtime_s: float
-    minimum_idle_time_s: float
-    offset: float
-    temperature_difference_full_power_deg_c: float
+    #: Indoor air temperature below which the unit heats, in °C.
+    heating_set_temperature_deg_c: float = 20.0
+    #: Indoor air temperature above which the unit cools, in °C.
+    cooling_set_temperature_deg_c: float = 24.0
+    #: Shortest time the unit stays in heating or cooling once it has started, in seconds.
+    #: Rounded down to whole time steps, so a value below one time step imposes nothing.
+    minimum_runtime_s: float = 1800.0
+    #: Shortest time the unit stays off once it has stopped, in seconds, rounded down the
+    #: same way. Together with the runtime it is what stops the unit chattering on and off
+    #: around the setpoint.
+    minimum_idle_time_s: float = 900.0
+    #: Width of the hysteresis band, in kelvin: how far past the setpoint that started it the
+    #: unit keeps running. Heating continues up to ``heating_set_temperature_deg_c + offset``
+    #: and cooling down to ``cooling_set_temperature_deg_c - offset``.
+    offset: float = 5.0
+    #: Temperature difference from the far edge of that band at which the unit runs at full
+    #: power, in kelvin. Below it the modulation is the square of the ratio, so the unit
+    #: throttles back sharply as the air approaches the setpoint.
+    temperature_difference_full_power_deg_c: float = 3.0
 
+    @preset
     @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the associated controller class."""
-        return AirConditionerController.get_full_classname()
+    def preset_standard(cls, name: str) -> "AirConditionerControllerConfig":
+        """The one comfort band the fleet runs: heating below 20 °C, cooling above 24 °C.
 
-    @classmethod
-    def get_default_air_conditioner_controller_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Returns a default configuration object."""
-        if component_id is None:
-            component_id = ComponentID(name="AirConditionerControllerConfig")
-        return cls(
-            component_id=component_id,
-            heating_set_temperature_deg_c=20.0,
-            cooling_set_temperature_deg_c=24.0,
-            minimum_runtime_s=30 * 60,
-            minimum_idle_time_s=15 * 60,
-            offset=5.0,
-            temperature_difference_full_power_deg_c=3.0,
-        )
+        The field defaults are that band, with five kelvin of hysteresis either side, full
+        power three kelvin from the edge, and the unit held for half an hour once it starts
+        and a quarter of an hour once it stops.
+
+        Args:
+            name: Instance name of the controller in the simulation.
+
+        Returns:
+            The configuration, fully concrete -- the class has no sizable field.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class AirConditionerControllerState:

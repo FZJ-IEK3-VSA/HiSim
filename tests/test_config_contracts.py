@@ -202,8 +202,12 @@ class PilotWireFormat:
         "MoreAdvancedHeatPumpHPLibControllerDHWConfig": ("standard",),
         "DistrictHeatingControllerConfig": ("standard",),
         "AirConditionerConfig": ("samsung_ac120",),
+        "AirConditionerControllerConfig": ("standard",),
         "SimpleAirConditionerConfig": ("standard",),
+        "SimpleAirConditionerControllerConfig": ("standard",),
         "SolarThermalSystemConfig": ("flat_plate",),
+        "SolarThermalSystemControllerConfig": ("standard",),
+        "NightSetbackConfig": ("standard",),
         "generic_chp.CHPConfig": ("gas", "hydrogen"),
         "advanced_fuel_cell.CHPConfig": ("hydrogen",),
         "IdealizedHeaterConfig": ("standard",),
@@ -245,8 +249,12 @@ class PilotWireFormat:
         "MoreAdvancedHeatPumpHPLibControllerDHWConfig": (),
         "DistrictHeatingControllerConfig": (),
         "AirConditionerConfig": ("for_device", "for_building_load"),
+        "AirConditionerControllerConfig": (),
         "SimpleAirConditionerConfig": (),
+        "SimpleAirConditionerControllerConfig": (),
         "SolarThermalSystemConfig": (),
+        "SolarThermalSystemControllerConfig": (),
+        "NightSetbackConfig": (),
         "generic_chp.CHPConfig": (),
         "advanced_fuel_cell.CHPConfig": (),
         "IdealizedHeaterConfig": (),
@@ -311,8 +319,12 @@ class PilotWireFormat:
         "MoreAdvancedHeatPumpHPLibControllerDHWConfig": (),
         "DistrictHeatingControllerConfig": (),
         "AirConditionerConfig": (),
+        "AirConditionerControllerConfig": (),
         "SimpleAirConditionerConfig": (),
+        "SimpleAirConditionerControllerConfig": (),
         "SolarThermalSystemConfig": (),
+        "SolarThermalSystemControllerConfig": (),
+        "NightSetbackConfig": (),
         "generic_chp.CHPConfig": (),
         "advanced_fuel_cell.CHPConfig": (),
         "IdealizedHeaterConfig": (),
@@ -605,9 +617,12 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         ElectricHeatingConfig,
         ElectricHeatingControllerConfig,
     )
-    from hisim.components.air_conditioner import AirConditionerConfig
+    from hisim.components.air_conditioner import AirConditionerConfig, AirConditionerControllerConfig
     from hisim.components.generic_heat_pump import GenericHeatPumpConfig, GenericHeatPumpControllerConfig
-    from hisim.components.simple_air_conditioner import SimpleAirConditionerConfig
+    from hisim.components.simple_air_conditioner import (
+        SimpleAirConditionerConfig,
+        SimpleAirConditionerControllerConfig,
+    )
     from hisim.components.heat_distribution_system import (
         HeatDistributionConfig,
         HeatDistributionControllerConfig,
@@ -624,7 +639,11 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     from hisim.components.advanced_fuel_cell import CHPConfig as FuelCellCHPConfig
     from hisim.components.generic_chp.chp import CHPConfig as GenericCHPConfig
     from hisim.components.simple_water_storage import SimpleDHWStorageConfig, SimpleHotWaterStorageConfig
-    from hisim.components.solar_thermal_system import SolarThermalSystemConfig
+    from hisim.components.night_setback_controller import NightSetbackConfig
+    from hisim.components.solar_thermal_system import (
+        SolarThermalSystemConfig,
+        SolarThermalSystemControllerConfig,
+    )
     from hisim.components.weather import WeatherConfig
 
     by_name: Dict[str, Any] = {
@@ -656,8 +675,12 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "MoreAdvancedHeatPumpHPLibControllerDHWConfig": MoreAdvancedHeatPumpHPLibControllerDHWConfig,
         "DistrictHeatingControllerConfig": DistrictHeatingControllerConfig,
         "AirConditionerConfig": AirConditionerConfig,
+        "AirConditionerControllerConfig": AirConditionerControllerConfig,
         "SimpleAirConditionerConfig": SimpleAirConditionerConfig,
+        "SimpleAirConditionerControllerConfig": SimpleAirConditionerControllerConfig,
         "SolarThermalSystemConfig": SolarThermalSystemConfig,
+        "SolarThermalSystemControllerConfig": SolarThermalSystemControllerConfig,
+        "NightSetbackConfig": NightSetbackConfig,
         "generic_chp.CHPConfig": GenericCHPConfig,
         "advanced_fuel_cell.CHPConfig": FuelCellCHPConfig,
         "IdealizedHeaterConfig": IdealizedHeaterConfig,

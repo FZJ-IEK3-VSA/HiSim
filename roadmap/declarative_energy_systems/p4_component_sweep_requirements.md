@@ -459,13 +459,33 @@ row is struck from the table, which keeps the question and the option chosen nex
   maximum; and literal pins in the tests. The conversion consequence is **four presets** — `gas`, `hydrogen`,
   `gas_with_buffer`, `hydrogen_with_buffer` — not two plus one shared override, because with the values kept a
   "buffer" override is not one thing.
-- **D-21** `[answered 2026-09-10]` **(c) plumb the fact, keep the Building's field a plain default.**
-  `heating_reference_temperature_in_celsius` becomes a `WeatherConfig` contribution from a per-station DIN 12831
-  table (the `LocationEnum` entries already carry the TRY region in their directory names), so the fact exists for
-  group A's heat pumps. The Building's field stays a plain `-7.0` default rather than `AUTO`, so the norm heating
-  load — and therefore every generator size — does not move: **no result change**. This is the repository's first
-  fact with two possible providers, so a district drawing on two weather stations needs a `sizing_sources` line
-  (R4.3), and that is the cost the option is accepted with.
+- **D-21** `[answered 2026-09-10; revised 2026-09-17, owner]` **(d) the Weather owns the design temperature and
+  states it; the Building reads it.** The 2026-09-10 answer (c) was to add a second provider of
+  `heating_reference_temperature_in_celsius` beside the Building, fed from a per-station DIN 12831 table. Three
+  things overtook it. The fact acquired a provider and readers of its own — the Building contributes it, and the
+  heat-distribution controller and the hplib heat pump read it — so (c)'s stated purpose, "the fact exists for
+  group A's heat pumps", is already met. A second provider would therefore buy nothing and cost a
+  `sizing_sources` line in every twin that carries either reader, because the engine refuses an ambiguous fact.
+  And the table (c) assumed does not exist: `hisim/inputs/housing/data_processed/heating_reference_temperature_per_location.csv`
+  is keyed by country, twenty ISO rows, not by any of the 45 stations of `LocationEnum`.
+
+  **The revision.** The design temperature is a property of the *place a building stands in*, not of a weather
+  year: it is the design condition a heating system is sized for and it does not move from one year to the next
+  (owner, 2026-09-17). So the Weather owns it and never derives it:
+
+  1. `WeatherConfig` gains `heating_reference_temperature_in_celsius`, a **plain field with no default**. Every
+     builder states it: `preset_aachen` states one number, `for_location` and `for_data_file` take it as an
+     argument, and a scenario file must write it. There is no table lookup and no law anywhere — a weather that
+     nobody gave a design temperature cannot be built.
+  2. `WeatherConfig` contributes the fact, beside `weather_identity`. A scenario has exactly one weather, so the
+     bare fact binds with no consumer naming a source, and there is exactly **one provider**.
+  3. `BuildingConfig` stops contributing the fact and reads it: the field becomes
+     `sized_field(rule=Size.HEATING_REFERENCE_TEMPERATURE_IN_CELSIUS)` like the two generator-side readers. One
+     provider, three readers, and the quantity is stated once per system instead of once per component.
+  4. **No result changes.** Every call site states the number it states today: -7.0 in the twelve German setups,
+     -12.2 in `basic_household_only_heating`, 5.7 in the Seville setup, which keeps reading the country table
+     itself. Whether -7.0 or the table's German -8.7 is the better figure for Aachen is a separate physics
+     question, not this one (owner, 2026-09-17).
 - **D-3** `[answered 2026-09-10]` **(a) a constructor, not a law.** `AirConditionerConfig.for_building_load(heating_load,
   heating_reference_temperature)` runs the existing twelve-field database search at build time and returns a complete
   config; no field is `AUTO`, so the kernel stays scalar and no multi-field law is added for a single consumer. Accepted
@@ -687,7 +707,7 @@ The 32 questions below are owner decisions surfaced by the survey, and **all 32 
 | D-12 | ~~PV `share_of_maximum_pv_potential` recorded as 1.0 by the scaled factory: fix, preserve, or delete the field?~~ | `[answered 2026-09-10]` **(a) fix** — the law reads `Self(...)` and the field records the real share; golden-neutral, but RenoVisor payloads with a share below one change to what they meant, stated in the commit and the RenoVisor docs | R3 PV, R5 |
 | D-7 | ~~Solar-thermal `area_m2 = 4 × apartments` law (one setup passes 4 unmultiplied)~~ | `[answered 2026-09-10]` **(a) adopt, record the diff** — executed 2026-09-11; the golden did not move, the setup's `two_dwellings` probe did | R3, R5 |
 | D-4 | ~~CHP controller 42/50 °C flip across axes: bug or preserve?~~ | `[answered 2026-09-10; reversed 2026-09-11 after the #683 review]` **(b) preserve** — the four factories keep their 2023 values and the asymmetry is recorded as unexplained rather than guessed, so the class converts as **four** presets (`gas`, `hydrogen`, `gas_with_buffer`, `hydrogen_with_buffer`), not two plus a shared buffer override; the buffer helper, the module-private constants, the `FuelCellController` name and the `__post_init__` min<max check stay from the PR. No result change | R3, R5 |
-| D-21 | ~~`heating_reference_temperature` from the Weather in B6 (physics), defer, or plumb the fact only?~~ | `[answered 2026-09-10]` **(c) plumb the fact** from a per-station DIN 12831 table, Building's field stays a plain -7.0 default — no result change; the first two-provider fact, so two-station districts need a `sizing_sources` line | R2.1, R5 |
+| D-21 | ~~`heating_reference_temperature` from the Weather in B6 (physics), defer, or plumb the fact only?~~ | `[answered 2026-09-10]` **(c) plumb the fact**; **revised 2026-09-17, owner: (d)** the Weather owns the value as a field with no default, states it at every builder, and contributes it; the Building stops contributing and reads it. One provider, three readers, no table, no law, no result change | R2.1, R3 Weather + Building |
 | **Naming / shape** | | | |
 | D-3 | ~~Air conditioner's 12-field database selection: constructor, multi-field law, or freeze the device?~~ | `[answered 2026-09-10]` **(a)** constructor `for_building_load(...)` runs the database search at build time; no `AUTO` field, and the selection is invisible to `sizing_sources` | R3 |
 | D-5 | ~~`advanced_fuel_cell.CHPConfig`: `standard` or `hydrogen`?~~ | `[answered 2026-09-10]` **(b)** `hydrogen`, a recorded deviation from the supplement's `standard` rule | R3, R4 |

@@ -127,7 +127,12 @@ class DescriptionRenderer(Report):
 
     @classmethod
     def _presets(cls, description: ConfigDescription, stream: TextIO) -> None:
-        """Writes each preset with the sizable fields it pins and the ones it leaves open."""
+        """Writes each preset with the sizable fields it pins, leaves open, and computes its own way.
+
+        A field the preset resolves by a law of its own gets a third line, ``law``, carrying that
+        law rather than the one declared at the field: the ``sizable fields`` section below always
+        prints the declared law, which for such a field is another preset's arithmetic.
+        """
         cls._heading("presets", stream)
         if not description.presets:
             cls._item("(none)", stream)
@@ -137,6 +142,8 @@ class DescriptionRenderer(Report):
             cls._item(f"{preset.name}{canonical}", stream)
             cls._detail("pinned", ", ".join(preset.pinned) or "(nothing sizable)", stream)
             cls._detail("AUTO", ", ".join(preset.auto) or "(nothing left open)", stream)
+            for field_name, law in preset.laws:
+                cls._detail("law", f"{field_name} = {law}", stream)
             if preset.note:
                 cls._detail("note", preset.note, stream)
 

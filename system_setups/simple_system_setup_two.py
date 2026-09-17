@@ -62,7 +62,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     # Create new Transformer object
     my_transformer = ExampleTransformer(
-        config=ExampleTransformerConfig.get_default_transformer(),
+        config=ExampleTransformerConfig.preset_standard("ExampleTransformerDefault"),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_transformer.connect_input(

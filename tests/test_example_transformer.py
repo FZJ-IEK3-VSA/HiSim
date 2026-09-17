@@ -24,7 +24,9 @@ def test_example_transformer() -> None:
 
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
-    my_example_transformer_config = example_transformer.ExampleTransformerConfig.get_default_transformer()
+    my_example_transformer_config = example_transformer.ExampleTransformerConfig.preset_standard(
+        "ExampleTransformerDefault"
+    )
     print("\n")
     log.information(f"default transformer config {my_example_transformer_config}\n")
     my_example_transformer = example_transformer.ExampleTransformer(

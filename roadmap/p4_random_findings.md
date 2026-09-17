@@ -1,6 +1,6 @@
 # P4 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-15 (13 findings)
+**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-16 (16 findings)
 **Context:** things that surfaced while working through
 `roadmap/declarative_energy_systems/p4_component_sweep_requirements.md` — the component sweep, decisions
 D-1 … D-32 — and were **not** what the work set out to do. Kept separately so the requirements stay about
@@ -648,7 +648,7 @@ preset whose digits belong to a device designation, and rule 2 keeps refusing ev
 number that is a *value* still fails. A second such preset costs one line and a moment's thought
 about whether the device is real — which is the check R4 actually wants.
 
-### F-18 — `describe` renders a per-preset law as plain `AUTO`, so the preset that changes the arithmetic looks identical to the one that does not **[verified]**
+### F-18 — `describe` renders a per-preset law as plain `AUTO`, so the preset that changes the arithmetic looks identical to the one that does not **[verified, fixed]**
 
 Found on 2026-09-15 while converting the generic CHP (B4). A preset may replace a field's law by
 assigning a `SizingLaw` as the field value — the spelling `GenericBoilerConfig.preset_pellets` has
@@ -670,6 +670,15 @@ preset to classify its fields, so the branch that files a field under `AUTO:` ca
 built value is a `SizingLaw` and, if it is, print that law's `describe()` beside the preset. Left
 alone here because it changes a shared introspection surface rather than the class under
 conversion, and because the number of classes with per-preset laws is still three.
+
+**Fixed 2026-09-16** (B8), as the entry proposed: `PresetInfo` gained a `laws` tuple that
+`_describe_presets` fills from the instance it already builds — the sizable fields holding a
+`SizingLaw`, each paired with that law's own `describe()` — and the renderer prints one `law:`
+line per pair beside `pinned:` and `AUTO:`. The field stays in `auto`, because a law is still
+something to be resolved and not a pinned value, and the `sizable fields` section still prints
+the declared law. `generic_chp.CHPConfig` now reads `hydrogen … law: p_el = 1.1162790697674418 *
+Self("p_th")` against the declared `0.66`, and both pellet presets of `GenericBoilerConfig` show
+their twelfth. The JSON schema carries no laws and did not change.
 
 ### F-19 — a `dataclasses_json` field alias is invisible to `describe`, the schema and the energy-system file **[reported]**
 
@@ -707,3 +716,76 @@ recording, which needs a way to mark a field as not-an-input that the recorder, 
 schema all honour, and which would be the first such mark in the repository. The first is smaller
 and says the true thing. Left alone in B7: moving them changes the component's behaviour surface
 and the twin, and the batch is behaviour-N.
+
+### F-21 — `describe` says nothing about what a preset sets on a plain field, so presets that differ only in plain fields describe as identical **[verified]**
+
+Found on 2026-09-16 in the R13 review of all 56 classes the wire-format contract pins. The
+`presets` section prints a preset's name, its canonical flag, the sizable fields it pins, the ones
+it leaves `AUTO`, the laws it assigns (F-18) and its note. It never prints a *value*. For a class
+whose presets differ only in plain fields — which is most of them, since R1.1 made plain values
+into field defaults a preset overrides — two presets render as the same four lines.
+
+`SimpleHeatSourceConfig` is the clearest case: `constant_thermal_power`, `constant_temperature`
+and `near_surface_brine` each print `pinned: (nothing sizable)` / `AUTO: (nothing left open)` and
+nothing else, while the `fields` section above shows one set of class defaults that belongs to
+none of the three in full. `L1CHPControllerConfig` prints its four presets identically, and
+`GenericBoilerConfig`'s seven differ in the output only where a sizable field or a note does. A
+reader who wants to know what `near_surface_brine` actually is has to open the module.
+
+The preset name carries most of the meaning, which is why this is a gap and not a defect, and a
+`note=` closes it one preset at a time (several classes already use one). The structural fix is to
+diff each built preset against the class defaults and print the fields it changes — the recorder
+already does exactly that diff for a twin's `config` block, against a built preset rather than
+against the class, so the machinery exists. Left alone in B8: it changes what every `describe`
+output looks like, and R13 is a review, not a redesign.
+
+### F-22 — a law written as a lambda describes itself as `<Class>.<lambda>`, and one of them names the wrong class **[verified]**
+
+Found on 2026-09-16 in the same review. `SizingLaw.describe()` renders an arithmetic law as its
+own expression (`0.5 * Size.PV_PEAK_POWER_IN_WATT.rounded(2)`) but a law built from a callable as
+that callable's qualified name. For a named function that is merely terse — `_rooftop_power_in_watt`,
+`_buffer_volume_in_liter` — but for the four laws written as lambdas it is
+`GenericBoilerConfig.<lambda>`, `HeatDistributionControllerConfig.<lambda>` and
+`ElectricHeatingControllerConfig.<lambda>`, which say only that the law exists.
+
+One of them says something untrue. `ElectricHeatingControllerConfig.set_heating_threshold_outside_temperature_in_celsius`
+reuses `HeatDistributionControllerConfig.HEATING_THRESHOLD_LAW` — deliberately, so the two
+controllers cannot disagree — and therefore describes as
+`law: HeatDistributionControllerConfig.<lambda>` under a class of another name, which reads as a
+description gone wrong rather than as sharing.
+
+B8 fixed the *readable* half within R13's one-line remit: the six sized fields with an opaque law
+gained a `note=`, so `describe` now states the arithmetic in words beside the name. The name
+itself is the finding. Two honest fixes: give `law()` an optional description string, which is one
+argument at six call sites and makes the rendering exact; or turn each lambda into a `def` with a
+telling name, which is free but still only names a function. Field notes don't reach the schema,
+so neither is wire format. Not done here: it changes `hisim/config/laws.py`, outside a batch's
+remit.
+
+### F-23 — two sibling controllers derive the heating threshold from the fact, a third recomputes it **[reported; the third has no provider to read]**
+
+Found on 2026-09-16 in the same review. R2.1 added the fact
+`set_heating_threshold_outside_temperature_in_celsius`, contributed by
+`HeatDistributionControllerConfig` as *the value it resolved to*, so that every generator
+controller heating below the same threshold reads the emitter circuit's own answer instead of
+repeating the step table. `MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig` and
+`DistrictHeatingControllerConfig` do exactly that: `law: Size.SET_HEATING_THRESHOLD_OUTSIDE_TEMPERATURE_IN_CELSIUS`.
+`ElectricHeatingControllerConfig` does not — it re-evaluates
+`HeatDistributionControllerConfig.HEATING_THRESHOLD_LAW` over the building's own two facts.
+
+The two agree today, because the emitter controller's contributed value is what that same law
+computed from the same two facts. They part the moment an author pins the emitter controller's
+threshold by hand: the fact then carries the pinned number, the two sibling controllers follow it
+and the electric heating controller keeps the step table's. A system where one generator heats
+below 18 °C and its emitter circuit below a hand-set 12 °C is a system nobody described.
+
+The one-line fix — read `Size.SET_HEATING_THRESHOLD_OUTSIDE_TEMPERATURE_IN_CELSIUS`, as the
+siblings do — is not available to this class as things stand. Direct electric heating has no
+water circuit, so `household_electric_heating_building_sizer` builds no heat-distribution
+controller and nothing in that system contributes the fact; a copy law would fail to resolve.
+That is why B5/2 (2026-09-16) chose the re-derivation and struck the R3 row's "removes a
+cross-module import" clause. The divergence described above therefore needs a system that has
+both an emitter controller and an electric heater, which no shipped setup does. Two ways out if
+one appears: a law that reads the fact when a provider exists and falls back to the step table
+otherwise (new kernel semantics), or an emitter-less system stating the threshold as a plain
+override. Recorded; not a B8 change.

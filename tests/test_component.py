@@ -288,7 +288,7 @@ def test_example_component_with_config() -> None:
         unit=lt.Units.WATT,
         electricity=-1e3,
         capacity=(
-            example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+            example_component.ExampleComponentConfig.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
             * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
         ),
         initial_temperature=25.0,
@@ -344,7 +344,7 @@ def test_component_connections() -> None:
         unit=lt.Units.WATT,
         electricity=-1e3,
         capacity=(
-            example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+            example_component.ExampleComponentConfig.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
             * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
         ),
         initial_temperature=25.0,
@@ -427,7 +427,7 @@ def test_add_default_connections_empty_raises() -> None:
         unit=lt.Units.WATT,
         electricity=-1e3,
         capacity=(
-            example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+            example_component.ExampleComponentConfig.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
             * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
         ),
         initial_temperature=25.0,

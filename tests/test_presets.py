@@ -402,6 +402,11 @@ def test_describe_config_reports_fields_presets_laws_and_facts_of_the_pilots():
     assert presets["condensing_gas_12kw"].note == "nominal catalogue device"
     # the pellet preset overrides one field's law, which is still "to be sized", not pinned
     assert presets["pellets"].auto == ("minimal_thermal_power_in_watt", "maximal_thermal_power_in_watt")
+    # and the law it overrides with travels with the preset, not with the field (F-18)
+    assert presets["pellets"].laws == (
+        ("minimal_thermal_power_in_watt", '0.08333333333333333 * Self("maximal_thermal_power_in_watt")'),
+    )
+    assert presets["condensing_gas"].laws == ()
     assert description.facts_provided == (
         "maximal_thermal_power_in_watt",
         "minimal_thermal_power_in_watt",
@@ -413,6 +418,34 @@ def test_describe_config_reports_fields_presets_laws_and_facts_of_the_pilots():
     maximal = next(f for f in description.sizable_fields if f.name == "maximal_thermal_power_in_watt")
     assert maximal.kind is SizableFieldKind.LAW
     assert maximal.facts_read == (("heating_load_in_watt", "ONE"), ("number_of_apartments", "ONE"))
+
+
+@pytest.mark.base
+def test_a_preset_that_overrides_a_law_describes_that_law_and_not_the_declared_one():
+    """A per-preset law is reported under the preset that assigns it (F-18).
+
+    Failure mode caught: the description of a class whose presets compute one field differently
+    reading as if they all computed it the declared way. The generic CHP is the sharpest case —
+    a gas turbine and a fuel cell derive electricity from heat by different ratios — and before
+    this, both presets said only ``AUTO: p_el, p_fuel`` while the ``sizable fields`` section
+    printed the gas turbine's ratio as if it were the law of both.
+    """
+    from hisim.components.generic_chp import CHPConfig
+
+    description = describe_config(CHPConfig)
+    presets = {preset.name: preset for preset in description.presets}
+    # the gas preset runs on the declared laws and so overrides nothing
+    assert presets["gas"].laws == ()
+    assert dict(presets["hydrogen"].laws) == {
+        "p_el": '1.1162790697674418 * Self("p_th")',
+        "p_fuel": '2.3255813953488373 * Self("p_th")',
+    }
+    # the fields stay AUTO: a law is still something to be resolved, not a pinned value
+    assert presets["hydrogen"].auto == ("p_el", "p_fuel")
+    assert presets["hydrogen"].pinned == ()
+    # and the declared laws, which are the gas turbine's, keep their own section unchanged
+    declared = {field.name: field.law for field in description.sizable_fields}
+    assert declared == {"p_el": '0.66 * Self("p_th")', "p_fuel": '2.0 * Self("p_th")'}
 
 
 @pytest.mark.base

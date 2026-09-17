@@ -158,7 +158,11 @@ class PVSystemConfig(ConfigBase):
     prediction_horizon: Optional[int] = None
     #: The array's power. Sizable: left ``AUTO`` it is computed by :data:`ROOFTOP_POWER_LAW` from
     #: the roof area the building contributes. Marked as the capacity field for the cost engine.
-    power_in_watt: Sizable[float] = sized_field(rule=ROOFTOP_POWER_LAW, metadata={"capacity": True})
+    power_in_watt: Sizable[float] = sized_field(
+        rule=ROOFTOP_POWER_LAW,
+        metadata={"capacity": True},
+        note="usable roof area times the module's power per m², times the share of it that is installed",
+    )
     #: The weather this system is computed with, as ``WeatherConfig.identity()`` spells it, sized
     #: from the weather by the sizing engine. It is not cache-key material — the series are keyed
     #: by the weather producer's own artifact key — but it is a sized field of the declarative

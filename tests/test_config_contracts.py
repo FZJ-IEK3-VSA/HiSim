@@ -231,6 +231,11 @@ class PilotWireFormat:
         "FuelCellControllerConfig": ("pem",),
         "ElectrolyzerWithStorageConfig": ("standard",),
         "ElectrolyzerWithHydrogenStorageConfig": ("standard",),
+        "ExampleComponentConfig": ("standard",),
+        "ComponentNameConfig": ("standard",),
+        "ExampleTransformerConfig": ("standard",),
+        "SimpleStorageConfig": ("thermal",),
+        "SimpleControllerConfig": ("standard",),
     }
 
     #: Config class name → its named constructors, in declaration order. A constructor's
@@ -288,6 +293,11 @@ class PilotWireFormat:
         "FuelCellControllerConfig": (),
         "ElectrolyzerWithStorageConfig": (),
         "ElectrolyzerWithHydrogenStorageConfig": (),
+        "ExampleComponentConfig": (),
+        "ComponentNameConfig": (),
+        "ExampleTransformerConfig": (),
+        "SimpleStorageConfig": (),
+        "SimpleControllerConfig": (),
     }
 
     #: The scanned classes that legitimately ship no preset at all. Zero presets is a legal
@@ -377,6 +387,11 @@ class PilotWireFormat:
         "FuelCellControllerConfig": (),
         "ElectrolyzerWithStorageConfig": (),
         "ElectrolyzerWithHydrogenStorageConfig": (),
+        "ExampleComponentConfig": (),
+        "ComponentNameConfig": (),
+        "ExampleTransformerConfig": (),
+        "SimpleStorageConfig": (),
+        "SimpleControllerConfig": (),
     }
 
 
@@ -709,6 +724,11 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     )
     from hisim.components.generic_electrolyzer_h2 import ElectrolyzerConfig
     from hisim.components.generic_fuel_cell import FuelCellConfig
+    from hisim.components.controller_l1_example_controller import SimpleControllerConfig
+    from hisim.components.example_component import ExampleComponentConfig
+    from hisim.components.example_storage import SimpleStorageConfig
+    from hisim.components.example_template import ComponentNameConfig
+    from hisim.components.example_transformer import ExampleTransformerConfig
 
     by_name: Dict[str, Any] = {
         "GenericBoilerConfig": GenericBoilerConfig,
@@ -764,6 +784,11 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "FuelCellControllerConfig": FuelCellControllerConfig,
         "ElectrolyzerWithStorageConfig": ElectrolyzerWithStorageConfig,
         "ElectrolyzerWithHydrogenStorageConfig": ElectrolyzerWithHydrogenStorageConfig,
+        "ExampleComponentConfig": ExampleComponentConfig,
+        "ComponentNameConfig": ComponentNameConfig,
+        "ExampleTransformerConfig": ExampleTransformerConfig,
+        "SimpleStorageConfig": SimpleStorageConfig,
+        "SimpleControllerConfig": SimpleControllerConfig,
     }
     for class_name, expected in PilotWireFormat.PRESET_NAMES.items():
         assert tuple(presets_of(by_name[class_name])) == expected

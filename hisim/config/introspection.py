@@ -77,6 +77,14 @@ class PresetInfo:
     building the preset once with :attr:`PROBE_NAME`, because a preset is a builder and
     its content cannot be read any other way; the throwaway instance is discarded
     immediately.
+
+    ``laws`` is the second half of that ``auto`` answer: the fields this preset resolves by a
+    law *of its own* rather than by the one declared at the field, each paired with that law's
+    own rendering of itself. ``GenericBoilerConfig.preset_pellets`` is the example — the pellet
+    boiler's minimum power is a twelfth of its maximum where the field declares a constant zero
+    — and the field stays in ``auto`` as well, because a law is still something to be resolved
+    and not a pinned value. A preset that overrides no law carries an empty tuple, which is the
+    normal case.
     """
 
     #: Instance name handed to a preset builder purely to inspect the result. It is never
@@ -90,6 +98,7 @@ class PresetInfo:
     canonical: bool
     pinned: Tuple[str, ...]
     auto: Tuple[str, ...]
+    laws: Tuple[Tuple[str, str], ...]
     note: Optional[str]
 
 
@@ -216,6 +225,10 @@ def _describe_presets(config_class: type, sizable: Tuple[str, ...]) -> Tuple[Pre
     every configuration has a defensible default. Each preset is built once with
     :attr:`PresetInfo.PROBE_NAME`; a builder that raises is a bug in the preset, not
     something to be swallowed here, so the exception propagates.
+
+    The built instance is also what says which fields this preset resolves by a law of its
+    own: a preset overrides a field's declared law by assigning a :class:`SizingLaw` as the
+    field's value, and that law is readable nowhere else.
     """
     canonical = canonical_preset(config_class)
     infos = []
@@ -228,10 +241,36 @@ def _describe_presets(config_class: type, sizable: Tuple[str, ...]) -> Tuple[Pre
                 canonical=canonical is not None and name == canonical.name,
                 pinned=tuple(field for field in sizable if field not in unresolved),
                 auto=tuple(field for field in sizable if field in unresolved),
+                laws=_preset_laws(probe, sizable),
                 note=builder.note,
             )
         )
     return tuple(infos)
+
+
+def _preset_laws(probe: Any, sizable: Tuple[str, ...]) -> Tuple[Tuple[str, str], ...]:
+    """Pairs every field a built preset holds a law in with that law's own description.
+
+    A preset may replace a field's declared law by assigning a :class:`SizingLaw` as the field
+    value, which is how ``GenericBoilerConfig.preset_pellets`` derives a pellet boiler's minimum
+    power from its maximum where the field itself declares a constant. Without this, a
+    description would show the *declared* law for such a field and so attribute one preset's
+    arithmetic to another (finding F-18).
+
+    Args:
+        probe: The throwaway instance the preset built, read and discarded by the caller.
+        sizable: The names of the class's sizable fields, in declaration order.
+
+    Returns:
+        ``(field name, law description)`` pairs in declaration order; empty for a preset that
+        overrides no law, which is the normal case.
+    """
+    laws = []
+    for field_name in sizable:
+        value = getattr(probe, field_name)
+        if isinstance(value, SizingLaw):
+            laws.append((field_name, value.describe()))
+    return tuple(laws)
 
 
 def _describe_constructors(config_class: type) -> Tuple[ConstructorInfo, ...]:

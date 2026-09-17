@@ -1,5 +1,6 @@
 """Test for the Example Template."""
 
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -25,14 +26,15 @@ def test_example_template() -> None:
 
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
-    # ``rated_power_in_watt`` is sized, so the factory's config carries AUTO and has to be
+    # ``rated_power_in_watt`` is sized, so the preset's config carries AUTO and has to be
     # resolved against the facts of the surrounding system before a component is built from it.
-    my_example_template_config = example_template.ComponentNameConfig.get_default_template_component().resolve(
-        fft.default_building_sizing_context()
-    )
+    my_example_template_config = example_template.ComponentNameConfig.preset_standard(
+        "ComponentNameDefault"
+    ).resolve(fft.default_building_sizing_context())
     assert (
         my_example_template_config.rated_power_in_watt
-        == example_template.SPECIFIC_RATED_POWER_IN_WATT_PER_M2 * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
+        == example_template.ComponentNameConfig.SPECIFIC_RATED_POWER_IN_WATT_PER_M2
+        * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
     )
     print("\n")
     log.information(f"default componentname config {my_example_template_config}\n")
@@ -92,22 +94,23 @@ def test_example_template() -> None:
 
 
 @pytest.mark.base
-def test_get_default_template_component_no_args() -> None:
-    """``get_default_template_component`` returns hardcoded defaults when called with no arguments."""
-    config = example_template.ComponentNameConfig.get_default_template_component()
+def test_preset_standard_states_nothing_but_the_name() -> None:
+    """``preset_standard`` builds the field defaults under the instance name it is given."""
+    config = example_template.ComponentNameConfig.preset_standard("ComponentNameDefault")
     assert config.component_id.building is None
     assert config.component_id.name == "ComponentNameDefault"
     assert config.loadtype == lt.LoadTypes.ELECTRICITY
     assert config.unit == lt.Units.WATT
-    # The sized field is not a default *value*: the factory leaves it to the law.
+    # The sized field is not a default *value*: the preset leaves it to the law.
     assert config.rated_power_in_watt is AUTO
 
 
 @pytest.mark.base
-def test_get_default_template_component_custom_building() -> None:
-    """Passing a component_id with a building only changes that; all other fields keep defaults."""
-    config = example_template.ComponentNameConfig.get_default_template_component(
-        component_id=ComponentID(name="ComponentNameDefault", building="MyHouse")
+def test_a_preset_config_takes_a_building_by_replacement() -> None:
+    """A preset takes only a name, so an identity carrying a building is substituted afterwards."""
+    config = dataclasses.replace(
+        example_template.ComponentNameConfig.preset_standard("ComponentNameDefault"),
+        component_id=ComponentID(name="ComponentNameDefault", building="MyHouse"),
     )
     assert config.component_id.building == "MyHouse"
     assert config.component_id.name == "ComponentNameDefault"
@@ -117,7 +120,7 @@ def test_get_default_template_component_custom_building() -> None:
 
 
 @pytest.mark.base
-def test_get_default_template_component_empty_building_is_refused() -> None:
+def test_an_empty_building_label_is_refused() -> None:
     """An empty building label is refused at the identity, naming the field.
 
     Passed through, it would silently join into a key with a leading underscore — a component
@@ -138,6 +141,7 @@ def test_get_main_classname() -> None:
     classname = example_template.ComponentNameConfig.get_main_classname()
     assert classname == example_template.ComponentName.get_full_classname()
     assert classname == "hisim.components.example_template.ComponentName"
+    assert example_template.ComponentNameConfig.MAIN_CLASS == classname
 
 
 @pytest.mark.base
@@ -161,7 +165,7 @@ def test_the_template_describes_its_sizing_mechanism() -> None:
     assert rated_power.kind is SizableFieldKind.LAW
     assert rated_power.fields_read == ()
     assert rated_power.note is not None
-    assert str(example_template.SPECIFIC_RATED_POWER_IN_WATT_PER_M2) in rated_power.note
+    assert str(example_template.ComponentNameConfig.SPECIFIC_RATED_POWER_IN_WATT_PER_M2) in rated_power.note
     assert [field.name for field in description.fields if field.sizable] == ["rated_power_in_watt"]
     # The template contributes no fact of its own; see the note in the module about why.
     assert not description.facts_provided
@@ -181,7 +185,7 @@ def _stateless_output_of_one_step(conditioned_floor_area_in_m2: float, input_in_
         float: the value written to ``OutputWithoutState``, in watts.
     """
     mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    config = example_template.ComponentNameConfig.get_default_template_component().resolve(
+    config = example_template.ComponentNameConfig.preset_standard("ComponentNameDefault").resolve(
         SizingContext(conditioned_floor_area_in_m2=conditioned_floor_area_in_m2)
     )
     component = example_template.ComponentName(config=config, my_simulation_parameters=mysim)
@@ -209,7 +213,7 @@ def test_the_stateless_output_is_capped_at_the_sized_rated_power() -> None:
     device was sized for -- both sides of the ``min`` being watts, which is why
     ``OutputWithoutState`` is declared in WATT.
     """
-    rated_power_in_watt = example_template.SPECIFIC_RATED_POWER_IN_WATT_PER_M2 * 20.0
+    rated_power_in_watt = example_template.ComponentNameConfig.SPECIFIC_RATED_POWER_IN_WATT_PER_M2 * 20.0
     assert rated_power_in_watt == 40.0
     assert _stateless_output_of_one_step(conditioned_floor_area_in_m2=20.0, input_in_w=50.0) == rated_power_in_watt
 
@@ -218,7 +222,8 @@ def test_the_stateless_output_is_capped_at_the_sized_rated_power() -> None:
 def test_the_stateless_output_passes_the_input_through_when_the_cap_does_not_bind() -> None:
     """The default building sizes the device at 242.4 W, well above the 51 W it is offered."""
     rated_power_in_watt = (
-        example_template.SPECIFIC_RATED_POWER_IN_WATT_PER_M2 * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
+        example_template.ComponentNameConfig.SPECIFIC_RATED_POWER_IN_WATT_PER_M2
+        * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
     )
     output_in_w = _stateless_output_of_one_step(
         conditioned_floor_area_in_m2=fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2, input_in_w=50.0
@@ -242,7 +247,7 @@ def test_a_rated_power_written_as_a_string_is_coerced_to_a_float() -> None:
 def test_an_unresolved_template_config_is_refused_by_the_component() -> None:
     """A config that still says AUTO never reaches the component, and the error names the law."""
     mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    config = example_template.ComponentNameConfig.get_default_template_component()
+    config = example_template.ComponentNameConfig.preset_standard("ComponentNameDefault")
     with pytest.raises(ConfigSizingError) as refusal:
         example_template.ComponentName(config=config, my_simulation_parameters=mysim)
     assert "rated_power_in_watt" in str(refusal.value)
@@ -280,7 +285,7 @@ def test_a_component_built_from_the_template_runs_inside_a_simulator(tmp_path: P
         config=fft.sized_example_component_config(), my_simulation_parameters=my_simulation_parameters
     )
     my_template_component = example_template.ComponentName(
-        config=example_template.ComponentNameConfig.get_default_template_component().resolve(
+        config=example_template.ComponentNameConfig.preset_standard("ComponentNameDefault").resolve(
             fft.default_building_sizing_context()
         ),
         my_simulation_parameters=my_simulation_parameters,

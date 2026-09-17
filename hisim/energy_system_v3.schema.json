@@ -134,6 +134,7 @@
             "hisim.components.building.Building",
             "hisim.components.building.building.Building",
             "hisim.components.controller_l1_electrolyzer_h2.ElectrolyzerController",
+            "hisim.components.controller_l1_example_controller.SimpleController",
             "hisim.components.controller_l1_fuel_cell.FuelCellController",
             "hisim.components.controller_l1_generic_ev_charge.L1Controller",
             "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
@@ -141,6 +142,10 @@
             "hisim.components.controller_l2_xtp_fuel_cell_ems.XTPController",
             "hisim.components.csvloader.CSVLoader",
             "hisim.components.electricity_meter.ElectricityMeter",
+            "hisim.components.example_component.ExampleComponent",
+            "hisim.components.example_storage.SimpleStorage",
+            "hisim.components.example_template.ComponentName",
+            "hisim.components.example_transformer.ExampleTransformer",
             "hisim.components.fuel_meter.FuelMeter",
             "hisim.components.gas_meter.GasMeter",
             "hisim.components.generic_boiler.GenericBoiler",
@@ -1088,6 +1093,43 @@
             "properties": {
               "class": {
                 "enum": [
+                  "hisim.components.controller_l1_example_controller.SimpleController"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {}
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
                   "hisim.components.controller_l1_fuel_cell.FuelCellController"
                 ]
               }
@@ -1760,6 +1802,457 @@
                       {
                         "type": "null"
                       }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.example_component.ExampleComponent"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "loadtype": {
+                    "enum": [
+                      "ANY",
+                      "ELECTRICITY",
+                      "IRRADIANCE",
+                      "SPEED",
+                      "HEATING",
+                      "COOLING",
+                      "TEMPERATURE",
+                      "PRESSURE",
+                      "TIME",
+                      "PRICE",
+                      "GAS",
+                      "AIR",
+                      "GREEN_HYDROGEN",
+                      "OXYGEN",
+                      "WATER",
+                      "WARM_WATER",
+                      "DIESEL",
+                      "OIL",
+                      "PELLETS",
+                      "WOOD_CHIPS",
+                      "DISTRICTHEATING",
+                      "ON_OFF",
+                      "ACTIVATION"
+                    ]
+                  },
+                  "unit": {
+                    "enum": [
+                      "ANY",
+                      "PERCENT",
+                      "WATT",
+                      "KILOWATT",
+                      "KWH_PER_TIMESTEP",
+                      "WATT_PER_METER",
+                      "WATT_PER_SQUARE_METER",
+                      "WATT_HOUR_PER_SQUARE_METER",
+                      "METER_PER_SECOND",
+                      "METER",
+                      "SQUARE_METER",
+                      "WATT_HOUR",
+                      "KWH",
+                      "JOULE",
+                      "KILOJOULE",
+                      "LITER",
+                      "CUBICMETERS",
+                      "LITER_PER_TIMESTEP",
+                      "CUBICMETERS_PER_SECOND",
+                      "KG",
+                      "KG_PER_SEC",
+                      "CELSIUS",
+                      "KELVIN",
+                      "DEGREES",
+                      "BAR",
+                      "PASCAL",
+                      "SECONDS",
+                      "HOURS",
+                      "TIMESTEPS",
+                      "YEARS",
+                      "EUR_PER_KWH",
+                      "EURO",
+                      "BINARY"
+                    ]
+                  },
+                  "electricity": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "initial_temperature": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "capacity": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": [
+                    "conditioned_floor_area_in_m2"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.example_storage.SimpleStorage"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "thermal"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "loadtype": {
+                    "enum": [
+                      "ANY",
+                      "ELECTRICITY",
+                      "IRRADIANCE",
+                      "SPEED",
+                      "HEATING",
+                      "COOLING",
+                      "TEMPERATURE",
+                      "PRESSURE",
+                      "TIME",
+                      "PRICE",
+                      "GAS",
+                      "AIR",
+                      "GREEN_HYDROGEN",
+                      "OXYGEN",
+                      "WATER",
+                      "WARM_WATER",
+                      "DIESEL",
+                      "OIL",
+                      "PELLETS",
+                      "WOOD_CHIPS",
+                      "DISTRICTHEATING",
+                      "ON_OFF",
+                      "ACTIVATION"
+                    ]
+                  },
+                  "unit": {
+                    "enum": [
+                      "ANY",
+                      "PERCENT",
+                      "WATT",
+                      "KILOWATT",
+                      "KWH_PER_TIMESTEP",
+                      "WATT_PER_METER",
+                      "WATT_PER_SQUARE_METER",
+                      "WATT_HOUR_PER_SQUARE_METER",
+                      "METER_PER_SECOND",
+                      "METER",
+                      "SQUARE_METER",
+                      "WATT_HOUR",
+                      "KWH",
+                      "JOULE",
+                      "KILOJOULE",
+                      "LITER",
+                      "CUBICMETERS",
+                      "LITER_PER_TIMESTEP",
+                      "CUBICMETERS_PER_SECOND",
+                      "KG",
+                      "KG_PER_SEC",
+                      "CELSIUS",
+                      "KELVIN",
+                      "DEGREES",
+                      "BAR",
+                      "PASCAL",
+                      "SECONDS",
+                      "HOURS",
+                      "TIMESTEPS",
+                      "YEARS",
+                      "EUR_PER_KWH",
+                      "EURO",
+                      "BINARY"
+                    ]
+                  },
+                  "capacity_in_kwh": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.example_template.ComponentName"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "loadtype": {
+                    "enum": [
+                      "ANY",
+                      "ELECTRICITY",
+                      "IRRADIANCE",
+                      "SPEED",
+                      "HEATING",
+                      "COOLING",
+                      "TEMPERATURE",
+                      "PRESSURE",
+                      "TIME",
+                      "PRICE",
+                      "GAS",
+                      "AIR",
+                      "GREEN_HYDROGEN",
+                      "OXYGEN",
+                      "WATER",
+                      "WARM_WATER",
+                      "DIESEL",
+                      "OIL",
+                      "PELLETS",
+                      "WOOD_CHIPS",
+                      "DISTRICTHEATING",
+                      "ON_OFF",
+                      "ACTIVATION"
+                    ]
+                  },
+                  "unit": {
+                    "enum": [
+                      "ANY",
+                      "PERCENT",
+                      "WATT",
+                      "KILOWATT",
+                      "KWH_PER_TIMESTEP",
+                      "WATT_PER_METER",
+                      "WATT_PER_SQUARE_METER",
+                      "WATT_HOUR_PER_SQUARE_METER",
+                      "METER_PER_SECOND",
+                      "METER",
+                      "SQUARE_METER",
+                      "WATT_HOUR",
+                      "KWH",
+                      "JOULE",
+                      "KILOJOULE",
+                      "LITER",
+                      "CUBICMETERS",
+                      "LITER_PER_TIMESTEP",
+                      "CUBICMETERS_PER_SECOND",
+                      "KG",
+                      "KG_PER_SEC",
+                      "CELSIUS",
+                      "KELVIN",
+                      "DEGREES",
+                      "BAR",
+                      "PASCAL",
+                      "SECONDS",
+                      "HOURS",
+                      "TIMESTEPS",
+                      "YEARS",
+                      "EUR_PER_KWH",
+                      "EURO",
+                      "BINARY"
+                    ]
+                  },
+                  "rated_power_in_watt": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": [
+                    "conditioned_floor_area_in_m2"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.example_transformer.ExampleTransformer"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "loadtype": {
+                    "enum": [
+                      "ANY",
+                      "ELECTRICITY",
+                      "IRRADIANCE",
+                      "SPEED",
+                      "HEATING",
+                      "COOLING",
+                      "TEMPERATURE",
+                      "PRESSURE",
+                      "TIME",
+                      "PRICE",
+                      "GAS",
+                      "AIR",
+                      "GREEN_HYDROGEN",
+                      "OXYGEN",
+                      "WATER",
+                      "WARM_WATER",
+                      "DIESEL",
+                      "OIL",
+                      "PELLETS",
+                      "WOOD_CHIPS",
+                      "DISTRICTHEATING",
+                      "ON_OFF",
+                      "ACTIVATION"
+                    ]
+                  },
+                  "unit": {
+                    "enum": [
+                      "ANY",
+                      "PERCENT",
+                      "WATT",
+                      "KILOWATT",
+                      "KWH_PER_TIMESTEP",
+                      "WATT_PER_METER",
+                      "WATT_PER_SQUARE_METER",
+                      "WATT_HOUR_PER_SQUARE_METER",
+                      "METER_PER_SECOND",
+                      "METER",
+                      "SQUARE_METER",
+                      "WATT_HOUR",
+                      "KWH",
+                      "JOULE",
+                      "KILOJOULE",
+                      "LITER",
+                      "CUBICMETERS",
+                      "LITER_PER_TIMESTEP",
+                      "CUBICMETERS_PER_SECOND",
+                      "KG",
+                      "KG_PER_SEC",
+                      "CELSIUS",
+                      "KELVIN",
+                      "DEGREES",
+                      "BAR",
+                      "PASCAL",
+                      "SECONDS",
+                      "HOURS",
+                      "TIMESTEPS",
+                      "YEARS",
+                      "EUR_PER_KWH",
+                      "EURO",
+                      "BINARY"
                     ]
                   }
                 }

@@ -46,7 +46,8 @@ components:
       - apt3_hds
       - ems
     # provides: heating_load_in_watt (whole building), number_of_apartments,
-    # conditioned_floor_area_in_m2 (whole building), heating_reference_temperature_in_celsius
+    # conditioned_floor_area_in_m2 (whole building); reads
+    # heating_reference_temperature_in_celsius off the weather, which owns it (D-21)
 
   meter:
     class: hisim.components.electricity_meter.ElectricityMeter

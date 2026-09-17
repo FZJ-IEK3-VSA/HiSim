@@ -763,9 +763,6 @@
                       },
                       "building_heat_capacity_class": {
                         "type": "string"
-                      },
-                      "heating_reference_temperature_in_celsius": {
-                        "type": "number"
                       }
                     }
                   }
@@ -776,9 +773,6 @@
                 "additionalProperties": false,
                 "properties": {
                   "component_id": {},
-                  "heating_reference_temperature_in_celsius": {
-                    "type": "number"
-                  },
                   "building_code": {
                     "type": "string"
                   },
@@ -987,6 +981,16 @@
                       }
                     ]
                   },
+                  "heating_reference_temperature_in_celsius": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
                   "weather_identity": {
                     "anyOf": [
                       {
@@ -1003,6 +1007,7 @@
                 "$ref": "#/$defs/sizing_sources",
                 "propertyNames": {
                   "enum": [
+                    "heating_reference_temperature_in_celsius",
                     "weather_identity"
                   ]
                 }
@@ -5893,7 +5898,8 @@
                     "type": "object",
                     "additionalProperties": false,
                     "required": [
-                      "location"
+                      "location",
+                      "heating_reference_temperature_in_celsius"
                     ],
                     "properties": {
                       "location": {
@@ -5945,6 +5951,9 @@
                           "BG"
                         ]
                       },
+                      "heating_reference_temperature_in_celsius": {
+                        "type": "number"
+                      },
                       "data_source": {
                         "anyOf": [
                           {
@@ -5969,7 +5978,8 @@
                     "additionalProperties": false,
                     "required": [
                       "path",
-                      "data_source"
+                      "data_source",
+                      "heating_reference_temperature_in_celsius"
                     ],
                     "properties": {
                       "path": {
@@ -5984,6 +5994,9 @@
                           "ERA5",
                           "DWD_15MIN"
                         ]
+                      },
+                      "heating_reference_temperature_in_celsius": {
+                        "type": "number"
                       }
                     }
                   }
@@ -6009,6 +6022,9 @@
                       "ERA5",
                       "DWD_15MIN"
                     ]
+                  },
+                  "heating_reference_temperature_in_celsius": {
+                    "type": "number"
                   },
                   "predictive_control": {
                     "type": "boolean"

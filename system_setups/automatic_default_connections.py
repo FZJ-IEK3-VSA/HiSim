@@ -54,9 +54,6 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # =================================================================================================================================
     # Set Fix System Parameters
 
-    # Set Heat Pump
-    heating_reference_temperature_in_celsius: float = -7  # heating_reference_temperature_in_celsius #TODO: get real heating ref temps according to location
-
     # =================================================================================================================================
     # Build Basic Components
 
@@ -67,10 +64,18 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
 
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
-    my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
+    my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field, so it is resolved before the archetype lookup runs on the config.
+    my_building_config = my_building_config.resolve(
+        SizingContext(
+            heating_reference_temperature_in_celsius=(
+                my_weather_config.heating_reference_temperature_in_celsius
+            )
+        )
+    )
 
     my_building_information = building.BuildingInformation(config=my_building_config)
-    my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build Occupancy
@@ -104,7 +109,9 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
             SizingContext(
                 heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
                 conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
-                heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+                heating_reference_temperature_in_celsius=(
+                    my_weather_config.heating_reference_temperature_in_celsius
+                ),
                 set_heating_temperature_in_celsius=(
                     my_building_information.set_heating_temperature_for_building_in_celsius
                 ),
@@ -158,7 +165,9 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     ).resolve(
         SizingContext(
             heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+            heating_reference_temperature_in_celsius=(
+                my_weather_config.heating_reference_temperature_in_celsius
+            ),
         )
     )
     my_heatpump_config.with_domestic_hot_water_preparation = True

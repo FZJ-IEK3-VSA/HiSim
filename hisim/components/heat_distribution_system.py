@@ -868,6 +868,9 @@ class HeatDistributionControllerConfig(ConfigBase):
             ctx.heating_load_in_watt / ctx.conditioned_floor_area_in_m2
         ),
         reads=(Size.HEATING_LOAD_IN_WATT, Size.CONDITIONED_FLOOR_AREA_IN_M2),
+        description=(
+            "heating_threshold_for(Size.HEATING_LOAD_IN_WATT / Size.CONDITIONED_FLOOR_AREA_IN_M2)"
+        ),
     )
 
     component_id: ComponentID

@@ -66,6 +66,12 @@ class Fixtures:
         "hisim.components.generic_boiler.GenericBoilerControllerConfig"
     )
 
+    #: The controller that borrows the heat distribution controller's heating-threshold law, the
+    #: case that used to describe as a lambda of a class of another name (F-22).
+    ELECTRIC_HEATING_CONTROLLER_CONFIG: ClassVar[str] = (
+        "hisim.components.generic_electric_heating.ElectricHeatingControllerConfig"
+    )
+
 
 @pytest.mark.base
 def test_describe_prints_the_presets_sizable_fields_and_facts_of_a_class(capsys) -> None:
@@ -184,6 +190,29 @@ def test_describe_prints_no_sets_line_for_a_preset_that_changes_nothing(capsys) 
     on_off = presets.split("on_off", 1)[1]
     assert "sets: is_modulating = False," in on_off
     assert "minimum_resting_time_in_seconds = 0" in on_off
+
+
+@pytest.mark.base
+def test_describe_prints_what_a_lambda_law_computes_rather_than_its_class(capsys) -> None:
+    """A law written as a lambda describes its arithmetic, not ``<Class>.<lambda>`` (F-22).
+
+    Failure mode caught: the electric heating controller, which borrows the heat distribution
+    controller's heating-threshold law on purpose so that the two cannot disagree, describing
+    that field as ``law: HeatDistributionControllerConfig.<lambda>`` — a class of another name,
+    which reads as a description gone wrong rather than as deliberate sharing.
+    """
+    code = main(["energy-system", "describe", Fixtures.ELECTRIC_HEATING_CONTROLLER_CONFIG])
+    printed = capsys.readouterr().out
+
+    assert code == ExitCodes.OK
+    sizable = printed.split("sizable fields", 1)[1]
+    assert (
+        "law: heating_threshold_for(Size.HEATING_LOAD_IN_WATT / "
+        "Size.CONDITIONED_FLOOR_AREA_IN_M2)"
+    ) in sizable
+    assert "law: Size.HEATING_LOAD_IN_WATT / Size.CONDITIONED_FLOOR_AREA_IN_M2" in sizable
+    assert "<lambda>" not in printed
+    assert "HeatDistributionControllerConfig" not in printed
 
 
 @pytest.mark.base

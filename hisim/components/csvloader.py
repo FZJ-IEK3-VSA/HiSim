@@ -21,44 +21,110 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim import component as cp
 from hisim.simulationparameters import SimulationParameters
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor
 from hisim.economics.facts import CostRelevance
 
 
 @dataclass_json
 @dataclass
 class CSVLoaderConfig(ConfigBase):
-    """Configuration for the :class:`CSVLoader` component.
+    """Configuration of one CSV profile replayed as a component output.
 
-    Args:
-        component_id: Structured identity (name, building, unit) of this loader.
-        name: Display name of the load profile.
-        csv_filename: Filename of the CSV file containing the profile data.
-        column: Zero-based index of the column holding the profile values.
-        loadtype: Physical load type of the data (e.g. electricity, heat).
-        unit: Unit of the loaded data.
-        column_name: Human-readable name of the profile column.
-        sep: Column separator used in the CSV file.
-        decimal: Decimal separator used in the CSV file.
-        multiplier: Factor applied to every loaded value.
-        output_description: Description text for the output channel.
+    Every field is a parameter of the file being read — its name, the column, what the numbers
+    in that column mean and how the file spells them — so there is no default profile to name
+    and no preset. A loader is built by naming the file::
+
+        CSVLoaderConfig.for_csv_file(
+            "CSV",
+            csv_filename="wind_generated_power_1_min.csv",
+            column=1,
+            loadtype=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.KILOWATT,
+            column_name="generated_power",
+        )
+
+    The reading itself happens in :class:`CSVLoader`, once, when the component is built; this
+    class only says which numbers to read.
     """
 
-    component_id: ComponentID
-    csv_filename: str
-    column: int
-    loadtype: lt.LoadTypes
-    unit: lt.Units
-    column_name: str
-    sep: str
-    decimal: str
-    multiplier: float
-    output_description: str
+    MAIN_CLASS = "hisim.components.csvloader.CSVLoader"
 
+    component_id: ComponentID
+    #: Name of the CSV file, relative to the HiSim inputs directory.
+    csv_filename: str
+    #: Zero-based index of the column holding the profile values.
+    column: int
+    #: Physical load type the column's numbers carry, e.g. electricity or heat.
+    loadtype: lt.LoadTypes
+    #: Unit the column's numbers are written in.
+    unit: lt.Units
+    #: Human-readable name of that column, used as the output channel's display name.
+    column_name: str
+    #: Column separator the file uses.
+    sep: str = ","
+    #: Decimal separator the file uses.
+    decimal: str = "."
+    #: Factor applied to every loaded value before it reaches the output.
+    multiplier: float = 1.0
+    #: Description text of the output channel.
+    output_description: str = "Values from CSV"
+
+    @constructor(note="one column of one CSV file under the HiSim inputs directory")
     @classmethod
-    def get_main_classname(cls) -> str:
-        """Return the full class name of the base class."""
-        return CSVLoader.get_full_classname()
+    def for_csv_file(
+        cls,
+        name: str,
+        csv_filename: str,
+        column: int,
+        loadtype: lt.LoadTypes,
+        unit: lt.Units,
+        column_name: str,
+        sep: str = ",",
+        decimal: str = ".",
+        multiplier: float = 1.0,
+        output_description: str = "Values from CSV",
+    ) -> "CSVLoaderConfig":
+        """Builds the configuration of one profile column of one CSV file.
+
+        A recorded profile is identified by the file it lives in and the column it occupies,
+        and neither has a defensible default, so this is the only builder the class has::
+
+            CSVLoaderConfig.for_csv_file(
+                "CSV", "wind_generated_power_1_min.csv", 1,
+                lt.LoadTypes.ELECTRICITY, lt.Units.KILOWATT, "generated_power",
+            )
+
+        Nothing is read here — the file is opened when :class:`CSVLoader` is built — so a
+        misspelled file name fails at component construction, not at configuration.
+
+        Args:
+            name: Instance name of the loader; its ``ComponentID`` is built from it.
+            csv_filename: Name of the file, relative to the HiSim inputs directory.
+            column: Zero-based index of the column holding the values.
+            loadtype: Physical load type the values carry.
+            unit: Unit the values are written in.
+            column_name: Human-readable name of the column, shown on the output channel.
+            sep: Column separator the file uses; a comma by default.
+            decimal: Decimal separator the file uses; a full stop by default.
+            multiplier: Factor applied to every value; 1.0 leaves the profile as written.
+            output_description: Description of the output channel.
+
+        Returns:
+            A fresh configuration of that column; nothing about it is shared with any other
+            instance.
+        """
+        return cls(
+            component_id=ComponentID(name=name),
+            csv_filename=csv_filename,
+            column=column,
+            loadtype=loadtype,
+            unit=unit,
+            column_name=column_name,
+            sep=sep,
+            decimal=decimal,
+            multiplier=multiplier,
+            output_description=output_description,
+        )
 
 
 class CSVLoader(cp.Component):

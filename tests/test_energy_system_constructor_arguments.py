@@ -37,11 +37,13 @@ from typing import Any, Callable, Dict, List
 from dataclasses_json import dataclass_json
 
 import pytest
-from utspclient.helpers.lpgdata import Households
+from utspclient.helpers.lpgdata import ChargingStationSets, Households
 
 from hisim import loadtypes as lt
 from hisim.component import Component, SingleTimeStepValues
 from hisim.components.building.config import BuildingConfig
+from hisim.components.controller_l1_generic_ev_charge import ChargingStationConfig
+from hisim.components.csvloader import CSVLoaderConfig
 from hisim.components.generic_car import CarConfig
 from hisim.components.loadprofilegenerator_utsp_connector import (
     LpgDataAcquisitionMode,
@@ -121,6 +123,32 @@ CAR_ENTRY = """  Car:
         car_name: Car1
         fuel: Diesel
         source_weight: 2
+"""
+
+
+#: A CSV profile, whose two enums are written by member name and whose four defaulted
+#: parameters are left out, so the constructor's own defaults have to survive the file.
+CSV_ENTRY = """  CSV:
+    class: hisim.components.csvloader.CSVLoader
+    constructor:
+      for_csv_file:
+        csv_filename: wind_generated_power_1_min.csv
+        column: 1
+        loadtype: ELECTRICITY
+        unit: KILOWATT
+        column_name: generated_power
+"""
+
+#: A wallbox, whose only argument is one ``ChargingStationSets`` member written as the mapping
+#: of the two fields ``JsonReference`` declares — the shape the car twins already carry.
+CHARGING_STATION_ENTRY = """  L1EVChargeControl:
+    class: hisim.components.controller_l1_generic_ev_charge.L1Controller
+    constructor:
+      for_charging_station_set:
+        charging_station_set:
+          Name: Charging At Home with 11 kW
+          Guid:
+            StrVal: 78dae308-24c4-45cc-8bdf-b001d61f45c2
 """
 
 
@@ -320,6 +348,50 @@ def test_a_scalar_argument_reaches_an_all_scalar_constructor_unharmed() -> None:
         building_code="DE.N.SFH.05.Gen.ReEx.001.002",
         absolute_conditioned_floor_area_in_m2=121.2,
     )
+
+
+@pytest.mark.base
+def test_the_csv_loader_constructor_keeps_its_defaults_when_a_file_omits_them() -> None:
+    """A file naming only the six parameters that identify a column builds the Python config.
+
+    ``for_csv_file`` mixes every scalar kind with two enums and four defaulted parameters, so
+    it is the case where a decoder that dropped a default, or coerced an enum to its string,
+    would show up as a configuration that differs in a field the file never mentioned.
+    """
+    origins = origins_of(CSV_ENTRY)
+
+    assert origins["CSV"] == CSVLoaderConfig.for_csv_file(
+        "CSV",
+        csv_filename="wind_generated_power_1_min.csv",
+        column=1,
+        loadtype=lt.LoadTypes.ELECTRICITY,
+        unit=lt.Units.KILOWATT,
+        column_name="generated_power",
+    )
+    # Hand-derived, so the constructor is not the only oracle: the two enums arrive as members
+    # and the four parameters the file left out keep the defaults the class declares.
+    assert origins["CSV"].loadtype is lt.LoadTypes.ELECTRICITY
+    assert origins["CSV"].unit is lt.Units.KILOWATT
+    assert (origins["CSV"].sep, origins["CSV"].decimal) == (",", ".")
+    assert origins["CSV"].multiplier == 1.0
+
+
+@pytest.mark.base
+def test_the_charging_station_constructor_derives_its_threshold_from_a_written_reference() -> None:
+    """A wallbox written as a ``JsonReference`` mapping builds the config the Python call builds.
+
+    The station set is the charger's only argument and the lower charging threshold is derived
+    from the rating spelled in its name, so a reference that arrived as a bare mapping rather
+    than as the dataclass would fail inside the constructor rather than produce a wrong number.
+    """
+    origins = origins_of(CHARGING_STATION_ENTRY)
+
+    assert origins["L1EVChargeControl"] == ChargingStationConfig.for_charging_station_set(
+        "L1EVChargeControl",
+        charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
+    )
+    # Hand-derived: 10 % of the 11 kW the set's name states.
+    assert origins["L1EVChargeControl"].lower_threshold_charging_power_in_watt == 1100.0
 
 
 @pytest.mark.base

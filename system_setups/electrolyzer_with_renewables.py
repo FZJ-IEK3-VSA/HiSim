@@ -11,7 +11,6 @@ from hisim.components.generic_electrolyzer_h2 import (
     Electrolyzer,
     ElectrolyzerConfig,
 )
-from hisim.config import ComponentID
 
 from hisim import loadtypes as lt
 
@@ -80,8 +79,8 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     # Build Components
 
     # Setup new CSV loader object
-    my_csv_loader = CSVLoaderConfig(
-        component_id=ComponentID(name="CSV"),
+    my_csv_loader = CSVLoaderConfig.for_csv_file(
+        "CSV",
         csv_filename=csv_filename,
         column=csv_data_column,  # The column number in the CSV file containing the load profile data
         loadtype=loadtype,  # Replace with the desired load type
@@ -90,7 +89,6 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         sep=sep,  # Separator used in the CSV file (e.g., "," or ";")
         decimal=decimal,  # Decimal indicator used in the CSV file (e.g., "." or ",")
         multiplier=multiplier,  # Multiplier factor for amplification (if needed)
-        output_description="Values from CSV",
     )
 
     # Create new CSV loader object

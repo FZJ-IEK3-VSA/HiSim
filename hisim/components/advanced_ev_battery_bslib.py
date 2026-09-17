@@ -3,7 +3,7 @@
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 import importlib
 from dataclasses import dataclass
-from typing import Optional, Any, List
+from typing import Any, List
 
 import pandas as pd
 from bslib import bslib as bsl
@@ -19,64 +19,65 @@ from hisim.component import (
     OpexCostDataClass,
     CapexCostDataClass,
 )
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiHelperClass
 from hisim.economics.facts import CostRelevance
 
-__authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = "..."
-__license__ = "MIT"
-__version__ = "0.1"
-__maintainer__ = "Tjarko Tjaden"
-__email__ = "tjarko.tjaden@hs-emden-leer.de"
-__status__ = "development"
-
 
 @dataclass_json
 @dataclass
 class CarBatteryConfig(ConfigBase):
-    """Configuration of a Car Battery."""
+    """Configuration of the battery of one electric car.
 
-    #: structured identity (name, building, unit) of the component
+    The battery is an AC-coupled storage simulated by the bslib library: ``system_id`` picks the
+    inverter characteristic out of that library's database, and the two ``*_custom`` numbers
+    override the rated power and capacity that come with it. The named default is
+    :meth:`preset_standard`, a 30 kWh pack charging and discharging at 10 kW::
+
+        CarBatteryConfig.preset_standard("CarBattery_1")
+
+    A system with more than one car gives each battery its own ``source_weight``, which is what
+    the charge controller and the energy management system match a car to its battery by.
+    """
+
+    MAIN_CLASS = "hisim.components.advanced_ev_battery_bslib.CarBattery"
+
     component_id: ComponentID
     #: priority of the device in hierachy: the higher the number the lower the priority
-    source_weight: int
+    source_weight: int = 1
     #: name of battery to search in database (bslib)
-    system_id: str
+    system_id: str = "SG1"
     #: charging and discharging power in Watt
-    p_inv_custom: float
+    p_inv_custom: float = 1e4
     #: battery capacity in in kWh
-    e_bat_custom: float
-    #: amount of energy used to charge the car battery
-    total_charged_energy_in_kilowatthour: float
-    #: amount of energy discharged from the battery
-    total_discharged_energy_in_kilowatthour: float
+    e_bat_custom: float = 30.0
+    #: amount of energy used to charge the car battery. Not an author's input: the component
+    #: writes the figure into its own configuration during post-processing (see
+    #: ``get_cost_opex`` and ``get_component_kpi_entries``), so it starts at zero and holds a
+    #: result once the run is over.
+    total_charged_energy_in_kilowatthour: float = 0.0
+    #: amount of energy discharged from the battery. Not an author's input either, written by
+    #: the component in the same two places.
+    total_discharged_energy_in_kilowatthour: float = 0.0
 
+    @preset
     @classmethod
-    def get_main_classname(cls):
-        """Return the full class name of the main component class."""
-        return CarBattery.get_full_classname()
+    def preset_standard(cls, name: str) -> "CarBatteryConfig":
+        """The one car battery the fleet runs: a 30 kWh pack charging at 10 kW.
 
-    @classmethod
-    def get_default_config(
-        cls, component_id: Optional[ComponentID] = None, name: str = "CarBattery"
-    ) -> "CarBatteryConfig":
-        """Returns default configuration of a Car Battery."""
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        config = CarBatteryConfig(
-            component_id=component_id,
-            system_id="SG1",
-            p_inv_custom=1e4,
-            e_bat_custom=30,
-            source_weight=1,
-            total_charged_energy_in_kilowatthour=0,
-            total_discharged_energy_in_kilowatthour=0,
-        )
-        return config
+        The field defaults are that pack — bslib's ``SG1`` inverter characteristic, 10 kW of
+        charging and discharging power, 30 kWh of capacity — at source weight 1, which is the
+        single-car case. A second car overrides the weight after building.
+
+        Args:
+            name: Instance name of the battery in the simulation.
+
+        Returns:
+            The configuration, fully concrete -- the class has no sizable field.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class CarBattery(Component):

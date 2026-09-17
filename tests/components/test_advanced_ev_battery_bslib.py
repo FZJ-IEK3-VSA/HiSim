@@ -3,7 +3,7 @@
 Covers three pure functions of ``hisim.components.advanced_ev_battery_bslib``
 that previously had no unit tests:
 
-* ``CarBatteryConfig.get_default_config``
+* ``CarBatteryConfig.preset_standard``
 * ``CarBatteryConfig.get_main_classname``
 * ``EVBatteryState.clone``
 
@@ -21,9 +21,9 @@ from hisim.config import ComponentID
 
 
 @pytest.mark.base
-def test_get_default_config_returns_expected_defaults() -> None:
-    """``get_default_config`` returns a deterministic config with hardcoded defaults."""
-    cfg = CarBatteryConfig.get_default_config()
+def test_preset_standard_returns_expected_defaults() -> None:
+    """``preset_standard`` returns a deterministic config with the fleet's battery."""
+    cfg = CarBatteryConfig.preset_standard("CarBattery")
 
     assert cfg.component_id.building is None
     assert cfg.component_id.name == "CarBattery"
@@ -36,9 +36,10 @@ def test_get_default_config_returns_expected_defaults() -> None:
 
 
 @pytest.mark.base
-def test_get_default_config_overrides_building_and_name() -> None:
-    """An explicit ``component_id`` overrides the default identity, the rest stay."""
-    cfg = CarBatteryConfig.get_default_config(component_id=ComponentID(name="Y", building="X"))
+def test_an_assigned_component_id_overrides_building_and_name() -> None:
+    """A ``component_id`` assigned after the preset overrides the identity, the rest stay."""
+    cfg = CarBatteryConfig.preset_standard("CarBattery")
+    cfg.component_id = ComponentID(name="Y", building="X")
 
     assert cfg.component_id.building == "X"
     assert cfg.component_id.name == "Y"

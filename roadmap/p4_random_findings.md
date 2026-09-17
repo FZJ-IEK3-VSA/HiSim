@@ -683,3 +683,27 @@ controller, so nothing is wrong today. Two honest ways out: drop the alias (the 
 thing it serves, and D-16's sweep already retired the repository's other aliases with the RSOC controller), or
 teach the codec the alias. The first is the smaller change and the one the wire-format rule favours: one name
 per field.
+
+### F-20 — a config field is mutable component state: the car battery writes its own totals into its configuration **[reported]**
+
+Found on 2026-09-16 while converting `CarBatteryConfig` (B7). Two of its fields,
+`total_charged_energy_in_kilowatthour` and `total_discharged_energy_in_kilowatthour`, are not
+inputs at all: `CarBattery.get_cost_opex` and `CarBattery.get_component_kpi_entries` each compute
+them from the post-processing results and assign them back onto `self.battery_config`, so the
+configuration object a run started with is a different object by the time the run ends. They carry
+a `0.0` default and the twin records them as `0.0`, which is true of the configuration as written
+and untrue of the configuration as it ends up.
+
+That a configuration is the author's statement of the system, read and never written, is what lets
+the recorder diff a live config against a built preset and call the difference an override. Here
+the difference is a result. Nothing is wrong today only because the two writes happen in
+post-processing, after the last recording; a recorder that ran later, or a second post-processing
+pass, would write two computed energies into a file as if an author had typed them.
+
+Two honest ways out. Move the accumulators onto the component — they are per-run state, which is
+what a component holds — and let the two methods read and write `self.total_charged_energy…`; the
+config loses two fields and the twin two lines. Or keep them where they are and exclude them from
+recording, which needs a way to mark a field as not-an-input that the recorder, `describe` and the
+schema all honour, and which would be the first such mark in the repository. The first is smaller
+and says the true thing. Left alone in B7: moving them changes the component's behaviour surface
+and the twin, and the batch is behaviour-N.

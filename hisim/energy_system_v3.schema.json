@@ -3288,9 +3288,6 @@
                 "additionalProperties": false,
                 "properties": {
                   "component_id": {},
-                  "efficiency": {
-                    "type": "number"
-                  },
                   "with_domestic_hot_water_preparation": {
                     "type": "boolean"
                   },

@@ -18,9 +18,7 @@ components:
       seed: 2
   Sum:
     class: hisim.components.sumbuilder.SumBuilderForTwoInputs
-    config:
-      loadtype: ANY
-      unit: ANY
+    preset: standard
     inputs:
       - input: Input1
         from: RandomNumbers100To200.RandomNumbers

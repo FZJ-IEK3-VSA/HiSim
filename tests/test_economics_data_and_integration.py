@@ -669,7 +669,7 @@ class TestTheAdapterEntriesAddedWithThoseRows:
         """The one figure its own capex model scales by, so the two agree on what "size" means."""
         from hisim.components.transformer_rectifier import TransformerConfig
 
-        config = TransformerConfig.get_default_transformer_config()
+        config = TransformerConfig.preset_standard("GenericTransformerAndRectifier")
         facts = FactsExtractors.BY_CLASS_NAME["Transformer"](config)
 
         assert facts is not None

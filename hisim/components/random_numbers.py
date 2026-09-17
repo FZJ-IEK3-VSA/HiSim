@@ -31,10 +31,7 @@ class RandomNumbersConfig(ConfigBase):
     component to the horizon it happened to be built under.
     """
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the base class."""
-        return RandomNumbers.get_full_classname()
+    MAIN_CLASS = "hisim.components.random_numbers.RandomNumbers"
 
     component_id: ComponentID
     minimum: float

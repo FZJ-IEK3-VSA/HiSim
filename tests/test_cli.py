@@ -56,6 +56,16 @@ class Fixtures:
     #: The component class whose configuration is the same one, reached the other way round.
     BOILER_COMPONENT: ClassVar[str] = "hisim.components.generic_boiler.GenericBoiler"
 
+    #: The configuration class whose three presets differ in nothing but plain fields, which is
+    #: what the ``sets`` line exists for: without it all three describe identically (F-21).
+    HEAT_SOURCE_CONFIG: ClassVar[str] = "hisim.components.simple_heat_source.SimpleHeatSourceConfig"
+
+    #: The configuration class whose canonical preset accepts every field default, which is what
+    #: a preset with no ``sets`` line at all looks like.
+    BOILER_CONTROLLER_CONFIG: ClassVar[str] = (
+        "hisim.components.generic_boiler.GenericBoilerControllerConfig"
+    )
+
 
 @pytest.mark.base
 def test_describe_prints_the_presets_sizable_fields_and_facts_of_a_class(capsys) -> None:
@@ -126,6 +136,54 @@ def test_describe_lists_each_batch_one_fact_under_its_provider(capsys, class_pat
     assert code == ExitCodes.OK
     provided = printed.split("facts provided", 1)[1]
     assert fact in provided
+
+
+@pytest.mark.base
+def test_describe_prints_the_values_a_preset_sets_on_the_plain_fields(capsys) -> None:
+    """A preset states the plain fields it moves off their class default (F-21).
+
+    Failure mode caught: two presets of one class describing identically because everything
+    that distinguishes them is a plain field. The three heat sources are the sharpest case —
+    each is a kind of source plus at most one number, and the sizing touches none of it — so
+    before this line an author reading the description could not tell them apart at all.
+    """
+    code = main(["energy-system", "describe", Fixtures.HEAT_SOURCE_CONFIG])
+    printed = capsys.readouterr().out
+
+    assert code == ExitCodes.OK
+    presets = printed.split("presets", 1)[1].split("constructors", 1)[0]
+    assert (
+        "      sets: heat_source_type = CONSTANT_THERMAL_POWER,\n"
+        "            power_th_in_watt = 5000.0\n"
+    ) in presets
+    assert (
+        "      sets: heat_source_type = CONSTANT_TEMPERATURE,\n"
+        "            temperature_output_in_celsius = 5\n"
+    ) in presets
+    # a preset that changes one field states it on the label's own line and needs no second
+    assert "      sets: heat_source_type = NEAR_SURFACE_BRINE_TEMPERATURE\n" in presets
+
+
+@pytest.mark.base
+def test_describe_prints_no_sets_line_for_a_preset_that_changes_nothing(capsys) -> None:
+    """A preset that accepts every plain default has no ``sets`` line at all (F-21).
+
+    Failure mode caught: a ``sets:`` label followed by a parenthesised "nothing", which is what
+    the two sizable lines already say for their own half and which would put a line nobody reads
+    under most presets of most classes. The modulating boiler controller is such a preset: it is
+    the class defaults under a name.
+    """
+    code = main(["energy-system", "describe", Fixtures.BOILER_CONTROLLER_CONFIG])
+    printed = capsys.readouterr().out
+
+    assert code == ExitCodes.OK
+    presets = printed.split("presets", 1)[1].split("constructors", 1)[0]
+    modulating = presets.split("modulating", 1)[1].split("on_off", 1)[0]
+    assert "sets:" not in modulating
+    # while the preset next to it, which does change three plain fields, states all three
+    on_off = presets.split("on_off", 1)[1]
+    assert "sets: is_modulating = False," in on_off
+    assert "minimum_resting_time_in_seconds = 0" in on_off
 
 
 @pytest.mark.base

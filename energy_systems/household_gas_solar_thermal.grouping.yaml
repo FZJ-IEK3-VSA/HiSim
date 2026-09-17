@@ -2,17 +2,7 @@
 # configurations means. Edited through the workbook, committed in this form.
 setup: system_setups/household_gas_solar_thermal.py
 probes: energy_systems/household_gas_solar_thermal.probes.yaml
-assignments:
-  DHWStorage:
-    assign: override
-    note: The storage volume and its heat loss are scaled per dwelling, so the one
-      field this setup reads out of its module configuration lands here. Same storage,
-      same wiring, a different size - a number a consumer picks.
-  SolarThermalSystem:
-    assign: override
-    note: Four square metres of collector per dwelling, so the same field reaches the
-      collector as reaches the storage it preheats. Same collector, same wiring, a
-      larger array - a number a consumer picks, not a component that comes or goes.
+assignments: {}
 configurations:
   baseline: {}
   two_dwellings: {}

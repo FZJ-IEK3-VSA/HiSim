@@ -468,7 +468,7 @@ def calculate_daily_average_outside_temperature(
     block -- for a minutely year, 1440 times over -- and took 19.4 s of the producer's runtime on a
     cache miss, against 21 ms here, for a result that is identical value for value (verified
     elementwise over the real Aachen year at one minute, a quarter hour and an hour, over a year with
-    an incomplete last day, and over spans shorter than a day: max |difference| 0.0).
+    an incomplete last day, and over spans shorter than a day: largest difference 0.0).
 
     Args:
         temperature_list: the air temperature per timestep.

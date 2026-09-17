@@ -21,12 +21,14 @@ class PtxOperationMode(str, Enum):
     configuration keeps spelling the mode out exactly as the string-typed field
     did before -- the wire format is unchanged.
 
-    NOMINAL_LOAD: run at the constant nominal load.
-    MINIMUM_LOAD: follow the load within the part-load range.
-    STANDBY_LOAD: follow the load, but never fall below the standby load, so
-        the system is not switched off.
-    STANDBY_AND_OFF_LOAD: like STANDBY_LOAD, but switch off once the standby
-        load has been held for the standby operation time.
+    The four modes:
+
+    - ``NOMINAL_LOAD``: run at the constant nominal load.
+    - ``MINIMUM_LOAD``: follow the load within the part-load range.
+    - ``STANDBY_LOAD``: follow the load, but never fall below the standby load, so the system
+      is not switched off.
+    - ``STANDBY_AND_OFF_LOAD``: like ``STANDBY_LOAD``, but switch off once the standby load has
+      been held for the standby operation time.
     """
 
     NOMINAL_LOAD = "NominalLoad"

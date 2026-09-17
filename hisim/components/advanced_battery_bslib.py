@@ -68,7 +68,8 @@ class BatteryConfig(ConfigBase):
     component_id: ComponentID
     #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int = 1
-    #: name of battery to search in database (bslib): SG1 is its generic lithium-ion system
+    #: The battery to look up in the bslib database, by that database's own identifier;
+    #: SG1 is its generic lithium-ion system.
     system_id: str = "SG1"
     #: amount of energy used to charge the battery, i.e. the state it starts in
     charge_in_kwh: float = 0

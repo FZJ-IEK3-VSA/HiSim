@@ -137,6 +137,9 @@ def simulation_for_one_timestep(
     my_residence_config.absolute_conditioned_floor_area_in_m2 = (
         absolute_conditioned_floor_area_in_m2
     )
+    # The design outside temperature is the weather's (D-21); this sweep builds no weather, so it
+    # states the same -7.0 °C the heat pump below is sized at.
+    my_residence_config.heating_reference_temperature_in_celsius = -7.0
 
     my_residence_information = building.BuildingInformation(config=my_residence_config)
 

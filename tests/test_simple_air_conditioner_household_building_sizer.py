@@ -26,6 +26,7 @@ import yaml
 from hisim import component as cp
 from hisim.components import building
 from hisim.components import weather
+from hisim.config import SizingContext
 from hisim.components.simple_air_conditioner import (
     SimpleAirConditioner,
     SimpleAirConditionerConfig,
@@ -78,6 +79,15 @@ def test_building_simulates_without_occupancy_connections() -> None:
     # Building — default German single-family home, no occupancy component
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field (D-21), so it is resolved before the component is built.
+    my_building_config = my_building_config.resolve(
+        SizingContext(
+            heating_reference_temperature_in_celsius=(
+                my_weather_config.heating_reference_temperature_in_celsius
+            )
+        )
+    )
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )

@@ -160,14 +160,22 @@ def test_the_pilot_chain_resolves_without_any_sources_mapping():
     )
 
     building = BuildingConfig.preset_german_single_family_home("Building")
-    heating_load = SizingContext.for_building(building).heating_load_in_watt
+    # The design temperature is the weather's (D-21); the chain below seeds it as a fact, and the
+    # heating load this line reads has to be the one the same number produces.
+    stated = BuildingConfig.preset_german_single_family_home("Building")
+    stated.heating_reference_temperature_in_celsius = -7.0
+    heating_load = SizingContext.for_building(stated).heating_load_in_watt
     controller = HeatDistributionControllerConfig.preset_building_derived("HeatDistributionController")
     hds = HeatDistributionConfig.preset_building_derived("HeatDistributionSystem")
     boiler = GenericBoilerConfig.preset_condensing_gas("CondensingGasBoiler")
-    # The chain has no weather, and the building now records which weather it is computed against, so
-    # that one fact is seeded: the seed is the surrounding system, and here the system is the test.
+    # The chain has no weather, and the building now reads two facts the weather provides -- which
+    # weather it is computed against and the design temperature it is computed for -- so both are
+    # seeded: the seed is the surrounding system, and here the system is the test.
     resolved = resolve_all(
-        [hds, boiler, building, controller], seed=SizingContext(weather_identity="pilot weather")
+        [hds, boiler, building, controller],
+        seed=SizingContext(
+            weather_identity="pilot weather", heating_reference_temperature_in_celsius=-7.0
+        ),
     )  # deliberately shuffled
     resolved_hds, resolved_boiler = resolved[0], resolved[1]
     assert resolved_hds.water_mass_flow_rate_in_kg_per_second == 0.27

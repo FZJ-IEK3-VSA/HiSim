@@ -12,7 +12,7 @@ from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import idealized_electric_heater
-from hisim.config import ComponentID
+from hisim.config import ComponentID, SizingContext
 from tests.testing_utils import TestingUtils
 
 
@@ -66,6 +66,15 @@ def _build_components(
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
 
     my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field (D-21), so it is resolved before the component is built.
+    my_building_config = my_building_config.resolve(
+        SizingContext(
+            heating_reference_temperature_in_celsius=(
+                my_weather_config.heating_reference_temperature_in_celsius
+            )
+        )
+    )
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )

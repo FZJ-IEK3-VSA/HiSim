@@ -27,6 +27,7 @@ from hisim import utils
 from hisim.components import building
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
+from hisim.config import SizingContext
 from hisim.sim_repository import SimRepository
 from hisim.simulator import SimulationParameters
 
@@ -241,6 +242,15 @@ def test_household_run_publishes_the_weather_series_into_the_run_repository(
     # Build Building
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field (D-21), so it is resolved before the component is built.
+    my_building_config = my_building_config.resolve(
+        SizingContext(
+            heating_reference_temperature_in_celsius=(
+                my_weather_config.heating_reference_temperature_in_celsius
+            )
+        )
+    )
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )

@@ -81,9 +81,6 @@ components:
   FuelMeter:
     class: hisim.components.fuel_meter.FuelMeter
     preset: standard
-    config:
-      heating_value_of_fuel_in_kwh_per_liter: null
-      fuel_density_in_kg_per_m3: null
     inputs:
       - from: DistrictHeating.ThermalOutputDhwEnergy
         tags:

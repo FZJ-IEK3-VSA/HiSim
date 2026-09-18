@@ -80,7 +80,9 @@ class FuelMeterConfig(ConfigBase):
     #: single source. Setting this field therefore changes the legacy OPEX numbers only.
     #: Sizable and optional: left ``AUTO`` it is copied from the generator by
     #: :data:`HEATING_VALUE_LAW`, and ``None`` is a legitimate value -- district heat burns
-    #: nothing -- which is why the declaration says ``optional=True``.
+    #: nothing -- which is why the declaration says ``optional=True``. A generator that
+    #: contributes the fact as ``None`` therefore resolves this field to ``None``; the
+    #: district heating setup states nothing here.
     heating_value_of_fuel_in_kwh_per_liter: Sizable[Optional[float]] = sized_field(
         rule=HEATING_VALUE_LAW, optional=True
     )

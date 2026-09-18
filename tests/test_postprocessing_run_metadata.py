@@ -81,7 +81,7 @@ def _post_process(case: PreparedPostProcessingCase, options: List[PostProcessing
     ppdt = _clone_ppdt(case=case, simulation_parameters=simulation_parameters)
     log.logger.reset()
     log.logger.setup(run_directory)
-    postprocessing_main.PostProcessor().run(ppdt=ppdt, simulator=case.simulator)
+    postprocessing_main.PostProcessor().run(ppdt=ppdt)
     return Path(run_directory)
 
 

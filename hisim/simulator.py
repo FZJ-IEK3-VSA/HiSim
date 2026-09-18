@@ -515,7 +515,7 @@ class Simulator:
         from hisim.postprocessing import postprocessing_main as pp  # pylint: disable=import-outside-toplevel
 
         my_post_processor = pp.PostProcessor()
-        my_post_processor.run(ppdt=postprocessing_datatransfer, simulator=self)
+        my_post_processor.run(ppdt=postprocessing_datatransfer)
         for wrapped_component in self.wrapped_components:
             wrapped_component.clear()
         del all_result_lines

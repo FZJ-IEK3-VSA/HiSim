@@ -47,7 +47,7 @@ loop completes. The entry point is the
     from hisim.postprocessing import postprocessing_main as pp
 
     my_post_processor = pp.PostProcessor()
-    my_post_processor.run(ppdt=postprocessing_datatransfer, simulator=simulator)
+    my_post_processor.run(ppdt=postprocessing_datatransfer)
 
 The :meth:`~hisim.postprocessing.postprocessing_main.PostProcessor.run`
 method iterates over the enabled option flags and dispatches each one to

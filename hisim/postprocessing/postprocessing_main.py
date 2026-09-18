@@ -64,7 +64,6 @@ from hisim.postprocessingoptions import PostProcessingOptions
 if TYPE_CHECKING:
     from hisim.postprocessing import reportgenerator
     from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemChartEntry
-    from hisim.simulator import Simulator
 
 
 #: KPI that only a ``Building`` component produces. The building-sizer JSON normalizes almost
@@ -167,7 +166,7 @@ class PostProcessor:
 
     @utils.measure_execution_time
     @utils.measure_memory_leak
-    def run(self, ppdt: PostProcessingDataTransfer, simulator: "Simulator") -> None:  # noqa: MC0001
+    def run(self, ppdt: PostProcessingDataTransfer) -> None:  # noqa: MC0001
         """Run every enabled post-processing step for a finished simulation.
 
         This is the primary entry point of the post-processing stage, called by
@@ -181,8 +180,8 @@ class PostProcessor:
         before any step runs, disabling all chart and PDF generation. Depending on the
         enabled options, this method writes files into
         ``ppdt.simulation_parameters.result_directory`` (CSV and Pickle exports, a PDF
-        report, housing-database CSVs, scenario-evaluation outputs, and JSON files for
-        component configurations and KPIs), generates plot images (line, carpet,
+        report, housing-database CSVs, scenario-evaluation outputs, and KPI JSON files),
+        generates plot images (line, carpet,
         single-day, monthly bar, and network charts), and may open the result directory in
         the system file explorer.
 
@@ -194,8 +193,6 @@ class PostProcessor:
                 ``result_directory`` and ``duration``), and the ``post_processing_options``
                 list that selects which steps run. ``ppdt.post_processing_options`` may be
                 mutated in place when running inside a Docker container.
-            simulator: The :class:`~hisim.simulator.Simulator` instance that ran the
-                simulation; passed through to the scenario-evaluation and JSON export steps.
 
         Returns:
             None. All output is produced through the file I/O and plotting side effects
@@ -456,7 +453,7 @@ class PostProcessor:
         if PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION in ppdt.post_processing_options:
             log.information("Prepare results for scenario evaluation.")
             start = timer()
-            self.prepare_results_for_scenario_evaluation(ppdt, my_sim=simulator)
+            self.prepare_results_for_scenario_evaluation(ppdt)
             end = timer()
             duration = end - start
             log.information("Preparing results for scenario evaluation took " + f"{duration:1.2f}s.")
@@ -978,8 +975,17 @@ class PostProcessor:
         pass  # noqa: unnecessary-pass
 
     @utils.measure_execution_time
-    def prepare_results_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:
-        """Prepare the results for the scenario evaluation."""
+    def prepare_results_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer) -> None:
+        """Writes the run's results resampled to four resolutions, in the pyam long format.
+
+        One CSV each for hourly, daily, monthly and yearly values, in a subdirectory of the
+        result directory, every row carrying the run's model, scenario, region, variable, unit
+        and year beside the value. The simulator itself is not needed: everything written comes
+        off the transfer object, the components it carries included.
+
+        Args:
+            ppdt: The finished run -- its resampled result frames, its KPIs and its metadata.
+        """
 
         # create result data folder
         self.result_data_folder_for_scenario_evaluation = os.path.join(

@@ -98,6 +98,11 @@ class SizingContext:
         because this module must not import components at module level (see the module
         docstring); it is the one sanctioned exception to the package's layering rule.
 
+        The outside design temperature is not among the facts returned: it is a property of
+        the place and ``WeatherConfig`` contributes it, the building itself being one of its
+        readers (D-21). A caller that needs it in the same context adds it with
+        :meth:`with_facts`, taking the number from the weather.
+
         Args:
             building_config: The building whose derived facts the returned context carries.
 
@@ -111,7 +116,6 @@ class SizingContext:
         information = BuildingInformation(config=building_config)
         return cls(
             heating_load_in_watt=information.max_thermal_building_demand_in_watt,
-            heating_reference_temperature_in_celsius=building_config.heating_reference_temperature_in_celsius,
             number_of_apartments=information.number_of_apartments,
             conditioned_floor_area_in_m2=information.scaled_conditioned_floor_area_in_m2,
             set_heating_temperature_in_celsius=building_config.set_heating_temperature_in_celsius,

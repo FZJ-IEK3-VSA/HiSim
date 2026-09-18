@@ -61,6 +61,10 @@ def test_building_scalability() -> None:
         absolute_conditioned_floor_area_in_m2
     )
     my_residence_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's (D-21).
+    my_residence_config.heating_reference_temperature_in_celsius = (
+        my_weather_config.heating_reference_temperature_in_celsius
+    )
     my_residence = building.Building(
         config=my_residence_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -143,6 +147,9 @@ def test_building_scalability() -> None:
             absolute_conditioned_floor_area_in_m2_scaled
         )
         my_residence_config.weather_identity = my_weather_config.identity()
+        my_residence_config.heating_reference_temperature_in_celsius = (
+            my_weather_config.heating_reference_temperature_in_celsius
+        )
         my_residence = building.Building(
             config=my_residence_config,
             my_simulation_parameters=my_simulation_parameters,

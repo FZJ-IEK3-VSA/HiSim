@@ -290,6 +290,7 @@ WEATHER_FROM_FILE_ENTRY = """  Weather:
       for_data_file:
         path: ${inputs}/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center.dat
         data_source: DWD_TRY
+        heating_reference_temperature_in_celsius: -7.0
 """
 
 
@@ -319,7 +320,9 @@ def _shipped_aachen_file() -> str:
         str: the absolute path of the file ``LocationEnum.AACHEN`` names the stem of.
     """
     return (
-        weather.WeatherConfig.for_location("Weather", weather.LocationEnum.AACHEN).source_path
+        weather.WeatherConfig.for_location(
+            "Weather", weather.LocationEnum.AACHEN, -7.0
+        ).source_path
         + ".dat"
     )
 
@@ -335,9 +338,14 @@ def test_the_same_weather_reached_by_file_and_by_catalogue_differs_only_in_its_l
     The one field that does differ is ``location``, and it differs because it has to: the
     catalogue knows the station is called ``Aachen``, while a bare file knows only its own name.
     """
-    catalogue = weather.WeatherConfig.for_location("Weather", weather.LocationEnum.AACHEN)
+    catalogue = weather.WeatherConfig.for_location(
+        "Weather", weather.LocationEnum.AACHEN, -7.0
+    )
     from_file = weather.WeatherConfig.for_data_file(
-        "Weather", _shipped_aachen_file(), weather.WeatherDataSourceEnum.DWD_TRY
+        "Weather",
+        _shipped_aachen_file(),
+        weather.WeatherDataSourceEnum.DWD_TRY,
+        -7.0,
     )
 
     differing = {
@@ -366,7 +374,7 @@ def test_a_reader_that_appends_an_extension_is_given_the_stem(
     weather_file.write_text("dummy weather data", encoding="utf-8")
 
     config = weather.WeatherConfig.for_data_file(
-        "Weather", str(weather_file), weather.WeatherDataSourceEnum.DWD_TRY
+        "Weather", str(weather_file), weather.WeatherDataSourceEnum.DWD_TRY, -7.0
     )
 
     assert config.source_path == str(tmp_path / "station")
@@ -381,10 +389,12 @@ def test_a_reader_that_opens_the_path_itself_keeps_the_extension() -> None:
     ``NSRDB`` append something to the stored path and the rest open it as it stands. Stripping a
     ``.csv`` from an ``NSRDB_15MIN`` path leaves a name no file on disk has.
     """
-    shipped = weather.WeatherConfig.for_location("Weather", weather.LocationEnum.FR).source_path
+    shipped = weather.WeatherConfig.for_location(
+        "Weather", weather.LocationEnum.FR, -7.0
+    ).source_path
 
     config = weather.WeatherConfig.for_data_file(
-        "Weather", shipped, weather.WeatherDataSourceEnum.NSRDB_15MIN
+        "Weather", shipped, weather.WeatherDataSourceEnum.NSRDB_15MIN, -7.0
     )
 
     assert shipped.endswith(".csv")
@@ -406,7 +416,7 @@ def test_a_weather_file_that_is_not_there_is_refused_naming_the_path(
 
     with pytest.raises(ValueError, match=str(missing)):
         weather.WeatherConfig.for_data_file(
-            "Weather", str(missing), weather.WeatherDataSourceEnum.DWD_TRY
+            "Weather", str(missing), weather.WeatherDataSourceEnum.DWD_TRY, -7.0
         )
 
 
@@ -422,7 +432,10 @@ def test_a_weather_named_as_a_file_in_an_energy_system_file_builds_the_same_conf
     origins = _origins_of(WEATHER_FROM_FILE_ENTRY)
 
     assert origins["Weather"] == weather.WeatherConfig.for_data_file(
-        "Weather", _shipped_aachen_file(), weather.WeatherDataSourceEnum.DWD_TRY
+        "Weather",
+        _shipped_aachen_file(),
+        weather.WeatherDataSourceEnum.DWD_TRY,
+        -7.0,
     )
     # Hand-derived, so that the constructor is not the only oracle here: the file's own stem as
     # the label, and the stem of the pair as the stored path.

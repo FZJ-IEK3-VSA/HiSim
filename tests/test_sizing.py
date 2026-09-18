@@ -288,8 +288,14 @@ def test_for_building_snapshots_the_derived_building_facts():
     """for_building runs the TABULA lookup once and fills the building-scope facts."""
     from hisim.components.building import BuildingConfig
 
-    ctx = SizingContext.for_building(BuildingConfig.preset_german_single_family_home("Building"))
+    # The design temperature the lookup runs against is the weather's (D-21). There is no weather
+    # here, so the test states it on the building; ``for_building`` snapshots the facts the
+    # building itself derives and no longer passes that one on.
+    default_building = BuildingConfig.preset_german_single_family_home("Building")
+    default_building.heating_reference_temperature_in_celsius = -7.0
+    ctx = SizingContext.for_building(default_building)
     assert ctx.heating_load_in_watt is not None and ctx.heating_load_in_watt > 0
+    assert ctx.heating_reference_temperature_in_celsius is None
     assert ctx.number_of_apartments == 1
     assert ctx.conditioned_floor_area_in_m2 == pytest.approx(121.2)
     enriched = ctx.with_facts(water_mass_flow_rate_in_kg_per_second=0.27)

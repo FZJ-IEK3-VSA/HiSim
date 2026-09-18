@@ -336,7 +336,6 @@ class PilotWireFormat:
             "number_of_apartments",
             "conditioned_floor_area_in_m2",
             "roof_area_in_m2",
-            "heating_reference_temperature_in_celsius",
             "set_heating_temperature_in_celsius",
             "set_cooling_temperature_in_celsius",
         ),
@@ -355,7 +354,7 @@ class PilotWireFormat:
         "HeatingMeterConfig": (),
         "SimpleDHWStorageConfig": (),
         "SimpleHotWaterStorageConfig": (),
-        "WeatherConfig": ("weather_identity",),
+        "WeatherConfig": ("weather_identity", "heating_reference_temperature_in_celsius"),
         "UtspLpgConnectorConfig": ("occupancy_identity",),
         "ElectricityMeterConfig": (),
         "GenericBoilerControllerConfig": (),
@@ -484,9 +483,14 @@ def test_the_batch_one_facts_have_exactly_the_provider_they_were_added_for(scan)
     The three fuel facts name two classes because a house's heat comes from one generator and
     the meter accounts whatever that generator delivers: a burnt fuel from the boiler, or heat
     off a network from the district-heating connection, which has no fuel and says so.
+
+    ``heating_reference_temperature_in_celsius`` is here for the same reason although it predates
+    the batch: D-21 moved it from the building to the weather, so which class declares it is the
+    one thing about it that could silently go wrong, and three components read it.
     """
     expected = {
         "set_heating_threshold_outside_temperature_in_celsius": {"HeatDistributionControllerConfig"},
+        "heating_reference_temperature_in_celsius": {"WeatherConfig"},
         "roof_area_in_m2": {"BuildingConfig"},
         "pv_peak_power_in_watt": {"PVSystemConfig"},
         "energy_carrier": {"GenericBoilerConfig", "DistrictHeatingConfig"},

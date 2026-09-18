@@ -16,7 +16,7 @@ from hisim.components import building
 from hisim.components import idealized_electric_heater
 from hisim import log
 from hisim import utils
-from hisim.config import ComponentID
+from hisim.config import ComponentID, SizingContext
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -112,6 +112,15 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     my_building_config.set_cooling_temperature_in_celsius = set_cooling_temperature_for_building_in_celsius
     my_building_config.set_heating_temperature_in_celsius = set_heating_temperature_for_building_in_celsius
     my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field (D-21), so it is resolved before the component is built.
+    my_building_config = my_building_config.resolve(
+        SizingContext(
+            heating_reference_temperature_in_celsius=(
+                my_weather_config.heating_reference_temperature_in_celsius
+            )
+        )
+    )
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")

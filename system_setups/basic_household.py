@@ -69,6 +69,13 @@ def setup_function(
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
 
     my_building_config.weather_identity = my_weather_config.identity()
+    my_building_config = my_building_config.resolve(
+        SizingContext(
+            heating_reference_temperature_in_celsius=(
+                my_weather_config.heating_reference_temperature_in_celsius
+            )
+        )
+    )
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")

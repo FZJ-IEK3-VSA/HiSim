@@ -35,17 +35,16 @@ class BuildingConfig(ConfigBase):
     The named default variant is :meth:`preset_german_single_family_home`, and any other
     building comes from :meth:`for_tabula_code`. The building is the *source* of the sizing
     facts every other component sizes against (see :attr:`SIZING_CONTRIBUTIONS`) and therefore
-    has no sizable field of its own apart from the weather it is computed with: its presets are
-    plain concrete archetypes, and a setup that deviates from one — a different TABULA code, an
-    explicit envelope U-value, a measured maximum thermal demand — takes the preset and assigns
-    the field.
+    has no sizable field of its own apart from the two the weather provides — the identity of the
+    weather it is computed with and the outside design temperature it is computed against: its
+    presets are plain concrete archetypes, and a setup that deviates from one — a different TABULA
+    code, an explicit envelope U-value, a measured maximum thermal demand — takes the preset and
+    assigns the field.
     """
 
     MAIN_CLASS = "hisim.components.building.building.Building"
 
     component_id: ComponentID
-    #: Outside design temperature the heating load is computed for.
-    heating_reference_temperature_in_celsius: float
     #: TABULA/EPISCOPE code selecting the archetype, e.g. "DE.N.SFH.05.Gen.ReEx.001.002".
     building_code: str
     #: TABULA thermal-mass class, one of "very light" … "very heavy".
@@ -83,6 +82,14 @@ class BuildingConfig(ConfigBase):
     # subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: Optional[float] = None
 
+    #: Outside design temperature the heating load is computed against, sized from the weather
+    #: by the sizing engine. The design condition belongs to the place the building stands in
+    #: rather than to the building, so ``WeatherConfig`` states it and the building, the
+    #: heat-distribution controller and the hplib heat pump all read the one number (D-21).
+    heating_reference_temperature_in_celsius: Sizable[float] = sized_field(
+        rule=Size.HEATING_REFERENCE_TEMPERATURE_IN_CELSIUS
+    )
+
     #: The weather this building is computed with, as ``WeatherConfig.identity()`` spells it,
     #: sized from the weather by the sizing engine. It is not cache-key material -- the
     #: solar-gains series are keyed by their producer, under the weather's own artifact key --
@@ -95,16 +102,19 @@ class BuildingConfig(ConfigBase):
 
         Runs the TABULA/EPISCOPE lookup once, through :class:`BuildingInformation`, and
         snapshots the quantities derived from it — the heating load, the apartment count, the
-        conditioned floor area and the roof area — beside the three temperatures the
+        conditioned floor area and the roof area — beside the two indoor temperatures the
         configuration states itself. Doing it here rather than per consumer is what keeps the
         lookup to one run per resolution, and it needs no constructed component.
+
+        The outside design temperature is not among them: it belongs to the place rather than to
+        the building, so ``WeatherConfig`` contributes it and this class reads it (D-21).
 
         Args:
             config: this building configuration.
             ctx: the sizing context; unused, the building is the root of the fact graph.
 
         Returns:
-            dict: the seven facts named in :attr:`SIZING_CONTRIBUTIONS`.
+            dict: the six facts named in :attr:`SIZING_CONTRIBUTIONS`.
         """
         del ctx
         # Imported here because information.py imports this module; the call is long after both
@@ -119,13 +129,12 @@ class BuildingConfig(ConfigBase):
             "number_of_apartments": information.number_of_apartments,
             "conditioned_floor_area_in_m2": information.scaled_conditioned_floor_area_in_m2,
             "roof_area_in_m2": information.roof_area_in_m2,
-            "heating_reference_temperature_in_celsius": config.heating_reference_temperature_in_celsius,
             "set_heating_temperature_in_celsius": config.set_heating_temperature_in_celsius,
             "set_cooling_temperature_in_celsius": config.set_cooling_temperature_in_celsius,
         }
 
     #: Sizing facts this config contributes to the scenario-wide fact pool: the building is the
-    #: root of the fact graph, and these seven are what everything else sizes against.
+    #: root of the fact graph, and these six are what everything else sizes against.
     SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
         FactContribution(
             facts=(
@@ -133,7 +142,6 @@ class BuildingConfig(ConfigBase):
                 "number_of_apartments",
                 "conditioned_floor_area_in_m2",
                 "roof_area_in_m2",
-                "heating_reference_temperature_in_celsius",
                 "set_heating_temperature_in_celsius",
                 "set_cooling_temperature_in_celsius",
             ),
@@ -161,7 +169,6 @@ class BuildingConfig(ConfigBase):
         absolute_conditioned_floor_area_in_m2: Optional[float] = None,
         total_base_area_in_m2: Optional[float] = None,
         building_heat_capacity_class: str = "medium",
-        heating_reference_temperature_in_celsius: float = -7.0,
     ) -> "BuildingConfig":
         """Builds a building from a TABULA/EPISCOPE building code and its few free numbers.
 
@@ -185,8 +192,6 @@ class BuildingConfig(ConfigBase):
                 scaling the archetype; ``None`` unless the caller measured it.
             building_heat_capacity_class: TABULA thermal-mass class, one of ``"very light"``
                 … ``"very heavy"``.
-            heating_reference_temperature_in_celsius: Outside design temperature the
-                heating load is computed for.
 
         Returns:
             A fresh, fully populated configuration; nothing about it is shared with any
@@ -196,7 +201,6 @@ class BuildingConfig(ConfigBase):
             component_id=ComponentID(name=name),
             building_code=building_code,
             building_heat_capacity_class=building_heat_capacity_class,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
             total_base_area_in_m2=total_base_area_in_m2,
             number_of_apartments=number_of_apartments,

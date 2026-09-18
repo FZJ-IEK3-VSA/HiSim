@@ -11,6 +11,7 @@ from typing import ClassVar, Dict, Iterable, List, Optional, Tuple
 import pandas as pd
 
 from hisim import log, utils
+from hisim.config import concrete
 from hisim.components.building.config import BuildingConfig
 
 
@@ -214,7 +215,9 @@ class BuildingInformation:
         # get set temperatures for building
         self.set_heating_temperature_for_building_in_celsius = self.buildingconfig.set_heating_temperature_in_celsius
         self.set_cooling_temperature_for_building_in_celsius = self.buildingconfig.set_cooling_temperature_in_celsius
-        self.heating_reference_temperature_in_celsius = self.buildingconfig.heating_reference_temperature_in_celsius
+        self.heating_reference_temperature_in_celsius = concrete(
+            self.buildingconfig.heating_reference_temperature_in_celsius
+        )
 
         self.building_heat_capacity_class = self.buildingconfig.building_heat_capacity_class
 
@@ -649,7 +652,7 @@ class BuildingInformation:
                 self.total_heat_conductance_transmission + self.total_heat_conductance_ventilation
             ) * (
                 self.buildingconfig.initial_internal_temperature_in_celsius
-                - self.buildingconfig.heating_reference_temperature_in_celsius
+                - self.heating_reference_temperature_in_celsius
             )
         else:
             self.max_thermal_building_demand_in_watt = self.buildingconfig.max_thermal_building_demand_in_watt

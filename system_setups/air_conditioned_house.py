@@ -15,7 +15,7 @@ from hisim.components import building
 from hisim.components import air_conditioner
 from hisim.components import electricity_meter
 from hisim import loadtypes
-from hisim.config import ComponentID
+from hisim.config import ComponentID, SizingContext
 
 
 __authors__ = "Marwa Alfouly, Sebastian Dickler, Kristina Dabrock"
@@ -96,14 +96,15 @@ def setup_function(
     ]
     # The weather config is created first: the building config copies its identity (weather_identity)
     # and must have it before the building is built. The weather component is still added below.
-    my_weather_config = weather.WeatherConfig.for_location("Weather", weather.LocationEnum.SEVILLE)
+    my_weather_config = weather.WeatherConfig.for_location(
+        "Weather", weather.LocationEnum.SEVILLE, heating_reference_temperature
+    )
 
     my_building_config = building.BuildingConfig(
         component_id=ComponentID(name="Building"),
         building_code="ES.ME.SFH.04.Gen.ReEx.001.003",
         building_heat_capacity_class="medium",
         initial_internal_temperature_in_celsius=22,
-        heating_reference_temperature_in_celsius=heating_reference_temperature,
         set_heating_temperature_in_celsius=20,
         set_cooling_temperature_in_celsius=24,
         absolute_conditioned_floor_area_in_m2=None,
@@ -128,6 +129,15 @@ def setup_function(
         lifetime_in_years=None,
     )
     my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field, so it is resolved before the component is built.
+    my_building_config = my_building_config.resolve(
+        SizingContext(
+            heating_reference_temperature_in_celsius=(
+                my_weather_config.heating_reference_temperature_in_celsius
+            )
+        )
+    )
     my_building = building.Building(
         config=my_building_config,
         my_simulation_parameters=my_simulation_parameters,

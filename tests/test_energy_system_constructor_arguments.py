@@ -69,14 +69,16 @@ from hisim.simulationparameters import SimulationParameters
 HOUSEHOLD = Households.CHR01_Couple_both_at_Work
 
 #: A weather built from a catalogue station named by its member name, with the optional
-#: reader named the same way. ``LocationEnum`` spells its values as tuples, so the member
-#: name is the only spelling a file has for it.
+#: reader named the same way and the mandatory design temperature as a plain number.
+#: ``LocationEnum`` spells its values as tuples, so the member name is the only spelling a
+#: file has for it.
 WEATHER_ENTRY = """  Weather:
     class: hisim.components.weather.Weather
     constructor:
       for_location:
         location: AACHEN
         data_source: DWD_TRY
+        heating_reference_temperature_in_celsius: -7.0
 """
 
 #: A building from a TABULA code: the all-scalar constructor, which worked before this change
@@ -302,12 +304,31 @@ def test_an_enum_argument_reaches_the_constructor_as_the_member() -> None:
     origins = origins_of(WEATHER_ENTRY)
 
     assert origins["Weather"] == WeatherConfig.for_location(
-        "Weather", location=LocationEnum.AACHEN, data_source=WeatherDataSourceEnum.DWD_TRY
+        "Weather",
+        location=LocationEnum.AACHEN,
+        heating_reference_temperature_in_celsius=-7.0,
+        data_source=WeatherDataSourceEnum.DWD_TRY,
     )
     # Hand-derived, so that the constructor is not the only oracle in the test: the station's
     # own spelling of itself, and the member the optional reader names.
     assert origins["Weather"].location == "Aachen"
     assert origins["Weather"].data_source is WeatherDataSourceEnum.DWD_TRY
+
+
+@pytest.mark.base
+def test_the_weathers_design_temperature_reaches_the_constructor_as_a_number() -> None:
+    """A plain float argument survives the trip from the file into the built configuration.
+
+    The design temperature is the first mandatory scalar a ``for_…`` constructor takes (D-21), and
+    a scalar goes through the same argument codec an enum or a path does. Writing ``-7.0`` under
+    ``for_location`` therefore has to arrive as the float ``-7.0`` on the field of that name --
+    not as the string the file spells it with, and not dropped for being untyped -- because three
+    components size their own design temperature off the fact the weather computes from it.
+    """
+    origins = origins_of(WEATHER_ENTRY)
+
+    assert origins["Weather"].heating_reference_temperature_in_celsius == -7.0
+    assert isinstance(origins["Weather"].heating_reference_temperature_in_celsius, float)
 
 
 @pytest.mark.base

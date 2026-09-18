@@ -121,7 +121,10 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     hds_name = "HeatDistributionSystem"
 
     # ===================================================================================================================
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field (D-21), and this test builds no weather, so it states the number.
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
+    my_building_config.heating_reference_temperature_in_celsius = -7.0
     my_building_information = building.BuildingInformation(config=my_building_config)
 
     # Build Heat Distribution System
@@ -131,7 +134,7 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
         SizingContext(
             heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
             conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
-            heating_reference_temperature_in_celsius=my_building_config.heating_reference_temperature_in_celsius,
+            heating_reference_temperature_in_celsius=-7.0,
             set_heating_temperature_in_celsius=(
                 my_building_information.set_heating_temperature_for_building_in_celsius
             ),
@@ -316,10 +319,18 @@ def test_the_heating_threshold_is_computed_from_the_building_it_serves() -> None
     are pinned through the context as well, so the law is tested where the setups meet it
     rather than only as a bare function.
     """
+    # The design temperature is the weather's, not the building's (D-21): the building reads it,
+    # so it is stated once here and then carried into the controller's context beside the facts
+    # ``for_building`` derives, which no longer include it.
     default_building = building.BuildingConfig.preset_german_single_family_home("Building")
+    default_building.heating_reference_temperature_in_celsius = -7.0
     resolved = heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
         "HeatDistributionController"
-    ).resolve(SizingContext.for_building(default_building))
+    ).resolve(
+        SizingContext.for_building(default_building).with_facts(
+            heating_reference_temperature_in_celsius=-7.0
+        )
+    )
 
     assert resolved.set_heating_threshold_outside_temperature_in_celsius == 18.0
 

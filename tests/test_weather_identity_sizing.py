@@ -137,15 +137,19 @@ def test_a_pv_key_moves_when_the_weather_does_and_a_building_key_too() -> None:
     Before F7 the PV key was identical for Aachen and Seville.
     """
     aachen = WeatherConfig.preset_aachen("Weather").identity()
-    seville = WeatherConfig.for_location("Weather", LocationEnum.SEVILLE).identity()
+    seville = WeatherConfig.for_location("Weather", LocationEnum.SEVILLE, 5.7).identity()
 
     pv = PVSystemConfig.preset_rooftop("PVSystem")
     pv.power_in_watt = 10000.0
     building = BuildingConfig.preset_german_single_family_home("Building")
 
     assert Keys.of(Keys.sized_from(pv, weather_identity=aachen)) != Keys.of(Keys.sized_from(pv, weather_identity=seville))
-    assert Keys.of(Keys.sized_from(building, weather_identity=aachen)) != Keys.of(
-        Keys.sized_from(building, weather_identity=seville)
+    # The building also reads the weather's design temperature (D-21), which has to be in the
+    # context for it to resolve; it is the same number on both sides, so the identity is what moves.
+    assert Keys.of(
+        Keys.sized_from(building, weather_identity=aachen, heating_reference_temperature_in_celsius=-7.0)
+    ) != Keys.of(
+        Keys.sized_from(building, weather_identity=seville, heating_reference_temperature_in_celsius=-7.0)
     )
 
 

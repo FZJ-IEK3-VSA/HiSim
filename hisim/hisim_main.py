@@ -177,8 +177,8 @@ def initialize_from_python(
         force_log_connections=True,
     )
     # The run's description is the setup file's first line — a docstring or a comment, the
-    # triple quotes stripped; post-processing writes it into scenario.json. It travels on the
-    # simulator, so a second simulator built in the same process keeps its own.
+    # triple quotes stripped. It travels on the simulator, so a second simulator built in the
+    # same process keeps its own. Nothing reads it since scenario.json retired (F-9).
     my_sim.description = description
 
     # Build method

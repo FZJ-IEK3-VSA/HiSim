@@ -1,6 +1,6 @@
 # P4 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-16 (16 findings)
+**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-18 (23 findings)
 **Context:** things that surfaced while working through
 `roadmap/declarative_energy_systems/p4_component_sweep_requirements.md` — the component sweep, decisions
 D-1 … D-32 — and were **not** what the work set out to do. Kept separately so the requirements stay about
@@ -164,7 +164,7 @@ scope for "retire a dead module". Two independent fixes are wanted, and they int
 Both rename things, so they want to land together or in that order, never against each other. P3's
 recordings inherit these names too, so the sequencing matters to the declarative stack as well.
 
-### F-3 — the CHP controller's summer branch switches off against the heating maximum, not the DHW maximum **[verified]**
+### F-3 — the CHP controller's summer branch switches off against the heating maximum, not the DHW maximum **[verified, fixed]**
 
 **Fixed 2026-09-11**: the summer branch deactivates against `t_max_dhw_in_celsius`, so the water is heated
 to the top of its own band. `tests/test_generic_chp.py` holds the CHP on at 50 °C in July and off above
@@ -488,7 +488,7 @@ about how long the scenario JSON is meant to live, so it is the owner's:
 
 ## 2. Recurrences of findings logged elsewhere
 
-### F-2 — P3's F-2 recurred, in exactly the shape it was logged in **[verified]**
+### F-2 — P3's F-2 recurred, in exactly the shape it was logged in **[verified, fixed]**
 
 `roadmap/p3_random_findings.md` F-2 records that `scripts/regenerate_scenario_jsons.py` regenerates against
 the *installed* package rather than the worktree, and "fails by producing plausible output, on a script whose
@@ -507,7 +507,15 @@ why the golden check reproduced the failure correctly while the regenerator quie
 *A second occurrence on a different branch, three days apart, on the same script. The fix is one line of
 `env` in the subprocess call.*
 
-### F-10 — a rounded product renders as if only the fact were rounded **[verified]**
+**Fixed 2026-09-18.** The script both occurrences were on, `scripts/regenerate_scenario_jsons.py`, has since
+been retired with the scenario JSONs, but the shape outlived it: `scripts/record_all_setups.py` spawns a child
+per setup through `ChildRecorder`, which inherited the parent's environment wholesale and so resolved `hisim`
+to whatever copy happened to be installed. The child's `PYTHONPATH` now starts at the directory the parent's
+own `hisim` package lives in — `Path(hisim.__file__).parent.parent`, the same derivation `golden_check.py`
+already made from `__file__` — with the operator's own entries kept behind it. A recording therefore describes
+the checkout it was started from whether or not anyone exported anything.
+
+### F-10 — a rounded product renders as if only the fact were rounded **[verified, fixed]**
 
 Found on 2026-09-13 while converting the battery (B2). Its inverter law is
 `(Size.PV_PEAK_POWER_IN_WATT * 0.5).rounded(2)`, and `hisim energy-system describe` prints it as
@@ -531,6 +539,11 @@ Fix: bracket a compound inner in `_RoundedLaw.describe` — `(0.5 * Size.PV_PEAK
 test over the battery's two laws pins the rendering. Not fixed on the B2 branches, which are
 conversions; belongs with the next kernel touch.
 
+**Fixed 2026-09-18** by the second of the two, which is the one that stays right as operators are added: a law
+now renders itself twice, as itself and as an operand of another law, and only the product differs between the
+two. The two suffix laws ask for the operand form, so the battery's inverter law describes as
+`(0.5 * Size.PV_PEAK_POWER_IN_WATT).rounded(2)` and a bare term keeps its unbracketed rendering.
+
 ### F-11 — the P2 mockups still name presets that the P4 decisions renamed, so their pinned errors pass for the wrong reason **[verified, fixed]**
 
 Found on 2026-09-13 after the PV and battery conversions (B2). `roadmap/declarative_energy_systems/energy_system_mockup.yaml`
@@ -553,7 +566,7 @@ entries from `BY_MOCKUP` and watch the test stay green.
 B2 conversion briefs kept out of scope; a doc-only commit at the top of the B2 stack is the natural
 place, or the first B3 PR.
 
-### F-12 — an optional sized field cannot receive a `None` fact **[verified]**
+### F-12 — an optional sized field cannot receive a `None` fact **[verified, fixed]**
 
 Found on 2026-09-13 converting the fuel meter (B2). `FuelMeterConfig.heating_value_of_fuel_in_kwh_per_liter`
 and `fuel_density_in_kg_per_m3` are `Sizable[Optional[float]]` with `sized_field(optional=True)` and copy laws
@@ -571,7 +584,16 @@ Fix, before the district-heating conversion (B4): an optional sized field whose 
 `None`. One rule in `_bind_one` (and the Python-mode `evaluate`), keyed on the field's `optional` flag, so a
 non-optional field keeps refusing a null fact as it does today.
 
-### F-13 — `dataclasses.replace` drops a preset's provenance, and the twin loses its `preset:` line **[verified]**
+**Fixed 2026-09-18**, after B4 landed with the pin the finding describes. A fact is nullable for a consumer
+when *every* unresolved field reading it is optional, which the engine works out per config from the same
+declarations it already reads: the binding then passes the `None` through instead of raising, and the
+resolver answers those fields with it without evaluating their laws, since a fact term cannot tell a null
+answer from an absent one. A fact any required field also reads refuses exactly as before — one optional
+reader does not make a fact nullable for the field beside it — and the audit entry still names the law that
+answered, so an empty field is explained rather than merely empty. `household_district_heating_building_sizer`
+no longer pins the two constants, and the fuel meter's block in both of its twins is `preset: standard`.
+
+### F-13 — `dataclasses.replace` drops a preset's provenance, and the twin loses its `preset:` line **[verified, fixed]**
 
 Found on 2026-09-13 converting the fuel meter (B2). A preset builder stamps the returned instance with
 `ConfigBuilder.PROVENANCE_ATTRIBUTE`, which is what the recorder reads to write `preset: standard` and only
@@ -585,6 +607,13 @@ idiom every converted setup now uses (the PV's `azimuth`/`tilt`, the fuel meter'
 survey's conversion pattern should say so, or a `replace`-shaped helper should carry the stamp; until one
 of the two exists this is an easy way to lose a preset from a twin without any test noticing, since the
 twin still loads and runs identically.
+
+**Fixed 2026-09-18** with the second of the two: `hisim.config.replace_config(config, **changes)` copies a
+config the way `dataclasses.replace` does and carries the stamp across. The three places in the kernel that
+were each carrying it by hand — the resolver's copy of a sized config, and the executor's copy of a config it
+overrides and of one it merely duplicates — now say so in one word instead of three transcriptions of the same
+four lines, and a test pins the difference against a plain `replace`. Attribute assignment before `.resolve()`
+remains the idiom a setup uses for one or two values; the helper is for a copy with changes.
 
 ### F-14 — the recorder had the provenance to write `AUTO` and wrote the number instead, so no twin could be reused **[verified, decided]**
 

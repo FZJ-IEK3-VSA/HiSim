@@ -48,7 +48,7 @@ from hisim.config.laws import (
     SizingLaw,
     normalize_law,
 )
-from hisim.config.presets import ConfigBuilder
+from hisim.config.presets import replace_config
 
 if TYPE_CHECKING:
     from hisim.config.context import SizingContext
@@ -536,7 +536,10 @@ def resolve_config(
             ) + tuple(
                 (f"self.{name}", own.value_of(name)) for name in effective_law.fields_read()
             )))
-    result = dataclasses.replace(config, **resolved)  # type: ignore[type-var]
+    # replace_config rather than dataclasses.replace: the resolved copy must keep the preset
+    # stamp, which is an attribute and not a field, or the recorder would write the config out
+    # as a full literal block instead of its preset plus the overrides (F-13).
+    result = replace_config(config, **resolved)
     setattr(result, "sizing_record", tuple(record))
     if record:
         key = getattr(getattr(config, "component_id", None), "key", type(config).__name__)
@@ -544,10 +547,4 @@ def resolve_config(
             f"Sizing: resolved {type(config).__name__} '{key}': "
             + "; ".join(f"{entry.field}={entry.value!r} <- {entry.law}" for entry in record)
         )
-    # Preset provenance rides along exactly like the sizing record: dataclasses.replace
-    # copies fields only, so the non-field stamp must be carried over explicitly for the
-    # template creator to still see which preset the resolved config came from.
-    provenance = getattr(config, ConfigBuilder.PROVENANCE_ATTRIBUTE, None)
-    if provenance is not None:
-        setattr(result, ConfigBuilder.PROVENANCE_ATTRIBUTE, provenance)
     return result

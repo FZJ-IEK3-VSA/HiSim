@@ -1,6 +1,6 @@
 # P4 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-18 (24 findings)
+**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-18 (25 findings)
 **Context:** things that surfaced while working through
 `roadmap/declarative_energy_systems/p4_component_sweep_requirements.md` — the component sweep, decisions
 D-1 … D-32 — and were **not** what the work set out to do. Kept separately so the requirements stay about
@@ -884,4 +884,43 @@ which is what this entry does for now.
 
 The scenario *name* is in a similar position but not the same one: its one remaining consumer, the `scenario`
 column of the pyam export, is live, and the eleven building sizers write their scenario hash into it.
+
+### F-25 — the pyam export outlived its reader by six weeks, and carries the last of the run metadata **[reported]**
+
+Found on 2026-09-18 while retiring the scenario JSON (F-9), when the owner asked whether the pyam output is
+needed either. The facts, in the order they decide the question:
+
+`pyam` is not a dependency and is imported nowhere. What exists is `PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION`,
+which writes the run's results resampled to four resolutions -- `hourly/daily/monthly/yearly_<n>_days.csv` in
+`result_data_for_scenario_evaluation/` -- in the pyam long format, one row per variable carrying
+`model, scenario, region, variable, unit, year, value`. The code says as much: "idea for format from pyam
+package".
+
+**Its reader is already gone.** `hisim/postprocessing/scenario_evaluation/` -- `result_data_collection.py`,
+`result_data_processing.py`, `result_data_plotting.py` and `scenario_analysis_complete_with_config.py`, the
+tool that read those CSVs back and compared runs -- was moved to `obsolete/` in #541 (2026-08-10) and left the
+repository entirely with the rest of that tree in #590. The writer stayed. `hisim/postprocessing/__init__.py`
+still tells a reader that results "can be compared and visualised with the
+`hisim.postprocessing.scenario_evaluation` sub-package", which has not existed for six weeks.
+
+Nothing else in the tree reads the CSVs: the building sizer reads `all_kpis.json` and
+`*_kpi_config_for_building_sizer.json`, and neither RenoVisor nor the HPC harness touches the directory. What
+is not known here is whether anyone reads them *outside* the repository -- unlike the scenario JSON, this
+artifact carries results rather than configuration, and the pyam long format is the interchange format for
+cross-run comparison, so an analysis workflow living elsewhere is plausible. That question is the whole of the
+decision, and it is the owner's.
+
+**What retiring it would take with it**, about 300 lines and the last of the run metadata:
+`prepare_results_for_scenario_evaluation` and its four helpers (`iterate_over_results_and_add_values_to_dict`,
+`write_filename_and_save_to_csv`, `write_kpis_in_dict`, `get_variable_name_and_unit_from_ppdt_results_column`)
+with the four `self.model/scenario/region/year` attributes; `region_of`, whose only caller it is, and
+`tests/test_postprocessing_region.py` entirely; the option in eleven building-sizer setups, three legacy
+`*.simulation.json` parameter files and five test files. And the **scenario name**: the `scenario` column of
+this export is its one remaining consumer since F-9, so `Simulator.scenario_name`, the building sizers' hash
+strings, `EnergySystemFile.name` as a run name and `scenario_name_of` for grouped runs would all become
+decoration. With F-24's description that is the entire run-metadata layer -- a run would then carry no name
+and no description that anything consumes.
+
+Logged rather than done on the owner's instruction (2026-09-18): it is separable from F-9, bigger, and turns
+on a fact only the people running scenario comparisons have.
 

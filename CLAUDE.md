@@ -32,11 +32,11 @@ Test markers: `base`, `buildingtest`, `system_setups`, `mpc`, `utsp`
 ### Run an energy system (declarative YAML — the declarative input)
 ```bash
 python hisim/hisim_main.py energy_systems/gas_boiler_household.energy_system.yaml \
-    energy_systems/one_day_15min.simulation.yaml
+    simulation_parameters/one_day_15min_export.simulation.yaml
 
 # or through the installed console script
 hisim energy-system run energy_systems/gas_boiler_household.energy_system.yaml \
-    energy_systems/one_day_15min.simulation.yaml
+    simulation_parameters/one_day_15min_export.simulation.yaml
 ```
 See `energy_systems/README.md`. Related commands: `hisim energy-system describe <class>`,
 `hisim energy-system facts <file>`, `hisim energy-system schema`.

@@ -153,6 +153,7 @@ class ParameterFileName:
             ),
         ),
         ("costs", ("COMPUTE_OPEX", "COMPUTE_CAPEX")),
+        ("lifecycle", ("COMPUTE_LIFECYCLE_COSTS", "LIFECYCLE_COST_REPORT")),
         (
             "plots",
             (
@@ -297,12 +298,14 @@ class ParameterFileWriter:
     #: Keys written as single scalars, in this order, ahead of the option list.
     SCALAR_KEYS: ClassVar[Tuple[str, ...]] = ("seconds_per_timestep", "country", "logging_level")
 
-    #: The comment lines a library file opens with -- one the recorder wrote because no file
-    #: beside it said the same thing.
+    #: The comment lines a library file opens with. It says what the file is for in the same
+    #: words its name is built from, and it is the same text whether a person wrote the file into
+    #: ``simulation_parameters/`` or the recorder added it there because nothing beside it said
+    #: the same thing -- the two are the same kind of file and are used interchangeably.
     HEADER: ClassVar[str] = (
-        "# {horizon} at {resolution} resolution, post-processing for {purpose}. Written by the\n"
-        "# HiSim energy-system recorder because no file beside it said the same thing; it is\n"
-        "# shared by every recording whose parameters normalise to this content.\n"
+        "# {horizon} at {resolution} resolution, post-processing for {purpose}. One of this\n"
+        "# repository's shared simulation-parameters files: any run may be started from it, and\n"
+        "# every recording whose parameters normalise to this content references it.\n"
     )
 
     #: The comment lines the parameter set of a finished run opens with. A run record is not a

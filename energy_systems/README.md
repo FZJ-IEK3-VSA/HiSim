@@ -15,8 +15,6 @@ preset pins and every value the system computes for itself, follows from those d
 | `<setup>.probes.yaml` | The module configurations `<setup>` is recorded under — the *probe list*. Authored; the first entry is always the class defaults. See "Groups and variants" below. |
 | `<setup>.grouping.yaml` | What a person decided each difference between those configurations means. Authored through a workbook and committed in this form. |
 | `<setup>.grouped.energy_system.yaml` | The twin again, with the differences that are structure expressed as groups and variants. Generated from the two files above. |
-| `one_day_15min.simulation.yaml` | One January day at a quarter-hour resolution. The pair to reach for when trying a file out; the test suite and every recording run against this file too. |
-| `2021_minutely.simulation.yaml` | The whole of 2021 at a one-minute resolution with the standard plots. |
 
 Two kinds of file live side by side and are never mixed:
 
@@ -24,8 +22,10 @@ Two kinds of file live side by side and are never mixed:
   post-processing, so the same household can be run over a day and over a year without a second
   copy of it.
 - `*.simulation.yaml` says what to **do** with it: the period, the time-step length, the logging
-  level and which post-processing to run. A `*.simulation.json` of the same shape is read as well,
-  which is what the Python setups in `system_setups/` already ship.
+  level and which post-processing to run. Those live one directory up, in `simulation_parameters/`,
+  because a parameter set belongs to no particular household — see the README there. A
+  `*.simulation.json` of the same shape is read as well, which is what the Python setups in
+  `system_setups/` already ship.
 
 ## Running one
 
@@ -33,10 +33,10 @@ Either of these runs the same thing:
 
 ```bash
 hisim energy-system run energy_systems/gas_boiler_household.energy_system.yaml \
-    energy_systems/one_day_15min.simulation.yaml
+    simulation_parameters/one_day_15min_export.simulation.yaml
 
 python hisim/hisim_main.py energy_systems/gas_boiler_household.energy_system.yaml \
-    energy_systems/one_day_15min.simulation.yaml
+    simulation_parameters/one_day_15min_export.simulation.yaml
 ```
 
 The run writes its results, and beside them four files that describe what was actually run:
@@ -85,7 +85,7 @@ and writing down what it built — one setup at a time:
 
 ```bash
 hisim energy-system record system_setups/basic_household.py \
-    energy_systems/one_day_15min.simulation.yaml
+    simulation_parameters/one_day_15min_export.simulation.yaml
 ```
 
 or the whole fleet at once, which is what regenerates this directory:
@@ -177,7 +177,7 @@ hisim energy-system grouping import energy_systems/household_heatpump_building_s
 
 # 3. build the grouped file and prove it against every probe
 hisim energy-system record system_setups/household_heatpump_building_sizer.py \
-    energy_systems/one_day_15min.simulation.yaml \
+    simulation_parameters/one_day_15min_export.simulation.yaml \
     --grouping energy_systems/household_heatpump_building_sizer.grouping.yaml
 
 # 4. re-render the page that says what all of this came to

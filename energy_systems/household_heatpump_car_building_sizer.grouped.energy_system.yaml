@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=../hisim/energy_system_v3.schema.json
-# Recorded from system_setups/household_heatpump_car_building_sizer.py with energy_systems/one_day_15min.simulation.yaml by the HiSim energy-system recorder v1.
+# Recorded from system_setups/household_heatpump_car_building_sizer.py with simulation_parameters/one_day_15min_export.simulation.yaml by the HiSim energy-system recorder v1.
 # Grouped by energy_systems/household_heatpump_car_building_sizer.grouping.yaml from the probe configurations of energy_systems/household_heatpump_car_building_sizer.probes.yaml.
 schema_version: 3
 name: household_heatpump_car_building_sizer

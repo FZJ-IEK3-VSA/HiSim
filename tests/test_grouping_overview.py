@@ -270,7 +270,7 @@ class Headers:
 
     #: The recorder's own origin line, which is what makes a file a twin at all.
     ORIGIN: ClassVar[str] = (
-        "# Recorded from system_setups/{stem}.py with energy_systems/one_day_15min.simulation.yaml "
+        "# Recorded from system_setups/{stem}.py with simulation_parameters/one_day_15min_export.simulation.yaml "
         "by the HiSim energy-system recorder v1.\n"
     )
 

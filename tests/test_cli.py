@@ -46,7 +46,7 @@ class Fixtures:
     #: One January day at a quarter-hour resolution: long enough to run every state machine,
     #: short enough for a test suite.
     PARAMETERS: ClassVar[Path] = (
-        Path(__file__).resolve().parents[1] / "energy_systems" / "one_day_15min.simulation.yaml"
+        Path(__file__).resolve().parents[1] / "simulation_parameters" / "one_day_15min_export.simulation.yaml"
     )
 
     #: The configuration class ``describe`` is exercised on: the one with the most presets, a

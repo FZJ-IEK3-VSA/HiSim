@@ -62,7 +62,7 @@ class Fixtures:
 
     #: One January day at a quarter-hour resolution, asking only for the result table.
     PARAMETERS: ClassVar[Path] = (
-        Path(__file__).resolve().parent.parent / "energy_systems" / "one_day_15min.simulation.yaml"
+        Path(__file__).resolve().parent.parent / "simulation_parameters" / "one_day_15min_export.simulation.yaml"
     )
 
     @classmethod

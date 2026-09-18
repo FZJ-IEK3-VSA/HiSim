@@ -32,7 +32,7 @@ python -m hpc_harness server --config server.json
 python scripts/hpc_harness/submit_energy_systems.py \
     --server-url-file /project/run/server.url --batch run1 \
     --energy-system-dir energy_systems --name-filter building_sizer \
-    --sim-params energy_systems/2021_minutely.simulation.yaml
+    --sim-params simulation_parameters/2021_minutely_plots.simulation.yaml
 
 # 3. Start workers (or enable the autoscaler in server.json)
 sbatch hpc_harness/slurm/worker.sbatch            # one exclusive node each

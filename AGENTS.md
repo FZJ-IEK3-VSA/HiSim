@@ -72,7 +72,7 @@ python ../hisim/hisim_main.py simple_system_setup_one.py
 Or the declarative equivalent (energy system + simulation-parameters pair):
 ```bash
 python hisim/hisim_main.py energy_systems/simple_system_setup_one.energy_system.yaml \
-    energy_systems/one_day_15min.simulation.yaml
+    simulation_parameters/one_day_15min_export.simulation.yaml
 ```
 
 Results land in a `results/` subdirectory next to the input file. Use `simple_system_setup_one.py` for the cheapest smoke test.

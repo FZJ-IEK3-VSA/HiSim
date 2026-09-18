@@ -1,0 +1,13 @@
+# one_week at minutely resolution, post-processing for kpis_costs. One of this
+# repository's shared simulation-parameters files: any run may be started from it, and
+# every recording whose parameters normalise to this content references it.
+start_date: "2021-01-01T00:00:00"
+end_date: "2021-01-08T00:00:00"
+seconds_per_timestep: 60
+country: "DE"
+logging_level: 3
+post_processing_options:
+  - COMPUTE_CAPEX
+  - COMPUTE_KPIS
+  - COMPUTE_OPEX
+  - WRITE_KPIS_TO_JSON

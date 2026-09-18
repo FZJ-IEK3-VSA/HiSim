@@ -19,7 +19,7 @@ Usage (from the repo root, server already running)::
     # a different subset / simulation profile:
     python scripts/hpc_harness/submit_energy_systems.py \\
         --server-url-file /project/run/server.url \\
-        --name-filter household --sim-params 2021_minutely.simulation.yaml
+        --name-filter household --sim-params 2021_minutely_plots.simulation.yaml
 
 Workers for these jobs must serve the ``hisim`` runner (add an ``autoscale`` profile
 for it, or start a worker with ``--runner hisim``).
@@ -42,7 +42,9 @@ DEFAULT_NAME_FILTER = "building_sizer"
 ENERGY_SYSTEM_SUFFIX = ".energy_system.yaml"
 GROUPED_SUFFIX = ".grouped.energy_system.yaml"
 # A full-year, minutely profile that renders plots — charts + the usual result files.
-DEFAULT_SIM_PARAMS = "2021_minutely.simulation.yaml"
+DEFAULT_SIM_PARAMS = "2021_minutely_plots.simulation.yaml"
+#: Where a bare ``--sim-params`` name is looked up first: the repository's shared library.
+PARAMETERS_DIR = "simulation_parameters"
 
 
 def find_energy_systems(energy_system_dir: Path, name_filter: str) -> List[Path]:
@@ -60,14 +62,16 @@ def find_energy_systems(energy_system_dir: Path, name_filter: str) -> List[Path]
 
 
 def resolve_sim_params(sim_params: str, energy_system_dir: Path) -> Path:
-    """Resolve ``--sim-params`` as an absolute path, a repo path, or a name under the directory."""
-    candidates = [Path(sim_params), energy_system_dir / sim_params, REPO_ROOT / sim_params]
+    """Resolve ``--sim-params`` as an absolute path, a repo path, or a name in the shared library."""
+    library = REPO_ROOT / PARAMETERS_DIR
+    candidates = [Path(sim_params), library / sim_params, energy_system_dir / sim_params,
+                  REPO_ROOT / sim_params]
     for candidate in candidates:
         if candidate.is_file():
             return candidate.resolve()
     raise FileNotFoundError(
         f"Simulation-parameters file not found: {sim_params} "
-        f"(looked in {energy_system_dir} and {REPO_ROOT})"
+        f"(looked in {library}, {energy_system_dir} and {REPO_ROOT})"
     )
 
 

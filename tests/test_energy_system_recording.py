@@ -91,11 +91,14 @@ class Fixtures:
     #: Where the Python setups live.
     SETUPS: ClassVar[Path] = ROOT / "system_setups"
 
-    #: Where the committed twins and the shared parameter files live.
+    #: Where the committed twins live.
     ENERGY_SYSTEMS: ClassVar[Path] = ROOT / "energy_systems"
 
+    #: Where the shared simulation-parameters files live.
+    ROOT_PARAMETERS: ClassVar[Path] = ROOT / "simulation_parameters"
+
     #: One January day at a quarter-hour resolution, the pair every twin is recorded with.
-    PARAMETERS: ClassVar[Path] = ENERGY_SYSTEMS / "one_day_15min.simulation.yaml"
+    PARAMETERS: ClassVar[Path] = ROOT_PARAMETERS / "one_day_15min_export.simulation.yaml"
 
     #: The setups recorded for this module, and committed as twins beside the exemplar.
     RECORDED: ClassVar[Tuple[str, ...]] = (

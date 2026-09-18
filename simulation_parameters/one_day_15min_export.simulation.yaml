@@ -1,0 +1,10 @@
+# one_day at 15min resolution, post-processing for export. One of this
+# repository's shared simulation-parameters files: any run may be started from it, and
+# every recording whose parameters normalise to this content references it.
+start_date: "2021-01-01T00:00:00"
+end_date: "2021-01-02T00:00:00"
+seconds_per_timestep: 900
+country: "DE"
+logging_level: 3
+post_processing_options:
+  - EXPORT_TO_CSV

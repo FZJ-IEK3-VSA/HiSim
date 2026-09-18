@@ -7,6 +7,11 @@ returned string is the component's own ``get_full_classname()`` (so a package th
 ``__module__`` and one that does not both come out under the path HiSim uses), a class that
 declares nothing is refused by name, and a misspelt path is refused as a ``ValueError`` naming the
 class and the path rather than as a bare import error.
+
+The first of those refusals happens twice over, and both are pinned here: a class body that
+declares neither ``MAIN_CLASS`` nor its own ``get_main_classname`` never becomes a class at all,
+and a class that reaches the resolver unset anyway — by overriding the method and delegating back
+up — still gets the ``NotImplementedError`` that names it.
 """
 
 from dataclasses import dataclass
@@ -51,15 +56,42 @@ def test_an_unpinned_reexport_resolves_to_the_defining_module() -> None:
 
 
 @pytest.mark.base
-def test_a_class_that_declares_nothing_is_refused_by_name() -> None:
-    """Catches the old anonymous 'missing a definition' message coming back."""
+def test_a_class_that_declares_nothing_is_refused_at_its_definition() -> None:
+    """Catches a config without an identity being accepted until something serializes it.
+
+    The class body below is the whole test: ``ConfigBase.__init_subclass__`` runs while it is
+    turned into a class, finds neither ``MAIN_CLASS`` nor an own ``get_main_classname``, and
+    refuses by name. Before the check the same class was built happily and only failed at the
+    first dump, a twin recording or a cost lookup away from the line that forgot to declare.
+    """
+    with pytest.raises(TypeError, match="NamelessConfig"):
+
+        @dataclass
+        class NamelessConfig(ConfigBase):  # pylint: disable=unused-variable
+            """A configuration that neither declares MAIN_CLASS nor overrides the method."""
+
+
+@pytest.mark.base
+def test_a_class_that_reaches_the_resolver_unset_is_refused_by_name() -> None:
+    """Catches the resolver's own refusal losing the class name it reports.
+
+    A class definition cannot reach the resolver unset any more, so the backstop is exercised
+    the one way left: a class that declares its own ``get_main_classname``, which satisfies the
+    definition-time check, and delegates straight back to the base implementation with
+    ``MAIN_CLASS`` still empty.
+    """
 
     @dataclass
-    class NamelessConfig(ConfigBase):
-        """A configuration that neither declares MAIN_CLASS nor overrides the method."""
+    class DelegatingConfig(ConfigBase):
+        """A configuration whose override hands the question back to the base class."""
 
-    with pytest.raises(NotImplementedError, match="NamelessConfig"):
-        NamelessConfig.get_main_classname()
+        @classmethod
+        def get_main_classname(cls) -> str:
+            """Delegates to the base resolver, which has nothing to resolve."""
+            return super().get_main_classname()
+
+    with pytest.raises(NotImplementedError, match="DelegatingConfig"):
+        DelegatingConfig.get_main_classname()
 
 
 @pytest.mark.base

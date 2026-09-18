@@ -238,6 +238,10 @@ class ReportedOperationMode(str, Enum):
 class ReportedConfig(ConfigBase):
     """A config with an enum field, a list of enum values and a plain float field."""
 
+    #: This test double configures no real component, so it names itself; every ConfigBase
+    #: subclass has to say which component it configures or its definition is refused.
+    MAIN_CLASS = "tests.test_component.ReportedConfig"
+
     component_id: ComponentID
     operation_mode: ReportedOperationMode
     fallback_modes: List[ReportedOperationMode]

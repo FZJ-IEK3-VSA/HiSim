@@ -132,6 +132,43 @@ def _complete_sizable_enum_codecs(config_class: type) -> None:
         descriptor.metadata = MappingProxyType(metadata)
 
 
+def _check_component_identity(config_class: type) -> None:
+    """Refuses a configuration class that does not say which component it configures.
+
+    A configuration names its component in one line, ``MAIN_CLASS``; the one exception is a
+    class that writes its own :py:meth:`ConfigBase.get_main_classname`, which a handful of
+    test doubles with no real component do. A class that declares neither used to be accepted
+    until something serialized it — a scenario dump, a recorded twin, the economics adapter —
+    and only then raised, far from the class that forgot the line. Checking while the class
+    body is being turned into a class moves that failure to the import that defines it.
+
+    Example: ``class SolarThermalSystemConfig(ConfigBase)`` with
+    ``MAIN_CLASS = "hisim.components.solar_thermal_system.SolarThermalSystem"`` passes; the
+    same class body without that line raises ``TypeError`` naming ``SolarThermalSystemConfig``.
+
+    Args:
+        config_class: The configuration class whose body has just executed.
+
+    Raises:
+        TypeError: If the class neither carries a non-empty ``MAIN_CLASS`` (its own or an
+            inherited one) nor defines ``get_main_classname`` anywhere below ``ConfigBase``;
+            the message names the class and says what to declare.
+    """
+    if getattr(config_class, "MAIN_CLASS", ""):
+        return
+    if any(
+        "get_main_classname" in ancestor.__dict__
+        for ancestor in config_class.__mro__
+        if ancestor is not ConfigBase
+    ):
+        return
+    raise TypeError(
+        f"{config_class.__name__} does not say which component it configures. Declare "
+        f"MAIN_CLASS = \"<dotted path of the component class>\" on {config_class.__name__}, "
+        "for example MAIN_CLASS = \"hisim.components.generic_pv_system.PVSystem\"."
+    )
+
+
 @dataclass_json
 @dataclass(frozen=True)
 class ComponentID:
@@ -283,17 +320,20 @@ class ConfigBase:
         decorated ``@preset``/``@constructor`` methods and the field names are visible.
         Checking here is what turns a builder name that shadows a field into an immediate,
         located error instead of a dataclass silently adopting the classmethod as that
-        field's default value.
+        field's default value. The component identity is checked last, so a class that gets
+        both wrong is told about the builder first, that being the more specific mistake.
         """
         super().__init_subclass__(**kwargs)
         check_builder_declarations(cls, _field_names_under_construction(cls))
         _complete_sizable_enum_codecs(cls)
+        _check_component_identity(cls)
 
     #: Dotted import path of the component class this configuration configures, for example
     #: ``"hisim.components.generic_pv_system.PVSystem"``. Declaring it is how a configuration
-    #: class says what it is a configuration *of*; :py:meth:`get_main_classname` resolves it.
-    #: Empty here and on every class that still writes its own ``get_main_classname``, which
-    #: keeps working: the override wins and the empty default is never read.
+    #: class says what it is a configuration *of*; :py:meth:`get_main_classname` resolves it,
+    #: and ``__init_subclass__`` refuses a subclass that leaves it empty. The one way out is to
+    #: override ``get_main_classname``, which a test double with no real component states
+    #: deliberately; for a component configuration the one line here is the way.
     MAIN_CLASS: ClassVar[str] = ""
 
     #: The sizing facts this config class contributes to the scenario-wide fact pool
@@ -372,8 +412,10 @@ class ConfigBase:
             str: ``<module of the component class>.<name of the component class>``.
 
         Raises:
-            NotImplementedError: If the class neither declares ``MAIN_CLASS`` nor overrides this
-                method; the message names the class.
+            NotImplementedError: If the class reaches this method with ``MAIN_CLASS`` unset —
+                ``ConfigBase`` itself, or a subclass whose own override delegates up; the message
+                names the class. A subclass that declares neither is already refused at its class
+                definition, so this branch is the backstop rather than the usual report.
             ValueError: If ``MAIN_CLASS`` is not a dotted path, names a module that cannot be
                 imported, or names an attribute the module does not have; the message names the
                 class and the path.

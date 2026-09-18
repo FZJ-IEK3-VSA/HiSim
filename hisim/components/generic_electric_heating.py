@@ -67,15 +67,12 @@ class ElectricHeatingConfig(ConfigBase):
 
     ``maximum_electric_power_w`` is both the electric and the thermal cap: the component sets its
     thermal output equal to its electric input, so the heat delivered is limited by this field
-    alone and ``efficiency`` is never read.
+    alone.
     """
 
     MAIN_CLASS = "hisim.components.generic_electric_heating.ElectricHeating"
 
     component_id: ComponentID
-    #: Electric-to-thermal conversion efficiency. Carried for completeness of the appliance's
-    #: description; resistive heating converts all of its input, and no code path reads it.
-    efficiency: float = 1.0
     #: Whether the appliance also heats domestic hot water, in which case it declares the DHW
     #: inputs and outputs and prioritises that demand over space heating.
     with_domestic_hot_water_preparation: bool = False

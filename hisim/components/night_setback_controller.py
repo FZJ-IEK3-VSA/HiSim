@@ -8,11 +8,10 @@ and zero otherwise. The output is meant to be connected to
 is reduced during the night.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional
 
 import pandas as pd
-from dataclasses_json import config as dc_json_config
 from dataclasses_json import dataclass_json
 
 from hisim import component as cp
@@ -58,16 +57,11 @@ class NightSetbackConfig(ConfigBase):
     #: Offset added to the building's heating set temperature during the night window, in
     #: kelvin. Negative lowers the set temperature, which is the point of a setback.
     setback_delta_in_kelvin: float = -4.0
-    # The Python attributes carry the explicit ``_in_hours`` unit suffix: the
-    # value is hours since midnight (0..23). The dataclasses_json ``field_name``
-    # aliases preserve the legacy ``night_start_hour`` / ``night_end_hour``
-    # serialization keys so existing JSON/HDF5 configs and reports still load
-    # unchanged (per KB-6843, KB-5295).
     #: Hour of the day at which the setback starts, 0..23.
-    night_start_time_in_hours: int = field(default=22, metadata=dc_json_config(field_name="night_start_hour"))
+    night_start_time_in_hours: int = 22
     #: Hour of the day at which it ends, 0..23. A value below the start hour means the window
     #: wraps across midnight, which is the usual case; equal hours mean no window at all.
-    night_end_time_in_hours: int = field(default=6, metadata=dc_json_config(field_name="night_end_hour"))
+    night_end_time_in_hours: int = 6
 
     @preset
     @classmethod

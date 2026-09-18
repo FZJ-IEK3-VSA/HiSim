@@ -622,7 +622,7 @@ distinction, the verdict does not), and an opt-in read-only *seed* directory the
 pre-filled from, so a profile that is an input to both sides rather than a result of either can be
 supplied once.
 
-### F-16 — `ElectricHeatingConfig.efficiency` is a field nothing reads **[reported]**
+### F-16 — `ElectricHeatingConfig.efficiency` is a field nothing reads **[decided 2026-09-17, owner: delete; done]**
 
 Found on 2026-09-15 while converting the electric heating (B4). The class declares
 `efficiency: float = 1.0`, "electric to thermal power conversion", and the component never reads it:
@@ -633,6 +633,10 @@ file gets the same run as one who does not. Two honest ways out: delete the fiel
 1.0 by physics, which is why nobody missed it), or make the component honour it, which is a behaviour change
 under R5 with its own diff. Left as is in the conversion, since either changes the wire format or the
 results; the field's docstring says it is not read.
+
+Deleted on 2026-09-17: a resistive heater converts all of its input by definition, the field had no
+reader anywhere in the repository and no twin carried it (the electric-heating block is a bare
+preset), so the schema lost one property and nothing else moved.
 
 ### F-17 — the preset naming check has no room for a device designation **[fixed in place]**
 
@@ -680,7 +684,7 @@ the declared law. `generic_chp.CHPConfig` now reads `hydrogen … law: p_el = 1.
 Self("p_th")` against the declared `0.66`, and both pellet presets of `GenericBoilerConfig` show
 their twelfth. The JSON schema carries no laws and did not change.
 
-### F-19 — a `dataclasses_json` field alias is invisible to `describe`, the schema and the energy-system file **[reported]**
+### F-19 — a `dataclasses_json` field alias is invisible to `describe`, the schema and the energy-system file **[decided 2026-09-17, owner: drop the aliases; done]**
 
 Found on 2026-09-15 while converting `NightSetbackConfig` (B5). Its two hour fields carry
 `dc_json_config(field_name="night_start_hour")` / `"night_end_hour"`, so `to_dict` and the legacy JSON path
@@ -692,6 +696,12 @@ controller, so nothing is wrong today. Two honest ways out: drop the alias (the 
 thing it serves, and D-16's sweep already retired the repository's other aliases with the RSOC controller), or
 teach the codec the alias. The first is the smaller change and the one the wire-format rule favours: one name
 per field.
+
+Dropped on 2026-09-17: the two hour fields are plain defaults again, so `to_dict` writes
+`night_start_time_in_hours` / `night_end_time_in_hours`, the spelling `describe` and the schema already
+used. Nothing read the alias and no twin carries the controller, so the schema did not move either. With
+the RSOC controller gone under D-16 this was the last one: the repository now has no `dataclasses_json`
+field alias at all.
 
 ### F-20 — a config field is mutable component state: the car battery writes its own totals into its configuration **[reported]**
 

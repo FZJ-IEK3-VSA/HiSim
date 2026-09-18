@@ -161,6 +161,10 @@ class SimpleHotWaterStorageConfig(ConfigBase):
         _buffer_volume_in_liter,
         reads=(Size.MAXIMAL_THERMAL_POWER_IN_WATT,),
         fields=("sizing_option",),
+        description=(
+            "Size.MAXIMAL_THERMAL_POWER_IN_WATT in kilowatt, times the litres per kilowatt of"
+            ' Self("sizing_option"), rounded to 2 decimals'
+        ),
     )
 
     component_id: ComponentID

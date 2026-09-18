@@ -124,6 +124,10 @@ class PVSystemConfig(ConfigBase):
         _rooftop_power_in_watt,
         reads=(Size.ROOF_AREA_IN_M2,),
         fields=("share_of_maximum_pv_potential", "module_name", "module_database"),
+        description=(
+            "USABLE_ROOF_FRACTION * Size.ROOF_AREA_IN_M2 / the module's area, times its watt"
+            ' peak, times Self("share_of_maximum_pv_potential"), rounded to 2 decimals'
+        ),
     )
 
     component_id: ComponentID

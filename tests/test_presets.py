@@ -23,6 +23,7 @@ from dataclasses_json import dataclass_json
 
 from hisim.config import (
     AUTO,
+    Cardinality,
     ComponentID,
     ConfigBase,
     FactContribution,
@@ -31,10 +32,12 @@ from hisim.config import (
     SizableFieldKind,
     Size,
     SizingContext,
+    SizingError,
     canonical_preset,
     constructor,
     constructors_of,
     describe_config,
+    law,
     preset,
     preset_provenance,
     presets_of,
@@ -446,6 +449,86 @@ def test_a_preset_that_overrides_a_law_describes_that_law_and_not_the_declared_o
     # and the declared laws, which are the gas turbine's, keep their own section unchanged
     declared = {field.name: field.law for field in description.sizable_fields}
     assert declared == {"p_el": '0.66 * Self("p_th")', "p_fuel": '2.0 * Self("p_th")'}
+
+
+@pytest.mark.base
+def test_a_preset_reports_the_plain_fields_it_moves_off_their_class_default():
+    """``PresetInfo.sets`` is the preset's plain half, and it is empty when there is none (F-21).
+
+    Failure mode caught: a description that says only what a preset does to the *sizable* fields,
+    so that two presets differing in nothing else — the three simple heat sources, which are a
+    kind of source and at most one number each — carry identical information. The second half of
+    the promise matters as much: a preset that accepts every default reports nothing, because
+    after the common value of a field became that field's default most presets change nothing and
+    a line per preset saying so would bury the ones that do.
+    """
+    from hisim.components.generic_boiler import GenericBoilerControllerConfig
+    from hisim.components.simple_heat_source import SimpleHeatSourceConfig, SimpleHeatSourceType
+
+    presets = {preset_info.name: preset_info for preset_info in describe_config(SimpleHeatSourceConfig).presets}
+    assert presets["constant_thermal_power"].sets == (
+        ("heat_source_type", SimpleHeatSourceType.CONSTANT_THERMAL_POWER),
+        ("power_th_in_watt", 5000.0),
+    )
+    # declaration order, not the order the preset's own constructor call happens to use
+    assert presets["near_surface_brine"].sets == (
+        ("heat_source_type", SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE),
+    )
+    # the identity every preset sets from the name it was handed is not a choice and not reported
+    assert all(name != "component_id" for preset_info in presets.values() for name, _ in preset_info.sets)
+
+    controller = {
+        preset_info.name: preset_info
+        for preset_info in describe_config(GenericBoilerControllerConfig).presets
+    }
+    assert controller["modulating"].sets == ()
+    assert dict(controller["on_off"].sets) == {
+        "is_modulating": False,
+        "minimum_runtime_in_seconds": 0,
+        "minimum_resting_time_in_seconds": 0,
+    }
+
+
+@pytest.mark.base
+def test_a_sizable_field_a_preset_pins_is_reported_once_and_not_as_a_plain_setting():
+    """A pinned sizable field stays under ``pinned`` and never appears under ``sets`` (F-21).
+
+    Failure mode caught: the same field stated twice in one preset's block, once as a number and
+    once as a name, which would make the two sizable lines and the plain line disagree about what
+    kind of thing the field is. The catalogue boilers pin both ends of their power band, so they
+    are the case that would show it.
+    """
+    from hisim.components.generic_boiler import GenericBoilerConfig
+
+    presets = {preset_info.name: preset_info for preset_info in describe_config(GenericBoilerConfig).presets}
+    catalogue = presets["condensing_gas_12kw"]
+    assert catalogue.pinned == ("minimal_thermal_power_in_watt", "maximal_thermal_power_in_watt")
+    assert [name for name, _ in catalogue.sets] == ["energy_carrier", "boiler_type"]
+
+
+@pytest.mark.base
+def test_a_function_law_describes_itself_by_its_declared_description():
+    """``law(description=...)`` is what an opaque law renders as, and only a callable may have one.
+
+    Failure mode caught: a lambda law describing itself as ``<Class>.<lambda>``, which says that
+    a law exists and nothing about what it computes — and, where one class borrows another's law,
+    names a class that has nothing to do with the field (F-22). The refusal is the other half: an
+    expression law already renders as the formula it is, so a description on one would be a
+    second spelling of the same thing, free to drift.
+    """
+    described = law(
+        lambda ctx: ctx.heating_load_in_watt / 2,
+        reads=(Size.HEATING_LOAD_IN_WATT,),
+        description="Size.HEATING_LOAD_IN_WATT / 2",
+    )
+    assert described.describe() == "Size.HEATING_LOAD_IN_WATT / 2"
+    assert described.facts_read() == (("heating_load_in_watt", Cardinality.ONE),)
+    # without one, the callable's qualified name is still what it renders as
+    assert "<lambda>" in law(lambda ctx: 1.0, reads=()).describe()
+    with pytest.raises(SizingError, match="not a function law"):
+        law(Size.HEATING_LOAD_IN_WATT, description="the heating load")
+    with pytest.raises(SizingError, match="not a function law"):
+        law(42.0, description="forty-two")
 
 
 @pytest.mark.base

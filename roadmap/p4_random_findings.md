@@ -727,7 +727,7 @@ schema all honour, and which would be the first such mark in the repository. The
 and says the true thing. Left alone in B7: moving them changes the component's behaviour surface
 and the twin, and the batch is behaviour-N.
 
-### F-21 — `describe` says nothing about what a preset sets on a plain field, so presets that differ only in plain fields describe as identical **[verified]**
+### F-21 — `describe` says nothing about what a preset sets on a plain field, so presets that differ only in plain fields describe as identical **[decided 2026-09-17, owner; done]**
 
 Found on 2026-09-16 in the R13 review of all 56 classes the wire-format contract pins. The
 `presets` section prints a preset's name, its canonical flag, the sizable fields it pins, the ones
@@ -749,7 +749,19 @@ already does exactly that diff for a twin's `config` block, against a built pres
 against the class, so the machinery exists. Left alone in B8: it changes what every `describe`
 output looks like, and R13 is a review, not a redesign.
 
-### F-22 — a law written as a lambda describes itself as `<Class>.<lambda>`, and one of them names the wrong class **[verified]**
+Taken on 2026-09-17. `PresetInfo.sets` pairs every plain field a built preset holds a value other
+than the class default for with that value, in declaration order, and the renderer prints it as a
+`sets:` line above the two sizable ones, one assignment per line. The identity field is excluded —
+every preset sets it from the name it was handed — and so is every sizable field, which the
+`pinned`/`AUTO`/`law` lines already account for; a preset that changes nothing prints no line at
+all, which after R1.1 is most of them. The diff is dataclass equality against the class's own
+declared defaults rather than the recorder's encoded comparison: `hisim/config/introspection.py`
+may not import the record writer, which lives two layers above it. Twenty-one of the 56 classes the
+wire-format contract pins now describe differently; the enum in a value renders by member name,
+which is the spelling the format itself reads and writes, so the `fields` section's own enum
+defaults were moved onto the same one formatter and no longer show the Python `repr`.
+
+### F-22 — a law written as a lambda describes itself as `<Class>.<lambda>`, and one of them names the wrong class **[decided 2026-09-17, owner; done]**
 
 Found on 2026-09-16 in the same review. `SizingLaw.describe()` renders an arithmetic law as its
 own expression (`0.5 * Size.PV_PEAK_POWER_IN_WATT.rounded(2)`) but a law built from a callable as
@@ -771,6 +783,16 @@ argument at six call sites and makes the rendering exact; or turn each lambda in
 telling name, which is free but still only names a function. Field notes don't reach the schema,
 so neither is wire format. Not done here: it changes `hisim/config/laws.py`, outside a batch's
 remit.
+
+Taken on 2026-09-17, the first way. `law()` and `normalize_law()` take an optional `description`
+and `_FunctionLaw.describe()` returns it where there is one, falling back to the qualified name;
+a description handed to an expression or constant law is refused at declaration time, since those
+already render as exactly what they are and a second spelling would be free to drift. Five call
+sites declare one — the three lambdas in `generic_boiler.py`, `heat_distribution_system.py` and
+`generic_electric_heating.py`, and the two named functions `_rooftop_power_in_watt` and
+`_buffer_volume_in_liter` — which covers the six sized fields, the heating-threshold law counting
+twice because two classes share it. That shared law now reads the same in both, as the arithmetic
+it is and not as a class of another name.
 
 ### F-23 — two sibling controllers derive the heating threshold from the fact, a third recomputes it **[reported; the third has no provider to read]**
 

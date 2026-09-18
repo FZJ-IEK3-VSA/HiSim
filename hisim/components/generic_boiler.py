@@ -187,6 +187,10 @@ class GenericBoilerConfig(ConfigBase):
     MAXIMAL_POWER_LAW: ClassVar[SizingLaw] = law(
         lambda ctx: GenericBoilerConfig.scale_thermal_power(ctx.heating_load_in_watt, ctx.number_of_apartments),
         reads=("heating_load_in_watt", "number_of_apartments"),
+        description=(
+            "max(Size.HEATING_LOAD_IN_WATT, 2500 * Size.NUMBER_OF_APARTMENTS),"
+            " times 1.1 when both are above zero"
+        ),
     )
 
     component_id: ComponentID

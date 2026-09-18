@@ -46,6 +46,7 @@ from hisim.energy_system.comments import (
 from hisim.energy_system.emitter import EnergySystemEmitter
 from hisim.energy_system.errors import EnergySystemFormatError, EnergySystemRecordError
 from hisim.energy_system.executor import (
+    PARAMETERS_FILENAME,
     SimulationParametersReader,
     build_energy_system,
     run_energy_system,
@@ -55,6 +56,7 @@ from hisim.energy_system.loader import dump_energy_system, load_energy_system
 from hisim.energy_system.metadata import RunMetadata
 from hisim.energy_system.record import ConfigBlockWriter, realize
 from hisim.energy_system.sizing_bridge import sizing_sources_bridge
+from hisim.postprocessingoptions import PostProcessingOptions
 
 
 class Fixtures:
@@ -750,6 +752,67 @@ def test_both_yaml_libraries_the_format_uses_are_declared_dependencies() -> None
 
     assert "pyyaml" in declared
     assert "ruamel.yaml" in declared
+
+
+@pytest.mark.base
+def test_a_result_directory_states_the_parameters_the_run_was_given(tmp_path: Path) -> None:
+    """Catches a result directory that describes the system and not the run.
+
+    The realized record says what was built; without this file nothing in the directory says over
+    which period, at which resolution, or with which post-processing it was built — the run's log
+    says "96 timesteps" and the option numbers, in prose. The file that used to carry it,
+    ``simulation.json``, was written only under two options that crashed on a declarative run, and
+    retired with them (F-9).
+    """
+    built = Fixtures.build(Fixtures.MINIMAL, tmp_path)
+
+    _record, _audit, _wires, parameters_path = write_records(built, str(tmp_path))
+
+    assert Path(parameters_path).name == PARAMETERS_FILENAME
+    written = yaml.safe_load(Path(parameters_path).read_text(encoding="utf-8"))
+    given = SimulationParametersReader.read(Fixtures.PARAMETERS)
+    assert written["start_date"] == given.start_date.isoformat()
+    assert written["end_date"] == given.end_date.isoformat()
+    assert written["seconds_per_timestep"] == given.seconds_per_timestep
+    assert written["post_processing_options"] == sorted(
+        PostProcessingOptions(option).name for option in given.post_processing_options
+    )
+    # What describes this machine rather than the run stays out, so two boxes running the same
+    # thing write the same file.
+    assert "result_directory" not in written and "cache_dir_path" not in written
+    assert str(tmp_path) not in Path(parameters_path).read_text(encoding="utf-8")
+
+
+@pytest.mark.base
+def test_the_two_files_a_run_writes_are_the_two_arguments_that_re_run_it(tmp_path: Path) -> None:
+    """Catches a result directory that cannot reproduce its own run.
+
+    The realized record and the parameter record are exactly what ``hisim energy-system run``
+    takes, so handing them straight back has to work — and has to reproduce, which ``--rerun``
+    checks field by field. A parameter file that lost the resolution, or that a reader refuses,
+    fails here rather than in someone's rebuild of a run six months old.
+    """
+    built = Fixtures.build(Fixtures.MINIMAL, tmp_path / "first")
+    record_path, _audit, _wires, parameters_path = write_records(built, str(tmp_path / "first"))
+
+    reread = SimulationParametersReader.read(Path(parameters_path))
+    reread.result_directory = str(tmp_path / "again")
+    rerun = build_energy_system(
+        Path(record_path), reread, rerun=True, simulation_parameters_path=Path(parameters_path)
+    )
+    again_path, _audit, _wires, again_parameters = write_records(rerun, str(tmp_path / "again"))
+
+    # The re-run reproduced the record — write_records raises EF-61 otherwise — and the values of
+    # the two records agree; only their provenance comments differ, the second run having read
+    # what the first one computed.
+    first = yaml.safe_load(Path(record_path).read_text(encoding="utf-8"))
+    second = yaml.safe_load(Path(again_path).read_text(encoding="utf-8"))
+    assert first["components"] == second["components"]
+    body = [line for line in Path(again_parameters).read_text(encoding="utf-8").splitlines()
+            if not line.startswith("#")]
+    original = [line for line in Path(parameters_path).read_text(encoding="utf-8").splitlines()
+                if not line.startswith("#")]
+    assert body == original
 
 
 @pytest.mark.base

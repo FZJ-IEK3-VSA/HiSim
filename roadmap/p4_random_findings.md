@@ -1,6 +1,6 @@
 # P4 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-18 (23 findings)
+**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-18 (24 findings)
 **Context:** things that surfaced while working through
 `roadmap/declarative_energy_systems/p4_component_sweep_requirements.md` — the component sweep, decisions
 D-1 … D-32 — and were **not** what the work set out to do. Kept separately so the requirements stay about
@@ -375,7 +375,7 @@ lists them.
 *Logged 2026-09-12 while landing the zenith clamp (#628). The finding is what the producer work was written
 for, so it is filed here fixed rather than open.*
 
-### F-9 — a declarative run asked for a scenario JSON dies after the simulation, parsing a port name only the legacy path ever wrote **[verified]**
+### F-9 — a declarative run asked for a scenario JSON dies after the simulation, parsing a port name only the legacy path ever wrote **[verified, retired]**
 
 Found on 2026-09-13 while going through what the post-processing options do to a run started from an
 energy-system file. A declarative run whose simulation parameters carry
@@ -482,6 +482,22 @@ about how long the scenario JSON is meant to live, so it is the owner's:
 - **Retire the label parsing along with the writer's claim on declarative runs.** Refuse the declarative input
   the way `:107-117` already refuses the declarative output, and refuse it before the first timestep rather
   than after the last, so the run fails with an explanation and no wasted simulation.
+
+**Answered 2026-09-18 by a third option: the writer retires.** Asked which of the two fixes to take, the owner
+asked first whether the scenario JSON is needed at all, and it is not. Its *reader* — `hisim/json_executor.py`
+and every `system_setups/*.scenario.json` — went in #708, when energy-system files became the only declarative
+input, so nothing has been able to run a file this writer produced since; nothing in the repository reads one
+either, and the owner confirmed that nothing outside it does. So `hisim/json_generator.py` moved to
+`obsolete/json_generator.py` under D-16's rule, with the two post-processing options that called it
+(`WRITE_COMPONENT_CONFIGS_TO_JSON`, `WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON`), the three test functions
+that pinned it, and `pyhumps`, its only user.
+
+Two things the entry above had wrong, both found while doing it. The blast radius was **wider**:
+`prepare_results_for_scenario_evaluation` ends by calling the writer unconditionally, so
+`PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION` — the option the eleven building sizers select — reached the same
+crash on any declarative run, while the entry says that option does not touch the generator. A one-day
+gas-boiler run with it exits 1 before the retirement and 0 after. And the run's *description* turns out to
+have had exactly one consumer, this writer, so it now reaches nothing at all: see F-24.
 
 
 ---
@@ -850,3 +866,22 @@ both an emitter controller and an electric heater, which no shipped setup does. 
 one appears: a law that reads the fact when a provider exists and falls back to the step table
 otherwise (new kernel semantics), or an emitter-less system stating the threshold as a plain
 override. Recorded; not a B8 change.
+
+### F-24 — a run carries a description nothing reads **[reported]**
+
+Found on 2026-09-18 while retiring the scenario JSON (F-9). A run's one-line description travels a long way:
+the Python entry point takes it from the first line of the setup file, a declarative run takes it from the
+energy-system file's `description` field, `Simulator.description` carries it, `PostProcessingDataTransfer`
+carries it — and its single consumer was the `description` field of `scenario.json`, which no longer exists.
+Nothing reads it now.
+
+The `description` of the *file* is not in question: it documents the system for whoever opens the file, the
+recorder writes it and the loader reads it back, and that is a good reason for it to exist. What has no reader
+is the copy the run object carries. Three honest ways out: drop the run-side chain and leave the field to the
+file (smallest, and it takes `hisim_main`'s docstring-scraping block with it); give it a consumer, the obvious
+one being the PDF report, which today prints no description of the run it reports on; or leave it and say so,
+which is what this entry does for now.
+
+The scenario *name* is in a similar position but not the same one: its one remaining consumer, the `scenario`
+column of the pyam export, is live, and the eleven building sizers write their scenario hash into it.
+

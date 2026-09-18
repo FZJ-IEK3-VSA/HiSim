@@ -76,9 +76,8 @@ def region_of(ppdt: PostProcessingDataTransfer) -> str:
     """Return the region the run is reported under: the locations its Weathers are configured for.
 
     The region is report metadata only -- the ``region`` field of the pyam export written by
-    ``prepare_results_for_scenario_evaluation`` and of the scenario-evaluation config JSON written
-    by ``write_config_data_for_scenario_evaluation``. It is read off the run's own components
-    rather than a process-wide global, so both writers share one answer and cannot drift apart.
+    ``prepare_results_for_scenario_evaluation``. It is read off the run's own components rather
+    than a process-wide global, so the answer does not depend on what else the run did.
 
     A run without a Weather has no region and gets ``""``. A run with one Weather is reported under
     that Weather's configured location. A run with several -- a district drawing on more than one
@@ -224,7 +223,6 @@ class PostProcessor:
                 PostProcessingOptions.COMPUTE_KPIS,
                 PostProcessingOptions.COMPUTE_OPEX,
                 PostProcessingOptions.COMPUTE_CAPEX,
-                PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON,
                 PostProcessingOptions.WRITE_KPIS_TO_JSON,
                 PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER,
             }
@@ -467,14 +465,6 @@ class PostProcessor:
         if PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER in ppdt.post_processing_options:
             log.information("Opening the explorer.")
             self.open_dir_in_file_explorer(ppdt)
-
-        if PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON in ppdt.post_processing_options:
-            log.information("Writing component configurations to JSON file.")
-            self.write_component_configurations_to_json(ppdt, my_sim=simulator)
-
-        if PostProcessingOptions.WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON in ppdt.post_processing_options:
-            log.information("Writing component configurations for scenario evaluation to JSON file.")
-            self.write_config_data_for_scenario_evaluation(ppdt, my_sim=simulator)
 
         if PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER in ppdt.post_processing_options:
             log.information("Writing KPIs to JSON file for building sizer.")
@@ -1070,79 +1060,6 @@ class PostProcessor:
             time_resolution_of_data="yearly",
             simulation_duration=ppdt.simulation_parameters.duration.days,
         )
-
-        self.write_config_data_for_scenario_evaluation(ppdt, my_sim)
-
-    def write_config_data_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:
-        """Prepare the results for the scenario evaluation."""
-        # create dictionary with all import data information
-
-        if PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION in ppdt.post_processing_options:
-            result_data_folder_for_scenario_evaluation = os.path.join(
-                ppdt.simulation_parameters.result_directory, "result_data_for_scenario_evaluation"
-            )
-            if os.path.exists(result_data_folder_for_scenario_evaluation) is False:
-                os.makedirs(result_data_folder_for_scenario_evaluation)
-        else:
-            result_data_folder_for_scenario_evaluation = ppdt.simulation_parameters.result_directory
-
-        self.model = "".join(["HiSim_", ppdt.module_filename])
-
-        # set pyam scenario name
-        self.scenario = ppdt.scenario_name
-
-        # set region
-        self.region = region_of(ppdt)
-
-        # set year or timeseries
-        self.year = ppdt.simulation_parameters.year
-
-        # Write the two new JSON configuration files
-        # Here, the my_sim could be replace by ppdt.simulation_parameters
-        write_standalone_simulation_json = _load_attribute(
-            "hisim.json_generator",
-            "write_standalone_simulation_json",
-        )
-        write_standalone_scenario_json = _load_attribute(
-            "hisim.json_generator",
-            "write_standalone_scenario_json",
-        )
-        write_standalone_simulation_json(my_sim, path=os.path.join(result_data_folder_for_scenario_evaluation, "simulation.json"))
-
-        # Here, the my_sim could maybe be replaced by an altered ppdt
-        write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=ppdt.description,
-                                       path=os.path.join(result_data_folder_for_scenario_evaluation, "scenario.json"),
-                                       scenario_name=ppdt.scenario_name)
-
-    def write_component_configurations_to_json(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:
-        """Collect all component configurations and write into JSON file in result directory.
-
-        The run's name and description are read off the transfer object here rather than off
-        ``self``, because this option is selected independently of the scenario-evaluation one:
-        a run asking only for the component configurations would otherwise write an anonymous,
-        undescribed ``scenario.json``, the two attributes still holding their empty defaults.
-
-        Args:
-            ppdt: The finished run, for its results directory and its metadata.
-            my_sim: The simulator whose components and connections are written out.
-        """
-
-        write_standalone_simulation_json = _load_attribute(
-            "hisim.json_generator",
-            "write_standalone_simulation_json",
-        )
-        write_standalone_scenario_json = _load_attribute(
-            "hisim.json_generator",
-            "write_standalone_scenario_json",
-        )
-        write_standalone_simulation_json(my_sim, path=os.path.join(
-            ppdt.simulation_parameters.result_directory,
-            "simulation.json",
-        ))
-        write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=ppdt.description, path=os.path.join(
-            ppdt.simulation_parameters.result_directory,
-            "scenario.json",
-        ), scenario_name=ppdt.scenario_name)
 
     def write_kpis_in_dict(
         self,

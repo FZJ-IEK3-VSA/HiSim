@@ -441,19 +441,7 @@ def test_postprocessing_option_prepare_outputs_for_scenario_evaluation(
             "result_data_for_scenario_evaluation/daily_*_days.csv",
             "result_data_for_scenario_evaluation/monthly_*_days.csv",
             "result_data_for_scenario_evaluation/yearly_*_days.csv",
-            "result_data_for_scenario_evaluation/scenario.json",
-            "result_data_for_scenario_evaluation/simulation.json",
         ],
-    )
-
-
-def test_postprocessing_option_write_component_configs_to_json(
-    postprocessing_option_framework: PostProcessingOptionTestFramework,
-) -> None:
-    """Test that PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON produces scenario and simulation JSON files."""
-    postprocessing_option_framework.run(
-        PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON,
-        expected_files=["scenario.json", "simulation.json"],
     )
 
 
@@ -477,16 +465,6 @@ def test_postprocessing_option_write_kpis_to_json(
 def test_postprocessing_option_export_to_pkl(postprocessing_option_framework: PostProcessingOptionTestFramework) -> None:
     """Test that PostProcessingOptions.EXPORT_TO_PKL produces pickled result files."""
     postprocessing_option_framework.run(PostProcessingOptions.EXPORT_TO_PKL, expected_files=["*.pkl"])
-
-
-def test_postprocessing_option_write_configs_for_scenario_evaluation_to_json(
-    postprocessing_option_framework: PostProcessingOptionTestFramework,
-) -> None:
-    """Test that PostProcessingOptions.WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON produces scenario and simulation JSON files."""
-    postprocessing_option_framework.run(
-        PostProcessingOptions.WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON,
-        expected_files=["scenario.json", "simulation.json"],
-    )
 
 
 def test_postprocessing_option_export_monthly_results(

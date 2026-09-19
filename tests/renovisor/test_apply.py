@@ -257,7 +257,7 @@ class TestInsulationLayers:
 
         note = applied.element_note(applied.layers[0].element)
         assert note is not None
-        assert "1/(1/1.1 + 0.12/0.0355)" in note
+        assert "1/(1/1.78 + 0.12/0.0355)" in note
 
 
 @pytest.mark.base

@@ -276,6 +276,16 @@ def test_the_shipped_catalogue_directory_is_where_step_six_b_will_write(tmp_path
 
 
 def test_the_map_pane_describes_every_cost_field() -> None:
-    """A field added to the payload without a row on the translation map is a failing build."""
+    """A field added to the payload without a row on the translation map is a failing build.
+
+    The rows cover every ``CostField`` and one leaf beyond them: the envelope half of the
+    investment breakdown is absent on its own, with its own entry in ``result.json["missing"]``,
+    so it has its own row.
+    """
     described: Tuple[str, ...] = tuple(row.field for row in CostSchema.rows())
-    assert set(described) == {field.value for field in CostField}
+
+    assert {field.value for field in CostField} <= set(described)
+    assert set(described) - {field.value for field in CostField} == {
+        f"{CostField.INVESTMENT_BREAKDOWN.value}.{CostBuilder.ENVELOPE_KEY}"
+    }
+    assert {row.block for row in CostSchema.rows()} == {CostBuilder.MISSING_PREFIX}

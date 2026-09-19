@@ -6,14 +6,13 @@ and a package. Each has to exit 0 and leave every file of §2.2 behind, the pack
 the building's heating demand, and the payload has to carry its values with their provenance and
 name the fields it could not fill.
 
-One blocker is written down here rather than hidden. The mockup's package installs
-``heating_installation: low_temperature_radiator``, and the lifecycle cost engine has no cost
-database row for that emitter (``hisim/economics/adapter.py`` ``_hds_facts`` returns ``None``
-for it on purpose, with its own test). Decision D7 of the cost specification aborts the whole
-evaluation on an unresolvable subject, so such a run ends at exit 5 with nothing written. The
-package this test runs therefore asks for ``surface_heating``, which is a heat pump's other
-natural emitter and is priced; :class:`TestTheLowTemperatureRadiatorBlocker` pins the gap so
-that the day a row is added, this file is what says the workaround can go.
+The package is the vendored mockup **verbatim**, low-temperature radiator and all. The
+lifecycle cost engine still has no cost database row for that emitter
+(``hisim/economics/adapter.py`` ``_hds_facts`` returns ``None`` for it on purpose, with its own
+test) and decision D7 of the cost specification aborts a whole evaluation on an unresolvable
+subject -- so the translator writes surface heating for it and reports the substitution, per
+the step 8 addendum. :class:`TestTheLowTemperatureRadiatorBlocker` points at the cost adapter
+rather than at a run, so the day a row is added it fails and the substitution can go.
 """
 
 import copy
@@ -26,6 +25,9 @@ import pytest
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.run import Calculation, ExitCode, Outputs
 from hisim.renovisor.simulation import Period
+from hisim.renovisor.translate import EmitterSubstitution
+from hisim.renovisor.vocabulary import HeatDistributionType
+from hisim.renovisor.whitelist import Whitelist
 
 BASE_FILES = Path(__file__).resolve().parents[1] / "energy_systems"
 
@@ -59,12 +61,14 @@ def bare_document() -> Dict[str, Any]:
 
 
 def package_document() -> Dict[str, Any]:
-    """Return the mockup's package with the emitter the cost engine can price."""
-    document = copy.deepcopy(ContractFiles.request_mockup())
-    for measure in document["measures"]:
-        if measure["id"] == "heating_installation":
-            measure["options"]["type_of_system"] = "surface_heating"
-    return document
+    """Return the vendored mockup verbatim: its five-measure package, nothing edited.
+
+    Nothing is edited any more. The mockup asks for ``heating_installation:
+    low_temperature_radiator``, which the translator writes as surface heating and reports as
+    ``not_implemented_yet`` with its sentence, so the one example both sides of the contract
+    point at is the one that runs here.
+    """
+    return copy.deepcopy(ContractFiles.request_mockup())
 
 
 def run(document: Dict[str, Any], directory: Path, name: str) -> ExitCode:
@@ -189,22 +193,75 @@ class TestTheResultPayload:
         assert payload["period"]["start"].startswith("2019-01-01")
 
 
-@pytest.mark.system_setups
+@pytest.mark.base
 class TestTheLowTemperatureRadiatorBlocker:
     """A pinned gap: the cost engine has no price for a low-temperature radiator.
 
     ``hisim/economics/adapter.py`` declines to price the emitter and decision D7 of the cost
-    specification aborts the whole evaluation on an unresolvable subject, so the mockup's own
-    package -- which installs exactly that emitter, as a heat-pump retrofit naturally would --
-    cannot complete. It is not a translator fault and the translator must not hide it: the run
-    ends at exit 5 with the engine's reason on standard error.
+    specification aborts the whole evaluation on an unresolvable subject, so a package installing
+    exactly that emitter -- as a heat-pump retrofit naturally would -- could not complete at all.
+    The translator therefore writes surface heating for it and says so, which is a stated
+    approximation rather than a hidden one.
 
-    The day the cost database gains a row for ``HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR``,
-    this test fails, and that is the signal to run the vendored mockup verbatim again.
+    This test points at the reason rather than at the workaround: the day the cost database gains
+    a row for ``HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR`` the adapter stops returning
+    ``None``, this fails, and the substitution together with its two whitelist entries can go --
+    T-NIY will demand it, because nothing will reach them any more.
     """
 
-    def test_the_vendored_mockup_verbatim_still_ends_at_the_cost_engine(self, tmp_path: Path) -> None:
-        """Written down so the workaround above has a stated reason and an expiry."""
-        document = copy.deepcopy(ContractFiles.request_mockup())
+    def test_the_cost_adapter_still_has_no_row_for_the_emitter(self) -> None:
+        """The whole reason the substitution exists, asserted where the reason lives."""
+        from hisim.components.heat_distribution_system import HeatDistributionSystemType
+        from hisim.economics.adapter import FactsExtractors
 
-        assert run(document, tmp_path, "verbatim") == ExitCode.SIMULATION_ERROR
+        extractor = FactsExtractors.BY_CLASS_NAME["HeatDistribution"]
+
+        assert extractor(_emitter_config(HeatDistributionSystemType.LOW_TEMPERATURE_RADIATOR)) is None
+        assert extractor(_emitter_config(HeatDistributionSystemType.FLOORHEATING)) is not None
+
+    def test_the_translator_writes_the_priced_emitter_and_reports_the_substitution(self) -> None:
+        """Written into the file as floor heating, into the report as the value that was asked."""
+        assert (
+            EmitterSubstitution.written_as(HeatDistributionType.LOW_TEMPERATURE_RADIATOR)
+            is HeatDistributionType.SURFACE_HEATING
+        )
+        assert EmitterSubstitution.written_as(
+            HeatDistributionType.LOW_TEMPERATURE_RADIATOR
+        ).hisim_member.name == "FLOORHEATING"
+        assert EmitterSubstitution.is_substituted(HeatDistributionType.CONVENTIONAL_RADIATOR) is False
+
+    def test_the_two_whitelist_entries_carry_the_reason(self) -> None:
+        """A user reads the sentence, so the sentence is what the list is checked on."""
+        notes = {
+            entry.item: entry.note
+            for entry in Whitelist.load().entries()
+            if entry.item
+            in ("house.heat_distribution.type_of_system", "heating_installation.type_of_system")
+            or entry.item.startswith("heating_installation.type_of_system=")
+        }
+        sentence = notes["heating_installation.type_of_system=low_temperature_radiator"]
+
+        assert "no cost row" in sentence.lower()
+        assert "modelled as surface heating" in sentence.lower()
+
+
+def _emitter_config(emitter: Any) -> Any:
+    """Return the smallest object the cost adapter's heat-distribution extractor reads.
+
+    The extractor reads two attributes off a component config and nothing else, so a stand-in
+    carrying those two is enough and keeps the test free of a component import chain.
+
+    Args:
+        emitter: The ``HeatDistributionSystemType`` member the config declares.
+
+    Returns:
+        An object with ``heating_system`` and ``absolute_conditioned_floor_area_in_m2``.
+    """
+
+    class _Config:  # pylint: disable=too-few-public-methods
+        """A config stand-in with the two fields the extractor reads."""
+
+        heating_system = emitter
+        absolute_conditioned_floor_area_in_m2 = 140.0
+
+    return _Config()

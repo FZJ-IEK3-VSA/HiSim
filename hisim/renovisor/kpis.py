@@ -428,6 +428,11 @@ class KpiBuilder:
         f"no BER/DEAP procedure in HiSim; no letter is invented ({ContractExamples.DECISION})"
     )
 
+    #: Why there is no embodied-carbon figure when the package adds no insulation. Decision R8
+    #: forbids the plausible zero, and a building that was not insulated has no embodied carbon
+    #: to report rather than none of it.
+    EMBODIED_CO2_ABSENT_REASON: ClassVar[str] = "the package adds no insulation layer (R8)"
+
     #: The two leaves of the contract's nested ``comfort`` object.
     COMFORT_LEAVES: ClassVar[Tuple[str, ...]] = ("heating", "cooling")
 
@@ -623,7 +628,7 @@ class KpiBuilder:
             The provenance object, or ``None`` when the field is absent.
         """
         if self._layers.is_empty():
-            self._absent(KpiField.EMBODIED_CO2, "the package adds no insulation layer (R8)")
+            self._absent(KpiField.EMBODIED_CO2, self.EMBODIED_CO2_ABSENT_REASON)
             return None
         unresolved = self._layers.unresolved()
         if unresolved:
@@ -693,37 +698,118 @@ class KpiBuilder:
 
 @dataclass(frozen=True)
 class PayloadFieldRow:
-    """One row of the payload's published shape: a field, its source and its expected provenance.
+    """One field ``result.json`` can carry: where its number comes from and what it will be.
 
-    The translation map is generated offline, with no simulation and therefore no ``result.json``
-    to show. What it can show is the *shape* the frontend will receive: every field the payload
-    can carry, where its number comes from, and whether that number will be a simulation result, a
-    constant or a partly-estimated figure. That is what a frontend team needs before the first
-    real payload exists, and what a reviewer needs to see the mocked fields without reading code.
+    Two readers need this before the first real payload exists. The translation map is generated
+    offline, with no simulation and therefore no ``result.json`` to show, and the capability
+    document's ``results`` section is the same statement served to the frontend over
+    ``GET /measures``: every field the payload can carry, the source its number is read from, and
+    whether that number will be a simulation result, a constant, a partly-estimated figure, or
+    nothing at all. Both are generated from these rows rather than from a second hand-kept list,
+    so a field added to the payload without a row here is a failing build.
+
+    A row says one of two things. Either the field is published, and then it carries the
+    provenance it is published with and the conditions that change it; or it is never published,
+    and then it carries the sentence ``result.json["missing"]`` states instead. A field that is
+    published *sometimes* carries both: its provenance, and the reason and the condition of its
+    absence (embodied carbon is the one such field today).
 
     Args:
-        field: The field's name in the payload block.
-        source: Where its value comes from, in one phrase.
-        provenance: The provenance it is published with, or the phrase saying it is absent.
+        block: Which block of ``result.json`` the field sits in -- ``kpis`` or ``costs``, the
+            same prefix its ``missing`` entry carries.
+        field: The field's name inside that block.
+        source: Where its value comes from, in one phrase; empty for a field that is never
+            published and therefore has no source to name.
+        provenance: The provenance it is published with, or ``None`` when no run fills it in.
+        conditions: The circumstances that change the published provenance, one sentence each.
+        reason: The sentence ``result.json["missing"]`` carries when the field is absent, or
+            ``None`` when it never is.
+        when: When the field is absent, in one phrase, or ``None`` when it never is.
     """
 
+    #: The word the ``provenance`` key carries for a field no run publishes.
+    ABSENT: ClassVar[str] = "absent"
+
+    #: What joins the provenance and its conditions in :meth:`describe`.
+    DESCRIPTION_SEPARATOR: ClassVar[str] = "; "
+
+    block: str
     field: str
     source: str
-    provenance: str
+    provenance: Optional[Provenance] = None
+    conditions: Tuple[str, ...] = ()
+    reason: Optional[str] = None
+    when: Optional[str] = None
+
+    def path(self) -> str:
+        """Return the field's dotted path in the payload, e.g. ``kpis.energy_label``."""
+        return f"{self.block}.{self.field}"
+
+    def published(self) -> str:
+        """Return the provenance word: one of the three, or :attr:`ABSENT`."""
+        return self.provenance.value if self.provenance is not None else self.ABSENT
+
+    def describe(self) -> str:
+        """Return the provenance with its conditions as one phrase, for a page a person reads.
+
+        Returns:
+            The provenance word, then every condition and, when the field can be absent, the
+            circumstance it is absent under, joined by :attr:`DESCRIPTION_SEPARATOR`.
+        """
+        parts = [self.published(), *self.conditions]
+        if self.when is not None:
+            parts.append(self.when)
+        return self.DESCRIPTION_SEPARATOR.join(parts)
+
+    def to_json(self) -> Dict[str, Any]:
+        """Return one entry of the capability document's ``results`` section.
+
+        Returns:
+            ``{"field", "provenance"}`` always, plus ``"source"``, ``"conditions"``, ``"reason"``
+            and ``"when"`` where this row has them. The shape is the one
+            ``measure-capabilities.results-extension.yaml`` declares.
+        """
+        entry: Dict[str, Any] = {"field": self.path(), "provenance": self.published()}
+        if self.source:
+            entry["source"] = self.source
+        if self.conditions:
+            entry["conditions"] = list(self.conditions)
+        if self.reason is not None:
+            entry["reason"] = self.reason
+        if self.when is not None:
+            entry["when"] = self.when
+        return entry
 
 
 class KpiSchema:
     """The published shape of the ``kpis`` block, without running anything.
 
     The rows restate, in one phrase each, what :class:`KpiBuilder` does -- deliberately, because
-    the map's audience is a frontend developer reading a page rather than a Python method. The
-    unit test asserts that every :class:`KpiField` has a row, so a field added to the payload
-    without a row on the map is a failing build.
+    the audience is a frontend developer reading a page or a JSON document rather than a Python
+    method. Every phrase is built from :class:`KpiSources` and from the builder's own reason
+    constants, so the two cannot drift apart silently, and the unit test asserts that every
+    :class:`KpiField` has a row.
     """
 
-    #: The provenance an annual figure carries when the run covers less than a full year, which is
-    #: every run of the one-day pair the examples use.
-    SCALED_PROVENANCE: ClassVar[str] = "SIMULATED over a full year, PARTIAL and scaled otherwise"
+    #: Which block of ``result.json`` these rows describe; the prefix their ``missing`` entries
+    #: carry, so the two documents address one field by one path.
+    BLOCK: ClassVar[str] = KpiBuilder.MISSING_PREFIX
+
+    #: What an annual figure does when the run is shorter than a year, which is every run of the
+    #: one-day pair the examples use.
+    SCALED_CONDITION: ClassVar[str] = (
+        "PARTIAL when the period is shorter than a year, and the annual figure is scaled from it"
+    )
+
+    #: When the embodied-carbon figure is absent instead of published. A partial sum over some of
+    #: a building's insulation would read as the whole building's carbon, so it is all or nothing.
+    EMBODIED_CO2_WHEN: ClassVar[str] = (
+        "absent when the package insulates nothing, or when a layer's element area or its "
+        "material's CO2 footprint is unknown"
+    )
+
+    #: The energy label's one condition: the field exists and its value is always null.
+    ENERGY_LABEL_CONDITION: ClassVar[str] = "the value is always null; no letter is invented"
 
     @classmethod
     def rows(cls) -> Tuple[PayloadFieldRow, ...]:
@@ -731,54 +817,69 @@ class KpiSchema:
         mocked = f"{ContractFiles.OPENAPI_FILENAME} Kpis.{{}} examples[0]"
         return (
             PayloadFieldRow(
+                cls.BLOCK,
                 KpiField.ENERGY_DEMAND.value,
                 f"all_kpis.json '{KpiSources.ENERGY_DEMAND_NAME}' (energy bought, Q22)",
-                cls.SCALED_PROVENANCE,
+                Provenance.SIMULATED,
+                conditions=(cls.SCALED_CONDITION,),
             ),
             PayloadFieldRow(
+                cls.BLOCK,
                 KpiField.EMISSIONS.value,
                 f"{LifecycleCo2.FILE_NAME} {LifecycleCo2.PERSPECTIVE_ID}.{LifecycleCo2.BLOCK} "
                 "(operational CO2 per year, the cost engine's own country factors, Q22)",
-                cls.SCALED_PROVENANCE,
+                Provenance.SIMULATED,
+                conditions=(cls.SCALED_CONDITION,),
             ),
             PayloadFieldRow(
+                cls.BLOCK,
                 KpiField.SELF_SUFFICIENCY.value,
                 f"all_kpis.json '{KpiSources.SELF_SUFFICIENCY_NAME}' (a rate, never scaled)",
-                Provenance.SIMULATED.value,
+                Provenance.SIMULATED,
             ),
             PayloadFieldRow(
+                cls.BLOCK,
                 KpiField.EMBODIED_CO2.value,
                 "the request material's co2_footprint_a1_a3_c3_c4_kg_m2 x element area",
-                f"{Provenance.SIMULATED.value}; absent when the package insulates nothing",
+                Provenance.SIMULATED,
+                reason=KpiBuilder.EMBODIED_CO2_ABSENT_REASON,
+                when=cls.EMBODIED_CO2_WHEN,
             ),
             PayloadFieldRow(
+                cls.BLOCK,
                 KpiField.ENERGY_LABEL.value,
-                "no BER/DEAP procedure in HiSim",
-                f"{Provenance.MOCKED.value}, value null",
+                KpiBuilder.ENERGY_LABEL_REASON,
+                Provenance.MOCKED,
+                conditions=(cls.ENERGY_LABEL_CONDITION,),
             ),
             PayloadFieldRow(
+                cls.BLOCK,
                 KpiField.DISRUPTION_DAYS.value,
                 mocked.format(KpiField.DISRUPTION_DAYS.value),
-                Provenance.MOCKED.value,
+                Provenance.MOCKED,
             ),
             PayloadFieldRow(
+                cls.BLOCK,
                 KpiField.INDOOR_AIR_QUALITY.value,
                 mocked.format(KpiField.INDOOR_AIR_QUALITY.value),
-                Provenance.MOCKED.value,
+                Provenance.MOCKED,
             ),
             PayloadFieldRow(
+                cls.BLOCK,
                 KpiField.THERMAL_INSULATION_EFFECT.value,
                 mocked.format(KpiField.THERMAL_INSULATION_EFFECT.value),
-                Provenance.MOCKED.value,
+                Provenance.MOCKED,
             ),
             PayloadFieldRow(
+                cls.BLOCK,
                 KpiField.SUMMER_HEAT_PROTECTION.value,
                 mocked.format(KpiField.SUMMER_HEAT_PROTECTION.value),
-                Provenance.MOCKED.value,
+                Provenance.MOCKED,
             ),
             PayloadFieldRow(
+                cls.BLOCK,
                 KpiField.COMFORT.value,
                 mocked.format("comfort.heating") + " and comfort.cooling",
-                Provenance.MOCKED.value,
+                Provenance.MOCKED,
             ),
         )

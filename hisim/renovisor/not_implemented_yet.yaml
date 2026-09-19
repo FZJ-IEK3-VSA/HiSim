@@ -101,6 +101,16 @@
   when: heating.type_of_system == electric_heating
   note: Electric heating has no heat distribution system.
 
+# The emitter itself is modelled -- HiSim has a LOW_TEMPERATURE_RADIATOR member -- but the cost
+# database has no row for it, and an unpriced subject aborts the whole lifecycle evaluation
+# (cost specification D7, `hisim/economics/adapter.py` `_hds_facts`). So the translator writes
+# floor heating instead, which is the heat pump's other low-temperature emitter and is priced.
+- path: house.heat_distribution.type_of_system
+  except: [surface_heating, conventional_radiator]
+  note: No cost row for a low-temperature radiator in the cost database yet; modelled as surface
+    heating (floor heating), the heat pump's other low-temperature emitter.
+  tracked: hisim/economics/adapter.py _hds_facts (no HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR row)
+
 - path: house.hot_water.supply
   except: [together_with_heating_system]
   when: heating.type_of_system != air_source_heat_pump
@@ -163,6 +173,11 @@
 
 - measure: heating_system.type_of_system=condensing_lpg_heating
   note: No LPG fuel in HiSim; modelled as gas.
+
+- measure: heating_installation.type_of_system=low_temperature_radiator
+  note: No cost row for a low-temperature radiator in the cost database yet; modelled as surface
+    heating (floor heating), the heat pump's other low-temperature emitter.
+  tracked: hisim/economics/adapter.py _hds_facts (no HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR row)
 
 - measure: heating_system.installation_year
   note: No HiSim parameter for the age of a new generator.

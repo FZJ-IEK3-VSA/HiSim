@@ -18,6 +18,11 @@ item whose note says it is *modelled as* something else is a **substitution**, a
 no model at all is a **gap**. The frontend hides the first class and may offer the second with
 its note, so the page marks them differently and the capability document carries the same
 ``substitution`` flag.
+
+The page carries one more table than the capability document's measure and field sections: the
+**result payload**, which is the document's own ``results`` section printed -- every field
+``result.json`` can carry, where its number comes from and whether it will be a simulation
+result, a constant, a partly-estimated figure or nothing at all.
 """
 
 import html
@@ -66,6 +71,54 @@ class MapPalette:
         """Return the inline style of one palette key."""
         background, foreground, _ = cls.BY_STATUS.get(key, ("#eee", "#333", ""))
         return f"background:{background};color:{foreground}"
+
+
+class ResultsPane:
+    """How the capability document's ``results`` section is read onto the page.
+
+    The section is data -- ``{"kpis": [...], "costs": [...]}``, each entry a field of
+    ``result.json`` with its provenance -- and this is the one place that says how it is
+    coloured and how an entry's conditions, reason and circumstance become the one cell a reader
+    sees. Nothing here recomputes anything: the page prints what the document already says.
+    """
+
+    #: The key the KPI half of the section sits under; the payload block's own name.
+    KPIS_KEY: ClassVar[str] = "kpis"
+
+    #: The key the cost half sits under.
+    COSTS_KEY: ClassVar[str] = "costs"
+
+    #: Which palette key each provenance borrows its colour from. A simulated figure is green
+    #: like a mapped field, a partly-estimated one amber like an approximation, a constant blue
+    #: like a defaulted value and an absent field red like a gap, so one legend serves the page.
+    PALETTE_KEYS: ClassVar[Dict[str, str]] = {
+        "SIMULATED": "supported",
+        "PARTIAL": "approximated",
+        "MOCKED": "defaulted",
+        "absent": "not_implemented_yet",
+    }
+
+    @classmethod
+    def conditions(cls, entry: Mapping[str, Any]) -> str:
+        """Return the conditions cell of one result row.
+
+        Args:
+            entry: One entry of the document's ``results`` section.
+
+        Returns:
+            A list item per condition, then the circumstance the field is absent under and the
+            sentence the payload's ``missing`` entry carries, or a middle dot when the field has
+            none of them.
+        """
+        items = [str(condition) for condition in entry.get("conditions") or ()]
+        if entry.get("when"):
+            items.append(str(entry["when"]))
+        if entry.get("reason"):
+            items.append(f"missing: {entry['reason']}")
+        if not items:
+            return "&middot;"
+        rendered = "".join(f"<li>{html.escape(item)}</li>" for item in items)
+        return f"<ul>{rendered}</ul>"
 
 
 @dataclass(frozen=True)
@@ -143,6 +196,7 @@ class TranslationMap:
             cls._legend(),
             cls._measures(document.body["measures"]),
             cls._fields(document.body["fields"]),
+            cls._results(document.body["results"]),
             cls._trace(trace),
             "</body></html>",
             "",
@@ -277,6 +331,43 @@ class TranslationMap:
             )
         rows.append("</table>")
         return "".join(rows)
+
+    @classmethod
+    def _results(cls, results: Mapping[str, Sequence[Mapping[str, Any]]]) -> str:
+        """Return the result pane: every field ``result.json`` can carry and what it will be.
+
+        The two halves of the payload, one table each, straight out of the capability document's
+        own ``results`` section -- which is generated from the tables the payload is built from,
+        so the page cannot promise a field the payload does not carry.
+        """
+        parts: List[str] = [
+            "<h2>Result payload</h2>",
+            '<p class="meta">What one finished calculation answers with: every field of '
+            "<code>result.json</code>, the source its number is read from, and what the number "
+            "will be. A field with provenance <code>absent</code> is not published at all and "
+            "says why.</p>",
+        ]
+        for block in (ResultsPane.KPIS_KEY, ResultsPane.COSTS_KEY):
+            parts.append(f"<h3>{html.escape(block)}</h3>")
+            parts.append(
+                "<table><tr><th>field</th><th>provenance</th><th>source</th>"
+                "<th>conditions</th></tr>"
+            )
+            for entry in results.get(block, ()):
+                parts.append(
+                    f"<tr><td><code>{html.escape(str(entry['field']))}</code></td>"
+                    f"<td>{cls._provenance(str(entry['provenance']))}</td>"
+                    f"<td>{html.escape(str(entry.get('source') or '')) or '&middot;'}</td>"
+                    f"<td>{ResultsPane.conditions(entry)}</td></tr>"
+                )
+            parts.append("</table>")
+        return "".join(parts)
+
+    @classmethod
+    def _provenance(cls, provenance: str) -> str:
+        """Return one provenance badge, coloured like the status it corresponds to."""
+        key = ResultsPane.PALETTE_KEYS.get(provenance, "approximated")
+        return f'<span class="s" style="{MapPalette.style(key)}">{html.escape(provenance)}</span>'
 
     @classmethod
     def _trace(cls, trace: TraceExample) -> str:

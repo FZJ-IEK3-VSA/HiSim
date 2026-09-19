@@ -766,69 +766,142 @@ class CostSchema:
     """The published shape of the ``costs`` block, without running anything.
 
     The counterpart of :class:`hisim.renovisor.kpis.KpiSchema` for the money half of the payload,
-    and the same contract: one row per :class:`CostField`, each saying where the figure comes from
-    and what provenance it carries, so the translation map can show the frontend what will arrive
-    before the first payload exists. The three fields that are always absent carry their reason in
-    place of a provenance, because that is the honest answer to "what will I get here".
+    and the same contract: one row per :class:`CostField`, each saying where the figure comes
+    from and what provenance it carries, so the translation map and the capability document's
+    ``results`` section can show the frontend what will arrive before the first payload exists.
+    The four figures that are always absent carry the sentence ``result.json["missing"]`` states
+    in place of a provenance, because that is the honest answer to "what will I get here".
     """
+
+    #: Which block of ``result.json`` these rows describe; the prefix their ``missing`` entries
+    #: carry.
+    BLOCK: ClassVar[str] = CostBuilder.MISSING_PREFIX
+
+    #: The country the shipped catalogue directory has no file for, which is what makes the
+    #: grant absent. Named here so the row's reason is the sentence the payload writes.
+    UNSUPPORTED_SUBSIDY_COUNTRY: ClassVar[str] = "IE"
+
+    #: When the grant is absent: until the country's own subsidy catalogue is written.
+    GRANT_WHEN: ClassVar[str] = (
+        f"absent until subsidy_catalog/{UNSUPPORTED_SUBSIDY_COUNTRY}.json exists (Q24, step 6b)"
+    )
+
+    #: When the payback period is absent: until a second run of the same dwelling exists.
+    PAYBACK_WHEN: ClassVar[str] = "absent until a compare entry point runs the base calculation too"
+
+    #: When the property-value figure is absent: always; decision A13 records that no model exists.
+    PROPERTY_VALUE_WHEN: ClassVar[str] = "always absent (A13)"
+
+    #: When the envelope half of the investment is absent: always, until the request carries a
+    #: material price.
+    ENVELOPE_WHEN: ClassVar[str] = (
+        "always absent until the request schema carries a material price (D-A)"
+    )
+
+    #: What the two banded investment figures say about their own basis.
+    PRICE_BASIS_CONDITION: ClassVar[str] = (
+        f"PARTIAL always: {CostSources.PRICE_BASIS_NOTE}"
+    )
+
+    #: What the whole investment figure is short of while the envelope half is absent.
+    INVESTMENT_CONDITION: ClassVar[str] = (
+        "the envelope material half is absent, so the figure is the devices alone"
+    )
 
     @classmethod
     def rows(cls) -> Tuple[PayloadFieldRow, ...]:
-        """Return one row per field of the ``costs`` block, in payload order."""
+        """Return one row per field of the ``costs`` block, in payload order.
+
+        Returns:
+            One row per :class:`CostField`, plus one for the ``envelope_material`` leaf of the
+            investment breakdown, which is a field of its own in ``result.json["missing"]``.
+        """
         engine = f"lifecycle cost engine under '{CostSources.PERSPECTIVE_ID}'"
         return (
             PayloadFieldRow(
+                cls.BLOCK,
                 CostField.INVESTMENT.value,
-                f"{engine}: year-0 {CostSources.INVESTMENT_CATEGORY} entries, plus the envelope "
-                "no envelope material cost: the request carries the material's physics, not its price",
-                f"{Provenance.PARTIAL.value}: device prices are AI estimates, the envelope is "
-                "material only",
+                f"{engine}: year-{CostSources.INVESTMENT_YEAR} "
+                f"{CostSources.INVESTMENT_CATEGORY} entries, plus the envelope material cost",
+                Provenance.PARTIAL,
+                conditions=(cls.PRICE_BASIS_CONDITION, cls.INVESTMENT_CONDITION),
             ),
             PayloadFieldRow(
+                cls.BLOCK,
                 CostField.ENERGY.value,
-                f"{engine}: year-1 nominal {', '.join(CostSources.ENERGY_CATEGORIES)}",
-                f"{Provenance.PARTIAL.value}: Irish energy prices are AI estimates",
+                f"{engine}: year-{CostSources.FIRST_BILLED_YEAR} nominal "
+                f"{', '.join(CostSources.ENERGY_CATEGORIES)}",
+                Provenance.PARTIAL,
+                conditions=(cls.PRICE_BASIS_CONDITION,),
             ),
             PayloadFieldRow(
+                cls.BLOCK,
                 CostField.MAINTENANCE.value,
-                f"{engine}: year-1 nominal {CostSources.MAINTENANCE_CATEGORY}",
-                f"{Provenance.PARTIAL.value}: maintenance rates are AI estimates",
+                f"{engine}: year-{CostSources.FIRST_BILLED_YEAR} nominal "
+                f"{CostSources.MAINTENANCE_CATEGORY}",
+                Provenance.PARTIAL,
+                conditions=(cls.PRICE_BASIS_CONDITION,),
             ),
             PayloadFieldRow(
+                cls.BLOCK,
                 CostField.NET_PRESENT_VALUE.value,
                 f"{engine}: {CostSources.NET_PRESENT_VALUE_FIELD} over the engine's horizon",
-                Provenance.PARTIAL.value,
+                Provenance.PARTIAL,
+                conditions=(cls.PRICE_BASIS_CONDITION,),
             ),
             PayloadFieldRow(
+                cls.BLOCK,
                 CostField.MONTHLY_TWENTY_YEARS.value,
-                f"{engine}: {CostSources.EQUIVALENT_ANNUAL_COST_FIELD} / 12",
-                Provenance.PARTIAL.value,
+                f"{engine}: {CostSources.EQUIVALENT_ANNUAL_COST_FIELD} / "
+                f"{CostSources.MONTHS_PER_YEAR:.0f}",
+                Provenance.PARTIAL,
+                conditions=(cls.PRICE_BASIS_CONDITION,),
             ),
             PayloadFieldRow(
+                cls.BLOCK,
                 CostField.MONTHLY_TEN_YEARS.value,
                 f"{CostDocuments.COSTS_FILE_NAME}'s stored inputs re-evaluated over "
-                f"{CostSources.SHORT_HORIZON_IN_YEARS} years, / 12",
-                Provenance.PARTIAL.value,
+                f"{CostSources.SHORT_HORIZON_IN_YEARS} years, / "
+                f"{CostSources.MONTHS_PER_YEAR:.0f}",
+                Provenance.PARTIAL,
+                conditions=(cls.PRICE_BASIS_CONDITION,),
             ),
             PayloadFieldRow(
+                cls.BLOCK,
                 CostField.GRANT.value,
-                f"the subsidy solver under '{CostSources.SUBSIDY_PERSPECTIVE_ID}', when a country "
+                f"the subsidy solver under '{CostSources.SUBSIDY_PERSPECTIVE_ID}', once a country "
                 "catalogue exists",
-                "absent until subsidy_catalog/<COUNTRY>.json exists (Q24)",
+                reason=CostBuilder.GRANT_REASON_TEMPLATE.format(
+                    country=cls.UNSUPPORTED_SUBSIDY_COUNTRY
+                ),
+                when=cls.GRANT_WHEN,
             ),
             PayloadFieldRow(
+                cls.BLOCK,
                 CostField.PAYBACK.value,
                 "the difference against the same dwelling without the package",
-                "absent: needs the base calculation (a compare entry point)",
+                reason=CostBuilder.PAYBACK_REASON,
+                when=cls.PAYBACK_WHEN,
             ),
             PayloadFieldRow(
+                cls.BLOCK,
                 CostField.PROPERTY_VALUE.value,
-                "no model",
-                "absent (A13)",
+                "",
+                reason=CostBuilder.PROPERTY_VALUE_REASON,
+                when=cls.PROPERTY_VALUE_WHEN,
             ),
             PayloadFieldRow(
+                cls.BLOCK,
                 CostField.INVESTMENT_BREAKDOWN.value,
                 "the two halves of the investment, separately: devices and envelope_material",
-                Provenance.PARTIAL.value,
+                Provenance.PARTIAL,
+                conditions=(cls.PRICE_BASIS_CONDITION,),
+            ),
+            PayloadFieldRow(
+                cls.BLOCK,
+                f"{CostField.INVESTMENT_BREAKDOWN.value}.{CostBuilder.ENVELOPE_KEY}",
+                "the request material's price per cubic metre, which the request does not carry",
+                reason=EnvelopeMaterialCost.REASON,
+                when=cls.ENVELOPE_WHEN,
             ),
         )

@@ -55,7 +55,12 @@ from hisim.renovisor.constants import (
 from hisim.renovisor.report import MappingReport
 from hisim.renovisor.request import House, Request
 from hisim.renovisor.tabula import BuildingCode, BuildingCodeSelector
-from hisim.renovisor.vocabulary import HeatGenerator, ReportStatus, ThermalElement
+from hisim.renovisor.vocabulary import (
+    HeatDistributionType,
+    HeatGenerator,
+    ReportStatus,
+    ThermalElement,
+)
 from hisim.renovisor.whitelist import TranslatorError, Unmapped, Whitelist
 
 
@@ -1359,25 +1364,75 @@ def _generator_note(state: _TranslationState, generator: HeatGenerator) -> Optio
     return None
 
 
+class EmitterSubstitution:
+    """The emitter the translator writes when the requested one cannot be carried through.
+
+    HiSim models all three emitters of ``heat_distribution.type_of_system``, but the lifecycle
+    cost database has no row for the low-temperature radiator, and decision D7 of the cost
+    specification aborts a whole evaluation on a subject it cannot price. A heat-pump package
+    asking for the emitter a heat-pump retrofit naturally installs would therefore end at exit 5
+    with nothing written, which is a worse answer than a stated approximation.
+
+    So that one value is written as surface heating -- ``FLOORHEATING``, the heat pump's other
+    low-temperature emitter, which is priced -- and the run reports it as ``not_implemented_yet``
+    with the whitelist's sentence beside it. The substitution lives here and the sentence lives
+    in ``not_implemented_yet.yaml``; the day ``hisim/economics/adapter.py`` gains the missing
+    cost row, both go away together.
+    """
+
+    #: The emitter each substituted request value is written as. An emitter absent from this
+    #: table is written as itself.
+    WRITTEN_AS: ClassVar[Dict[HeatDistributionType, HeatDistributionType]] = {
+        HeatDistributionType.LOW_TEMPERATURE_RADIATOR: HeatDistributionType.SURFACE_HEATING,
+    }
+
+    @classmethod
+    def written_as(cls, requested: HeatDistributionType) -> HeatDistributionType:
+        """Return the emitter written into the energy-system file for *requested*.
+
+        Args:
+            requested: The emitter the renovated house carries.
+
+        Returns:
+            The substitute when there is one, otherwise *requested* itself.
+        """
+        return cls.WRITTEN_AS.get(requested, requested)
+
+    @classmethod
+    def is_substituted(cls, requested: HeatDistributionType) -> bool:
+        """Return whether *requested* is written as a different emitter than itself."""
+        return requested in cls.WRITTEN_AS
+
+
 def _heat_distribution(state: _TranslationState, generator: HeatGenerator) -> None:
-    """Tell the heat distribution controller which emitters the dwelling has."""
+    """Tell the heat distribution controller which emitters the dwelling has.
+
+    One of the three request values is written as another (:class:`EmitterSubstitution`): the
+    file gets the substitute so the run is priced and completes, and the report gets the
+    whitelist's ``not_implemented_yet`` line so nobody reads the result as the emitter they
+    asked for.
+    """
+    del generator
     path = "house.heat_distribution.type_of_system"
-    member = state.house.heat_distribution.hisim_member
-    if state.write(
+    requested = state.house.heat_distribution
+    member = EmitterSubstitution.written_as(requested).hisim_member
+    if not state.write(
         Targets.HEAT_DISTRIBUTION_CONTROLLER,
         Targets.HEATING_SYSTEM,
         member.name,
         source=path,
         note="the emitter and the heat pump's space-heating controller both read it as a fact",
     ):
-        state.report.used(
-            path,
-            Targets.describe(Targets.HEAT_DISTRIBUTION_CONTROLLER, Targets.HEATING_SYSTEM),
-            value=member.name,
-        )
+        state.listed(path, requested.value)
         return
-    del generator
-    state.listed(path, state.house.heat_distribution.value)
+    if EmitterSubstitution.is_substituted(requested):
+        state.listed(path, requested.value)
+        return
+    state.report.used(
+        path,
+        Targets.describe(Targets.HEAT_DISTRIBUTION_CONTROLLER, Targets.HEATING_SYSTEM),
+        value=member.name,
+    )
 
 
 def _flow_temperature(state: _TranslationState, generator: HeatGenerator, heating: Any) -> None:

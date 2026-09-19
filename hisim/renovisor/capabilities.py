@@ -23,6 +23,13 @@ image ``broken`` on that, and the point of the document is that it cannot.
 The document's shape is ``measure-capabilities.openapi.yaml``'s
 ``components.schemas.ImplementedMeasures``, and :meth:`CapabilityDocument.validate` checks it
 against that vendored schema before writing.
+
+One section is not aggregated from probes at all. ``results`` (:class:`ResultsSection`) says what
+the *answer* will look like -- every field ``result.json`` can carry, its source and its
+provenance -- generated from the same two tables the payload is built from. The vendored schema
+has no ``additionalProperties: false``, so the document still validates against it; the section
+is checked against ``measure-capabilities.results-extension.yaml`` as well, which is HiSim's own
+proposal for it.
 """
 
 import copy
@@ -39,6 +46,8 @@ from jsonschema import Draft202012Validator
 from hisim.renovisor import TRANSLATOR_VERSION
 from hisim.renovisor.apply import apply
 from hisim.renovisor.contract import ContractFiles
+from hisim.renovisor.costs import CostSchema
+from hisim.renovisor.kpis import KpiSchema
 from hisim.renovisor.report import HiSimCommit
 from hisim.renovisor.request import (
     AccessLevel,
@@ -558,14 +567,93 @@ class ProbeRunner:
         )
 
 
+@dataclass(frozen=True)
+class Observation:
+    """What one probe said about one item: the status it reported and the note beside it.
+
+    The document aggregates many probes into one entry, and the two halves of an entry -- its
+    status and its note -- have to come from the same probe, or the entry announces one thing
+    and explains another. Keeping the pair together in one object, rather than in two parallel
+    lists indexed by nothing, is what makes that impossible to get wrong.
+
+    Args:
+        status: The status the probe's mapping report carried for the item.
+        note: The sentence it carried beside the status, or ``None`` when it carried none.
+    """
+
+    status: ReportStatus
+    note: Optional[str] = None
+
+
+class NoteAggregation:
+    """How several probes' observations of one item become one status and one note.
+
+    The status is the worst status any probe observed, which is what makes the document a
+    promise rather than an average: a run can never report an item worse than the document
+    announces. The note then has to be the note of the probe that produced *that* status. Taking
+    the first note anybody wrote down instead is how ``house.solar_thermal_system.supplies`` came
+    to be published as ``not_implemented_yet`` while explaining itself with the sentence of the
+    value that works (step 8 addendum A)::
+
+        status = NoteAggregation.status_of(observations)
+        note = NoteAggregation.note_of(observations, status)
+
+    Where several probes tie at the worst status with different sentences, all of them are
+    carried, joined by :attr:`SEPARATOR` in probe order: each is true of a different request, and
+    picking one of them would hide the other. Two probes that tie with the same sentence carry it
+    once.
+    """
+
+    #: What joins two sentences that tie at the worst status.
+    SEPARATOR: ClassVar[str] = " | "
+
+    @classmethod
+    def status_of(cls, observations: Sequence[Observation]) -> ReportStatus:
+        """Return the worst status any of *observations* carried.
+
+        Args:
+            observations: What the probes said; at least one.
+
+        Returns:
+            The worst of the observed statuses, per
+            :meth:`hisim.renovisor.vocabulary.ReportStatus.worst_of`.
+
+        Raises:
+            ValueError: When *observations* is empty, because there is no neutral status.
+        """
+        return ReportStatus.worst_of(*(observation.status for observation in observations))
+
+    @classmethod
+    def note_of(cls, observations: Sequence[Observation], status: ReportStatus) -> Optional[str]:
+        """Return the sentence an entry of *status* carries, out of the same observations.
+
+        Args:
+            observations: What the probes said, in probe order.
+            status: The status the entry is published with, normally :meth:`status_of` of the
+                same observations.
+
+        Returns:
+            The note of the observations that carry *status*, de-duplicated and joined by
+            :attr:`SEPARATOR` in probe order, or ``None`` when none of them carried one.
+        """
+        notes: List[str] = []
+        for observation in observations:
+            if observation.status is not status or not observation.note:
+                continue
+            if observation.note not in notes:
+                notes.append(observation.note)
+        return cls.SEPARATOR.join(notes) if notes else None
+
+
 class Aggregation:
     """Reduces the probe results to one status per measure, option, value and inventory field.
 
     The rule is the frontend side's specification §8 step 4: a status is the worst one any probe
-    observed, an option value a probe refused as unknown is left out of ``accepted_values``, and
-    the note is the whitelist entry's sentence. "Worst" is
-    :meth:`hisim.renovisor.vocabulary.ReportStatus.worst_of`, which is what makes the document a
-    promise rather than an average: a run can never report an item worse than it announces.
+    observed, and an option value a probe refused as unknown is left out of ``accepted_values``.
+    "Worst" is :meth:`hisim.renovisor.vocabulary.ReportStatus.worst_of`, which is what makes the
+    document a promise rather than an average: a run can never report an item worse than it
+    announces. The note beside a status comes from :class:`NoteAggregation`, so that an entry is
+    always explained by the probe that produced the status it publishes.
     """
 
     #: The phrase a note has to contain for the entry to count as a substitution rather than as
@@ -592,31 +680,28 @@ class Aggregation:
     def measures(cls, results: Sequence[ProbeResult]) -> List[Dict[str, Any]]:
         """Return the ``measures`` array of the document, one entry per catalogue measure.
 
-        Two probe kinds are deliberately left out of the *status* and counted only for their
-        note. A ``PAIR`` probe constructs an unsupported combination on purpose -- a solar
-        thermal collector on an oil boiler -- and a measure's status is about the measure, not
-        about a combination, so letting a pair probe set it would announce that the collector
-        is never modelled. And an ``OPTION`` probe of a valued option carries one value's own
-        status, which belongs in ``values`` and, by the openapi schema's own wording, never
-        changes the option's.
+        Two probe kinds are deliberately left out. A ``PAIR`` probe constructs an unsupported
+        combination on purpose -- a solar thermal collector on an oil boiler -- and a measure's
+        status is about the measure, not about a combination, so letting a pair probe set it
+        would announce that the collector is never modelled. And an ``OPTION`` probe of a valued
+        option carries one value's own status, which belongs in ``values`` and, by the openapi
+        schema's own wording, never changes the option's. Neither kind contributes a note
+        either: a note an entry's own status cannot account for is what addendum A removed.
         """
         entries: List[Dict[str, Any]] = []
         for measure_id in CatalogueTable.ids():
-            observed: List[ReportStatus] = []
-            note: Optional[str] = None
+            observed: List[Observation] = []
             targets: List[str] = []
-            option_statuses: Dict[str, List[ReportStatus]] = {}
-            option_notes: Dict[str, Optional[str]] = {}
+            option_observed: Dict[str, List[Observation]] = {}
             value_statuses: Dict[str, Dict[Any, Tuple[ReportStatus, Optional[str]]]] = {}
             valued = {spec.name for spec in CatalogueTable.options_of(measure_id) if spec.values}
             for result in results:
                 row = result.measures.get(measure_id)
                 if row is None:
                     continue
-                status, measure_note, options = row
+                measure_status, measure_note, options = row
                 if result.probe.kind is not ProbeKind.PAIR:
-                    observed.append(status)
-                note = note or measure_note
+                    observed.append(Observation(measure_status, measure_note))
                 targets.extend(result.targets.get(measure_id, ()))
                 own = (
                     result.probe.subject
@@ -630,14 +715,17 @@ class Aggregation:
                             option_note,
                         )
                     elif result.probe.kind is not ProbeKind.PAIR:
-                        option_statuses.setdefault(name, []).append(option_status)
-                    if option_note is not None and option_notes.get(name) is None:
-                        option_notes[name] = option_note
-            status = ReportStatus.worst_of(*observed) if observed else ReportStatus.NOT_IMPLEMENTED_YET
+                        option_observed.setdefault(name, []).append(
+                            Observation(option_status, option_note)
+                        )
+            status = (
+                NoteAggregation.status_of(observed) if observed else ReportStatus.NOT_IMPLEMENTED_YET
+            )
+            note = NoteAggregation.note_of(observed, status)
             entry: Dict[str, Any] = {
                 "measure_id": measure_id,
                 "status": MeasureStatus.of(status).value,
-                "options": cls._options(measure_id, option_statuses, option_notes, value_statuses),
+                "options": cls._options(measure_id, option_observed, value_statuses),
                 "hisim_targets": sorted(set(targets)),
                 "substitution": cls.is_substitution(note),
             }
@@ -650,17 +738,26 @@ class Aggregation:
     def _options(
         cls,
         measure_id: str,
-        statuses: Mapping[str, List[ReportStatus]],
-        notes: Mapping[str, Optional[str]],
+        observed: Mapping[str, List[Observation]],
         values: Mapping[str, Mapping[Any, Tuple[ReportStatus, Optional[str]]]],
     ) -> List[Dict[str, Any]]:
-        """Return one entry per option the catalogue declares for one measure."""
+        """Return one entry per option the catalogue declares for one measure.
+
+        An option's note is the note of its own worst *option-level* observation, never of one
+        of its values: a value's sentence belongs to the ``values`` entry that carries the
+        value's own status, and repeating it at option level announced ``used`` options that
+        explained themselves with a sentence about something nobody asked for (addendum A).
+        """
         entries: List[Dict[str, Any]] = []
         for spec in CatalogueTable.options_of(measure_id):
-            observed = statuses.get(spec.name) or [
-                status for status, _ in values.get(spec.name, {}).values()
+            observations = observed.get(spec.name) or [
+                Observation(status, note) for status, note in values.get(spec.name, {}).values()
             ]
-            status = ReportStatus.worst_of(*observed) if observed else ReportStatus.NOT_IMPLEMENTED_YET
+            status = (
+                NoteAggregation.status_of(observations)
+                if observations
+                else ReportStatus.NOT_IMPLEMENTED_YET
+            )
             entry: Dict[str, Any] = {"name": spec.name, "status": status.value}
             if spec.values is not None:
                 entry["accepted_values"] = list(spec.values)
@@ -671,7 +768,7 @@ class Aggregation:
             bounds = ProbeSet.OPTION_BOUNDS.get(spec.name)
             if spec.values is None and bounds is not None and spec.value_type is not ValueType.BOOLEAN:
                 entry["minimum"], entry["maximum"] = bounds
-            note = notes.get(spec.name)
+            note = NoteAggregation.note_of(observations, status)
             if note is not None:
                 entry["note"] = note
             entries.append(entry)
@@ -698,13 +795,14 @@ class Aggregation:
         """Return the ``fields`` array: the same aggregation over the inventory.
 
         As for a measure's options, a probe that varies one field's value contributes that
-        value's own status to ``values`` and not to the field's, and a ``PAIR`` probe
-        contributes its note and not its status. What is left for the field's own status is
-        every probe that carried the field without being about it -- the anchor, the block
-        probes and the measure probes -- and, when nothing did, the worst of its values.
+        value's own status to ``values`` and not to the field's, and a ``PAIR`` probe contributes
+        to neither. What is left for the field's own status is every probe that carried the field
+        without being about it -- the anchor, the block probes and the measure probes -- and,
+        when nothing did, the worst of its values. The note follows the status out of the same
+        observations, which is what makes ``house.hot_water.supply`` explain itself with the two
+        supplies that are not implemented rather than with the one that is.
         """
-        statuses: Dict[str, List[ReportStatus]] = {}
-        notes: Dict[str, Optional[str]] = {}
+        observed: Dict[str, List[Observation]] = {}
         per_value: Dict[str, Dict[Any, Tuple[ReportStatus, Optional[str]]]] = {}
         for result in results:
             probe = result.probe
@@ -713,15 +811,14 @@ class Aggregation:
                 if path == own:
                     per_value.setdefault(path, {})[_key(probe.value)] = (status, note)
                 elif probe.kind is not ProbeKind.PAIR:
-                    statuses.setdefault(path, []).append(status)
-                if note is not None and notes.get(path) is None:
-                    notes[path] = note
+                    observed.setdefault(path, []).append(Observation(status, note))
         entries: List[Dict[str, Any]] = []
-        for path in sorted(set(statuses) | set(per_value)):
-            observed = statuses.get(path) or [
-                status for status, _ in per_value.get(path, {}).values()
+        for path in sorted(set(observed) | set(per_value)):
+            observations = observed.get(path) or [
+                Observation(status, note) for status, note in per_value.get(path, {}).values()
             ]
-            status = ReportStatus.worst_of(*observed)
+            status = NoteAggregation.status_of(observations)
+            note = NoteAggregation.note_of(observations, status)
             entry: Dict[str, Any] = {"path": path, "status": status.value}
             if per_value.get(path):
                 entry["values"] = [
@@ -736,9 +833,9 @@ class Aggregation:
                     }
                     for value, (value_status, value_note) in per_value[path].items()
                 ]
-            if notes.get(path) is not None:
-                entry["note"] = notes[path]
-            entry["substitution"] = cls.is_substitution(notes.get(path))
+            if note is not None:
+                entry["note"] = note
+            entry["substitution"] = cls.is_substitution(note)
             entries.append(entry)
         return entries
 
@@ -756,6 +853,62 @@ def _key(value: Any) -> Any:
     if isinstance(value, Mapping):
         return json.dumps(value, sort_keys=True)
     return value
+
+
+class ResultsSection:
+    """The ``results`` section of the document: what ``result.json`` will carry.
+
+    The rest of the document says what the translator does with a *request*. This says what the
+    caller gets *back*, which a frontend building a result page needs before the first
+    calculation has run: every field the payload can carry, where its number is read from, and
+    whether that number will be a simulation result, a constant standing in for a missing model,
+    a partly-estimated figure, or nothing at all.
+
+    It is generated from the two tables ``result.json`` is itself built out of --
+    :class:`hisim.renovisor.kpis.KpiSchema` and :class:`hisim.renovisor.costs.CostSchema`, both
+    written in terms of ``KpiSources`` and ``CostSources`` -- and not from a second list beside
+    them, so the section cannot announce a field the payload does not carry or a source the
+    builder does not read. Its shape is
+    ``measure-capabilities.results-extension.yaml``'s ``ResultFields``, which is HiSim's proposal
+    to the frontend team rather than a vendored file, and which
+    :meth:`CapabilityDocument.validate` checks the section against.
+    """
+
+    #: The key of the KPI half of the section, which is the payload block's own name.
+    KPIS_KEY: ClassVar[str] = "kpis"
+
+    #: The key of the cost half.
+    COSTS_KEY: ClassVar[str] = "costs"
+
+    #: The document path of the section's schema inside the extension file.
+    SCHEMA_REF: ClassVar[str] = "#/components/schemas/ResultFields"
+
+    @classmethod
+    def build(cls) -> Dict[str, Any]:
+        """Return the section, one entry per field ``result.json`` can emit.
+
+        Returns:
+            ``{"kpis": [...], "costs": [...]}``, each list in payload order.
+        """
+        return {
+            cls.KPIS_KEY: [row.to_json() for row in KpiSchema.rows()],
+            cls.COSTS_KEY: [row.to_json() for row in CostSchema.rows()],
+        }
+
+    @classmethod
+    def validate(cls, section: Mapping[str, Any]) -> None:
+        """Check one section against the results-extension schema.
+
+        Args:
+            section: The ``results`` block of a document.
+
+        Raises:
+            jsonschema.ValidationError: On the first way the section is not the shape the
+                extension file declares.
+        """
+        extension = dict(ContractFiles.results_extension_schema())
+        extension["$ref"] = cls.SCHEMA_REF
+        Draft202012Validator(extension).validate(dict(section))
 
 
 @dataclass(frozen=True)
@@ -818,6 +971,7 @@ class CapabilityDocument:
             },
             "measures": measures,
             "fields": Aggregation.fields(results),
+            "results": ResultsSection.build(),
         }
         return cls(body=body, results=results, whitelist=runner.whitelist)
 
@@ -842,17 +996,31 @@ class CapabilityDocument:
         hit = {key for result in self.results for key in result.hits}
         return tuple(entry.key() for entry in self.whitelist.entries() if entry.key() not in hit)
 
+    #: The document path of the whole document's schema inside the vendored capabilities file.
+    SCHEMA_REF: ClassVar[str] = "#/components/schemas/ImplementedMeasures"
+
+    #: The key the results section sits under.
+    RESULTS_KEY: ClassVar[str] = "results"
+
     def validate(self) -> None:
-        """Check the document against the vendored ``measure-capabilities.openapi.yaml``.
+        """Check the document against both schemas it has to satisfy.
+
+        The whole document is checked against the vendored
+        ``measure-capabilities.openapi.yaml``, which is what ``GET /measures`` returns and which
+        carries no ``additionalProperties: false``, so the ``results`` section passes it
+        untouched. The section itself is then checked against
+        ``measure-capabilities.results-extension.yaml``, HiSim's own proposal for it, so that a
+        section nobody has agreed to yet is still a shape somebody wrote down.
 
         Raises:
             jsonschema.ValidationError: On the first way the document is not what the contract
-                says ``GET /measures`` returns.
+                says ``GET /measures`` returns, or the first way the results section is not what
+                the extension file declares.
         """
-        openapi = ContractFiles.capabilities_schema()
-        schema = dict(openapi)
-        schema["$ref"] = "#/components/schemas/ImplementedMeasures"
+        schema = dict(ContractFiles.capabilities_schema())
+        schema["$ref"] = self.SCHEMA_REF
         Draft202012Validator(schema).validate(self.body)
+        ResultsSection.validate(self.body[self.RESULTS_KEY])
 
     def write(self, path: Path) -> int:
         """Validate the document and write it as JSON.

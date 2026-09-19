@@ -23,13 +23,20 @@ from hisim.renovisor.capabilities import (
     Aggregation,
     CapabilityDocument,
     MeasureStatus,
+    NoteAggregation,
+    Observation,
+    Probe,
     ProbeKind,
+    ProbeResult,
     ProbeRunner,
     ProbeSet,
+    ResultsSection,
     unlisted_lines,
 )
+from hisim.renovisor.costs import CostField, CostSchema
+from hisim.renovisor.kpis import KpiField, KpiSchema
 from hisim.renovisor.request import CatalogueTable
-from hisim.renovisor.vocabulary import ReportStatus
+from hisim.renovisor.vocabulary import Provenance, ReportStatus
 
 #: The tally of §4.2 as decision D-D leaves it. The frontend side's spec counted 16 / 9 / 7;
 #: `air_conditioners`, `temperature_control_system` and
@@ -252,3 +259,174 @@ class TestTheRunner:
         results = ProbeRunner().run([probe])
 
         assert results[0].refused == ("location.country.unsupported",)
+
+
+@pytest.mark.base
+class TestANoteFollowsTheStatusItExplains:
+    """The step 8 addendum A: an entry is explained by the probe that set its status.
+
+    The defect this pins: ``house.solar_thermal_system.supplies`` was published as
+    ``not_implemented_yet`` -- because one probe asked for ``dhw_and_space_heating`` -- while
+    carrying the sentence of ``dhw_only``, the value that works. A reader of the document was
+    told an item was missing and handed the explanation of the item that is not.
+    """
+
+    @staticmethod
+    def _result(name: str, path: str, status: ReportStatus, note: str) -> ProbeResult:
+        """Return one probe result carrying one field line, for the aggregation to reduce."""
+        return ProbeResult(
+            probe=Probe(name=name, kind=ProbeKind.BLOCK), fields={path: (status, note)}
+        )
+
+    def test_a_two_probe_field_carries_the_note_of_the_probe_that_set_the_status(self) -> None:
+        """Two probes, two statuses, two sentences: the published one follows the status."""
+        path = "house.example.field"
+        entries = Aggregation.fields(
+            (
+                self._result("first", path, ReportStatus.USED, "the value that works"),
+                self._result("second", path, ReportStatus.NOT_IMPLEMENTED_YET, "no model for it"),
+            )
+        )
+
+        assert entries[0]["status"] == ReportStatus.NOT_IMPLEMENTED_YET.value
+        assert entries[0]["note"] == "no model for it"
+
+    def test_probes_that_tie_at_the_worst_status_carry_all_their_sentences(self) -> None:
+        """Each is true of a different request, so picking one of them would hide the other."""
+        path = "house.example.field"
+        entries = Aggregation.fields(
+            (
+                self._result("first", path, ReportStatus.USED, "the value that works"),
+                self._result("second", path, ReportStatus.NOT_IMPLEMENTED_YET, "no heat pump"),
+                self._result("third", path, ReportStatus.NOT_IMPLEMENTED_YET, "no immersion"),
+            )
+        )
+
+        assert entries[0]["note"] == f"no heat pump{NoteAggregation.SEPARATOR}no immersion"
+
+    def test_two_probes_that_tie_with_the_same_sentence_carry_it_once(self) -> None:
+        """A sentence repeated by every probe of a kind is still one sentence."""
+        observations = (
+            Observation(ReportStatus.NOT_IMPLEMENTED_YET, "one sentence"),
+            Observation(ReportStatus.NOT_IMPLEMENTED_YET, "one sentence"),
+        )
+
+        assert NoteAggregation.note_of(observations, ReportStatus.NOT_IMPLEMENTED_YET) == "one sentence"
+
+    def test_a_status_with_no_sentence_behind_it_carries_none(self) -> None:
+        """A note belonging to another status is not borrowed to fill the gap."""
+        observations = (
+            Observation(ReportStatus.USED, "a used sentence"),
+            Observation(ReportStatus.APPROXIMATED, None),
+        )
+
+        assert NoteAggregation.note_of(observations, ReportStatus.APPROXIMATED) is None
+
+    def test_the_document_explains_the_field_that_the_defect_was_found_on(
+        self, document: CapabilityDocument
+    ) -> None:
+        """The real entry, over the real probe set: the collector's two supply values."""
+        fields = {entry["path"]: entry for entry in document.body["fields"]}
+        supplies = fields["house.solar_thermal_system.supplies"]
+
+        assert supplies["status"] == ReportStatus.NOT_IMPLEMENTED_YET.value
+        assert "modelled as dhw_only" in supplies["note"]
+        assert supplies["substitution"] is True
+
+    def test_the_two_unimplemented_hot_water_supplies_are_both_named(
+        self, document: CapabilityDocument
+    ) -> None:
+        """Two probes tie at the worst status with different sentences, so both are carried."""
+        fields = {entry["path"]: entry for entry in document.body["fields"]}
+        supply = fields["house.hot_water.supply"]
+
+        assert NoteAggregation.SEPARATOR in supply["note"]
+        assert "domestic-hot-water heat pump" in supply["note"]
+        assert "immersion-heater" in supply["note"]
+
+    def test_a_used_option_carries_no_sentence_from_one_of_its_values(
+        self, document: CapabilityDocument
+    ) -> None:
+        """The values keep their own notes; the option says nothing it cannot account for."""
+        heating = next(
+            entry for entry in document.body["measures"] if entry["measure_id"] == "heating_system"
+        )
+        option = next(row for row in heating["options"] if row["name"] == "type_of_system")
+
+        assert option["status"] == ReportStatus.USED.value
+        assert "note" not in option
+        hybrid = next(value for value in option["values"] if value["value"] == "hybrid_heat_pump")
+        assert "modelled as air_source_heat_pump" in hybrid["note"]
+
+
+@pytest.mark.base
+class TestTheResultsSection:
+    """The step 8 addendum B: what the caller gets back, beside what the translator accepts."""
+
+    def test_every_payload_field_has_an_entry(self, document: CapabilityDocument) -> None:
+        """Generated from the tables the payload is built from, so it cannot miss one."""
+        results = document.body["results"]
+        kpis = {entry["field"] for entry in results["kpis"]}
+        costs = {entry["field"] for entry in results["costs"]}
+
+        assert kpis == {f"kpis.{field.value}" for field in KpiField}
+        assert {f"costs.{field.value}" for field in CostField} <= costs
+
+    def test_it_is_generated_from_the_payload_tables_and_not_from_a_second_list(self) -> None:
+        """The section is the two schema tables serialized, entry for entry."""
+        section = ResultsSection.build()
+
+        assert section["kpis"] == [row.to_json() for row in KpiSchema.rows()]
+        assert section["costs"] == [row.to_json() for row in CostSchema.rows()]
+
+    def test_a_published_field_names_its_source_and_its_provenance(
+        self, document: CapabilityDocument
+    ) -> None:
+        """A frontend has to be able to tell a simulated figure from a constant in advance."""
+        entries = {entry["field"]: entry for entry in document.body["results"]["kpis"]}
+        demand = entries["kpis.energy_demand_in_kilowatt_hour_per_year"]
+
+        assert demand["provenance"] == Provenance.SIMULATED.value
+        assert "Purchased energy consumption" in demand["source"]
+        assert any("PARTIAL when the period" in condition for condition in demand["conditions"])
+
+    def test_an_absent_field_carries_the_reason_the_payload_writes(
+        self, document: CapabilityDocument
+    ) -> None:
+        """Decision R8 forbids the plausible zero, so the document announces the absence."""
+        entries = {entry["field"]: entry for entry in document.body["results"]["costs"]}
+
+        for field in ("costs.grant_in_euro", "costs.payback_period_in_years",
+                      "costs.property_value_increase_in_percent",
+                      "costs.investment_breakdown.envelope_material"):
+            assert entries[field]["provenance"] == "absent"
+            assert entries[field]["reason"]
+            assert entries[field]["when"]
+        assert "subsidy_catalog/IE.json" in entries["costs.grant_in_euro"]["reason"]
+
+    def test_a_field_that_is_published_but_can_be_absent_says_both(
+        self, document: CapabilityDocument
+    ) -> None:
+        """Embodied carbon is the one such field: simulated, or absent with its own sentence."""
+        entries = {entry["field"]: entry for entry in document.body["results"]["kpis"]}
+        embodied = entries["kpis.embodied_co2_in_kg"]
+
+        assert embodied["provenance"] == Provenance.SIMULATED.value
+        assert "no insulation layer" in embodied["reason"]
+        assert "element area" in embodied["when"]
+
+    def test_the_section_validates_against_the_hisim_side_extension_schema(
+        self, document: CapabilityDocument
+    ) -> None:
+        """A section nobody has agreed to yet is still a shape somebody wrote down."""
+        ResultsSection.validate(document.body["results"])
+
+    def test_a_section_with_an_unknown_key_is_refused(self) -> None:
+        """``additionalProperties: false`` on the entry is what keeps the proposal a proposal."""
+        from jsonschema import ValidationError
+
+        section = ResultsSection.build()
+        section["kpis"] = [{**section["kpis"][0], "invented": 1}]
+
+        with pytest.raises(ValidationError):
+            ResultsSection.validate(section)

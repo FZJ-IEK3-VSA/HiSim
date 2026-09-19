@@ -11,6 +11,12 @@ capability document the translator generates) come from the frontend side's prop
 repository. This package holds a copy of each, together with ``PINNED.yaml``, which records where
 every copy came from and the content hash it had at that moment.
 
+One file here is not a copy at all. ``measure-capabilities.results-extension.yaml`` is HiSim's
+own proposal back to the frontend team -- the shape of the capability document's ``results``
+section, which says what ``result.json`` will carry -- and is therefore listed in
+:attr:`ContractFiles.HISIM_AUTHORED` and carries no pin: a pin records which revision of somebody
+else's file a copy came from, and there is no such revision.
+
 Why copies and not a dependency: the decision of 2026-09-15 (``roadmap/renovisor/challenges.md``,
 Q28) was "vendored copy for now"; where the master version of the contract lives is still to be
 discussed in the project, and the installable-package option is on the table. Until then the
@@ -30,6 +36,7 @@ Reading the copies::
     schema = ContractFiles.request_schema()       # parsed calculation-request.schema.json
     mockup = ContractFiles.request_mockup()       # parsed calculation-request.mockup-1.yaml
     shape = ContractFiles.capabilities_schema()   # parsed measure-capabilities.openapi.yaml
+    results = ContractFiles.results_extension_schema()  # HiSim's own results-section proposal
     pin = ContractFiles.pinned()                  # parsed PINNED.yaml
 
 Refreshing them from a local checkout and the proposal directory::
@@ -39,7 +46,7 @@ Refreshing them from a local checkout and the proposal directory::
 
 import json
 from pathlib import Path
-from typing import Any, ClassVar, Dict, cast
+from typing import Any, ClassVar, Dict, Tuple, cast
 
 import yaml
 
@@ -64,6 +71,14 @@ class ContractFiles:
     REQUEST_MOCKUP_FILENAME: ClassVar[str] = "calculation-request.mockup-1.yaml"
     CAPABILITIES_SCHEMA_FILENAME: ClassVar[str] = "measure-capabilities.openapi.yaml"
     PINNED_FILENAME: ClassVar[str] = "PINNED.yaml"
+
+    #: The one schema in this directory HiSim wrote itself rather than copied: the proposal for
+    #: the capability document's ``results`` section. It is not pinned, because a pin records
+    #: which revision of somebody else's file a copy came from and there is no such revision.
+    RESULTS_EXTENSION_FILENAME: ClassVar[str] = "measure-capabilities.results-extension.yaml"
+
+    #: Every file here that is HiSim's own and therefore carries no pin.
+    HISIM_AUTHORED: ClassVar[Tuple[str, ...]] = (RESULTS_EXTENSION_FILENAME,)
 
     @classmethod
     def path(cls, filename: str) -> Path:
@@ -142,3 +157,19 @@ class ContractFiles:
             The OpenAPI 3.1 document as nested dictionaries and lists.
         """
         return cast(Dict[str, Any], cls._load(cls.CAPABILITIES_SCHEMA_FILENAME))
+
+    @classmethod
+    def results_extension_schema(cls) -> Dict[str, Any]:
+        """Return the parsed ``measure-capabilities.results-extension.yaml``.
+
+        HiSim's own proposal, not a vendored copy: the shape of the capability document's
+        ``results`` section, which says what ``result.json`` will carry. Its
+        ``components.schemas.ResultFields`` is what
+        :meth:`hisim.renovisor.capabilities.CapabilityDocument.validate` checks that section
+        against, in addition to the vendored ``ImplementedMeasures`` the whole document is
+        checked against.
+
+        Returns:
+            The OpenAPI 3.1 schema fragment as nested dictionaries and lists.
+        """
+        return cast(Dict[str, Any], cls._load(cls.RESULTS_EXTENSION_FILENAME))

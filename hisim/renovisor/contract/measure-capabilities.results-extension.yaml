@@ -1,0 +1,114 @@
+# Proposal — the `results` section of GET /api/v1/hisim/{version}/measures
+#
+# WRITTEN BY HISIM, NOT VENDORED. Every other file in this directory is a copy of
+# something the contract repository or the frontend side's proposal directory owns,
+# and PINNED.yaml records the hash it was copied with. This one is the other way
+# round: it is HiSim's proposal to the frontend team, offered here so that the
+# section the capability document already carries has a schema to be read against
+# and, when the team agrees, one to be merged into
+# measure-capabilities.openapi.yaml. It is therefore NOT pinned and is edited by
+# hand like any other HiSim source file.
+#
+# WHY THE SECTION EXISTS. measure-capabilities.openapi.yaml answers "what does this
+# engine version do with a request". It does not answer "what will I get back",
+# and a frontend that has to build a result page before the first calculation has
+# run needs exactly that: every field result.json can carry, where its number comes
+# from, and whether the number is a simulation result, a constant standing in for a
+# model nobody has written, a partly-estimated figure, or nothing at all.
+#
+# The section is generated from the same tables result.json itself is built from
+# (`hisim.renovisor.kpis.KpiSchema` and `hisim.renovisor.costs.CostSchema`, both
+# built out of `KpiSources` / `CostSources`), so it cannot announce a field the
+# payload does not carry or a source the builder does not read.
+#
+# HOW IT VALIDATES TODAY. ImplementedMeasures in the vendored file carries no
+# `additionalProperties: false`, so a document with a `results` key validates
+# against it unchanged. `CapabilityDocument.validate` checks the document against
+# the vendored schema first and the `results` section against this file second, so
+# neither can drift.
+openapi: 3.1.0
+info:
+  title: RenoVisor simulation backend — result fields of one engine version (HiSim proposal)
+  version: 0.1.0-proposal
+  description: |
+    An extension of ImplementedMeasures with one further property, `results`.
+
+    To merge: add `results: { $ref: '#/components/schemas/ResultFields' }` to
+    ImplementedMeasures.properties in measure-capabilities.openapi.yaml, and copy
+    the two schemas below into its components.schemas.
+components:
+  schemas:
+    ResultFields:
+      type: object
+      description: |
+        What `result.json` can carry, one entry per field, in payload order. The
+        two arrays are the two blocks of the payload and are addressed by the same
+        dotted paths its `missing` entries use, so a consumer can join the two.
+      required: [kpis, costs]
+      properties:
+        kpis:
+          type: array
+          description: One entry per field of the payload's `kpis` block.
+          items: { $ref: '#/components/schemas/ResultField' }
+        costs:
+          type: array
+          description: |
+            One entry per field of the payload's `costs` block, plus one per leaf
+            of a nested field that can be absent on its own
+            (`costs.investment_breakdown.envelope_material`).
+          items: { $ref: '#/components/schemas/ResultField' }
+    ResultField:
+      type: object
+      description: |
+        One field of `result.json`. An entry says one of two things, and a field
+        that is published *sometimes* says both:
+
+        - published: `provenance` is one of the three payload provenances and
+          `source` names where the number is read from. `conditions` lists what
+          changes that provenance — an annual figure scaled from a one-day run is
+          PARTIAL rather than SIMULATED, and says so here rather than surprising
+          the consumer at read time.
+        - absent: `provenance` is `absent`, `reason` is the sentence the payload's
+          `missing` entry carries verbatim, and `when` says under which
+          circumstances the field is missing (`always …` for a field no run fills
+          in yet).
+      required: [field, provenance]
+      additionalProperties: false
+      properties:
+        field:
+          type: string
+          description: |
+            The field's dotted path in `result.json`, block included — the same
+            path `result.json["missing"]` uses for it.
+          examples: ['kpis.energy_demand_in_kilowatt_hour_per_year', 'costs.grant_in_euro']
+        provenance:
+          type: string
+          enum: [SIMULATED, PARTIAL, MOCKED, absent]
+          description: |
+            What the published value is: computed from the run (SIMULATED),
+            computed but with at least one estimated or extrapolated input
+            (PARTIAL), a constant standing in for a missing model (MOCKED), or not
+            published at all (absent).
+        source:
+          type: string
+          description: |
+            Where the number comes from, in enough detail to find it: the HiSim KPI
+            name, the cost engine field, or the contract schema path a mocked
+            constant is read from. Absent only for a field that has no source at
+            all because nothing computes it.
+        conditions:
+          type: array
+          description: |
+            What changes the published provenance, one sentence each. Absent when
+            the provenance never changes.
+          items: { type: string }
+        reason:
+          type: string
+          description: |
+            The sentence `result.json["missing"]` carries for this field, verbatim.
+            Present for every field that can be absent, published or not.
+        when:
+          type: string
+          description: |
+            Under which circumstances the field is absent, in one phrase. Present
+            for every field that can be absent, published or not.

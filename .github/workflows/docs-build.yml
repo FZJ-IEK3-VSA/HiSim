@@ -1,0 +1,141 @@
+# Documentation build gate.
+#
+# The Read the Docs build is the only consumer of docs/ and it lives outside this
+# repository's CI, so for a long time nothing here noticed when it stopped working.
+# It stopped twice, both times invisibly, and both times for a reason a two-minute
+# Sphinx run would have caught on the pull request that introduced it:
+#   - a requirements/Python mismatch -- the build image selected Python 3.9 while
+#     requirements.txt had moved on (pandas 3.0.5 needs >= 3.11), so the install
+#     died before Sphinx was ever invoked;
+#   - an undeclared extension -- docs/conf.py loads sphinxcontrib.mermaid for the
+#     diagrams in the architecture pages, but nothing declared it as a dependency,
+#     and Sphinx aborts with "Could not import extension" before reading a single
+#     document;
+#   - an import error anywhere autodoc reaches -- docs/conf.py puts the repository
+#     root on sys.path and autodoc *imports* hisim to read its docstrings, so a
+#     module that cannot be imported (a missing dependency, a circular import, a
+#     syntax error in a component) takes the whole documentation build down.
+# That third one is why this workflow is unfiltered: it runs on every pull request
+# rather than only when docs/ changes, because almost any change to hisim/ can break
+# the documentation build without touching docs/ at all.
+#
+# The build command mirrors what Read the Docs runs -- 'python -m sphinx -b html docs'
+# against docs/conf.py, with the package installed the way .readthedocs.yaml installs
+# it ('python.install: path: .') -- so a green job here means a green build there.
+#
+# Warnings are NOT errors here yet, and the reason has changed since this file was
+# first written. It then read that the tree produced about 4330 docstring and reST
+# warnings, so '-W' would paint the gate red on day one and it would be switched off
+# within the week. The P4 component sweep rewrote the docstrings of 56 configuration
+# classes in the meantime, and the count is now zero: the last four are fixed in this
+# pull request (a pipe character read as an undefined substitution, an enum member
+# list read as a block quote, and a bare 'name' cross-reference matching three
+# classes).
+#
+# So the condition the paragraph above set for tightening is met, and one thing is
+# still missing: evidence from this image. The zero was measured locally against
+# Sphinx 9.1.0, while requirements.txt pins no version and the container carries
+# whatever it was built with. The first green run of this job is that evidence; after
+# it, adding '-W --keep-going' to the build step is a one-line change, and the gate
+# then also catches a broken cross-reference, a document missing from a toctree and a
+# diagram directive that silently degraded. Until then Sphinx's exit status is the
+# oracle -- non-zero on exactly the three failure modes above -- and the job prints
+# the warning count to the run summary, so a regression away from zero is visible in
+# the run that causes it.
+#
+# A local-only nuisance worth knowing, because it does not happen here: docs/_autosummary/
+# is generated and gitignored, and Sphinx does not delete a stub whose module has gone.
+# A working copy that built the documentation before a module was retired keeps warning
+# about that module, four times over, until the directory is deleted. CI checks out clean
+# every time and so never sees it.
+#
+# One honest gap: this job runs in the prebuilt test image, which is Python 3.11,
+# while Read the Docs builds on 3.12 (see .readthedocs.yaml). The three failure modes
+# above are all interpreter-independent, so the container is worth its speed -- it
+# carries requirements.txt preinstalled, including the whole Sphinx toolchain and the
+# graphviz binaries, which turns a ten-minute pip resolve into a ten-second one. A
+# defect that appears only on 3.12 would still reach Read the Docs; if that ever
+# happens, the fix is to move the test image to 3.12 (which the development
+# environment has been on for a while anyway), not to add a second slow job here.
+#
+# Gate: BLOCKING. Sphinx's exit status fails the job, so a pull request that breaks
+# the documentation build cannot be merged.
+
+name: docs-build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  # Runnable by hand as well, because the two automatic triggers above only fire for pull
+  # requests that target main. A stacked pull request — one whose base is the branch below it
+  # in a chain — therefore gets no run at all, and a whole stack can reach main having never
+  # built the documentation.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: docs-build-${{ github.ref }}
+  # Cancel superseded runs on feature branches, but let every push to main finish.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  sphinx:
+    name: build the Sphinx documentation
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      # Mirrors .readthedocs.yaml's 'python.install: path: .'. The image already carries
+      # requirements.txt, so this is nearly free; it is also what picks up a dependency a
+      # pull request *added* to requirements.txt but the image has not been rebuilt with,
+      # since install_requires is read from that file.
+      - name: Install HiSim package
+        run: uv pip install --system -e .
+      # sphinx.ext.graphviz and sphinx.ext.inheritance_diagram shell out to "dot";
+      # .readthedocs.yaml asks for the graphviz apt package for exactly this reason and
+      # Dockerfile.test installs it. Assert it rather than let the diagrams quietly decay
+      # into warnings that this gate does not read. Install it if the image ever loses it.
+      - name: Check the diagram toolchain
+        run: |
+          dot -V || {
+            apt-get update && apt-get install -y --no-install-recommends graphviz
+            dot -V
+          }
+      # The Read the Docs build command. docs/_build/ is gitignored, so it does not
+      # disturb any freshness gate that looks for a dirty tree.
+      - name: Build the HTML documentation
+        # bash by name, the third step in this repository to need it: a `run:` step falls back to
+        # sh in this container and dies on the bash-only `set -o pipefail` ("Illegal option -o
+        # pipefail"), though bash is installed -- see the same comment on p3-parity.yml's summary
+        # step and energy-system-freshness.yml's recorder step. pipefail is what keeps Sphinx's own
+        # exit code, the whole oracle of this gate, which `tee` would otherwise replace with its 0.
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m sphinx -b html docs docs/_build/html 2>&1 | tee docs-build.log
+      # A counter for the warning debt described in the header: this is the number that
+      # has to reach zero before '-W' can be turned on.
+      - name: Report the warning count
+        if: always()
+        run: |
+          count=$(grep -c 'WARNING' docs-build.log || true)
+          echo "Sphinx warnings: ${count:-0}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Sphinx warnings: ${count:-0}"
+      - name: Upload the build log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: docs-build-log
+          path: docs-build.log
+          if-no-files-found: warn

@@ -14,13 +14,12 @@ delegate to :mod:`hisim.config.sizing`) without closing an import cycle through
 ``hisim/component.py``.
 """
 
-# clean
-
 from __future__ import annotations
 
 import copy
 import dataclasses as dc
 import enum
+import importlib
 import sys
 import types
 import typing
@@ -131,6 +130,43 @@ def _complete_sizable_enum_codecs(config_class: type) -> None:
         metadata["dataclasses_json"] = json_config
         metadata[SizedFieldMetadata.VALUE_TYPE] = enum_type
         descriptor.metadata = MappingProxyType(metadata)
+
+
+def _check_component_identity(config_class: type) -> None:
+    """Refuses a configuration class that does not say which component it configures.
+
+    A configuration names its component in one line, ``MAIN_CLASS``; the one exception is a
+    class that writes its own :py:meth:`ConfigBase.get_main_classname`, which a handful of
+    test doubles with no real component do. A class that declares neither used to be accepted
+    until something serialized it — a scenario dump, a recorded twin, the economics adapter —
+    and only then raised, far from the class that forgot the line. Checking while the class
+    body is being turned into a class moves that failure to the import that defines it.
+
+    Example: ``class SolarThermalSystemConfig(ConfigBase)`` with
+    ``MAIN_CLASS = "hisim.components.solar_thermal_system.SolarThermalSystem"`` passes; the
+    same class body without that line raises ``TypeError`` naming ``SolarThermalSystemConfig``.
+
+    Args:
+        config_class: The configuration class whose body has just executed.
+
+    Raises:
+        TypeError: If the class neither carries a non-empty ``MAIN_CLASS`` (its own or an
+            inherited one) nor defines ``get_main_classname`` anywhere below ``ConfigBase``;
+            the message names the class and says what to declare.
+    """
+    if getattr(config_class, "MAIN_CLASS", ""):
+        return
+    if any(
+        "get_main_classname" in ancestor.__dict__
+        for ancestor in config_class.__mro__
+        if ancestor is not ConfigBase
+    ):
+        return
+    raise TypeError(
+        f"{config_class.__name__} does not say which component it configures. Declare "
+        f"MAIN_CLASS = \"<dotted path of the component class>\" on {config_class.__name__}, "
+        "for example MAIN_CLASS = \"hisim.components.generic_pv_system.PVSystem\"."
+    )
 
 
 @dataclass_json
@@ -284,11 +320,21 @@ class ConfigBase:
         decorated ``@preset``/``@constructor`` methods and the field names are visible.
         Checking here is what turns a builder name that shadows a field into an immediate,
         located error instead of a dataclass silently adopting the classmethod as that
-        field's default value.
+        field's default value. The component identity is checked last, so a class that gets
+        both wrong is told about the builder first, that being the more specific mistake.
         """
         super().__init_subclass__(**kwargs)
         check_builder_declarations(cls, _field_names_under_construction(cls))
         _complete_sizable_enum_codecs(cls)
+        _check_component_identity(cls)
+
+    #: Dotted import path of the component class this configuration configures, for example
+    #: ``"hisim.components.generic_pv_system.PVSystem"``. Declaring it is how a configuration
+    #: class says what it is a configuration *of*; :py:meth:`get_main_classname` resolves it,
+    #: and ``__init_subclass__`` refuses a subclass that leaves it empty. The one way out is to
+    #: override ``get_main_classname``, which a test double with no real component states
+    #: deliberately; for a component configuration the one line here is the way.
+    MAIN_CLASS: ClassVar[str] = ""
 
     #: The sizing facts this config class contributes to the scenario-wide fact pool
     #: (resolved engine-side before components are constructed). Empty for the vast majority of
@@ -346,9 +392,55 @@ class ConfigBase:
         self.component_id = component_id
 
     @classmethod
-    def get_main_classname(cls):
-        """Returns the fully qualified class name for the class that is getting configured. Used for Json."""
-        raise NotImplementedError("Missing a definition of the ")
+    def get_main_classname(cls) -> str:
+        """Returns the fully qualified name of the component class this configuration configures.
+
+        Serialized scenarios and postprocessing spell a component by this string, so it has to be
+        the one the rest of HiSim uses: the component's own ``get_full_classname()``. The class is
+        found through :py:attr:`MAIN_CLASS`, imported at call time (a component module imports its
+        configuration, so a module-level import here would close the cycle), and asked for its own
+        name. The declared path is where the class is imported from; the returned path is the
+        module the class was defined in, and the two agree only where a package pins the class's
+        ``__module__`` to the shorter path (``PVSystem``, ``Weather`` do; the building does not).
+
+        Example: ``PVSystemConfig.MAIN_CLASS`` is ``"hisim.components.generic_pv_system.PVSystem"``
+        and this returns that same string. ``BuildingConfig.MAIN_CLASS`` is
+        ``"hisim.components.building.building.Building"``, the defining module, so that it too
+        reads as what the method returns.
+
+        Returns:
+            str: ``<module of the component class>.<name of the component class>``.
+
+        Raises:
+            NotImplementedError: If the class reaches this method with ``MAIN_CLASS`` unset —
+                ``ConfigBase`` itself, or a subclass whose own override delegates up; the message
+                names the class. A subclass that declares neither is already refused at its class
+                definition, so this branch is the backstop rather than the usual report.
+            ValueError: If ``MAIN_CLASS`` is not a dotted path, names a module that cannot be
+                imported, or names an attribute the module does not have; the message names the
+                class and the path.
+        """
+        if not cls.MAIN_CLASS:
+            raise NotImplementedError(
+                f"{cls.__name__} does not say which component it configures. Declare "
+                f"MAIN_CLASS = \"<dotted path of the component class>\" on {cls.__name__}, "
+                "or override get_main_classname()."
+            )
+        module_name, _, class_name = cls.MAIN_CLASS.rpartition(".")
+        if not module_name:
+            raise ValueError(
+                f"{cls.__name__}.MAIN_CLASS is {cls.MAIN_CLASS!r}, which names no module. It is "
+                "the dotted path of the component class, for example "
+                "\"hisim.components.generic_pv_system.PVSystem\"."
+            )
+        try:
+            component_class = getattr(importlib.import_module(module_name), class_name)
+        except (ImportError, AttributeError) as error:
+            raise ValueError(
+                f"{cls.__name__}.MAIN_CLASS is {cls.MAIN_CLASS!r}, but that class could not be "
+                f"imported: {error}"
+            ) from error
+        return str(component_class.get_full_classname())
 
     @classmethod
     def get_config_classname(cls):

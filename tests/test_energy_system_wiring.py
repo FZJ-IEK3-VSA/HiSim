@@ -19,8 +19,6 @@ and a meter — so a failure points at the rule under test rather than at a hous
 Each test states the failure mode it catches.
 """
 
-# clean
-
 from pathlib import Path
 from typing import ClassVar, Tuple, cast
 
@@ -387,14 +385,16 @@ def test_an_input_fed_by_two_sources_is_rejected(tmp_path: Path) -> None:
     preset: german_single_family_home
     sizing_sources:
       weather_identity: weather.weather_identity
+      heating_reference_temperature_in_celsius: weather.heating_reference_temperature_in_celsius
     inputs:
       - weather
       - input: TemperatureOutside
         from: other_weather.TemperatureOutside
 """
     )
-    # Two weathers make the building's weather_identity ambiguous, and sizing runs before wiring, so the
-    # fixture names its source: this test is about the second feed, not about which weather sizes it.
+    # Two weathers make both of the building's weather facts ambiguous -- the weather identity and the
+    # design temperature the weather owns since D-21 -- and sizing runs before wiring, so the fixture
+    # names a source for each: this test is about the second feed, not about which weather sizes it.
 
     with pytest.raises(EnergySystemWiringError) as failure:
         Systems.build(entries, tmp_path)

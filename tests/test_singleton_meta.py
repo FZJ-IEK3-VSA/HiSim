@@ -8,8 +8,6 @@ a class that has never been instantiated has no entry there, so the creation pat
 without evicting the result path provider another test may be relying on.
 """
 
-# clean
-
 import threading
 from typing import Any, List
 

@@ -1,7 +1,5 @@
 """Tests for ReportImageEntry init and SystemChartEntry dataclass."""
 
-# clean
-
 import pytest
 
 from hisim.postprocessing.report_image_entries import (

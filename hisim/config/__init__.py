@@ -62,8 +62,6 @@ canonical spelling; the submodules are equally importable for code that prefers 
 fully-qualified path.
 """
 
-# clean
-
 from hisim.config.base import ComponentID, ConfigBase, DisplayConfig
 from hisim.config.names import NameSyntax
 from hisim.config.presets import (
@@ -75,6 +73,7 @@ from hisim.config.presets import (
     constructors_of,
     preset,
     preset_provenance,
+    replace_config,
     presets_of,
 )
 from hisim.config.laws import (
@@ -174,6 +173,7 @@ __all__ = [
     "law",
     "preset",
     "preset_provenance",
+    "replace_config",
     "presets_of",
     "resolve_all",
     "resolve_config",

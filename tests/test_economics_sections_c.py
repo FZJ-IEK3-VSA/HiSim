@@ -27,8 +27,6 @@ statements' own reconciliation invariant — and a bug caught here can mislead a
 never corrupt a stored result.
 """
 
-# clean
-
 import re
 from dataclasses import replace
 

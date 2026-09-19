@@ -24,8 +24,6 @@ that reads ``=``. Nothing is inferred by this — the byte-for-byte check of the
 file is what would catch it if the normalisation were ever too generous.
 """
 
-# clean
-
 from __future__ import annotations
 
 import enum

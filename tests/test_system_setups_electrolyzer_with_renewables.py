@@ -1,7 +1,5 @@
 """Tests for the electrolyzer with renewables system setup."""
 
-# clean
-
 from pathlib import Path
 import shutil
 from typing import Iterator

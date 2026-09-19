@@ -1,10 +1,9 @@
 """Electric Heating Module."""
 
-# clean
 # Owned
 from dataclasses import dataclass
 import logging
-from typing import List, Optional
+from typing import ClassVar, List, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -20,7 +19,20 @@ from hisim.component import (
     OpexCostDataClass,
     CapexCostDataClass,
 )
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import (
+    ComponentID,
+    ConfigBase,
+    DisplayConfig,
+    FactContribution,
+    Sizable,
+    Size,
+    SizingContext,
+    SizingLaw,
+    concrete,
+    law,
+    preset,
+    sized_field,
+)
 from hisim.components.building import Building
 from hisim.components.weather import Weather
 from hisim.components.heat_distribution_system import HeatDistributionControllerConfig
@@ -37,66 +49,94 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.economics.facts import CostRelevance
 
-__authors__ = "Katharina Rieck, Kristina Dabrock"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = ""
-__version__ = ""
-__maintainer__ = "Katharina Rieck"
-__email__ = "k.rieck@fz-juelich.de"
-__status__ = ""
-
 
 @dataclass_json
 @dataclass
 class ElectricHeatingConfig(ConfigBase):
-    """Configuration of the Electric Heating class."""
+    """Configuration of the Electric Heating class.
 
-    @classmethod
-    def get_main_classname(cls):
-        """Return the full class name of the base class."""
-        return ElectricHeating.get_full_classname()
+    Direct electric heating -- a radiator, an electric boiler, a fan heater -- serving space
+    heating and, optionally, domestic hot water. The named default is :meth:`preset_resistive`,
+    and the one field that depends on the building is sizable, so the preset leaves it ``AUTO``
+    and ``.resolve(ctx)`` copies the building's heating load into it. An author who knows the
+    appliance pins the field instead::
+
+        ElectricHeatingConfig.preset_resistive("ElectricHeating").resolve(
+            SizingContext(heating_load_in_watt=7780.75)
+        )
+
+    ``maximum_electric_power_w`` is both the electric and the thermal cap: the component sets its
+    thermal output equal to its electric input, so the heat delivered is limited by this field
+    alone.
+    """
+
+    MAIN_CLASS = "hisim.components.generic_electric_heating.ElectricHeating"
 
     component_id: ComponentID
-    # # Maximum electric power that can be delivered
-    maximum_electric_power_w: float
-    # Efficiency for electric to thermal power conversion
-    efficiency: float
-    #: CO2 footprint of investment in kg
-    device_co2_footprint_in_kg: Optional[float]
+    #: Whether the appliance also heats domestic hot water, in which case it declares the DHW
+    #: inputs and outputs and prioritises that demand over space heating.
+    with_domestic_hot_water_preparation: bool = False
+    #: CO2 footprint of investment in kg. Unset throughout the repository, which is what makes
+    #: postprocessing look the appliance up in the cost database instead.
+    device_co2_footprint_in_kg: Optional[float] = None
     #: cost for investment in Euro
-    investment_costs_in_euro: Optional[float]
+    investment_costs_in_euro: Optional[float] = None
     #: lifetime in years
-    lifetime_in_years: Optional[float]
+    lifetime_in_years: Optional[float] = None
     # maintenance cost in euro per year
-    maintenance_costs_in_euro_per_year: Optional[float]
+    maintenance_costs_in_euro_per_year: Optional[float] = None
     # subsidies as percentage of investment costs
-    subsidy_as_percentage_of_investment_costs: Optional[float]
-    with_domestic_hot_water_preparation: bool
+    subsidy_as_percentage_of_investment_costs: Optional[float] = None
+    #: Largest electric power the appliance draws, and therefore also the largest thermal power
+    #: it delivers. Sizable: left ``AUTO`` it is the building's heating load exactly, the
+    #: appliance covering the design load with no reserve.
+    maximum_electric_power_w: Sizable[float] = sized_field(rule=Size.HEATING_LOAD_IN_WATT)
 
+    @staticmethod
+    def sizing_facts(config: "ElectricHeatingConfig", ctx: SizingContext) -> dict:
+        """Contributes the appliance's resolved thermal power for the components around it.
+
+        Runs after the appliance itself resolved, so the value is the final concrete number
+        whether it came from the law, from the preset or from an override. The contributed
+        quantity is ``maximum_electric_power_w`` unconverted: resistive heating delivers as much
+        heat as it draws current, and the component caps both space heating and domestic hot
+        water at that one number.
+
+        Args:
+            config: this electric heating configuration, fully resolved.
+            ctx: the sizing context; unused, the value is this config's own.
+
+        Returns:
+            dict: the one fact named in :attr:`SIZING_CONTRIBUTIONS`.
+        """
+        del ctx
+        return {"maximal_thermal_power_in_watt": concrete(config.maximum_electric_power_w)}
+
+    #: Sizing facts this config contributes: its resolved thermal power, under the name the
+    #: heating-generator family shares, so a consumer sizes from electric heating exactly as it
+    #: sizes from a boiler. With two generators in one scenario each is addressable as
+    #: "<its name>.maximal_thermal_power_in_watt" and a consumer must say which one it means.
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
+        FactContribution(facts=("maximal_thermal_power_in_watt",), compute=sizing_facts),
+    )
+
+    @preset
     @classmethod
-    def get_default_electric_heating_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-        with_domestic_hot_water_preparation: bool = False,
-        maximum_electric_power_w: float = 40000,
-    ) -> "ElectricHeatingConfig":
-        """Get a default Electric heating."""
-        if component_id is None:
-            component_id = ComponentID(name="ElectricHeating")
-        config = ElectricHeatingConfig(
-            component_id=component_id,
-            maximum_electric_power_w=maximum_electric_power_w,
-            efficiency=1.0,  # 100% efficiency
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-        )
-        return config
+    def preset_resistive(cls, name: str) -> "ElectricHeatingConfig":
+        """Resistive electric heating, scaled to the building it heats.
+
+        The field defaults are that appliance: every watt drawn becomes a watt of heat, space
+        heating only, and the investment costs left to the cost database. What the preset does
+        not fix is how large the appliance is: ``maximum_electric_power_w`` stays ``AUTO`` so
+        that it is copied from the building's heating load.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            ElectricHeatingConfig: The preset configuration, power unsized.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class ElectricHeating(Component):
@@ -431,15 +471,17 @@ class ElectricHeating(Component):
 
             # Now calculate for space heating
             # Calculate
-            if self.config.maximum_electric_power_w - thermal_power_dhw_delivered_w <= 0:
+            maximum_electric_power_in_watt = concrete(self.config.maximum_electric_power_w)
+            if maximum_electric_power_in_watt - thermal_power_dhw_delivered_w <= 0:
                 raise ValueError(
-                    f"Electric load for DHW {thermal_power_dhw_delivered_w}W is equal or higher than maximal electric load {self.config.maximum_electric_power_w}. "
+                    f"Electric load for DHW {thermal_power_dhw_delivered_w}W is equal or higher "
+                    f"than maximal electric load {maximum_electric_power_in_watt}. "
                 )
             theoretical_thermal_building_in_watt = stsv.get_input_value(self.theoretical_thermal_building_power_channel)
             theoretical_thermal_building_energy_in_watthour = stsv.get_input_value(
                 self.theoretical_thermal_building_energy_channel
             )
-            available_electric_load_in_watt = self.config.maximum_electric_power_w - thermal_power_dhw_delivered_w
+            available_electric_load_in_watt = maximum_electric_power_in_watt - thermal_power_dhw_delivered_w
 
             if theoretical_thermal_building_in_watt >= 0:
                 if theoretical_thermal_building_in_watt > available_electric_load_in_watt:
@@ -504,8 +546,8 @@ class ElectricHeating(Component):
         if delta_temperature_needed_in_celsius > 0:
             # regulate thermal output power based on deltaT needed
             thermal_power_delivered_w = min(
-                self.config.maximum_electric_power_w * delta_temperature_needed_in_celsius / 100.0,
-                self.config.maximum_electric_power_w,
+                concrete(self.config.maximum_electric_power_w) * delta_temperature_needed_in_celsius / 100.0,
+                concrete(self.config.maximum_electric_power_w),
             )
             water_mass_flow_rate_in_kg_per_s = thermal_power_delivered_w / (
                 PhysicsConfig.get_properties_for_energy_carrier(
@@ -604,7 +646,7 @@ class ElectricHeating(Component):
         component_type = ComponentType.ELECTRIC_HEATER
         kpi_tag = KpiTagEnumClass.ELECTRIC_HEATING
         unit = Units.KILOWATT
-        size_of_energy_system = config.maximum_electric_power_w * 1e-3
+        size_of_energy_system = concrete(config.maximum_electric_power_w) * 1e-3
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
             simulation_parameters=simulation_parameters,
@@ -732,64 +774,88 @@ class ElectricHeating(Component):
 @dataclass_json
 @dataclass
 class ElectricHeatingControllerConfig(ConfigBase):
-    """Electric Heating Controller Config Class."""
+    """Configuration of the direct electric heating appliance's controller.
 
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return ElectricHeatingController.get_full_classname()
+    The switch in front of the appliance: each time step it decides whether the heat goes to
+    space heating, to domestic hot water, to both at once or nowhere, and it stops space
+    heating once the daily average outside temperature has risen above the heating threshold.
+    The named default is :meth:`preset_standard`; the two fields that describe the building
+    rather than the appliance are sizable, so the preset leaves them ``AUTO`` and
+    ``.resolve(ctx)`` derives both from the building's facts::
+
+        ElectricHeatingControllerConfig.preset_standard("ElectricHeatingController").resolve(
+            SizingContext(heating_load_in_watt=7780.75, conditioned_floor_area_in_m2=121.2)
+        )
+
+    Direct electric heating has no water circuit and therefore no heat distribution controller
+    whose threshold could be copied, so the threshold is derived here from the building's
+    efficiency -- by reusing that controller's law rather than restating its step table, which
+    is what keeps an electrically heated house switching off on the same day a water-heated
+    one of the same efficiency does.
+    """
+
+    MAIN_CLASS = "hisim.components.generic_electric_heating.ElectricHeatingController"
+
+    #: Sizing law of the building's specific heating load: its design heating load divided by
+    #: its conditioned floor area. Law terms carry no division, so this is a function law over
+    #: the two building facts; the operands and their order are the ones the setups divided by
+    #: hand, because the recorded value is the unrounded quotient.
+    SPECIFIC_HEATING_LOAD_LAW: ClassVar[SizingLaw] = law(
+        lambda ctx: ctx.heating_load_in_watt / ctx.conditioned_floor_area_in_m2,
+        reads=(Size.HEATING_LOAD_IN_WATT, Size.CONDITIONED_FLOOR_AREA_IN_M2),
+        description="Size.HEATING_LOAD_IN_WATT / Size.CONDITIONED_FLOOR_AREA_IN_M2",
+    )
 
     component_id: ComponentID
-    set_heating_threshold_outside_temperature_in_celsius: float
-    with_domestic_hot_water_preparation: bool
-    hysteresis_water_temperature_offset: float
-    parallel_space_heating_and_dhw_option: bool
-    specific_heating_load_of_building_in_watt_per_m2: Optional[float]
+    #: Daily average outside temperature above which space heating stops. Sizable: left ``AUTO``
+    #: it is the heat distribution controller's step table over the building's specific heating
+    #: load -- 16 °C up to 50 W/m², 18 °C up to 80 W/m², 20 °C above that -- because a badly
+    #: insulated house cools out in the mornings and evenings of the shoulder season and has to
+    #: be heated earlier in the year.
+    set_heating_threshold_outside_temperature_in_celsius: Sizable[float] = sized_field(
+        rule=HeatDistributionControllerConfig.HEATING_THRESHOLD_LAW,
+        note=(
+            "the heat distribution controller's step table: 16 °C up to 50 W/m² of specific"
+            " heating load, 18 °C up to 80 W/m², 20 °C above that"
+        ),
+    )
+    #: Whether the appliance this controls also prepares domestic hot water, in which case the
+    #: controller reads the vessel's temperature and can prioritise it over space heating.
+    with_domestic_hot_water_preparation: bool = False
+    #: Width of the hysteresis band on the hot water temperature, in kelvin: how far below the
+    #: 60 °C aim the vessel may cool before it is heated again, and the margin the controller
+    #: adds to the delta temperature it then asks the appliance for.
+    hysteresis_water_temperature_offset: float = 15.0
+    #: Whether space heating and hot water may be served in the same time step. False makes the
+    #: two exclusive, with hot water taking precedence.
+    parallel_space_heating_and_dhw_option: bool = False
+    #: The building's design heating load per square metre of conditioned floor area. No code
+    #: path reads it -- neither controller nor appliance touches the field -- it is recorded
+    #: provenance for the threshold above, which the same ratio decides. Sizable so that the
+    #: number recorded is the one the threshold was derived from, and not a second hand-typed one.
+    specific_heating_load_of_building_in_watt_per_m2: Sizable[float] = sized_field(
+        rule=SPECIFIC_HEATING_LOAD_LAW,
+        note="the building's heating load per m² of conditioned floor area",
+    )
 
+    @preset
     @classmethod
-    def get_default_electric_heating_controller_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-        with_domestic_hot_water_preparation: bool = False,
-        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
-        parallel_space_heating_and_dhw_option: bool = False,
-    ) -> "ElectricHeatingControllerConfig":
-        """Gets a default electric heating controller."""
-        if component_id is None:
-            component_id = ComponentID(name="ElectricHeatingController")
-        return ElectricHeatingControllerConfig(
-            component_id=component_id,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
-            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-            hysteresis_water_temperature_offset=15,
-            parallel_space_heating_and_dhw_option=parallel_space_heating_and_dhw_option,
-            specific_heating_load_of_building_in_watt_per_m2=None,
-        )
+    def preset_standard(cls, name: str) -> "ElectricHeatingControllerConfig":
+        """The one electric heating controller the fleet runs, derived from the building it heats.
 
-    @classmethod
-    def get_electric_heating_config_based_on_building_efficiency(
-        cls,
-        specific_heating_load_of_building_in_watt_per_m2: float,
-        component_id: Optional[ComponentID] = None,
-        with_domestic_hot_water_preparation: bool = False,
-        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
-        parallel_space_heating_and_dhw_option: bool = False,
-    ) -> "ElectricHeatingControllerConfig":
-        """Gets a default electric heating controller."""
-        if component_id is None:
-            component_id = ComponentID(name="ElectricHeatingController")
-        set_heating_threshold_outside_temperature_in_celsius = HeatDistributionControllerConfig.set_heating_threshold_temperature_based_on_building_efficiency(
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
-            specific_heating_load_of_building_in_watt_per_m2=specific_heating_load_of_building_in_watt_per_m2,
-        )
-        return ElectricHeatingControllerConfig(
-            component_id=component_id,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
-            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-            hysteresis_water_temperature_offset=15,
-            parallel_space_heating_and_dhw_option=parallel_space_heating_and_dhw_option,
-            specific_heating_load_of_building_in_watt_per_m2=specific_heating_load_of_building_in_watt_per_m2,
-        )
+        The field defaults are that controller: space heating only, exclusive of hot water
+        where the appliance prepares it as well, and a fifteen-kelvin hysteresis band on the
+        vessel temperature. What the preset does not fix is the heating threshold and the
+        specific heating load behind it, which stay ``AUTO`` so that both come from the
+        building instead of being written down twice.
+
+        Args:
+            name: Instance name of the controller in the simulation.
+
+        Returns:
+            The configuration, with its two sizable fields still ``AUTO``.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class ElectricHeatingController(Component):
@@ -987,7 +1053,9 @@ class ElectricHeatingController(Component):
                 set_temperature_space_heating_in_celsius=60,  # artificial because no sh water used
                 set_temperature_dhw_in_celsius=self.warm_water_temperature_aim_in_celsius,
                 hysteresis_water_temperature_offset_in_celsius=self.config.hysteresis_water_temperature_offset,
-                outside_temperature_threshold_in_celsius=self.config.set_heating_threshold_outside_temperature_in_celsius,
+                outside_temperature_threshold_in_celsius=concrete(
+                    self.config.set_heating_threshold_outside_temperature_in_celsius
+                ),
             ),
             parallel_space_heating_and_dhw_option=self.config.parallel_space_heating_and_dhw_option,
         )

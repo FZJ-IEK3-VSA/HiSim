@@ -29,8 +29,6 @@ central AUTO check and ``ConfigBase.resolve``), so any other hisim import here w
 close a cycle.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses
@@ -50,7 +48,7 @@ from hisim.config.laws import (
     SizingLaw,
     normalize_law,
 )
-from hisim.config.presets import ConfigBuilder
+from hisim.config.presets import replace_config
 
 if TYPE_CHECKING:
     from hisim.config.context import SizingContext
@@ -188,7 +186,8 @@ class SizedFieldMetadata:
     VALUE_TYPE: ClassVar[str] = "hisim_sizing_value_type"
     #: Whether the field's law may legitimately resolve to ``None``. Without this flag a
     #: vacuous value (``None``, a blank string) on a sized field counts as unresolved,
-    #: because a JSON ``null`` must not slip past the AUTO guard into a cache key.
+    #: because a JSON ``null`` must not slip past the AUTO guard into a cache key. The flag
+    #: also makes a null fact an answer for this field rather than a refusal (F-12).
     OPTIONAL: ClassVar[str] = "hisim_sizing_optional"
 
 
@@ -221,7 +220,9 @@ def sized_field(
         optional: Declare that the law may legitimately resolve to ``None`` (the field is
             ``Sizable[Optional[...]]``). Without it, ``None`` -- which a JSON ``null``
             decodes to -- and a blank string count as unresolved, so they cannot slip past
-            the construction guard into a cache key.
+            the construction guard into a cache key. It also decides what a null *fact*
+            means for the field: an optional field whose fact the system provides as
+            ``None`` resolves to ``None``, where a required field refuses, naming the fact.
         **field_kwargs: Passed through to ``dataclasses.field`` (respecting an existing
             ``metadata`` mapping by merging into it).
 
@@ -326,17 +327,41 @@ def _is_vacuous(value: Any) -> bool:
     return value is None or (isinstance(value, str) and not value.strip())
 
 
-def _optional_sized_fields(config_class: type) -> Set[str]:
+def optional_sized_fields(config_class: type) -> Set[str]:
     """Names the sized fields of a class whose law may legitimately resolve to ``None``.
 
     These are the fields declared with ``sized_field(..., optional=True)``; a vacuous value
-    on them is a resolved value, not a request for sizing.
+    on them is a resolved value, not a request for sizing, and a fact they read that the
+    system provides as ``None`` resolves them to ``None`` rather than failing.
+
+    Args:
+        config_class: The configuration class to inspect.
+
+    Returns:
+        The names of its optional sized fields, empty for a class that declares none.
     """
     return {
         field.name
         for field in dataclasses.fields(config_class)
         if field.metadata.get(SizedFieldMetadata.OPTIONAL, False)
     }
+
+
+def reads_a_null_fact(law: SizingLaw, ctx: "SizingContext") -> bool:
+    """Whether any context fact this law reads is carried as ``None``.
+
+    Only asked about an optional field: for it a ``None`` fact is an answer -- district heat
+    burns nothing, so the fuel's heating value is nothing -- while for every other field it
+    is the absence of an answer, which the fact term refuses on its own.
+
+    Args:
+        law: The law about to be evaluated.
+        ctx: The facts visible to the config being resolved.
+
+    Returns:
+        True if the law reads at least one fact the context carries as ``None``.
+    """
+    return any(getattr(ctx, fact, None) is None for fact, _cardinality in law.facts_read())
 
 
 def describe_auto_fields(config: Any) -> str:
@@ -458,6 +483,33 @@ def _qualified_source(fact: str, fact_sources: Optional[Mapping[str, str]]) -> s
     return f"{provider}.{fact}" if provider else fact
 
 
+def _resolution_entry(
+    field_name: str, law: SizingLaw, value: Any, ctx: "SizingContext",
+    own: "OwnFields", fact_sources: Optional[Mapping[str, str]],
+) -> SizingRecordEntry:
+    """Builds one field's audit entry: the law, the facts it read, their values and the result.
+
+    Args:
+        field_name: The field that was resolved.
+        law: The law that produced the value -- the class's, or the one a preset assigned.
+        value: What the field ended up holding, ``None`` included.
+        ctx: The facts visible to this config, read for the entry's input values.
+        own: The view of the config's own fields, read for sibling inputs.
+        fact_sources: Fact-to-provider names, so an input reads ``provider.fact``; may be None.
+
+    Returns:
+        The record entry, ready to append to the config's sizing record.
+    """
+    facts = tuple(fact for fact, _cardinality in law.facts_read())
+    return SizingRecordEntry(
+        field=field_name, law=law.describe(), facts_read=facts, value=value,
+        inputs=tuple(
+            (_qualified_source(fact, fact_sources), getattr(ctx, fact, None)) for fact in facts
+        ) + tuple(
+            (f"self.{name}", own.value_of(name)) for name in law.fields_read()
+        ))
+
+
 def resolve_config(
     config: ConfigT, ctx: "SizingContext", fact_sources: Optional[Mapping[str, str]] = None
 ) -> ConfigT:
@@ -502,7 +554,7 @@ def resolve_config(
     # A preset may override the class law for one field by assigning a SizingLaw as the
     # field value (the per-preset escape hatch) — e.g. the pellet boiler's minimal power
     # is a twelfth of its own maximal power, while the gas boiler's is a constant zero.
-    optional_fields = _optional_sized_fields(type(config))
+    optional_fields = optional_sized_fields(type(config))
     pending: Dict[str, SizingLaw] = {}
     for field_name, declared_law in laws.items():
         current = getattr(config, field_name)
@@ -514,6 +566,16 @@ def resolve_config(
     record = []
     for field_name in _resolution_order(type(config), pending, own.known_fields()):
         effective_law = pending[field_name]
+        if field_name in optional_fields and reads_a_null_fact(effective_law, ctx):
+            # The system answered the question with "nothing", which for an optional field is
+            # an answer: a district heating connection contributes no heating value because it
+            # burns nothing. Evaluating would raise instead, since a fact term cannot tell a
+            # null answer from an absent one (F-12). The record still names the law, so the
+            # audit shows why the field ended up empty.
+            resolved[field_name] = None
+            own.record(field_name, None)
+            record.append(_resolution_entry(field_name, effective_law, None, ctx, own, fact_sources))
+            continue
         try:
             value = effective_law.evaluate(ctx, own)
         except NotImplementedError:
@@ -530,15 +592,11 @@ def resolve_config(
             ) from error
         resolved[field_name] = value
         own.record(field_name, value)
-        facts = tuple(fact for fact, _cardinality in effective_law.facts_read())
-        record.append(SizingRecordEntry(
-            field=field_name, law=effective_law.describe(), facts_read=facts, value=value,
-            inputs=tuple(
-                (_qualified_source(fact, fact_sources), getattr(ctx, fact, None)) for fact in facts
-            ) + tuple(
-                (f"self.{name}", own.value_of(name)) for name in effective_law.fields_read()
-            )))
-    result = dataclasses.replace(config, **resolved)  # type: ignore[type-var]
+        record.append(_resolution_entry(field_name, effective_law, value, ctx, own, fact_sources))
+    # replace_config rather than dataclasses.replace: the resolved copy must keep the preset
+    # stamp, which is an attribute and not a field, or the recorder would write the config out
+    # as a full literal block instead of its preset plus the overrides (F-13).
+    result = replace_config(config, **resolved)
     setattr(result, "sizing_record", tuple(record))
     if record:
         key = getattr(getattr(config, "component_id", None), "key", type(config).__name__)
@@ -546,10 +604,4 @@ def resolve_config(
             f"Sizing: resolved {type(config).__name__} '{key}': "
             + "; ".join(f"{entry.field}={entry.value!r} <- {entry.law}" for entry in record)
         )
-    # Preset provenance rides along exactly like the sizing record: dataclasses.replace
-    # copies fields only, so the non-field stamp must be carried over explicitly for the
-    # template creator to still see which preset the resolved config came from.
-    provenance = getattr(config, ConfigBuilder.PROVENANCE_ATTRIBUTE, None)
-    if provenance is not None:
-        setattr(result, ConfigBuilder.PROVENANCE_ATTRIBUTE, provenance)
     return result

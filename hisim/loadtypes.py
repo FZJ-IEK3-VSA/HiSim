@@ -13,8 +13,6 @@ Guidelines for enum classes:
 """
 from __future__ import annotations
 
-# clean
-
 import enum
 import typing
 

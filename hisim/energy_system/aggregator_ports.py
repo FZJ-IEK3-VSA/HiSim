@@ -18,8 +18,6 @@ The checks are classmethods over explicit arguments and reach into components on
 port lists every component has, so this module imports no component code.
 """
 
-# clean
-
 from __future__ import annotations
 
 from typing import Any, Dict, List, Sequence, Tuple

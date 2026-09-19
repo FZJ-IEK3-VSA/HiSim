@@ -10,7 +10,7 @@ from hisim.components import building
 from hisim.components import generic_heat_pump
 from hisim.components import electricity_meter
 from hisim import loadtypes
-from hisim.config import ComponentID, SizingContext
+from hisim.config import SizingContext
 
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
@@ -48,14 +48,6 @@ def setup_function(
 
     # Default source weight for electricity meter connections
     default_source_weight = 999
-    # Set Heat Pump Controller
-
-    temperature_air_heating_in_celsius = 19.0
-    temperature_air_cooling_in_celsius = 24.0
-    # hysteresis band around the heating/cooling setpoints, in K
-    # (a temperature difference: e.g. heating turns off above setpoint + offset)
-    temperature_offset_in_kelvin = 0.5
-    hp_mode = 2
 
     # =================================================================================================================================
     # Build Components
@@ -77,6 +69,13 @@ def setup_function(
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
 
     my_building_config.weather_identity = my_weather_config.identity()
+    my_building_config = my_building_config.resolve(
+        SizingContext(
+            heating_reference_temperature_in_celsius=(
+                my_weather_config.heating_reference_temperature_in_celsius
+            )
+        )
+    )
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.preset_couple_both_at_work("UTSPConnector")
@@ -107,20 +106,17 @@ def setup_function(
     )
 
     # Build Heat Pump Controller
+    my_heat_pump_controller_config = generic_heat_pump.GenericHeatPumpControllerConfig.preset_standard(
+        "GenericHeatPumpController"
+    )
     my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
-        config=generic_heat_pump.GenericHeatPumpControllerConfig(
-            component_id=ComponentID(name="GenericHeatPumpController"),
-            temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
-            temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-            offset_in_celsius=temperature_offset_in_kelvin,
-            mode=hp_mode,
-        ),
+        config=my_heat_pump_controller_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump
     my_heat_pump = generic_heat_pump.GenericHeatPump(
-        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump_config(),
+        config=generic_heat_pump.GenericHeatPumpConfig.preset_vitocal_300_a("HeatPump"),
         my_simulation_parameters=my_simulation_parameters,
     )
 

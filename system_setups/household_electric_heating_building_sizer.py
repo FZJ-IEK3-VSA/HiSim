@@ -7,8 +7,6 @@ elements, DHW storage, optional battery and EMS, and an electricity meter.
 Configuration is loaded from modular household config files or defaults are used.
 """
 
-# clean
-
 from typing import Optional, Any, Union, List
 import re
 import os
@@ -187,10 +185,15 @@ def setup_function(
     # the fallback, for a climate LocationEnum does not carry.
     weather_station = getattr(weather.LocationEnum, weather_location.strip(), None)
     if weather_station is not None:
-        my_weather_config = weather.WeatherConfig.for_location("Weather", weather_station)
+        my_weather_config = weather.WeatherConfig.for_location(
+            "Weather", weather_station, heating_reference_temperature_in_celsius
+        )
     elif weather_filepath is not None and weather_datasource is not None:
         my_weather_config = weather.WeatherConfig.for_data_file(
-            "Weather", weather_filepath, weather_datasource
+            "Weather",
+            weather_filepath,
+            weather_datasource,
+            heating_reference_temperature_in_celsius,
         )
     else:
         raise ValueError(
@@ -199,7 +202,6 @@ def setup_function(
         )
 
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
-    my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
     my_building_config.max_thermal_building_demand_in_watt = max_thermal_building_demand_in_watt
     my_building_config.set_heating_temperature_in_celsius = building_set_heating_temperature_in_celsius
     my_building_config.set_cooling_temperature_in_celsius = building_set_cooling_temperature_in_celsius
@@ -225,8 +227,13 @@ def setup_function(
     if arche_type_config_.building_heat_capacity_class is not None:
         my_building_config.building_heat_capacity_class = arche_type_config_.building_heat_capacity_class
 
-    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field, so it is resolved before the archetype lookup runs on the config.
+    my_building_config = my_building_config.resolve(
+        SizingContext(heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius)
+    )
+    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_building, connect_automatically=True)
@@ -290,22 +297,29 @@ def setup_function(
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
 
     # Build electric heating controller
-    my_electric_heating_controller_sh_config = generic_electric_heating.ElectricHeatingControllerConfig.get_electric_heating_config_based_on_building_efficiency(
-        with_domestic_hot_water_preparation=True,
-        specific_heating_load_of_building_in_watt_per_m2=my_building_information.max_thermal_building_demand_in_watt
-        / my_building_information.scaled_conditioned_floor_area_in_m2,
-        parallel_space_heating_and_dhw_option=True,
+    my_electric_heating_controller_sh_config = (
+        generic_electric_heating.ElectricHeatingControllerConfig.preset_standard(
+            "ElectricHeatingController"
+        ).resolve(
+            SizingContext(
+                heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+                conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+            )
+        )
     )
+    # This house heats its water electrically as well, and serves both circuits at once.
+    my_electric_heating_controller_sh_config.with_domestic_hot_water_preparation = True
+    my_electric_heating_controller_sh_config.parallel_space_heating_and_dhw_option = True
     my_electric_heating_controller = generic_electric_heating.ElectricHeatingController(
         my_simulation_parameters=my_simulation_parameters, config=my_electric_heating_controller_sh_config
     )
     my_sim.add_component(my_electric_heating_controller, connect_automatically=True)
 
     # Build electric heating For Space Heating and DHW
-    my_electric_heating_sh_config = generic_electric_heating.ElectricHeatingConfig.get_default_electric_heating_config(
-        with_domestic_hot_water_preparation=True,
-        maximum_electric_power_w=my_building_information.max_thermal_building_demand_in_watt,
-    )
+    my_electric_heating_sh_config = generic_electric_heating.ElectricHeatingConfig.preset_resistive(
+        "ElectricHeating"
+    ).resolve(SizingContext(heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt))
+    my_electric_heating_sh_config.with_domestic_hot_water_preparation = True
     my_electric_heating = generic_electric_heating.ElectricHeating(
         config=my_electric_heating_sh_config, my_simulation_parameters=my_simulation_parameters
     )

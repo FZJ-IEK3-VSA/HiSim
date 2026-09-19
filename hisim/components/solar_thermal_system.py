@@ -3,7 +3,7 @@
 from copy import deepcopy
 import datetime
 from typing import ClassVar, List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 import pandas as pd
 import pvlib
@@ -19,13 +19,13 @@ from hisim.component import (
     SingleTimeStepValues,
 )
 from hisim.config import (
-    AUTO,
     ComponentID,
     ConfigBase,
     DisplayConfig,
     Sizable,
     Size,
     concrete,
+    preset,
     sized_field,
 )
 from hisim import loadtypes, log, utils
@@ -39,118 +39,117 @@ from hisim.postprocessing.cost_and_emission_computation.capex_computation import
 from hisim.economics.facts import CostRelevance
 
 
-__authors__ = "Kristina Dabrock"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Kristina Dabrock"]
-__license__ = "MIT"
-__version__ = "0.1"
-__maintainer__ = "Kristina Dabrock"
-__email__ = "k.dabrock@fz-juelich.de"
-__status__ = "development"
-
-
-#: How much collector a solar thermal system gets per apartment it serves. The whole
-#: of the collector sizing law: a building with three flats gets three times the
-#: collector of a single-family house, the law assuming that hot water demand scales
-#: with the number of dwellings.
-COLLECTOR_AREA_IN_M2_PER_APARTMENT = 4.0
-
-
 @dataclass_json
 @dataclass
 class SolarThermalSystemConfig(ConfigBase):
-    """Configuration of the SolarThermalSystem component."""
+    """Configuration of the solar thermal system: a collector field preheating the hot water storage.
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the base class."""
-        return SolarThermalSystem.get_full_classname()
+    A collector is described by three things: the efficiency curve it converts irradiance with
+    (``eta_0`` and the two thermal loss parameters), the plane it sits in (``tilt``, ``azimuth``)
+    together with the place that plane stands in (``coordinates``, which fix the sun's path over
+    it), and how much of it there is (``area_m2``). Only the last is sized against the building:
+    the curve and the plane describe the product an installer picks, the area describes how much
+    of that product the dwellings need.
+
+    The named default is :meth:`preset_flat_plate`::
+
+        SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem").resolve(context)
+
+    The preset leaves ``area_m2`` at ``AUTO``, so the configuration it returns has to be resolved
+    against a context carrying ``number_of_apartments`` before a component can be built from it.
+    """
+
+    MAIN_CLASS = "hisim.components.solar_thermal_system.SolarThermalSystem"
+
+    #: How much collector a solar thermal system gets per apartment it serves. The whole of the
+    #: collector sizing law: a building with three flats gets three times the collector of a
+    #: single-family house, the law assuming that hot water demand scales with the number of
+    #: dwellings.
+    COLLECTOR_AREA_IN_M2_PER_APARTMENT: ClassVar[float] = 4.0
 
     component_id: ComponentID
-    coordinates: Coordinates
 
-    # Module configuration
-    azimuth: float
-    tilt: float
-    eta_0: float
-    a_1_w_m2_k: float  # W/(m2*K)
-    a_2_w_m2_k: float  # W/(m2*K2)
+    #: Where the collector stands, which together with the instant is the whole of the sun's
+    #: position over it. Aachen.
+    coordinates: Coordinates = field(
+        default_factory=lambda: Coordinates(latitude_in_degrees=50.78, longitude_in_degrees=6.08)
+    )
 
-    # Whether on old solar pump or a new one is used
-    old_solar_pump: bool
+    #: Compass direction the collector plane faces, in degrees clockwise from north; 180 is south.
+    azimuth: float = 180.0
+    #: Inclination of the collector plane against the horizontal, in degrees.
+    tilt: float = 30.0
 
-    # techno-economic parameters
-    #: CO2 footprint of investment in kg
-    device_co2_footprint_in_kg: Optional[float]
-    #: cost for investment in Euro
-    investment_costs_in_euro: Optional[float]
-    #: lifetime in years
-    lifetime_in_years: Optional[float]
-    # maintenance cost in euro per year
-    maintenance_costs_in_euro_per_year: Optional[float]
-    # subsidies as percentage of investment costs
-    subsidy_as_percentage_of_investment_costs: Optional[float]
+    # The three numbers of the efficiency curve are taken from the Excel sheet that can be
+    # downloaded from
+    # http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters
+    # Values were determined by changing eta_0, a_1 and a_2 so that the curve fits with the
+    # typical flat plate curve.
+    #: Optical efficiency: the share of the irradiance on the plane that reaches the fluid while
+    #: collector and ambient air are equally warm.
+    eta_0: float = 0.78
+    #: First-order thermal loss coefficient, in W/(m2*K).
+    a_1_w_m2_k: float = 3.2
+    #: Second-order thermal loss coefficient, in W/(m2*K2).
+    a_2_w_m2_k: float = 0.015
 
-    # Weight of component, defines hierachy in control. The default is 1.
-    source_weight: int
+    #: Whether an old solar pump is installed rather than a new one. An old one draws 35 W while
+    #: it runs, a new one 10 W.
+    old_solar_pump: bool = False
 
-    #: Collector area in m2, sized to the building it serves. A sizable field carries a
-    #: default (AUTO), so it sits here among the defaulted fields rather than up with the
-    #: other module parameters, which a dataclass would refuse.
+    #: CO2 footprint of investment in kg. Left None, so that the capex computation derives it
+    #: from the collector area.
+    device_co2_footprint_in_kg: Optional[float] = None
+    #: Cost for investment in Euro. Left None, as the footprint above.
+    investment_costs_in_euro: Optional[float] = None
+    #: Lifetime in years. Left None, as the footprint above.
+    lifetime_in_years: Optional[float] = None
+    #: Maintenance cost in Euro per year. Left None, as the footprint above.
+    maintenance_costs_in_euro_per_year: Optional[float] = None
+    #: Subsidies as a percentage of the investment costs. Left None, as the footprint above.
+    subsidy_as_percentage_of_investment_costs: Optional[float] = None
+
+    #: Weight of the component, which defines its place in the control hierarchy.
+    source_weight: int = 1
+
+    #: Collector area in m2, sized to the building it serves.
     area_m2: Sizable[float] = sized_field(
         rule=Size.NUMBER_OF_APARTMENTS * COLLECTOR_AREA_IN_M2_PER_APARTMENT,
         value_type=float,
         note=f"{COLLECTOR_AREA_IN_M2_PER_APARTMENT} m2 of collector per apartment",
     )
 
-    # Temperature difference between collector inlet and mean temperature
-    delta_temperature_n_k: float = 10  # K
+    #: Temperature difference between the collector inlet and the collector's mean temperature, in K.
+    delta_temperature_n_k: float = 10
 
+    @preset
     @classmethod
-    def get_default_solar_thermal_system(
-        cls,
-        component_id: Optional[ComponentID] = None,
-        coordinates: Coordinates = Coordinates(latitude_in_degrees=50.78, longitude_in_degrees=6.08),
-        azimuth: float = 180.0,
-        tilt: float = 30.0,
-        area_m2: Sizable[float] = AUTO,
-        eta_0: float = 0.78,
-        a_1_w_m2_k: float = 3.2,  # W/(m2*K)
-        a_2_w_m2_k: float = 0.015,  # W/(m2*K2)
-        old_solar_pump: bool = False,
-        source_weight: int = 1,
-    ) -> "SolarThermalSystemConfig":
-        """Gets a default SolarThermalSystem.
+    def preset_flat_plate(cls, name: str) -> "SolarThermalSystemConfig":
+        """A Solar Keymark flat-plate collector over Aachen, facing south at 30 degrees.
 
-        The collector area is left to the field's sizing law unless the caller names one:
-        the returned config then carries AUTO and has to be resolved against a
-        ``SizingContext`` that knows how many apartments the building holds. A caller that
-        passes a number keeps that number, as an explicit value always beats a law.
+        The field defaults are the whole installation: the efficiency curve fitted to the typical
+        flat-plate curve, a south-facing plane inclined 30 degrees, the Aachen coordinates and a
+        new solar pump. The collector area is the one thing the preset does not state, because it
+        follows from the building: it stays ``AUTO`` and ``.resolve(context)`` turns it into four
+        square metres per dwelling.
+
+        Example::
+
+            config = SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem").resolve(
+                SizingContext(number_of_apartments=3)
+            )
+
+        The preset is named after the collector technology rather than ``standard`` because a flat
+        plate is one collector kind among several: an evacuated-tube collector is the same class
+        with a different curve, and it would want a name of its own.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            SolarThermalSystemConfig: The preset configuration, its area still to be resolved.
         """
-        if component_id is None:
-            component_id = ComponentID(name="SolarThermalSystem")
-        return SolarThermalSystemConfig(
-            coordinates=coordinates,
-            component_id=component_id,
-            azimuth=azimuth,
-            tilt=tilt,
-            area_m2=area_m2,  # m2
-            # These values are taken from the Excel sheet that can be downloaded from
-            # http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters
-            # Values were determined by changing eta_0, a_1, and a_2 so that the curve
-            # fits with the typical flat plat curve
-            eta_0=eta_0,
-            a_1_w_m2_k=a_1_w_m2_k,  # W/(m2*K)
-            a_2_w_m2_k=a_2_w_m2_k,  # W/(m2*K2)
-            old_solar_pump=old_solar_pump,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-            source_weight=source_weight,
-        )
+        return cls(component_id=ComponentID(name=name))
 
 
 class SolarThermalSystem(Component):
@@ -777,30 +776,46 @@ class SolarThermalSystemState:
 @dataclass_json
 @dataclass
 class SolarThermalSystemControllerConfig(ConfigBase):
-    """Config class for controller of solar thermal system."""
+    """Configuration of the solar thermal system's controller: when the solar pump runs.
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the base class."""
-        return SolarThermalSystemController.get_full_classname()
+    The differential thermostat in front of the collector loop. It starts the pump once the
+    collector is more than :attr:`set_temperature_difference_for_on` warmer than the water in
+    the hot water vessel, and stops it again when the collector has cooled back to the
+    vessel's temperature or the vessel has reached its 60 °C aim. Running the pump against a
+    smaller difference would cost more electricity than the loop brings in heat.
+
+    The named default is :meth:`preset_standard`::
+
+        SolarThermalSystemControllerConfig.preset_standard("SolarThermalSystemController")
+
+    The switch-on difference is a property of the loop's pump and piping, not of the building
+    or the collector area, so the one field is a plain default and the preset takes nothing
+    but the instance name.
+    """
+
+    MAIN_CLASS = "hisim.components.solar_thermal_system.SolarThermalSystemController"
 
     component_id: ComponentID
-    set_temperature_difference_for_on: float
+    #: Temperature difference between the collector and the mean water temperature in the
+    #: vessel, in kelvin, above which the solar pump is switched on.
+    set_temperature_difference_for_on: float = 10.0
 
+    @preset
     @classmethod
-    def get_solar_thermal_system_controller_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-        name: str = "SolarThermalSystemController",
-        set_temperature_difference_for_on: float = 10,
-    ) -> "SolarThermalSystemControllerConfig":
-        """Gets a default SolarThermalSystemController for DHW."""
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        return SolarThermalSystemControllerConfig(
-            component_id=component_id,
-            set_temperature_difference_for_on=set_temperature_difference_for_on,
-        )
+    def preset_standard(cls, name: str) -> "SolarThermalSystemControllerConfig":
+        """The one differential thermostat the fleet runs: ten kelvin to switch the pump on.
+
+        The single field default is the whole controller. The preset is called ``standard``
+        because a switch-on difference describes no device and no standard — there is nothing
+        else to name it after.
+
+        Args:
+            name: Instance name of the controller in the simulation.
+
+        Returns:
+            The configuration, fully concrete — the class has no sizable field.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class SolarThermalSystemController(Component):

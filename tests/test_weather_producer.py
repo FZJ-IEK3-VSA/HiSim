@@ -12,8 +12,6 @@ series the producer computes are pinned by value, so a regression in the calcula
 rather than waiting for a golden pair.
 """
 
-# clean
-
 import dataclasses
 import importlib
 import pathlib

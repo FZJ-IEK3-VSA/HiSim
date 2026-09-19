@@ -18,7 +18,6 @@ instead of quietly dropping it; one setup also stands in for the fleet in refusi
 module-config path it cannot read. All three refusals are raised before any component is
 built, so each is checked by initializing the setup once and catching the error.
 """
-# clean
 import json
 import math
 import os

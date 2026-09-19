@@ -1,6 +1,5 @@
 """Test for the advanced battery lib."""
 
-# clean
 import pytest
 from hisim import component as cp
 from hisim.components import advanced_battery_bslib

@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 """The setup script."""
-# clean
 from setuptools import setup, find_packages
 
 with open("README.md", encoding="utf-8") as readme_file:

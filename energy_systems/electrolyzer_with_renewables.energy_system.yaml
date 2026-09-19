@@ -1,19 +1,14 @@
 # yaml-language-server: $schema=../hisim/energy_system_v3.schema.json
-# Recorded from system_setups/electrolyzer_with_renewables.py with energy_systems/one_day_15min.simulation.yaml by the HiSim energy-system recorder v1.
+# Recorded from system_setups/electrolyzer_with_renewables.py with simulation_parameters/one_day_15min_export.simulation.yaml by the HiSim energy-system recorder v1.
 schema_version: 3
 name: electrolyzer_with_renewables
 description: Simple Electrolyzer system setup.
 components:
   StandardTransformerAndRectifier:
     class: hisim.components.transformer_rectifier.Transformer
+    preset: standard
     config:
-      efficiency: 0.95
       rated_power_in_kilowatt: 1028.225
-      device_co2_footprint_in_kg: null
-      investment_costs_in_euro: null
-      lifetime_in_years: null
-      maintenance_costs_in_euro_per_year: null
-      subsidy_as_percentage_of_investment_costs: null
     inputs:
       - input: Input1
         from: CSV.CSVProfile

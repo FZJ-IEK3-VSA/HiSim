@@ -15,8 +15,6 @@ component imports. Like every module of the ``hisim.config`` package it imports 
 from the rest of HiSim, which is what lets a component package import it freely.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses
@@ -79,6 +77,22 @@ class PresetInfo:
     building the preset once with :attr:`PROBE_NAME`, because a preset is a builder and
     its content cannot be read any other way; the throwaway instance is discarded
     immediately.
+
+    ``laws`` is the second half of that ``auto`` answer: the fields this preset resolves by a
+    law *of its own* rather than by the one declared at the field, each paired with that law's
+    own rendering of itself. ``GenericBoilerConfig.preset_pellets`` is the example — the pellet
+    boiler's minimum power is a twelfth of its maximum where the field declares a constant zero
+    — and the field stays in ``auto`` as well, because a law is still something to be resolved
+    and not a pinned value. A preset that overrides no law carries an empty tuple, which is the
+    normal case.
+
+    ``sets`` is what the preset does to the *plain* fields: every non-sizable field whose built
+    value differs from the class's own declared default, paired with that value, in declaration
+    order. It is what separates two presets of a class whose sizable half is identical —
+    ``SimpleHeatSourceConfig``'s three presets differ in nothing else (finding F-21) — and it is
+    empty for the many presets that only accept the field defaults, since a preset that changes
+    nothing has nothing to state. The identity field is never listed: every preset sets it, from
+    the instance name it was handed, and it is not a choice the preset made.
     """
 
     #: Instance name handed to a preset builder purely to inspect the result. It is never
@@ -88,10 +102,16 @@ class PresetInfo:
     #: refuses anything a result column or a declarative file could not carry.
     PROBE_NAME: ClassVar[str] = "_describe_probe_"
 
+    #: Name of the field holding the component's identity, which every preset sets from the
+    #: instance name it was handed and which is therefore never news about the preset itself.
+    IDENTITY_FIELD: ClassVar[str] = "component_id"
+
     name: str
     canonical: bool
+    sets: Tuple[Tuple[str, Any], ...]
     pinned: Tuple[str, ...]
     auto: Tuple[str, ...]
+    laws: Tuple[Tuple[str, str], ...]
     note: Optional[str]
 
 
@@ -186,29 +206,39 @@ def _type_name(field: dataclasses.Field) -> str:
     return _annotation_name(field.type)
 
 
-def _describe_fields(config_class: type, sizable: Tuple[str, ...]) -> Tuple[FieldInfo, ...]:
-    """Describes every dataclass field of the class, marking the sizable ones.
+def _field_default(field: dataclasses.Field) -> Any:
+    """Returns the value a field defaults to, or ``dataclasses.MISSING`` when it is mandatory.
 
-    A field with a default factory is reported with the value that factory produces, since
-    a description is about what a user would get, not about how the default is spelled.
+    A field with a default factory is reported with the value that factory produces, since a
+    description is about what a user would get, not about how the default is spelled. Example:
+    a field declared ``default_factory=list`` answers ``[]``, not ``list``.
+
+    Args:
+        field: The dataclass field to read.
+
+    Returns:
+        The declared default, the factory's product, or ``dataclasses.MISSING`` for a field the
+        caller must supply — a distinct marker is needed because ``None`` is itself a common and
+        meaningful default in HiSim configs.
     """
-    infos = []
-    for field in dataclasses.fields(config_class):
-        if field.default is not dataclasses.MISSING:
-            default: Any = field.default
-        elif field.default_factory is not dataclasses.MISSING:  # type: ignore[misc]
-            default = field.default_factory()  # type: ignore[misc]
-        else:
-            default = dataclasses.MISSING
-        infos.append(
-            FieldInfo(
-                name=field.name,
-                type_name=_type_name(field),
-                default=default,
-                sizable=field.name in sizable,
-            )
+    if field.default is not dataclasses.MISSING:
+        return field.default
+    if field.default_factory is not dataclasses.MISSING:  # type: ignore[misc]
+        return field.default_factory()  # type: ignore[misc]
+    return dataclasses.MISSING
+
+
+def _describe_fields(config_class: type, sizable: Tuple[str, ...]) -> Tuple[FieldInfo, ...]:
+    """Describes every dataclass field of the class, marking the sizable ones."""
+    return tuple(
+        FieldInfo(
+            name=field.name,
+            type_name=_type_name(field),
+            default=_field_default(field),
+            sizable=field.name in sizable,
         )
-    return tuple(infos)
+        for field in dataclasses.fields(config_class)
+    )
 
 
 def _describe_presets(config_class: type, sizable: Tuple[str, ...]) -> Tuple[PresetInfo, ...]:
@@ -218,6 +248,11 @@ def _describe_presets(config_class: type, sizable: Tuple[str, ...]) -> Tuple[Pre
     every configuration has a defensible default. Each preset is built once with
     :attr:`PresetInfo.PROBE_NAME`; a builder that raises is a bug in the preset, not
     something to be swallowed here, so the exception propagates.
+
+    The built instance is also what says which fields this preset resolves by a law of its
+    own: a preset overrides a field's declared law by assigning a :class:`SizingLaw` as the
+    field's value, and that law is readable nowhere else — and, through
+    :func:`_preset_sets`, which plain fields it moves off their class default.
     """
     canonical = canonical_preset(config_class)
     infos = []
@@ -228,12 +263,101 @@ def _describe_presets(config_class: type, sizable: Tuple[str, ...]) -> Tuple[Pre
             PresetInfo(
                 name=name,
                 canonical=canonical is not None and name == canonical.name,
+                sets=_preset_sets(config_class, probe, sizable),
                 pinned=tuple(field for field in sizable if field not in unresolved),
                 auto=tuple(field for field in sizable if field in unresolved),
+                laws=_preset_laws(probe, sizable),
                 note=builder.note,
             )
         )
     return tuple(infos)
+
+
+def _preset_laws(probe: Any, sizable: Tuple[str, ...]) -> Tuple[Tuple[str, str], ...]:
+    """Pairs every field a built preset holds a law in with that law's own description.
+
+    A preset may replace a field's declared law by assigning a :class:`SizingLaw` as the field
+    value, which is how ``GenericBoilerConfig.preset_pellets`` derives a pellet boiler's minimum
+    power from its maximum where the field itself declares a constant. Without this, a
+    description would show the *declared* law for such a field and so attribute one preset's
+    arithmetic to another (finding F-18).
+
+    Args:
+        probe: The throwaway instance the preset built, read and discarded by the caller.
+        sizable: The names of the class's sizable fields, in declaration order.
+
+    Returns:
+        ``(field name, law description)`` pairs in declaration order; empty for a preset that
+        overrides no law, which is the normal case.
+    """
+    laws = []
+    for field_name in sizable:
+        value = getattr(probe, field_name)
+        if isinstance(value, SizingLaw):
+            laws.append((field_name, value.describe()))
+    return tuple(laws)
+
+
+def _preset_sets(config_class: type, probe: Any, sizable: Tuple[str, ...]) -> Tuple[Tuple[str, Any], ...]:
+    """Pairs every plain field a built preset moves off its class default with the value it holds.
+
+    A preset's own section otherwise says only what it does to the *sizable* fields, so two
+    presets differing in nothing but plain values — ``SimpleHeatSourceConfig``'s three, which
+    each state a kind of heat source and the one number that kind needs — describe identically
+    (finding F-21). The comparison is against the class's own declared defaults, which is what
+    keeps the answer short: after the common value of a field became its default, most presets
+    change nothing and this returns an empty tuple.
+
+    Example: ``SimpleHeatSourceConfig.preset_constant_thermal_power`` answers
+    ``(("heat_source_type", SimpleHeatSourceType.CONSTANT_THERMAL_POWER),
+    ("power_th_in_watt", 5000.0))``.
+
+    Three kinds of field are left out. The identity field is set by every preset from the
+    instance name it was handed, so it says nothing about the preset. A sizable field is
+    already the subject of the ``pinned``/``auto`` split and of :func:`_preset_laws`, and
+    repeating it here would state it twice. And a field whose value equals the class default
+    was not changed at all.
+
+    Args:
+        config_class: The class the preset belongs to, read for its declared defaults.
+        probe: The throwaway instance the preset built, read and discarded by the caller.
+        sizable: The names of the class's sizable fields, which this answer excludes.
+
+    Returns:
+        ``(field name, value)`` pairs in declaration order; empty for a preset that accepts
+        every plain default, which is the normal case.
+    """
+    changed = []
+    for field in dataclasses.fields(config_class):
+        if field.name == PresetInfo.IDENTITY_FIELD or field.name in sizable:
+            continue
+        value = getattr(probe, field.name, dataclasses.MISSING)
+        if _differs(value, _field_default(field)):
+            changed.append((field.name, value))
+    return tuple(changed)
+
+
+def _differs(value: Any, default: Any) -> bool:
+    """Says whether a built preset's field value is a change from the class's declared default.
+
+    Plain equality answers it for everything a config field normally holds — a number, a string,
+    an enum member, a nested configuration dataclass — and ``dataclasses.MISSING`` compares
+    unequal to every real value, so a preset supplying a mandatory field always counts as
+    setting it. A value whose ``__eq__`` returns something that is not a boolean (an array, a
+    frame) is reported as changed, because a description that silently dropped such a field
+    would be claiming the preset left it alone.
+
+    Args:
+        value: The value the built preset holds.
+        default: The class's declared default, or ``dataclasses.MISSING``.
+
+    Returns:
+        ``True`` when the two are not plainly equal.
+    """
+    try:
+        return bool(value != default)
+    except (TypeError, ValueError):
+        return True
 
 
 def _describe_constructors(config_class: type) -> Tuple[ConstructorInfo, ...]:

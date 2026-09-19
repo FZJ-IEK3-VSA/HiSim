@@ -1,7 +1,5 @@
 """Simple System Setup Module."""
 
-# clean
-
 # Generic
 from typing import Optional
 
@@ -57,7 +55,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     # Create sum builder object
     sum_builder = SumBuilderForTwoInputs(
-        config=SumBuilderConfig.get_sumbuilder_default_config(),
+        config=SumBuilderConfig.preset_standard("Sum"),
         my_simulation_parameters=my_simulation_parameters,
     )
     # Connect inputs from sum object to both previous outputs

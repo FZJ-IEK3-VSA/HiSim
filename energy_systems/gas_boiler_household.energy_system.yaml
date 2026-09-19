@@ -5,7 +5,7 @@
 # identical after canonicalisation, so an edit to either must be made to both.
 # Run it with:
 #   hisim energy-system run energy_systems/gas_boiler_household.energy_system.yaml \
-#       energy_systems/one_day_15min.simulation.yaml
+#       simulation_parameters/one_day_15min_export.simulation.yaml
 schema_version: 3
 name: Gas boiler household
 description: Single-family house with a condensing gas boiler, floor heating and grid electricity.

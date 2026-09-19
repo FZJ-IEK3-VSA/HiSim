@@ -16,8 +16,6 @@ package-wide ``hisim.log`` exception is not needed here — the report never log
 *is* the record).
 """
 
-# clean
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field

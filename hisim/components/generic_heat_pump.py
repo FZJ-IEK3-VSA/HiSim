@@ -7,8 +7,6 @@ This module contains the following classes:
 
 """
 
-# clean
-
 # Generic/Built-in
 import copy
 from typing import List, Any, Optional
@@ -23,7 +21,7 @@ from hisim import log
 # Owned
 from hisim import utils
 from hisim.component import OpexCostDataClass, CapexCostDataClass
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor, preset
 from hisim.components.building import Building
 from hisim.components.weather import Weather
 import hisim.loadtypes as lt
@@ -31,77 +29,145 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.economics.facts import ComponentCostFacts, CostRelevance
 
-__authors__ = "Vitor Hugo Bellotto Zago"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = "MIT"
-__version__ = "0.1"
-__maintainer__ = "Vitor Hugo Bellotto Zago"
-__email__ = "vitor.zago@rwth-aachen.de"
-__status__ = "development"
-
 
 @dataclass_json
 @dataclass
 class GenericHeatPumpConfig(ConfigBase):
-    """Config for the generic heat pump."""
+    """Configuration of the Generic Heat Pump class.
 
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return GenericHeatPump.get_full_classname()
+    A heat pump picked out of the bundled device catalogue by manufacturer and model name.
+    The component does not model the machine: it reads the catalogue row at construction
+    time, fits a line through the row's COP points and takes the row's A2/35 rating as the
+    machine's heating power. The configuration therefore says which row to read and how
+    long the machine has to stay on and off once it has switched; nothing about its size.
+
+    The named default is :meth:`preset_vitocal_300_a`, the one device the fleet uses. Any of
+    the catalogue's other rows is reached through :meth:`for_device`::
+
+        GenericHeatPumpConfig.for_device(
+            "HeatPump",
+            manufacturer="NIBE Systemtechnick GmbH",
+            heat_pump_name="F1155-6",
+        )
+    """
+
+    MAIN_CLASS = "hisim.components.generic_heat_pump.GenericHeatPump"
 
     component_id: ComponentID
-    manufacturer: str
-    heat_pump_name: str
-    min_operation_time_in_seconds: float
-    min_idle_time_in_seconds: float
+    #: Manufacturer as the bundled heat-pump catalogue spells it, the first half of the key
+    #: the component looks the device up by.
+    manufacturer: str = "Viessmann Werke GmbH & Co KG"
+    #: Model name as the catalogue spells it, the second half of that key.
+    heat_pump_name: str = "Vitocal 300-A AWO-AC 301.B07"
+    #: Shortest time the machine stays on once it has started, in seconds.
+    min_operation_time_in_seconds: float = 3600.0
+    #: Shortest time the machine stays off once it has stopped, in seconds.
+    min_idle_time_in_seconds: float = 900.0
 
+    @preset(note="nominal catalogue device")
     @classmethod
-    def get_default_generic_heat_pump_config(
+    def preset_vitocal_300_a(cls, name: str) -> "GenericHeatPumpConfig":
+        """The fleet's air/water heat pump, Viessmann's Vitocal 300-A AWO-AC 301.B07.
+
+        The field defaults are that machine: the catalogue row it is looked up by, an hour of
+        minimum running time and a quarter of an hour of minimum idle time. Its heating power
+        is not a field at all -- the component reads it off the catalogue row -- so there is
+        nothing for the preset to size.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            GenericHeatPumpConfig: The preset configuration.
+        """
+        return cls(component_id=ComponentID(name=name))
+
+    @constructor
+    @classmethod
+    def for_device(
         cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Gets a default Generic Heat Pump."""
-        if component_id is None:
-            component_id = ComponentID(name="HeatPump")
-        return GenericHeatPumpConfig(
-            component_id=component_id,
-            heat_pump_name="Vitocal 300-A AWO-AC 301.B07",
-            manufacturer="Viessmann Werke GmbH & Co KG",
-            min_operation_time_in_seconds=60 * 60,
-            min_idle_time_in_seconds=15 * 60,
+        name: str,
+        manufacturer: str,
+        heat_pump_name: str,
+    ) -> "GenericHeatPumpConfig":
+        """Builds a heat pump from any other row of the bundled device catalogue.
+
+        The catalogue has more rows than the one the preset pins, and a preset name is wire
+        format forever, so the other devices are reached by naming them rather than by minting
+        a preset each. The two timing fields keep the preset's values: they describe how the
+        machine is operated, not which machine it is.
+
+        The pair is *not* checked here. The catalogue is read by the component, in ``build()``,
+        and a pair that matches no row raises ``ValueError("Heat pump '<manufacturer>' /
+        '<name>' not registered in the database")`` there -- when the component is constructed,
+        not when this configuration is. A misspelling therefore survives serialization and
+        fails at the start of the simulation.
+
+        Args:
+            name: Instance name of the heat pump component; its ``ComponentID`` is built
+                from it.
+            manufacturer: Manufacturer as the catalogue spells it, e.g.
+                ``"NIBE Systemtechnick GmbH"``.
+            heat_pump_name: Model name as the catalogue spells it, e.g. ``"F1155-6"``.
+
+        Returns:
+            A fresh configuration naming that device; nothing about it is shared with any
+            other instance.
+        """
+        return cls(
+            component_id=ComponentID(name=name),
+            manufacturer=manufacturer,
+            heat_pump_name=heat_pump_name,
         )
 
 
 @dataclass_json
 @dataclass
 class GenericHeatPumpControllerConfig(ConfigBase):
-    """Configuration for the generic heat pump controller."""
+    """Configuration of the generic heat pump's controller.
 
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return GenericHeatPumpController.get_full_classname()
+    The thermostat in front of the machine: it watches the building's indoor air
+    temperature and switches the heat pump to heating below
+    :attr:`temperature_air_heating_in_celsius`, to cooling above
+    :attr:`temperature_air_cooling_in_celsius`, and off inside the band between them. The
+    named default is :meth:`preset_standard`::
+
+        GenericHeatPumpControllerConfig.preset_standard("GenericHeatPumpController")
+
+    Nothing here is derived from the building it heats -- these are the temperatures the
+    residents ask for -- so no field is sizable and the preset takes nothing but the
+    instance name.
+    """
+
+    MAIN_CLASS = "hisim.components.generic_heat_pump.GenericHeatPumpController"
 
     component_id: ComponentID
-    temperature_air_heating_in_celsius: float
-    temperature_air_cooling_in_celsius: float
-    offset_in_celsius: float
-    mode: int
+    #: Indoor air temperature below which the machine heats, in °C.
+    temperature_air_heating_in_celsius: float = 19.0
+    #: Indoor air temperature above which the machine cools, in °C. Only read in ``mode`` 2.
+    temperature_air_cooling_in_celsius: float = 24.0
+    #: Half-width of the hysteresis band around either setpoint, in kelvin: the machine
+    #: keeps running until the air is this far past the temperature that started it.
+    offset_in_celsius: float = 0.5
+    #: Which control law runs: 1 heats only, 2 heats and cools.
+    mode: int = 2
 
+    @preset
     @classmethod
-    def get_default_generic_heat_pump_controller_config(cls, component_id: Optional[ComponentID] = None,) -> Any:
-        """Gets a default Generic Heat Pump Controller."""
-        if component_id is None:
-            component_id = ComponentID(name="HeatPumpController")
-        return GenericHeatPumpControllerConfig(
-            component_id=component_id,
-            temperature_air_heating_in_celsius=18.0,
-            temperature_air_cooling_in_celsius=26.0,
-            offset_in_celsius=0.5,
-            mode=1,
-        )
+    def preset_standard(cls, name: str) -> "GenericHeatPumpControllerConfig":
+        """The one thermostat the fleet runs: heating below 19 °C, cooling above 24 °C.
+
+        The field defaults are that thermostat, with half a kelvin of hysteresis either
+        side of the setpoint that started the machine, and both the heating and the cooling
+        law enabled.
+
+        Args:
+            name: Instance name of the controller in the simulation.
+
+        Returns:
+            The configuration, fully concrete -- the class has no sizable field.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class GenericHeatPumpState:

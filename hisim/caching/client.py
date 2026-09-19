@@ -16,8 +16,6 @@ a miss, which is how entries from an older key scheme clean themselves up.
 This module imports the standard library, ``hisim.log`` and its own package only.
 """
 
-# clean
-
 import os
 from contextlib import contextmanager
 from dataclasses import dataclass

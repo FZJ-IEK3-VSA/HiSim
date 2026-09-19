@@ -61,7 +61,7 @@ def _wire_controller_inputs(controller: SimpleAirConditionerController, t_indoor
 def test_controller_turns_on_when_temperature_above_upper_deadband() -> None:
     """Inside temp above setpoint + deadband (24.5 °C) commands cooling (-1.0)."""
     my_simulation_parameters = _make_simulation_parameters()
-    config = SimpleAirConditionerControllerConfig.get_default_simple_air_conditioner_controller_config()
+    config = SimpleAirConditionerControllerConfig.preset_standard("SimpleAirConditionerController")
     controller = SimpleAirConditionerController(
         my_simulation_parameters=my_simulation_parameters,
         config=config,
@@ -79,7 +79,7 @@ def test_controller_turns_on_when_temperature_above_upper_deadband() -> None:
 def test_controller_turns_off_when_temperature_below_lower_deadband() -> None:
     """Inside temp below setpoint - deadband (23.5 °C) commands off (0.0)."""
     my_simulation_parameters = _make_simulation_parameters()
-    config = SimpleAirConditionerControllerConfig.get_default_simple_air_conditioner_controller_config()
+    config = SimpleAirConditionerControllerConfig.preset_standard("SimpleAirConditionerController")
     controller = SimpleAirConditionerController(
         my_simulation_parameters=my_simulation_parameters,
         config=config,
@@ -97,7 +97,7 @@ def test_controller_turns_off_when_temperature_below_lower_deadband() -> None:
 def test_controller_hysteresis_stays_on_within_deadband() -> None:
     """When previously cooling, a temp within the deadband keeps cooling on."""
     my_simulation_parameters = _make_simulation_parameters()
-    config = SimpleAirConditionerControllerConfig.get_default_simple_air_conditioner_controller_config()
+    config = SimpleAirConditionerControllerConfig.preset_standard("SimpleAirConditionerController")
     controller = SimpleAirConditionerController(
         my_simulation_parameters=my_simulation_parameters,
         config=config,
@@ -118,7 +118,7 @@ def test_controller_hysteresis_stays_on_within_deadband() -> None:
 def test_controller_hysteresis_stays_off_within_deadband() -> None:
     """When previously off, a temp within the deadband keeps cooling off."""
     my_simulation_parameters = _make_simulation_parameters()
-    config = SimpleAirConditionerControllerConfig.get_default_simple_air_conditioner_controller_config()
+    config = SimpleAirConditionerControllerConfig.preset_standard("SimpleAirConditionerController")
     controller = SimpleAirConditionerController(
         my_simulation_parameters=my_simulation_parameters,
         config=config,
@@ -137,7 +137,7 @@ def test_controller_hysteresis_stays_off_within_deadband() -> None:
 def test_controller_first_timestep_default_state_is_off() -> None:
     """The controller initialises in the off state (state == 0)."""
     my_simulation_parameters = _make_simulation_parameters()
-    config = SimpleAirConditionerControllerConfig.get_default_simple_air_conditioner_controller_config()
+    config = SimpleAirConditionerControllerConfig.preset_standard("SimpleAirConditionerController")
     controller = SimpleAirConditionerController(
         my_simulation_parameters=my_simulation_parameters,
         config=config,
@@ -150,7 +150,7 @@ def test_controller_first_timestep_default_state_is_off() -> None:
 @pytest.mark.base
 def test_controller_setpoint_default_value() -> None:
     """The default controller config has a 24 °C setpoint and 0.5 K deadband."""
-    config = SimpleAirConditionerControllerConfig.get_default_simple_air_conditioner_controller_config()
+    config = SimpleAirConditionerControllerConfig.preset_standard("SimpleAirConditionerController")
     assert config.setpoint_temperature_c == 24.0
     assert config.deadband_k == 0.5
 
@@ -159,7 +159,7 @@ def test_controller_setpoint_default_value() -> None:
 def test_controller_save_and_restore_state() -> None:
     """i_save_state / i_restore_state correctly round-trip the controller state."""
     my_simulation_parameters = _make_simulation_parameters()
-    config = SimpleAirConditionerControllerConfig.get_default_simple_air_conditioner_controller_config()
+    config = SimpleAirConditionerControllerConfig.preset_standard("SimpleAirConditionerController")
     controller = SimpleAirConditionerController(
         my_simulation_parameters=my_simulation_parameters,
         config=config,
@@ -180,7 +180,7 @@ def test_controller_save_and_restore_state() -> None:
 def _make_component() -> SimpleAirConditioner:
     """Create a SimpleAirConditioner component and return it."""
     my_simulation_parameters = _make_simulation_parameters()
-    config = SimpleAirConditionerConfig.get_default_simple_air_conditioner_config()
+    config = SimpleAirConditionerConfig.preset_standard("SimpleAirConditioner")
     return SimpleAirConditioner(
         my_simulation_parameters=my_simulation_parameters,
         config=config,
@@ -402,7 +402,7 @@ def test_component_partial_modulation() -> None:
 @pytest.mark.base
 def test_component_default_config_values() -> None:
     """The default component config has the expected nominal power, eta, and epsilon."""
-    config = SimpleAirConditionerConfig.get_default_simple_air_conditioner_config()
+    config = SimpleAirConditionerConfig.preset_standard("SimpleAirConditioner")
     assert config.nominal_cooling_power_w == 2000.0
     assert config.eta_carnot == 0.3
     assert config.temperature_epsilon_k == 0.01
@@ -423,13 +423,13 @@ def test_integration_controller_and_component_end_to_end() -> None:
     """
     my_simulation_parameters = _make_simulation_parameters()
 
-    controller_config = SimpleAirConditionerControllerConfig.get_default_simple_air_conditioner_controller_config()
+    controller_config = SimpleAirConditionerControllerConfig.preset_standard("SimpleAirConditionerController")
     controller = SimpleAirConditionerController(
         my_simulation_parameters=my_simulation_parameters,
         config=controller_config,
     )
 
-    ac_config = SimpleAirConditionerConfig.get_default_simple_air_conditioner_config()
+    ac_config = SimpleAirConditionerConfig.preset_standard("SimpleAirConditioner")
     ac = SimpleAirConditioner(
         my_simulation_parameters=my_simulation_parameters,
         config=ac_config,
@@ -510,13 +510,13 @@ def test_integration_controller_off_and_component_idle() -> None:
     """End-to-end: indoor temp 22 °C (below 23.5) commands off; component outputs zero."""
     my_simulation_parameters = _make_simulation_parameters()
 
-    controller_config = SimpleAirConditionerControllerConfig.get_default_simple_air_conditioner_controller_config()
+    controller_config = SimpleAirConditionerControllerConfig.preset_standard("SimpleAirConditionerController")
     controller = SimpleAirConditionerController(
         my_simulation_parameters=my_simulation_parameters,
         config=controller_config,
     )
 
-    ac_config = SimpleAirConditionerConfig.get_default_simple_air_conditioner_config()
+    ac_config = SimpleAirConditionerConfig.preset_standard("SimpleAirConditioner")
     ac = SimpleAirConditioner(
         my_simulation_parameters=my_simulation_parameters,
         config=ac_config,
@@ -581,7 +581,7 @@ def test_integration_controller_off_and_component_idle() -> None:
 def _make_cost_component() -> SimpleAirConditioner:
     """Create a SimpleAirConditioner for cost/KPI tests (year 2021 has cost factors)."""
     my_simulation_parameters = SimulationParameters.one_day_only(2021, 60)
-    config = SimpleAirConditionerConfig.get_default_simple_air_conditioner_config()
+    config = SimpleAirConditionerConfig.preset_standard("SimpleAirConditioner")
     return SimpleAirConditioner(
         my_simulation_parameters=my_simulation_parameters,
         config=config,
@@ -616,7 +616,7 @@ def _build_postprocessing_results(component, electric_energy_wh, thermal_energy_
 def test_get_cost_capex_returns_expected_values() -> None:
     """CAPEX returns the hardcoded investment cost, CO2 footprint, and lifetime."""
     my_simulation_parameters = SimulationParameters.one_day_only(2021, 60)
-    config = SimpleAirConditionerConfig.get_default_simple_air_conditioner_config()
+    config = SimpleAirConditionerConfig.preset_standard("SimpleAirConditioner")
     capex = SimpleAirConditioner.get_cost_capex(config, my_simulation_parameters)
 
     assert capex.capex_investment_cost_in_euro == 1500.0
@@ -726,7 +726,7 @@ def test_get_component_kpi_entries_cooling_sums_only_negative() -> None:
 def test_controller_get_cost_capex_returns_default() -> None:
     """Controller CAPEX returns the default (zero-cost) dataclass."""
     my_simulation_parameters = _make_simulation_parameters()
-    config = SimpleAirConditionerControllerConfig.get_default_simple_air_conditioner_controller_config()
+    config = SimpleAirConditionerControllerConfig.preset_standard("SimpleAirConditionerController")
     capex = SimpleAirConditionerController.get_cost_capex(config, my_simulation_parameters)
 
     assert capex.capex_investment_cost_in_euro == 0
@@ -738,7 +738,7 @@ def test_controller_get_cost_opex_returns_default() -> None:
     """Controller OPEX returns the default (zero-cost) dataclass."""
     controller = SimpleAirConditionerController(
         my_simulation_parameters=_make_simulation_parameters(),
-        config=SimpleAirConditionerControllerConfig.get_default_simple_air_conditioner_controller_config(),
+        config=SimpleAirConditionerControllerConfig.preset_standard("SimpleAirConditionerController"),
     )
     opex = controller.get_cost_opex(all_outputs=[], postprocessing_results=None)
     assert opex.total_consumption_in_kwh == pytest.approx(0.0)
@@ -749,7 +749,7 @@ def test_controller_get_component_kpi_entries_returns_empty() -> None:
     """Controller KPI entries list is empty (no direct KPIs)."""
     controller = SimpleAirConditionerController(
         my_simulation_parameters=_make_simulation_parameters(),
-        config=SimpleAirConditionerControllerConfig.get_default_simple_air_conditioner_controller_config(),
+        config=SimpleAirConditionerControllerConfig.preset_standard("SimpleAirConditionerController"),
     )
     kpi_entries = controller.get_component_kpi_entries(all_outputs=[], postprocessing_results=None)
     assert not kpi_entries

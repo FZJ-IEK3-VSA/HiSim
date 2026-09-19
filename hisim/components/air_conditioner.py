@@ -13,7 +13,7 @@ from hisim.component import (
     CapexCostDataClass,
     OpexCostDataClass,
 )
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor, preset
 from hisim.components.configuration import (
     EmissionFactorsAndCostsForFuelsConfig,
 )
@@ -28,19 +28,6 @@ from hisim.components.weather import Weather
 from hisim.components.building import Building
 from hisim import utils
 from hisim.economics.facts import CostRelevance
-
-__authors__ = "Marwa Alfouly, Kristina Dabrock"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt, Marwa Alfouly, Kristina Dabrock"]
-__license__ = "MIT"
-__version__ = "0.1"
-__maintainer__ = "Kristina Dabrock"
-__email__ = "k.dabrock@fz-juelich.de"
-__status__ = "development"
-
-
-# Share of the investment costs spent on maintenance each year.
-MAINTENANCE_COST_AS_PERCENTAGE_OF_INVESTMENT_PER_YEAR = 0.05
 
 
 def get_price_in_euro(air_conditioner: Dict[str, Any]) -> float:
@@ -87,63 +74,155 @@ def get_installation_cost_in_euro(air_conditioner: Dict[str, Any]) -> float:
 @dataclass_json
 @dataclass
 class AirConditionerConfig(ConfigBase):
-    """Configuration dataclass for the air conditioner component."""
+    """Configuration of the air conditioner: one unit out of the bundled smart-devices catalogue.
+
+    The component models no machine of its own. It interpolates the efficiency and capacity
+    curves of a real catalogue unit over the outdoor temperature and multiplies the result by
+    ``scale_factor``, so this configuration is a copy of one catalogue row — three outdoor
+    temperatures and the EER, COP, cooling and heating capacity measured at each — plus that
+    factor and the unit's costs. The row is read when the configuration is built, never during
+    the simulation, which is why a scenario file carries the twelve reference numbers rather
+    than the catalogue key alone.
+
+    The named default is :meth:`preset_samsung_ac120`, the ducted split unit the fleet uses.
+    Any other row is reached by naming it, and a unit picked to match a building's heating
+    load by :meth:`for_building_load`::
+
+        AirConditionerConfig.for_device("AirConditioner", "Daikin", "FTXZ35N/RXZ35N")
+        AirConditionerConfig.for_building_load("AirConditioner", 11430.0, -7.0)
+    """
+
+    MAIN_CLASS = "hisim.components.air_conditioner.AirConditioner"
+
+    #: Key under which the smart-devices database lists the air conditioners.
+    CATALOGUE_NAME: ClassVar[str] = "Air Conditioner"
+
+    #: Share of the investment costs spent on maintenance each year.
+    MAINTENANCE_COST_AS_PERCENTAGE_OF_INVESTMENT_PER_YEAR: ClassVar[float] = 0.05
+
+    #: Service life of an air conditioner, in years. 10 years
+    #: https://www.deutschlandfunk.de/belastung-fuer-die-atmosphaere-der-vormarsch-der-100.html,
+    #: 10-15 years https://klivago.de/faq-was-man-ueber-eine-klimaanlage-wissen-sollte,
+    #: 15 years https://volted.ch/blogs/guides-fokus-und-bericht/wie-lange-halten-tragbare-
+    #: klimaanlagen?srsltid=AfmBOoojFnnbhbCYtAGCZLzdawl4C8zeNvRtc9GFeCICEwaWB6ZdKhSt
+    LIFETIME_IN_YEARS: ClassVar[int] = 12
+
+    #: Manufacturing emissions of one unit, in kg CO2 equivalent; in a first step the same
+    #: figure as for a heat pump.
+    CO2_EMISSIONS_IN_KG_CO2_EQ: ClassVar[float] = 165.84
+
+    #: Share of the selected unit's heating capacity that :meth:`for_building_load` sizes it
+    #: to. 0.6 was determined heuristically based on manually experimenting with different
+    #: scaling factors.
+    CAPACITY_SHARE_FOR_BUILDING_LOAD: ClassVar[float] = 0.6
 
     component_id: ComponentID
+    #: Manufacturer as the smart-devices database spells it, the first half of the catalogue key.
     manufacturer: str
+    #: Model name as the database spells it, the second half of that key.
     model_name: str
+    #: Multiplier on every capacity and power the unit delivers; 1.0 runs it at its rating.
     scale_factor: float
+    #: Outdoor temperatures, in °C, at which the cooling figures below were measured.
     t_out_cooling_ref: List[float]
+    #: Outdoor temperatures, in °C, at which the heating figures below were measured.
     t_out_heating_ref: List[float]
+    #: Energy efficiency ratio in cooling, W/W, one per cooling reference temperature.
     eer_ref: List[float]
+    #: Coefficient of performance in heating, W/W, one per heating reference temperature.
     cop_ref: List[float]
+    #: Cooling capacity in W, one per cooling reference temperature.
     cooling_capacity_ref: List[float]
+    #: Heating capacity in W, one per heating reference temperature.
     heating_capacity_ref: List[float]
+    #: Purchase price plus installation costs of the unit, in euro.
     investment_costs_in_euro: float
+    #: Service life of the unit, in years.
     lifetime_in_years: int
+    #: Manufacturing emissions of the unit, in kg CO2 equivalent.
     co2_emissions_kg_co2_eq: float
+    #: Yearly maintenance costs, in euro.
     maintenance_costs_in_euro_per_year: float
 
+    @preset(note='smart-devices catalogue, Samsung "AC120HBHFKH/SA - AC120HCAFKH/SA"')
     @classmethod
-    def get_main_classname(cls) -> str:
-        """Return the full class name of the main component class."""
-        return AirConditioner.get_full_classname()
+    def preset_samsung_ac120(cls, name: str) -> "AirConditionerConfig":
+        """The fleet's air conditioner, Samsung's ducted split AC120HBHFKH/SA - AC120HCAFKH/SA.
 
+        The catalogue row is read here, so the twelve reference values, the costs, the service
+        life and the CO2 figure are whatever the bundled database says about that unit today.
+        The unit runs at its rating: ``scale_factor`` is 1.0, since a preset knows no building
+        to size against — :meth:`for_building_load` is the builder that does.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            AirConditionerConfig: The preset configuration.
+        """
+        return cls.for_device(name, manufacturer="Samsung", model_name="AC120HBHFKH/SA - AC120HCAFKH/SA")
+
+    @constructor
     @classmethod
-    def get_air_conditioner_config_from_database(
+    def for_device(
         cls,
+        name: str,
         manufacturer: str,
         model_name: str,
         scale_factor: float = 1.0,
-        component_id: Optional[ComponentID] = None,
-        name: str = "AirConditioner",
     ) -> "AirConditionerConfig":
-        """Build a configuration from the smart-devices database entry of the given model."""
+        """Builds the configuration of one named unit of the bundled smart-devices catalogue.
 
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        air_conditioners = utils.load_smart_appliance("Air Conditioner")
+        The catalogue has more units than the one the preset pins and a preset name is wire
+        format forever, so the others are reached by naming them. The row supplies the twelve
+        reference values and the purchase price; the investment costs add the installation
+        costs the unit's type implies, and the maintenance costs are
+        :attr:`MAINTENANCE_COST_AS_PERCENTAGE_OF_INVESTMENT_PER_YEAR` of the investment. Service
+        life and CO2 figure are the class constants, which do not vary by unit.
+
+        Unlike a catalogue key that the component resolves later, this pair is checked here: the
+        database is read while the configuration is built, so a misspelling fails at build time.
+
+        Args:
+            name: Instance name of the air conditioner; its ``ComponentID`` is built from it.
+            manufacturer: Manufacturer as the database spells it, e.g. ``"Panasonic"``.
+            model_name: Model name as the database spells it, e.g.
+                ``"CS-TZ71WKEW + CU-TZ71WKE"``.
+            scale_factor: Multiplier on every capacity and power the unit delivers. 1.0, the
+                default, runs it at its catalogue rating.
+
+        Returns:
+            A fresh configuration of that unit; nothing about it is shared with any other
+            instance.
+
+        Raises:
+            ValueError: If no catalogue row has that manufacturer and model name, if the row
+                carries no price or a price in another currency, or if its type implies no
+                installation costs.
+        """
+        air_conditioners = utils.load_smart_appliance(cls.CATALOGUE_NAME)
         air_conditioner = next(
             (
-                ac
-                for ac in air_conditioners
-                if ac["Manufacturer"] == manufacturer
-                and ac["Model"] == model_name
+                candidate
+                for candidate in air_conditioners
+                if candidate["Manufacturer"] == manufacturer and candidate["Model"] == model_name
             ),
             None,
         )
-
         if air_conditioner is None:
-            raise ValueError(f"Air conditioner model {manufacturer}/{model_name} not found in database")
+            known = ", ".join(f"{entry['Manufacturer']} / {entry['Model']}" for entry in air_conditioners)
+            raise ValueError(
+                f"Air conditioner model {manufacturer}/{model_name} not found in database. "
+                f"The smart devices database holds: {known}."
+            )
 
         investment_costs_in_euro = get_price_in_euro(air_conditioner) + get_installation_cost_in_euro(air_conditioner)
 
         return cls(
-            component_id=component_id,
+            component_id=ComponentID(name=name),
             manufacturer=manufacturer,
             model_name=model_name,
             scale_factor=scale_factor,
-            # Reference data for interpolation
             t_out_cooling_ref=air_conditioner["Outdoor temperature range - cooling"],
             t_out_heating_ref=air_conditioner["Outdoor temperature range - heating"],
             eer_ref=air_conditioner["EER W/W"],
@@ -151,94 +230,92 @@ class AirConditionerConfig(ConfigBase):
             cooling_capacity_ref=air_conditioner["Cooling capacity W"],
             heating_capacity_ref=air_conditioner["Heating capacity W"],
             investment_costs_in_euro=investment_costs_in_euro,
-            maintenance_costs_in_euro_per_year=MAINTENANCE_COST_AS_PERCENTAGE_OF_INVESTMENT_PER_YEAR
-            * investment_costs_in_euro,
-            # Lifetime estimation:
-            # 10 years https://www.deutschlandfunk.de/belastung-fuer-die-atmosphaere-der-vormarsch-der-100.html,
-            # 10-15 years https://klivago.de/faq-was-man-ueber-eine-klimaanlage-wissen-sollte
-            # 15 years https://volted.ch/blogs/guides-fokus-und-bericht/wie-lange-halten-tragbare-
-            # klimaanlagen?srsltid=AfmBOoojFnnbhbCYtAGCZLzdawl4C8zeNvRtc9GFeCICEwaWB6ZdKhSt
-            lifetime_in_years=12,
-            co2_emissions_kg_co2_eq=165.84,  # In first step same as for heat pump
-        )
-
-    @classmethod
-    def get_default_air_conditioner_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "AirConditionerConfig":
-        """Return default air-conditioner configuration."""
-
-        return cls.get_air_conditioner_config_from_database(
-            component_id=component_id,
-            manufacturer="Samsung",  # Further options are available in the smart_devices file
-            model_name="AC120HBHFKH/SA - AC120HCAFKH/SA",  # Other option: "CS-TZ71WKEW + CU-TZ71WKE"
-        )
-
-    @classmethod
-    def get_scaled_air_conditioner_config(
-        cls,
-        heating_load: float,
-        heating_reference_temperature: float,
-        component_id: Optional[ComponentID] = None,
-    ) -> "AirConditionerConfig":
-        """Return an air-conditioner configuration scaled to the building heating load.
-
-        Searches the smart-devices database for the air conditioner whose heating
-        capacity at the outdoor reference temperature closest to
-        ``heating_reference_temperature`` best matches the building's
-        ``heating_load``. The configuration is then returned with a
-        ``scale_factor`` of ``relevant_heating_capacity * 0.6 / heating_load``
-        (the factor of 0.6 was determined heuristically), so the selected unit is
-        sized down to the building's demand rather than used at its nominal rating.
-        """
-        air_conditioners = utils.load_smart_appliance("Air Conditioner")
-        air_conditioner_df = pd.DataFrame(air_conditioners)
-
-        # Select air conditioner whose heating capacity (at temperature closes to heating reference temperature) is closest
-        # to heating load of building
-        def get_relevant_heating_capacity_for_temperature(
-            temperature_range: List[float], capacity: List[float]
-        ) -> float:
-            closest_temperature_index = min(
-                range(len(temperature_range)),
-                key=lambda i: abs(
-                    temperature_range[i] - heating_reference_temperature
-                ),
-            )
-            return capacity[closest_temperature_index]
-
-        differences = air_conditioner_df.apply(
-            lambda row: abs(
-                get_relevant_heating_capacity_for_temperature(
-                    row["Outdoor temperature range - heating"],
-                    row["Heating capacity W"],
-                )
-                - heating_load
+            lifetime_in_years=cls.LIFETIME_IN_YEARS,
+            co2_emissions_kg_co2_eq=cls.CO2_EMISSIONS_IN_KG_CO2_EQ,
+            maintenance_costs_in_euro_per_year=(
+                cls.MAINTENANCE_COST_AS_PERCENTAGE_OF_INVESTMENT_PER_YEAR * investment_costs_in_euro
             ),
-            axis=1,
         )
 
-        selected_air_conditioner = air_conditioner_df.loc[differences.idxmin()]
-        relevant_capacity_for_scaling = (
-            get_relevant_heating_capacity_for_temperature(
-                selected_air_conditioner[
-                    "Outdoor temperature range - heating"
-                ],
-                selected_air_conditioner["Heating capacity W"],
+    @constructor(
+        note=(
+            "selects the device whose heating capacity at the reference temperature is closest "
+            "to the load, then scales it by 0.6 × capacity / load"
+        )
+    )
+    @classmethod
+    def for_building_load(
+        cls,
+        name: str,
+        heating_load_in_watt: float,
+        heating_reference_temperature_in_celsius: float,
+    ) -> "AirConditionerConfig":
+        """Picks the catalogue unit that fits a building's heating load and sizes it down to it.
+
+        Every catalogue row is measured at three outdoor temperatures; the one closest to
+        ``heating_reference_temperature_in_celsius`` gives the row's heating capacity at the
+        building's design condition. The unit whose capacity is nearest the building's heating
+        load wins, and its ``scale_factor`` becomes
+        :attr:`CAPACITY_SHARE_FOR_BUILDING_LOAD` × capacity / load, so the unit is run below its
+        rating instead of at it. Ties go to the unit the database lists first.
+
+        This is a constructor rather than a sizing law because one lookup answers twelve fields
+        at once: the selected row's reference values and costs are written into the
+        configuration here, and nothing downstream can tell which building they came from.
+
+        For a building whose design heating load is 11 430 W at -7 °C::
+
+            AirConditionerConfig.for_building_load("AirConditioner", 11430.0, -7.0)
+
+        Args:
+            name: Instance name of the air conditioner; its ``ComponentID`` is built from it.
+            heating_load_in_watt: The building's design heating load, in W.
+            heating_reference_temperature_in_celsius: The outdoor temperature that load is
+                defined at, in °C.
+
+        Returns:
+            A fresh configuration of the selected unit, scaled to the load.
+        """
+        air_conditioners = utils.load_smart_appliance(cls.CATALOGUE_NAME)
+        capacities = [
+            cls._heating_capacity_at_temperature(
+                candidate["Outdoor temperature range - heating"],
+                candidate["Heating capacity W"],
+                heating_reference_temperature_in_celsius,
             )
+            for candidate in air_conditioners
+        ]
+        selected = min(range(len(air_conditioners)), key=lambda index: abs(capacities[index] - heating_load_in_watt))
+
+        return cls.for_device(
+            name,
+            manufacturer=air_conditioners[selected]["Manufacturer"],
+            model_name=air_conditioners[selected]["Model"],
+            scale_factor=capacities[selected] * cls.CAPACITY_SHARE_FOR_BUILDING_LOAD / heating_load_in_watt,
         )
 
-        # 0.6 was determined heuristically based on manually experimenting
-        # with different scaling factors
-        scaling_factor = relevant_capacity_for_scaling * 0.6 / heating_load
+    @staticmethod
+    def _heating_capacity_at_temperature(
+        temperature_range: List[float],
+        capacity: List[float],
+        temperature: float,
+    ) -> float:
+        """Returns the heating capacity measured closest to the given outdoor temperature.
 
-        return cls.get_air_conditioner_config_from_database(
-            component_id=component_id,
-            manufacturer=selected_air_conditioner["Manufacturer"],
-            model_name=selected_air_conditioner["Model"],
-            scale_factor=scaling_factor,
-        )
+        A catalogue row states its heating capacity at three outdoor temperatures and nothing
+        in between; this picks the measurement nearest ``temperature`` rather than
+        interpolating, because the selection only has to rank units against one another.
+
+        Args:
+            temperature_range: The outdoor temperatures the row was measured at, in °C.
+            capacity: The heating capacities, in W, in the same order.
+            temperature: The outdoor temperature to look up, in °C.
+
+        Returns:
+            The capacity, in W, at the nearest measured temperature; ties go to the first.
+        """
+        closest = min(range(len(temperature_range)), key=lambda index: abs(temperature_range[index] - temperature))
+        return capacity[closest]
 
 
 class AirConditioner(cp.Component):
@@ -720,38 +797,65 @@ class AirConditioner(cp.Component):
 @dataclass_json
 @dataclass
 class AirConditionerControllerConfig(ConfigBase):
-    """Configuration class for the air conditioner controller."""
+    """Configuration of the air conditioner's controller: a comfort band with minimum run times.
+
+    The controller watches the building's indoor air temperature and puts the unit into
+    heating below :attr:`heating_set_temperature_deg_c`, into cooling above
+    :attr:`cooling_set_temperature_deg_c`, and off in the band between them. Two things
+    soften that switch: ``offset`` widens the band the unit stays in once it has started, so
+    it does not stop the moment the setpoint is reached, and the two minimum times keep it
+    running, or keep it off, for a while whatever the air says. Within the running band the
+    power is modulated quadratically, reaching full power
+    ``temperature_difference_full_power_deg_c`` kelvin past the setpoint that started it.
+
+    The named default is :meth:`preset_standard`::
+
+        AirConditionerControllerConfig.preset_standard("AirConditionerController")
+
+    Nothing here is derived from the building. These are the temperatures the residents ask
+    for and the cycling limits of the machine, so no field is sizable and the preset takes
+    nothing but the instance name.
+    """
+
+    MAIN_CLASS = "hisim.components.air_conditioner.AirConditionerController"
 
     component_id: ComponentID
-    heating_set_temperature_deg_c: float
-    cooling_set_temperature_deg_c: float
-    minimum_runtime_s: float
-    minimum_idle_time_s: float
-    offset: float
-    temperature_difference_full_power_deg_c: float
+    #: Indoor air temperature below which the unit heats, in °C.
+    heating_set_temperature_deg_c: float = 20.0
+    #: Indoor air temperature above which the unit cools, in °C.
+    cooling_set_temperature_deg_c: float = 24.0
+    #: Shortest time the unit stays in heating or cooling once it has started, in seconds.
+    #: Rounded down to whole time steps, so a value below one time step imposes nothing.
+    minimum_runtime_s: float = 1800.0
+    #: Shortest time the unit stays off once it has stopped, in seconds, rounded down the
+    #: same way. Together with the runtime it is what stops the unit chattering on and off
+    #: around the setpoint.
+    minimum_idle_time_s: float = 900.0
+    #: Width of the hysteresis band, in kelvin: how far past the setpoint that started it the
+    #: unit keeps running. Heating continues up to ``heating_set_temperature_deg_c + offset``
+    #: and cooling down to ``cooling_set_temperature_deg_c - offset``.
+    offset: float = 5.0
+    #: Temperature difference from the far edge of that band at which the unit runs at full
+    #: power, in kelvin. Below it the modulation is the square of the ratio, so the unit
+    #: throttles back sharply as the air approaches the setpoint.
+    temperature_difference_full_power_deg_c: float = 3.0
 
+    @preset
     @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the associated controller class."""
-        return AirConditionerController.get_full_classname()
+    def preset_standard(cls, name: str) -> "AirConditionerControllerConfig":
+        """The one comfort band the fleet runs: heating below 20 °C, cooling above 24 °C.
 
-    @classmethod
-    def get_default_air_conditioner_controller_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Returns a default configuration object."""
-        if component_id is None:
-            component_id = ComponentID(name="AirConditionerControllerConfig")
-        return cls(
-            component_id=component_id,
-            heating_set_temperature_deg_c=20.0,
-            cooling_set_temperature_deg_c=24.0,
-            minimum_runtime_s=30 * 60,
-            minimum_idle_time_s=15 * 60,
-            offset=5.0,
-            temperature_difference_full_power_deg_c=3.0,
-        )
+        The field defaults are that band, with five kelvin of hysteresis either side, full
+        power three kelvin from the edge, and the unit held for half an hour once it starts
+        and a quarter of an hour once it stops.
+
+        Args:
+            name: Instance name of the controller in the simulation.
+
+        Returns:
+            The configuration, fully concrete -- the class has no sizable field.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class AirConditionerControllerState:

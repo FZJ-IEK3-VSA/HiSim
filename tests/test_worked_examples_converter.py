@@ -35,8 +35,6 @@ can run in the bare CI job of `.github/workflows/worked-examples.yml`, while a t
 anything.
 """
 
-# clean
-
 import os
 import shutil
 

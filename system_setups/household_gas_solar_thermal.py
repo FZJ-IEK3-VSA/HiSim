@@ -90,9 +90,6 @@ def setup_function(
     # =================================================================================================================================
     # Build Components
 
-    # Set heating systems for space heating and domestic hot water
-    heating_reference_temperature_in_celsius = -7.0
-
     # Set Building (scale building according to total base area and not absolute floor area)
     number_of_apartments = arche_type_config_.number_of_dwellings_per_building
 
@@ -106,8 +103,17 @@ def setup_function(
     my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
 
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
-    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field, so it is resolved before the archetype lookup runs on the config.
+    my_building_config = my_building_config.resolve(
+        SizingContext(
+            heating_reference_temperature_in_celsius=(
+                my_weather_config.heating_reference_temperature_in_celsius
+            )
+        )
+    )
+    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(
         config=my_building_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -134,7 +140,9 @@ def setup_function(
             SizingContext(
                 heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
                 conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
-                heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+                heating_reference_temperature_in_celsius=(
+                    my_weather_config.heating_reference_temperature_in_celsius
+                ),
                 set_heating_temperature_in_celsius=(
                     my_building_information.set_heating_temperature_for_building_in_celsius
                 ),
@@ -216,11 +224,9 @@ def setup_function(
     )
 
     # Solar thermal for DHW
-    my_solar_thermal_system_config = (
-        solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system().resolve(
-            SizingContext(number_of_apartments=number_of_apartments)
-        )
-    )
+    my_solar_thermal_system_config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate(
+        "SolarThermalSystem"
+    ).resolve(SizingContext(number_of_apartments=number_of_apartments))
     my_solar_thermal_system = solar_thermal_system.SolarThermalSystem(
         config=my_solar_thermal_system_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -228,7 +234,7 @@ def setup_function(
 
     # Gas Heater (for DHW) - Controller
     my_solar_thermal_system_controller_config = (
-        solar_thermal_system.SolarThermalSystemControllerConfig.get_solar_thermal_system_controller_config()
+        solar_thermal_system.SolarThermalSystemControllerConfig.preset_standard("SolarThermalSystemController")
     )
 
     my_solar_thermal_system_controller = solar_thermal_system.SolarThermalSystemController(

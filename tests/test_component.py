@@ -5,8 +5,6 @@ ComponentOutput, SingleTimeStepValues, ConfigBase, and related classes.
 Each test verifies a specific aspect of the component system.
 """
 
-# clean
-
 from dataclasses import dataclass
 from enum import Enum, unique
 from typing import List
@@ -240,6 +238,10 @@ class ReportedOperationMode(str, Enum):
 class ReportedConfig(ConfigBase):
     """A config with an enum field, a list of enum values and a plain float field."""
 
+    #: This test double configures no real component, so it names itself; every ConfigBase
+    #: subclass has to say which component it configures or its definition is refused.
+    MAIN_CLASS = "tests.test_component.ReportedConfig"
+
     component_id: ComponentID
     operation_mode: ReportedOperationMode
     fallback_modes: List[ReportedOperationMode]
@@ -290,7 +292,7 @@ def test_example_component_with_config() -> None:
         unit=lt.Units.WATT,
         electricity=-1e3,
         capacity=(
-            example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+            example_component.ExampleComponentConfig.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
             * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
         ),
         initial_temperature=25.0,
@@ -346,7 +348,7 @@ def test_component_connections() -> None:
         unit=lt.Units.WATT,
         electricity=-1e3,
         capacity=(
-            example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+            example_component.ExampleComponentConfig.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
             * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
         ),
         initial_temperature=25.0,
@@ -429,7 +431,7 @@ def test_add_default_connections_empty_raises() -> None:
         unit=lt.Units.WATT,
         electricity=-1e3,
         capacity=(
-            example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+            example_component.ExampleComponentConfig.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
             * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
         ),
         initial_temperature=25.0,

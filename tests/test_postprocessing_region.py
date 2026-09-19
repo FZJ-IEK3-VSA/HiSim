@@ -56,12 +56,18 @@ def _data_transfer_reporting_on(
 
 
 def _weather(case: PreparedPostProcessingCase, name: str, location: LocationEnum) -> Weather:
-    """Build a Weather configured for one catalogue station."""
+    """Build a Weather configured for one catalogue station.
+
+    The design temperature is the repository's usual -7.0 °C; this suite reads the region a run
+    is reported under, which the station's display name decides and the number does not touch.
+    """
     # The config and component classes resolve to Any under the tests' mypy profile, so the
     # annotation is what pins the built component to a Weather.
     weather_component: Weather = Weather(
         my_simulation_parameters=case.ppdt.simulation_parameters,
-        config=WeatherConfig.for_location(name, location=location),
+        config=WeatherConfig.for_location(
+            name, location=location, heating_reference_temperature_in_celsius=-7.0
+        ),
     )
     return weather_component
 

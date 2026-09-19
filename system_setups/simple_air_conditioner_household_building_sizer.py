@@ -10,13 +10,12 @@ weather + building + AC + controller only — no UTSP/occupancy, PV, battery, EM
 heat pump, heat distribution, DHW storage, or electricity meter.
 """
 
-# clean
-
 import re
 from typing import Optional, Any
 
 from hisim.simulator import SimulationParameters
 from hisim.components import weather
+from hisim.config import SizingContext
 from hisim.components import building
 from hisim.components import simple_air_conditioner
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
@@ -81,6 +80,7 @@ def setup_function(
     # =================================================================================================================================
     # Extract config values
     weather_location = arche_type_config_.weather_location
+    heating_reference_temperature_in_celsius = -7.0
     building_code = arche_type_config_.building_code
     total_base_area_in_m2 = None
     absolute_conditioned_floor_area_in_m2 = arche_type_config_.conditioned_floor_area_in_m2
@@ -91,7 +91,9 @@ def setup_function(
     # The weather config is created first: the building and PV configs copy its identity
     # (weather_identity) and must have it before those components are built. The weather
     # component itself is still added further down, so the simulator's component order is unchanged.
-    my_weather_config = weather.WeatherConfig.for_location("Weather", weather.LocationEnum[weather_location])
+    my_weather_config = weather.WeatherConfig.for_location(
+        "Weather", weather.LocationEnum[weather_location], heating_reference_temperature_in_celsius
+    )
 
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.set_heating_temperature_in_celsius = 20.0
@@ -104,6 +106,11 @@ def setup_function(
     my_building_config.number_of_apartments = number_of_apartments
     my_building_config.enable_opening_windows = True
     my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field, so it is resolved before the component is built.
+    my_building_config = my_building_config.resolve(
+        SizingContext(heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius)
+    )
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -116,8 +123,8 @@ def setup_function(
 
     # =================================================================================================================================
     # Build Simple Air Conditioner
-    my_air_conditioner_config = (
-        simple_air_conditioner.SimpleAirConditionerConfig.get_default_simple_air_conditioner_config()
+    my_air_conditioner_config = simple_air_conditioner.SimpleAirConditionerConfig.preset_standard(
+        "SimpleAirConditioner"
     )
     my_air_conditioner = simple_air_conditioner.SimpleAirConditioner(
         config=my_air_conditioner_config,
@@ -127,7 +134,7 @@ def setup_function(
     # =================================================================================================================================
     # Build Simple Air Conditioner Controller
     my_air_conditioner_controller_config = (
-        simple_air_conditioner.SimpleAirConditionerControllerConfig.get_default_simple_air_conditioner_controller_config()
+        simple_air_conditioner.SimpleAirConditionerControllerConfig.preset_standard("SimpleAirConditionerController")
     )
     my_air_conditioner_controller = simple_air_conditioner.SimpleAirConditionerController(
         config=my_air_conditioner_controller_config,

@@ -55,8 +55,6 @@ cleanup the only legal justification for regenerating it is a metadata change (a
 added attribute), never a changed number.
 """
 
-# clean
-
 import dataclasses
 from typing import Any, Dict, List, Optional, Tuple, Union
 

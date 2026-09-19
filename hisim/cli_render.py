@@ -10,11 +10,10 @@ an item and a labelled detail, indented consistently, written to a stream the ca
 here decides anything and nothing here reads a file; they are handed the answer and lay it out.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses
+import enum
 from pathlib import Path
 from typing import Any, Sequence, TextIO
 
@@ -82,6 +81,12 @@ class DescriptionRenderer(Report):
     UNION_PREFIX: str = "Union["
     SIZABLE_SPELLING: str = "Sizable"
 
+    #: Label of the line listing what a preset sets on the plain fields, and the separator
+    #: between two of its assignments. The label's width decides where a continuation line
+    #: starts, so that a second assignment lines up under the first.
+    SETS_LABEL: str = "sets"
+    SETS_SEPARATOR: str = ","
+
     @classmethod
     def render(cls, description: ConfigDescription, stream: TextIO) -> None:
         """Writes the whole description.
@@ -102,10 +107,34 @@ class DescriptionRenderer(Report):
         """Writes the settable fields with their types, defaults and sizability."""
         cls._heading("fields", stream)
         for field in description.fields:
-            default = cls.NO_DEFAULT if field.default is dataclasses.MISSING else repr(field.default)
             marker = "  [sizable]" if field.sizable else ""
             name = f"{field.name} ({cls.type_of(field)})".ljust(cls.FIELD_WIDTH)
-            cls._item(f"{name} = {default}{marker}", stream)
+            cls._item(f"{name} = {cls.value_of(field.default)}{marker}", stream)
+
+    @classmethod
+    def value_of(cls, value: Any) -> str:
+        """Renders one configuration value — a field default, or what a preset sets it to.
+
+        The one place a value becomes text in this report, so a default and the preset value
+        that overrides it are never spelled two different ways. An enum is shown by member
+        name, which is the spelling the declarative format itself reads and writes and so the
+        one a reader can type back into a file; everything else is shown as its ``repr``, which
+        keeps a float a float and puts quotes around a string.
+
+        Example: ``FluidMediaType.PROPYLEN_GLYCOL`` renders as ``PROPYLEN_GLYCOL``, ``5000.0``
+        as ``5000.0``, and a mandatory field's absent default as ``(required)``.
+
+        Args:
+            value: The value to render, or ``dataclasses.MISSING`` for a field with no default.
+
+        Returns:
+            The value as one short string.
+        """
+        if value is dataclasses.MISSING:
+            return cls.NO_DEFAULT
+        if isinstance(value, enum.Enum):
+            return value.name
+        return repr(value)
 
     @classmethod
     def type_of(cls, field: FieldInfo) -> str:
@@ -129,7 +158,16 @@ class DescriptionRenderer(Report):
 
     @classmethod
     def _presets(cls, description: ConfigDescription, stream: TextIO) -> None:
-        """Writes each preset with the sizable fields it pins and the ones it leaves open."""
+        """Writes each preset with the sizable fields it pins, leaves open, and computes its own way.
+
+        A field the preset resolves by a law of its own gets a third line, ``law``, carrying that
+        law rather than the one declared at the field: the ``sizable fields`` section below always
+        prints the declared law, which for such a field is another preset's arithmetic.
+
+        The ``sets`` line above them is the plain half: what this preset makes of the fields the
+        sizing never touches. A preset that accepts every plain default has no such line at all,
+        which is most of them and is the honest rendering — there is nothing to say.
+        """
         cls._heading("presets", stream)
         if not description.presets:
             cls._item("(none)", stream)
@@ -137,10 +175,42 @@ class DescriptionRenderer(Report):
         for preset in description.presets:
             canonical = "  (canonical)" if preset.canonical else ""
             cls._item(f"{preset.name}{canonical}", stream)
+            cls._sets(preset.sets, stream)
             cls._detail("pinned", ", ".join(preset.pinned) or "(nothing sizable)", stream)
             cls._detail("AUTO", ", ".join(preset.auto) or "(nothing left open)", stream)
+            for field_name, law in preset.laws:
+                cls._detail("law", f"{field_name} = {law}", stream)
             if preset.note:
                 cls._detail("note", preset.note, stream)
+
+    @classmethod
+    def _sets(cls, assignments: Sequence[Any], stream: TextIO) -> None:
+        """Writes the ``sets`` line of one preset: one assignment per line, aligned under the label.
+
+        One field per line rather than as many as fit a guessed terminal width, because the list
+        is short, because a reader scans it for a field name, and because a layout that never
+        depends on the length of the values is the same layout in every run and in every diff of
+        two runs. Every line but the last ends in a comma, so that the block reads as the one
+        list it is::
+
+              sets: heat_source_type = CONSTANT_THERMAL_POWER,
+                    power_th_in_watt = 5000.0
+
+        Args:
+            assignments: The ``(field name, value)`` pairs the preset changes, in declaration
+                order; nothing is written for an empty sequence.
+            stream: Where to write them.
+        """
+        if not assignments:
+            return
+        indent = " " * (cls.DETAIL_INDENT + len(cls.SETS_LABEL) + len(": "))
+        rendered = [f"{name} = {cls.value_of(value)}" for name, value in assignments]
+        for position, line in enumerate(rendered):
+            tail = cls.SETS_SEPARATOR if position < len(rendered) - 1 else ""
+            if position == 0:
+                cls._detail(cls.SETS_LABEL, f"{line}{tail}", stream)
+            else:
+                print(f"{indent}{line}{tail}", file=stream)
 
     @classmethod
     def _constructors(cls, description: ConfigDescription, stream: TextIO) -> None:

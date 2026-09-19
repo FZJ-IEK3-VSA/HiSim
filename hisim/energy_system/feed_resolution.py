@@ -24,8 +24,6 @@ at all, which is what keeps a component free to import the resolved-connection r
 closing an import cycle.
 """
 
-# clean
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple, cast

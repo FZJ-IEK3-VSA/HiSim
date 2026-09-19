@@ -1,5 +1,4 @@
 """ Class for the simulation repository. """
-# clean
 from __future__ import annotations
 from typing import Any
 

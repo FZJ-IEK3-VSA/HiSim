@@ -64,8 +64,6 @@ import anything, so this is the direction that removes the duplication instead o
 tool's isolation.
 """
 
-# clean
-
 import json
 import os
 import warnings

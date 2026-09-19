@@ -1,5 +1,28 @@
-""" Helper module to generate the JSON configurations. """
-# clean
+"""The v1 scenario-JSON writer, retired with the two post-processing options that called it (F-9).
+
+Moved out of `hisim/json_generator.py` on 2026-09-18. It wrote two files at the end of a run,
+`scenario.json` and `simulation.json`, for `PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON`
+and `WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON`; both options are retired with it, and nothing
+in the repository or outside it reads either file any more.
+
+It was the writing half of the v1 JSON mode. The reading half -- `hisim/json_executor.py` and
+every `system_setups/*.scenario.json` -- was retired in #708, when energy-system files became the
+only declarative input, so a `scenario.json` written after that date could no longer be run by
+anything. The recorder in `hisim/energy_system/recording/` is what writes a system down today,
+and it writes the v3 format: `energy_systems/<setup>.energy_system.yaml` plus the shared
+`*.simulation.yaml` parameter files.
+
+What finally decided it was F-9: for every dynamic input, `convert_component_to_json` recovered
+the feeding component's name by matching the port's *name* against the legacy
+`Input_<source>_<field>_<n>` pattern (`:147-150`), so a run built from an energy-system file --
+whose aggregator ports are named `<Output>From<Source>` -- simulated to the end and then raised
+`ValueError: Label does not match expected format`. The name it was reconstructing sits on the
+port as `src_object_name` on both paths. Reading it there would have been a four-line fix; with
+no reader left for the file it produced, the module goes instead. The output half of the same
+function already refused declarative runs by design.
+
+Archived as it stood, import paths included: nothing here is importable in place.
+"""
 from __future__ import annotations
 import dataclasses
 import re

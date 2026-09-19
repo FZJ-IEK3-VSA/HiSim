@@ -24,8 +24,6 @@ its source may legitimately be absent: a half-wired system that starts and produ
 the failure mode this format exists to remove.
 """
 
-# clean
-
 from __future__ import annotations
 
 from dataclasses import dataclass

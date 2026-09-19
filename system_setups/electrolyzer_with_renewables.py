@@ -1,7 +1,5 @@
 """Simple Electrolyzer system setup."""
 
-# clean
-
 # Generic
 from typing import Optional
 
@@ -13,7 +11,6 @@ from hisim.components.generic_electrolyzer_h2 import (
     Electrolyzer,
     ElectrolyzerConfig,
 )
-from hisim.config import ComponentID
 
 from hisim import loadtypes as lt
 
@@ -65,7 +62,6 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     # Set transformer and rectifier parameter
     name = "StandardTransformerAndRectifier"
-    efficiency = 0.95  # from literature
     loadtype = lt.LoadTypes.ELECTRICITY
     unit = lt.Units.KILOWATT
 
@@ -83,8 +79,8 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     # Build Components
 
     # Setup new CSV loader object
-    my_csv_loader = CSVLoaderConfig(
-        component_id=ComponentID(name="CSV"),
+    my_csv_loader = CSVLoaderConfig.for_csv_file(
+        "CSV",
         csv_filename=csv_filename,
         column=csv_data_column,  # The column number in the CSV file containing the load profile data
         loadtype=loadtype,  # Replace with the desired load type
@@ -93,7 +89,6 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         sep=sep,  # Separator used in the CSV file (e.g., "," or ";")
         decimal=decimal,  # Decimal indicator used in the CSV file (e.g., "." or ",")
         multiplier=multiplier,  # Multiplier factor for amplification (if needed)
-        output_description="Values from CSV",
     )
 
     # Create new CSV loader object
@@ -102,22 +97,21 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     # The electrolyzer configuration is read first because the transformer and rectifier in front
     # of it is rated for it: the conversion stage has to carry the machine's maximum load, which is
     # also what its investment cost is scaled by.
-    my_electrolyzer_config = ElectrolyzerConfig.config_electrolyzer(electrolyzer_name)
+    my_electrolyzer_config = ElectrolyzerConfig.for_device("Electrolyzer", electrolyzer_name=electrolyzer_name)
 
     # Setup the transformer and rectifier unit
+    # The preset's 95 % efficiency is the figure from the literature this setup runs on.
+    my_transformer_config = TransformerConfig.preset_standard(name)
+    # Rated to carry the electrolyzer it feeds, so the two figures are tied on purpose.
+    my_transformer_config.rated_power_in_kilowatt = my_electrolyzer_config.max_load
     my_transformer = Transformer(
         my_simulation_parameters=my_simulation_parameters,
-        config=TransformerConfig(
-            component_id=ComponentID(name=name),
-            efficiency=efficiency,
-            # Rated to carry the electrolyzer it feeds, so the two figures are tied on purpose.
-            rated_power_in_kilowatt=my_electrolyzer_config.max_load,
-        ),
+        config=my_transformer_config,
     )
 
     # Setup the controller
     my_controller = ElectrolyzerController(
-        config=ElectrolyzerControllerConfig.control_electrolyzer(electrolyzer_name),
+        config=ElectrolyzerControllerConfig.for_device("L1ElectrolyzerController", electrolyzer_name),
         my_simulation_parameters=my_simulation_parameters,
     )
 

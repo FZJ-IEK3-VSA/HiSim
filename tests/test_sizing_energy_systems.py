@@ -3,7 +3,6 @@
 Depending on building properties like rooftop area, floor area, number of apartments and heating load the energy system components,
 such as pv system, battery, heat pumps, water storage, etc. need to be scaled up.
 """
-# clean
 
 from typing import Dict
 import pytest
@@ -138,6 +137,9 @@ def simulation_for_one_timestep(
     my_residence_config.absolute_conditioned_floor_area_in_m2 = (
         absolute_conditioned_floor_area_in_m2
     )
+    # The design outside temperature is the weather's (D-21); this sweep builds no weather, so it
+    # states the same -7.0 °C the heat pump below is sized at.
+    my_residence_config.heating_reference_temperature_in_celsius = -7.0
 
     my_residence_information = building.BuildingInformation(config=my_residence_config)
 
@@ -151,8 +153,13 @@ def simulation_for_one_timestep(
     )
 
     # Set hplib
-    my_hplib_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=my_residence_information.max_thermal_building_demand_in_watt
+    my_hplib_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
+        "MoreAdvancedHeatPumpHPLib"
+    ).resolve(
+        SizingContext(
+            heating_load_in_watt=my_residence_information.max_thermal_building_demand_in_watt,
+            heating_reference_temperature_in_celsius=-7.0,
+        )
     )
 
     # Set Hot Water Storage
@@ -165,7 +172,9 @@ def simulation_for_one_timestep(
         simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
     )
     my_simple_hot_water_storage_config = my_simple_hot_water_storage_config.resolve(
-        SizingContext(maximal_thermal_power_in_watt=my_hplib_config.set_thermal_output_power_in_watt)
+        SizingContext(
+            maximal_thermal_power_in_watt=concrete(my_hplib_config.set_thermal_output_power_in_watt)
+        )
     )
 
     # Set Battery
@@ -180,7 +189,7 @@ def simulation_for_one_timestep(
 
     # Energy system sizes
     pv_power_in_watt = concrete(my_pv_config.power_in_watt)
-    hplib_thermal_power_in_watt = my_hplib_config.set_thermal_output_power_in_watt
+    hplib_thermal_power_in_watt = concrete(my_hplib_config.set_thermal_output_power_in_watt)
     simple_hot_water_storage_size_in_liter = (
         my_simple_hot_water_storage_config.volume_heating_water_storage_in_liter
     )

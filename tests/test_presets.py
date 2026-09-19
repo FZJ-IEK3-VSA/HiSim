@@ -9,8 +9,6 @@ preset name typo and a wrongly typed constructor argument are *static* type erro
 ``hisim/config`` resolves through the kernel without the kernel knowing anything about it.
 """
 
-# clean
-
 import ast
 import dataclasses
 import pathlib
@@ -25,6 +23,7 @@ from dataclasses_json import dataclass_json
 
 from hisim.config import (
     AUTO,
+    Cardinality,
     ComponentID,
     ConfigBase,
     FactContribution,
@@ -33,12 +32,15 @@ from hisim.config import (
     SizableFieldKind,
     Size,
     SizingContext,
+    SizingError,
     canonical_preset,
     constructor,
     constructors_of,
     describe_config,
+    law,
     preset,
     preset_provenance,
+    replace_config,
     presets_of,
     resolve_all,
     sized_field,
@@ -207,6 +209,27 @@ def test_a_preset_builds_only_with_an_instance_name_and_stamps_its_provenance():
     assert preset_provenance(_StorageConfig(component_id=ComponentID(name="Manual"))) is None
     with pytest.raises(TypeError):
         _StorageConfig.preset_standard()  # type: ignore[call-arg]  # pylint: disable=no-value-for-parameter
+
+
+@pytest.mark.base
+def test_replace_config_keeps_the_stamp_that_dataclasses_replace_drops():
+    """A copy made with ``replace_config`` still knows its preset; a plain ``replace`` does not.
+
+    Failure mode caught: a variant built by copying a preset instance records as a full
+    literal block instead of ``preset:`` plus its overrides, because the stamp is an
+    attribute and ``dataclasses.replace`` copies fields only (F-13). The twin still loads
+    and runs identically, so nothing but this test notices.
+    """
+    built = _StorageConfig.preset_standard("TankA")
+    variant = replace_config(built, volume_in_liter=123.0)
+    assert variant.volume_in_liter == 123.0
+    assert variant is not built and built.volume_in_liter != 123.0
+    assert preset_provenance(variant) == "standard"
+    assert preset_provenance(dataclasses.replace(built, volume_in_liter=123.0)) is None
+    # No changes at all is a plain copy, stamp included, which is what the executor's
+    # per-entry copy needs; and an unstamped config stays unstamped rather than gaining one.
+    assert preset_provenance(replace_config(built)) == "standard"
+    assert preset_provenance(replace_config(_StorageConfig(component_id=ComponentID(name="M")))) is None
 
 
 @pytest.mark.base
@@ -404,6 +427,11 @@ def test_describe_config_reports_fields_presets_laws_and_facts_of_the_pilots():
     assert presets["condensing_gas_12kw"].note == "nominal catalogue device"
     # the pellet preset overrides one field's law, which is still "to be sized", not pinned
     assert presets["pellets"].auto == ("minimal_thermal_power_in_watt", "maximal_thermal_power_in_watt")
+    # and the law it overrides with travels with the preset, not with the field (F-18)
+    assert presets["pellets"].laws == (
+        ("minimal_thermal_power_in_watt", '0.08333333333333333 * Self("maximal_thermal_power_in_watt")'),
+    )
+    assert presets["condensing_gas"].laws == ()
     assert description.facts_provided == (
         "maximal_thermal_power_in_watt",
         "minimal_thermal_power_in_watt",
@@ -415,6 +443,114 @@ def test_describe_config_reports_fields_presets_laws_and_facts_of_the_pilots():
     maximal = next(f for f in description.sizable_fields if f.name == "maximal_thermal_power_in_watt")
     assert maximal.kind is SizableFieldKind.LAW
     assert maximal.facts_read == (("heating_load_in_watt", "ONE"), ("number_of_apartments", "ONE"))
+
+
+@pytest.mark.base
+def test_a_preset_that_overrides_a_law_describes_that_law_and_not_the_declared_one():
+    """A per-preset law is reported under the preset that assigns it (F-18).
+
+    Failure mode caught: the description of a class whose presets compute one field differently
+    reading as if they all computed it the declared way. The generic CHP is the sharpest case —
+    a gas turbine and a fuel cell derive electricity from heat by different ratios — and before
+    this, both presets said only ``AUTO: p_el, p_fuel`` while the ``sizable fields`` section
+    printed the gas turbine's ratio as if it were the law of both.
+    """
+    from hisim.components.generic_chp import CHPConfig
+
+    description = describe_config(CHPConfig)
+    presets = {preset.name: preset for preset in description.presets}
+    # the gas preset runs on the declared laws and so overrides nothing
+    assert presets["gas"].laws == ()
+    assert dict(presets["hydrogen"].laws) == {
+        "p_el": '1.1162790697674418 * Self("p_th")',
+        "p_fuel": '2.3255813953488373 * Self("p_th")',
+    }
+    # the fields stay AUTO: a law is still something to be resolved, not a pinned value
+    assert presets["hydrogen"].auto == ("p_el", "p_fuel")
+    assert presets["hydrogen"].pinned == ()
+    # and the declared laws, which are the gas turbine's, keep their own section unchanged
+    declared = {field.name: field.law for field in description.sizable_fields}
+    assert declared == {"p_el": '0.66 * Self("p_th")', "p_fuel": '2.0 * Self("p_th")'}
+
+
+@pytest.mark.base
+def test_a_preset_reports_the_plain_fields_it_moves_off_their_class_default():
+    """``PresetInfo.sets`` is the preset's plain half, and it is empty when there is none (F-21).
+
+    Failure mode caught: a description that says only what a preset does to the *sizable* fields,
+    so that two presets differing in nothing else — the three simple heat sources, which are a
+    kind of source and at most one number each — carry identical information. The second half of
+    the promise matters as much: a preset that accepts every default reports nothing, because
+    after the common value of a field became that field's default most presets change nothing and
+    a line per preset saying so would bury the ones that do.
+    """
+    from hisim.components.generic_boiler import GenericBoilerControllerConfig
+    from hisim.components.simple_heat_source import SimpleHeatSourceConfig, SimpleHeatSourceType
+
+    presets = {preset_info.name: preset_info for preset_info in describe_config(SimpleHeatSourceConfig).presets}
+    assert presets["constant_thermal_power"].sets == (
+        ("heat_source_type", SimpleHeatSourceType.CONSTANT_THERMAL_POWER),
+        ("power_th_in_watt", 5000.0),
+    )
+    # declaration order, not the order the preset's own constructor call happens to use
+    assert presets["near_surface_brine"].sets == (
+        ("heat_source_type", SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE),
+    )
+    # the identity every preset sets from the name it was handed is not a choice and not reported
+    assert all(name != "component_id" for preset_info in presets.values() for name, _ in preset_info.sets)
+
+    controller = {
+        preset_info.name: preset_info
+        for preset_info in describe_config(GenericBoilerControllerConfig).presets
+    }
+    assert controller["modulating"].sets == ()
+    assert dict(controller["on_off"].sets) == {
+        "is_modulating": False,
+        "minimum_runtime_in_seconds": 0,
+        "minimum_resting_time_in_seconds": 0,
+    }
+
+
+@pytest.mark.base
+def test_a_sizable_field_a_preset_pins_is_reported_once_and_not_as_a_plain_setting():
+    """A pinned sizable field stays under ``pinned`` and never appears under ``sets`` (F-21).
+
+    Failure mode caught: the same field stated twice in one preset's block, once as a number and
+    once as a name, which would make the two sizable lines and the plain line disagree about what
+    kind of thing the field is. The catalogue boilers pin both ends of their power band, so they
+    are the case that would show it.
+    """
+    from hisim.components.generic_boiler import GenericBoilerConfig
+
+    presets = {preset_info.name: preset_info for preset_info in describe_config(GenericBoilerConfig).presets}
+    catalogue = presets["condensing_gas_12kw"]
+    assert catalogue.pinned == ("minimal_thermal_power_in_watt", "maximal_thermal_power_in_watt")
+    assert [name for name, _ in catalogue.sets] == ["energy_carrier", "boiler_type"]
+
+
+@pytest.mark.base
+def test_a_function_law_describes_itself_by_its_declared_description():
+    """``law(description=...)`` is what an opaque law renders as, and only a callable may have one.
+
+    Failure mode caught: a lambda law describing itself as ``<Class>.<lambda>``, which says that
+    a law exists and nothing about what it computes — and, where one class borrows another's law,
+    names a class that has nothing to do with the field (F-22). The refusal is the other half: an
+    expression law already renders as the formula it is, so a description on one would be a
+    second spelling of the same thing, free to drift.
+    """
+    described = law(
+        lambda ctx: ctx.heating_load_in_watt / 2,
+        reads=(Size.HEATING_LOAD_IN_WATT,),
+        description="Size.HEATING_LOAD_IN_WATT / 2",
+    )
+    assert described.describe() == "Size.HEATING_LOAD_IN_WATT / 2"
+    assert described.facts_read() == (("heating_load_in_watt", Cardinality.ONE),)
+    # without one, the callable's qualified name is still what it renders as
+    assert "<lambda>" in law(lambda ctx: 1.0, reads=()).describe()
+    with pytest.raises(SizingError, match="not a function law"):
+        law(Size.HEATING_LOAD_IN_WATT, description="the heating load")
+    with pytest.raises(SizingError, match="not a function law"):
+        law(42.0, description="forty-two")
 
 
 @pytest.mark.base
@@ -468,8 +604,12 @@ def test_describe_config_covers_the_other_pilots_and_rejects_a_non_dataclass():
     assert tabula.parameters[0].name == "building_code"
     assert tabula.parameters[0].default is dataclasses.MISSING
     assert {parameter.name for parameter in tabula.parameters} >= {"number_of_apartments", "building_code"}
-    # The building sizes exactly one field from the system: which weather it is computed against.
-    assert [field.name for field in building.sizable_fields] == ["weather_identity"]
+    # The building sizes exactly two fields from the system, and the weather provides both: the
+    # design temperature it is computed for and which weather it is computed against (D-21).
+    assert [field.name for field in building.sizable_fields] == [
+        "heating_reference_temperature_in_celsius",
+        "weather_identity",
+    ]
     assert "heating_load_in_watt" in building.facts_provided
 
     with pytest.raises(TypeError, match="config dataclass"):
@@ -509,8 +649,13 @@ def test_a_config_class_outside_the_kernel_resolves_through_resolve_all():
 
     building = BuildingConfig.preset_german_single_family_home("Building")
     storage = _StorageConfig.preset_standard("Tank")
-    # No weather in this scenario, so the fact the building now reads is seeded by the test.
-    resolved = resolve_all([building, storage], seed=SizingContext(weather_identity="test weather"))
+    # No weather in this scenario, so the two facts the building now reads are seeded by the test.
+    resolved = resolve_all(
+        [building, storage],
+        seed=SizingContext(
+            weather_identity="test weather", heating_reference_temperature_in_celsius=-7.0
+        ),
+    )
     resolved_storage = next(config for config in resolved if isinstance(config, _StorageConfig))
     volume = cast(float, resolved_storage.volume_in_liter)  # resolved: nothing left to size
     assert volume > 0.0

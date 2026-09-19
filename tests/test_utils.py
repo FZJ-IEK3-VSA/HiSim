@@ -5,8 +5,6 @@ These tests target regressions flagged during docstring review of
 ``get_cache_file`` cache-path generation.
 """
 
-# clean
-
 import os
 import pathlib
 from dataclasses import dataclass

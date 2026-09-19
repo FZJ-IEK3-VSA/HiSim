@@ -18,8 +18,6 @@ there. A target port is written under its own key and is free of the rule, which
 directions are checked separately rather than by one sweep over every port a component has.
 """
 
-# clean
-
 from __future__ import annotations
 
 from typing import Any, ClassVar, Tuple

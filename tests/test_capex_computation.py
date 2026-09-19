@@ -13,8 +13,6 @@ simulated duration. The last case deliberately takes the other branch, where the
 the annual maintenance figure itself out of the tabulated device factors.
 """
 
-# clean
-
 import datetime
 from dataclasses import dataclass
 from typing import Optional

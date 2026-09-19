@@ -19,8 +19,6 @@ instead of silently degrading every ``EF-4x`` to the catch-all. Each test states
 mode it catches.
 """
 
-# clean
-
 import dataclasses
 import enum
 import importlib
@@ -633,6 +631,38 @@ def test_auto_in_a_config_block_reopens_a_field_the_preset_had_pinned() -> None:
     assert pinned.maximal_thermal_power_in_watt == 12_000.0
     assert reopened.maximal_thermal_power_in_watt != pinned.maximal_thermal_power_in_watt
     assert isinstance(reopened.maximal_thermal_power_in_watt, float)
+
+
+@pytest.mark.base
+def test_a_preset_replacing_a_law_sizes_the_file_by_that_law_and_not_the_class_default() -> None:
+    """Catches a per-preset law being dropped so that a file silently gets the class's law.
+
+    ``CHPConfig`` declares the gas arithmetic on its two derived fields and ``preset_hydrogen``
+    assigns the fuel cell's laws over them, so which preset a file names decides what the same
+    stated thermal power turns into. A file naming ``hydrogen`` and a thermal power of 1000 W
+    has to come out at the fuel cell's 1116 W of electricity, not at the gas turbine's 660 W.
+    """
+    hydrogen = Systems.configure(
+        """  chp:
+    class: hisim.components.generic_chp.SimpleCHP
+    preset: hydrogen
+    config:
+      p_th: 1000.0
+"""
+    ).config_of("chp")
+    gas = Systems.configure(
+        """  chp:
+    class: hisim.components.generic_chp.SimpleCHP
+    preset: gas
+    config:
+      p_th: 1000.0
+"""
+    ).config_of("chp")
+
+    assert hydrogen.p_el == (0.48 / 0.43) * 1000.0
+    assert hydrogen.p_fuel == (1 / 0.43) * 1000.0
+    assert gas.p_el == (0.33 / 0.5) * 1000.0
+    assert gas.p_fuel == (1 / 0.5) * 1000.0
 
 
 @pytest.mark.base

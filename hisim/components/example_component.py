@@ -1,62 +1,60 @@
 """Example Component."""
 
-# clean
-
 # Generic/Built-in
-from typing import List, Optional
+from typing import ClassVar, List, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Owned
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-from hisim.config import AUTO, ConfigBase, ComponentID, DisplayConfig, Sizable, Size, concrete, sized_field
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, Sizable, Size, concrete, preset, sized_field
 from hisim import loadtypes as lt
 from hisim.economics.facts import CostRelevance
-
-__authors__ = "Vitor Hugo Bellotto Zago"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = "MIT"
-__version__ = "0.1"
-__maintainer__ = "Vitor Hugo Bellotto Zago"
-__email__ = "vitor.zago@rwth-aachen.de"
-__status__ = "development"
-
-#: Specific heat capacity of the fictitious thermal mass this component stands for, in
-#: joule per kelvin and square metre of conditioned floor area. It is the constant half of
-#: the ``capacity`` sizing law below; the other half is the floor area of the building the
-#: component sits in. The number, and the law it forms, are where the literal
-#: ``45 * 121.2`` that this config used to carry came from: 121.2 m² is the conditioned
-#: floor area of the default TABULA building (``BuildingConfig.preset_german_single_family_home``,
-#: ``DE.N.SFH.05.Gen.ReEx.001.002``), so the law reproduces the old value exactly for that
-#: building and scales with any other one.
-SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2: float = 45.0
 
 
 @dataclass_json
 @dataclass
 class ExampleComponentConfig(ConfigBase):
-    """Configuration of the Example Component.
+    """Configuration of the example component: a fictitious thermal mass with an electrical load.
 
-    ``capacity`` is a *sizable* field: its value is not a number written here but a law
-    declared at the field, which the sizing kernel evaluates against the facts of the
-    surrounding system (see :mod:`hisim.config.sizing`). The factory below therefore says
-    :data:`~hisim.config.AUTO` instead of a number, and a caller resolves the config
-    against a :class:`~hisim.config.SizingContext` before handing it to the component.
+    The component stands for nothing real -- it is the file a reader opens to see what a HiSim
+    component looks like -- so its configuration is one named default::
+
+        ExampleComponentConfig.preset_standard("ExampleComponent")
+
+    which is the 1 kW heating load at 25 degrees Celsius every caller in this repository builds.
+
+    ``capacity`` is a *sizable* field: its value is not a number written here but a law declared at
+    the field, which the sizing kernel evaluates against the facts of the surrounding system (see
+    :mod:`hisim.config.sizing`). The preset therefore leaves it at ``AUTO``, and a caller resolves
+    the configuration against a :class:`~hisim.config.SizingContext` before handing it to the
+    component.
     """
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the base class."""
-        return ExampleComponent.get_full_classname()
+    MAIN_CLASS = "hisim.components.example_component.ExampleComponent"
+
+    #: Specific heat capacity of the fictitious thermal mass this component stands for, in joule
+    #: per kelvin and square metre of conditioned floor area. It is the constant half of the
+    #: ``capacity`` sizing law below; the other half is the floor area of the building the
+    #: component sits in. The number, and the law it forms, are where the literal ``45 * 121.2``
+    #: that this config used to carry came from: 121.2 m2 is the conditioned floor area of the
+    #: default TABULA building (``BuildingConfig.preset_german_single_family_home``,
+    #: ``DE.N.SFH.05.Gen.ReEx.001.002``), so the law reproduces the old value exactly for that
+    #: building and scales with any other one.
+    SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2: ClassVar[float] = 45.0
 
     component_id: ComponentID
-    loadtype: lt.LoadTypes
-    unit: lt.Units
-    electricity: Optional[float]
-    # heat: float = 0.0,
-    initial_temperature: Optional[float]
+    #: Physical quantity the component's electrical port carries.
+    loadtype: lt.LoadTypes = lt.LoadTypes.HEATING
+    #: Unit that quantity is in.
+    unit: lt.Units = lt.Units.WATT
+    #: Electrical load of the mass in watts, negated by :meth:`ExampleComponent.build` and drawn
+    #: in two blocks of the day. ``None`` falls back to the same 1 kW inside that method.
+    electricity: Optional[float] = -1e3
+    #: Temperature the mass starts the simulation at, in degrees Celsius. ``None`` falls back to
+    #: the same 25 degrees inside :meth:`ExampleComponent.build`.
+    initial_temperature: Optional[float] = 25.0
     #: Thermal capacity of the modelled mass in J/K: the specific capacity above times the
     #: conditioned floor area of the building. Declared last because a sizable field carries
     #: a default (``AUTO``) and must follow the fields that do not.
@@ -66,23 +64,19 @@ class ExampleComponentConfig(ConfigBase):
         note=f"{SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2} J/K per m² of conditioned floor area",
     )
 
+    @preset
     @classmethod
-    def get_default_example_component(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "ExampleComponentConfig":
-        """Gets a default Example Component."""
-        if component_id is None:
-            component_id = ComponentID(name="ExampleComponent")
-        return ExampleComponentConfig(
-            component_id=component_id,
-            electricity=-1e3,
-            loadtype=lt.LoadTypes.HEATING,
-            unit=lt.Units.WATT,
-            # heat=0.0,
-            capacity=AUTO,
-            initial_temperature=25.0,
-        )
+    def preset_standard(cls, name: str) -> "ExampleComponentConfig":
+        """The fictitious mass of the examples: a 1 kW heating load starting at 25 degrees Celsius.
+
+        Args:
+            name: Instance name of the component in the simulation.
+
+        Returns:
+            The configuration, with ``capacity`` left as ``AUTO`` for the sizing kernel to fill in
+            from the conditioned floor area of the building the component is placed in.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class ExampleComponent(Component):

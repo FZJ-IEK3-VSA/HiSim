@@ -11,8 +11,6 @@ reference, preserves the original column order, handles the hourly-resample
 shortcut, and survives empty aggregation groups (all-mean / all-sum).
 """
 
-# clean
-
 from types import SimpleNamespace
 
 import numpy as np

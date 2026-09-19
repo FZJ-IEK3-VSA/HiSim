@@ -16,8 +16,6 @@ The rule that picks a channel for a feed — most-specific subset — and the ch
 it live next door in :mod:`hisim.energy_system.channel_matching`.
 """
 
-# clean
-
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -37,8 +37,6 @@ it cannot import ``ComponentID`` from :mod:`hisim.config.base`, since that modul
 the sizing machinery — which is why every builder spells the ``ComponentID`` out itself.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses
@@ -56,6 +54,9 @@ from typing import Any, Callable, ClassVar, Dict, Iterable, Mapping, Optional, T
 #: classmethod stay a fully typed classmethod for mypy, so a typo in its name is an
 #: ``attr-defined`` error and a wrong argument an ``arg-type`` error at the call site.
 BuilderT = TypeVar("BuilderT")
+
+#: Type variable of :func:`replace_config`, which returns the very type it is handed.
+ConfigT = TypeVar("ConfigT")
 
 
 class BuilderKind(enum.Enum):
@@ -599,6 +600,40 @@ def preset_provenance(config: Any) -> Optional[str]:
     """
     provenance = getattr(config, ConfigBuilder.PROVENANCE_ATTRIBUTE, None)
     return provenance if isinstance(provenance, str) else None
+
+
+def replace_config(config: ConfigT, **changes: Any) -> ConfigT:
+    """Copies a config with some fields changed, keeping the preset stamp it was built with.
+
+    Use this wherever a config instance is copied with changes::
+
+        variant = replace_config(BatteryConfig.preset_sized_to_pv("Battery"), source_weight=2)
+        preset_provenance(variant)  # "sized_to_pv", where dataclasses.replace loses it
+
+    :func:`dataclasses.replace` copies *fields*, and the provenance stamp is an attribute
+    rather than a field, so a plain ``replace`` silently returns a config that no longer
+    knows which preset it came from. What that costs is a recorded file: the recorder writes
+    ``preset: <name>`` plus the differing fields for a stamped config and a full literal
+    block for an unstamped one, so a twin quietly loses its ``preset:`` line while still
+    loading and running identically -- the regression no test notices, recorded as F-13.
+
+    Args:
+        config: The configuration to copy. Any dataclass; only a stamped one has anything
+            to carry.
+        **changes: Field values to replace, exactly as :func:`dataclasses.replace` takes them.
+
+    Returns:
+        A fresh instance with the changes applied and the preset stamp of ``config``.
+
+    Raises:
+        TypeError: If ``config`` is not a dataclass instance, or a name in ``changes`` is
+            not one of its fields -- both raised by :func:`dataclasses.replace` itself.
+    """
+    replaced = dataclasses.replace(config, **changes)  # type: ignore[type-var]
+    provenance = getattr(config, ConfigBuilder.PROVENANCE_ATTRIBUTE, None)
+    if provenance is not None:
+        setattr(replaced, ConfigBuilder.PROVENANCE_ATTRIBUTE, provenance)
+    return replaced
 
 
 def check_builder_declarations(config_class: type, field_names: Iterable[str]) -> None:

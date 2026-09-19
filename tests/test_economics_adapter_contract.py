@@ -26,8 +26,6 @@ resolved because its module refused to import fails, since an unresolvable key i
 defect these tests exist to find.
 """
 
-# clean
-
 import dataclasses
 import importlib
 import inspect
@@ -39,7 +37,7 @@ import pytest
 
 from hisim.component import Component
 from hisim.components.heat_distribution_system import HeatDistributionConfig, HeatDistributionSystemType
-from hisim.components.solar_thermal_system import COLLECTOR_AREA_IN_M2_PER_APARTMENT
+from hisim.components.solar_thermal_system import SolarThermalSystemConfig
 from hisim.config import auto_fields, presets_of
 from hisim.dynamic_component import DynamicComponent
 from hisim.economics.adapter import (
@@ -126,7 +124,17 @@ class AdapterContractScan:
         "HeatDistributionConfig.water_mass_flow_rate_in_kg_per_second": 0.5,
         "HeatDistributionConfig.absolute_conditioned_floor_area_in_m2": 120.0,
         # What the area law gives the single apartment of a single-family house.
-        "SolarThermalSystemConfig.area_m2": COLLECTOR_AREA_IN_M2_PER_APARTMENT,
+        "SolarThermalSystemConfig.area_m2": SolarThermalSystemConfig.COLLECTOR_AREA_IN_M2_PER_APARTMENT,
+        # The heat pump the copy laws build for the fleet's archetype: the machine covers the
+        # building's heating load exactly and is rated at the building's design outside
+        # temperature. The extractor reads the power as the kilowatts it prices; the reference
+        # temperature it does not read, but the sweep resolves the whole configuration.
+        "MoreAdvancedHeatPumpHPLibConfig.set_thermal_output_power_in_watt": 7780.75,
+        "MoreAdvancedHeatPumpHPLibConfig.heating_reference_temperature_in_celsius": -7.0,
+        # The two heat generators the copy law sizes to the archetype's heating load exactly.
+        # The extractor reads both as the kilowatts it prices.
+        "ElectricHeatingConfig.maximum_electric_power_w": 7780.75,
+        "DistrictHeatingConfig.connected_load_in_w": 7780.75,
     }
 
     @staticmethod

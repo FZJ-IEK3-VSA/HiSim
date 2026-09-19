@@ -1,7 +1,5 @@
 """Contains a component that uses the UTSP to provide LoadProfileGenerator data."""
 
-# clean
-
 import datetime
 import errno
 import io
@@ -11,7 +9,7 @@ import contextlib
 from ast import literal_eval
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union, Set
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union, Set
 import copy
 import enum
 import portalocker
@@ -67,10 +65,20 @@ class LpgDataAcquisitionMode(enum.Enum):
 @dataclass_json
 @dataclass
 class UtspLpgConnectorConfig(ConfigBase):
-    """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters."""
+    """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters.
+
+    The one preset is :meth:`preset_couple_both_at_work`, the household every example and every
+    fixture of this repository runs; any other household of the LoadProfileGenerator catalogue
+    comes from :meth:`for_household`.
+    """
+
+    MAIN_CLASS = "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector"
 
     component_id: ComponentID
+    #: Where the profile comes from: the shipped predefined one, a local LoadProfileGenerator or
+    #: the UTSP.
     data_acquisition_mode: LpgDataAcquisitionMode
+    #: The catalogue household to simulate, or one reference per apartment.
     household: Union[JsonReference, List[JsonReference]]
     energy_intensity: EnergyIntensityType
     travel_route_set: Optional[JsonReference]
@@ -78,6 +86,8 @@ class UtspLpgConnectorConfig(ConfigBase):
     charging_station_set: Optional[JsonReference]
     profile_with_washing_machine_and_dishwasher: bool
     predictive_control: bool
+    #: Where the result file is written. Not part of the cache key; see
+    #: :meth:`_clear_non_key_fields`.
     result_dir_path: str
     cache_dir_path: Optional[str] = None
     name_of_predefined_loadprofile: Optional[str] = "CHR01 Couple both at Work"
@@ -137,7 +147,7 @@ class UtspLpgConnectorConfig(ConfigBase):
     def identity_facts(config: "UtspLpgConnectorConfig", ctx: Any) -> Dict[str, Any]:
         """Provide :meth:`identity` as the sizing fact ``occupancy_identity``.
 
-        Registered in ``SIZING_CONTRIBUTIONS`` below; the sizing engine calls it with the resolved config.
+        Registered in :attr:`SIZING_CONTRIBUTIONS`; the sizing engine calls it with the resolved config.
 
         Args:
             config: this connector configuration.
@@ -149,10 +159,12 @@ class UtspLpgConnectorConfig(ConfigBase):
         del ctx
         return {"occupancy_identity": config.identity()}
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the base class."""
-        return UtspLpgConnector.get_full_classname()  # type: ignore[no-any-return]
+    #: A scenario normally has one occupancy, so the bare fact ``occupancy_identity`` binds
+    #: without the car naming a source; a scenario with several names the one its car belongs to
+    #: in the car's ``sizing_sources``, which is exactly the case the engine refuses to guess.
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
+        FactContribution(facts=("occupancy_identity",), compute=identity_facts),
+    )
 
     @preset(note="CHR01, a couple both at work, on the shipped predefined profile")
     @classmethod
@@ -303,7 +315,6 @@ class UtspLpgConnectorConfig(ConfigBase):
             component_id=ComponentID(name=name),
             data_acquisition_mode=data_acquisition_mode,
             name_of_predefined_loadprofile=cls.predefined_profile_of(household, data_acquisition_mode),
-            predefined_loadprofile_filepaths=None,
             household=household,
             result_dir_path=utils.HISIMPATH["utsp_results"],
             energy_intensity=energy_intensity,
@@ -324,19 +335,7 @@ class UtspLpgConnectorConfig(ConfigBase):
             ),
             profile_with_washing_machine_and_dishwasher=True,
             predictive_control=False,
-            cache_dir_path=None,
-            guid="",
-            calculation_index_for_local_lpg=None,
         )
-
-
-# Declared after the class because it refers to it. A scenario normally has one occupancy, so the bare
-# fact ``occupancy_identity`` binds without the car naming a source; a scenario with several names the
-# one its car belongs to in the car's ``sizing_sources``, which is exactly the case the engine refuses
-# to guess.
-UtspLpgConnectorConfig.SIZING_CONTRIBUTIONS = (
-    FactContribution(facts=("occupancy_identity",), compute=UtspLpgConnectorConfig.identity_facts),
-)
 
 
 class UtspLpgConnector(cp.Component):

@@ -1,5 +1,4 @@
 """ Tests for the basic household system setup. """
-# clean
 import os
 from pathlib import Path
 
@@ -41,8 +40,6 @@ def test_basic_household_with_all_resultfiles() -> None:
             PostProcessingOptions.COMPUTE_CAPEX,
             PostProcessingOptions.COMPUTE_KPIS,
             PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION,
-            PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON,
-            PostProcessingOptions.WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON,
             PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER,
             PostProcessingOptions.WRITE_KPIS_TO_JSON,
         ]
@@ -88,17 +85,10 @@ def test_basic_household_with_all_resultfiles() -> None:
     )
 
     # --- JSON outputs -------------------------------------------------------
-    # WRITE_COMPONENT_CONFIGS_TO_JSON    -> simulation.json, scenario.json
     # WRITE_KPIS_TO_JSON                 -> all_kpis.json
     # WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER -> <building>_kpi_config_for_building_sizer.json
     assert any(results_dir.rglob("*.json")), "no JSON result files produced"
 
-    assert (results_dir / "simulation.json").is_file(), (
-        f"simulation.json not found in result directory: {results_dir}"
-    )
-    assert (results_dir / "scenario.json").is_file(), (
-        f"scenario.json not found in result directory: {results_dir}"
-    )
     assert (results_dir / "all_kpis.json").is_file(), (
         f"all_kpis.json not found in result directory: {results_dir}"
     )
@@ -109,17 +99,9 @@ def test_basic_household_with_all_resultfiles() -> None:
 
     # --- Scenario-evaluation output -----------------------------------------
     # PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION creates a sub-directory with
-    # resolution CSVs (hourly/daily/monthly/yearly) and, together with
-    # WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON, also writes simulation.json
-    # and scenario.json into it.
+    # resolution CSVs (hourly/daily/monthly/yearly).
     scenario_eval_dir = results_dir / "result_data_for_scenario_evaluation"
     assert scenario_eval_dir.is_dir(), (
         f"scenario-evaluation output directory was not created at {scenario_eval_dir}"
     )
     assert any(scenario_eval_dir.rglob("*.csv")), "no CSV files in scenario-evaluation output directory"
-    assert (scenario_eval_dir / "simulation.json").is_file(), (
-        f"simulation.json not found in scenario-evaluation directory: {scenario_eval_dir}"
-    )
-    assert (scenario_eval_dir / "scenario.json").is_file(), (
-        f"scenario.json not found in scenario-evaluation directory: {scenario_eval_dir}"
-    )

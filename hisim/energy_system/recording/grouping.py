@@ -20,8 +20,6 @@ reviewer reads as a diff and what the second recording pass is handed. The workb
 from the probe runs whenever it is wanted and is never committed.
 """
 
-# clean
-
 from __future__ import annotations
 
 import enum

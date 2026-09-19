@@ -3,8 +3,6 @@
 Evaluates diesel or electricity consumption based on driven kilometers and processes Car Location for charging stations.
 """
 
-# clean
-
 import datetime as dt
 from dataclasses import dataclass
 
@@ -51,6 +49,8 @@ class CarConfig(ConfigBase):
     looks its profile up under in the simulation repository, once the occupancy has published it.
     """
 
+    MAIN_CLASS = "hisim.components.generic_car.Car"
+
     #: Consumption per kilometre in kWh/km, CO2 footprint of manufacture in kg and investment cost
     #: in Euro of the electric vehicle :meth:`for_household` configures for an electric car.
     ELECTRIC_VEHICLE: ClassVar[Tuple[float, float, float]] = (0.15, 8899.4, 44498.0)
@@ -90,11 +90,6 @@ class CarConfig(ConfigBase):
     #: spells it. Sized from the occupancy by the sizing engine, so the cache key includes it; the
     #: household name alone does not determine the profile. See ``roadmap/pylpg_flakiness.md`` F7.
     occupancy_identity: Sizable[str] = sized_field(rule=Size.OCCUPANCY_IDENTITY, value_type=str)
-
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return Car.get_full_classname()
 
     @constructor(note="the two vehicles the HiSim cost database carries, an EV and a diesel car")
     @classmethod

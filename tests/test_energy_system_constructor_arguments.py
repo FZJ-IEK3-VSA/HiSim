@@ -31,20 +31,26 @@ resolve, since an unresolved parameter type is one the schema cannot state and t
 cannot decode against.
 """
 
-# clean
-
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List
 
 from dataclasses_json import dataclass_json
 
 import pytest
-from utspclient.helpers.lpgdata import Households
+from utspclient.helpers.lpgdata import ChargingStationSets, Households
 
 from hisim import loadtypes as lt
 from hisim.component import Component, SingleTimeStepValues
 from hisim.components.building.config import BuildingConfig
+from hisim.components.controller_l1_generic_ev_charge import ChargingStationConfig
+from hisim.components.controller_l1_electrolyzer_h2 import ElectrolyzerControllerConfig
+from hisim.components.controller_l2_ptx_energy_management_system import (
+    PTXControllerConfig,
+    PtxOperationMode,
+)
+from hisim.components.csvloader import CSVLoaderConfig
 from hisim.components.generic_car import CarConfig
+from hisim.components.generic_electrolyzer_h2 import ElectrolyzerConfig
 from hisim.components.loadprofilegenerator_utsp_connector import (
     LpgDataAcquisitionMode,
     UtspLpgConnectorConfig,
@@ -63,14 +69,16 @@ from hisim.simulationparameters import SimulationParameters
 HOUSEHOLD = Households.CHR01_Couple_both_at_Work
 
 #: A weather built from a catalogue station named by its member name, with the optional
-#: reader named the same way. ``LocationEnum`` spells its values as tuples, so the member
-#: name is the only spelling a file has for it.
+#: reader named the same way and the mandatory design temperature as a plain number.
+#: ``LocationEnum`` spells its values as tuples, so the member name is the only spelling a
+#: file has for it.
 WEATHER_ENTRY = """  Weather:
     class: hisim.components.weather.Weather
     constructor:
       for_location:
         location: AACHEN
         data_source: DWD_TRY
+        heating_reference_temperature_in_celsius: -7.0
 """
 
 #: A building from a TABULA code: the all-scalar constructor, which worked before this change
@@ -123,6 +131,53 @@ CAR_ENTRY = """  Car:
         car_name: Car1
         fuel: Diesel
         source_weight: 2
+"""
+
+
+#: A CSV profile, whose two enums are written by member name and whose four defaulted
+#: parameters are left out, so the constructor's own defaults have to survive the file.
+CSV_ENTRY = """  CSV:
+    class: hisim.components.csvloader.CSVLoader
+    constructor:
+      for_csv_file:
+        csv_filename: wind_generated_power_1_min.csv
+        column: 1
+        loadtype: ELECTRICITY
+        unit: KILOWATT
+        column_name: generated_power
+"""
+
+#: A wallbox, whose only argument is one ``ChargingStationSets`` member written as the mapping
+#: of the two fields ``JsonReference`` declares — the shape the car twins already carry.
+CHARGING_STATION_ENTRY = """  L1EVChargeControl:
+    class: hisim.components.controller_l1_generic_ev_charge.L1Controller
+    constructor:
+      for_charging_station_set:
+        charging_station_set:
+          Name: Charging At Home with 11 kW
+          Guid:
+            StrVal: 78dae308-24c4-45cc-8bdf-b001d61f45c2
+"""
+
+
+#: The three readers of the electrolyzer manufacturer table, all naming the same device. The
+#: PtX controller additionally takes its operating mode, written by member name.
+ELECTROLYZER_ENTRIES = """  Electrolyzer:
+    class: hisim.components.generic_electrolyzer_h2.Electrolyzer
+    constructor:
+      for_device:
+        electrolyzer_name: HTecME450
+  L1ElectrolyzerController:
+    class: hisim.components.controller_l1_electrolyzer_h2.ElectrolyzerController
+    constructor:
+      for_device:
+        electrolyzer_name: HTecME450
+  L2PtXController:
+    class: hisim.components.controller_l2_ptx_energy_management_system.PTXController
+    constructor:
+      for_device:
+        electrolyzer_name: HTecME450
+        operation_mode: NOMINAL_LOAD
 """
 
 
@@ -249,12 +304,31 @@ def test_an_enum_argument_reaches_the_constructor_as_the_member() -> None:
     origins = origins_of(WEATHER_ENTRY)
 
     assert origins["Weather"] == WeatherConfig.for_location(
-        "Weather", location=LocationEnum.AACHEN, data_source=WeatherDataSourceEnum.DWD_TRY
+        "Weather",
+        location=LocationEnum.AACHEN,
+        heating_reference_temperature_in_celsius=-7.0,
+        data_source=WeatherDataSourceEnum.DWD_TRY,
     )
     # Hand-derived, so that the constructor is not the only oracle in the test: the station's
     # own spelling of itself, and the member the optional reader names.
     assert origins["Weather"].location == "Aachen"
     assert origins["Weather"].data_source is WeatherDataSourceEnum.DWD_TRY
+
+
+@pytest.mark.base
+def test_the_weathers_design_temperature_reaches_the_constructor_as_a_number() -> None:
+    """A plain float argument survives the trip from the file into the built configuration.
+
+    The design temperature is the first mandatory scalar a ``for_…`` constructor takes (D-21), and
+    a scalar goes through the same argument codec an enum or a path does. Writing ``-7.0`` under
+    ``for_location`` therefore has to arrive as the float ``-7.0`` on the field of that name --
+    not as the string the file spells it with, and not dropped for being untyped -- because three
+    components size their own design temperature off the fact the weather computes from it.
+    """
+    origins = origins_of(WEATHER_ENTRY)
+
+    assert origins["Weather"].heating_reference_temperature_in_celsius == -7.0
+    assert isinstance(origins["Weather"].heating_reference_temperature_in_celsius, float)
 
 
 @pytest.mark.base
@@ -322,6 +396,81 @@ def test_a_scalar_argument_reaches_an_all_scalar_constructor_unharmed() -> None:
         building_code="DE.N.SFH.05.Gen.ReEx.001.002",
         absolute_conditioned_floor_area_in_m2=121.2,
     )
+
+
+@pytest.mark.base
+def test_the_csv_loader_constructor_keeps_its_defaults_when_a_file_omits_them() -> None:
+    """A file naming only the six parameters that identify a column builds the Python config.
+
+    ``for_csv_file`` mixes every scalar kind with two enums and four defaulted parameters, so
+    it is the case where a decoder that dropped a default, or coerced an enum to its string,
+    would show up as a configuration that differs in a field the file never mentioned.
+    """
+    origins = origins_of(CSV_ENTRY)
+
+    assert origins["CSV"] == CSVLoaderConfig.for_csv_file(
+        "CSV",
+        csv_filename="wind_generated_power_1_min.csv",
+        column=1,
+        loadtype=lt.LoadTypes.ELECTRICITY,
+        unit=lt.Units.KILOWATT,
+        column_name="generated_power",
+    )
+    # Hand-derived, so the constructor is not the only oracle: the two enums arrive as members
+    # and the four parameters the file left out keep the defaults the class declares.
+    assert origins["CSV"].loadtype is lt.LoadTypes.ELECTRICITY
+    assert origins["CSV"].unit is lt.Units.KILOWATT
+    assert (origins["CSV"].sep, origins["CSV"].decimal) == (",", ".")
+    assert origins["CSV"].multiplier == 1.0
+
+
+@pytest.mark.base
+def test_the_charging_station_constructor_derives_its_threshold_from_a_written_reference() -> None:
+    """A wallbox written as a ``JsonReference`` mapping builds the config the Python call builds.
+
+    The station set is the charger's only argument and the lower charging threshold is derived
+    from the rating spelled in its name, so a reference that arrived as a bare mapping rather
+    than as the dataclass would fail inside the constructor rather than produce a wrong number.
+    """
+    origins = origins_of(CHARGING_STATION_ENTRY)
+
+    assert origins["L1EVChargeControl"] == ChargingStationConfig.for_charging_station_set(
+        "L1EVChargeControl",
+        charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
+    )
+    # Hand-derived: 10 % of the 11 kW the set's name states.
+    assert origins["L1EVChargeControl"].lower_threshold_charging_power_in_watt == 1100.0
+
+
+@pytest.mark.base
+def test_the_three_electrolyzer_constructors_read_the_same_row_from_a_file() -> None:
+    """One device name in a file builds the machine, its L1 controller and its PtX controller.
+
+    All three read the same row of ``electrolyzer_manufacturer_config.json``, so this is the
+    case where a device name that reached the builder mangled -- or an operating mode left as
+    the string that spells it -- would show up as three configurations of one plant that no
+    longer agree on its load band.
+    """
+    origins = origins_of(ELECTROLYZER_ENTRIES)
+
+    assert origins["Electrolyzer"] == ElectrolyzerConfig.for_device(
+        "Electrolyzer", electrolyzer_name="HTecME450"
+    )
+    assert origins["L1ElectrolyzerController"] == ElectrolyzerControllerConfig.for_device(
+        "L1ElectrolyzerController", electrolyzer_name="HTecME450"
+    )
+    assert origins["L2PtXController"] == PTXControllerConfig.for_device(
+        "L2PtXController",
+        electrolyzer_name="HTecME450",
+        operation_mode=PtxOperationMode.NOMINAL_LOAD,
+    )
+    # Hand-derived from the table row rather than from the constructors, so they are not the
+    # only oracle: the three agree on the machine's 987 kW and its 1028.225 kW ceiling, and the
+    # mode arrives as the member rather than as the name the file spelled.
+    assert origins["Electrolyzer"].nom_load == 987.0
+    assert origins["L1ElectrolyzerController"].max_load == 1028.225
+    assert origins["L2PtXController"].min_load == 205.462
+    assert origins["L2PtXController"].operation_mode is PtxOperationMode.NOMINAL_LOAD
 
 
 @pytest.mark.base

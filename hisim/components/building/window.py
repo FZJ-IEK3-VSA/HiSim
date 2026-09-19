@@ -5,8 +5,6 @@ for the layout and the RC_BuildingSimulator reference). Holds ``Window``, moved
 verbatim from the former single-module ``building.py``.
 """
 
-# clean
-
 import math
 from functools import lru_cache
 

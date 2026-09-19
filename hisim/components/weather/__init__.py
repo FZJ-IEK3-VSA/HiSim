@@ -42,8 +42,6 @@ Note on ``Weather.__module__``:
     ``hisim.components.weather.Weather``.
 """
 
-# clean
-
 # The annotations below are never evaluated (PEP 563), which keeps the typing names they use out of
 # this module's namespace: a facade whose ``dir()`` lists ``Dict`` beside ``Weather`` is a worse facade.
 from __future__ import annotations

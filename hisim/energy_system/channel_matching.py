@@ -22,8 +22,6 @@ participant on it must carry the reserved monitored-only weight, and a channel t
 dispatches needs a real rank to serve.
 """
 
-# clean
-
 from __future__ import annotations
 
 from typing import Any, FrozenSet, List, Optional, Sequence, Tuple

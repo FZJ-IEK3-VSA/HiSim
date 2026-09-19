@@ -7,8 +7,6 @@ dataclass instances / call classmethods and assert field values - no
 simulation, no I/O.
 """
 
-# clean
-
 import pytest
 
 from hisim.components.electricity_meter import (

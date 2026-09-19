@@ -1,6 +1,5 @@
 """Heating meter module to measure district heating consumption, costs and co2 emission."""
 
-# clean
 from dataclasses import dataclass
 from typing import ClassVar, List, Optional, Tuple
 
@@ -24,13 +23,6 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagE
 from hisim.economics.facts import CostRelevance
 
 DEFAULT_SOURCE_WEIGHT = 999
-__authors__ = "Jonas Hoppe"
-__copyright__ = ""
-__credits__ = ["Jonas Hoppe"]
-__license__ = "-"
-__version__ = ""
-__maintainer__ = ""
-__status__ = ""
 
 
 @dataclass_json
@@ -43,10 +35,7 @@ class HeatingMeterConfig(ConfigBase):
     :meth:`preset_standard`, which takes the instance name.
     """
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the base class."""
-        return HeatingMeter.get_full_classname()
+    MAIN_CLASS = "hisim.components.heating_meter.HeatingMeter"
 
     component_id: ComponentID
 
@@ -57,8 +46,7 @@ class HeatingMeterConfig(ConfigBase):
 
         The only preset the class has, and the whole configuration: the component identity is
         this class's single field, because a heat meter sums watt-hours and neither prices a
-        fuel nor owns a device. It reproduces the deleted ``get_heating_meter_default_config``
-        factory exactly.
+        fuel nor owns a device.
 
         Args:
             name: The instance name, which becomes the configuration's component identity.

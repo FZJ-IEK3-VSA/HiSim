@@ -19,8 +19,6 @@ Snapshots must be taken before ``run_all_timesteps`` finishes, because the simul
 component references at the end of a run.
 """
 
-# clean
-
 from __future__ import annotations
 
 import re

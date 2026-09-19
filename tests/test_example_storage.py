@@ -1,7 +1,5 @@
 """Test for the Example Storage."""
 
-# clean
-
 import pytest
 
 from hisim import component as cp
@@ -26,7 +24,7 @@ def test_example_storage() -> None:
     simulation_parameters: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
     my_example_storage_config: example_storage.SimpleStorageConfig = (
-        example_storage.SimpleStorageConfig.get_default_thermal_storage()
+        example_storage.SimpleStorageConfig.preset_thermal("SimpleThermalStorage")
     )
     my_example_storage: example_storage.SimpleStorage = example_storage.SimpleStorage(
         config=my_example_storage_config, my_simulation_parameters=simulation_parameters

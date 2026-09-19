@@ -16,8 +16,6 @@ happens once for the whole module and every test after that is an assertion on p
 Each test states the failure mode it catches.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses
@@ -93,11 +91,14 @@ class Fixtures:
     #: Where the Python setups live.
     SETUPS: ClassVar[Path] = ROOT / "system_setups"
 
-    #: Where the committed twins and the shared parameter files live.
+    #: Where the committed twins live.
     ENERGY_SYSTEMS: ClassVar[Path] = ROOT / "energy_systems"
 
+    #: Where the shared simulation-parameters files live.
+    ROOT_PARAMETERS: ClassVar[Path] = ROOT / "simulation_parameters"
+
     #: One January day at a quarter-hour resolution, the pair every twin is recorded with.
-    PARAMETERS: ClassVar[Path] = ENERGY_SYSTEMS / "one_day_15min.simulation.yaml"
+    PARAMETERS: ClassVar[Path] = ROOT_PARAMETERS / "one_day_15min_export.simulation.yaml"
 
     #: The setups recorded for this module, and committed as twins beside the exemplar.
     RECORDED: ClassVar[Tuple[str, ...]] = (
@@ -599,10 +600,10 @@ def test_the_realized_record_of_a_recording_re_executes_unchanged(
     the second run legitimately started from a different file than the first.
     """
     built = build_energy_system(recordings["basic_household"].path, Fixtures.parameters(tmp_path / "results"))
-    record_path, _, _ = write_records(built, str(tmp_path / "record"))
+    record_path, _, _, _ = write_records(built, str(tmp_path / "record"))
 
     rerun = build_energy_system(Path(record_path), Fixtures.parameters(tmp_path / "again"), rerun=True)
-    rerun_path, _, _ = write_records(rerun, str(tmp_path / "record-again"))
+    rerun_path, _, _, _ = write_records(rerun, str(tmp_path / "record-again"))
 
     first = load_energy_system(Path(record_path))
     second = load_energy_system(Path(rerun_path))

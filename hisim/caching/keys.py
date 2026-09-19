@@ -23,8 +23,6 @@ processed weather series and ``Weather.i_prepare_simulation`` looks it up throug
 imports the standard library only.
 """
 
-# clean
-
 import ast
 import dataclasses
 import enum

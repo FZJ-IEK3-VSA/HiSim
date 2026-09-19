@@ -9,11 +9,10 @@ ordering, the cycle error), the many-cardinality hook, and the provenance the re
 leaves behind in ``sizing_record`` and the ``ResolutionReport``.
 """
 
-# clean
-
 import json
 import random
 from dataclasses import dataclass
+from typing import Optional
 
 import pytest
 from dataclasses_json import dataclass_json
@@ -118,6 +117,39 @@ class _ConsumerConfig(ConfigBase):
 
 @dataclass_json
 @dataclass
+class _OptionalConsumerConfig(ConfigBase):
+    """A fixture consumer whose one sized field may legitimately end up holding nothing."""
+
+    component_id: ComponentID
+    band_in_watt: Sizable[Optional[float]] = sized_field(
+        rule=0.5 * Size.MAXIMAL_THERMAL_POWER_IN_WATT, optional=True
+    )
+
+    @classmethod
+    def get_main_classname(cls) -> str:
+        """Returns a dummy classname, as the ConfigBase contract requires."""
+        return "tests.test_sizing_engine._OptionalConsumerConfig"
+
+
+@dataclass_json
+@dataclass
+class _MixedConsumerConfig(ConfigBase):
+    """A fixture consumer reading one fact from both an optional and a required field."""
+
+    component_id: ComponentID
+    band_in_watt: Sizable[Optional[float]] = sized_field(
+        rule=0.5 * Size.MAXIMAL_THERMAL_POWER_IN_WATT, optional=True
+    )
+    floor_in_watt: Sizable[float] = sized_field(rule=0.25 * Size.MAXIMAL_THERMAL_POWER_IN_WATT)
+
+    @classmethod
+    def get_main_classname(cls) -> str:
+        """Returns a dummy classname, as the ConfigBase contract requires."""
+        return "tests.test_sizing_engine._MixedConsumerConfig"
+
+
+@dataclass_json
+@dataclass
 class _FlowConsumerConfig(ConfigBase):
     """A fixture consumer of the unambiguous mass-flow fact, which needs no mapping."""
 
@@ -162,14 +194,22 @@ def test_the_pilot_chain_resolves_without_any_sources_mapping():
     )
 
     building = BuildingConfig.preset_german_single_family_home("Building")
-    heating_load = SizingContext.for_building(building).heating_load_in_watt
+    # The design temperature is the weather's (D-21); the chain below seeds it as a fact, and the
+    # heating load this line reads has to be the one the same number produces.
+    stated = BuildingConfig.preset_german_single_family_home("Building")
+    stated.heating_reference_temperature_in_celsius = -7.0
+    heating_load = SizingContext.for_building(stated).heating_load_in_watt
     controller = HeatDistributionControllerConfig.preset_building_derived("HeatDistributionController")
     hds = HeatDistributionConfig.preset_building_derived("HeatDistributionSystem")
     boiler = GenericBoilerConfig.preset_condensing_gas("CondensingGasBoiler")
-    # The chain has no weather, and the building now records which weather it is computed against, so
-    # that one fact is seeded: the seed is the surrounding system, and here the system is the test.
+    # The chain has no weather, and the building now reads two facts the weather provides -- which
+    # weather it is computed against and the design temperature it is computed for -- so both are
+    # seeded: the seed is the surrounding system, and here the system is the test.
     resolved = resolve_all(
-        [hds, boiler, building, controller], seed=SizingContext(weather_identity="pilot weather")
+        [hds, boiler, building, controller],
+        seed=SizingContext(
+            weather_identity="pilot weather", heating_reference_temperature_in_celsius=-7.0
+        ),
     )  # deliberately shuffled
     resolved_hds, resolved_boiler = resolved[0], resolved[1]
     assert resolved_hds.water_mass_flow_rate_in_kg_per_second == 0.27
@@ -320,6 +360,50 @@ def test_binding_to_the_null_provider_names_it_in_the_error():
             ],
             seed=SizingContext(heating_load_in_watt=10_000.0),
             sources={"DhwController": {"maximal_thermal_power_in_watt": "HeatPump.maximal_thermal_power_in_watt"}},
+        )
+
+
+@pytest.mark.base
+def test_a_null_fact_resolves_an_optional_field_to_nothing():
+    """A fact only optional fields read is answered by ``None``, not refused.
+
+    The fuel meter beside a district heating connection is the real case: the connection
+    burns nothing in the house, so it contributes no heating value and no density, and both
+    of the meter's fields are declared ``optional=True``. Before F-12 the setup had to assign
+    the two ``None``s before resolving, which left them out of the sizing and put two
+    ``null`` lines into the twin.
+    """
+    resolved = resolve_all(
+        [
+            _NullProducerConfig(component_id=ComponentID(name="HeatPump")),
+            _OptionalConsumerConfig(component_id=ComponentID(name="Meter")),
+        ],
+    )
+
+    meter = next(config for config in resolved if config.component_id.name == "Meter")
+    assert meter.band_in_watt is None
+    # The audit still names the law that answered, so an empty field is explained rather
+    # than merely empty.
+    entry = next(entry for entry in meter.sizing_record if entry.field == "band_in_watt")
+    assert entry.law == "0.5 * Size.MAXIMAL_THERMAL_POWER_IN_WATT"
+    assert entry.value is None
+    assert entry.inputs == (("HeatPump.maximal_thermal_power_in_watt", None),)
+
+
+@pytest.mark.base
+def test_a_null_fact_is_still_refused_where_a_required_field_reads_it():
+    """One optional reader does not make a fact nullable for the field beside it.
+
+    Failure mode caught: a config with an optional and a required field over the same fact
+    resolving the required one from nothing, which is the invention of a number the null
+    rule exists to prevent.
+    """
+    with pytest.raises(ConfigSizingError, match="provided as null by 'HeatPump'"):
+        resolve_all(
+            [
+                _NullProducerConfig(component_id=ComponentID(name="HeatPump")),
+                _MixedConsumerConfig(component_id=ComponentID(name="Meter")),
+            ],
         )
 
 

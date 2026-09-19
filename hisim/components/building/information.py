@@ -1,14 +1,9 @@
 """Derived building parameters from the EPISCOPE/TABULA typology data.
 
-Part of the ``hisim.components.building`` package split (see the package ``__init__``
-for the layout and the TABULA reference). Holds ``BuildingInformation`` and, at the
-bottom of the module, the sizing-fact contribution of ``BuildingConfig``: the building is
-the root of the sizing dependency graph, and everything it contributes is derived by this
-module's physics, so the contribution is declared here and assigned onto the config class
-on import.
+Holds ``BuildingInformation``, which reads a ``BuildingConfig`` and the TABULA row its code
+names and derives every quantity the rest of a scenario is sized against. The declaration of
+those facts is on the configuration, in ``config.py``; this module is the physics behind them.
 """
-
-# clean
 
 from dataclasses import dataclass
 from typing import ClassVar, Dict, Iterable, List, Optional, Tuple
@@ -16,8 +11,8 @@ from typing import ClassVar, Dict, Iterable, List, Optional, Tuple
 import pandas as pd
 
 from hisim import log, utils
+from hisim.config import concrete
 from hisim.components.building.config import BuildingConfig
-from hisim.config import FactContribution, SizingContext
 
 
 class BuildingInformation:
@@ -220,7 +215,9 @@ class BuildingInformation:
         # get set temperatures for building
         self.set_heating_temperature_for_building_in_celsius = self.buildingconfig.set_heating_temperature_in_celsius
         self.set_cooling_temperature_for_building_in_celsius = self.buildingconfig.set_cooling_temperature_in_celsius
-        self.heating_reference_temperature_in_celsius = self.buildingconfig.heating_reference_temperature_in_celsius
+        self.heating_reference_temperature_in_celsius = concrete(
+            self.buildingconfig.heating_reference_temperature_in_celsius
+        )
 
         self.building_heat_capacity_class = self.buildingconfig.building_heat_capacity_class
 
@@ -655,7 +652,7 @@ class BuildingInformation:
                 self.total_heat_conductance_transmission + self.total_heat_conductance_ventilation
             ) * (
                 self.buildingconfig.initial_internal_temperature_in_celsius
-                - self.buildingconfig.heating_reference_temperature_in_celsius
+                - self.heating_reference_temperature_in_celsius
             )
         else:
             self.max_thermal_building_demand_in_watt = self.buildingconfig.max_thermal_building_demand_in_watt
@@ -756,38 +753,3 @@ class BuildingInformation:
         self.tabula_ref_heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin = float(
             buildingdata["h_Transmission"].values[0]
         )
-
-
-def _building_sizing_facts(config: BuildingConfig, ctx: SizingContext) -> dict:
-    """Computes the building-scope sizing facts from a BuildingConfig.
-
-    Runs the TABULA/EPISCOPE lookup once and snapshots the derived quantities; the
-    context argument is unused because the building is the root of the fact graph.
-    """
-    del ctx
-    information = BuildingInformation(config=config)
-    return {
-        "heating_load_in_watt": information.max_thermal_building_demand_in_watt,
-        "number_of_apartments": information.number_of_apartments,
-        "conditioned_floor_area_in_m2": information.scaled_conditioned_floor_area_in_m2,
-        "roof_area_in_m2": information.roof_area_in_m2,
-        "heating_reference_temperature_in_celsius": config.heating_reference_temperature_in_celsius,
-        "set_heating_temperature_in_celsius": config.set_heating_temperature_in_celsius,
-        "set_cooling_temperature_in_celsius": config.set_cooling_temperature_in_celsius,
-    }
-
-
-BuildingConfig.SIZING_CONTRIBUTIONS = (
-    FactContribution(
-        facts=(
-            "heating_load_in_watt",
-            "number_of_apartments",
-            "conditioned_floor_area_in_m2",
-            "roof_area_in_m2",
-            "heating_reference_temperature_in_celsius",
-            "set_heating_temperature_in_celsius",
-            "set_cooling_temperature_in_celsius",
-        ),
-        compute=_building_sizing_facts,
-    ),
-)

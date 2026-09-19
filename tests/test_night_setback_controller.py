@@ -1,6 +1,5 @@
 """Test for the night setback controller."""
 
-# clean
 import pytest
 
 from hisim import component as cp
@@ -15,7 +14,7 @@ def test_night_setback_controller_outputs_expected_modifier() -> None:
     """The controller should emit the setback value at night and zero by day."""
 
     simulation_parameters = SimulationParameters.full_year(year=2026, seconds_per_timestep=3600)
-    config = night_setback_controller.NightSetbackConfig.get_default_config()
+    config = night_setback_controller.NightSetbackConfig.preset_standard("NightSetbackController")
     controller = night_setback_controller.NightSetbackController(
         my_simulation_parameters=simulation_parameters,
         config=config,

@@ -26,8 +26,6 @@ arithmetic, the horizon projection of a bill (§8.5), and any notion of who pays
 not implement a control strategy — it only publishes the signals a strategy needs.
 """
 
-# clean
-
 import datetime
 from dataclasses import dataclass
 from typing import Any, List, Optional
@@ -74,15 +72,12 @@ class TariffProviderConfig(ConfigBase):
     in its `config` block.
     """
 
+    MAIN_CLASS = "hisim.components.tariff_provider.TariffProvider"
+
     component_id: ComponentID
     #: Contract id resolved against hisim/cost_database/tariffs/, or "SYNTHETIC_TEST" for the
     #: deterministic synthetic reference profile (spec Q16).
     tariff_contract_id: str
-
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the fully qualified class name for JSON mode."""
-        return TariffProvider.get_full_classname()
 
     @classmethod
     def get_default_config(cls, component_id: Optional[ComponentID] = None) -> "TariffProviderConfig":

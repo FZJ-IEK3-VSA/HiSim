@@ -3,8 +3,6 @@
 Here we test the cluster household.
 """
 
-# clean
-
 import os
 import shutil
 from math import isclose
@@ -350,12 +348,18 @@ def run_cluster_house(
     # The weather config is created first: the building and PV configs copy its identity
     # (weather_identity) and must have it before those components are built. The weather
     # component itself is still added further down, so the simulator's component order is unchanged.
-    my_weather_config = weather.WeatherConfig.for_location("Weather", weather.LocationEnum[weather_location])
+    my_weather_config = weather.WeatherConfig.for_location(
+        "Weather", weather.LocationEnum[weather_location], heating_reference_temperature_in_celsius
+    )
 
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
-    my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
-    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field, so it is resolved before the archetype lookup runs on the config.
+    my_building_config = my_building_config.resolve(
+        SizingContext(heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius)
+    )
+    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_building, connect_automatically=True)
@@ -421,9 +425,17 @@ def run_cluster_house(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build Heat Pump Controller for space heating
-    my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
-        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
-        set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
+    my_heatpump_controller_sh_config = (
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
+            "MoreAdvancedHeatPumpHPLibControllerSH"
+        ).resolve(
+            SizingContext(
+                heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
+                set_heating_threshold_outside_temperature_in_celsius=(
+                    my_hds_controller_information.set_heating_threshold_temperature_in_celsius
+                ),
+            )
+        )
     )
     my_heatpump_controller_sh_config.mode = hp_controller_mode
 
@@ -433,7 +445,9 @@ def run_cluster_house(
     my_sim.add_component(my_heatpump_controller_sh, connect_automatically=True)
 
     my_heatpump_controller_dhw_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.get_default_dhw_controller_config()
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
+            "HeatPumpControllerDHW"
+        )
     )
 
     # Build Heat Pump Controller for dhw
@@ -443,9 +457,13 @@ def run_cluster_house(
     my_sim.add_component(my_heatpump_controller_dhw, connect_automatically=True)
 
     # Build Heat Pump (for dhw and space heating)
-    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
+        "MoreAdvancedHeatPumpHPLib"
+    ).resolve(
+        SizingContext(
+            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+        )
     )
     my_heatpump_config.with_domestic_hot_water_preparation = True
 
@@ -488,7 +506,9 @@ def run_cluster_house(
         simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
     )
     my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
-        SizingContext(maximal_thermal_power_in_watt=my_heatpump_config.set_thermal_output_power_in_watt)
+        SizingContext(
+            maximal_thermal_power_in_watt=concrete(my_heatpump_config.set_thermal_output_power_in_watt)
+        )
     )
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,

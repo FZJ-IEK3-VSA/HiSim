@@ -22,8 +22,6 @@ asserted over the *whole* authored corpus, in both renderers, so a stray asteris
 definition fails in CI rather than being printed to a reader as punctuation.
 """
 
-# clean
-
 import dataclasses
 import re
 from typing import Any, Dict, List, Tuple

@@ -1,6 +1,6 @@
 # P4 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-13 (9 findings)
+**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-18 (25 findings)
 **Context:** things that surfaced while working through
 `roadmap/declarative_energy_systems/p4_component_sweep_requirements.md` — the component sweep, decisions
 D-1 … D-32 — and were **not** what the work set out to do. Kept separately so the requirements stay about
@@ -164,7 +164,7 @@ scope for "retire a dead module". Two independent fixes are wanted, and they int
 Both rename things, so they want to land together or in that order, never against each other. P3's
 recordings inherit these names too, so the sequencing matters to the declarative stack as well.
 
-### F-3 — the CHP controller's summer branch switches off against the heating maximum, not the DHW maximum **[verified]**
+### F-3 — the CHP controller's summer branch switches off against the heating maximum, not the DHW maximum **[verified, fixed]**
 
 **Fixed 2026-09-11**: the summer branch deactivates against `t_max_dhw_in_celsius`, so the water is heated
 to the top of its own band. `tests/test_generic_chp.py` holds the CHP on at 50 °C in July and off above
@@ -375,7 +375,7 @@ lists them.
 *Logged 2026-09-12 while landing the zenith clamp (#628). The finding is what the producer work was written
 for, so it is filed here fixed rather than open.*
 
-### F-9 — a declarative run asked for a scenario JSON dies after the simulation, parsing a port name only the legacy path ever wrote **[verified]**
+### F-9 — a declarative run asked for a scenario JSON dies after the simulation, parsing a port name only the legacy path ever wrote **[verified, retired]**
 
 Found on 2026-09-13 while going through what the post-processing options do to a run started from an
 energy-system file. A declarative run whose simulation parameters carry
@@ -483,12 +483,28 @@ about how long the scenario JSON is meant to live, so it is the owner's:
   the way `:107-117` already refuses the declarative output, and refuse it before the first timestep rather
   than after the last, so the run fails with an explanation and no wasted simulation.
 
+**Answered 2026-09-18 by a third option: the writer retires.** Asked which of the two fixes to take, the owner
+asked first whether the scenario JSON is needed at all, and it is not. Its *reader* — `hisim/json_executor.py`
+and every `system_setups/*.scenario.json` — went in #708, when energy-system files became the only declarative
+input, so nothing has been able to run a file this writer produced since; nothing in the repository reads one
+either, and the owner confirmed that nothing outside it does. So `hisim/json_generator.py` moved to
+`obsolete/json_generator.py` under D-16's rule, with the two post-processing options that called it
+(`WRITE_COMPONENT_CONFIGS_TO_JSON`, `WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON`), the three test functions
+that pinned it, and `pyhumps`, its only user.
+
+Two things the entry above had wrong, both found while doing it. The blast radius was **wider**:
+`prepare_results_for_scenario_evaluation` ends by calling the writer unconditionally, so
+`PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION` — the option the eleven building sizers select — reached the same
+crash on any declarative run, while the entry says that option does not touch the generator. A one-day
+gas-boiler run with it exits 1 before the retirement and 0 after. And the run's *description* turns out to
+have had exactly one consumer, this writer, so it now reaches nothing at all: see F-24.
+
 
 ---
 
 ## 2. Recurrences of findings logged elsewhere
 
-### F-2 — P3's F-2 recurred, in exactly the shape it was logged in **[verified]**
+### F-2 — P3's F-2 recurred, in exactly the shape it was logged in **[verified, fixed]**
 
 `roadmap/p3_random_findings.md` F-2 records that `scripts/regenerate_scenario_jsons.py` regenerates against
 the *installed* package rather than the worktree, and "fails by producing plausible output, on a script whose
@@ -507,7 +523,15 @@ why the golden check reproduced the failure correctly while the regenerator quie
 *A second occurrence on a different branch, three days apart, on the same script. The fix is one line of
 `env` in the subprocess call.*
 
-### F-10 — a rounded product renders as if only the fact were rounded **[verified]**
+**Fixed 2026-09-18.** The script both occurrences were on, `scripts/regenerate_scenario_jsons.py`, has since
+been retired with the scenario JSONs, but the shape outlived it: `scripts/record_all_setups.py` spawns a child
+per setup through `ChildRecorder`, which inherited the parent's environment wholesale and so resolved `hisim`
+to whatever copy happened to be installed. The child's `PYTHONPATH` now starts at the directory the parent's
+own `hisim` package lives in — `Path(hisim.__file__).parent.parent`, the same derivation `golden_check.py`
+already made from `__file__` — with the operator's own entries kept behind it. A recording therefore describes
+the checkout it was started from whether or not anyone exported anything.
+
+### F-10 — a rounded product renders as if only the fact were rounded **[verified, fixed]**
 
 Found on 2026-09-13 while converting the battery (B2). Its inverter law is
 `(Size.PV_PEAK_POWER_IN_WATT * 0.5).rounded(2)`, and `hisim energy-system describe` prints it as
@@ -531,6 +555,11 @@ Fix: bracket a compound inner in `_RoundedLaw.describe` — `(0.5 * Size.PV_PEAK
 test over the battery's two laws pins the rendering. Not fixed on the B2 branches, which are
 conversions; belongs with the next kernel touch.
 
+**Fixed 2026-09-18** by the second of the two, which is the one that stays right as operators are added: a law
+now renders itself twice, as itself and as an operand of another law, and only the product differs between the
+two. The two suffix laws ask for the operand form, so the battery's inverter law describes as
+`(0.5 * Size.PV_PEAK_POWER_IN_WATT).rounded(2)` and a bare term keeps its unbracketed rendering.
+
 ### F-11 — the P2 mockups still name presets that the P4 decisions renamed, so their pinned errors pass for the wrong reason **[verified, fixed]**
 
 Found on 2026-09-13 after the PV and battery conversions (B2). `roadmap/declarative_energy_systems/energy_system_mockup.yaml`
@@ -553,7 +582,7 @@ entries from `BY_MOCKUP` and watch the test stay green.
 B2 conversion briefs kept out of scope; a doc-only commit at the top of the B2 stack is the natural
 place, or the first B3 PR.
 
-### F-12 — an optional sized field cannot receive a `None` fact **[verified]**
+### F-12 — an optional sized field cannot receive a `None` fact **[verified, fixed]**
 
 Found on 2026-09-13 converting the fuel meter (B2). `FuelMeterConfig.heating_value_of_fuel_in_kwh_per_liter`
 and `fuel_density_in_kg_per_m3` are `Sizable[Optional[float]]` with `sized_field(optional=True)` and copy laws
@@ -571,7 +600,16 @@ Fix, before the district-heating conversion (B4): an optional sized field whose 
 `None`. One rule in `_bind_one` (and the Python-mode `evaluate`), keyed on the field's `optional` flag, so a
 non-optional field keeps refusing a null fact as it does today.
 
-### F-13 — `dataclasses.replace` drops a preset's provenance, and the twin loses its `preset:` line **[verified]**
+**Fixed 2026-09-18**, after B4 landed with the pin the finding describes. A fact is nullable for a consumer
+when *every* unresolved field reading it is optional, which the engine works out per config from the same
+declarations it already reads: the binding then passes the `None` through instead of raising, and the
+resolver answers those fields with it without evaluating their laws, since a fact term cannot tell a null
+answer from an absent one. A fact any required field also reads refuses exactly as before — one optional
+reader does not make a fact nullable for the field beside it — and the audit entry still names the law that
+answered, so an empty field is explained rather than merely empty. `household_district_heating_building_sizer`
+no longer pins the two constants, and the fuel meter's block in both of its twins is `preset: standard`.
+
+### F-13 — `dataclasses.replace` drops a preset's provenance, and the twin loses its `preset:` line **[verified, fixed]**
 
 Found on 2026-09-13 converting the fuel meter (B2). A preset builder stamps the returned instance with
 `ConfigBuilder.PROVENANCE_ATTRIBUTE`, which is what the recorder reads to write `preset: standard` and only
@@ -585,6 +623,13 @@ idiom every converted setup now uses (the PV's `azimuth`/`tilt`, the fuel meter'
 survey's conversion pattern should say so, or a `replace`-shaped helper should carry the stamp; until one
 of the two exists this is an easy way to lose a preset from a twin without any test noticing, since the
 twin still loads and runs identically.
+
+**Fixed 2026-09-18** with the second of the two: `hisim.config.replace_config(config, **changes)` copies a
+config the way `dataclasses.replace` does and carries the stamp across. The three places in the kernel that
+were each carrying it by hand — the resolver's copy of a sized config, and the executor's copy of a config it
+overrides and of one it merely duplicates — now say so in one word instead of three transcriptions of the same
+four lines, and a test pins the difference against a plain `replace`. Attribute assignment before `.resolve()`
+remains the idiom a setup uses for one or two values; the helper is for a copy with changes.
 
 ### F-14 — the recorder had the provenance to write `AUTO` and wrote the number instead, so no twin could be reused **[verified, decided]**
 
@@ -603,3 +648,279 @@ Decided as A-P3.1 (`p3_recording_requirements.md` §11): the recorder leaves a
 law-computed field unwritten when its facts have a declared provider in the recorded system, so the
 preset's `AUTO` stands; assigned fields stay concrete, a pinned law field says why; a twin whose
 left-to-the-preset fields do not resolve to the run's values fails the recording. Implemented on `twins_resize`.
+
+### F-15 — the parity rig cannot run any occupancy-driven setup on a machine whose local LoadProfileGenerator does not work **[reported]**
+
+Found on 2026-09-15 while accepting the hplib heat-pump conversion (B4). `scripts/p3_parity_check.py`
+gives each of its two sides a private, empty cache directory and deletes the whole work directory at the
+start of every triple (`p3_parity_check.py:159`, `p3_parity_runs.py:324`), which is right for the question
+it asks: a shared cache would let one side answer from the other side's result. The consequence is that
+every setup whose occupancy comes from `USE_LOCAL_LPG` must actually run the LoadProfileGenerator binary,
+twice, on every invocation. On a machine where that binary fails — here the root filesystem was 98 % full and the binary died
+with `System.IO.IOException: No space left on device`, leaving no results and no log — no such setup can be measured, and the rig reports a parity failure rather than an unrunnable
+environment: three identical `FAIL` rows whose note is `the python run did not finish`. The golden gate
+has no such problem, since it uses the normal cache directory and a seeded entry answers both modes.
+
+Two things would help, neither of them a change to the isolation the rig needs: a verdict that
+distinguishes "the run could not start" from "the two sides disagree" (the note already carries the
+distinction, the verdict does not), and an opt-in read-only *seed* directory the private caches are
+pre-filled from, so a profile that is an input to both sides rather than a result of either can be
+supplied once.
+
+### F-16 — `ElectricHeatingConfig.efficiency` is a field nothing reads **[decided 2026-09-17, owner: delete; done]**
+
+Found on 2026-09-15 while converting the electric heating (B4). The class declares
+`efficiency: float = 1.0`, "electric to thermal power conversion", and the component never reads it:
+`ElectricHeating` sets its electric output equal to the thermal power it delivers and caps both the
+space-heating and the DHW branch at `maximum_electric_power_w` directly. The field is therefore wire
+format for a number that has no effect, and an author who writes `efficiency: 0.9` into an energy-system
+file gets the same run as one who does not. Two honest ways out: delete the field (a resistive heater is
+1.0 by physics, which is why nobody missed it), or make the component honour it, which is a behaviour change
+under R5 with its own diff. Left as is in the conversion, since either changes the wire format or the
+results; the field's docstring says it is not read.
+
+Deleted on 2026-09-17: a resistive heater converts all of its input by definition, the field had no
+reader anywhere in the repository and no twin carried it (the electric-heating block is a bare
+preset), so the schema lost one property and nothing else moved.
+
+### F-17 — the preset naming check has no room for a device designation **[fixed in place]**
+
+Found on 2026-09-15 while converting the generic heat pump (B4). R4 mints a name after a real
+catalogue device, and `tests/test_config_contracts.py` enforces rule 2 — no digits outside one
+trailing rating suffix — with `RATING_SUFFIX = ^[a-z]+(_[a-z]+)*(_[0-9]+[a-z]+)?$`. That pattern
+spells `oil_12kw`, a rating, but no manufacturer's designation: Viessmann's Vitocal 300-A is
+`vitocal_300_a`, whose digits sit in the middle and whose last segment is a bare letter. The two
+rules therefore contradicted each other for exactly the case R4's amendment invites.
+
+Resolved by listing rather than loosening: `ComponentConfigScan.CATALOGUE_DEVICE_PRESETS` names each
+preset whose digits belong to a device designation, and rule 2 keeps refusing everything else, so a
+number that is a *value* still fails. A second such preset costs one line and a moment's thought
+about whether the device is real — which is the check R4 actually wants.
+
+### F-18 — `describe` renders a per-preset law as plain `AUTO`, so the preset that changes the arithmetic looks identical to the one that does not **[verified, fixed]**
+
+Found on 2026-09-15 while converting the generic CHP (B4). A preset may replace a field's law by
+assigning a `SizingLaw` as the field value — the spelling `GenericBoilerConfig.preset_pellets` has
+used since B1 and the one the two CHP presets need, since a gas turbine and a fuel cell derive
+their electricity from their heat by different ratios. `hisim energy-system describe` shows
+nothing of it. Its `presets` section prints each preset's sizable fields as `pinned:` or `AUTO:`,
+and a field holding a law counts as `AUTO`; its `sizable fields` section prints the law declared
+on the field, which is the *other* preset's. The description of `CHPConfig` therefore says
+`p_el … law: 0.66 * Self("p_th")` and lists `hydrogen` with `AUTO: p_el, p_fuel`, so a reader is
+told the fuel cell computes its electricity the gas turbine's way. `GenericBoilerConfig` reads the
+same way for `pellets` and `wood_chips`, whose minimum power law is a twelfth of the maximum where
+the declared law is a constant zero.
+
+Nothing computes wrongly — the resolver evaluates the assigned law, which
+`tests/test_energy_system_configure.py` now pins at the wire level — but `describe` is what an
+author reads before writing a file, and `hisim/config/introspection.py` is what the schema
+exporter and the RenoVisor layer read. The fix is local: `describe_config` already builds each
+preset to classify its fields, so the branch that files a field under `AUTO:` can ask whether the
+built value is a `SizingLaw` and, if it is, print that law's `describe()` beside the preset. Left
+alone here because it changes a shared introspection surface rather than the class under
+conversion, and because the number of classes with per-preset laws is still three.
+
+**Fixed 2026-09-16** (B8), as the entry proposed: `PresetInfo` gained a `laws` tuple that
+`_describe_presets` fills from the instance it already builds — the sizable fields holding a
+`SizingLaw`, each paired with that law's own `describe()` — and the renderer prints one `law:`
+line per pair beside `pinned:` and `AUTO:`. The field stays in `auto`, because a law is still
+something to be resolved and not a pinned value, and the `sizable fields` section still prints
+the declared law. `generic_chp.CHPConfig` now reads `hydrogen … law: p_el = 1.1162790697674418 *
+Self("p_th")` against the declared `0.66`, and both pellet presets of `GenericBoilerConfig` show
+their twelfth. The JSON schema carries no laws and did not change.
+
+### F-19 — a `dataclasses_json` field alias is invisible to `describe`, the schema and the energy-system file **[decided 2026-09-17, owner: drop the aliases; done]**
+
+Found on 2026-09-15 while converting `NightSetbackConfig` (B5). Its two hour fields carry
+`dc_json_config(field_name="night_start_hour")` / `"night_end_hour"`, so `to_dict` and the legacy JSON path
+spell them by the alias, while `describe_config`, the v3 schema and therefore any `config:` block in an
+energy-system file spell them by the Python attribute, `night_start_time_in_hours` / `night_end_time_in_hours`:
+`describe_config` reads `dataclasses.fields()` and ignores the `dataclasses_json` metadata. The class had no
+preset before, so it had no schema presence and the two spellings never met; now they do. No twin carries the
+controller, so nothing is wrong today. Two honest ways out: drop the alias (the legacy JSON spelling is the only
+thing it serves, and D-16's sweep already retired the repository's other aliases with the RSOC controller), or
+teach the codec the alias. The first is the smaller change and the one the wire-format rule favours: one name
+per field.
+
+Dropped on 2026-09-17: the two hour fields are plain defaults again, so `to_dict` writes
+`night_start_time_in_hours` / `night_end_time_in_hours`, the spelling `describe` and the schema already
+used. Nothing read the alias and no twin carries the controller, so the schema did not move either. With
+the RSOC controller gone under D-16 this was the last one: the repository now has no `dataclasses_json`
+field alias at all.
+
+### F-20 — a config field is mutable component state: the car battery writes its own totals into its configuration **[reported]**
+
+Found on 2026-09-16 while converting `CarBatteryConfig` (B7). Two of its fields,
+`total_charged_energy_in_kilowatthour` and `total_discharged_energy_in_kilowatthour`, are not
+inputs at all: `CarBattery.get_cost_opex` and `CarBattery.get_component_kpi_entries` each compute
+them from the post-processing results and assign them back onto `self.battery_config`, so the
+configuration object a run started with is a different object by the time the run ends. They carry
+a `0.0` default and the twin records them as `0.0`, which is true of the configuration as written
+and untrue of the configuration as it ends up.
+
+That a configuration is the author's statement of the system, read and never written, is what lets
+the recorder diff a live config against a built preset and call the difference an override. Here
+the difference is a result. Nothing is wrong today only because the two writes happen in
+post-processing, after the last recording; a recorder that ran later, or a second post-processing
+pass, would write two computed energies into a file as if an author had typed them.
+
+Two honest ways out. Move the accumulators onto the component — they are per-run state, which is
+what a component holds — and let the two methods read and write `self.total_charged_energy…`; the
+config loses two fields and the twin two lines. Or keep them where they are and exclude them from
+recording, which needs a way to mark a field as not-an-input that the recorder, `describe` and the
+schema all honour, and which would be the first such mark in the repository. The first is smaller
+and says the true thing. Left alone in B7: moving them changes the component's behaviour surface
+and the twin, and the batch is behaviour-N.
+
+### F-21 — `describe` says nothing about what a preset sets on a plain field, so presets that differ only in plain fields describe as identical **[decided 2026-09-17, owner; done]**
+
+Found on 2026-09-16 in the R13 review of all 56 classes the wire-format contract pins. The
+`presets` section prints a preset's name, its canonical flag, the sizable fields it pins, the ones
+it leaves `AUTO`, the laws it assigns (F-18) and its note. It never prints a *value*. For a class
+whose presets differ only in plain fields — which is most of them, since R1.1 made plain values
+into field defaults a preset overrides — two presets render as the same four lines.
+
+`SimpleHeatSourceConfig` is the clearest case: `constant_thermal_power`, `constant_temperature`
+and `near_surface_brine` each print `pinned: (nothing sizable)` / `AUTO: (nothing left open)` and
+nothing else, while the `fields` section above shows one set of class defaults that belongs to
+none of the three in full. `L1CHPControllerConfig` prints its four presets identically, and
+`GenericBoilerConfig`'s seven differ in the output only where a sizable field or a note does. A
+reader who wants to know what `near_surface_brine` actually is has to open the module.
+
+The preset name carries most of the meaning, which is why this is a gap and not a defect, and a
+`note=` closes it one preset at a time (several classes already use one). The structural fix is to
+diff each built preset against the class defaults and print the fields it changes — the recorder
+already does exactly that diff for a twin's `config` block, against a built preset rather than
+against the class, so the machinery exists. Left alone in B8: it changes what every `describe`
+output looks like, and R13 is a review, not a redesign.
+
+Taken on 2026-09-17. `PresetInfo.sets` pairs every plain field a built preset holds a value other
+than the class default for with that value, in declaration order, and the renderer prints it as a
+`sets:` line above the two sizable ones, one assignment per line. The identity field is excluded —
+every preset sets it from the name it was handed — and so is every sizable field, which the
+`pinned`/`AUTO`/`law` lines already account for; a preset that changes nothing prints no line at
+all, which after R1.1 is most of them. The diff is dataclass equality against the class's own
+declared defaults rather than the recorder's encoded comparison: `hisim/config/introspection.py`
+may not import the record writer, which lives two layers above it. Twenty-one of the 56 classes the
+wire-format contract pins now describe differently; the enum in a value renders by member name,
+which is the spelling the format itself reads and writes, so the `fields` section's own enum
+defaults were moved onto the same one formatter and no longer show the Python `repr`.
+
+### F-22 — a law written as a lambda describes itself as `<Class>.<lambda>`, and one of them names the wrong class **[decided 2026-09-17, owner; done]**
+
+Found on 2026-09-16 in the same review. `SizingLaw.describe()` renders an arithmetic law as its
+own expression (`0.5 * Size.PV_PEAK_POWER_IN_WATT.rounded(2)`) but a law built from a callable as
+that callable's qualified name. For a named function that is merely terse — `_rooftop_power_in_watt`,
+`_buffer_volume_in_liter` — but for the four laws written as lambdas it is
+`GenericBoilerConfig.<lambda>`, `HeatDistributionControllerConfig.<lambda>` and
+`ElectricHeatingControllerConfig.<lambda>`, which say only that the law exists.
+
+One of them says something untrue. `ElectricHeatingControllerConfig.set_heating_threshold_outside_temperature_in_celsius`
+reuses `HeatDistributionControllerConfig.HEATING_THRESHOLD_LAW` — deliberately, so the two
+controllers cannot disagree — and therefore describes as
+`law: HeatDistributionControllerConfig.<lambda>` under a class of another name, which reads as a
+description gone wrong rather than as sharing.
+
+B8 fixed the *readable* half within R13's one-line remit: the six sized fields with an opaque law
+gained a `note=`, so `describe` now states the arithmetic in words beside the name. The name
+itself is the finding. Two honest fixes: give `law()` an optional description string, which is one
+argument at six call sites and makes the rendering exact; or turn each lambda into a `def` with a
+telling name, which is free but still only names a function. Field notes don't reach the schema,
+so neither is wire format. Not done here: it changes `hisim/config/laws.py`, outside a batch's
+remit.
+
+Taken on 2026-09-17, the first way. `law()` and `normalize_law()` take an optional `description`
+and `_FunctionLaw.describe()` returns it where there is one, falling back to the qualified name;
+a description handed to an expression or constant law is refused at declaration time, since those
+already render as exactly what they are and a second spelling would be free to drift. Five call
+sites declare one — the three lambdas in `generic_boiler.py`, `heat_distribution_system.py` and
+`generic_electric_heating.py`, and the two named functions `_rooftop_power_in_watt` and
+`_buffer_volume_in_liter` — which covers the six sized fields, the heating-threshold law counting
+twice because two classes share it. That shared law now reads the same in both, as the arithmetic
+it is and not as a class of another name.
+
+### F-23 — two sibling controllers derive the heating threshold from the fact, a third recomputes it **[reported; the third has no provider to read]**
+
+Found on 2026-09-16 in the same review. R2.1 added the fact
+`set_heating_threshold_outside_temperature_in_celsius`, contributed by
+`HeatDistributionControllerConfig` as *the value it resolved to*, so that every generator
+controller heating below the same threshold reads the emitter circuit's own answer instead of
+repeating the step table. `MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig` and
+`DistrictHeatingControllerConfig` do exactly that: `law: Size.SET_HEATING_THRESHOLD_OUTSIDE_TEMPERATURE_IN_CELSIUS`.
+`ElectricHeatingControllerConfig` does not — it re-evaluates
+`HeatDistributionControllerConfig.HEATING_THRESHOLD_LAW` over the building's own two facts.
+
+The two agree today, because the emitter controller's contributed value is what that same law
+computed from the same two facts. They part the moment an author pins the emitter controller's
+threshold by hand: the fact then carries the pinned number, the two sibling controllers follow it
+and the electric heating controller keeps the step table's. A system where one generator heats
+below 18 °C and its emitter circuit below a hand-set 12 °C is a system nobody described.
+
+The one-line fix — read `Size.SET_HEATING_THRESHOLD_OUTSIDE_TEMPERATURE_IN_CELSIUS`, as the
+siblings do — is not available to this class as things stand. Direct electric heating has no
+water circuit, so `household_electric_heating_building_sizer` builds no heat-distribution
+controller and nothing in that system contributes the fact; a copy law would fail to resolve.
+That is why B5/2 (2026-09-16) chose the re-derivation and struck the R3 row's "removes a
+cross-module import" clause. The divergence described above therefore needs a system that has
+both an emitter controller and an electric heater, which no shipped setup does. Two ways out if
+one appears: a law that reads the fact when a provider exists and falls back to the step table
+otherwise (new kernel semantics), or an emitter-less system stating the threshold as a plain
+override. Recorded; not a B8 change.
+
+### F-24 — a run carries a description nothing reads **[reported]**
+
+Found on 2026-09-18 while retiring the scenario JSON (F-9). A run's one-line description travels a long way:
+the Python entry point takes it from the first line of the setup file, a declarative run takes it from the
+energy-system file's `description` field, `Simulator.description` carries it, `PostProcessingDataTransfer`
+carries it — and its single consumer was the `description` field of `scenario.json`, which no longer exists.
+Nothing reads it now.
+
+The `description` of the *file* is not in question: it documents the system for whoever opens the file, the
+recorder writes it and the loader reads it back, and that is a good reason for it to exist. What has no reader
+is the copy the run object carries. Three honest ways out: drop the run-side chain and leave the field to the
+file (smallest, and it takes `hisim_main`'s docstring-scraping block with it); give it a consumer, the obvious
+one being the PDF report, which today prints no description of the run it reports on; or leave it and say so,
+which is what this entry does for now.
+
+The scenario *name* is in a similar position but not the same one: its one remaining consumer, the `scenario`
+column of the pyam export, is live, and the eleven building sizers write their scenario hash into it.
+
+### F-25 — the pyam export outlived its reader by six weeks, and carries the last of the run metadata **[reported]**
+
+Found on 2026-09-18 while retiring the scenario JSON (F-9), when the owner asked whether the pyam output is
+needed either. The facts, in the order they decide the question:
+
+`pyam` is not a dependency and is imported nowhere. What exists is `PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION`,
+which writes the run's results resampled to four resolutions -- `hourly/daily/monthly/yearly_<n>_days.csv` in
+`result_data_for_scenario_evaluation/` -- in the pyam long format, one row per variable carrying
+`model, scenario, region, variable, unit, year, value`. The code says as much: "idea for format from pyam
+package".
+
+**Its reader is already gone.** `hisim/postprocessing/scenario_evaluation/` -- `result_data_collection.py`,
+`result_data_processing.py`, `result_data_plotting.py` and `scenario_analysis_complete_with_config.py`, the
+tool that read those CSVs back and compared runs -- was moved to `obsolete/` in #541 (2026-08-10) and left the
+repository entirely with the rest of that tree in #590. The writer stayed. `hisim/postprocessing/__init__.py`
+still tells a reader that results "can be compared and visualised with the
+`hisim.postprocessing.scenario_evaluation` sub-package", which has not existed for six weeks.
+
+Nothing else in the tree reads the CSVs: the building sizer reads `all_kpis.json` and
+`*_kpi_config_for_building_sizer.json`, and neither RenoVisor nor the HPC harness touches the directory. What
+is not known here is whether anyone reads them *outside* the repository -- unlike the scenario JSON, this
+artifact carries results rather than configuration, and the pyam long format is the interchange format for
+cross-run comparison, so an analysis workflow living elsewhere is plausible. That question is the whole of the
+decision, and it is the owner's.
+
+**What retiring it would take with it**, about 300 lines and the last of the run metadata:
+`prepare_results_for_scenario_evaluation` and its four helpers (`iterate_over_results_and_add_values_to_dict`,
+`write_filename_and_save_to_csv`, `write_kpis_in_dict`, `get_variable_name_and_unit_from_ppdt_results_column`)
+with the four `self.model/scenario/region/year` attributes; `region_of`, whose only caller it is, and
+`tests/test_postprocessing_region.py` entirely; the option in eleven building-sizer setups, three legacy
+`*.simulation.json` parameter files and five test files. And the **scenario name**: the `scenario` column of
+this export is its one remaining consumer since F-9, so `Simulator.scenario_name`, the building sizers' hash
+strings, `EnergySystemFile.name` as a run name and `scenario_name_of` for grouped runs would all become
+decoration. With F-24's description that is the entire run-metadata layer -- a run would then carry no name
+and no description that anything consumes.
+
+Logged rather than done on the owner's instruction (2026-09-18): it is separable from F-9, bigger, and turns
+on a fact only the people running scenario comparisons have.
+

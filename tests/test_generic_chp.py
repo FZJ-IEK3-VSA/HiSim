@@ -1,15 +1,16 @@
-"""Tests for the generic CHP system and CHPConfig factory methods.
+"""Tests for the generic CHP system and the two CHPConfig presets.
 
 Covers integration of ``generic_chp.SimpleCHP`` with ``generic_chp.L1CHPController``
-under various demand/hydrogen scenarios, plus unit checks of ``CHPConfig``
-default-config builders and ``GenericCHPState.clone``.
+under various demand/hydrogen scenarios, plus unit checks of the ``gas`` and ``hydrogen``
+presets -- whose electrical power and fuel input are laws over the thermal power the
+author states -- and of ``GenericCHPState.clone``.
 
-``L1CHPControllerConfig`` carries four default configurations whose thresholds are not
-symmetric: ``t_min_dhw_in_celsius`` runs 42/50/50/42 over chp, fuel cell, chp-with-buffer and
-fuel-cell-with-buffer, and a buffer raises ``t_min_heating_in_celsius`` to 35.0 for gas but to
+``L1CHPControllerConfig`` carries four presets whose thresholds are not symmetric:
+``t_min_dhw_in_celsius`` runs 42/50/50/42 over gas, hydrogen, gas-with-buffer and
+hydrogen-with-buffer, and a buffer raises ``t_min_heating_in_celsius`` to 35.0 for gas but to
 31.0 for hydrogen. Nothing in the module, the tests or the commit history explains either, so
 the values stand as they were written in 2023 and ``test_chp_controller_default_thresholds``
-pins all four as literals - a pin that read its expectation off a sibling factory would agree
+pins all four as literals - a pin that read its expectation off a sibling preset would agree
 with any drift that happened to move both.
 """
 
@@ -23,7 +24,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components import generic_chp
 from hisim.simulationparameters import SimulationParameters
-from hisim.config import ComponentID
+from hisim.config import ComponentID, SizingContext, concrete
 
 
 @pytest.mark.base
@@ -63,12 +64,14 @@ def test_chp_system() -> None:
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
     # configure and add chp
-    chp_config = generic_chp.CHPConfig.get_default_config_fuelcell(thermal_power=thermal_power)
+    chp_config = generic_chp.CHPConfig.preset_hydrogen("CHP")
+    chp_config.p_th = thermal_power
+    chp_config = chp_config.resolve(SizingContext())
     my_chp = generic_chp.SimpleCHP(my_simulation_parameters=my_simulation_parameters, config=chp_config)
 
     # configure chp controller
-    chp_controller_config = generic_chp.L1CHPControllerConfig.get_default_config_fuel_cell_with_buffer()
-    chp_controller_config.electricity_threshold = chp_config.p_el / 2
+    chp_controller_config = generic_chp.L1CHPControllerConfig.preset_hydrogen_with_buffer("FuelCellController")
+    chp_controller_config.electricity_threshold = concrete(chp_config.p_el) / 2
     my_chp_controller = generic_chp.L1CHPController(
         my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
     )
@@ -245,10 +248,12 @@ def test_chp_heats_the_water_to_the_dhw_maximum_in_summer() -> None:
     thermal_power = 500  # thermal power in Watt
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
-    chp_config = generic_chp.CHPConfig.get_default_config_chp(thermal_power=thermal_power)
+    chp_config = generic_chp.CHPConfig.preset_gas("CHP")
+    chp_config.p_th = thermal_power
+    chp_config = chp_config.resolve(SizingContext())
     my_chp = generic_chp.SimpleCHP(my_simulation_parameters=my_simulation_parameters, config=chp_config)
 
-    chp_controller_config = generic_chp.L1CHPControllerConfig.get_default_config_chp()
+    chp_controller_config = generic_chp.L1CHPControllerConfig.preset_gas("CHPController")
     my_chp_controller = generic_chp.L1CHPController(
         my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
     )
@@ -359,9 +364,17 @@ def test_chp_heats_the_water_to_the_dhw_maximum_in_summer() -> None:
 
 
 @pytest.mark.base
-def test_get_default_config_chp_basic() -> None:
-    """Test CHPConfig.get_default_config_chp with thermal_power=1000 and default building name."""
-    config = generic_chp.CHPConfig.get_default_config_chp(thermal_power=1000)
+def test_preset_gas_derives_electricity_and_fuel_from_the_thermal_power() -> None:
+    """The gas preset at 1000 W thermal is 660 W electric and 2000 W of gas.
+
+    Half of the gas a gas-driven CHP burns comes out as heat and electricity together and a
+    third of it as electricity alone, so the two derived fields are the thermal power times
+    0.33/0.5 and times 1/0.5.
+    """
+    config = generic_chp.CHPConfig.preset_gas("CHP")
+    config.p_th = 1000
+    config = config.resolve(SizingContext())
+
     assert config.p_th == 1000
     assert config.p_el == pytest.approx(660)
     assert config.p_fuel == pytest.approx(2000)
@@ -372,27 +385,33 @@ def test_get_default_config_chp_basic() -> None:
 
 
 @pytest.mark.base
-def test_get_default_config_chp_zero() -> None:
-    """Test CHPConfig.get_default_config_chp with thermal_power=0 (boundary case)."""
-    config = generic_chp.CHPConfig.get_default_config_chp(thermal_power=0)
+def test_preset_gas_at_zero_thermal_power_derives_zero() -> None:
+    """A gas CHP rated at no heat produces no electricity and burns no fuel (boundary case)."""
+    config = generic_chp.CHPConfig.preset_gas("CHP")
+    config.p_th = 0
+    config = config.resolve(SizingContext())
+
     assert config.p_th == 0
     assert config.p_el == 0
     assert config.p_fuel == 0
 
 
 @pytest.mark.base
-def test_get_default_config_chp_default_building() -> None:
-    """Omitting the component_id leaves the identity without a building."""
-    config = generic_chp.CHPConfig.get_default_config_chp(thermal_power=1000)
+def test_a_preset_leaves_the_identity_without_a_building() -> None:
+    """A preset takes the instance name alone, so the identity it builds names no building."""
+    config = generic_chp.CHPConfig.preset_gas("CHP")
+
     assert config.component_id.building is None
 
 
 @pytest.mark.base
-def test_get_default_config_chp_custom_building_and_powers() -> None:
-    """Test CHPConfig.get_default_config_chp with a custom building name and thermal_power=500."""
-    config = generic_chp.CHPConfig.get_default_config_chp(
-        thermal_power=500, component_id=ComponentID(name="CHP", building="Custom")
-    )
+def test_a_pinned_identity_and_thermal_power_survive_the_resolution() -> None:
+    """An author's own identity and rating are kept, and the derived pair follows the rating."""
+    config = generic_chp.CHPConfig.preset_gas("CHP")
+    config.component_id = ComponentID(name="CHP", building="Custom")
+    config.p_th = 500
+    config = config.resolve(SizingContext())
+
     assert config.component_id.building == "Custom"
     assert config.p_th == 500
     assert config.p_el == pytest.approx(330)
@@ -400,9 +419,16 @@ def test_get_default_config_chp_custom_building_and_powers() -> None:
 
 
 @pytest.mark.base
-def test_get_default_config_fuelcell_basic() -> None:
-    """Test CHPConfig.get_default_config_fuelcell with thermal_power=1000."""
-    config = generic_chp.CHPConfig.get_default_config_fuelcell(thermal_power=1000)
+def test_preset_hydrogen_derives_the_fuel_cell_figures_instead_of_the_gas_ones() -> None:
+    """The hydrogen preset replaces both laws, so 1000 W thermal is 1116 W electric.
+
+    A fuel cell turns 0.48 of its hydrogen into electricity where 0.43 of it is useful at
+    all, which is the larger electrical share of the two presets and the point of having two.
+    """
+    config = generic_chp.CHPConfig.preset_hydrogen("CHP")
+    config.p_th = 1000
+    config = config.resolve(SizingContext())
+
     assert config.p_th == 1000
     assert config.p_el == pytest.approx((0.48 / 0.43) * 1000)
     assert config.p_fuel == pytest.approx((1 / 0.43) * 1000)
@@ -410,12 +436,43 @@ def test_get_default_config_fuelcell_basic() -> None:
 
 
 @pytest.mark.base
-def test_get_default_config_fuelcell_zero() -> None:
-    """Test CHPConfig.get_default_config_fuelcell with thermal_power=0 (boundary case)."""
-    config = generic_chp.CHPConfig.get_default_config_fuelcell(thermal_power=0)
+def test_preset_hydrogen_at_zero_thermal_power_derives_zero() -> None:
+    """A fuel cell rated at no heat produces no electricity and draws no hydrogen (boundary)."""
+    config = generic_chp.CHPConfig.preset_hydrogen("CHP")
+    config.p_th = 0
+    config = config.resolve(SizingContext())
+
     assert config.p_th == 0
     assert config.p_el == 0
     assert config.p_fuel == 0
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "preset_name, electrical_ratio, fuel_ratio",
+    [
+        ("gas", 0.33 / 0.5, 1 / 0.5),
+        ("hydrogen", 0.48 / 0.43, 1 / 0.43),
+    ],
+)
+@pytest.mark.parametrize("thermal_power", [0.0, 500.0, 1000.0])
+def test_the_laws_reproduce_the_ratios_to_the_last_bit(
+    preset_name: str, electrical_ratio: float, fuel_ratio: float, thermal_power: float
+) -> None:
+    """Each law is the ratio times the thermal power exactly, not to within a tolerance.
+
+    The two fields used to be computed as ``(0.33 / 0.5) * thermal_power`` in a factory and
+    are now a sibling-reading law, and a CHP's electricity and fuel feed a simulation whose
+    results are compared byte for byte. Equality rather than ``approx`` is what says the
+    arithmetic did not move: floating-point multiplication commutes exactly, so a law written
+    as ``p_th * ratio`` has to give the bit pattern the factory's ``ratio * p_th`` gave.
+    """
+    config = getattr(generic_chp.CHPConfig, f"preset_{preset_name}")("CHP")
+    config.p_th = thermal_power
+    config = config.resolve(SizingContext())
+
+    assert config.p_el == electrical_ratio * thermal_power
+    assert config.p_fuel == fuel_ratio * thermal_power
 
 
 @pytest.mark.base
@@ -448,7 +505,7 @@ def test_generic_chp_state_clone_independence() -> None:
 
 @pytest.mark.base
 def test_chp_controller_default_thresholds() -> None:
-    """Pins every threshold that the four default controller configurations carry.
+    """Pins every threshold that the four controller presets carry.
 
     They cross two fuels with the presence of a buffer storage, and the numbers are not
     symmetric: the lower drain hot water bound runs 42 / 50 / 50 / 42 °C down the list below, and
@@ -456,13 +513,13 @@ def test_chp_controller_default_thresholds() -> None:
     Nothing on record says why, so the values are kept as they were written in 2023 rather than
     guessed at, and pinned here so that any later change to one of them has to be deliberate.
 
-    Every expectation is a literal. Checking one factory against another would pass just as
-    happily if both of them drifted, which is the change this is meant to catch.
+    Every expectation is a literal. Checking one preset against another would pass just as
+    happily if both of them drifted, which is the change this is meant to catch. The instance
+    name is not pinned: a preset takes it from its caller rather than carrying one.
     """
     config_class = generic_chp.L1CHPControllerConfig
     expected: dict[str, dict[str, object]] = {
-        "chp": {
-            "component_name": "CHPController",
+        "gas": {
             "use": lt.LoadTypes.GAS,
             "h2_soc_threshold": 0,
             "t_min_heating_in_celsius": 20.0,
@@ -474,8 +531,7 @@ def test_chp_controller_default_thresholds() -> None:
             "min_operation_time_in_seconds": 3600 * 4,
             "min_idle_time_in_seconds": 3600 * 2,
         },
-        "fuel_cell": {
-            "component_name": "FuelCellController",
+        "hydrogen": {
             "use": lt.LoadTypes.GREEN_HYDROGEN,
             "h2_soc_threshold": 8.0,
             "t_min_heating_in_celsius": 20.0,
@@ -487,8 +543,7 @@ def test_chp_controller_default_thresholds() -> None:
             "min_operation_time_in_seconds": 3600 * 4,
             "min_idle_time_in_seconds": 3600 * 2,
         },
-        "chp_with_buffer": {
-            "component_name": "CHPController",
+        "gas_with_buffer": {
             "use": lt.LoadTypes.GAS,
             "h2_soc_threshold": 0,
             "t_min_heating_in_celsius": 35.0,
@@ -500,8 +555,7 @@ def test_chp_controller_default_thresholds() -> None:
             "min_operation_time_in_seconds": 3600 * 4,
             "min_idle_time_in_seconds": 3600 * 2,
         },
-        "fuel_cell_with_buffer": {
-            "component_name": "FuelCellController",
+        "hydrogen_with_buffer": {
             "use": lt.LoadTypes.GREEN_HYDROGEN,
             "h2_soc_threshold": 8.0,
             "t_min_heating_in_celsius": 31.0,
@@ -515,13 +569,10 @@ def test_chp_controller_default_thresholds() -> None:
         },
     }
 
-    for factory_name, fields in expected.items():
-        config = getattr(config_class, "get_default_config_" + factory_name)()
-        actual: dict[str, object] = {
-            field: config.component_id.name if field == "component_name" else getattr(config, field)
-            for field in fields
-        }
-        assert actual == fields, factory_name
+    for preset_name, fields in expected.items():
+        config = getattr(config_class, "preset_" + preset_name)("Controller")
+        actual: dict[str, object] = {field: getattr(config, field) for field in fields}
+        assert actual == fields, preset_name
 
 
 @pytest.mark.base
@@ -532,7 +583,7 @@ def test_chp_controller_config_refuses_a_heating_band_of_zero_width() -> None:
     position inside the band divided by the band's width, so a band of zero width would raise
     only in the middle of a simulation, if at all.
     """
-    config = generic_chp.L1CHPControllerConfig.get_default_config_chp()
+    config = generic_chp.L1CHPControllerConfig.preset_gas("CHPController")
 
     with pytest.raises(ValueError, match="t_min_heating_in_celsius"):
         dataclasses.replace(config, t_min_heating_in_celsius=config.t_max_heating_in_celsius)
@@ -546,7 +597,7 @@ def test_chp_controller_config_refuses_an_inverted_dhw_band() -> None:
     level, so the controller would quietly serve the fuller vessel and the run would look like a
     working simulation of a differently configured house.
     """
-    config = generic_chp.L1CHPControllerConfig.get_default_config_chp()
+    config = generic_chp.L1CHPControllerConfig.preset_gas("CHPController")
 
     with pytest.raises(ValueError, match="t_min_dhw_in_celsius"):
         dataclasses.replace(config, t_min_dhw_in_celsius=config.t_max_dhw_in_celsius + 1)

@@ -1,7 +1,5 @@
 """Default Connections Module."""
 
-# clean
-
 from typing import Optional
 from hisim.simulator import SimulationParameters, Simulator
 from hisim.components import loadprofilegenerator_utsp_connector
@@ -11,7 +9,7 @@ from hisim.components import building
 from hisim.components import generic_heat_pump
 from hisim.components import electricity_meter
 from hisim import loadtypes
-from hisim.config import ComponentID, SizingContext
+from hisim.config import SizingContext
 
 
 def setup_function(
@@ -39,12 +37,6 @@ def setup_function(
     year = 2021
     seconds_per_timestep = 60
 
-    # Set heat pump controller
-    temperature_air_heating_in_celsius = 16.0
-    temperature_air_cooling_in_celsius = 24.0
-    temperature_offset_in_kelvin = 0.5  # K, hysteresis band around the setpoint
-    hp_mode = 2
-
     # ==== Build Components ====
 
     # Build system parameters
@@ -62,6 +54,15 @@ def setup_function(
 
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field, so it is resolved before the component is built.
+    my_building_config = my_building_config.resolve(
+        SizingContext(
+            heating_reference_temperature_in_celsius=(
+                my_weather_config.heating_reference_temperature_in_celsius
+            )
+        )
+    )
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build Occupancy
@@ -99,14 +100,14 @@ def setup_function(
         config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
     )
 
+    my_heat_pump_controller_config = generic_heat_pump.GenericHeatPumpControllerConfig.preset_standard(
+        "GenericHeatPumpController"
+    )
+    # This setup lets the house cool to 16 °C before the machine heats, three kelvin below the
+    # preset's setpoint.
+    my_heat_pump_controller_config.temperature_air_heating_in_celsius = 16.0
     my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
-        config=generic_heat_pump.GenericHeatPumpControllerConfig(
-            component_id=ComponentID(name="GenericHeatPumpController"),
-            temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
-            temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-            offset_in_celsius=temperature_offset_in_kelvin,
-            mode=hp_mode,
-        ),
+        config=my_heat_pump_controller_config,
         my_simulation_parameters=my_simulation_parameters,
     )
     my_heat_pump_controller.connect_only_predefined_connections(my_building)
@@ -120,7 +121,7 @@ def setup_function(
     my_sim.add_component(my_heat_pump_controller)
 
     my_heat_pump = generic_heat_pump.GenericHeatPump(
-        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump_config(),
+        config=generic_heat_pump.GenericHeatPumpConfig.preset_vitocal_300_a("HeatPump"),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_heat_pump.connect_only_predefined_connections(my_weather, my_heat_pump_controller)

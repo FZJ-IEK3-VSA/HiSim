@@ -35,8 +35,6 @@ Note on ``PVSystem.__module__``:
     ``describe`` are unaffected.
 """
 
-# clean
-
 from hisim.components.generic_pv_system.calculation import (
     ARTIFACT_KIND,
     OUTPUT_COLUMN,

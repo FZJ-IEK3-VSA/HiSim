@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=../hisim/energy_system_v3.schema.json
-# Recorded from system_setups/simple_system_setup_two.py with energy_systems/one_day_15min.simulation.yaml by the HiSim energy-system recorder v1.
+# Recorded from system_setups/simple_system_setup_two.py with simulation_parameters/one_day_15min_export.simulation.yaml by the HiSim energy-system recorder v1.
 schema_version: 3
 name: simple_system_setup_two
 description: Simple System Setup Module.
@@ -18,17 +18,13 @@ components:
       seed: 2
   ExampleTransformerDefault:
     class: hisim.components.example_transformer.ExampleTransformer
-    config:
-      loadtype: ANY
-      unit: ANY
+    preset: standard
     inputs:
       - input: Input1
         from: RandomNumbers10To20.RandomNumbers
   Sum:
     class: hisim.components.sumbuilder.SumBuilderForTwoInputs
-    config:
-      loadtype: ANY
-      unit: ANY
+    preset: standard
     inputs:
       - input: Input1
         from: RandomNumbers100To200.RandomNumbers

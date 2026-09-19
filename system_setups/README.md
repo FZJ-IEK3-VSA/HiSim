@@ -94,8 +94,6 @@ The `post_processing_options` array accepts any combination of the following str
 | `COMPUTE_CAPEX`                                 | Calculate capital expenditure costs                                 |
 | `COMPUTE_KPIS`                                  | Calculate key performance indicators                                |
 | `PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION`       | Prepare outputs for multi-scenario comparison                       |
-| `WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON` | Export configs for scenario evaluation                              |
-| `WRITE_COMPONENT_CONFIGS_TO_JSON`               | Write all component configurations to JSON                          |
 | `WRITE_KPIS_TO_JSON`                            | Write KPI results to a JSON file                                    |
 | `WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER`         | Write KPIs in the format expected by the building sizer             |
 | `MAKE_RESULT_JSON_FOR_WEBTOOL`                  | Generate a result JSON for the HiSim webtool                        |

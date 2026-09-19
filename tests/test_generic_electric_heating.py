@@ -12,8 +12,6 @@ The tests construct an :class:`ElectricHeating` instance and call
 matching :class:`pandas.DataFrame`, avoiding the cost of a full simulation.
 """
 
-# clean
-
 from typing import List
 
 import pandas as pd
@@ -45,9 +43,9 @@ def _make_electric_heating() -> ElectricHeating:
     my_simulation_parameters = SimulationParameters.one_day_only(
         year=2021, seconds_per_timestep=_SECONDS_PER_TIMESTEP
     )
-    config = ElectricHeatingConfig.get_default_electric_heating_config(
-        with_domestic_hot_water_preparation=True
-    )
+    config = ElectricHeatingConfig.preset_resistive("ElectricHeating")
+    config.with_domestic_hot_water_preparation = True
+    config.maximum_electric_power_w = 40000.0
     return ElectricHeating(
         my_simulation_parameters=my_simulation_parameters,
         config=config,
@@ -183,7 +181,8 @@ def test_electric_heating_display_config_default_instances_are_isolated() -> Non
     my_simulation_parameters = SimulationParameters.one_day_only(
         year=2021, seconds_per_timestep=_SECONDS_PER_TIMESTEP
     )
-    config = ElectricHeatingConfig.get_default_electric_heating_config()
+    config = ElectricHeatingConfig.preset_resistive("ElectricHeating")
+    config.maximum_electric_power_w = 40000.0
 
     first = ElectricHeating(
         my_simulation_parameters=my_simulation_parameters,
@@ -215,7 +214,12 @@ def test_electric_heating_controller_display_config_default_instances_are_isolat
     my_simulation_parameters = SimulationParameters.one_day_only(
         year=2021, seconds_per_timestep=_SECONDS_PER_TIMESTEP
     )
-    config = ElectricHeatingControllerConfig.get_default_electric_heating_controller_config()
+    config = ElectricHeatingControllerConfig.preset_standard("ElectricHeatingController")
+    # Both sizable fields are pinned rather than resolved: this test builds no building to size
+    # them from. 16 °C is the threshold the retired factory handed it, and 40 W/m² is a building
+    # efficiency the step table maps to exactly that threshold, so the two agree.
+    config.set_heating_threshold_outside_temperature_in_celsius = 16.0
+    config.specific_heating_load_of_building_in_watt_per_m2 = 40.0
 
     first = ElectricHeatingController(
         my_simulation_parameters=my_simulation_parameters,

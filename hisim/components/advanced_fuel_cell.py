@@ -1,7 +1,5 @@
 """Advanced fuel cell module."""
 
-# clean
-import os
 from dataclasses import dataclass
 import math
 
@@ -10,7 +8,7 @@ import copy
 from dataclasses_json import dataclass_json
 
 import pandas as pd
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.component import (
     CapexCostDataClass,
     Component,
@@ -24,61 +22,60 @@ from hisim import loadtypes as lt
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig, PhysicsConfig
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
-from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim.economics.facts import CostRelevance
 
 
-__authors__ = "Frank Burkrad, Maximilian Hillen,"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = ""
-__version__ = ""
-__maintainer__ = "Maximilian Hillen"
-__email__ = "maximilian.hillen@rwth-aachen.de"
-__status__ = "development"
-
-# Constants
-SPECIFIC_HEAT_CAPACITY_WATER = 4182  # J/(kg·K)
-
-
 @dataclass_json
 @dataclass
 class CHPConfig(ConfigBase):
-    """CHP Config class.
+    """Configuration of the modulating fuel-cell CHP: one machine, its power band and its cost.
+
+    The unit is described by the band it modulates in -- a minimum and a maximum electrical and
+    thermal power with an efficiency at each end -- by the fuel it runs on, by how long it must
+    stay on and off once it has switched, and by the water circuit it feeds. The named default is
+    :meth:`preset_hydrogen`::
+
+        CHPConfig.preset_hydrogen("CHP")
+
+    which is the 3 kW electric, 4 kW thermal hydrogen machine every caller in this repository
+    builds; nothing here is sized against a building, so the configuration it returns is complete.
 
     Besides the machine's operating parameters, the configuration carries the five cost fields
     every costed component in the library declares. They are read as a set: while all five are
-    ``None`` -- the default, and what the config-building classmethod below produces --
-    postprocessing looks the figures up from the device database for the simulated year and
-    country and scales them by ``p_el_max``, the unit's electrical rating, which is what a
-    micro-CHP's price is quoted per. Setting all five overrides that lookup with the values given
-    here, for a specific quoted machine.
+    ``None`` -- the default, and what the preset above produces -- postprocessing looks the figures
+    up from the device database for the simulated year and country and scales them by ``p_el_max``,
+    the unit's electrical rating, which is what a micro-CHP's price is quoted per. Setting all five
+    overrides that lookup with the values given here, for a specific quoted machine.
     """
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Return the full class name of the base class."""
-        return CHP.get_full_classname()
+    MAIN_CLASS = "hisim.components.advanced_fuel_cell.CHP"
 
     component_id: ComponentID
-    min_operation_time: float
-    min_idle_time: float
-    gas_type: str
-    operating_mode: str
-    is_modulating: bool
-    p_el_min: float  # [W]
-    p_th_min: float  # [W]
-    eff_el_min: float  # [-]
-    eff_th_min: float  # [-]
-    mass_flow_max: float  # kg/s
-    p_el_max: float  # [W]; the electrical rating, and the only figure the capex scales by
-    p_th_max: float  # [W]
-    eff_el_max: float  # [-]
-    eff_th_max: float  # [-]
-    temperature_max: float
-    delta_temperature: float
+    #: Minimum time the machine stays on once it has started, in timesteps.
+    min_operation_time: float = 60
+    #: Minimum time the machine stays off once it has stopped, in timesteps.
+    min_idle_time: float = 15
+    #: The fuel burnt, either "Hydrogen" or "Methan"; it decides the load type of the fuel ports.
+    gas_type: str = "Hydrogen"
+    #: What the machine follows: "heat", "electricity" or "both".
+    operating_mode: str = "both"
+    #: Whether the machine can run at part load rather than only at its rating.
+    is_modulating: bool = True
+    p_el_min: float = 2_000  # [W]
+    p_th_min: float = 3_000  # [W]
+    eff_el_min: float = 0.2  # [-]
+    eff_th_min: float = 0.5  # [-]
+    mass_flow_max: float = 0.011  # kg/s
+    p_el_max: float = 3_000  # [W]; the electrical rating, and the only figure the capex scales by
+    p_th_max: float = 4_000  # [W]
+    eff_el_max: float = 0.4  # [-]
+    eff_th_max: float = 0.55  # [-]
+    #: Temperature the machine heats its water circuit to, in degrees Celsius.
+    temperature_max: float = 80
+    #: Temperature rise of the water across the machine, in Kelvin.
+    delta_temperature: float = 10
     #: CO2 footprint of investment in kg
     device_co2_footprint_in_kg: Optional[float] = None
     #: cost for investment in Euro
@@ -106,80 +103,11 @@ class CHPConfig(ConfigBase):
                 "It is what the investment cost is scaled by, so an unrated unit would be costed as free."
             )
 
+    @preset
     @classmethod
-    def get_default_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "CHPConfig":
-        """Get default config."""
-        if component_id is None:
-            component_id = ComponentID(name="CHP")
-        config = CHPConfig(
-            component_id=component_id,
-            min_operation_time=60,
-            min_idle_time=15,
-            gas_type="Hydrogen",
-            operating_mode="both",
-            is_modulating=True,
-            p_el_min=2_000,
-            p_th_min=3_000,
-            eff_el_min=0.2,
-            eff_th_min=0.5,
-            mass_flow_max=0.011,
-            p_el_max=3_000,
-            p_th_max=4_000,
-            eff_el_max=0.4,
-            eff_th_max=0.55,
-            temperature_max=80,
-            delta_temperature=10,
-        )
-        return config
-
-
-class CHPConfigAdvanced:
-    """CHP config advanced class."""
-
-    def __init__(self) -> None:
-        """Initialize the class."""
-        # Remark: moved the whole class body into the __init__ function to avoid errors if the file read below
-        # does not exist.
-
-        # system_name = "BlueGEN15"
-        # system_name = "Dachs 0.8"
-        # system_name = "Test_KWK"
-        # system_name = "Dachs G2.9"
-        # system_name = "HOMER"
-        system_name = "BlueGen BG15"
-
-        dataframe = pd.read_excel(
-            os.path.join(utils.HISIMPATH["chp_system"], "mock_up_efficiencies.xlsx"),
-            index_col=0,
-        )
-
-        df_specific = dataframe.loc[str(system_name)]
-
-        if str(df_specific["is_modulating"]) == "Yes":
-            self.is_modulating: bool = True
-            self.p_el_min: float = df_specific["P_el_min"]
-            self.p_th_min: float = df_specific["P_th_min"]
-            self.p_total_min: float = df_specific["P_total_min"]
-            self.eff_el_min: float = df_specific["eff_el_min"]
-            self.eff_th_min: float = df_specific["eff_th_min"]
-
-        elif str(df_specific["is_modulating"]) == "No":
-            self.is_modulating = False
-        else:
-            log.error("Modulation is not defined. Modulation must be 'Yes' or 'No'")
-            raise ValueError
-
-        self.p_el_max: float = df_specific["P_el_max"]
-        self.p_th_max: float = df_specific["P_th_max"]
-        self.p_total_max: float = df_specific["P_total_max"]  # maximum fuel consumption
-        self.eff_el_max: float = df_specific["eff_el_max"]
-        self.eff_th_max: float = df_specific["eff_th_max"]
-        self.mass_flow_max: float = df_specific["mass_flow (dT=20°C)"]
-        self.temperature_max: float = df_specific["temperature_max"]
-        self.delta_temperature: float = 10
+    def preset_hydrogen(cls, name: str) -> "CHPConfig":
+        """The 3 kW electric, 4 kW thermal modulating hydrogen fuel cell, on every field default."""
+        return cls(component_id=ComponentID(name=name))
 
 
 class CHPState:
@@ -215,6 +143,10 @@ class CHP(Component):
     """
 
     cost_relevance = CostRelevance.PRICED
+
+    #: Specific heat capacity of water in J/(kg*K), which turns the thermal power the machine
+    #: produces into the mass flow and the temperature rise of the circuit it feeds.
+    SPECIFIC_HEAT_CAPACITY_WATER: ClassVar[float] = 4182
 
     # Inputs
     ControlSignal: ClassVar[str] = "ControlSignal"  # at which Procentage is the CHP modulating [0..1]
@@ -432,7 +364,7 @@ class CHP(Component):
     ) -> tuple[float, float, float, float]:
         """Simulates the component."""
 
-        specific_heat_capacity_water = SPECIFIC_HEAT_CAPACITY_WATER
+        specific_heat_capacity_water = self.SPECIFIC_HEAT_CAPACITY_WATER
         # Calculation.Electric Energy deliverd
         # CHP is on
         if self.state.activation != 0:

@@ -30,8 +30,6 @@ stops reaching a section still compares two empty renderings and passes — and
 lets the `report` CLI render stored files instead of re-running the evaluator.
 """
 
-# clean
-
 import datetime
 import os
 

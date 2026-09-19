@@ -1,5 +1,3 @@
-# clean
-
 """Classes to provide the structure for the KPI generation."""
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union, List, Tuple
 from enum import Enum

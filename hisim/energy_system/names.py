@@ -12,8 +12,6 @@ file written against that expectation resolve to something its author never mean
 therefore rejected here, at the one place a name or a reference enters the model at all.
 """
 
-# clean
-
 from __future__ import annotations
 
 from typing import Any, ClassVar, Optional, Pattern, Tuple

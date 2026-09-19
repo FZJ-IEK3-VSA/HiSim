@@ -39,9 +39,10 @@ components:
   weather:
     class: hisim.components.weather.Weather
     constructor:
-      for_location:                         # WeatherConfig.for_location(location=..., data_source=...)
+      for_location:                         # WeatherConfig.for_location(location=..., heating_reference_temperature_in_celsius=..., data_source=...)
         location: BERLIN
         data_source: DWD_15MIN
+        heating_reference_temperature_in_celsius: -7.0   # the design condition of the place (D-21)
     # a constructor may compute paths; they come out symbolic (R12):
     # source_path -> "${inputs}/weather/dwd_15min/berlin"
 
@@ -67,7 +68,8 @@ components:
       - ems                                 # lives in a variant option: dropped when the
                                             # other option is selected (R15.3)
     # provides facts: heating_load_in_watt, number_of_apartments,
-    # conditioned_floor_area_in_m2, heating_reference_temperature_in_celsius
+    # conditioned_floor_area_in_m2; reads heating_reference_temperature_in_celsius
+    # off the weather, which owns it (D-21)
 
   hds_controller:
     class: hisim.components.heat_distribution_system.HeatDistributionController

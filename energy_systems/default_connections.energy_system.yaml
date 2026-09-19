@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=../hisim/energy_system_v3.schema.json
-# Recorded from system_setups/default_connections.py with energy_systems/one_day_15min.simulation.yaml by the HiSim energy-system recorder v1.
+# Recorded from system_setups/default_connections.py with simulation_parameters/one_day_15min_export.simulation.yaml by the HiSim energy-system recorder v1.
 schema_version: 3
 name: default_connections
 description: Default Connections Module.
@@ -29,21 +29,15 @@ components:
       - Weather
   GenericHeatPumpController:
     class: hisim.components.generic_heat_pump.GenericHeatPumpController
+    preset: standard
     config:
       temperature_air_heating_in_celsius: 16.0
-      temperature_air_cooling_in_celsius: 24.0
-      offset_in_celsius: 0.5
-      mode: 2
     inputs:
       - ElectricityMeter
       - Building
   HeatPump:
     class: hisim.components.generic_heat_pump.GenericHeatPump
-    config:
-      manufacturer: Viessmann Werke GmbH & Co KG
-      heat_pump_name: Vitocal 300-A AWO-AC 301.B07
-      min_operation_time_in_seconds: 3600.0
-      min_idle_time_in_seconds: 900.0
+    preset: vitocal_300_a
     inputs:
       - GenericHeatPumpController
       - Weather

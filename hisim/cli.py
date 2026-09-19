@@ -23,8 +23,6 @@ of the format is reported as the message the executor would print, on the standa
 with the exit code that says a file was rejected rather than that the command was misused.
 """
 
-# clean
-
 from __future__ import annotations
 
 import argparse

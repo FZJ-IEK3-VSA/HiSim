@@ -20,8 +20,6 @@ The one non-error outcome the kernel reports is a fact that nobody read. That is
 sometimes deliberate, so it comes back as a warning line rather than as a refusal.
 """
 
-# clean
-
 from __future__ import annotations
 
 import enum

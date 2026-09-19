@@ -29,8 +29,6 @@ helpers (§7 B8), the D2 switch of `total_subsidies_received` to a timeline-base
 S4b decision to scope `year_zero_build_up` like the table beside it.
 """
 
-# clean
-
 from typing import Dict
 
 import pytest

@@ -5,12 +5,11 @@ This module provides the :class:`DistrictHeating` component and the
 supply to space heating and domestic hot water circuits.
 """
 
-# clean
 # Owned
 # import importlib
 from dataclasses import dataclass
 import logging
-from typing import List, Any, Optional, Tuple
+from typing import ClassVar, List, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -26,7 +25,18 @@ from hisim.component import (
     OpexCostDataClass,
     CapexCostDataClass,
 )
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import (
+    ComponentID,
+    ConfigBase,
+    DisplayConfig,
+    FactContribution,
+    Sizable,
+    Size,
+    SizingContext,
+    concrete,
+    preset,
+    sized_field,
+)
 from hisim.components.heat_distribution_system import (
     HeatDistributionController,
     HeatDistribution,
@@ -46,75 +56,120 @@ from hisim.postprocessing.cost_and_emission_computation.capex_computation import
 from hisim.economics.facts import CostRelevance
 
 
-__authors__ = "Katharina Rieck, Kristina Dabrock"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = ""
-__version__ = ""
-__maintainer__ = "Katharina Rieck"
-__email__ = "k.rieck@fz-juelich.de"
-__status__ = ""
-
-
 @dataclass_json
 @dataclass
 class DistrictHeatingConfig(ConfigBase):
-    """Configuration of the District Heating class."""
+    """Configuration of the District Heating class.
 
-    @classmethod
-    def get_main_classname(cls):
-        """Return the full class name of the base class."""
-        return DistrictHeating.get_full_classname()
+    A house's connection to a district heating network, serving space heating and, optionally,
+    domestic hot water. The named default is :meth:`preset_standard`, and the one field that
+    depends on the building is sizable, so the preset leaves it ``AUTO`` and ``.resolve(ctx)``
+    copies the building's heating load into it. An author who knows the contracted connection
+    pins the field instead::
+
+        DistrictHeatingConfig.preset_standard("DistrictHeating").resolve(
+            SizingContext(heating_load_in_watt=7780.75)
+        )
+
+    The connection burns nothing on site, which is why :attr:`HEATING_VALUE_IN_KWH_PER_LITER`
+    and :attr:`FUEL_DENSITY_IN_KG_PER_M3` are ``None``: the meter that accounts the heat taken
+    from the network has no litres and no kilograms to convert into.
+    """
+
+    MAIN_CLASS = "hisim.components.generic_district_heating.DistrictHeating"
+
+    #: The carrier this connection delivers, contributed for the meter that accounts it. A
+    #: constant rather than a field: district heat is what makes this class district heating, and
+    #: a connection delivering oil would be a different component.
+    ENERGY_CARRIER: ClassVar[LoadTypes] = LoadTypes.DISTRICTHEATING
+
+    #: Heating value of the fuel, ``None`` because the network burns its fuel elsewhere and
+    #: delivers kilowatt hours of heat. Contributed so that a meter beside this connection copies
+    #: the absence instead of stating a value for a fuel the house never sees.
+    HEATING_VALUE_IN_KWH_PER_LITER: ClassVar[Optional[float]] = None
+
+    #: Density of the fuel, ``None`` for the same reason as the heating value above.
+    FUEL_DENSITY_IN_KG_PER_M3: ClassVar[Optional[float]] = None
 
     component_id: ComponentID
-    # Maximum thermal power that can be delivered
-    connected_load_in_w: float
-    #: CO2 footprint of investment in kg
-    device_co2_footprint_in_kg: Optional[float]
+    #: Whether the connection also prepares domestic hot water, in which case it declares the DHW
+    #: inputs and outputs and prioritises that demand over space heating.
+    with_domestic_hot_water_preparation: bool = False
+    #: CO2 footprint of investment in kg. Unset throughout the repository, which is what makes
+    #: postprocessing look the connection up in the cost database instead.
+    device_co2_footprint_in_kg: Optional[float] = None
     #: cost for investment in Euro
-    investment_costs_in_euro: Optional[float]
+    investment_costs_in_euro: Optional[float] = None
     #: lifetime in years
-    lifetime_in_years: Optional[float]
+    lifetime_in_years: Optional[float] = None
     # maintenance cost in euro per year
-    maintenance_costs_in_euro_per_year: Optional[float]
+    maintenance_costs_in_euro_per_year: Optional[float] = None
     # subsidies as percentage of investment costs
-    subsidy_as_percentage_of_investment_costs: Optional[float]
-    with_domestic_hot_water_preparation: bool
+    subsidy_as_percentage_of_investment_costs: Optional[float] = None
+    #: Largest thermal power the connection may draw from the network, the contracted connected
+    #: load. Sizable: left ``AUTO`` it is the building's heating load exactly, the connection
+    #: covering the design load with no reserve.
+    connected_load_in_w: Sizable[float] = sized_field(rule=Size.HEATING_LOAD_IN_WATT)
 
-    @classmethod
-    def get_default_district_heating_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-        with_domestic_hot_water_preparation=False,
-        connected_load_in_w: float = 20000,
-    ) -> Any:
-        """Return a default DistrictHeatingConfig with sensible preset values.
+    @staticmethod
+    def sizing_facts(config: "DistrictHeatingConfig", ctx: SizingContext) -> dict:
+        """Contributes the connection's resolved power and its carrier for the components around it.
+
+        Runs after the connection itself resolved, so the power is the final concrete number
+        whether it came from the law, from the preset or from an override. The fuel half is the
+        three class constants: the meter accounting the heat taken from the network copies them
+        instead of stating a carrier and two constants of its own, exactly as it copies a
+        boiler's.
 
         Args:
-            component_id: Structured identity (name, building, unit) of the district heating.
-            with_domestic_hot_water_preparation: Whether the system also prepares
-                domestic hot water (adds DHW inputs/outputs).
-            connected_load_in_w: Maximum thermal power the district heating connection
-                can deliver, in watts.
+            config: this district heating configuration, fully resolved.
+            ctx: the sizing context; unused, every value is this config's own.
 
         Returns:
-            A DistrictHeatingConfig with capex/emissions left as None (calculated
-            later in get_cost_capex).
+            dict: the four facts named in :attr:`SIZING_CONTRIBUTIONS`.
         """
-        if component_id is None:
-            component_id = ComponentID(name="DistrictHeating")
-        config = DistrictHeatingConfig(
-            component_id=component_id,
-            connected_load_in_w=connected_load_in_w,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-        )
-        return config
+        del ctx
+        return {
+            "maximal_thermal_power_in_watt": concrete(config.connected_load_in_w),
+            "energy_carrier": DistrictHeatingConfig.ENERGY_CARRIER,
+            "heating_value_of_fuel_in_kwh_per_liter": DistrictHeatingConfig.HEATING_VALUE_IN_KWH_PER_LITER,
+            "fuel_density_in_kg_per_m3": DistrictHeatingConfig.FUEL_DENSITY_IN_KG_PER_M3,
+        }
+
+    #: Sizing facts this config contributes: its resolved power, under the name the
+    #: heating-generator family shares, and its carrier plus the two fuel constants, for the meter
+    #: that accounts what it delivers. With two generators in one scenario each is addressable as
+    #: "<its name>.maximal_thermal_power_in_watt" and a consumer must say which one it means.
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
+        FactContribution(
+            facts=(
+                "maximal_thermal_power_in_watt",
+                "energy_carrier",
+                "heating_value_of_fuel_in_kwh_per_liter",
+                "fuel_density_in_kg_per_m3",
+            ),
+            compute=sizing_facts,
+        ),
+    )
+
+    @preset
+    @classmethod
+    def preset_standard(cls, name: str) -> "DistrictHeatingConfig":
+        """A house's connection to a district heating network, scaled to the building it heats.
+
+        The only preset the class has, and it pins almost nothing: a connection to a network has
+        no technology to name and no catalogue to pick from -- what distinguishes one from
+        another is how much power it is contracted for, and that stays ``AUTO`` so it is copied
+        from the building's heating load. Space heating only, with the investment costs left to
+        the cost database.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            DistrictHeatingConfig: The preset configuration, connected load unsized.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class DistrictHeating(Component):
@@ -417,7 +472,7 @@ class DistrictHeating(Component):
                 water_mass_flow_rate_for_sh_in_kg_per_s,
                 delta_temperature_needed_for_sh_in_celsius,
                 water_input_temperature_for_sh_deg_c,
-                available_load_in_w=self.config.connected_load_in_w,
+                available_load_in_w=concrete(self.config.connected_load_in_w),
             )
 
             # Set outputs
@@ -530,9 +585,11 @@ class DistrictHeating(Component):
             # Now calculate for space heating
             # Calculate
             # raise value error if thermal power delivered of both are higher than maximal load
-            if self.config.connected_load_in_w - thermal_power_delivered_for_dhw_w <= 0:
+            connected_load_in_w = concrete(self.config.connected_load_in_w)
+            if connected_load_in_w - thermal_power_delivered_for_dhw_w <= 0:
                 raise ValueError(
-                    f"Thermal load for DHW {thermal_power_delivered_for_dhw_w}W is equal or higher than maximal connected load {self.config.connected_load_in_w}. "
+                    f"Thermal load for DHW {thermal_power_delivered_for_dhw_w}W is equal or higher "
+                    f"than maximal connected load {connected_load_in_w}. "
                 )
             (
                 thermal_power_delivered_for_sh_w,
@@ -542,7 +599,7 @@ class DistrictHeating(Component):
                 water_mass_flow_rate_for_sh_in_kg_per_s,
                 delta_temperature_needed_for_sh_in_celsius,
                 water_input_temperature_for_sh_deg_c,
-                available_load_in_w=self.config.connected_load_in_w - thermal_power_delivered_for_dhw_w,
+                available_load_in_w=connected_load_in_w - thermal_power_delivered_for_dhw_w,
             )
 
             # Set outputs
@@ -633,8 +690,9 @@ class DistrictHeating(Component):
         # calculate thermal power delivered Q = m * cw * dT
         if delta_temperature_needed_in_celsius > 0:
             # regulate thermal output power based on deltaT needed
+            connected_load_in_w = concrete(self.config.connected_load_in_w)
             thermal_power_delivered_in_w = min(
-                self.config.connected_load_in_w * delta_temperature_needed_in_celsius / 100.0, self.config.connected_load_in_w
+                connected_load_in_w * delta_temperature_needed_in_celsius / 100.0, connected_load_in_w
             )
             water_mass_flow_rate_in_kg_per_s = thermal_power_delivered_in_w / (
                 PhysicsConfig.get_properties_for_energy_carrier(
@@ -730,7 +788,7 @@ class DistrictHeating(Component):
         component_type = ComponentType.DISTRICT_HEATING
         kpi_tag = KpiTagEnumClass.DISTRICT_HEATING
         unit = Units.KILOWATT
-        size_of_energy_system = config.connected_load_in_w * 1e-3
+        size_of_energy_system = concrete(config.connected_load_in_w) * 1e-3
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
             simulation_parameters=simulation_parameters,
@@ -860,37 +918,60 @@ class DistrictHeating(Component):
 @dataclass_json
 @dataclass
 class DistrictHeatingControllerConfig(ConfigBase):
-    """District Heating Controller Config Class."""
+    """Configuration of the district heating connection's controller.
 
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return DistrictHeatingController.get_full_classname()
+    The valve logic in front of the connection: it decides each time step whether the heat
+    taken from the network goes to space heating, to domestic hot water, to both at once or
+    nowhere, and it stops space heating once the daily average outside temperature has
+    risen above the heating threshold. The named default is :meth:`preset_standard`; the
+    threshold belongs to the emitter circuit rather than to the connection, so it is
+    sizable and ``.resolve(ctx)`` copies it from the heat distribution controller's facts::
+
+        DistrictHeatingControllerConfig.preset_standard("DistrictHeatingController").resolve(
+            SizingContext(set_heating_threshold_outside_temperature_in_celsius=18.0)
+        )
+
+    Copying rather than restating is the point: a generator controller that switched off on
+    a different day than the circuit it feeds would heat into a circuit that has stopped.
+    """
+
+    MAIN_CLASS = "hisim.components.generic_district_heating.DistrictHeatingController"
 
     component_id: ComponentID
-    set_heating_threshold_outside_temperature_in_celsius: float
-    with_domestic_hot_water_preparation: bool
-    hysteresis_water_temperature_offset_in_celsius: float
-    parallel_space_heating_and_dhw_option: bool
+    #: Daily average outside temperature above which nothing heats, copied from the emitter
+    #: circuit. Sizable: left ``AUTO`` it is the threshold the heat distribution controller
+    #: resolved to, so both switch off on the same day.
+    set_heating_threshold_outside_temperature_in_celsius: Sizable[float] = sized_field(
+        rule=Size.SET_HEATING_THRESHOLD_OUTSIDE_TEMPERATURE_IN_CELSIUS
+    )
+    #: Whether the connection this controls also prepares domestic hot water, in which case
+    #: the controller reads the vessel's temperature and can prioritise it over space heating.
+    with_domestic_hot_water_preparation: bool = False
+    #: Width of the hysteresis band on the water temperature, in kelvin: how far below the
+    #: requested flow temperature the water may fall before heat is taken again.
+    hysteresis_water_temperature_offset_in_celsius: float = 15.0
+    #: Whether space heating and hot water may be served in the same time step. False makes
+    #: the two exclusive, with hot water taking precedence.
+    parallel_space_heating_and_dhw_option: bool = False
 
+    @preset
     @classmethod
-    def get_default_district_heating_controller_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-        with_domestic_hot_water_preparation=False,
-        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
-        parallel_space_heating_and_dhw_option: bool = False,
-    ) -> Any:
-        """Gets a default district heating controller."""
-        if component_id is None:
-            component_id = ComponentID(name="DistrictHeatingController")
-        return DistrictHeatingControllerConfig(
-            component_id=component_id,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
-            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-            hysteresis_water_temperature_offset_in_celsius=15,
-            parallel_space_heating_and_dhw_option=parallel_space_heating_and_dhw_option,
-        )
+    def preset_standard(cls, name: str) -> "DistrictHeatingControllerConfig":
+        """The one district heating controller the fleet runs, taking its limit from the emitter circuit.
+
+        The field defaults are that controller: space heating only, exclusive of hot water
+        where the connection prepares it as well, and a fifteen-kelvin hysteresis band on
+        the water temperature. What the preset does not fix is the heating threshold, which
+        stays ``AUTO`` so that it is copied from the heat distribution controller instead of
+        repeating its choice here.
+
+        Args:
+            name: Instance name of the controller in the simulation.
+
+        Returns:
+            The configuration, with its one sizable field still ``AUTO``.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class DistrictHeatingController(Component):
@@ -1169,7 +1250,9 @@ class DistrictHeatingController(Component):
                 set_temperature_space_heating_in_celsius=sh_set_temperature_deg_c,
                 set_temperature_dhw_in_celsius=self.warm_water_temperature_aim_in_celsius,
                 hysteresis_water_temperature_offset_in_celsius=self.config.hysteresis_water_temperature_offset_in_celsius,
-                outside_temperature_threshold_in_celsius=self.district_heating_controller_config.set_heating_threshold_outside_temperature_in_celsius,
+                outside_temperature_threshold_in_celsius=concrete(
+                    self.district_heating_controller_config.set_heating_threshold_outside_temperature_in_celsius
+                ),
             ),
             parallel_space_heating_and_dhw_option=self.config.parallel_space_heating_and_dhw_option,
         )

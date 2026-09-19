@@ -657,7 +657,7 @@ class TestTheAdapterEntriesAddedWithThoseRows:
         """Its config states `nom_load` in kW, which is what the ELECTROLYZER row prices per."""
         from hisim.components.generic_electrolyzer_h2 import ElectrolyzerConfig
 
-        config = ElectrolyzerConfig.get_default_alkaline_electrolyzer_config()
+        config = ElectrolyzerConfig.preset_alkaline("Alkaline_electrolyzer")
         facts = FactsExtractors.BY_CLASS_NAME["Electrolyzer"](config)
 
         assert facts is not None
@@ -669,7 +669,7 @@ class TestTheAdapterEntriesAddedWithThoseRows:
         """The one figure its own capex model scales by, so the two agree on what "size" means."""
         from hisim.components.transformer_rectifier import TransformerConfig
 
-        config = TransformerConfig.get_default_transformer_config()
+        config = TransformerConfig.preset_standard("GenericTransformerAndRectifier")
         facts = FactsExtractors.BY_CLASS_NAME["Transformer"](config)
 
         assert facts is not None

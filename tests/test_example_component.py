@@ -1,6 +1,5 @@
 """Test for the Example Component."""
 
-# clean
 from pathlib import Path
 
 import pytest
@@ -29,15 +28,15 @@ def test_example_component() -> None:
 
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
-    # ``capacity`` is a sizable field, so the factory hands back AUTO and the config has to be
+    # ``capacity`` is a sizable field, so the preset hands back AUTO and the config has to be
     # resolved against the facts of the surrounding system before a component may be built from
     # it. The helper carries the one fact this law reads: the building's conditioned floor area.
-    assert example_component.ExampleComponentConfig.get_default_example_component().capacity is AUTO
+    assert example_component.ExampleComponentConfig.preset_standard("ExampleComponent").capacity is AUTO
     my_example_component_config = fft.sized_example_component_config()
     # The law reproduces the literal the module used to carry, exactly: 45 J/K/m2 x 121.2 m2.
     assert (
         my_example_component_config.capacity
-        == example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+        == example_component.ExampleComponentConfig.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
         * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
         == 5454.0
     )
@@ -129,7 +128,7 @@ def test_the_default_capacity_resolves_to_the_literal_it_replaced() -> None:
     assert config.capacity == 5454.0
     assert (
         config.capacity
-        == example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
+        == example_component.ExampleComponentConfig.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2
         * fft.DEFAULT_CONDITIONED_FLOOR_AREA_IN_M2
     )
 
@@ -169,7 +168,10 @@ def test_capacity_is_described_as_a_sized_field() -> None:
     assert capacity.fields_read == ()
     assert capacity.kind is SizableFieldKind.LAW
     assert capacity.note is not None
-    assert str(example_component.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2) in capacity.note
+    assert (
+        str(example_component.ExampleComponentConfig.SPECIFIC_HEAT_CAPACITY_IN_JOULE_PER_KELVIN_PER_M2)
+        in capacity.note
+    )
 
 
 @pytest.mark.base

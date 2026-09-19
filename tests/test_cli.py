@@ -12,9 +12,8 @@ file the executor refuses, with the same message. ``schema`` has to produce exac
 file. And ``run`` has to leave a result directory holding the three artifacts every run writes.
 """
 
-# clean
-
 import os
+import re
 from pathlib import Path
 from typing import ClassVar
 
@@ -47,7 +46,7 @@ class Fixtures:
     #: One January day at a quarter-hour resolution: long enough to run every state machine,
     #: short enough for a test suite.
     PARAMETERS: ClassVar[Path] = (
-        Path(__file__).resolve().parents[1] / "energy_systems" / "one_day_15min.simulation.yaml"
+        Path(__file__).resolve().parents[1] / "simulation_parameters" / "one_day_15min_export.simulation.yaml"
     )
 
     #: The configuration class ``describe`` is exercised on: the one with the most presets, a
@@ -56,6 +55,22 @@ class Fixtures:
 
     #: The component class whose configuration is the same one, reached the other way round.
     BOILER_COMPONENT: ClassVar[str] = "hisim.components.generic_boiler.GenericBoiler"
+
+    #: The configuration class whose three presets differ in nothing but plain fields, which is
+    #: what the ``sets`` line exists for: without it all three describe identically (F-21).
+    HEAT_SOURCE_CONFIG: ClassVar[str] = "hisim.components.simple_heat_source.SimpleHeatSourceConfig"
+
+    #: The configuration class whose canonical preset accepts every field default, which is what
+    #: a preset with no ``sets`` line at all looks like.
+    BOILER_CONTROLLER_CONFIG: ClassVar[str] = (
+        "hisim.components.generic_boiler.GenericBoilerControllerConfig"
+    )
+
+    #: The controller that borrows the heat distribution controller's heating-threshold law, the
+    #: case that used to describe as a lambda of a class of another name (F-22).
+    ELECTRIC_HEATING_CONTROLLER_CONFIG: ClassVar[str] = (
+        "hisim.components.generic_electric_heating.ElectricHeatingControllerConfig"
+    )
 
 
 @pytest.mark.base
@@ -74,6 +89,29 @@ def test_describe_prints_the_presets_sizable_fields_and_facts_of_a_class(capsys)
     assert "maximal_thermal_power_in_watt" in printed
     assert "heating_load_in_watt (ONE)" in printed
     assert "facts provided" in printed
+
+
+@pytest.mark.base
+def test_describe_shows_a_preset_the_law_that_preset_assigns(capsys) -> None:
+    """A preset that computes a field its own way says so beside that preset (F-18).
+
+    The pellet and wood-chip boilers derive their minimum power from their maximum, where the
+    field itself declares a constant zero. Before this line existed, the presets section filed
+    the field under ``AUTO`` and said nothing else, so an author reading the description was
+    told the pellet boiler used the condensing gas boiler's arithmetic.
+    """
+    code = main(["energy-system", "describe", Fixtures.BOILER_CONFIG])
+    printed = capsys.readouterr().out
+
+    assert code == ExitCodes.OK
+    presets = printed.split("presets", 1)[1].split("constructors", 1)[0]
+    pellets = presets.split("pellets", 1)[1].split("wood_chips", 1)[0]
+    assert 'law: minimal_thermal_power_in_watt = 0.08333333333333333 * Self("maximal_thermal_power_in_watt")' in pellets
+    # the preset that assigns no law of its own keeps its two lines and gains no third
+    condensing = presets.split("condensing_gas", 1)[1].split("condensing_gas_12kw", 1)[0]
+    assert "law:" not in condensing
+    # and the field's own declared law is still what the sizable fields section prints
+    assert "law: 0.0" in printed.split("sizable fields", 1)[1]
 
 
 @pytest.mark.base
@@ -104,6 +142,77 @@ def test_describe_lists_each_batch_one_fact_under_its_provider(capsys, class_pat
     assert code == ExitCodes.OK
     provided = printed.split("facts provided", 1)[1]
     assert fact in provided
+
+
+@pytest.mark.base
+def test_describe_prints_the_values_a_preset_sets_on_the_plain_fields(capsys) -> None:
+    """A preset states the plain fields it moves off their class default (F-21).
+
+    Failure mode caught: two presets of one class describing identically because everything
+    that distinguishes them is a plain field. The three heat sources are the sharpest case —
+    each is a kind of source plus at most one number, and the sizing touches none of it — so
+    before this line an author reading the description could not tell them apart at all.
+    """
+    code = main(["energy-system", "describe", Fixtures.HEAT_SOURCE_CONFIG])
+    printed = capsys.readouterr().out
+
+    assert code == ExitCodes.OK
+    presets = printed.split("presets", 1)[1].split("constructors", 1)[0]
+    assert (
+        "      sets: heat_source_type = CONSTANT_THERMAL_POWER,\n"
+        "            power_th_in_watt = 5000.0\n"
+    ) in presets
+    assert (
+        "      sets: heat_source_type = CONSTANT_TEMPERATURE,\n"
+        "            temperature_output_in_celsius = 5\n"
+    ) in presets
+    # a preset that changes one field states it on the label's own line and needs no second
+    assert "      sets: heat_source_type = NEAR_SURFACE_BRINE_TEMPERATURE\n" in presets
+
+
+@pytest.mark.base
+def test_describe_prints_no_sets_line_for_a_preset_that_changes_nothing(capsys) -> None:
+    """A preset that accepts every plain default has no ``sets`` line at all (F-21).
+
+    Failure mode caught: a ``sets:`` label followed by a parenthesised "nothing", which is what
+    the two sizable lines already say for their own half and which would put a line nobody reads
+    under most presets of most classes. The modulating boiler controller is such a preset: it is
+    the class defaults under a name.
+    """
+    code = main(["energy-system", "describe", Fixtures.BOILER_CONTROLLER_CONFIG])
+    printed = capsys.readouterr().out
+
+    assert code == ExitCodes.OK
+    presets = printed.split("presets", 1)[1].split("constructors", 1)[0]
+    modulating = presets.split("modulating", 1)[1].split("on_off", 1)[0]
+    assert "sets:" not in modulating
+    # while the preset next to it, which does change three plain fields, states all three
+    on_off = presets.split("on_off", 1)[1]
+    assert "sets: is_modulating = False," in on_off
+    assert "minimum_resting_time_in_seconds = 0" in on_off
+
+
+@pytest.mark.base
+def test_describe_prints_what_a_lambda_law_computes_rather_than_its_class(capsys) -> None:
+    """A law written as a lambda describes its arithmetic, not ``<Class>.<lambda>`` (F-22).
+
+    Failure mode caught: the electric heating controller, which borrows the heat distribution
+    controller's heating-threshold law on purpose so that the two cannot disagree, describing
+    that field as ``law: HeatDistributionControllerConfig.<lambda>`` — a class of another name,
+    which reads as a description gone wrong rather than as deliberate sharing.
+    """
+    code = main(["energy-system", "describe", Fixtures.ELECTRIC_HEATING_CONTROLLER_CONFIG])
+    printed = capsys.readouterr().out
+
+    assert code == ExitCodes.OK
+    sizable = printed.split("sizable fields", 1)[1]
+    assert (
+        "law: heating_threshold_for(Size.HEATING_LOAD_IN_WATT / "
+        "Size.CONDITIONED_FLOOR_AREA_IN_M2)"
+    ) in sizable
+    assert "law: Size.HEATING_LOAD_IN_WATT / Size.CONDITIONED_FLOOR_AREA_IN_M2" in sizable
+    assert "<lambda>" not in printed
+    assert "HeatDistributionControllerConfig" not in printed
 
 
 @pytest.mark.base
@@ -162,12 +271,18 @@ def test_facts_prints_where_every_sized_value_of_a_file_comes_from(capsys) -> No
 
 @pytest.mark.base
 def test_facts_refuses_a_file_the_executor_refuses_and_says_why(capsys) -> None:
-    """Catches the command being more permissive than a run, which would be worse than useless."""
+    """Catches the command being more permissive than a run, which would be worse than useless.
+
+    The mockup is refused for whichever of its known gaps the executor meets first (see
+    ``ExpectedFailures`` in ``test_energy_system_classes``); which one that is moves as the
+    component sweep converts classes, so the assertion is on a refusal code being reported, not
+    on a particular one.
+    """
     code = main(["energy-system", "facts", str(Fixtures.HEAT_PUMP)])
     captured = capsys.readouterr()
 
     assert code == ExitCodes.FILE_REJECTED
-    assert "EF-13" in captured.err
+    assert re.search(r"\bEF-\d+\b", captured.err), captured.err
 
 
 @pytest.mark.base

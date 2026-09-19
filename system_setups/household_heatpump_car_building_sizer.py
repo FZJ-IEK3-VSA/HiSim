@@ -1,7 +1,5 @@
 """Basic household new system setup."""
 
-# clean
-
 from typing import Optional, Any, Union, List
 import re
 from pathlib import Path
@@ -11,7 +9,7 @@ from utspclient.helpers.lpgdata import (
     ChargingStationSets,
 )
 from hisim.simulator import SimulationParameters
-from hisim.config import ComponentID, SizingContext, concrete
+from hisim.config import SizingContext, concrete
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
@@ -195,10 +193,11 @@ def setup_function(
     # The weather config is created first: the building and PV configs copy its identity
     # (weather_identity) and must have it before those components are built. The weather
     # component itself is still added further down, so the simulator's component order is unchanged.
-    my_weather_config = weather.WeatherConfig.for_location("Weather", weather.LocationEnum[weather_location])
+    my_weather_config = weather.WeatherConfig.for_location(
+        "Weather", weather.LocationEnum[weather_location], heating_reference_temperature_in_celsius
+    )
 
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
-    my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
     my_building_config.max_thermal_building_demand_in_watt = max_thermal_building_demand_in_watt
     my_building_config.set_heating_temperature_in_celsius = building_set_heating_temperature_in_celsius
     my_building_config.set_cooling_temperature_in_celsius = building_set_cooling_temperature_in_celsius
@@ -224,8 +223,13 @@ def setup_function(
     if arche_type_config_.building_heat_capacity_class is not None:
         my_building_config.building_heat_capacity_class = arche_type_config_.building_heat_capacity_class
 
-    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field, so it is resolved before the archetype lookup runs on the config.
+    my_building_config = my_building_config.resolve(
+        SizingContext(heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius)
+    )
+    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_building, connect_automatically=True)
@@ -313,9 +317,17 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build Heat Pump Controller for space heating
-    my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
-        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
-        set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
+    my_heatpump_controller_sh_config = (
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
+            "MoreAdvancedHeatPumpHPLibControllerSH"
+        ).resolve(
+            SizingContext(
+                heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
+                set_heating_threshold_outside_temperature_in_celsius=(
+                    my_hds_controller_information.set_heating_threshold_temperature_in_celsius
+                ),
+            )
+        )
     )
     my_heatpump_controller_sh_config.mode = hp_controller_mode
 
@@ -325,7 +337,9 @@ def setup_function(
     my_sim.add_component(my_heatpump_controller_sh, connect_automatically=True)
 
     my_heatpump_controller_dhw_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.get_default_dhw_controller_config()
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
+            "HeatPumpControllerDHW"
+        )
     )
 
     # Build Heat Pump Controller for dhw
@@ -335,9 +349,13 @@ def setup_function(
     my_sim.add_component(my_heatpump_controller_dhw, connect_automatically=True)
 
     # Build Heat Pump (for dhw and space heating)
-    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
+        "MoreAdvancedHeatPumpHPLib"
+    ).resolve(
+        SizingContext(
+            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+        )
     )
     my_heatpump_config.with_domestic_hot_water_preparation = True
 
@@ -380,7 +398,9 @@ def setup_function(
         simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
     )
     my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
-        SizingContext(maximal_thermal_power_in_watt=my_heatpump_config.set_thermal_output_power_in_watt)
+        SizingContext(
+            maximal_thermal_power_in_watt=concrete(my_heatpump_config.set_thermal_output_power_in_watt)
+        )
     )
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
@@ -435,20 +455,22 @@ def setup_function(
     car_number = 1
 
     for car in my_cars:
-        my_car_battery_config = advanced_ev_battery_bslib.CarBatteryConfig.get_default_config()
+        my_car_battery_config = advanced_ev_battery_bslib.CarBatteryConfig.preset_standard(
+            f"CarBattery_{car_number}"
+        )
         my_car_battery_config.source_weight = car.config.source_weight
-        my_car_battery_config.component_id = ComponentID(f"CarBattery_{car_number}")
         my_car_battery = advanced_ev_battery_bslib.CarBattery(
             my_simulation_parameters=my_simulation_parameters,
             config=my_car_battery_config,
         )
         my_car_batteries.append(my_car_battery)
 
-        my_car_battery_controller_config = controller_l1_generic_ev_charge.ChargingStationConfig.get_default_config(
-            charging_station_set=charging_station_set
+        my_car_battery_controller_config = (
+            controller_l1_generic_ev_charge.ChargingStationConfig.for_charging_station_set(
+                f"L1EVChargeControl_{car_number}", charging_station_set=charging_station_set
+            )
         )
         my_car_battery_controller_config.source_weight = car.config.source_weight
-        my_car_battery_controller_config.component_id = ComponentID(f"L1EVChargeControl_{car_number}")
         if car_surplus_charging:
             # lower threshold for soc of car battery in clever case. This enables more surplus charging
             my_car_battery_controller_config.battery_set_soc = 0.4

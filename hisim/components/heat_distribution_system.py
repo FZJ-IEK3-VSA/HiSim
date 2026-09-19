@@ -1,6 +1,5 @@
 """Heat Distribution Module."""
 
-# clean
 import importlib
 from enum import Enum, unique
 from typing import Any, ClassVar, List, Optional, Tuple
@@ -35,15 +34,6 @@ from hisim.config import (
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.economics.facts import CostRelevance
-
-__authors__ = "Katharina Rieck, Noah Pflugradt"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = ""
-__version__ = ""
-__maintainer__ = "Katharina Rieck"
-__email__ = "k.rieck@fz-juelich.de"
-__status__ = ""
 
 
 @unique
@@ -88,12 +78,14 @@ class PositionHotWaterStorageInSystemSetup(str, Enum):
 @dataclass_json
 @dataclass
 class HeatDistributionConfig(ConfigBase):
-    """Configuration of the HeatingWaterStorage class."""
+    """Configuration of the HeatDistribution class, the water circuit between generator and rooms.
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Return the full class name of the base class."""
-        return HeatDistribution.get_full_classname()  # type: ignore[no-any-return]
+    Every value it needs is a property of the building it serves — the emitter type, the mass
+    flow the circuit carries and the floor area it heats — so all three fields are sizable and
+    :meth:`preset_building_derived` pins none of them.
+    """
+
+    MAIN_CLASS = "hisim.components.heat_distribution_system.HeatDistribution"
 
     component_id: ComponentID
     heating_system: Sizable[HeatDistributionSystemType] = sized_field(
@@ -843,18 +835,14 @@ class HeatDistribution(cp.Component):
 @dataclass_json
 @dataclass
 class HeatDistributionControllerConfig(ConfigBase):
-    """HeatDistribution Controller Config Class."""
+    """HeatDistribution Controller Config Class.
 
-    #: Sizing facts this config contributes: the water mass flow it derives
-    #: via HeatDistributionControllerInformation and the heat distribution system type —
-    #: the two sibling facts the HeatDistributionConfig preset resolves from. Assigned
-    #: below the class, next to the compute function.
-    SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = ()
+    The heating curve of the water circuit: which emitter it feeds, and the temperatures it runs
+    at. Everything but the emitter is a property of the building, so :meth:`preset_building_derived`
+    pins nothing and the fields resolve from the building's facts.
+    """
 
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return HeatDistributionController.get_full_classname()
+    MAIN_CLASS = "hisim.components.heat_distribution_system.HeatDistributionController"
 
     @staticmethod
     def heating_threshold_for(specific_heating_load_of_building_in_watt_per_m2: float) -> float:
@@ -880,6 +868,9 @@ class HeatDistributionControllerConfig(ConfigBase):
             ctx.heating_load_in_watt / ctx.conditioned_floor_area_in_m2
         ),
         reads=(Size.HEATING_LOAD_IN_WATT, Size.CONDITIONED_FLOOR_AREA_IN_M2),
+        description=(
+            "heating_threshold_for(Size.HEATING_LOAD_IN_WATT / Size.CONDITIONED_FLOOR_AREA_IN_M2)"
+        ),
     )
 
     component_id: ComponentID
@@ -887,7 +878,8 @@ class HeatDistributionControllerConfig(ConfigBase):
     heating_system: HeatDistributionSystemType = HeatDistributionSystemType.FLOORHEATING
     #: Derived from the building's efficiency by :meth:`heating_threshold_for`.
     set_heating_threshold_outside_temperature_in_celsius: Sizable[float] = sized_field(
-        rule=HEATING_THRESHOLD_LAW
+        rule=HEATING_THRESHOLD_LAW,
+        note="16 °C up to 50 W/m² of specific heating load, 18 °C up to 80 W/m², 20 °C above that",
     )
     heating_reference_temperature_in_celsius: Sizable[float] = sized_field(
         rule=Size.HEATING_REFERENCE_TEMPERATURE_IN_CELSIUS
@@ -899,6 +891,52 @@ class HeatDistributionControllerConfig(ConfigBase):
         rule=Size.SET_COOLING_TEMPERATURE_IN_CELSIUS
     )
     heating_load_of_building_in_watt: Sizable[float] = sized_field(rule=Size.HEATING_LOAD_IN_WATT.rounded(2))
+
+    @staticmethod
+    def sizing_facts(config: "HeatDistributionControllerConfig", ctx: SizingContext) -> dict:
+        """Contributes what the emitter circuit decides for the components around it.
+
+        The water mass flow and the emitter type are the two facts :class:`HeatDistributionConfig`
+        resolves from, and they are derived here through the same
+        :class:`HeatDistributionControllerInformation` the setups have always used, so an
+        engine-resolved value is the hand-threaded one.
+
+        The heating threshold is passed on as the value this controller resolved to, whether that
+        came from :attr:`HEATING_THRESHOLD_LAW` or from an author pinning it: every generator
+        controller that heats below the same threshold reads the one the emitter circuit actually
+        uses, instead of repeating the step table.
+
+        Args:
+            config: this controller configuration, fully resolved.
+            ctx: the sizing context; unused, the controller carries its building-derived
+                parameters itself.
+
+        Returns:
+            dict: the three facts named in :attr:`SIZING_CONTRIBUTIONS`.
+        """
+        del ctx
+        information = HeatDistributionControllerInformation(config=config)
+        return {
+            "water_mass_flow_rate_in_kg_per_second": information.water_mass_flow_rate_in_kg_per_second,
+            "heat_distribution_system_type": config.heating_system,
+            "set_heating_threshold_outside_temperature_in_celsius": concrete(
+                config.set_heating_threshold_outside_temperature_in_celsius
+            ),
+        }
+
+    #: Sizing facts this config contributes: the water mass flow it derives via
+    #: :class:`HeatDistributionControllerInformation`, the emitter type, and the outside
+    #: temperature above which nothing heats.
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
+        FactContribution(
+            facts=(
+                "water_mass_flow_rate_in_kg_per_second",
+                "heat_distribution_system_type",
+                "set_heating_threshold_outside_temperature_in_celsius",
+            ),
+            compute=sizing_facts,
+        ),
+    )
 
     @preset
     @classmethod
@@ -1472,40 +1510,3 @@ class HeatDistributionControllerInformation:
             * self.temperature_difference_between_flow_and_return_in_celsius
         )
         return heating_distribution_system_water_mass_flow_in_kg_per_second
-
-
-def _hds_controller_sizing_facts(
-    config: HeatDistributionControllerConfig, ctx: SizingContext
-) -> dict:
-    """Computes the heat-distribution sizing facts from the controller config.
-
-    Uses the same HeatDistributionControllerInformation derivation the setups call today,
-    so engine-resolved values are identical to the hand-threaded ones. The context is
-    unused: the controller config already carries its building-derived parameters.
-
-    The heating threshold is passed on as the value this controller resolved to, whether
-    that came from :attr:`HeatDistributionControllerConfig.HEATING_THRESHOLD_LAW` or from
-    an author pinning it: every generator controller that heats below the same threshold
-    reads the one the emitter circuit actually uses, instead of repeating the step table.
-    """
-    del ctx
-    information = HeatDistributionControllerInformation(config=config)
-    return {
-        "water_mass_flow_rate_in_kg_per_second": information.water_mass_flow_rate_in_kg_per_second,
-        "heat_distribution_system_type": config.heating_system,
-        "set_heating_threshold_outside_temperature_in_celsius": concrete(
-            config.set_heating_threshold_outside_temperature_in_celsius
-        ),
-    }
-
-
-HeatDistributionControllerConfig.SIZING_CONTRIBUTIONS = (
-    FactContribution(
-        facts=(
-            "water_mass_flow_rate_in_kg_per_second",
-            "heat_distribution_system_type",
-            "set_heating_threshold_outside_temperature_in_celsius",
-        ),
-        compute=_hds_controller_sizing_facts,
-    ),
-)

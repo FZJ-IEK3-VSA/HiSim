@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=../hisim/energy_system_v3.schema.json
-# Recorded from system_setups/air_conditioned_house.py with energy_systems/one_day_15min.simulation.yaml by the HiSim energy-system recorder v1.
+# Recorded from system_setups/air_conditioned_house.py with simulation_parameters/one_day_15min_export.simulation.yaml by the HiSim energy-system recorder v1.
 schema_version: 3
 name: air_conditioned_house
 description: Air-conditioned household.
@@ -13,6 +13,7 @@ components:
       location: Seville
       source_path: ${inputs}/weather/NSRDB/Seville/Seville
       data_source: NSRDB
+      heating_reference_temperature_in_celsius: 5.7
       predictive_control: false
   PVSystem:
     class: hisim.components.generic_pv_system.PVSystem
@@ -80,7 +81,6 @@ components:
   Building:
     class: hisim.components.building.building.Building
     config:
-      heating_reference_temperature_in_celsius: 5.7
       building_code: ES.ME.SFH.04.Gen.ReEx.001.003
       building_heat_capacity_class: medium
       initial_internal_temperature_in_celsius: 22.0
@@ -106,6 +106,7 @@ components:
       lifetime_in_years: null
       maintenance_costs_in_euro_per_year: null
       subsidy_as_percentage_of_investment_costs: null
+      heating_reference_temperature_in_celsius: 5.7
       weather_identity: Seville/NSRDB/weather/NSRDB/Seville/Seville
     inputs:
       - Weather
@@ -114,13 +115,7 @@ components:
         from: AirConditioner.ThermalPowerDelivered
   AirConditionerControllerConfig:
     class: hisim.components.air_conditioner.AirConditionerController
-    config:
-      heating_set_temperature_deg_c: 20.0
-      cooling_set_temperature_deg_c: 24.0
-      minimum_runtime_s: 1800.0
-      minimum_idle_time_s: 900.0
-      offset: 5.0
-      temperature_difference_full_power_deg_c: 3.0
+    preset: standard
     inputs:
       - Building
   ElectricityMeter:

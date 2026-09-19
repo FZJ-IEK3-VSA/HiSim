@@ -1,12 +1,10 @@
-"""Tests for the TransformerConfig factory and classname classmethods.
+"""Tests for the TransformerConfig preset and classname classmethods.
 
 These tests pin down the pure, side-effect-free classmethods on
 ``TransformerConfig`` that are otherwise untested. They only construct
 dataclass instances / call classmethods and assert field values - no
 simulation, no I/O.
 """
-
-# clean
 
 import json
 
@@ -27,9 +25,9 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_get_default_transformer_config_returns_config_with_documented_defaults() -> None:
-    """``get_default_transformer_config()`` returns a ``TransformerConfig`` with the hardcoded fields."""
-    config = TransformerConfig.get_default_transformer_config()
+def test_preset_standard_returns_config_with_documented_defaults() -> None:
+    """``preset_standard()`` names the instance it is given and carries the field defaults."""
+    config = TransformerConfig.preset_standard("GenericTransformerAndRectifier")
     assert isinstance(config, TransformerConfig)
     assert config.component_id.building is None
     assert config.component_id.name == "GenericTransformerAndRectifier"
@@ -45,10 +43,10 @@ def test_get_default_transformer_config_returns_config_with_documented_defaults(
 
 
 @pytest.mark.base
-def test_get_default_transformer_config_is_deterministic_but_distinct() -> None:
+def test_preset_standard_is_deterministic_but_distinct() -> None:
     """Two calls return equal values but not the same object identity."""
-    first = TransformerConfig.get_default_transformer_config()
-    second = TransformerConfig.get_default_transformer_config()
+    first = TransformerConfig.preset_standard("GenericTransformerAndRectifier")
+    second = TransformerConfig.preset_standard("GenericTransformerAndRectifier")
     assert first == second
     assert first is not second
 
@@ -86,7 +84,7 @@ def test_transformer_default_display_config_not_shared() -> None:
     in a parametric study).
     """
     mysim = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
-    config = TransformerConfig.get_default_transformer_config()
+    config = TransformerConfig.preset_standard("GenericTransformerAndRectifier")
 
     first = Transformer(my_simulation_parameters=mysim, config=config)
     second = Transformer(my_simulation_parameters=mysim, config=config)
@@ -98,7 +96,7 @@ def test_transformer_default_display_config_not_shared() -> None:
 def test_transformer_explicit_display_config_respected() -> None:
     """An explicitly passed ``DisplayConfig`` is used verbatim (not replaced)."""
     mysim = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
-    config = TransformerConfig.get_default_transformer_config()
+    config = TransformerConfig.preset_standard("GenericTransformerAndRectifier")
     explicit = DisplayConfig()
 
     transformer = Transformer(
@@ -146,7 +144,7 @@ def test_transformer_does_not_override_state_lifecycle_hooks() -> None:
 def test_transformer_inherited_lifecycle_hooks_are_noops() -> None:
     """Calling the inherited no-op lifecycle hooks on a Transformer instance does not raise."""
     mysim = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
-    config = TransformerConfig.get_default_transformer_config()
+    config = TransformerConfig.preset_standard("GenericTransformerAndRectifier")
     transformer = Transformer(my_simulation_parameters=mysim, config=config)
     transformer.i_save_state()
     transformer.i_restore_state()
@@ -278,7 +276,10 @@ def test_transformer_kpi_entries_refuse_nan_instead_of_understating() -> None:
 def test_transformer_kpi_entries_refuse_a_missing_output() -> None:
     """A missing output column raises naming the component instead of reporting nothing."""
     mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    transformer = Transformer(my_simulation_parameters=mysim, config=TransformerConfig.get_default_transformer_config())
+    transformer = Transformer(
+        my_simulation_parameters=mysim,
+        config=TransformerConfig.preset_standard("GenericTransformerAndRectifier"),
+    )
 
     with pytest.raises(ValueError, match="transformer output column"):
         transformer.get_component_kpi_entries([], pd.DataFrame())

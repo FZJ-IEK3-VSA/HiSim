@@ -9,8 +9,6 @@ as a pure method that only reads ``self.ppdt`` and returns the assembled
 :class:`ComponentOutput` types.
 """
 
-# clean
-
 # These tests deliberately exercise the private graph-assembly method ``_build_graph``.
 # pylint: disable=protected-access
 

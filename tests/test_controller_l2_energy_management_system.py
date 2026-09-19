@@ -4,8 +4,6 @@ Run a normal house with heatpumps, PV and battery and compare EMS outputs with K
 Investigate total consumption, total grid consumption and grid injection.
 """
 
-# clean
-
 import os
 import json
 from typing import Optional
@@ -14,8 +12,6 @@ import numpy as np
 import pandas as pd
 import hisim.component as cp
 import hisim.simulator as sim
-from hisim import json_generator
-from hisim.config.channels import ResolvedDispatch, ResolvedDynamicConnection
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
@@ -110,9 +106,13 @@ def test_house(
     my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
 
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
-    my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
-    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field (D-21), so it is resolved before the component is built.
+    my_building_config = my_building_config.resolve(
+        SizingContext(heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius)
+    )
+    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_building, connect_automatically=True)
@@ -181,9 +181,17 @@ def test_house(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build Heat Pump Controller for space heating
-    my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
-        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
-        set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
+    my_heatpump_controller_sh_config = (
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
+            "MoreAdvancedHeatPumpHPLibControllerSH"
+        ).resolve(
+            SizingContext(
+                heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
+                set_heating_threshold_outside_temperature_in_celsius=(
+                    my_hds_controller_information.set_heating_threshold_temperature_in_celsius
+                ),
+            )
+        )
     )
 
     my_heatpump_controller_sh = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
@@ -192,7 +200,9 @@ def test_house(
     my_sim.add_component(my_heatpump_controller_sh, connect_automatically=True)
 
     my_heatpump_controller_dhw_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.get_default_dhw_controller_config()
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
+            "HeatPumpControllerDHW"
+        )
     )
 
     # Build Heat Pump Controller for dhw
@@ -202,9 +212,13 @@ def test_house(
     my_sim.add_component(my_heatpump_controller_dhw, connect_automatically=True)
 
     # Build Heat Pump (for dhw and space heating)
-    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
+        "MoreAdvancedHeatPumpHPLib"
+    ).resolve(
+        SizingContext(
+            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+        )
     )
     my_heatpump_config.with_domestic_hot_water_preparation = True
 
@@ -247,7 +261,9 @@ def test_house(
         simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
     )
     my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
-        SizingContext(maximal_thermal_power_in_watt=my_heatpump_config.set_thermal_output_power_in_watt)
+        SizingContext(
+            maximal_thermal_power_in_watt=concrete(my_heatpump_config.set_thermal_output_power_in_watt)
+        )
     )
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
@@ -623,9 +639,11 @@ def _heat_pump(
     Returns:
         The heat pump.
     """
-    config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_default_generic_advanced_hp_lib(
-        component_id=ComponentID(name=name)
-    )
+    config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(name)
+    # No building in this test, so the two fields the preset leaves to the building's facts are
+    # stated here: an 8 kW machine rated at the German design outside temperature.
+    config.set_thermal_output_power_in_watt = 8000.0
+    config.heating_reference_temperature_in_celsius = -7.0
     config.with_domestic_hot_water_preparation = with_domestic_hot_water_preparation
     heat_pump: more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib = (
         more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
@@ -746,70 +764,3 @@ def test_a_device_that_publishes_no_dhw_power_grows_no_dhw_target() -> None:
         "ElectricityToOrFromGridOfSHMoreAdvancedHeatPumpHPLib_2",
         "ElectricityToOrFromGridOfDHWMoreAdvancedHeatPumpHPLib_3",
     ]
-
-
-def _resolved_feed_of(heat_pump: more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib) -> ResolvedDynamicConnection:
-    """Builds the resolved feed an energy-system file produces for a steered participant.
-
-    Args:
-        heat_pump: The participant the feed measures.
-
-    Returns:
-        A feed whose dispatch block names no target input, so its port is named by the
-        ``DispatchFor`` template.
-    """
-    return ResolvedDynamicConnection(
-        source_name=heat_pump.component_name,
-        source_component=heat_pump,
-        source_output=more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH,
-        source_port=heat_pump.outputs[0],
-        target_name="L2EMSElectricityController",
-        component_type=lt.ComponentType.HEAT_PUMP_BUILDING,
-        flow_tags=(lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,),
-        weight=2,
-        channel=controller_l2_energy_management_system.L2GenericEnergyManagementSystem.get_channel(
-            controller_l2_energy_management_system.L2GenericEnergyManagementSystem.CONSUMPTION_CONTROLLED_CHANNEL
-        ),
-        origin="a test's feed",
-        dispatch=ResolvedDispatch(
-            target_input=None,
-            tags=(lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_TARGET),
-        ),
-    )
-
-
-@pytest.mark.base
-def test_the_scenario_json_writes_the_targets_a_setup_made_and_no_others() -> None:
-    """Catches the scenario JSON writing a port twice, losing one, or writing a garbled name.
-
-    The file is the legacy path's own: the JSON executor applies the same default connections
-    when it rebuilds the component, so a target grown from one must not be written down, while
-    every target the setup added by hand must be — under the prefix it was added with. Both
-    answers are read off the port's own bookkeeping now, which is also why a port named by the
-    declarative format's templates, having no prefix at all, is refused by name instead of
-    written as whatever the arithmetic made of it.
-    """
-    manager = _energy_manager()
-    manager.add_component_output(
-        source_output_name="LoadingPowerInputForBattery_",
-        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-        source_weight=6,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        output_description="Target electricity for Battery Control. ",
-    )
-    heat_pump = _heat_pump("HeatPump")
-    manager.connect_with_dynamic_connections_list(manager.get_dynamic_default_connections(heat_pump))
-
-    written, _, _ = json_generator.convert_component_to_json(manager.config, manager)
-
-    assert [(out["source_output_name"], out["source_weight"]) for out in written.outputs] == [
-        ("LoadingPowerInputForBattery_", 6)
-    ]
-
-    declarative_manager = _energy_manager()
-    dispatch_output = declarative_manager.add_resolved_dispatch_output(_resolved_feed_of(heat_pump))
-    assert dispatch_output.field_name == "DispatchForHeatPump_ElectricalInputPowerSH"
-
-    with pytest.raises(ValueError, match=dispatch_output.field_name):
-        json_generator.convert_component_to_json(declarative_manager.config, declarative_manager)

@@ -182,10 +182,11 @@ def setup_function(
     # The weather config is created first: the building and PV configs copy its identity
     # (weather_identity) and must have it before those components are built. The weather
     # component itself is still added further down, so the simulator's component order is unchanged.
-    my_weather_config = weather.WeatherConfig.for_location("Weather", weather.LocationEnum[weather_location])
+    my_weather_config = weather.WeatherConfig.for_location(
+        "Weather", weather.LocationEnum[weather_location], heating_reference_temperature_in_celsius
+    )
 
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
-    my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
     my_building_config.max_thermal_building_demand_in_watt = max_thermal_building_demand_in_watt
     my_building_config.set_heating_temperature_in_celsius = building_set_heating_temperature_in_celsius
     my_building_config.set_cooling_temperature_in_celsius = building_set_cooling_temperature_in_celsius
@@ -211,8 +212,13 @@ def setup_function(
     if arche_type_config_.building_heat_capacity_class is not None:
         my_building_config.building_heat_capacity_class = arche_type_config_.building_heat_capacity_class
 
-    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field, so it is resolved before the archetype lookup runs on the config.
+    my_building_config = my_building_config.resolve(
+        SizingContext(heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius)
+    )
+    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_building, connect_automatically=True)
@@ -301,9 +307,17 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build Heat Pump Controller for hot water (heating building)
-    my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
-        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
-        set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
+    my_heatpump_controller_sh_config = (
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
+            "MoreAdvancedHeatPumpHPLibControllerSH"
+        ).resolve(
+            SizingContext(
+                heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
+                set_heating_threshold_outside_temperature_in_celsius=(
+                    my_hds_controller_information.set_heating_threshold_temperature_in_celsius
+                ),
+            )
+        )
     )
     my_heatpump_controller_sh_config.mode = hp_controller_mode
 
@@ -312,7 +326,9 @@ def setup_function(
     )
 
     my_heatpump_controller_dhw_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.get_default_dhw_controller_config()
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
+            "HeatPumpControllerDHW"
+        )
     )
 
     # Build Heat Pump Controller for dhw
@@ -321,9 +337,13 @@ def setup_function(
     )
 
     # Build Heat Pump
-    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
+        "MoreAdvancedHeatPumpHPLib"
+    ).resolve(
+        SizingContext(
+            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+        )
     )
     my_heatpump_config.with_domestic_hot_water_preparation = True
 
@@ -355,7 +375,9 @@ def setup_function(
         simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
     )
     my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
-        SizingContext(maximal_thermal_power_in_watt=my_heatpump_config.set_thermal_output_power_in_watt)
+        SizingContext(
+            maximal_thermal_power_in_watt=concrete(my_heatpump_config.set_thermal_output_power_in_watt)
+        )
     )
 
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
@@ -383,11 +405,9 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
 
     # Solar thermal for DHW
-    my_solar_thermal_system_config = (
-        solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system().resolve(
-            SizingContext(number_of_apartments=number_of_apartments)
-        )
-    )
+    my_solar_thermal_system_config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate(
+        "SolarThermalSystem"
+    ).resolve(SizingContext(number_of_apartments=number_of_apartments))
     my_solar_thermal_system = solar_thermal_system.SolarThermalSystem(
         config=my_solar_thermal_system_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -396,7 +416,7 @@ def setup_function(
 
     # Solar thermal for DHW - Controller
     my_solar_thermal_system_controller_config = (
-        solar_thermal_system.SolarThermalSystemControllerConfig.get_solar_thermal_system_controller_config()
+        solar_thermal_system.SolarThermalSystemControllerConfig.preset_standard("SolarThermalSystemController")
     )
 
     my_solar_thermal_system_controller = solar_thermal_system.SolarThermalSystemController(

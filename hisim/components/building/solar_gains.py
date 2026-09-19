@@ -38,8 +38,6 @@ and the next one recomputed everything. That is the "deferred cache writes" defe
 a static producer fixes it as a side effect: compute, write, then simulate.
 """
 
-# clean
-
 from dataclasses import dataclass, field
 from typing import ClassVar, List, Optional, Tuple
 

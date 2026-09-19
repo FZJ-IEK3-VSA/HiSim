@@ -11,8 +11,6 @@ dependency, typically) must not silently shrink the scanned set, so the import f
 collected and reported by their own test instead of being swallowed.
 """
 
-# clean
-
 import dataclasses
 import importlib
 import inspect
@@ -60,6 +58,18 @@ class ComponentConfigScan:
     #: marks a concrete catalogue device (``oil_12kw``, ``standard_5kwh``). Anything else
     #: numeric in a name is a value that belongs in a field, not in the wire format.
     RATING_SUFFIX: "re.Pattern[str]" = re.compile(r"^[a-z]+(_[a-z]+)*(_[0-9]+[a-z]+)?$")
+
+    #: Rule 2's one sanctioned exception, as ``"<ConfigClass>.<preset>"``: a preset named
+    #: after a real catalogue device carries that device's designation, digits and all, and
+    #: no rating suffix can spell it. ``vitocal_300_a`` is Viessmann's Vitocal 300-A, the one
+    #: machine the generic heat pump's device database is keyed to in the fleet, and
+    #: ``samsung_ac120`` is Samsung's AC120HBHFKH/SA - AC120HCAFKH/SA out of the smart-devices
+    #: catalogue. Listing the exemption here is what keeps rule 2 strict: a number that is a
+    #: *value* still fails, because it will not be in this tuple.
+    CATALOGUE_DEVICE_PRESETS: Tuple[str, ...] = (
+        "GenericHeatPumpConfig.vitocal_300_a",
+        "AirConditionerConfig.samsung_ac120",
+    )
 
     #: Rule 5 (with amendment A1 of the naming supplement): ``standard`` is reserved for a
     #: class with exactly one defensible preset, and survives a second one only when that
@@ -127,12 +137,20 @@ class InterchangeableProviders:
 
     #: Fact name → the config classes sanctioned to declare it. The heating-generator
     #: family shares its power band because exactly one of its members is present in a
-    #: scenario and every consumer of the band is indifferent to which. Today only the
-    #: boiler family is converted; the heat pump, electric and district heating generators
-    #: join this entry as they are converted.
+    #: scenario and every consumer of the band is indifferent to which. The fuel facts are
+    #: shared for the same reason one step further on: the meter accounts whatever the one
+    #: generator delivers, be that a burnt fuel or heat off a network.
     ALLOWED: Dict[str, Set[str]] = {
-        "maximal_thermal_power_in_watt": {"GenericBoilerConfig"},
+        "maximal_thermal_power_in_watt": {
+            "GenericBoilerConfig",
+            "MoreAdvancedHeatPumpHPLibConfig",
+            "ElectricHeatingConfig",
+            "DistrictHeatingConfig",
+        },
         "minimal_thermal_power_in_watt": {"GenericBoilerConfig"},
+        "energy_carrier": {"GenericBoilerConfig", "DistrictHeatingConfig"},
+        "heating_value_of_fuel_in_kwh_per_liter": {"GenericBoilerConfig", "DistrictHeatingConfig"},
+        "fuel_density_in_kg_per_m3": {"GenericBoilerConfig", "DistrictHeatingConfig"},
     }
 
 
@@ -145,7 +163,10 @@ class PilotWireFormat:
     what a stored scenario means.
     """
 
-    #: Config class name → its preset names in declaration order, canonical first.
+    #: Config class name → its preset names in declaration order, canonical first. Two
+    #: different classes are both called ``CHPConfig`` -- the non-modulating generic CHP and
+    #: the modulating fuel cell -- so those two are keyed by module and class together; every
+    #: other name is unique in the repository and stays bare.
     PRESET_NAMES: Dict[str, Tuple[str, ...]] = {
         "GenericBoilerConfig": (
             "condensing_gas",
@@ -171,7 +192,50 @@ class PilotWireFormat:
         "HeatingMeterConfig": ("standard",),
         "SimpleDHWStorageConfig": ("standard",),
         "SimpleHotWaterStorageConfig": ("buffer",),
+        "MoreAdvancedHeatPumpHPLibConfig": ("air_water",),
+        "ElectricHeatingConfig": ("resistive",),
+        "DistrictHeatingConfig": ("standard",),
+        "GenericHeatPumpConfig": ("vitocal_300_a",),
+        "GenericHeatPumpControllerConfig": ("standard",),
+        "ElectricHeatingControllerConfig": ("standard",),
+        "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig": ("standard",),
+        "MoreAdvancedHeatPumpHPLibControllerDHWConfig": ("standard",),
+        "DistrictHeatingControllerConfig": ("standard",),
+        "AirConditionerConfig": ("samsung_ac120",),
+        "AirConditionerControllerConfig": ("standard",),
+        "SimpleAirConditionerConfig": ("standard",),
+        "SimpleAirConditionerControllerConfig": ("standard",),
+        "SolarThermalSystemConfig": ("flat_plate",),
+        "SolarThermalSystemControllerConfig": ("standard",),
+        "NightSetbackConfig": ("standard",),
+        "generic_chp.CHPConfig": ("gas", "hydrogen"),
+        "advanced_fuel_cell.CHPConfig": ("hydrogen",),
+        "L1CHPControllerConfig": ("gas", "hydrogen", "gas_with_buffer", "hydrogen_with_buffer"),
+        "IdealizedHeaterConfig": ("standard",),
+        "SimpleHeatSourceConfig": (
+            "constant_thermal_power",
+            "constant_temperature",
+            "near_surface_brine",
+        ),
+        "SumBuilderConfig": ("standard",),
+        "TransformerConfig": ("standard",),
         "CarConfig": (),
+        "CarBatteryConfig": ("standard",),
+        "CSVLoaderConfig": (),
+        "ChargingStationConfig": (),
+        "ElectrolyzerConfig": ("alkaline",),
+        "ElectrolyzerControllerConfig": ("standard",),
+        "PTXControllerConfig": (),
+        "XTPControllerConfig": ("standard",),
+        "FuelCellConfig": ("pem",),
+        "FuelCellControllerConfig": ("pem",),
+        "ElectrolyzerWithStorageConfig": ("standard",),
+        "ElectrolyzerWithHydrogenStorageConfig": ("standard",),
+        "ExampleComponentConfig": ("standard",),
+        "ComponentNameConfig": ("standard",),
+        "ExampleTransformerConfig": ("standard",),
+        "SimpleStorageConfig": ("thermal",),
+        "SimpleControllerConfig": ("standard",),
     }
 
     #: Config class name → its named constructors, in declaration order. A constructor's
@@ -194,16 +258,64 @@ class PilotWireFormat:
         "HeatingMeterConfig": (),
         "SimpleDHWStorageConfig": (),
         "SimpleHotWaterStorageConfig": (),
+        "MoreAdvancedHeatPumpHPLibConfig": (),
+        "ElectricHeatingConfig": (),
+        "DistrictHeatingConfig": (),
+        "GenericHeatPumpConfig": ("for_device",),
+        "GenericHeatPumpControllerConfig": (),
+        "ElectricHeatingControllerConfig": (),
+        "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig": (),
+        "MoreAdvancedHeatPumpHPLibControllerDHWConfig": (),
+        "DistrictHeatingControllerConfig": (),
+        "AirConditionerConfig": ("for_device", "for_building_load"),
+        "AirConditionerControllerConfig": (),
+        "SimpleAirConditionerConfig": (),
+        "SimpleAirConditionerControllerConfig": (),
+        "SolarThermalSystemConfig": (),
+        "SolarThermalSystemControllerConfig": (),
+        "NightSetbackConfig": (),
+        "generic_chp.CHPConfig": (),
+        "advanced_fuel_cell.CHPConfig": (),
+        "L1CHPControllerConfig": (),
+        "IdealizedHeaterConfig": (),
+        "SimpleHeatSourceConfig": (),
+        "SumBuilderConfig": (),
+        "TransformerConfig": (),
         "CarConfig": ("for_household",),
+        "CarBatteryConfig": (),
+        "CSVLoaderConfig": ("for_csv_file",),
+        "ChargingStationConfig": ("for_charging_station_set",),
+        "ElectrolyzerConfig": ("for_device",),
+        "ElectrolyzerControllerConfig": ("for_device",),
+        "PTXControllerConfig": ("for_device",),
+        "XTPControllerConfig": (),
+        "FuelCellConfig": (),
+        "FuelCellControllerConfig": (),
+        "ElectrolyzerWithStorageConfig": (),
+        "ElectrolyzerWithHydrogenStorageConfig": (),
+        "ExampleComponentConfig": (),
+        "ComponentNameConfig": (),
+        "ExampleTransformerConfig": (),
+        "SimpleStorageConfig": (),
+        "SimpleControllerConfig": (),
     }
 
     #: The scanned classes that legitimately ship no preset at all. Zero presets is a legal
     #: state and this tuple is where that decision is recorded rather than discovered.
-    #: ``CarConfig`` is the first and so far only one: a preset takes nothing but the instance
-    #: name, and a car cannot be configured without naming the household and the car whose
-    #: LoadProfileGenerator driving profile it drives by, so every one of its builders has to
-    #: be a constructor (D-23, 2026-08-31).
-    CLASSES_WITHOUT_PRESETS: Tuple[str, ...] = ("CarConfig",)
+    #: ``CarConfig`` was the first: a preset takes nothing but the instance name, and a car
+    #: cannot be configured without naming the household and the car whose LoadProfileGenerator
+    #: driving profile it drives by, so every one of its builders has to be a constructor
+    #: (D-23, 2026-08-31). ``CSVLoaderConfig`` has no default profile — every field of it is a
+    #: parameter of the file it reads — and ``ChargingStationConfig`` no default station, the
+    #: rating in a station set's name being its identity (D-24, 2026-09-11).
+    #: ``PTXControllerConfig`` joined them in B7: all four of its loads come out of one row of
+    #: the electrolyzer manufacturer table, so there is no default plant to name.
+    CLASSES_WITHOUT_PRESETS: Tuple[str, ...] = (
+        "CSVLoaderConfig",
+        "CarConfig",
+        "ChargingStationConfig",
+        "PTXControllerConfig",
+    )
 
     #: Config class name → the facts it contributes, in declaration order.
     FACT_NAMES: Dict[str, Tuple[str, ...]] = {
@@ -224,21 +336,61 @@ class PilotWireFormat:
             "number_of_apartments",
             "conditioned_floor_area_in_m2",
             "roof_area_in_m2",
-            "heating_reference_temperature_in_celsius",
             "set_heating_temperature_in_celsius",
             "set_cooling_temperature_in_celsius",
         ),
         "PVSystemConfig": ("pv_peak_power_in_watt",),
+        "MoreAdvancedHeatPumpHPLibConfig": ("maximal_thermal_power_in_watt",),
+        "ElectricHeatingConfig": ("maximal_thermal_power_in_watt",),
+        "DistrictHeatingConfig": (
+            "maximal_thermal_power_in_watt",
+            "energy_carrier",
+            "heating_value_of_fuel_in_kwh_per_liter",
+            "fuel_density_in_kg_per_m3",
+        ),
         "BatteryConfig": (),
         "GasMeterConfig": (),
         "FuelMeterConfig": (),
         "HeatingMeterConfig": (),
         "SimpleDHWStorageConfig": (),
         "SimpleHotWaterStorageConfig": (),
-        "WeatherConfig": ("weather_identity",),
+        "WeatherConfig": ("weather_identity", "heating_reference_temperature_in_celsius"),
         "UtspLpgConnectorConfig": ("occupancy_identity",),
         "ElectricityMeterConfig": (),
         "GenericBoilerControllerConfig": (),
+        "GenericHeatPumpConfig": (),
+        "GenericHeatPumpControllerConfig": (),
+        "ElectricHeatingControllerConfig": (),
+        "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig": (),
+        "MoreAdvancedHeatPumpHPLibControllerDHWConfig": (),
+        "DistrictHeatingControllerConfig": (),
+        "AirConditionerConfig": (),
+        "AirConditionerControllerConfig": (),
+        "SimpleAirConditionerConfig": (),
+        "SimpleAirConditionerControllerConfig": (),
+        "SolarThermalSystemConfig": (),
+        "SolarThermalSystemControllerConfig": (),
+        "NightSetbackConfig": (),
+        "generic_chp.CHPConfig": (),
+        "advanced_fuel_cell.CHPConfig": (),
+        "L1CHPControllerConfig": (),
+        "IdealizedHeaterConfig": (),
+        "SimpleHeatSourceConfig": (),
+        "SumBuilderConfig": (),
+        "TransformerConfig": (),
+        "ElectrolyzerConfig": (),
+        "ElectrolyzerControllerConfig": (),
+        "PTXControllerConfig": (),
+        "XTPControllerConfig": (),
+        "FuelCellConfig": (),
+        "FuelCellControllerConfig": (),
+        "ElectrolyzerWithStorageConfig": (),
+        "ElectrolyzerWithHydrogenStorageConfig": (),
+        "ExampleComponentConfig": (),
+        "ComponentNameConfig": (),
+        "ExampleTransformerConfig": (),
+        "SimpleStorageConfig": (),
+        "SimpleControllerConfig": (),
     }
 
 
@@ -322,27 +474,36 @@ def test_no_two_classes_declare_the_same_fact_unless_they_are_interchangeable(sc
 
 @pytest.mark.base
 def test_the_batch_one_facts_have_exactly_the_provider_they_were_added_for(scan):
-    """Each fact R2.1 added is declared by one class, and by that class.
+    """Each fact R2.1 added is declared by the generator it was added for, and by no one else.
 
     Failure mode caught: a fact landing on the wrong config — the roof area on the PV rather
     than on the building, say — which binds silently today (nothing reads it yet) and becomes
     a wrong number or an ambiguity only once the batch that reads it lands.
+
+    The three fuel facts name two classes because a house's heat comes from one generator and
+    the meter accounts whatever that generator delivers: a burnt fuel from the boiler, or heat
+    off a network from the district-heating connection, which has no fuel and says so.
+
+    ``heating_reference_temperature_in_celsius`` is here for the same reason although it predates
+    the batch: D-21 moved it from the building to the weather, so which class declares it is the
+    one thing about it that could silently go wrong, and three components read it.
     """
     expected = {
-        "set_heating_threshold_outside_temperature_in_celsius": "HeatDistributionControllerConfig",
-        "roof_area_in_m2": "BuildingConfig",
-        "pv_peak_power_in_watt": "PVSystemConfig",
-        "energy_carrier": "GenericBoilerConfig",
-        "heating_value_of_fuel_in_kwh_per_liter": "GenericBoilerConfig",
-        "fuel_density_in_kg_per_m3": "GenericBoilerConfig",
+        "set_heating_threshold_outside_temperature_in_celsius": {"HeatDistributionControllerConfig"},
+        "heating_reference_temperature_in_celsius": {"WeatherConfig"},
+        "roof_area_in_m2": {"BuildingConfig"},
+        "pv_peak_power_in_watt": {"PVSystemConfig"},
+        "energy_carrier": {"GenericBoilerConfig", "DistrictHeatingConfig"},
+        "heating_value_of_fuel_in_kwh_per_liter": {"GenericBoilerConfig", "DistrictHeatingConfig"},
+        "fuel_density_in_kg_per_m3": {"GenericBoilerConfig", "DistrictHeatingConfig"},
     }
     declarers: Dict[str, Set[str]] = {}
     for config_class in scan[0]:
         for contribution in getattr(config_class, FactContribution.CLASS_ATTRIBUTE, ()):
             for fact in contribution.facts:
                 declarers.setdefault(fact, set()).add(config_class.__name__)
-    for fact, provider in expected.items():
-        assert declarers.get(fact) == {provider}, f"'{fact}' is declared by {sorted(declarers.get(fact) or ())}"
+    for fact, providers in expected.items():
+        assert declarers.get(fact) == providers, f"'{fact}' is declared by {sorted(declarers.get(fact) or ())}"
 
 
 @pytest.mark.base
@@ -436,6 +597,10 @@ def test_every_preset_wire_name_follows_the_naming_convention(scan):
     scenario file, where it becomes a permanent spelling nobody may change; a number baked
     into a name that belongs in a field; or ``standard`` surviving next to a real second
     variant, where it stops saying anything about the configuration it names.
+
+    A preset named after a real catalogue device spells that device's designation and so may
+    carry digits a rating suffix cannot; each such name is listed in
+    :attr:`ComponentConfigScan.CATALOGUE_DEVICE_PRESETS` rather than loosening the rule.
     """
     offenders: List[str] = []
     for config_class in scan[0]:
@@ -443,7 +608,10 @@ def test_every_preset_wire_name_follows_the_naming_convention(scan):
         for name in names:
             if not ComponentConfigScan.SNAKE_CASE.match(name):
                 offenders.append(f"{config_class.__name__}.preset_{name} is not snake_case")
-            elif not ComponentConfigScan.RATING_SUFFIX.match(name):
+            elif (
+                not ComponentConfigScan.RATING_SUFFIX.match(name)
+                and f"{config_class.__name__}.{name}" not in ComponentConfigScan.CATALOGUE_DEVICE_PRESETS
+            ):
                 offenders.append(f"{config_class.__name__}.preset_{name} has digits outside a rating suffix")
         standard = ComponentConfigScan.STANDARD_NAME
         siblings = [name for name in names if name != standard]
@@ -508,14 +676,63 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     from hisim.components.heating_meter import HeatingMeterConfig
     from hisim.components.generic_boiler import GenericBoilerConfig, GenericBoilerControllerConfig
     from hisim.components.generic_car import CarConfig
+    from hisim.components.generic_district_heating import (
+        DistrictHeatingConfig,
+        DistrictHeatingControllerConfig,
+    )
+    from hisim.components.generic_electric_heating import (
+        ElectricHeatingConfig,
+        ElectricHeatingControllerConfig,
+    )
+    from hisim.components.air_conditioner import AirConditionerConfig, AirConditionerControllerConfig
+    from hisim.components.generic_heat_pump import GenericHeatPumpConfig, GenericHeatPumpControllerConfig
+    from hisim.components.simple_air_conditioner import (
+        SimpleAirConditionerConfig,
+        SimpleAirConditionerControllerConfig,
+    )
     from hisim.components.heat_distribution_system import (
         HeatDistributionConfig,
         HeatDistributionControllerConfig,
     )
     from hisim.components.generic_pv_system import PVSystemConfig
     from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnectorConfig
+    from hisim.components.idealized_electric_heater import IdealizedHeaterConfig
+    from hisim.components.more_advanced_heat_pump_hplib import (
+        MoreAdvancedHeatPumpHPLibConfig,
+        MoreAdvancedHeatPumpHPLibControllerDHWConfig,
+        MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig,
+    )
+    from hisim.components.simple_heat_source import SimpleHeatSourceConfig
+    from hisim.components.sumbuilder import SumBuilderConfig
+    from hisim.components.transformer_rectifier import TransformerConfig
+    from hisim.components.advanced_fuel_cell import CHPConfig as FuelCellCHPConfig
+    from hisim.components.generic_chp.chp import CHPConfig as GenericCHPConfig
+    from hisim.components.generic_chp.controller import L1CHPControllerConfig
     from hisim.components.simple_water_storage import SimpleDHWStorageConfig, SimpleHotWaterStorageConfig
+    from hisim.components.night_setback_controller import NightSetbackConfig
+    from hisim.components.solar_thermal_system import (
+        SolarThermalSystemConfig,
+        SolarThermalSystemControllerConfig,
+    )
     from hisim.components.weather import WeatherConfig
+    from hisim.components.advanced_ev_battery_bslib import CarBatteryConfig
+    from hisim.components.controller_l1_generic_ev_charge import ChargingStationConfig
+    from hisim.components.csvloader import CSVLoaderConfig
+    from hisim.components.controller_l1_electrolyzer_h2 import ElectrolyzerControllerConfig
+    from hisim.components.controller_l1_fuel_cell import FuelCellControllerConfig
+    from hisim.components.controller_l2_ptx_energy_management_system import PTXControllerConfig
+    from hisim.components.controller_l2_xtp_fuel_cell_ems import XTPControllerConfig
+    from hisim.components.generic_electrolyzer_and_h2_storage import (
+        ElectrolyzerWithHydrogenStorageConfig,
+        ElectrolyzerWithStorageConfig,
+    )
+    from hisim.components.generic_electrolyzer_h2 import ElectrolyzerConfig
+    from hisim.components.generic_fuel_cell import FuelCellConfig
+    from hisim.components.controller_l1_example_controller import SimpleControllerConfig
+    from hisim.components.example_component import ExampleComponentConfig
+    from hisim.components.example_storage import SimpleStorageConfig
+    from hisim.components.example_template import ComponentNameConfig
+    from hisim.components.example_transformer import ExampleTransformerConfig
 
     by_name: Dict[str, Any] = {
         "GenericBoilerConfig": GenericBoilerConfig,
@@ -534,7 +751,48 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "HeatingMeterConfig": HeatingMeterConfig,
         "SimpleDHWStorageConfig": SimpleDHWStorageConfig,
         "SimpleHotWaterStorageConfig": SimpleHotWaterStorageConfig,
+        "MoreAdvancedHeatPumpHPLibConfig": MoreAdvancedHeatPumpHPLibConfig,
+        "ElectricHeatingConfig": ElectricHeatingConfig,
+        "DistrictHeatingConfig": DistrictHeatingConfig,
+        "GenericHeatPumpConfig": GenericHeatPumpConfig,
+        "GenericHeatPumpControllerConfig": GenericHeatPumpControllerConfig,
+        "ElectricHeatingControllerConfig": ElectricHeatingControllerConfig,
+        "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig": (
+            MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig
+        ),
+        "MoreAdvancedHeatPumpHPLibControllerDHWConfig": MoreAdvancedHeatPumpHPLibControllerDHWConfig,
+        "DistrictHeatingControllerConfig": DistrictHeatingControllerConfig,
+        "AirConditionerConfig": AirConditionerConfig,
+        "AirConditionerControllerConfig": AirConditionerControllerConfig,
+        "SimpleAirConditionerConfig": SimpleAirConditionerConfig,
+        "SimpleAirConditionerControllerConfig": SimpleAirConditionerControllerConfig,
+        "SolarThermalSystemConfig": SolarThermalSystemConfig,
+        "SolarThermalSystemControllerConfig": SolarThermalSystemControllerConfig,
+        "NightSetbackConfig": NightSetbackConfig,
+        "generic_chp.CHPConfig": GenericCHPConfig,
+        "advanced_fuel_cell.CHPConfig": FuelCellCHPConfig,
+        "L1CHPControllerConfig": L1CHPControllerConfig,
+        "IdealizedHeaterConfig": IdealizedHeaterConfig,
+        "SimpleHeatSourceConfig": SimpleHeatSourceConfig,
+        "SumBuilderConfig": SumBuilderConfig,
+        "TransformerConfig": TransformerConfig,
         "CarConfig": CarConfig,
+        "CarBatteryConfig": CarBatteryConfig,
+        "CSVLoaderConfig": CSVLoaderConfig,
+        "ChargingStationConfig": ChargingStationConfig,
+        "ElectrolyzerConfig": ElectrolyzerConfig,
+        "ElectrolyzerControllerConfig": ElectrolyzerControllerConfig,
+        "PTXControllerConfig": PTXControllerConfig,
+        "XTPControllerConfig": XTPControllerConfig,
+        "FuelCellConfig": FuelCellConfig,
+        "FuelCellControllerConfig": FuelCellControllerConfig,
+        "ElectrolyzerWithStorageConfig": ElectrolyzerWithStorageConfig,
+        "ElectrolyzerWithHydrogenStorageConfig": ElectrolyzerWithHydrogenStorageConfig,
+        "ExampleComponentConfig": ExampleComponentConfig,
+        "ComponentNameConfig": ComponentNameConfig,
+        "ExampleTransformerConfig": ExampleTransformerConfig,
+        "SimpleStorageConfig": SimpleStorageConfig,
+        "SimpleControllerConfig": SimpleControllerConfig,
     }
     for class_name, expected in PilotWireFormat.PRESET_NAMES.items():
         assert tuple(presets_of(by_name[class_name])) == expected

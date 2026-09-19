@@ -30,8 +30,6 @@ context, post-processing option — and starts the run. That separation is the p
 setup stays untouched and the cost module is shown to be purely additive on top of it.
 """
 
-# clean
-
 import sys
 import time
 from pathlib import Path

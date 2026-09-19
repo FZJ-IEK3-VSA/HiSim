@@ -13,8 +13,6 @@ These tests pin both halves -- that the exact parser is exact, and that every ca
 it -- because the argument is easy to leave out of the next one and nothing else would notice.
 """
 
-# clean
-
 import io
 import pathlib
 from typing import Tuple

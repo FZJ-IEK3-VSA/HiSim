@@ -5,7 +5,6 @@ running totals in GasMeterState, and supplies OPEX/CAPEX and KPI data for the
 post-processing cost and emission computation.
 """
 
-# clean
 from dataclasses import dataclass
 from typing import ClassVar, List, Optional, Tuple
 
@@ -59,32 +58,29 @@ class GasMeterConfig(ConfigBase):
     generator in it does.
     """
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the base class."""
-        return str(GasMeter.get_full_classname())
+    MAIN_CLASS = "hisim.components.gas_meter.GasMeter"
 
     #: Sizing law of ``gas_loadtype``: the carrier is copied from the generator that feeds
-    #: this meter, which contributes it as the ``energy_carrier`` fact (D-15 (b)). Named as a
+    #: this meter, which contributes it as the ``energy_carrier`` fact. Named as a
     #: ClassVar so the field declaration reads as one line. A gas boiler beside a meter
     #: configured for green hydrogen is what the copy makes unstateable; the meter's own
     #: ``__init__`` still refuses a carrier it cannot account.
     CARRIER_LAW: ClassVar[SizingLaw] = Size.ENERGY_CARRIER
 
     component_id: ComponentID
-    #: CO2 footprint of investment in kg
-    device_co2_footprint_in_kg: Optional[float]
+    #: CO2 footprint of investment in kg. ``None`` lets postprocessing look the device up in
+    #: the cost database, which is what every meter in the repository does.
+    device_co2_footprint_in_kg: Optional[float] = None
     #: cost for investment in Euro
-    investment_costs_in_euro: Optional[float]
+    investment_costs_in_euro: Optional[float] = None
     #: lifetime in years
-    lifetime_in_years: Optional[float]
+    lifetime_in_years: Optional[float] = None
     # maintenance cost in euro per year
-    maintenance_costs_in_euro_per_year: Optional[float]
+    maintenance_costs_in_euro_per_year: Optional[float] = None
     # subsidies as percentage of investment costs
-    subsidy_as_percentage_of_investment_costs: Optional[float]
+    subsidy_as_percentage_of_investment_costs: Optional[float] = None
     #: The gas this meter measures. Sizable: left ``AUTO`` it is copied from the generator by
-    #: :data:`CARRIER_LAW`. It is declared after the capex fields because a field with a
-    #: default may not precede one without; nothing constructs the class positionally.
+    #: :data:`CARRIER_LAW`.
     gas_loadtype: Sizable[lt.LoadTypes] = sized_field(rule=CARRIER_LAW, value_type=lt.LoadTypes)
 
     @preset
@@ -92,12 +88,11 @@ class GasMeterConfig(ConfigBase):
     def preset_standard(cls, name: str) -> "GasMeterConfig":
         """The gas meter of a household, measuring whatever its generator burns.
 
-        The only preset the class has. It fixes nothing but the capex fields, which stay
-        ``None`` so that post-processing looks the device up in the cost database, exactly as
-        the deleted ``get_gas_meter_default_config`` factory did. ``gas_loadtype`` stays
-        ``AUTO`` so :data:`CARRIER_LAW` copies it from the generator; there are deliberately no
-        ``gas``/``hydrogen`` presets pinning a carrier, because a preset that pins one is a
-        second place to state a fact the generator already states (D-15 (b)).
+        The only preset the class has, and it fixes nothing: the capex fields keep their
+        ``None`` defaults, so post-processing looks the device up in the cost database, and
+        ``gas_loadtype`` stays ``AUTO`` so :data:`CARRIER_LAW` copies it from the generator.
+        There are deliberately no ``gas``/``hydrogen`` presets pinning a carrier, because a
+        preset that pins one is a second place to state a fact the generator already states.
 
         Args:
             name: The instance name, which becomes the configuration's component identity.
@@ -105,15 +100,7 @@ class GasMeterConfig(ConfigBase):
         Returns:
             GasMeterConfig: The preset configuration, with the carrier unsized.
         """
-        return cls(
-            component_id=ComponentID(name=name),
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-        )
+        return cls(component_id=ComponentID(name=name))
 
 
 class GasMeter(DynamicComponent):

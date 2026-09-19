@@ -1,6 +1,5 @@
 """ Contains functions to sum up multiple inputs. """
 
-# clean
 from dataclasses import dataclass
 from typing import Any, ClassVar, List
 
@@ -9,7 +8,7 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.component import Component
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.simulationparameters import SimulationParameters
 from hisim.economics.facts import CostRelevance
 
@@ -17,33 +16,43 @@ from hisim.economics.facts import CostRelevance
 @dataclass_json
 @dataclass
 class SumBuilderConfig(ConfigBase):
-    """Configuration dataclass for sum-builder components.
+    """Configuration of a sum builder: the quantity it adds up, and the unit that quantity is in.
 
-    ``loadtype`` and ``unit`` define the physical quantity and its unit for
-    every input and the single output of the sum-builder.  Because the unit is
-    chosen at runtime (default ``lt.Units.ANY``), the local variables inside
-    ``i_simulate`` (``val1_in_config_unit``, ``val2_in_config_unit``,
-    ``val3_in_config_unit``, ``total_in_config_unit``) use the
-    ``_in_config_unit`` suffix to document that they carry values in ``unit``
-    rather than encoding a concrete unit.  ``config.unit`` is the
-    single source of truth for the unit of all values; the framework enforces
-    consistency between connected ``ComponentInput`` and ``ComponentOutput``
-    units during wiring (see ``ComponentWrapper.connect_inputs``).
+    The same configuration serves all three components of this module, each of which adds its
+    inputs and writes one output::
+
+        SumBuilderConfig.preset_standard("Sum")
+
+    builds an adder that neither states nor checks a quantity -- ``ANY`` over ``ANY`` -- which is
+    what the sum of two arbitrary series is. A sum of electrical power says so instead, by
+    overriding the two fields with ``ELECTRICITY`` and ``WATT``. Both fields reach every input and
+    the output alike, so that the framework refuses at wiring time to add a kilowatt to a degree:
+    a connected ``ComponentInput`` and ``ComponentOutput`` must agree on load type and unit (see
+    ``ComponentWrapper.connect_inputs``).
     """
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the base class."""
-        return SumBuilderForTwoInputs.get_full_classname()
+    MAIN_CLASS = "hisim.components.sumbuilder.SumBuilderForTwoInputs"
 
     component_id: ComponentID
-    loadtype: lt.LoadTypes
-    unit: lt.Units
+    #: Physical quantity every input and the output carry. ``ANY`` adds up whatever it is fed.
+    loadtype: lt.LoadTypes = lt.LoadTypes.ANY
+    #: Unit every input and the output are in. ``ANY`` adds up whatever it is fed.
+    unit: lt.Units = lt.Units.ANY
 
+    @preset
     @classmethod
-    def get_sumbuilder_default_config(cls) -> "SumBuilderConfig":
-        """Gets a default Sumbuilder."""
-        return SumBuilderConfig(component_id=ComponentID(name="Sum"), loadtype=lt.LoadTypes.ANY, unit=lt.Units.ANY)
+    def preset_standard(cls, name: str) -> "SumBuilderConfig":
+        """Adder of an unstated quantity: ``ANY`` over ``ANY``, the field defaults.
+
+        This is the sum builder of the example setups, which add two series of plain numbers.
+
+        Args:
+            name: Instance name of the sum builder in the simulation.
+
+        Returns:
+            The configuration, fully concrete -- the class has no sizable field.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class CalculateOperation(cp.Component):

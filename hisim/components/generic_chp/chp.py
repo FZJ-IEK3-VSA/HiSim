@@ -6,99 +6,111 @@ on or off. When it runs, it outputs a constant thermal and electrical power sign
 and needs a constant input of hydrogen or natural gas.
 """
 
-# clean
-
 from dataclasses import dataclass
-from typing import Optional, ClassVar, List
+from typing import ClassVar, List
 
 from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components.generic_chp import controller
 from hisim.simulationparameters import SimulationParameters
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import (
+    ComponentID,
+    ConfigBase,
+    DisplayConfig,
+    Self,
+    Sizable,
+    SizingLaw,
+    concrete,
+    preset,
+    sized_field,
+)
 from hisim.economics.facts import CostRelevance
 
 
 @dataclass_json
 @dataclass
 class CHPConfig(ConfigBase):
-    """Defininition of configuration of combined heat and power plant (CHP)."""
+    """Configuration of the non-modulating combined heat and power plant.
+
+    The machine is described by one number the author states -- the thermal power it
+    delivers while it runs -- and two that follow from it: the electricity it produces
+    beside that heat, and the fuel it burns to make both. The two follow because a CHP is
+    quoted by its overall efficiency and by the share of that output which is electrical,
+    so both derive from the thermal power by a fixed ratio once the machine's technology
+    is chosen. Which ratios apply is what the two presets differ in::
+
+        CHPConfig.preset_hydrogen("CHP").resolve(SizingContext())
+
+    builds a fuel cell of ``p_th`` thermal watt, ``(0.48 / 0.43) * p_th`` electrical watt
+    and ``(1 / 0.43) * p_th`` watt of hydrogen input, while ``preset_gas`` builds a
+    gas-driven turbine at the gas figures below. The two derived fields are sizable, so a
+    configuration has to be resolved before a component can be built from it -- an author
+    who pins a different ``p_th`` gets the electricity and the fuel recomputed from it
+    rather than left at the preset's numbers.
+    """
+
+    MAIN_CLASS = "hisim.components.generic_chp.chp.SimpleCHP"
+
+    #: Share of the fuel energy a gas-driven CHP delivers as heat and electricity together.
+    GAS_OVERALL_EFFICIENCY: ClassVar[float] = 0.5
+    #: Share of the fuel energy a gas-driven CHP delivers as electricity alone.
+    GAS_ELECTRICAL_SHARE: ClassVar[float] = 0.33
+    #: Share of the fuel energy a hydrogen fuel cell delivers as heat and electricity together.
+    HYDROGEN_OVERALL_EFFICIENCY: ClassVar[float] = 0.43
+    #: Share of the fuel energy a hydrogen fuel cell delivers as electricity alone.
+    HYDROGEN_ELECTRICAL_SHARE: ClassVar[float] = 0.48
+
+    #: Electrical power of a gas-driven CHP: the thermal power times the ratio of the two
+    #: gas efficiencies, which is what "0.33 of the fuel as electricity where 0.5 of it is
+    #: useful at all" comes to once the fuel input is eliminated.
+    GAS_ELECTRIC_POWER_LAW: ClassVar[SizingLaw] = Self("p_th") * (GAS_ELECTRICAL_SHARE / GAS_OVERALL_EFFICIENCY)
+    #: Fuel input of a gas-driven CHP: the thermal power divided by the overall efficiency.
+    GAS_FUEL_POWER_LAW: ClassVar[SizingLaw] = Self("p_th") * (1 / GAS_OVERALL_EFFICIENCY)
+    #: Electrical power of a hydrogen fuel cell, the hydrogen counterpart of the gas law above.
+    HYDROGEN_ELECTRIC_POWER_LAW: ClassVar[SizingLaw] = Self("p_th") * (
+        HYDROGEN_ELECTRICAL_SHARE / HYDROGEN_OVERALL_EFFICIENCY
+    )
+    #: Fuel input of a hydrogen fuel cell, the hydrogen counterpart of the gas law above.
+    HYDROGEN_FUEL_POWER_LAW: ClassVar[SizingLaw] = Self("p_th") * (1 / HYDROGEN_OVERALL_EFFICIENCY)
 
     component_id: ComponentID
-    #: priority of the component in hierachy: the higher the number the lower the priority
-    source_weight: int
-    #: type of CHP (fuel cell or gas driven)
+    #: Type of CHP: a gas-driven turbine or a hydrogen fuel cell. It decides the unit and the
+    #: load type of the fuel channel, so it is what a preset states rather than a default.
     fuel_type: lt.LoadTypes
-    #: electrical power of the CHP, when activated
-    p_el: float
-    #: thermal power of the CHP in Watt, when activated
-    p_th: float
-    #: demanded power of fuel input in Watt, when activated
-    p_fuel: float
+    #: Thermal power of the CHP in Watt, while it runs. Nominally 500 W, which is not a
+    #: catalogue rating but the only size anything in this repository runs the machine at;
+    #: an author who has a machine in mind states its rating instead, and the electrical
+    #: power and the fuel input follow from whatever is stated here.
+    p_th: float = 500.0
+    #: Priority of the component in the hierarchy: the higher the number, the lower the priority.
+    source_weight: int = 1
+    #: Electrical power of the CHP in Watt, while it runs, derived from the thermal power.
+    #: The field carries the gas law; :meth:`preset_hydrogen` replaces it with the hydrogen one.
+    p_el: Sizable[float] = sized_field(rule=GAS_ELECTRIC_POWER_LAW)
+    #: Demanded power of the fuel input in Watt, while it runs, derived from the thermal power.
+    #: The field carries the gas law; :meth:`preset_hydrogen` replaces it with the hydrogen one.
+    p_fuel: Sizable[float] = sized_field(rule=GAS_FUEL_POWER_LAW)
 
-    @staticmethod
-    def get_default_config_chp(
-        thermal_power: float,
-        component_id: Optional[ComponentID] = None,
-    ) -> "CHPConfig":
-        """Build a default gas-driven CHP configuration from a rated thermal power.
-
-        Assumes an overall efficiency of 0.5 and an electrical-to-thermal split of
-        0.33 to 0.5, so the electrical output is `(0.33 / 0.5) * thermal_power` and
-        the fuel input is `(1 / 0.5) * thermal_power`.
-
-        Args:
-            thermal_power: Rated thermal output of the CHP in Watt when running.
-            component_id: Structured identity (name, building, unit) of the CHP.
-
-        Returns:
-            A `CHPConfig` configured for a natural-gas CHP with the given thermal
-            power.
-        """
-        if component_id is None:
-            component_id = ComponentID(name="CHP")
-        config = CHPConfig(
-            component_id=component_id,
-            source_weight=1,
+    @preset
+    @classmethod
+    def preset_gas(cls, name: str) -> "CHPConfig":
+        """Natural-gas driven CHP, half of whose fuel is useful and a third of it electricity."""
+        return cls(
+            component_id=ComponentID(name=name),
             fuel_type=lt.LoadTypes.GAS,
-            p_el=(0.33 / 0.5) * thermal_power,
-            p_th=thermal_power,
-            p_fuel=(1 / 0.5) * thermal_power,
         )
-        return config
 
-    @staticmethod
-    def get_default_config_fuelcell(
-        thermal_power: float,
-        component_id: Optional[ComponentID] = None,
-    ) -> "CHPConfig":
-        """Build a default green-hydrogen fuel-cell configuration from a rated thermal power.
-
-        Assumes an overall efficiency of 0.43 and an electrical-to-thermal split of
-        0.48 to 0.43, so the electrical output is `(0.48 / 0.43) * thermal_power`
-        and the fuel input is `(1 / 0.43) * thermal_power`.
-
-        Args:
-            thermal_power: Rated thermal output of the fuel cell in Watt when
-                running.
-            component_id: Structured identity (name, building, unit) of the fuel cell.
-
-        Returns:
-            A `CHPConfig` configured for a green-hydrogen fuel cell with the given
-            thermal power.
-        """
-        if component_id is None:
-            component_id = ComponentID(name="CHP")
-        config = CHPConfig(
-            component_id=component_id,
-            source_weight=1,
+    @preset
+    @classmethod
+    def preset_hydrogen(cls, name: str) -> "CHPConfig":
+        """Green-hydrogen fuel cell, whose electrical share is the larger half of its output."""
+        return cls(
+            component_id=ComponentID(name=name),
             fuel_type=lt.LoadTypes.GREEN_HYDROGEN,
-            p_el=(0.48 / 0.43) * thermal_power,
-            p_th=thermal_power,
-            p_fuel=(1 / 0.43) * thermal_power,
+            p_el=cls.HYDROGEN_ELECTRIC_POWER_LAW,
+            p_fuel=cls.HYDROGEN_FUEL_POWER_LAW,
         )
-        return config
 
 
 class GenericCHPState:
@@ -148,10 +160,11 @@ class SimpleCHP(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
+        fuel_power_in_watt = concrete(config.p_fuel)
         if self.config.fuel_type == lt.LoadTypes.GREEN_HYDROGEN:
-            self.p_fuel: float = config.p_fuel / (3.6e3 * 3.939e4)  # converted to kg / s
+            self.p_fuel: float = fuel_power_in_watt / (3.6e3 * 3.939e4)  # converted to kg / s
         else:
-            self.p_fuel = config.p_fuel * my_simulation_parameters.seconds_per_timestep / 3.6e3  # converted to Wh
+            self.p_fuel = fuel_power_in_watt * my_simulation_parameters.seconds_per_timestep / 3.6e3  # to Wh
 
         self.state: GenericCHPState = GenericCHPState(state=0)
         self.previous_state: GenericCHPState = self.state.clone()
@@ -260,7 +273,7 @@ class SimpleCHP(cp.Component):
                 self.state.state * self.config.p_th,
             )
 
-        stsv.set_output_value(self.electricity_output_channel, self.state.state * self.config.p_el)
+        stsv.set_output_value(self.electricity_output_channel, self.state.state * concrete(self.config.p_el))
         stsv.set_output_value(self.fuel_consumption_channel, self.state.state * self.p_fuel)
 
     def get_default_connections_from_chp_controller(

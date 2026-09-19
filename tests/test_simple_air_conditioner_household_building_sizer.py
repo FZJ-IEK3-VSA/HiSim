@@ -15,8 +15,6 @@ Covers three concerns:
     components and the same one manual connection.
 """
 
-# clean
-
 import json
 import os
 from pathlib import Path
@@ -28,9 +26,12 @@ import yaml
 from hisim import component as cp
 from hisim.components import building
 from hisim.components import weather
+from hisim.config import SizingContext
 from hisim.components.simple_air_conditioner import (
     SimpleAirConditioner,
+    SimpleAirConditionerConfig,
     SimpleAirConditionerController,
+    SimpleAirConditionerControllerConfig,
 )
 from hisim import hisim_main
 from hisim import utils
@@ -78,6 +79,15 @@ def test_building_simulates_without_occupancy_connections() -> None:
     # Building — default German single-family home, no occupancy component
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field (D-21), so it is resolved before the component is built.
+    my_building_config = my_building_config.resolve(
+        SizingContext(
+            heating_reference_temperature_in_celsius=(
+                my_weather_config.heating_reference_temperature_in_celsius
+            )
+        )
+    )
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -247,16 +257,22 @@ def test_recorded_twin_structure() -> None:
     assert components["Building"]["preset"] == "german_single_family_home"
     assert components["Building"]["config"]["number_of_apartments"] == 1.0
 
-    # SimpleAirConditioner config sanity
-    ac_config = components["SimpleAirConditioner"]["config"]
-    assert ac_config["nominal_cooling_power_w"] == 2000.0
-    assert ac_config["eta_carnot"] == 0.3
-    assert ac_config["temperature_epsilon_k"] == 0.01
+    # SimpleAirConditioner config sanity: the preset states all three numbers, so the twin
+    # carries the preset name and no override at all.
+    assert components["SimpleAirConditioner"]["preset"] == "standard"
+    assert "config" not in components["SimpleAirConditioner"]
+    built = SimpleAirConditionerConfig.preset_standard("SimpleAirConditioner")
+    assert built.nominal_cooling_power_w == 2000.0
+    assert built.eta_carnot == 0.3
+    assert built.temperature_epsilon_k == 0.01
 
-    # Controller config sanity
-    ctrl_config = components["SimpleAirConditionerController"]["config"]
-    assert ctrl_config["setpoint_temperature_c"] == 24.0
-    assert ctrl_config["deadband_k"] == 0.5
+    # Controller config sanity: its preset states both numbers too, so the twin carries the
+    # preset name and no override, exactly as the machine's block does.
+    assert components["SimpleAirConditionerController"]["preset"] == "standard"
+    assert "config" not in components["SimpleAirConditionerController"]
+    built_controller = SimpleAirConditionerControllerConfig.preset_standard("SimpleAirConditionerController")
+    assert built_controller.setpoint_temperature_c == 24.0
+    assert built_controller.deadband_k == 0.5
 
 
 class UndefinedForThisHousehold:

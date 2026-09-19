@@ -1,5 +1,4 @@
 """Generic helper functions shared across tests."""
-# clean
 from typing import Optional, Protocol
 
 from hisim.result_path_provider import ResultPathProviderSingleton, RunMode, detect_test_name

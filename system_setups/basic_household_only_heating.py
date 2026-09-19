@@ -1,6 +1,5 @@
 """Shows a single household with only heating."""
 
-# clean
 from typing import Optional, Any
 from hisim.simulator import SimulationParameters
 from hisim.config import SizingContext, concrete
@@ -68,6 +67,15 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
     my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field, so it is resolved before the component is built.
+    my_building_config = my_building_config.resolve(
+        SizingContext(
+            heating_reference_temperature_in_celsius=(
+                my_weather_config.heating_reference_temperature_in_celsius
+            )
+        )
+    )
     my_building = building.Building(
         config=my_building_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -87,11 +95,12 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     # Build Heat Distribution. Every fact the controller sizes from is the building's own, so that
-    # the context here says exactly what the building contributes. The design outside temperature is
-    # the one number this setup does not take from the building: it has always run its heating curve
-    # against -12.2 °C while the building itself is the default -7.0 °C, and that is an assignment on
-    # top of the sized configuration rather than a different fact, so a recorded twin writes it as
-    # the override it is instead of claiming a law produced it.
+    # the context here says exactly what the building contributes -- except the design outside
+    # temperature, which the weather owns and the building itself reads (D-21). That is also the one
+    # number this setup does not take from the fact: it has always run its heating curve against
+    # -12.2 °C while the place is stated at -7.0 °C, and that is an assignment on top of the sized
+    # configuration rather than a different fact, so a recorded twin writes it as the override it is
+    # instead of claiming a law produced it.
     my_heat_distribution_controller_config = (
         heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
             "HeatDistributionController"
@@ -100,7 +109,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
                 heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
                 conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                 heating_reference_temperature_in_celsius=(
-                    my_building_config.heating_reference_temperature_in_celsius
+                    my_weather_config.heating_reference_temperature_in_celsius
                 ),
                 set_heating_temperature_in_celsius=(
                     my_building_information.set_heating_temperature_for_building_in_celsius

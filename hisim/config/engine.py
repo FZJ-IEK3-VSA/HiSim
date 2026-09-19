@@ -30,13 +30,11 @@ also recorded in a :class:`~hisim.config.report.ResolutionReport`, readable as
 ``engine.report`` after a run.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Union
+from typing import Any, ClassVar, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 from hisim import log
 from hisim.config import sizing
@@ -61,13 +59,16 @@ class _Node:
 
     ``needed_facts`` pairs every fact the config's pending laws read with the cardinality
     they read it at, because the binding rule treats a one-read and a many-read
-    differently. ``contribution_reads`` are the facts the config needs to *compute* its
-    own contributions, a readiness condition separate from being sizable.
+    differently. ``nullable_facts`` are those of them that only optional fields read, for
+    which a provider's ``None`` is an answer rather than a refusal. ``contribution_reads``
+    are the facts the config needs to *compute* its own contributions, a readiness
+    condition separate from being sizable.
     """
 
     name: str
     config: Any
     needed_facts: Tuple[Tuple[str, Cardinality], ...]
+    nullable_facts: FrozenSet[str]
     contribution_reads: Tuple[str, ...]
     contributions: Tuple[FactContribution, ...]
     resolved: bool = False
@@ -146,6 +147,35 @@ class SizingFactEngine:
         return tuple(dict.fromkeys(needed))
 
     @staticmethod
+    def _nullable_facts(config: Any) -> FrozenSet[str]:
+        """Names the facts this config may legitimately read as ``None``.
+
+        A fact is nullable for a consumer when every unresolved field reading it is an
+        optional sized field: ``None`` then means "there is none of this" -- district heat
+        burns nothing, so it has no heating value -- and the field resolves to ``None``.
+        A fact that any non-optional field also reads stays a refusal, since that field
+        would have nothing to compute from.
+
+        Args:
+            config: The configuration whose unresolved fields are inspected.
+
+        Returns:
+            The facts a null value is an answer to, empty for a config with no optional field.
+        """
+        laws = sizing.sizable_fields(type(config))
+        optional = sizing.optional_sized_fields(type(config))
+        nullable: Set[str] = set()
+        required: Set[str] = set()
+        for field_name in sizing.auto_fields(config):
+            value = getattr(config, field_name)
+            effective = value if isinstance(value, SizingLaw) else laws.get(field_name)
+            if effective is None:
+                continue
+            reads = {fact for fact, _cardinality in effective.facts_read()}
+            (nullable if field_name in optional else required).update(reads)
+        return frozenset(nullable - required)
+
+    @staticmethod
     def _instance_name(config: Any) -> str:
         """Returns the config's instance name, which is how providers are addressed.
 
@@ -186,6 +216,7 @@ class SizingFactEngine:
                 name=name,
                 config=config,
                 needed_facts=self._needed_facts(config),
+                nullable_facts=self._nullable_facts(config),
                 contribution_reads=tuple(dict.fromkeys(
                     fact for contribution in contributions for fact in contribution.reads)),
                 contributions=contributions,
@@ -277,13 +308,24 @@ class SizingFactEngine:
             f"sources={{'{consumer}': {{'{fact}': '<one of {' or '.join(references)}>'}}}}"
         )
 
-    def _bind(self, consumer: str, fact: str, cardinality: Cardinality) -> _Binding:
+    def _bind(self, consumer: str, fact: str, cardinality: Cardinality, nullable: bool = False) -> _Binding:
         """Binds one needed fact of one consumer to its provider, or reports it pending.
 
         Implements the binding rule of the module docstring: an explicit mapping wins and
         is validated against the provider table, a bare fact needs exactly one declared
         provider, and everything else raises naming what the author must write — for an
         unprovided, ambiguous, wrongly mapped, mis-shaped or null-valued fact alike.
+
+        Args:
+            consumer: The instance name of the config reading the fact.
+            fact: The fact being bound.
+            cardinality: Whether the reading law asks for one provider or all of them.
+            nullable: Whether a ``None`` from the provider is an answer for this consumer,
+                which it is when only optional fields read the fact (see
+                :meth:`_nullable_facts`).
+
+        Returns:
+            The binding, possibly pending when the provider has not contributed yet.
         """
         candidates = tuple(sorted(self._providers.get(fact, set())))
         mapped = self._sources.get(consumer, {}).get(fact)
@@ -294,7 +336,7 @@ class SizingFactEngine:
                 raise self._unbindable_error(consumer, fact, cardinality, candidates)
             provider = candidates[0]
             mode = LookupMode.SEED if provider == self.SEED_PROVIDER else LookupMode.UNIQUE
-            return self._bind_one(consumer, fact, provider, mode, candidates)
+            return self._bind_one(consumer, fact, provider, mode, candidates, nullable)
         if cardinality is Cardinality.MANY:
             if isinstance(mapped, str) or not isinstance(mapped, (list, tuple)):
                 raise self._shape_error(consumer, fact, "a list of", mapped)
@@ -303,21 +345,39 @@ class SizingFactEngine:
         if not isinstance(mapped, str):
             raise self._shape_error(consumer, fact, "one", mapped)
         provider = self._reference_provider(consumer, fact, mapped)
-        return self._bind_one(consumer, fact, provider, LookupMode.EXPLICIT, candidates)
+        return self._bind_one(consumer, fact, provider, LookupMode.EXPLICIT, candidates, nullable)
 
     def _bind_one(self, consumer: str, fact: str, provider: str, mode: str,
-                  candidates: Tuple[str, ...]) -> _Binding:
+                  candidates: Tuple[str, ...], nullable: bool = False) -> _Binding:
         """Reads one provider's value for a scalar fact, or reports the read as pending.
 
         A provider that has not folded its contributions yet is not an error — the fixed
-        point comes back to it — but one that computed ``None`` is: its feature is off,
-        and sizing from a switched-off component would invent a number.
+        point comes back to it — but one that computed ``None`` usually is: its feature is
+        off, and sizing from a switched-off component would invent a number. The exception
+        is a fact only optional fields read, where ``None`` is the answer itself: the meter
+        beside a district heating connection accounts a fuel with no heating value, because
+        the connection burns none (F-12).
+
+        Args:
+            consumer: The instance name of the config reading the fact.
+            fact: The fact being read.
+            provider: The instance name the fact was bound to.
+            mode: How the provider was chosen, for the lookup record.
+            candidates: Every declared provider of the fact, for the lookup record.
+            nullable: Whether ``None`` is an answer for this consumer.
+
+        Returns:
+            The binding, pending while the provider has not contributed yet.
+
+        Raises:
+            ConfigSizingError: If the provider computed ``None`` and a non-optional field
+                of the consumer reads the fact.
         """
         contributed = self._pool.get(provider, {})
         if fact not in contributed:
             return _Binding(provider=provider, value=None, mode=mode, candidates=candidates, pending=True)
         value = contributed[fact]
-        if value is None:
+        if value is None and not nullable:
             raise ConfigSizingError(
                 f"'{fact}' provided as null by '{provider}' (feature off); '{consumer}' "
                 "cannot size from it."
@@ -353,7 +413,7 @@ class SizingFactEngine:
         missing: List[str] = []
         lookups: List[FactLookupRecord] = []
         for fact, cardinality in node.needed_facts:  # binding order is irrelevant
-            binding = self._bind(node.name, fact, cardinality)
+            binding = self._bind(node.name, fact, cardinality, fact in node.nullable_facts)
             if binding.pending:
                 missing.append(fact)
                 continue

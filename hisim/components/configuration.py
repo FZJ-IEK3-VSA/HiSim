@@ -1,7 +1,5 @@
 """Configuration module."""
 
-# clean
-
 from typing import Any, ClassVar, Optional, Tuple
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
@@ -772,19 +770,6 @@ class PlaceholderCountryFactors:
 # challenges.md, finding F2). Every legacy cost and CO2 KPI of an Irish run therefore reads as
 # -1e9-scaled nonsense on purpose; the lifecycle cost engine has its own Irish data files and is unaffected.
 PlaceholderCountryFactors.register("IE")
-
-
-class GasHeaterConfig:
-    """Gas heater config class."""
-
-    is_modulating = True
-    P_th_min = 1_000  # [W]
-    P_th_max = 12_000  # [W]
-    eff_th_min = 0.60  # [-]
-    eff_th_max = 0.90  # [-]
-    delta_temperature = 25
-    mass_flow_max = P_th_max / (4180 * delta_temperature)  # kg/s ## -> ~0.07
-    temperature_max = 80  # [°C]
 
 
 class HouseholdWarmWaterDemandConfig:

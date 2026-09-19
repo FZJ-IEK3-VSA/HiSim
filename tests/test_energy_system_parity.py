@@ -15,8 +15,6 @@ that breaks the results, which is the one thing the harness exists to prevent.
 Each test states the failure mode it catches.
 """
 
-# clean
-
 from __future__ import annotations
 
 from typing import ClassVar, Dict, Tuple

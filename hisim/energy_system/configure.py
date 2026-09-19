@@ -31,15 +31,13 @@ the block an author can paste. A provider nobody read is not a failure but a war
 legal, occasionally intended, and always worth saying out loud.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 
-from hisim.config.presets import ConfigBuilder
+from hisim.config.presets import ConfigBuilder, replace_config
 from hisim.config.report import ResolutionReport
 from hisim.energy_system.bindings import ClassBinding, ClassBindings
 from hisim.energy_system.classes import validate_classes
@@ -181,11 +179,7 @@ class EntryConfigurator:
         Returns:
             A fresh instance equal to ``config``, provenance included.
         """
-        copied = dataclasses.replace(config)
-        provenance = getattr(config, ConfigBuilder.PROVENANCE_ATTRIBUTE, None)
-        if provenance is not None:
-            setattr(copied, ConfigBuilder.PROVENANCE_ATTRIBUTE, provenance)
-        return copied
+        return replace_config(config)
 
     @property
     def origin_is_the_entrys_own_block(self) -> bool:
@@ -398,11 +392,7 @@ class EntryConfigurator:
             key: self.codec.decode(key, value, f"components.{entry.name}.config.{key}", entry.name)
             for key, value in entry.config.items()
         }
-        replaced = dataclasses.replace(config, **decoded)
-        provenance = getattr(config, ConfigBuilder.PROVENANCE_ATTRIBUTE, None)
-        if provenance is not None:
-            setattr(replaced, ConfigBuilder.PROVENANCE_ATTRIBUTE, provenance)
-        return replaced
+        return replace_config(config, **decoded)
 
     def _expand_paths(self, config: Any) -> Any:
         """Turns the portable ``${var}`` spelling of the path fields into local paths.

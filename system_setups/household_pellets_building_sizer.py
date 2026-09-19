@@ -1,7 +1,5 @@
 """Basic household new system setup."""
 
-# clean
-
 from typing import Optional, Any, Union, List
 import re
 import os
@@ -190,10 +188,15 @@ def setup_function(
     # the fallback, for a climate LocationEnum does not carry.
     weather_station = getattr(weather.LocationEnum, weather_location.strip(), None)
     if weather_station is not None:
-        my_weather_config = weather.WeatherConfig.for_location("Weather", weather_station)
+        my_weather_config = weather.WeatherConfig.for_location(
+            "Weather", weather_station, heating_reference_temperature_in_celsius
+        )
     elif weather_filepath is not None and weather_datasource is not None:
         my_weather_config = weather.WeatherConfig.for_data_file(
-            "Weather", weather_filepath, weather_datasource
+            "Weather",
+            weather_filepath,
+            weather_datasource,
+            heating_reference_temperature_in_celsius,
         )
     else:
         raise ValueError(
@@ -202,7 +205,6 @@ def setup_function(
         )
 
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
-    my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
     my_building_config.max_thermal_building_demand_in_watt = max_thermal_building_demand_in_watt
     my_building_config.set_heating_temperature_in_celsius = building_set_heating_temperature_in_celsius
     my_building_config.set_cooling_temperature_in_celsius = building_set_cooling_temperature_in_celsius
@@ -228,8 +230,13 @@ def setup_function(
     if arche_type_config_.building_heat_capacity_class is not None:
         my_building_config.building_heat_capacity_class = arche_type_config_.building_heat_capacity_class
 
-    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field, so it is resolved before the archetype lookup runs on the config.
+    my_building_config = my_building_config.resolve(
+        SizingContext(heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius)
+    )
+    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_building, connect_automatically=True)

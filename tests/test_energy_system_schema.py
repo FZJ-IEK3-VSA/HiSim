@@ -15,8 +15,6 @@ ones fail only on entries whose classes are not converted yet — the same gap t
 validator pins, seen from the other side.
 """
 
-# clean
-
 from typing import Any, ClassVar, Dict, List, Tuple, cast
 
 import jsonschema
@@ -246,17 +244,26 @@ def test_a_named_constructor_and_its_parameters_are_in_the_schema(validator: Any
     """Catches the constructor form being missing from the schema (AC-P2.15).
 
     The weather is the class the format's constructor form exists for: a station is an open
-    identifier space, so the file writes ``constructor: {for_location: {location: AACHEN}}`` and
-    the schema has to accept exactly that, name and parameter alike.
+    identifier space, so the file writes ``constructor: {for_location: {location: AACHEN,
+    heating_reference_temperature_in_celsius: -7.0}}`` and the schema has to accept exactly that,
+    name and parameter alike. Both parameters are mandatory -- the station names the time series
+    and the number names the design condition of the place (D-21) -- so a call missing either is
+    a schema error, which is what the last case pins.
     """
     weather = "hisim.components.weather.Weather"
-    good = {"class": weather, "constructor": {"for_location": {"location": "AACHEN"}}}
-    wrong_name = {"class": weather, "constructor": {"for_place": {"location": "AACHEN"}}}
-    wrong_argument = {"class": weather, "constructor": {"for_location": {"place": "AACHEN"}}}
+    arguments = {"location": "AACHEN", "heating_reference_temperature_in_celsius": -7.0}
+    good = {"class": weather, "constructor": {"for_location": arguments}}
+    wrong_name = {"class": weather, "constructor": {"for_place": arguments}}
+    wrong_argument = {
+        "class": weather,
+        "constructor": {"for_location": {"place": "AACHEN", "heating_reference_temperature_in_celsius": -7.0}},
+    }
+    missing_argument = {"class": weather, "constructor": {"for_location": {"location": "AACHEN"}}}
 
     assert errors_of(validator, Documents.with_entry(good)) == []
     assert errors_of(validator, Documents.with_entry(wrong_name))
     assert errors_of(validator, Documents.with_entry(wrong_argument))
+    assert errors_of(validator, Documents.with_entry(missing_argument))
 
 
 @pytest.mark.base

@@ -36,8 +36,6 @@ nothing left to switch, and nothing downstream of this module ever has to know t
 was there.
 """
 
-# clean
-
 from __future__ import annotations
 
 from dataclasses import dataclass

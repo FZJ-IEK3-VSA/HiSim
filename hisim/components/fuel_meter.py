@@ -1,6 +1,5 @@
 """Fuel meter module to measure energy consumption for all fuel types except gas (natural and hydrogen) and electricity."""
 
-# clean
 from dataclasses import dataclass
 from typing import ClassVar, Dict, List, Optional, Tuple
 
@@ -38,14 +37,6 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.economics.facts import CostRelevance
 
-__authors__ = "Jonas Hoppe"
-__copyright__ = ""
-__credits__ = ["Jonas Hoppe"]
-__license__ = "-"
-__version__ = ""
-__maintainer__ = ""
-__status__ = ""
-
 
 @dataclass_json
 @dataclass
@@ -57,13 +48,10 @@ class FuelMeterConfig(ConfigBase):
     litres and kilograms with. The named default is :meth:`preset_standard`, and it leaves all
     three ``AUTO``: a meter accounts what the generator beside it burns, so the carrier and the
     two constants are copied off that generator's configuration rather than stated a second
-    time (D-15 (b)). A system whose generator is not converted yet states them itself.
+    time. A system whose generator states none of them pins them instead.
     """
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the base class."""
-        return FuelMeter.get_full_classname()
+    MAIN_CLASS = "hisim.components.fuel_meter.FuelMeter"
 
     #: Sizing law of ``fuel_loadtype``: the carrier is copied from the generator that feeds this
     #: meter, which contributes it as the ``energy_carrier`` fact. An oil boiler beside a meter
@@ -73,7 +61,7 @@ class FuelMeterConfig(ConfigBase):
     #: Sizing law of ``heating_value_of_fuel_in_kwh_per_liter``: copied from the generator, which
     #: derives it from its carrier **and** its boiler type -- the higher heating value for a
     #: condensing boiler, the lower one for a conventional one -- so the meter cannot derive it
-    #: from its own carrier alone (survey `FuelMeterConfig` item 5).
+    #: from its own carrier alone.
     HEATING_VALUE_LAW: ClassVar[SizingLaw] = Size.HEATING_VALUE_OF_FUEL_IN_KWH_PER_LITER
 
     #: Sizing law of ``fuel_density_in_kg_per_m3``: copied from the same generator, which reads it
@@ -92,7 +80,9 @@ class FuelMeterConfig(ConfigBase):
     #: single source. Setting this field therefore changes the legacy OPEX numbers only.
     #: Sizable and optional: left ``AUTO`` it is copied from the generator by
     #: :data:`HEATING_VALUE_LAW`, and ``None`` is a legitimate value -- district heat burns
-    #: nothing -- which is why the declaration says ``optional=True``.
+    #: nothing -- which is why the declaration says ``optional=True``. A generator that
+    #: contributes the fact as ``None`` therefore resolves this field to ``None``; the
+    #: district heating setup states nothing here.
     heating_value_of_fuel_in_kwh_per_liter: Sizable[Optional[float]] = sized_field(
         rule=HEATING_VALUE_LAW, optional=True
     )
@@ -110,12 +100,7 @@ class FuelMeterConfig(ConfigBase):
         :data:`DENSITY_LAW` copy them off the generator. There are deliberately no
         ``oil``/``pellets``/``wood_chips``/``district_heating`` presets: with the three values
         copied there is nothing left for four presets to differ in, and a preset that pinned a
-        carrier would be the second statement of a fact the generator already makes (D-15 (b)).
-
-        The deleted ``get_fuel_meter_default_config`` factory instead defaulted to a rounded oil
-        heating value of 9.82 kWh/l and a density of 830 kg/m3, which every oil, pellet and
-        wood-chip setup overrode with the boiler's own numbers and only the district-heating
-        setup -- which burns nothing -- accepted.
+        carrier would be the second statement of a fact the generator already makes.
 
         Args:
             name: The instance name, which becomes the configuration's component identity.

@@ -15,8 +15,6 @@ structural validator, which :func:`load_energy_system` runs afterwards. No step 
 a component class, so nothing is decided yet about presets, fields or ports.
 """
 
-# clean
-
 from __future__ import annotations
 
 from pathlib import Path

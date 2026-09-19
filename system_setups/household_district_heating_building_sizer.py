@@ -228,10 +228,15 @@ def setup_function(
     # the fallback, for a climate LocationEnum does not carry.
     weather_station = getattr(weather.LocationEnum, weather_location.strip(), None)
     if weather_station is not None:
-        my_weather_config = weather.WeatherConfig.for_location("Weather", weather_station)
+        my_weather_config = weather.WeatherConfig.for_location(
+            "Weather", weather_station, heating_reference_temperature_in_celsius
+        )
     elif weather_filepath is not None and weather_datasource is not None:
         my_weather_config = weather.WeatherConfig.for_data_file(
-            "Weather", weather_filepath, weather_datasource
+            "Weather",
+            weather_filepath,
+            weather_datasource,
+            heating_reference_temperature_in_celsius,
         )
     else:
         raise ValueError(
@@ -240,7 +245,6 @@ def setup_function(
         )
 
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
-    my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
     my_building_config.max_thermal_building_demand_in_watt = max_thermal_building_demand_in_watt
     my_building_config.set_heating_temperature_in_celsius = building_set_heating_temperature_in_celsius
     my_building_config.set_cooling_temperature_in_celsius = building_set_cooling_temperature_in_celsius
@@ -266,8 +270,13 @@ def setup_function(
     if arche_type_config_.building_heat_capacity_class is not None:
         my_building_config.building_heat_capacity_class = arche_type_config_.building_heat_capacity_class
 
-    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field, so it is resolved before the archetype lookup runs on the config.
+    my_building_config = my_building_config.resolve(
+        SizingContext(heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius)
+    )
+    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_building, connect_automatically=True)
@@ -356,11 +365,20 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build district heating controller
-    my_district_heating_controller_sh_config = generic_district_heating.DistrictHeatingControllerConfig.get_default_district_heating_controller_config(
-        with_domestic_hot_water_preparation=True,
-        set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
-        parallel_space_heating_and_dhw_option=True,
+    my_district_heating_controller_sh_config = (
+        generic_district_heating.DistrictHeatingControllerConfig.preset_standard(
+            "DistrictHeatingController"
+        ).resolve(
+            SizingContext(
+                set_heating_threshold_outside_temperature_in_celsius=(
+                    my_hds_controller_information.set_heating_threshold_temperature_in_celsius
+                )
+            )
+        )
     )
+    # This house takes its hot water off the network as well, and serves both circuits at once.
+    my_district_heating_controller_sh_config.with_domestic_hot_water_preparation = True
+    my_district_heating_controller_sh_config.parallel_space_heating_and_dhw_option = True
 
     my_district_heating_controller = generic_district_heating.DistrictHeatingController(
         my_simulation_parameters=my_simulation_parameters,
@@ -369,10 +387,10 @@ def setup_function(
     my_sim.add_component(my_district_heating_controller, connect_automatically=True)
 
     # Build district heating For Space Heating and DHW
-    my_district_heating_sh_config = generic_district_heating.DistrictHeatingConfig.get_default_district_heating_config(
-        with_domestic_hot_water_preparation=True,
-        connected_load_in_w=my_building_information.max_thermal_building_demand_in_watt,
-    )
+    my_district_heating_sh_config = generic_district_heating.DistrictHeatingConfig.preset_standard(
+        "DistrictHeating"
+    ).resolve(SizingContext(heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt))
+    my_district_heating_sh_config.with_domestic_hot_water_preparation = True
 
     my_district_heating = generic_district_heating.DistrictHeating(
         config=my_district_heating_sh_config, my_simulation_parameters=my_simulation_parameters
@@ -408,16 +426,21 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
 
     # Build Heating Meter
-    # The district-heating class is not converted yet, so nothing in this setup contributes the
-    # meter's fuel constants and the setup states them itself, on top of the preset and before
-    # resolving. District heat burns nothing, so it has neither a heating value nor a fuel
-    # density: both are None, which is what `GenericBoilerConfig.fuel_constants` returns for
-    # this carrier and what a converted district-heating class will contribute.
-    my_fuel_meter_config = fuel_meter.FuelMeterConfig.preset_standard("FuelMeter")
-    my_fuel_meter_config.heating_value_of_fuel_in_kwh_per_liter = None
-    my_fuel_meter_config.fuel_density_in_kg_per_m3 = None
-    my_fuel_meter_config = my_fuel_meter_config.resolve(
-        SizingContext(energy_carrier=lt.LoadTypes.DISTRICTHEATING)
+    # The meter accounts what the connection delivers, so all three values are facts of the
+    # district heating's configuration and are read off the same class constants its contribution
+    # uses, instead of being named a second time here. The two fuel constants are None -- district
+    # heat burns nothing in the house -- and both fields are declared optional, so the None is an
+    # answer they resolve to rather than something the setup has to pin.
+    my_fuel_meter_config = fuel_meter.FuelMeterConfig.preset_standard("FuelMeter").resolve(
+        SizingContext(
+            energy_carrier=generic_district_heating.DistrictHeatingConfig.ENERGY_CARRIER,
+            heating_value_of_fuel_in_kwh_per_liter=(
+                generic_district_heating.DistrictHeatingConfig.HEATING_VALUE_IN_KWH_PER_LITER
+            ),
+            fuel_density_in_kg_per_m3=(
+                generic_district_heating.DistrictHeatingConfig.FUEL_DENSITY_IN_KG_PER_M3
+            ),
+        )
     )
     my_fuel_meter = fuel_meter.FuelMeter(
         my_simulation_parameters=my_simulation_parameters,

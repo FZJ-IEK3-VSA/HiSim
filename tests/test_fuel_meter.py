@@ -6,8 +6,6 @@ oil boiler's consumption within tolerance, and logs the OPEX cost and CO2
 footprint KPI values for inspection.
 """
 
-# clean
-
 import os
 from pathlib import Path
 import json
@@ -104,8 +102,12 @@ def test_house(
 
     # Build Building
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
-    my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
     my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field (D-21), so it is resolved before the component is built.
+    my_building_config = my_building_config.resolve(
+        SizingContext(heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius)
+    )
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     my_building_information = building.BuildingInformation(config=my_building_config)
 

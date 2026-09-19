@@ -5,58 +5,52 @@ level-1 controller that toggles a gas heater on/off based on a storage
 fill-level threshold.
 """
 
-# clean
-
 # Generic/Built-in
 
 from dataclasses import dataclass
-from typing import Optional
 from dataclasses_json import dataclass_json
 
 # Owned
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.economics.facts import CostRelevance
 
-__authors__ = "Vitor Hugo Bellotto Zago"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = "MIT"
-__version__ = "0.1"
-__maintainer__ = "Vitor Hugo Bellotto Zago"
-__email__ = "vitor.zago@rwth-aachen.de"
-__status__ = "development"
-
 
 @dataclass_json
 @dataclass
 class SimpleControllerConfig(ConfigBase):
-    """Configuration dataclass for the SimpleController example controller.
+    """Configuration of the example L1 controller: nothing but the controller's identity.
 
-    Attributes:
-        component_id: Structured identity (name, building, unit) of this controller.
-        name: Human-readable name of the controller instance.
+    The two fill levels the controller switches on are class constants of
+    :class:`SimpleController`, not fields, so there is nothing to configure and the one preset
+    the class ships::
+
+        SimpleControllerConfig.preset_standard("SimpleController")
+
+    takes the instance name and nothing else. ``standard`` is the name because a controller
+    with no parameter has nothing to describe.
     """
 
+    MAIN_CLASS = "hisim.components.controller_l1_example_controller.SimpleController"
+
+    #: Structured identity (name, building, unit) of this controller.
     component_id: ComponentID
 
+    @preset
     @classmethod
-    def get_main_classname(cls) -> str:
-        """Return the full class name of the base class."""
-        return str(SimpleController.get_full_classname())
+    def preset_standard(cls, name: str) -> "SimpleControllerConfig":
+        """The only configuration this controller has: its identity.
 
-    @classmethod
-    def get_default_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "SimpleControllerConfig":
-        """Returns default config."""
-        if component_id is None:
-            component_id = ComponentID(name="SimpleController")
-        config = SimpleControllerConfig(component_id=component_id)
-        return config
+        Args:
+            name: Instance name of the controller in the simulation.
+
+        Returns:
+            The configuration, fully concrete -- the class has neither a plain field beside the
+            identity nor a sizable one.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class SimpleController(Component):

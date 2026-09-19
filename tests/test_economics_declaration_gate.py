@@ -20,8 +20,6 @@ means an undeclared component can once again reach a cost result, where it contr
 says nothing — the silent omission the whole §9.2 declaration exists to prevent.
 """
 
-# clean
-
 import datetime
 from typing import Any, cast
 

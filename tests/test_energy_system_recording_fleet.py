@@ -13,11 +13,10 @@ setup twice, and it uses the cheapest setup in the repository for that reason.
 Each test states the failure mode it catches.
 """
 
-# clean
-
 from __future__ import annotations
 
 import datetime
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -25,6 +24,7 @@ from typing import ClassVar, List, Sequence, Tuple
 
 import pytest
 
+import hisim
 from hisim.cli import build_parser
 from hisim.energy_system.executor import SimulationParametersReader
 from hisim.energy_system.recording.child_recorder import ChildRecorder
@@ -64,11 +64,14 @@ class Fleet:
     #: Where the Python setups live.
     SETUPS: ClassVar[Path] = ROOT / "system_setups"
 
-    #: Where the committed twins and the shared parameter files live.
+    #: Where the committed twins live.
     ENERGY_SYSTEMS: ClassVar[Path] = ROOT / "energy_systems"
 
+    #: Where the shared simulation-parameters files live.
+    SIMULATION_PARAMETERS: ClassVar[Path] = ROOT / "simulation_parameters"
+
     #: The shipped one-day file every recording is started from.
-    ONE_DAY: ClassVar[Path] = ENERGY_SYSTEMS / "one_day_15min.simulation.yaml"
+    ONE_DAY: ClassVar[Path] = SIMULATION_PARAMETERS / "one_day_15min_export.simulation.yaml"
 
     #: The cheapest setup in the repository: three toy components, no weather and no load
     #: profile, which is what makes recording it twice affordable in a test.
@@ -106,7 +109,7 @@ class Fleet:
 
     @classmethod
     def library(cls, tmp_path: Path) -> ParameterFileLibrary:
-        """A library that may reference the shipped files and writes new ones into a test's own directory.
+        """A library that may reference the committed ones and writes new ones into a test's own directory.
 
         Args:
             tmp_path: The test's temporary directory.
@@ -114,7 +117,7 @@ class Fleet:
         Returns:
             The library.
         """
-        return ParameterFileLibrary(search=(cls.ENERGY_SYSTEMS, tmp_path), write_to=tmp_path)
+        return ParameterFileLibrary(search=(cls.SIMULATION_PARAMETERS, tmp_path), write_to=tmp_path)
 
     @classmethod
     def written(cls, tmp_path: Path) -> List[str]:
@@ -374,7 +377,7 @@ def test_recording_the_same_setup_twice_is_byte_identical(tmp_path: Path) -> Non
         session = RecordingSession(
             setup,
             directory,
-            ParameterFileLibrary(search=(Fleet.ENERGY_SYSTEMS, directory), write_to=directory),
+            ParameterFileLibrary(search=(Fleet.SIMULATION_PARAMETERS, directory), write_to=directory),
         )
         texts.append(session.record(parameters).text)
 
@@ -468,6 +471,34 @@ def test_a_recording_child_picks_its_own_profile_directory(monkeypatch: pytest.M
         "the recorder pinned or passed on a local-LPG calculation index; cleared, the child derives "
         "its own from its process and cannot collide with another run"
     )
+
+
+@pytest.mark.base
+def test_a_recording_child_records_the_code_its_parent_is_running(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The child's ``PYTHONPATH`` starts at the parent's own package root, whatever the operator set.
+
+    Failure mode caught: a recording made in one worktree that describes another checkout's code,
+    because the child resolved ``hisim`` to whichever copy happens to be installed. It reports
+    every twin fresh and is a false all-clear on exactly the files this script exists to keep
+    honest -- P3's F-2, seen twice on the scenario-JSON regenerator before that script was retired.
+    """
+    recorded = RecordedChildEnvironment()
+    monkeypatch.setattr("hisim.energy_system.recording.child_recorder.subprocess.run", recorded)
+    monkeypatch.setenv(ChildRecorder.PATH_VARIABLE, os.pathsep.join(["/somewhere/else", ChildRecorder.package_root()]))
+
+    Recorder.record(
+        setup=Fleet.SETUPS / f"{Fleet.CHEAPEST_SETUP}.py",
+        parameters=Fleet.ONE_DAY,
+        out_dir=tmp_path,
+        python=sys.executable,
+    )
+
+    path = recorded.environments[0][ChildRecorder.PATH_VARIABLE].split(os.pathsep)
+    assert path[0] == ChildRecorder.package_root() == str(Path(hisim.__file__).resolve().parent.parent)
+    # What the operator set is kept behind it, and the root does not appear twice.
+    assert path == [ChildRecorder.package_root(), "/somewhere/else"]
 
 
 class CopyingStubRecorder:

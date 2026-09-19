@@ -122,33 +122,36 @@ Not blocking P3 — the KPI-layer repair list found by `golden_validate.py --sca
 
 ## P4 — Component sweep (batches; each a mechanical PR)
 
-Requirements: `p4_component_sweep_requirements.md` (draft 2026-08-27; per-class table R3, gates R2, physics changes R5,
-decisions D-1…D-32 with full text in `p4_class_survey.md`). Its R7 reorders the batches below by recorded-setup impact;
-the list here is kept until the document is accepted.
+Requirements: `p4_component_sweep_requirements.md` (per-class table R3, gates R2, physics changes R5,
+decisions D-1…D-33 with full text in `p4_class_survey.md`). Its R7 reordered the batches by recorded-setup
+impact, and that is the order the sweep ran in; the list below follows R7. The original B1–B8 list of
+this file is struck through where R7 renamed it.
 
-- [ ] Requirements document accepted (D-1…D-32 decided)
+- [x] Requirements document accepted (D-1…D-32 decided; D-33 added 2026-09-14)
 
-Gates before the first batch (inherited from the branch agenda; each is its own commit,
-never bundled with a conversion because each changes results or deletes code):
+Gates before the first batch (each its own commit, never bundled with a conversion because each changes
+results or deletes code):
 
-- [ ] D13 — the 14 components that cannot be built from their own defaults: delete outright or move to `obsolete/` — decide, execute, so nobody converts a class about to be deleted. **The zombie third is done.** `controller_l1_building_heating` and `controller_l1_generic_runtime` left with the `obsolete/` tree in #590, and `controller_l1_heatpump` moves to `obsolete/components/` under D-2 `[2026-09-10]`. The 6 defective (`generic_battery` ×2, `generic_ev_charger` ×4) are already gone with the same move, so that third is closed too. What is left is the data-dependent remainder: `generic_smart_device.SmartDevice` (D-30), the H₂/RSOC classes whose only builders read `fuel_cell_manufacturer_config.json` and `rSOC_manufacturer_config.json`, neither of which is in the repository (D-25/D-26), and `GenericElectrolyzerConfig.get_default_config`, which takes a mandatory argument (D-28/D-29)
-- [ ] C11 — buffer storage sized from *building load* (legacy gas/oil/pellet/wood-chip setups) although the parameter is the *generator power* (≈1.1 × max(load, DHW) once the boiler is sized). **Decided as D-9 `[2026-09-10]`: fix the physics**, not bless the status quo — the law reads the generator's `maximal_thermal_power_in_watt`, in its own commit with result diffs, re-blessing the five golden sizers at +10 % volume and adding `basic_household_only_heating` (+54 %) to the week gate in the same commit. Executes before B4; not yet done
-- [ ] Q-P1.8 outcome applied before B3: `HeatDistributionControllerConfig.heating_system` gets a law reading the building's construction year and renovation level (new Building facts from the TABULA code) — physics change, own commit with result diffs; until then a plain default, not `AUTO`. The same controller's threshold is **decided as D-11 `[2026-09-10]`: convert and record the diff** — 16 → 18 °C for the three setups still on the legacy factory, no `fixed_threshold_16c` preset for a value nobody chose, and `basic_household_only_heating` blessed in the same commit so one of the three is gated. Both execute in B3; neither is done
-- [ ] Expect on every converted class (random_findings): trailing capex fields need `None` defaults once sized fields carry defaults; regenerated fixtures show int → float literal drift (golden-neutral, must be committed); one `SizingContext` per setup threaded through, not one per component
+- [x] D13 — the components that cannot be built from their own defaults: the zombie third left with `obsolete/` in #590; `controller_l1_heatpump` (D-2), `advanced_fuel_cell_controller` (D-8) and `generic_smart_device` (D-30) followed; the H₂/RSOC classes whose only builders read absent files went with D-25 and D-29 *(all executed 2026-09-10/11)*
+- [x] C11 — buffer storage sized from the generator's power, not the building load — decided as D-9, executed 2026-09-11 with the five golden sizers re-blessed
+- [x] Q-P1.8 / D-11 — HDS controller threshold 16 → 18 °C for the three legacy setups, converted and diffed 2026-09-11; the `heating_system` law from construction year stays a plain default until its Building facts exist
+- [x] Expect on every converted class: capex fields carry `None` defaults, one `SizingContext` per setup — both are the R1.1 shape now
 
-Order by dependency and by how many consumers a family unlocks (inventory §2–§3). Each batch:
-presets replace `get_default_*`/`get_scaled_*`; laws replace setup-side arithmetic; `SIZING_CONTRIBUTIONS`
-declared; call sites moved; regenerated fixtures; golden parity.
+Batches in R7 order (presets replace `get_default_*`/`get_scaled_*`; laws replace setup-side arithmetic;
+`SIZING_CONTRIBUTIONS` declared; call sites moved; twins re-recorded; golden parity):
 
-- [ ] B1 Heat generators: hplib heat pumps (both), electric heating, district heating, generic heat pump, CHP/fuel cell (constants only)
-- [ ] B2 Heat generator controllers: heat pump SH/DHW, boiler controllers, electric/district heating controllers, L1 heat source controller
-- [ ] B3 Heat distribution: HDS controller (specific load, threshold), HDS (remaining legacy controller config)
-- [ ] B4 Storages: hot water storage (per-generator volume presets), DHW storage; delete `WATERMASSFLOWRATEOFHEATGENERATOR`
-- [ ] B5 Electricity: PV (per-preset share law), battery, meter, price signal, wind turbine
-- [ ] B6 Occupancy, weather (`for_location` pattern), building presets (`german_multi_family_home`)
-- [ ] B7 Mobility and remaining: cars, chargers, smart devices, H₂ chain, air conditioners, solar thermal
-- [ ] B8 Examples and templates; `example_template.py` shows the preset/law pattern; delete the nine legacy plain dataclasses in `configuration.py` instead of converting them (supplement conflict 10)
-- [ ] `describe` output and generated docs reviewed for every converted class (R13)
+- [x] B1 Legacy-factory removals on converted classes — Weather, UTSP, ElectricityMeter, HDS controller, boiler controller *(2026-09-12/13, #737)*
+- [x] B2 Electricity — PV (rooftop law), battery (sized to PV), gas/fuel/heating meters (carrier copied from the generator, D-15) *(2026-09-13, #738–#744)*
+- [x] B3 Storages — DHW storage (250 l per apartment), buffer storage (`sizing_option` field and l/kW law, D-10) *(2026-09-14, #747–#748)*
+- [x] R1.2 — the sixteen converted classes brought to the R1.1 shape in one sweep; `ConfigBase.MAIN_CLASS` *(2026-09-15, #753)*
+- [x] B4 Heat generators — hplib heat pump (`air_water`), electric (`resistive`) and district heating, generic heat pump (`vitocal_300_a` + `for_device`), idealized heater, simple heat source (three presets), air conditioners (D-3 constructors), solar thermal (`flat_plate`), CHP ×2 (`gas`/`hydrogen`, D-5) *(2026-09-15, #754–#759)*
+- [x] B5 Generator controllers — hplib SH/DHW, generic heat pump, district heating, electric heating (specific-load law), air conditioners, solar thermal, night setback, CHP controller (four presets, D-4 numbers preserved) *(2026-09-15, #760–#763)*
+- [x] B6 Providers — Building `roof_area` fact *(2026-09-11)*, D-22 sparse overrides *(2026-09-11)*, sum builder and transformer presets *(2026-09-15, #764)*; D-21 revised and executed *(2026-09-17)* — the weather owns the design temperature as a plain field, contributes it, and the building reads it, so the fact keeps one provider and no per-station DIN 12831 table is needed
+- [x] B7 Mobility and H₂ — CSV loader (`for_csv_file`, no preset), car battery (`standard`) and charging station (`for_charging_station_set`, no preset, D-24) *(2026-09-16, #766)*; the electrolyzer (`alkaline` + `for_device`), its L1 controller, the PtX controller (constructor only), the XtP controller (the preset D-25 left it without), the fuel cell and its controller (`pem`), and the two electrolyzer-with-storage classes (D-28, D-29) *(2026-09-16, #767)*
+- [x] B8 Examples and templates — the five example/simple classes converted (`standard` ×4, `thermal` for the storage), `example_template.py` now teaching `MAIN_CLASS`, a `@preset`, a `sized_field` law and the D-31 contribution comment together; F-18 fixed (a preset's own law renders beside `pinned:`/`AUTO:`); `describe` reviewed for all 56 pinned classes (R13), six opaque laws given a `note=`, three larger gaps recorded as F-21…F-23. **The "nine legacy plain dataclasses" phrase is stale:** D-8, D-16 and D-29 had already moved all but one, and B8 moved that one, `GasHeaterConfig`, to `obsolete/components/configuration_gas_heater.py`; `configuration.py` now holds only the two emission-factor tables, `PhysicsConfig` and the live `HouseholdWarmWaterDemandConfig`, which R3 marks exempt *(2026-09-16)*
+- [x] Close-out decisions, all settled *(2026-09-17)* — D-21 revised, the weather owning the design temperature (see B6); F-16, the dead `efficiency` field, deleted from `ElectricHeatingConfig` (the schema loses one property; no twin, no golden); F-19, the night setback's two `dataclasses_json` aliases, dropped, so `to_dict` spells the hour fields the way `describe` and the schema already did and the repository has no field alias left; and `MAIN_CLASS` enforced at class definition — `CarConfig` and `TariffProviderConfig`, the last two overriders, declare it instead, and `ConfigBase.__init_subclass__` now refuses a subclass that declares neither a non-empty `MAIN_CLASS` nor its own `get_main_classname` (the override stays as the exception a test double with no real component states). F-21 and F-22, the two gaps R13 left in `describe`, close it: a preset prints the plain fields it sets and their values, and a law built from a callable states the arithmetic it computes instead of the qualified name of the lambda — which for the borrowed heating-threshold law had been the name of another class entirely. With B7 recorded in the line above it, P4 has no open item left
+
+~~B1 Heat generators · B2 Heat generator controllers · B3 Heat distribution · B4 Storages · B5 Electricity · B6 Occupancy, weather, building presets~~ — the original list, superseded by R7 above; every item in it is done under its R7 name.
 
 ## P5 — Consumer integration (outline; document later)
 

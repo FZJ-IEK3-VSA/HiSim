@@ -12,8 +12,6 @@ the aggregator-port checks and the wiring — keep reading them from the package
 The machinery that produces them is :mod:`hisim.energy_system.feed_resolution`.
 """
 
-# clean
-
 from hisim.config.channels import (
     ResolvedDispatch,
     ResolvedDynamicConnection,

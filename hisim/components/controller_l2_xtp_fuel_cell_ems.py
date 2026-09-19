@@ -2,26 +2,16 @@
 
 from __future__ import annotations
 
-# clean
 from enum import Enum, unique
 import math
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
 
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.economics.facts import CostRelevance
-
-__authors__ = "Franz Oldopp"
-__copyright__ = "Copyright 2023, IEK-3"
-__credits__ = ["Franz Oldopp"]
-__license__ = "MIT"
-__version__ = "0.1"
-__maintainer__ = "Franz Oldopp"
-__email__ = "f.oldopp@fz-juelich.de"
-__status__ = "development"
 
 
 @unique
@@ -45,27 +35,29 @@ class XtpOperationMode(str, Enum):
 @dataclass_json
 @dataclass
 class XTPControllerConfig(ConfigBase):
-    """Configuration of the PtX  Controller.
+    """Output band of an X-to-power fuel cell and the mode the L2 controller drives it in.
 
-    This class has **no default builder**. Its only factory read
-    `hisim/inputs/fuel_cell_manufacturer_config.json`, a file that is not in this repository
-    and never was, so the factory raised `FileNotFoundError` on every call; component sweep
-    decision D-25 removed it and archived its text in
-    `obsolete/components/fuel_cell_manufacturer_table.py`. Until the conversion batch gives
-    this class a preset, a caller builds it by naming every field.
+    The controller serves the electricity demand from the fuel cell as far as the band
+    ``min_output`` … ``max_output`` allows, takes the rest from a battery, and
+    :attr:`operation_mode` decides whether the cell is held at ``standby_load`` or switched
+    off once the demand is gone. :meth:`preset_standard` is the 10 kW cell::
+
+        XTPControllerConfig.preset_standard("L2XTPController")
     """
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the base class."""
-        return str(XTPController.get_full_classname())
+    MAIN_CLASS = "hisim.components.controller_l2_xtp_fuel_cell_ems.XTPController"
 
     component_id: ComponentID
-    nom_output: float
-    min_output: float
-    max_output: float
-    standby_load: float
-    operation_mode: XtpOperationMode
+    #: Nominal electrical output of the fuel cell, in kW.
+    nom_output: float = 10.0
+    #: Lowest output the cell may be run at, in kW; below it the controller goes to standby.
+    min_output: float = 2.0
+    #: Highest output the controller asks for, in kW.
+    max_output: float = 10.0
+    #: Output the cell is held at while it is idle but not switched off, in kW.
+    standby_load: float = 1.0
+    #: Which of the two control laws of :class:`XtpOperationMode` the cell is driven by.
+    operation_mode: XtpOperationMode = XtpOperationMode.STANDBY_LOAD
 
     def __post_init__(self) -> None:
         """Normalises the operation mode into a :class:`XtpOperationMode` member.
@@ -88,6 +80,26 @@ class XTPControllerConfig(ConfigBase):
                 f"Unknown XtP controller operation mode {self.operation_mode!r}. "
                 f"Write one of {[mode.value for mode in XtpOperationMode]}."
             ) from None
+
+    @preset(note="a 10 kW cell between 2 and 10 kW, held at standby")
+    @classmethod
+    def preset_standard(cls, name: str) -> "XTPControllerConfig":
+        """The controller of a 10 kW fuel cell running between 2 and 10 kW.
+
+        The field defaults are that band with a 1 kW standby output, driven in
+        :attr:`XtpOperationMode.STANDBY_LOAD`, so the cell idles rather than switching off.
+        Those are the only figures anyone runs this controller at: its one former builder read
+        a manufacturer table that is not in this repository, so the class had no default at all
+        and the values here are the ones its tests state. ``standard`` is the name, since the
+        band names no device and no manufacturer.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            XTPControllerConfig: The preset configuration.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class XTPController(Component):

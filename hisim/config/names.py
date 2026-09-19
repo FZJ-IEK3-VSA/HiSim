@@ -16,8 +16,6 @@ runtime, so the component runtime cannot import back. The configuration package 
 bottom layer both of them import, which makes it the only place a single definition can sit.
 """
 
-# clean
-
 from __future__ import annotations
 
 import re

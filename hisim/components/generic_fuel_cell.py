@@ -1,11 +1,8 @@
 """Generic fuel cell component modelling hydrogen-to-electricity conversion."""
 
-# clean
-
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from pathlib import Path
 import json
-from typing import Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from scipy.interpolate import interp1d
@@ -13,7 +10,7 @@ import numpy as np
 
 # Import modules from HiSim
 from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
@@ -24,63 +21,61 @@ from hisim import (
 )
 from hisim.economics.facts import CostRelevance
 
-__authors__ = "Franz Oldopp"
-__copyright__ = "Copyright 2023, FZJ-IEK-3"
-__credits__ = ["Franz Oldopp"]
-__license__ = "-"
-__version__ = "1.0"
-__maintainer__ = "Franz Oldopp"
-__status__ = "development"
-
 
 @dataclass_json
 @dataclass
 class FuelCellConfig(ConfigBase):
-    """Configuration of the `FuelCell` component.
+    """Electrical band, hydrogen flow and cell data of one fuel cell.
 
-    Holds configuration parameters for a PEM fuel cell: nominal, minimum
-    and maximum electrical power output, nominal hydrogen flow rate,
-    Faraday efficiency, nominal cell current, and ramp-up/ramp-down rates.
+    The machine burns hydrogen into electricity between ``min_output_in_kilowatt`` and
+    ``max_output_in_kilowatt``, as fast as the two ramp rates allow, and the component reads
+    its efficiency off a polarization curve the cell data indexes. The one machine this
+    library states is :meth:`preset_pem`::
+
+        FuelCellConfig.preset_pem("FuelCell")
     """
 
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return FuelCell.get_full_classname()
+    MAIN_CLASS = "hisim.components.generic_fuel_cell.FuelCell"
 
     component_id: ComponentID
-    type: str
-    nom_output_in_kilowatt: float  # [kW]
-    max_output_in_kilowatt: float  # [kW]
-    min_output_in_kilowatt: float  # [kW]
-    nom_h2_flow_rate_in_m3_per_h: float  # [m^3/h]
-    faraday_eff: float
-    i_cell_nom_in_ampere_per_cm2: float
-    ramp_up_rate_in_percent_per_s: float  # [%/s]
-    ramp_down_rate_in_percent_per_s: float  # [%/s]
+    #: Cell technology as the polarization data spells it; ``"PEM"`` is the one it carries.
+    type: str = "PEM"
+    #: Nominal electrical output of the cell, in kW.
+    nom_output_in_kilowatt: float = 100.0  # [kW]
+    #: Highest electrical output the cell reaches, in kW.
+    max_output_in_kilowatt: float = 110.0  # [kW]
+    #: Lowest output the cell may be run at, in kW.
+    min_output_in_kilowatt: float = 10.0  # [kW]
+    #: Hydrogen volume flow at the nominal output, in m3/h.
+    nom_h2_flow_rate_in_m3_per_h: float = 65.64  # [m^3/h]
+    #: Faraday efficiency of the cell, the share of the current the reaction actually carries.
+    faraday_eff: float = 0.90
+    #: Nominal current density of the cell, in A/cm2.
+    i_cell_nom_in_ampere_per_cm2: float = 0.52
+    #: How fast the output may rise, in percent of the nominal output per second.
+    ramp_up_rate_in_percent_per_s: float = 0.1  # [%/s]
+    #: How fast the output may fall, in percent of the nominal output per second.
+    ramp_down_rate_in_percent_per_s: float = 0.2  # [%/s]
     # H_s_h2 = 33.33 #kWh/kg
 
+    @preset(note="proton-exchange-membrane cell, 100 kW nominal")
     @classmethod
-    def get_default_pem_fuel_cell_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "FuelCellConfig":
-        """Returns a default `FuelCellConfig` for a PEM fuel cell."""
-        if component_id is None:
-            component_id = ComponentID(name="PEM_Fuel_Cell")
-        return FuelCellConfig(
-            component_id=component_id,
-            type="PEM",
-            nom_output_in_kilowatt=100.0,  # [kW]
-            max_output_in_kilowatt=110.0,  # [kW]
-            min_output_in_kilowatt=10.0,  # [kW]
-            nom_h2_flow_rate_in_m3_per_h=65.64,  # [m^3/h]
-            faraday_eff=0.90,
-            i_cell_nom_in_ampere_per_cm2=0.52,
-            ramp_up_rate_in_percent_per_s=0.1,  # [%/s]
-            ramp_down_rate_in_percent_per_s=0.2,  # [%/s]
-            # H_s_h2 = 33.33,
-        )
+    def preset_pem(cls, name: str) -> "FuelCellConfig":
+        """The 100 kW proton-exchange-membrane cell, the only fuel cell this library states.
+
+        The field defaults are that machine: a PEM stack rated at 100 kW, running between 10
+        and 110 kW, consuming 65.64 m3 of hydrogen an hour at the nominal point, with a Faraday
+        efficiency of 0.90, 0.52 A/cm2 of nominal current density and ramps of 0.1 and 0.2 %/s.
+        The variant names the preset -- PEM is what the polarization curve behind it belongs to
+        -- since a table of other machines was never in this repository to read.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            FuelCellConfig: The preset configuration.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 class FuelCell(cp.Component):

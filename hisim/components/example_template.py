@@ -7,15 +7,25 @@ Additionally it contains examples for doc strings according to the sphinx format
 Steps to build a component, in the order they appear below:
 
 1. Write the configuration dataclass (:class:`ComponentNameConfig`). Every parameter of
-   the device is a field of it.
+   the device is a field of it, and every field carries the value the device usually has,
+   so that a caller states only what makes its instance different. ``MAIN_CLASS`` names the
+   component the configuration builds, which is how a declarative energy-system file finds
+   it.
 2. For every parameter whose value is *not* the author's choice but follows from the
    surrounding system — the size of the building, the load it has to cover, the power of
    the device next to it — declare a **sizing law** at the field instead of writing a
    number: ``sized_field(rule=...)``, see ``rated_power_in_watt`` below. The law is an
    expression over ``Size.*`` terms, which are the *facts* the surrounding system
    provides (``hisim/config/context.py`` holds the whole vocabulary).
-3. Write the factory / preset. A sized field is spelled :data:`~hisim.config.AUTO` there:
-   the factory says "this one is computed", not what it computes to.
+3. Write the **preset**: a ``@preset`` classmethod named ``preset_<name>`` that takes the
+   instance name and returns the configuration of one named, defensible variant of the
+   device — see :meth:`ComponentNameConfig.preset_standard`. Its name is *wire format*: an
+   energy-system file says ``preset: standard`` and gets exactly what the classmethod
+   builds, so a rename breaks every file already written. A class whose variation is an
+   open identifier space — a building code, a weather location, a catalogue row — writes a
+   ``@constructor`` named ``for_<something>`` instead, or as well. A sized field is simply
+   left alone in a preset: its default is :data:`~hisim.config.AUTO`, which says "this one
+   is computed", not what it computes to.
 4. Where a contribution is declared: if the component is itself a *source* of facts — a
    weather file contributing its identity, a building contributing its heating load, a
    boiler contributing its power band — that goes into ``SIZING_CONTRIBUTIONS``. Shown as
@@ -43,36 +53,18 @@ or a test does the same explicitly with ``config.resolve(SizingContext(...))``.
 
 """
 
-# clean
-
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Optional
+from typing import ClassVar, Optional
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
-from hisim.config import AUTO, ConfigBase, ComponentID, DisplayConfig, Sizable, Size, concrete, sized_field
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, Sizable, Size, concrete, preset, sized_field
 from hisim import loadtypes
 from hisim.simulationparameters import SimulationParameters
 from hisim.economics.facts import CostRelevance
-
-__authors__ = "Tjarko Tjaden, Kai Rösken"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = "MIT"
-__version__ = "0.1"
-__maintainer__ = "Vitor Hugo Bellotto Zago"
-__email__ = "vitor.zago@rwth-aachen.de"
-__status__ = "development"
-
-#: Rated electrical power of this fictitious device per square metre of conditioned floor
-#: area, in W/m². It is the constant half of the ``rated_power_in_watt`` sizing law below;
-#: the other half is a fact about the surrounding system. A real component cites a source
-#: for such a constant (a standard, a datasheet) in the field's ``note``; this one is
-#: invented, because the template models no real device.
-SPECIFIC_RATED_POWER_IN_WATT_PER_M2: float = 2.0
 
 
 @dataclass_json
@@ -86,16 +78,36 @@ class ComponentNameConfig(ConfigBase):
     component is placed in* and is therefore declared with :func:`~hisim.config.sized_field`
     — a law at the field, evaluated once by the sizing kernel, instead of a number repeated
     in every setup that uses the component.
+
+    Every field carries the value this fictitious device usually has, so the one preset the
+    class ships::
+
+        ComponentNameConfig.preset_standard("ComponentNameDefault")
+
+    states nothing but the instance name. That is the rule a preset follows: it passes only
+    what *distinguishes* it from the field defaults, and a class with two presets differing
+    in one value passes one argument in each.
     """
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Returns the full class name of the base class."""
-        return ComponentName.get_full_classname()
+    #: The component this configuration builds, as a dotted path. A declarative
+    #: energy-system file names the component class and the executor finds the
+    #: configuration through it, so the two halves have to point at each other.
+    MAIN_CLASS = "hisim.components.example_template.ComponentName"
+
+    #: Rated electrical power of this fictitious device per square metre of conditioned
+    #: floor area, in W/m². It is the constant half of the ``rated_power_in_watt`` sizing
+    #: law below; the other half is a fact about the surrounding system. Declared here as a
+    #: ``ClassVar`` rather than as a module-level name, so the number sits with the field it
+    #: belongs to and no module-level state exists to be mutated. A real component cites a
+    #: source for such a constant (a standard, a datasheet) in the field's ``note``; this one
+    #: is invented, because the template models no real device.
+    SPECIFIC_RATED_POWER_IN_WATT_PER_M2: ClassVar[float] = 2.0
 
     component_id: ComponentID
-    loadtype: loadtypes.LoadTypes
-    unit: loadtypes.Units
+    #: Physical quantity this component's ports carry.
+    loadtype: loadtypes.LoadTypes = loadtypes.LoadTypes.ELECTRICITY
+    #: Unit that quantity is in.
+    unit: loadtypes.Units = loadtypes.Units.WATT
     #: How the sizing mechanism is declared, in one field:
     #:
     #: * ``Sizable[float]`` is the field's type — a float, or, until it is resolved, the
@@ -119,6 +131,9 @@ class ComponentNameConfig(ConfigBase):
     #: The facts themselves are provided by the other components of the system (see the
     #: note on ``SIZING_CONTRIBUTIONS`` below) and the value is computed by the executor,
     #: before any component is constructed.
+    #:
+    #: A sizable field is declared after the plain ones because it carries a default —
+    #: ``AUTO`` — and a dataclass forbids a defaulted field before an undefaulted one.
     rated_power_in_watt: Sizable[float] = sized_field(
         rule=Size.CONDITIONED_FLOOR_AREA_IN_M2 * SPECIFIC_RATED_POWER_IN_WATT_PER_M2,
         value_type=float,
@@ -128,25 +143,31 @@ class ComponentNameConfig(ConfigBase):
         ),
     )
 
+    @preset
     @classmethod
-    def get_default_template_component(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> "ComponentNameConfig":
-        """Gets a default ComponentName."""
-        if component_id is None:
-            component_id = ComponentID(name="ComponentNameDefault")
-        return ComponentNameConfig(
-            component_id=component_id,
-            loadtype=loadtypes.LoadTypes.ELECTRICITY,
-            unit=loadtypes.Units.WATT,
-            # A sized field is spelled AUTO in a factory or a preset: the value is the
-            # law's to compute, so the factory only says that it is not pinned here.
-            # (It is also the field's declared default, so it could be omitted entirely;
-            # it is written out once here because this file is read as a tutorial.)
-            rated_power_in_watt=AUTO,
-        )
+    def preset_standard(cls, name: str) -> "ComponentNameConfig":
+        """The one variant of this fictitious device: watts of electricity, sized to the building.
 
+        ``standard`` is the wire name an energy-system file writes as ``preset: standard``. It is
+        the right name only where a class has exactly one defensible variant and nothing
+        describes it better; where a reference, a technology or a catalogue device names what the
+        preset pins — ``aachen``, ``condensing_gas``, ``vitocal_300_a`` — that name wins.
+
+        The ``@preset`` decorator is what registers the classmethod as a builder, so that
+        ``hisim energy-system describe`` lists it and the executor can call it. It builds on the
+        field defaults and states nothing else; ``rated_power_in_watt`` is not mentioned at all,
+        because its default is ``AUTO`` and the law at the field is what computes it.
+
+        Args:
+            name: Instance name of the component in the simulation. Every preset takes it and
+                nothing else: it becomes the :class:`~hisim.config.ComponentID` the results are
+                labelled by, and the executor passes the key the file wrote.
+
+        Returns:
+            The configuration, with ``rated_power_in_watt`` left as ``AUTO`` for the sizing
+            kernel to fill in from the conditioned floor area of the building.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 # Step 4 -- contributing facts, the other half of the sizing mechanism.
 #

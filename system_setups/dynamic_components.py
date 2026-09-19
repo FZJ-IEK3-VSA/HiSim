@@ -1,12 +1,10 @@
 """Dynamic Components Module."""
 
-# clean
-
 from typing import Optional
 
 # import hisim.components.random_numbers
 from hisim.simulator import SimulationParameters, Simulator
-from hisim.config import ComponentID, SizingContext
+from hisim.config import SizingContext
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import advanced_battery_bslib
 from hisim.components import weather
@@ -72,10 +70,8 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         config=my_advanced_battery_config_2,
     )
 
-    my_advanced_fuel_cell_config_1 = advanced_fuel_cell.CHPConfig.get_default_config()
-    my_advanced_fuel_cell_config_2 = advanced_fuel_cell.CHPConfig.get_default_config()
-    my_advanced_fuel_cell_config_1.component_id = ComponentID("CHP1")
-    my_advanced_fuel_cell_config_2.component_id = ComponentID("CHP2")
+    my_advanced_fuel_cell_config_1 = advanced_fuel_cell.CHPConfig.preset_hydrogen("CHP1")
+    my_advanced_fuel_cell_config_2 = advanced_fuel_cell.CHPConfig.preset_hydrogen("CHP2")
 
     my_advanced_fuel_cell_1 = advanced_fuel_cell.CHP(
         my_simulation_parameters=my_simulation_parameters,

@@ -23,8 +23,6 @@ configurations, resolving the sizing, constructing the components — never impo
 introspect the same class twice.
 """
 
-# clean
-
 from __future__ import annotations
 
 import dataclasses

@@ -17,8 +17,6 @@ were already meaningful strings (``LoadTypes``, ``FluidMediaType``,
 but still covered by the second.
 """
 
-# clean
-
 import dataclasses
 import enum
 import importlib
@@ -38,6 +36,25 @@ from hisim.components import more_advanced_heat_pump_hplib
 from hisim.components import simple_heat_source
 from hisim.components import simple_water_storage
 from hisim.components import weather
+
+
+def _air_water_heat_pump_config() -> more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig:
+    """Builds the air/water heat pump configuration this module round-trips.
+
+    The ``air_water`` preset leaves the machine's rated thermal power and the outside
+    temperature it is rated at to the building's sizing facts. This module serializes a
+    configuration rather than sizing a system, so both are stated here: 8 kW at the German
+    design outside temperature.
+
+    Returns:
+        MoreAdvancedHeatPumpHPLibConfig: A concrete configuration with every enum field set.
+    """
+    config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
+        "MoreAdvancedHeatPumpHPLib"
+    )
+    config.set_thermal_output_power_in_watt = 8000.0
+    config.heating_reference_temperature_in_celsius = -7.0
+    return config
 
 
 class ConfigEnumSerializationCases:
@@ -75,10 +92,10 @@ class ConfigEnumSerializationCases:
         "SimpleHotWaterStorageConfig": lambda: (
             simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer("SimpleHotWaterStorage")
         ),
-        "MoreAdvancedHeatPumpHPLibConfig": (
-            more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_default_generic_advanced_hp_lib
+        "MoreAdvancedHeatPumpHPLibConfig": _air_water_heat_pump_config,
+        "SimpleHeatSourceConfig": lambda: (
+            simple_heat_source.SimpleHeatSourceConfig.preset_constant_thermal_power("HeatSourceConstPower")
         ),
-        "SimpleHeatSourceConfig": simple_heat_source.SimpleHeatSourceConfig.get_default_config_const_power,
         "HeatDistributionConfig": lambda: (
             heat_distribution_system.HeatDistributionConfig.preset_building_derived("HeatDistributionSystem").resolve(
                 SizingContext(
@@ -226,11 +243,12 @@ def test_config_round_trips_through_json_unchanged(case_name: str) -> None:
 def test_config_round_trips_through_to_dict_and_plain_json_dump(case_name: str) -> None:
     """A default config also survives HiSim's own ``to_dict`` plus ``json.dump`` path.
 
-    ``hisim.json_generator.convert_component_to_json`` writes scenario files by
-    calling ``to_dict`` and handing the result to the JSON encoder, without going
-    through ``to_json``. That only works when every enum member is itself a string
-    subclass, which is precisely what the ``str`` mixin on the converted enums
-    buys; this test guards that second, less obvious encode path.
+    Several writers dump a configuration by calling ``to_dict`` and handing the result
+    straight to the JSON encoder, without going through ``to_json`` -- the building
+    sizer's household config (``modular_household_config.py``), the RenoVisor request's
+    ``moduleConfig`` and the webtool KPI export among them. That only works when every
+    enum member is itself a string subclass, which is precisely what the ``str`` mixin on
+    the converted enums buys; this test guards that second, less obvious encode path.
     """
     config = ConfigEnumSerializationCases.CONFIG_FACTORIES[case_name]()
     encoded = json.loads(json.dumps(config.to_dict()))

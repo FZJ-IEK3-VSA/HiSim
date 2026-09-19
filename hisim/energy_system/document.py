@@ -19,8 +19,6 @@ model builder extends as it descends, so a message points at one line of a long 
 rather than at the file as a whole.
 """
 
-# clean
-
 from __future__ import annotations
 
 import re

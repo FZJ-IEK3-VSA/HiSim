@@ -23,8 +23,6 @@ its ports that way today.
 Each test states the failure mode it catches.
 """
 
-# clean
-
 from pathlib import Path
 from typing import ClassVar
 
@@ -176,7 +174,7 @@ components:
     #: directory: the test suite is run from ``tests/`` in CI and from the repository root
     #: locally, so a relative path would find the file in only one of the two.
     SHIPPED_PARAMETERS: ClassVar[Path] = (
-        Path(__file__).resolve().parents[1] / "energy_systems" / "one_day_15min.simulation.yaml"
+        Path(__file__).resolve().parents[1] / "simulation_parameters" / "one_day_15min_export.simulation.yaml"
     )
 
     @classmethod

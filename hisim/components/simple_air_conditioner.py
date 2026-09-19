@@ -14,7 +14,6 @@ Sign convention (matching the existing ``AirConditioner``):
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -24,7 +23,7 @@ from hisim.component import (
     CapexCostDataClass,
     OpexCostDataClass,
 )
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiEntry,
@@ -38,15 +37,6 @@ from hisim.components.building import Building
 from hisim import utils
 from hisim.economics.facts import CostRelevance
 
-__authors__ = "HiSim Project"
-__copyright__ = "Copyright 2025, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
-__license__ = "MIT"
-__version__ = "0.1"
-__maintainer__ = "HiSim Project"
-__email__ = "n.pflugradt@fz-juelich.de"
-__status__ = "development"
-
 
 # ==============================================================================
 # Configuration
@@ -56,31 +46,47 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class SimpleAirConditionerConfig(ConfigBase):
-    """Configuration for the :class:`SimpleAirConditioner` component."""
+    """Configuration of the simple air conditioner: a cooling machine described by three numbers.
+
+    The component names no device. It delivers up to ``nominal_cooling_power_w`` of cooling and
+    draws the electricity a Carnot process between the indoor and the outdoor temperature would
+    need, spoiled by ``eta_carnot``; ``temperature_epsilon_k`` is the temperature difference
+    below which the two are treated as equal, so that the COP cannot run away as the difference
+    approaches zero. There is nothing to size against a building and no catalogue row behind
+    the numbers, which is why the class ships one preset and no constructor.
+
+    The named default is :meth:`preset_standard`::
+
+        SimpleAirConditionerConfig.preset_standard("SimpleAirConditioner")
+    """
+
+    MAIN_CLASS = "hisim.components.simple_air_conditioner.SimpleAirConditioner"
 
     component_id: ComponentID
+    #: Cooling power the machine delivers at full modulation, in W.
     nominal_cooling_power_w: float = 2000.0
+    #: Share of the Carnot coefficient of performance the machine actually reaches.
     eta_carnot: float = 0.3
+    #: Temperature difference, in K, below which outdoor and indoor air count as equally warm.
     temperature_epsilon_k: float = 0.01
 
+    @preset
     @classmethod
-    def get_main_classname(cls) -> str:
-        """Return the full class name of the main component class."""
-        return SimpleAirConditioner.get_full_classname()
+    def preset_standard(cls, name: str) -> SimpleAirConditionerConfig:
+        """A 2 kW split unit at 30 % of the Carnot coefficient of performance.
 
-    @classmethod
-    def get_default_simple_air_conditioner_config(
-        cls, component_id: Optional[ComponentID] = None
-    ) -> SimpleAirConditionerConfig:
-        """Return a default configuration for the simple air conditioner."""
-        if component_id is None:
-            component_id = ComponentID(name="SimpleAirConditioner")
-        return cls(
-            component_id=component_id,
-            nominal_cooling_power_w=2000.0,
-            eta_carnot=0.3,
-            temperature_epsilon_k=0.01,
-        )
+        The field defaults are the whole machine: 2000 W of cooling power, an efficiency of
+        0.3 and a 0.01 K dead band. The preset is called ``standard`` because a Carnot-factor
+        model of that size describes no device, no standard and no building — there is nothing
+        else to name it after.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            SimpleAirConditionerConfig: The preset configuration.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 # ==============================================================================
@@ -518,29 +524,46 @@ class SimpleAirConditioner(cp.Component):
 @dataclass_json
 @dataclass
 class SimpleAirConditionerControllerConfig(ConfigBase):
-    """Configuration for the :class:`SimpleAirConditionerController`."""
+    """Configuration of the simple air conditioner's controller: a setpoint and a dead band.
+
+    A two-point hysteresis thermostat. Cooling starts when the indoor air rises above
+    ``setpoint_temperature_c + deadband_k`` and stops when it falls below
+    ``setpoint_temperature_c - deadband_k``; inside the band the previous state is kept,
+    which is what stops the machine cycling on and off every time step.
+
+    The named default is :meth:`preset_standard`::
+
+        SimpleAirConditionerControllerConfig.preset_standard("SimpleAirConditionerController")
+
+    The setpoint is the temperature the residents ask for and the dead band is how much
+    cycling they will tolerate, so neither is derived from the building and no field is
+    sizable.
+    """
+
+    MAIN_CLASS = "hisim.components.simple_air_conditioner.SimpleAirConditionerController"
 
     component_id: ComponentID
+    #: Indoor air temperature the controller aims at, in °C; the middle of the dead band.
     setpoint_temperature_c: float = 24.0
+    #: Half-width of the hysteresis band around the setpoint, in kelvin.
     deadband_k: float = 0.5
 
+    @preset
     @classmethod
-    def get_main_classname(cls) -> str:
-        """Return the full class name of the associated controller class."""
-        return SimpleAirConditionerController.get_full_classname()  # type: ignore[no-any-return]
+    def preset_standard(cls, name: str) -> SimpleAirConditionerControllerConfig:
+        """The one thermostat the fleet runs: 24 °C with half a kelvin either side.
 
-    @classmethod
-    def get_default_simple_air_conditioner_controller_config(
-        cls, component_id: Optional[ComponentID] = None
-    ) -> SimpleAirConditionerControllerConfig:
-        """Return a default configuration for the simple air conditioner controller."""
-        if component_id is None:
-            component_id = ComponentID(name="SimpleAirConditionerController")
-        return cls(
-            component_id=component_id,
-            setpoint_temperature_c=24.0,
-            deadband_k=0.5,
-        )
+        The two field defaults are the whole thermostat, so cooling starts at 24.5 °C and
+        stops at 23.5 °C. The preset is called ``standard`` because a setpoint and a dead
+        band describe no device and no standard — there is nothing else to name it after.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            SimpleAirConditionerControllerConfig: The preset configuration.
+        """
+        return cls(component_id=ComponentID(name=name))
 
 
 # ==============================================================================

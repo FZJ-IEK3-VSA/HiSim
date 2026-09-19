@@ -9,6 +9,7 @@ components:
       location: Aachen
       source_path: ${inputs}/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
       data_source: DWD_TRY
+      heating_reference_temperature_in_celsius: -7.0
       predictive_control: false
   occupancy:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
@@ -43,7 +44,6 @@ components:
   building:
     class: hisim.components.building.Building
     config: # built from preset: german_single_family_home
-      heating_reference_temperature_in_celsius: -7.0
       building_code: DE.N.SFH.05.Gen.ReEx.001.002
       building_heat_capacity_class: medium
       initial_internal_temperature_in_celsius: 22.0
@@ -69,19 +69,21 @@ components:
       lifetime_in_years: null
       maintenance_costs_in_euro_per_year: null
       subsidy_as_percentage_of_investment_costs: null
+      heating_reference_temperature_in_celsius: -7.0 # sized from weather.heating_reference_temperature_in_celsius=-7.0
       weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center # sized from weather.weather_identity=Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
     inputs:
       - weather
       - occupancy
       - hds
     sizing_sources:
+      heating_reference_temperature_in_celsius: weather.heating_reference_temperature_in_celsius # unique provider, written for re-execution
       weather_identity: weather.weather_identity # unique provider, written for re-execution
   hds_controller:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     config: # built from preset: building_derived
       heating_system: FLOORHEATING
       set_heating_threshold_outside_temperature_in_celsius: 18.0 # sized from building.heating_load_in_watt=7780.752200000001, building.conditioned_floor_area_in_m2=121.2
-      heating_reference_temperature_in_celsius: -7.0 # sized from building.heating_reference_temperature_in_celsius=-7.0
+      heating_reference_temperature_in_celsius: -7.0 # sized from weather.heating_reference_temperature_in_celsius=-7.0
       set_heating_temperature_for_building_in_celsius: 20.0 # sized from building.set_heating_temperature_in_celsius=20.0
       set_cooling_temperature_for_building_in_celsius: 25.0 # sized from building.set_cooling_temperature_in_celsius=25.0
       heating_load_of_building_in_watt: 7780.75 # sized from building.heating_load_in_watt=7780.752200000001
@@ -91,7 +93,7 @@ components:
     sizing_sources:
       heating_load_in_watt: building.heating_load_in_watt # unique provider, written for re-execution
       conditioned_floor_area_in_m2: building.conditioned_floor_area_in_m2 # unique provider, written for re-execution
-      heating_reference_temperature_in_celsius: building.heating_reference_temperature_in_celsius # unique provider, written for re-execution
+      heating_reference_temperature_in_celsius: weather.heating_reference_temperature_in_celsius # unique provider, written for re-execution
       set_heating_temperature_in_celsius: building.set_heating_temperature_in_celsius # unique provider, written for re-execution
       set_cooling_temperature_in_celsius: building.set_cooling_temperature_in_celsius # unique provider, written for re-execution
   hds:

@@ -1,10 +1,8 @@
 """Household with automatic default connections."""
 
-# clean
-
 from typing import Optional, Any
 from hisim.simulator import SimulationParameters
-from hisim.config import SizingContext
+from hisim.config import SizingContext, concrete
 
 from hisim.components import (
     building,
@@ -56,9 +54,6 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # =================================================================================================================================
     # Set Fix System Parameters
 
-    # Set Heat Pump
-    heating_reference_temperature_in_celsius: float = -7  # heating_reference_temperature_in_celsius #TODO: get real heating ref temps according to location
-
     # =================================================================================================================================
     # Build Basic Components
 
@@ -69,10 +64,18 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_weather_config = weather.WeatherConfig.preset_aachen("Weather")
 
     my_building_config = building.BuildingConfig.preset_german_single_family_home("Building")
-    my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
+    my_building_config.weather_identity = my_weather_config.identity()
+    # The design outside temperature is the weather's, not the building's: the building reads
+    # it as a sized field, so it is resolved before the archetype lookup runs on the config.
+    my_building_config = my_building_config.resolve(
+        SizingContext(
+            heating_reference_temperature_in_celsius=(
+                my_weather_config.heating_reference_temperature_in_celsius
+            )
+        )
+    )
 
     my_building_information = building.BuildingInformation(config=my_building_config)
-    my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build Occupancy
@@ -106,7 +109,9 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
             SizingContext(
                 heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
                 conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
-                heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+                heating_reference_temperature_in_celsius=(
+                    my_weather_config.heating_reference_temperature_in_celsius
+                ),
                 set_heating_temperature_in_celsius=(
                     my_building_information.set_heating_temperature_for_building_in_celsius
                 ),
@@ -126,9 +131,17 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     # Build Heat Pump Controller for space heating
-    my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
-        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
-        set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
+    my_heatpump_controller_sh_config = (
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
+            "MoreAdvancedHeatPumpHPLibControllerSH"
+        ).resolve(
+            SizingContext(
+                heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
+                set_heating_threshold_outside_temperature_in_celsius=(
+                    my_hds_controller_information.set_heating_threshold_temperature_in_celsius
+                ),
+            )
+        )
     )
 
     my_heatpump_controller_sh = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
@@ -136,7 +149,9 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     my_heatpump_controller_dhw_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.get_default_dhw_controller_config()
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
+            "HeatPumpControllerDHW"
+        )
     )
 
     # Build Heat Pump Controller for dhw
@@ -145,9 +160,15 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     # Build Heat Pump (for dhw and space heating)
-    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
+        "MoreAdvancedHeatPumpHPLib"
+    ).resolve(
+        SizingContext(
+            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            heating_reference_temperature_in_celsius=(
+                my_weather_config.heating_reference_temperature_in_celsius
+            ),
+        )
     )
     my_heatpump_config.with_domestic_hot_water_preparation = True
 
@@ -186,7 +207,9 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
     )
     my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
-        SizingContext(maximal_thermal_power_in_watt=my_heatpump_config.set_thermal_output_power_in_watt)
+        SizingContext(
+            maximal_thermal_power_in_watt=concrete(my_heatpump_config.set_thermal_output_power_in_watt)
+        )
     )
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,

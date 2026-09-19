@@ -1,25 +1,30 @@
 """Configuration dataclass for the Building component.
 
-Part of the ``hisim.components.building`` package split (see the package ``__init__``
-for the layout). Holds ``BuildingConfig`` together with its named default preset and
-its TABULA constructor. The
-sizing facts the building contributes to the rest of a scenario are declared next to the
-physics that computes them, in ``information.py``, which assigns
-``BuildingConfig.SIZING_CONTRIBUTIONS`` on import.
+Holds ``BuildingConfig`` with its named default preset, its TABULA constructor and the sizing
+facts it contributes to every other component of a scenario. The physics behind those facts is
+``BuildingInformation`` in ``information.py``, which the contribution calls.
 """
 
-# clean
-
 # pylint: disable=cyclic-import
-# (the only backward edge is a runtime-local import of Building inside
-# get_main_classname; module import order is acyclic)
+# (the only backward edges are runtime-local imports of Building and BuildingInformation;
+# module import order is acyclic)
 
 from dataclasses import dataclass
-from typing import ClassVar, Optional
+from typing import ClassVar, Optional, Tuple
 
 from dataclasses_json import dataclass_json
 
-from hisim.config import ComponentID, ConfigBase, Sizable, Size, constructor, preset, sized_field
+from hisim.config import (
+    ComponentID,
+    ConfigBase,
+    FactContribution,
+    Sizable,
+    Size,
+    SizingContext,
+    constructor,
+    preset,
+    sized_field,
+)
 
 
 @dataclass_json
@@ -27,69 +32,122 @@ from hisim.config import ComponentID, ConfigBase, Sizable, Size, constructor, pr
 class BuildingConfig(ConfigBase):
     """Configuration of the Building class.
 
-    The named default variant is :meth:`preset_german_single_family_home`, which replaced the former
-    ``get_default_german_single_family_home`` factory, and any other building comes from
-    :meth:`for_tabula_code`. The building is the *source* of the
-    sizing facts every other component sizes against (see :attr:`SIZING_CONTRIBUTIONS`) and
-    therefore has no sizable field of its own: its presets are plain concrete archetypes, and
-    a setup that deviates from one — a different TABULA code, an explicit envelope U-value, a
-    measured maximum thermal demand — takes the preset and assigns the field.
+    The named default variant is :meth:`preset_german_single_family_home`, and any other
+    building comes from :meth:`for_tabula_code`. The building is the *source* of the sizing
+    facts every other component sizes against (see :attr:`SIZING_CONTRIBUTIONS`) and therefore
+    has no sizable field of its own apart from the two the weather provides — the identity of the
+    weather it is computed with and the outside design temperature it is computed against: its
+    presets are plain concrete archetypes, and a setup that deviates from one — a different TABULA
+    code, an explicit envelope U-value, a measured maximum thermal demand — takes the preset and
+    assigns the field.
     """
 
-    @classmethod
-    def get_main_classname(cls) -> str:
-        """Return the full class name of the base class."""
-        from hisim.components.building.building import Building  # pylint: disable=import-outside-toplevel  # avoids config->building import cycle
-
-        return Building.get_full_classname()  # type: ignore[no-any-return]
+    MAIN_CLASS = "hisim.components.building.building.Building"
 
     component_id: ComponentID
-    heating_reference_temperature_in_celsius: float
+    #: TABULA/EPISCOPE code selecting the archetype, e.g. "DE.N.SFH.05.Gen.ReEx.001.002".
     building_code: str
-    building_heat_capacity_class: str
-    initial_internal_temperature_in_celsius: float
-    absolute_conditioned_floor_area_in_m2: Optional[float]
-    total_base_area_in_m2: Optional[float]
-    number_of_apartments: Optional[float]
-    max_thermal_building_demand_in_watt: Optional[float]
-    floor_u_value_in_watt_per_m2_per_kelvin: Optional[float]
-    floor_area_in_m2: Optional[float]
-    facade_u_value_in_watt_per_m2_per_kelvin: Optional[float]
-    facade_area_in_m2: Optional[float]
-    roof_u_value_in_watt_per_m2_per_kelvin: Optional[float]
-    roof_area_in_m2: Optional[float]
-    window_u_value_in_watt_per_m2_per_kelvin: Optional[float]
-    window_area_in_m2: Optional[float]
-    door_u_value_in_watt_per_m2_per_kelvin: Optional[float]
-    door_area_in_m2: Optional[float]
-    set_heating_temperature_in_celsius: float
-    set_cooling_temperature_in_celsius: float
-    enable_opening_windows: bool
-    #: CO2 footprint of investment in kg
-    device_co2_footprint_in_kg:  Optional[float]
+    #: TABULA thermal-mass class, one of "very light" … "very heavy".
+    building_heat_capacity_class: str = "medium"
+    initial_internal_temperature_in_celsius: float = 22.0
+    #: Heated floor area. Unset lets the Building derive it from the archetype, and the same
+    #: holds for every measurement below it: unset means "take the TABULA row's value".
+    absolute_conditioned_floor_area_in_m2: Optional[float] = None
+    total_base_area_in_m2: Optional[float] = None
+    number_of_apartments: Optional[float] = None
+    max_thermal_building_demand_in_watt: Optional[float] = None
+    floor_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
+    floor_area_in_m2: Optional[float] = None
+    facade_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
+    facade_area_in_m2: Optional[float] = None
+    roof_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
+    roof_area_in_m2: Optional[float] = None
+    window_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
+    window_area_in_m2: Optional[float] = None
+    door_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
+    door_area_in_m2: Optional[float] = None
+    #: Indoor temperatures the residents set, which bound the heating and the cooling season.
+    set_heating_temperature_in_celsius: float = 20.0
+    set_cooling_temperature_in_celsius: float = 25.0
+    enable_opening_windows: bool = False
+    #: CO2 footprint of investment in kg. Unset throughout the repository, which is what makes
+    #: postprocessing look the building up in the cost database instead.
+    device_co2_footprint_in_kg: Optional[float] = None
     #: cost for investment in Euro
-    investment_costs_in_euro:  Optional[float]
+    investment_costs_in_euro: Optional[float] = None
     #: lifetime in years
-    lifetime_in_years:  Optional[float]
+    lifetime_in_years: Optional[float] = None
     # maintenance cost in euro per year
-    maintenance_costs_in_euro_per_year:  Optional[float]
+    maintenance_costs_in_euro_per_year: Optional[float] = None
     # subsidies as percentage of investment costs
-    subsidy_as_percentage_of_investment_costs: Optional[float]
+    subsidy_as_percentage_of_investment_costs: Optional[float] = None
 
-    #: The weather this building is computed with, as ``WeatherConfig.identity()`` spells it. Sized
-    #: from the weather by the sizing engine (``roadmap/pylpg_flakiness.md`` F7). It exists because
-    #: the legacy solar-gains cache key was a hash of this config and nothing else, so without it two
-    #: buildings under different weathers shared one entry. The gains are keyed by their producer
-    #: now, under the weather's own artifact key, and this field is no longer part of that key -- but
-    #: it stays: it is sizing wire format, spelled out in every recorded energy-system twin and in the
-    #: generated schema, and removing it would move all of them.
+    #: Outside design temperature the heating load is computed against, sized from the weather
+    #: by the sizing engine. The design condition belongs to the place the building stands in
+    #: rather than to the building, so ``WeatherConfig`` states it and the building, the
+    #: heat-distribution controller and the hplib heat pump all read the one number (D-21).
+    heating_reference_temperature_in_celsius: Sizable[float] = sized_field(
+        rule=Size.HEATING_REFERENCE_TEMPERATURE_IN_CELSIUS
+    )
+
+    #: The weather this building is computed with, as ``WeatherConfig.identity()`` spells it,
+    #: sized from the weather by the sizing engine. It is not cache-key material -- the
+    #: solar-gains series are keyed by their producer, under the weather's own artifact key --
+    #: but it is sizing wire format, spelled out in every recorded twin and in the schema.
     weather_identity: Sizable[str] = sized_field(rule=Size.WEATHER_IDENTITY, value_type=str)
 
-    #: Sizing facts this config contributes to the scenario-wide fact pool.
-    #: Computed from the config alone via BuildingInformation, so the TABULA lookup runs
-    #: once per resolution, never per consumer, and never needs a constructed component.
-    #: Assigned in ``information.py``, next to the physics it calls.
-    SIZING_CONTRIBUTIONS: ClassVar[tuple] = ()
+    @staticmethod
+    def sizing_facts(config: "BuildingConfig", ctx: SizingContext) -> dict:
+        """Contributes the building-scope facts every other component sizes against.
+
+        Runs the TABULA/EPISCOPE lookup once, through :class:`BuildingInformation`, and
+        snapshots the quantities derived from it — the heating load, the apartment count, the
+        conditioned floor area and the roof area — beside the two indoor temperatures the
+        configuration states itself. Doing it here rather than per consumer is what keeps the
+        lookup to one run per resolution, and it needs no constructed component.
+
+        The outside design temperature is not among them: it belongs to the place rather than to
+        the building, so ``WeatherConfig`` contributes it and this class reads it (D-21).
+
+        Args:
+            config: this building configuration.
+            ctx: the sizing context; unused, the building is the root of the fact graph.
+
+        Returns:
+            dict: the six facts named in :attr:`SIZING_CONTRIBUTIONS`.
+        """
+        del ctx
+        # Imported here because information.py imports this module; the call is long after both
+        # are loaded.
+        from hisim.components.building.information import (  # pylint: disable=import-outside-toplevel
+            BuildingInformation,
+        )
+
+        information = BuildingInformation(config=config)
+        return {
+            "heating_load_in_watt": information.max_thermal_building_demand_in_watt,
+            "number_of_apartments": information.number_of_apartments,
+            "conditioned_floor_area_in_m2": information.scaled_conditioned_floor_area_in_m2,
+            "roof_area_in_m2": information.roof_area_in_m2,
+            "set_heating_temperature_in_celsius": config.set_heating_temperature_in_celsius,
+            "set_cooling_temperature_in_celsius": config.set_cooling_temperature_in_celsius,
+        }
+
+    #: Sizing facts this config contributes to the scenario-wide fact pool: the building is the
+    #: root of the fact graph, and these six are what everything else sizes against.
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
+        FactContribution(
+            facts=(
+                "heating_load_in_watt",
+                "number_of_apartments",
+                "conditioned_floor_area_in_m2",
+                "roof_area_in_m2",
+                "set_heating_temperature_in_celsius",
+                "set_cooling_temperature_in_celsius",
+            ),
+            compute=sizing_facts,
+        ),
+    )
 
     @preset(note="TABULA/EPISCOPE German single-family reference house")
     @classmethod
@@ -111,7 +169,6 @@ class BuildingConfig(ConfigBase):
         absolute_conditioned_floor_area_in_m2: Optional[float] = None,
         total_base_area_in_m2: Optional[float] = None,
         building_heat_capacity_class: str = "medium",
-        heating_reference_temperature_in_celsius: float = -7.0,
     ) -> "BuildingConfig":
         """Builds a building from a TABULA/EPISCOPE building code and its few free numbers.
 
@@ -119,10 +176,8 @@ class BuildingConfig(ConfigBase):
         hundreds of members — rather than by a handful of variants, which is why it is a
         named constructor and not a preset per code: a preset name is wire format forever,
         and minting hundreds of them would freeze an arbitrary subset of the catalogue into
-        the file format. Every envelope U-value and area is left ``None`` so the Building
-        component derives it from the code, the capex fields stay ``None`` so postprocessing
-        looks them up from the device database, and the comfort settings take the values the
-        repository has always used.
+        the file format. Everything the code decides — every envelope U-value and area — keeps
+        its unset default, so the Building derives it from the archetype.
 
         Args:
             name: Instance name of the building component; its ``ComponentID`` is built
@@ -137,8 +192,6 @@ class BuildingConfig(ConfigBase):
                 scaling the archetype; ``None`` unless the caller measured it.
             building_heat_capacity_class: TABULA thermal-mass class, one of ``"very light"``
                 … ``"very heavy"``.
-            heating_reference_temperature_in_celsius: Outside design temperature the
-                heating load is computed for.
 
         Returns:
             A fresh, fully populated configuration; nothing about it is shared with any
@@ -148,28 +201,7 @@ class BuildingConfig(ConfigBase):
             component_id=ComponentID(name=name),
             building_code=building_code,
             building_heat_capacity_class=building_heat_capacity_class,
-            initial_internal_temperature_in_celsius=22.0,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
-            max_thermal_building_demand_in_watt=None,
-            floor_u_value_in_watt_per_m2_per_kelvin=None,
-            floor_area_in_m2=None,
-            facade_u_value_in_watt_per_m2_per_kelvin=None,
-            facade_area_in_m2=None,
-            roof_u_value_in_watt_per_m2_per_kelvin=None,
-            roof_area_in_m2=None,
-            window_u_value_in_watt_per_m2_per_kelvin=None,
-            window_area_in_m2=None,
-            door_u_value_in_watt_per_m2_per_kelvin=None,
-            door_area_in_m2=None,
             total_base_area_in_m2=total_base_area_in_m2,
             number_of_apartments=number_of_apartments,
-            set_heating_temperature_in_celsius=20.0,
-            set_cooling_temperature_in_celsius=25.0,
-            enable_opening_windows=False,
-            device_co2_footprint_in_kg=None,  # todo: check value
-            investment_costs_in_euro=None,   # todo: check value
-            maintenance_costs_in_euro_per_year=None,  # todo: check value
-            subsidy_as_percentage_of_investment_costs=None,
-            lifetime_in_years=None,  # todo: check value
         )

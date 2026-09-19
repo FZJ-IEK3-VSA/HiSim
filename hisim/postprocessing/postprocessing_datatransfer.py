@@ -62,8 +62,8 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
                 carries it. Post-processing writes it into the pyam "scenario" column.
                 Empty when the run was not named.
             description: One-line description of the run, as the simulator carries it.
-                Post-processing writes it into ``scenario.json``. Empty when the run has
-                no description.
+                No post-processing artifact has carried it since ``scenario.json`` retired
+                with its writer (F-9). Empty when the run has no description.
         """
         if kpi_collection_dict is None:
             kpi_collection_dict = {}

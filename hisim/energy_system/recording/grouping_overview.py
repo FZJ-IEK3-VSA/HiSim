@@ -30,8 +30,6 @@ ungrouped setups, which have no file order to inherit because they have only one
 alphabetically. Nothing here iterates a set into the page.
 """
 
-# clean
-
 from __future__ import annotations
 
 import json

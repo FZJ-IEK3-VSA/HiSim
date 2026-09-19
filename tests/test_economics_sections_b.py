@@ -28,8 +28,6 @@ nothing about whether the numbers are right — `tests/test_economics_views_char
 and a bug caught here can mislead a reader but can never corrupt a stored result.
 """
 
-# clean
-
 import copy
 import dataclasses
 import re

@@ -20,8 +20,6 @@ without the code that wrote it, and validating one is a matter of recomputing th
 it with the filename. See :class:`CacheEntryMetadata`.
 """
 
-# clean
-
 import hashlib
 import os
 import tempfile

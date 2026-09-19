@@ -59,8 +59,6 @@ golden is a hard error, never a silent create; the golden's diff is part of the 
 request and, during the cleanup, may only be justified by a metadata change.
 """
 
-# clean
-
 import dataclasses
 import math
 from typing import Any, ClassVar, Dict, List, Tuple
@@ -343,6 +341,9 @@ class OneDaySnapshot:
         # The snapshot drives the building with synthetic inputs and no weather component, so the
         # identity is a description rather than a station; it has to be set for the building to build.
         config.weather_identity = "synthetic winter day, no weather component"
+        # The design outside temperature is the weather's (D-21); with no weather component the
+        # snapshot states the number the building has always been computed against.
+        config.heating_reference_temperature_in_celsius = -7.0
         if variant_name == cls.SCALED_VARIANT_NAME:
             config = dataclasses.replace(
                 config,

@@ -15,8 +15,6 @@ laws and how configs *resolve* them lives in :mod:`hisim.config.sizing`. Per the
 ``hisim.config`` layering rule this module imports nothing from the rest of HiSim.
 """
 
-# clean
-
 from __future__ import annotations
 
 import enum
@@ -114,6 +112,21 @@ class SizingLaw:
     def describe(self) -> str:
         """Renders the law as a short human-readable formula for errors and the audit."""
         raise NotImplementedError
+
+    def describe_as_operand(self) -> str:
+        """Renders the law for use *inside* another law's rendering, bracketed if needed.
+
+        ``Size.PV_PEAK_POWER_IN_WATT`` renders the same either way, but a law whose own
+        rendering is an infix expression has to be bracketed before a suffix is appended
+        to it, or the suffix reads as belonging to the expression's last term:
+        ``(0.5 * Size.PV_PEAK_POWER_IN_WATT).rounded(2)`` rather than
+        ``0.5 * Size.PV_PEAK_POWER_IN_WATT.rounded(2)``, which is a different arithmetic.
+        The default renders the law unchanged, and the infix laws override it.
+
+        Returns:
+            The law's rendering, in brackets where the rendering is an infix expression.
+        """
+        return self.describe()
 
     def facts_read(self) -> Tuple[Tuple[str, Cardinality], ...]:
         """Names the context facts this law reads, each with its cardinality.
@@ -283,7 +296,11 @@ class _ScaledLaw(_UnaryLaw):
 
     def describe(self) -> str:
         """Renders as ``factor * inner``."""
-        return f"{self.factor} * {self.inner.describe()}"
+        return f"{self.factor} * {self.inner.describe_as_operand()}"
+
+    def describe_as_operand(self) -> str:
+        """Renders bracketed: the product is infix, so a suffix must not bind to its tail."""
+        return f"({self.describe()})"
 
 
 class _ClampedLaw(_UnaryLaw):
@@ -306,7 +323,7 @@ class _ClampedLaw(_UnaryLaw):
 
     def describe(self) -> str:
         """Renders the bounds as ``.at_least``/``.at_most`` suffixes."""
-        rendered = self.inner.describe()
+        rendered = self.inner.describe_as_operand()
         if self.minimum is not None:
             rendered += f".at_least({self.minimum})"
         if self.maximum is not None:
@@ -328,7 +345,7 @@ class _RoundedLaw(_UnaryLaw):
 
     def describe(self) -> str:
         """Renders as a ``.rounded(n)`` suffix."""
-        return f"{self.inner.describe()}.rounded({self.digits})"
+        return f"{self.inner.describe_as_operand()}.rounded({self.digits})"
 
 
 class _ConstantLaw(SizingLaw):
@@ -370,11 +387,13 @@ class _FunctionLaw(SizingLaw):
         function: Callable[..., Any],
         reads: Tuple[Tuple[str, Cardinality], ...],
         fields: Tuple[str, ...] = (),
+        description: Optional[str] = None,
     ) -> None:
-        """Stores the callable, its declared context facts and its declared sibling fields."""
+        """Stores the callable, its declared context facts, its sibling fields and its wording."""
         self.function = function
         self.reads = reads
         self.fields = fields
+        self.description = description
 
     def evaluate(self, ctx: "SizingContext", own: Optional[OwnFieldsView] = None) -> Any:
         """Calls the function, passing the own-fields view only if sibling reads were declared."""
@@ -388,7 +407,20 @@ class _FunctionLaw(SizingLaw):
         return self.function(ctx, own)
 
     def describe(self) -> str:
-        """Renders the function by its qualified name where available."""
+        """Renders the author's description, falling back to the function's qualified name.
+
+        A function is opaque, so the only thing that can be read off it is its name, and for a
+        lambda that name is ``<Class>.<lambda>`` — which says that a law exists and nothing about
+        what it computes, and names the class the lambda was written in even where another class
+        borrows the law (finding F-22). An author who passes ``description=`` to :func:`law`
+        replaces that with the arithmetic in words; one who does not keeps the name.
+
+        Returns:
+            The declared description when there is one, else the callable's ``__qualname__``, else
+            its ``repr``.
+        """
+        if self.description is not None:
+            return self.description
         return getattr(self.function, "__qualname__", repr(self.function))
 
     def facts_read(self) -> Tuple[Tuple[str, Cardinality], ...]:
@@ -456,18 +488,52 @@ def _reject_mixed_cardinality(pairs: Tuple[Tuple[str, Cardinality], ...], descri
             )
 
 
+def _reject_description_without_function(rule: Any, description: Optional[str]) -> None:
+    """Rejects a description handed to a law that renders itself from its own structure.
+
+    Only a function law is opaque and therefore needs words: an expression law already renders
+    as the formula an author wrote and a constant law as the constant itself, so a description
+    on either would be a second, silently diverging spelling of something the law already says.
+    The check runs at declaration time, so the mistake fails on import rather than showing up in
+    a description nobody reads twice.
+
+    Example: ``law(Size.HEATING_LOAD_IN_WATT, description="the heating load")`` raises, while
+    ``law(lambda ctx: ..., reads=(...), description="the heating load per m²")`` is the intended
+    use.
+
+    Args:
+        rule: The rule as :func:`normalize_law` received it.
+        description: The description the caller passed, or ``None``.
+
+    Raises:
+        SizingError: If a description was given for anything but a callable rule.
+    """
+    if description is None:
+        return
+    raise SizingError(
+        f"a description was given for the law {rule!r}, which is not a function law; only a "
+        "function law is opaque enough to need one — an expression law describes itself as the "
+        "formula it is and a constant law as its constant."
+    )
+
+
 def normalize_law(
-    rule: Any, reads: Optional[Tuple[Any, ...]] = None, fields: Optional[Tuple[str, ...]] = None
+    rule: Any,
+    reads: Optional[Tuple[Any, ...]] = None,
+    fields: Optional[Tuple[str, ...]] = None,
+    description: Optional[str] = None,
 ) -> SizingLaw:
     """Turns whatever ``sized_field(rule=...)`` or :func:`law` received into a law object.
 
     Accepts a ready law, a callable (which **must** declare its reads), or any other
     value (wrapped as a constant law). The ``reads`` entries may be ``Size.*`` terms,
     :func:`Many`-wrapped terms or plain fact names; ``fields`` names sibling fields and
-    switches the callable to the two-argument ``fn(ctx, own)`` protocol. The result is
-    checked for the one-and-many contradiction before it is returned.
+    switches the callable to the two-argument ``fn(ctx, own)`` protocol; ``description``
+    states in words what a callable computes, and is what the law then describes itself
+    as. The result is checked for the one-and-many contradiction before it is returned.
     """
     if isinstance(rule, SizingLaw):
+        _reject_description_without_function(rule, description)
         _reject_mixed_cardinality(rule.facts_read(), rule.describe())
         return rule
     if callable(rule):
@@ -480,12 +546,16 @@ def normalize_law(
             )
         pairs = _read_pairs(reads)
         _reject_mixed_cardinality(pairs, getattr(rule, "__qualname__", repr(rule)))
-        return _FunctionLaw(rule, pairs, tuple(fields or ()))
+        return _FunctionLaw(rule, pairs, tuple(fields or ()), description)
+    _reject_description_without_function(rule, description)
     return _ConstantLaw(rule)
 
 
 def law(
-    rule: Any, reads: Optional[Tuple[Any, ...]] = None, fields: Optional[Tuple[str, ...]] = None
+    rule: Any,
+    reads: Optional[Tuple[Any, ...]] = None,
+    fields: Optional[Tuple[str, ...]] = None,
+    description: Optional[str] = None,
 ) -> SizingLaw:
     """Public spelling of law normalization, for laws declared outside ``sized_field``.
 
@@ -495,5 +565,32 @@ def law(
     but computes with that law). For callables ``reads`` is mandatory (Size terms,
     ``Many`` terms or plain fact names) and ``fields`` optionally names sibling fields
     the callable then receives as a second argument; see :class:`_FunctionLaw`.
+
+    Example::
+
+        HEATING_THRESHOLD_LAW: ClassVar[SizingLaw] = law(
+            lambda ctx: heating_threshold_for(ctx.heating_load_in_watt / ctx.area_in_m2),
+            reads=(Size.HEATING_LOAD_IN_WATT, Size.CONDITIONED_FLOOR_AREA_IN_M2),
+            description="a step table over the building's heating load per m²",
+        )
+
+    Args:
+        rule: A ready law, a callable, or any other value to be held as a constant.
+        reads: The context facts a callable reads, mandatory for one and refused for
+            anything else by the resolver's own declaration rules.
+        fields: The sibling fields a callable reads, which also switch it to the
+            two-argument protocol.
+        description: What a callable computes, in words. A function is opaque, so without
+            this the law describes itself as the callable's qualified name — for a lambda,
+            the uninformative ``<Class>.<lambda>``. Refused for an expression or constant
+            law, which already describe themselves exactly.
+
+    Returns:
+        The law object, ready to be attached to a field or assigned by a preset.
+
+    Raises:
+        SizingError: If a callable declares no reads, if a law reads one fact both as one
+            provider and as many, or if a description is given for a law that is not built
+            from a callable.
     """
-    return normalize_law(rule, reads, fields)
+    return normalize_law(rule, reads, fields, description)

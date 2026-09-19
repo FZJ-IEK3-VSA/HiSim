@@ -1,5 +1,5 @@
 """Helper functions for testing."""
-# clean
+import dataclasses
 from typing import Any, ClassVar, Optional, Tuple, Type
 
 import yaml
@@ -37,20 +37,23 @@ def default_building_sizing_context() -> SizingContext:
 def sized_example_component_config(component_id: Optional[ComponentID] = None) -> ExampleComponentConfig:
     """The default example component configuration, resolved so a component may be built from it.
 
-    ``ExampleComponentConfig.capacity`` is a sizable field, so the factory hands back a config
+    ``ExampleComponentConfig.capacity`` is a sizable field, so the preset hands back a config
     carrying ``AUTO`` and ``Component.__init__`` refuses it. Every test that constructs an
     ``ExampleComponent`` therefore resolves first, and does it through this one helper rather
     than repeating the context.
 
     Args:
-        component_id: the identity to build the configuration for; the factory default if None.
+        component_id: the identity to build the configuration for. A preset takes only an
+            instance name, so an identity that carries a building is substituted afterwards;
+            None means the plain ``"ExampleComponent"`` the preset builds.
 
     Returns:
         ExampleComponentConfig: the resolved configuration, with ``capacity`` a real number.
     """
-    return ExampleComponentConfig.get_default_example_component(component_id=component_id).resolve(
-        default_building_sizing_context()
-    )
+    config = ExampleComponentConfig.preset_standard("ExampleComponent")
+    if component_id is not None:
+        config = dataclasses.replace(config, component_id=component_id)
+    return config.resolve(default_building_sizing_context())
 
 
 def round_trip_config_block(config: Any, config_class: Type, component_name: str) -> Any:

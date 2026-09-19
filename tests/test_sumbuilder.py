@@ -1,6 +1,5 @@
 """Tests for the SumBuilder components."""
 
-# clean
 import pytest
 
 from hisim import component as cp
@@ -21,7 +20,7 @@ def test_sum_builder_for_three_inputs() -> None:
     """
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
-    sum_builder_config = sumbuilder.SumBuilderConfig.get_sumbuilder_default_config()
+    sum_builder_config = sumbuilder.SumBuilderConfig.preset_standard("Sum")
     my_sum = sumbuilder.SumBuilderForThreeInputs(config=sum_builder_config, my_simulation_parameters=mysim)
 
     # Define fake inputs
@@ -93,7 +92,7 @@ def test_sum_builder_for_two_inputs() -> None:
     """
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
-    sum_builder_config = sumbuilder.SumBuilderConfig.get_sumbuilder_default_config()
+    sum_builder_config = sumbuilder.SumBuilderConfig.preset_standard("Sum")
     my_sum = sumbuilder.SumBuilderForTwoInputs(config=sum_builder_config, my_simulation_parameters=mysim)
 
     # Define fake inputs
@@ -152,7 +151,7 @@ def _make_calculate_operation() -> sumbuilder.CalculateOperation:
     ``add_numbered_input`` / ``add_operation`` calls.
     """
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
-    config = sumbuilder.SumBuilderConfig.get_sumbuilder_default_config()
+    config = sumbuilder.SumBuilderConfig.preset_standard("Sum")
     return sumbuilder.CalculateOperation(config=config, my_simulation_parameters=mysim)
 
 

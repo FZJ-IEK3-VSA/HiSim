@@ -2,7 +2,7 @@
 # Records which contract revision each vendored file was copied from and the
 # SHA-256 it had; tests/renovisor/test_contract.py recomputes the hashes.
 repository: https://github.com/climatemedia/renovisor-api-contract
-refreshed_at: '2026-09-19T19:18:53+00:00'
+refreshed_at: '2026-09-19T19:53:50+00:00'
 files:
   openapi.yaml:
     ref: origin/main
@@ -36,4 +36,4 @@ files:
   measure-capabilities.openapi.yaml:
     source: /home/contract-proposals
     path: measure-capabilities.openapi.yaml
-    sha256: f41ddbd06c326c810dd71f24118892e5e5c431d717dfe3d5d67e3c9aca14c3d2
+    sha256: 79d29faed57c3e5079186b89b8888a24741bde52d4b5d571ae34cd0718824cf0

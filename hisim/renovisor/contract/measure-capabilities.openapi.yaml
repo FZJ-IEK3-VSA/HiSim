@@ -111,7 +111,6 @@ components:
           required: [commit]
           properties:
             commit: { type: string, description: Commit of the translator in this image. }
-            generated_at: { type: string, format: date-time }
             probes:
               type: integer
               description: How many probe requests the document was aggregated from.

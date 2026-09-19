@@ -62,7 +62,7 @@ EXPECTED_NOT_IMPLEMENTED = {
 @pytest.fixture(scope="module", name="document")
 def fixture_document() -> CapabilityDocument:
     """Build the capability document once; every test in this module reads the same probe run."""
-    return CapabilityDocument.build(generated_at="2026-09-19T00:00:00+00:00")
+    return CapabilityDocument.build()
 
 
 @pytest.mark.base
@@ -233,14 +233,19 @@ class TestTheDocument:
             ReportStatus.USED.value
         )
 
-    def test_the_only_non_deterministic_field_can_be_overridden(self, tmp_path: Path) -> None:
-        """So that a test, and a reproducible build, can compare two documents byte for byte."""
-        first = CapabilityDocument.build(generated_at="2026-09-19T00:00:00+00:00")
-        path = tmp_path / "capabilities.json"
+    def test_two_builds_of_one_state_are_byte_identical(
+        self, document: CapabilityDocument, tmp_path: Path
+    ) -> None:
+        """The backend hashes the file for a strong, immutable ETag; a clock in it would break that (H18)."""
+        second = CapabilityDocument.build()
+        first_path = tmp_path / "first.json"
+        second_path = tmp_path / "second.json"
 
-        assert first.write(path) == 0
-        assert first.body["translator"]["generated_at"] == "2026-09-19T00:00:00+00:00"
-        assert path.read_text(encoding="utf-8").endswith("\n")
+        assert document.write(first_path) == 0
+        assert second.write(second_path) == 0
+        assert first_path.read_bytes() == second_path.read_bytes()
+        assert "generated_at" not in document.body["translator"]
+        assert first_path.read_text(encoding="utf-8").endswith("\n")
 
 
 @pytest.mark.base

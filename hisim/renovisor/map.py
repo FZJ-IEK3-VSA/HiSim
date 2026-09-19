@@ -209,11 +209,6 @@ class TranslationMap:
     #: The page's title, in the tab and in the heading.
     TITLE: ClassVar[str] = "RenoVisor translation map"
 
-    #: The timestamp the page carries. It is the translator version and the catalogue revision,
-    #: never a clock: a page that changed because it was regenerated on a Tuesday would fail its
-    #: own freshness test every Tuesday.
-    GENERATED_AT: ClassVar[str] = "fixed by content, not by the clock"
-
     @classmethod
     def render(cls, base_files_directory: Optional[Path] = None) -> str:
         """Return the whole page as one string.
@@ -224,9 +219,7 @@ class TranslationMap:
         Returns:
             The HTML, deterministic for one state of the translator.
         """
-        document = CapabilityDocument.build(
-            generated_at=cls.GENERATED_AT, base_files_directory=base_files_directory
-        )
+        document = CapabilityDocument.build(base_files_directory=base_files_directory)
         trace = TraceExample.build(base_files_directory)
         parts: List[str] = [
             "<!doctype html>",

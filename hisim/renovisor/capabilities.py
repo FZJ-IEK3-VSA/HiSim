@@ -33,7 +33,6 @@ proposal for it.
 """
 
 import copy
-import datetime
 import json
 from dataclasses import dataclass, field
 from enum import Enum
@@ -932,16 +931,20 @@ class CapabilityDocument:
     def build(
         cls,
         measures_path: Optional[Path] = None,
-        generated_at: Optional[str] = None,
         base_files_directory: Optional[Path] = None,
     ) -> "CapabilityDocument":
         """Read the catalogue, check the frozen table against it, run the probes and aggregate.
 
+        The document is a function of the code and the vendored catalogue alone: two builds of
+        one commit are byte-identical. It therefore carries no timestamp. The backend serves the
+        file under a strong ETag that is its hash and marks it immutable per version, so a clock
+        reading inside the document would make equivalent content look changed on every rebuild
+        (shared todo H18). The commit fields identify the build; a reader who wants to know when
+        a file was written asks the file system.
+
         Args:
             measures_path: A ``measures.yaml`` to check the frozen table against; the vendored
                 copy when omitted.
-            generated_at: Override the document's one non-deterministic field, so that a test
-                can compare two runs byte for byte.
             base_files_directory: Where the recorded twins live.
 
         Returns:
@@ -967,9 +970,6 @@ class CapabilityDocument:
                 "hisim_commit": HiSimCommit.or_unknown(),
                 "request_schema_version": 1,
                 "catalogue_revision": cls.catalogue_revision(),
-                "generated_at": generated_at or datetime.datetime.now(datetime.timezone.utc)
-                .replace(microsecond=0)
-                .isoformat(),
                 "probes": len(results),
             },
             "measures": measures,

@@ -47,6 +47,7 @@ from hisim.energy_system.errors import (
 from hisim.energy_system.groups import ExpansionRecord, expand_groups
 from hisim.energy_system.loader import parse_energy_system
 from hisim.energy_system.model import EnergySystemFile
+from hisim.energy_system.parameters_format import ParameterFileWriter, ParameterNormalisation
 from hisim.energy_system.path_resolver import PathResolver
 from hisim.energy_system.record import realize, verify_rerun
 from hisim.energy_system.validation import validate_structure
@@ -448,24 +449,60 @@ def build_energy_system(
     return executor.build()
 
 
-def write_records(built: BuiltEnergySystem, result_directory: str) -> Tuple[str, str, str]:
-    """Writes the three artifacts that describe one built energy system.
+#: File name of the parameter set a run was given, written beside its realized record. The pair
+#: is what ``hisim energy-system run`` takes as its two arguments, so a result directory carries
+#: the command that reproduces it rather than only the system half of it.
+PARAMETERS_FILENAME = "realized.simulation.yaml"
+
+
+def write_parameters(parameters: SimulationParameters, result_directory: str) -> str:
+    """Writes the parameter set a run was given, next to the record of what it built.
+
+    Rendered through the same writer the fleet recorder's library files go through, so the two
+    kinds of file are byte-for-byte the same format and either can be handed back to
+    ``hisim energy-system run``. Normalisation drops what describes the machine rather than the
+    run -- the cache directory, the result directory, the figure format and the two derived
+    counts -- so the file says what to do and not where it was done.
+
+    Args:
+        parameters: The run's effective parameters, after the file and any override.
+        result_directory: Where the file goes; the caller has created it.
+
+    Returns:
+        The path written.
+    """
+    path = os.path.join(result_directory, PARAMETERS_FILENAME)
+    text = ParameterFileWriter.text(
+        ParameterNormalisation.normalise(parameters), ParameterFileWriter.RUN_HEADER
+    )
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(text)
+    return path
+
+
+def write_records(built: BuiltEnergySystem, result_directory: str) -> Tuple[str, str, str, str]:
+    """Writes the four artifacts that describe one built energy system and its run.
 
     The realized record states what was built, annotated with where every number came from; the
-    audit companion states the same provenance as data nothing has to parse out of a comment; and
-    the wire log lists every connection that was made. All three are written before the first
-    timestep runs, so a run that crashes halfway still leaves behind a complete description of
-    the system it was running — which is when such a description is worth the most.
+    audit companion states the same provenance as data nothing has to parse out of a comment; the
+    wire log lists every connection that was made; and the parameter record states what the run
+    was asked to do with the system. All four are written before the first timestep runs, so a run
+    that crashes halfway still leaves behind a complete description of what it was running — which
+    is when such a description is worth the most.
+
+    The record and the parameter file together are the two arguments of the command that produced
+    them, which is what makes a result directory reproducible from its own contents rather than
+    from whatever the caller remembers typing.
 
     Nothing has to have been simulated for this to work. A caller that only built a system, to
-    see what a file would produce, gets the same three files.
+    see what a file would produce, gets the same four files.
 
     Args:
         built: The finished build.
         result_directory: Where the artifacts go; created when it does not exist.
 
     Returns:
-        The paths of the record, the audit and the wire log.
+        The paths of the record, the audit, the wire log and the parameter record.
 
     Raises:
         EnergySystemRecordError: ``EF-60`` when the record would not be fully concrete, and
@@ -479,11 +516,12 @@ def write_records(built: BuiltEnergySystem, result_directory: str) -> Tuple[str,
         record, build_audit(built), os.path.join(result_directory, AnnotatedEmitter.RECORD_FILENAME)
     )
     audit_path, wire_path = write_audit(built, result_directory)
+    parameters_path = write_parameters(built.simulator.get_simulation_parameters(), result_directory)
     log.information(
         f"Wrote the realized record of '{built.model.name}' to '{record_path}', its audit to "
-        f"'{audit_path}' and its wire log to '{wire_path}'."
+        f"'{audit_path}', its wire log to '{wire_path}' and its parameters to '{parameters_path}'."
     )
-    return record_path, audit_path, wire_path
+    return record_path, audit_path, wire_path, parameters_path
 
 
 def run_energy_system(

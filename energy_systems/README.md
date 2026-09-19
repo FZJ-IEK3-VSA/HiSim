@@ -39,15 +39,20 @@ python hisim/hisim_main.py energy_systems/gas_boiler_household.energy_system.yam
     energy_systems/one_day_15min.simulation.yaml
 ```
 
-The run writes its results, and beside them three files that describe what was actually run:
+The run writes its results, and beside them four files that describe what was actually run:
 `realized.energy_system.yaml` — the file again with every preset expanded and every computed value
 written out, annotated with where each number came from; `realized.audit.yaml` — the same
-provenance as plain data; and `component_connections.json` — the flat log of every connection that
-was made. Re-running the realized record decides nothing and reproduces the run exactly:
+provenance as plain data; `component_connections.json` — the flat log of every connection that
+was made; and `realized.simulation.yaml` — the parameter set the run was given, without the
+settings that describe the machine rather than the run. All four are written before the first
+timestep, so a run that dies halfway still describes itself.
+
+The first and the last are the two arguments of the command that produced them, so a result
+directory re-runs from its own contents, and `--rerun` checks that it reproduces field by field:
 
 ```bash
 hisim energy-system run results/.../realized.energy_system.yaml \
-    energy_systems/one_day_15min.simulation.yaml --rerun
+    results/.../realized.simulation.yaml --rerun
 ```
 
 ## Finding out what to write

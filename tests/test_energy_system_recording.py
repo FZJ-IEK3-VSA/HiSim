@@ -597,10 +597,10 @@ def test_the_realized_record_of_a_recording_re_executes_unchanged(
     the second run legitimately started from a different file than the first.
     """
     built = build_energy_system(recordings["basic_household"].path, Fixtures.parameters(tmp_path / "results"))
-    record_path, _, _ = write_records(built, str(tmp_path / "record"))
+    record_path, _, _, _ = write_records(built, str(tmp_path / "record"))
 
     rerun = build_energy_system(Path(record_path), Fixtures.parameters(tmp_path / "again"), rerun=True)
-    rerun_path, _, _ = write_records(rerun, str(tmp_path / "record-again"))
+    rerun_path, _, _, _ = write_records(rerun, str(tmp_path / "record-again"))
 
     first = load_energy_system(Path(record_path))
     second = load_energy_system(Path(rerun_path))

@@ -449,3 +449,10 @@ set to −1 000 000 000** (`hisim/components/configuration.py`, `PlaceholderCoun
 Irish rows replace the block. The payload reads none of those KPIs: emissions come from the lifecycle engine's
 Irish factors; energy demand and self-sufficiency do not depend on the tables. Verified: the KPI path ran,
 "Costs of grid electricity" = −1.2 × 10¹⁰ EUR for one January day.
+
+**F11 (2026-09-19, found on the merge with main):** HiSim #771 moved the outside design temperature to the
+weather (`Weather.for_location` requires `heating_reference_temperature_in_celsius`; the building reads it as a
+sizing fact). The translator had been passing TABULA's `Theta_e_Base` for it — which is the heating-degree-day
+base of 12 °C for every country, not a design condition (`Theta_e` is the annual mean). The value is now the
+reviewed per-country constant `DesignTemperatures.BY_COUNTRY` (IE −3 °C, NL −10 °C, both TO BE REVIEWED), and a
+country without one is a translator error rather than Aachen's −7 °C.

@@ -73,6 +73,7 @@ class Outputs:
         "realized.energy_system.yaml",
         "realized.audit.yaml",
         "component_connections.json",
+        "realized.simulation.yaml",
     )
 
     #: Written after the simulation.

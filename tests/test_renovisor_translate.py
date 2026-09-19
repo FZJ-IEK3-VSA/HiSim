@@ -20,7 +20,7 @@ import pytest
 
 from hisim.energy_system.loader import load_energy_system
 from hisim.renovisor.apply import apply
-from hisim.renovisor.constants import BuildingDefaults, RoofDefaults, StorageDefaults
+from hisim.renovisor.constants import BuildingDefaults, DesignTemperatures, RoofDefaults, StorageDefaults
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.report import MappingReport
 from hisim.renovisor.request import Request
@@ -150,7 +150,16 @@ class TestEveryTargetReceivesItsValue:
         assert arguments["building_code"].startswith("IE.N.SFH.")
         assert arguments["absolute_conditioned_floor_area_in_m2"] == 140
         assert arguments["number_of_apartments"] == BuildingDefaults.NUMBER_OF_APARTMENTS
-        assert "heating_reference_temperature_in_celsius" in arguments
+        assert "heating_reference_temperature_in_celsius" not in arguments
+
+    def test_the_weather_carries_the_reviewed_design_temperature(self) -> None:
+        """The weather owns the design condition (HiSim #771); it is the per-country reviewed constant,
+        not TABULA's degree-day base of 12 °C."""
+        system = translate(baseline())
+
+        arguments = constructor_of(system, Targets.WEATHER)
+        assert arguments is not None
+        assert arguments["heating_reference_temperature_in_celsius"] == DesignTemperatures.BY_COUNTRY["IE"]
 
     def test_the_recorded_weather_identity_is_removed(self) -> None:
         """Finding F1: a recorded value on a sized field pins it, and Aachen is not Dublin."""
@@ -162,7 +171,10 @@ class TestEveryTargetReceivesItsValue:
         """One station per country, chosen by its constructor rather than by a recorded path."""
         system = translate(baseline())
 
-        assert constructor_of(system, Targets.WEATHER) == {"location": "IE"}
+        assert constructor_of(system, Targets.WEATHER) == {
+            "location": "IE",
+            "heating_reference_temperature_in_celsius": DesignTemperatures.BY_COUNTRY["IE"],
+        }
         assert "source_path" not in config_of(system, Targets.WEATHER)
 
     def test_the_occupancy_is_the_one_profile_the_image_ships(self) -> None:

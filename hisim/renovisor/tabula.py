@@ -88,14 +88,11 @@ class BuildingCode:
         typology: The typology the code carries, for the note.
         notes: One sentence per approximation that was made; empty when the code is the exact
             band of the exact typology.
-        heating_reference_temperature_in_celsius: The row's own ``Theta_e_Base``, the outside
-            design temperature of the climate region the archetype belongs to.
     """
 
     code: str
     typology: str
     notes: Tuple[str, ...]
-    heating_reference_temperature_in_celsius: Optional[float]
 
     def is_approximated(self) -> bool:
         """Return whether anything about the selection was approximated."""
@@ -156,7 +153,6 @@ class TabulaIndex:
     YEAR_END_COLUMN: ClassVar[str] = "Year2_Building"
     DOOR_AREA_COLUMN: ClassVar[str] = "A_Door_1"
     WINDOW_AREA_COLUMNS: ClassVar[Tuple[str, str]] = ("A_Window_1", "A_Window_2")
-    REFERENCE_TEMPERATURE_COLUMN: ClassVar[str] = "Theta_e_Base"
 
     @classmethod
     @lru_cache(maxsize=1)
@@ -182,23 +178,6 @@ class TabulaIndex:
             key: tuple(sorted(bands.values(), key=lambda band: band.band))
             for key, bands in collected.items()
         }
-
-    @classmethod
-    @lru_cache(maxsize=1)
-    def reference_temperatures(cls) -> Dict[str, float]:
-        """Return the outside design temperature of every indexed code, by code.
-
-        The ``for_tabula_code`` constructor's own default is ``-7``, a German value. TABULA
-        carries the climate region's design temperature on every row as ``Theta_e_Base``, so the
-        translator reads it from the row it selected instead of holding a per-country constant
-        (review §6).
-        """
-        temperatures: Dict[str, float] = {}
-        for match, row in cls._rows():
-            value = cls._decimal(row.get(cls.REFERENCE_TEMPERATURE_COLUMN))
-            if value is not None:
-                temperatures[match.group(0)] = value
-        return temperatures
 
     @classmethod
     def countries(cls) -> FrozenSet[str]:
@@ -297,14 +276,13 @@ class BuildingCodeSelector:
             code=code,
             typology=typology,
             notes=tuple(notes),
-            heating_reference_temperature_in_celsius=TabulaIndex.reference_temperatures().get(code),
         )
 
     @classmethod
     def _requested(cls, code: str, areas_given: bool) -> BuildingCode:
         """Return the expert-supplied code, checking only that it exists and can be simulated."""
         match = TabulaIndex.CODE_PATTERN.match(code)
-        if match is None or code not in TabulaIndex.reference_temperatures():
+        if match is None:
             raise TabulaUnresolvable(
                 f"'{code}' is not a generic-example row of the processed TABULA table"
             )
@@ -313,7 +291,11 @@ class BuildingCodeSelector:
             (entry for entry in TabulaIndex.bands().get((country, typology), ()) if entry.band == wanted),
             None,
         )
-        if band is not None and not band.usable and not areas_given:
+        if band is None:
+            raise TabulaUnresolvable(
+                f"'{code}' is not a generic-example row of the processed TABULA table"
+            )
+        if not band.usable and not areas_given:
             raise TabulaUnresolvable(
                 f"the TABULA row '{code}' has no door or window area and the request supplies "
                 "neither door.area_in_m2 nor window.area_in_m2, so the Building would divide by zero"
@@ -322,7 +304,6 @@ class BuildingCodeSelector:
             code=code,
             typology=typology,
             notes=(),
-            heating_reference_temperature_in_celsius=TabulaIndex.reference_temperatures().get(code),
         )
 
     @classmethod

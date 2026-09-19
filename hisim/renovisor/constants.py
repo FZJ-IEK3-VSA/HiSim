@@ -193,6 +193,28 @@ class RoofDefaults:
     AZIMUTH: ClassVar[float] = 180.0
 
 
+class DesignTemperatures:
+    """The outside design temperature a heating system is sized for, per country.
+
+    HiSim's weather owns this fact (``WeatherConfig.heating_reference_temperature_in_celsius``,
+    a required constructor argument since HiSim #771) and hands it to the building and the
+    generators as the sizing fact of the same name; the recorded twins carry Aachen's -7 °C. TABULA
+    cannot supply it: its ``Theta_e_Base`` column is the heating-degree-day base temperature (12 °C
+    for every country) and ``Theta_e`` the annual mean, neither of which is a design condition.
+    So the number is a reviewed constant per country, and a country without one is refused rather
+    than sized for Aachen.
+
+    Every value here is TO BE REVIEWED by whoever owns the physics.
+    """
+
+    #: Country code -> outside design temperature in °C.
+    #:   IE: -3.0 -- the external design temperature used for Irish heat-loss sizing
+    #:       (I.S. EN 12831 national annex / SEAI heat pump sizing guidance).           TO BE REVIEWED
+    #:   NL: -10.0 -- the Dutch design temperature (NEN 5060 / ISSO 51).                 TO BE REVIEWED
+    #: ES has no entry: it has no TABULA typology and is refused before the weather is built.
+    BY_COUNTRY: ClassVar[Dict[str, float]] = {"IE": -3.0, "NL": -10.0}
+
+
 class BuildingDefaults:
     """What the translator writes into ``Building`` that no request field states."""
 

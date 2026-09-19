@@ -47,6 +47,7 @@ from hisim.renovisor.constants import (
     BatteryLaw,
     BoilerEfficiency,
     BuildingDefaults,
+    DesignTemperatures,
     OccupancyMode,
     PredefinedHousehold,
     RoofDefaults,
@@ -1111,8 +1112,6 @@ def _envelope(state: _TranslationState) -> None:
         "absolute_conditioned_floor_area_in_m2": building.absolute_conditioned_floor_area_in_m2,
         "number_of_apartments": BuildingDefaults.NUMBER_OF_APARTMENTS,
     }
-    if code.heating_reference_temperature_in_celsius is not None:
-        arguments["heating_reference_temperature_in_celsius"] = code.heating_reference_temperature_in_celsius
     state.swap(
         ConstructorSwaps.BUILDING,
         arguments,
@@ -1168,18 +1167,6 @@ def _report_archetype(state: _TranslationState, code: BuildingCode) -> None:
             Targets.BUILDING, "for_tabula_code", "number_of_apartments"
         ),
     )
-    if code.heating_reference_temperature_in_celsius is not None:
-        state.report.defaulted(
-            "house.building.heating_reference_temperature_in_celsius",
-            code.heating_reference_temperature_in_celsius,
-            note=(
-                f"the outside design temperature of the TABULA row {code.code} (Theta_e_Base), "
-                "instead of the constructor's own German default of -7"
-            ),
-            target=Targets.describe_constructor(
-                Targets.BUILDING, "for_tabula_code", "heating_reference_temperature_in_celsius"
-            ),
-        )
 
 
 def _element(state: _TranslationState, element: ThermalElement) -> None:
@@ -1261,9 +1248,16 @@ def _weather(state: _TranslationState) -> None:
             "the request schema and HiSim's station catalogue disagree, which the request "
             "validation should have caught",
         )
+    design_temperature = DesignTemperatures.BY_COUNTRY.get(country)
+    if design_temperature is None:
+        raise TranslateError(
+            f"no reviewed outside design temperature for country '{country}'",
+            "Weather.for_location requires one since the weather owns that sizing fact (HiSim #771); add the "
+            "country to DesignTemperatures.BY_COUNTRY with its source rather than sizing for Aachen's -7 °C",
+        )
     state.swap(
         ConstructorSwaps.WEATHER,
-        {"location": country},
+        {"location": country, "heating_reference_temperature_in_celsius": design_temperature},
         source="location.country",
         note=(
             f"the recorded Aachen configuration became for_location({country}); its location, "
@@ -1276,6 +1270,17 @@ def _weather(state: _TranslationState) -> None:
         country,
         source="location.country",
         note="the array's own label, which the recorded file carried as AACHEN",
+    )
+    state.report.defaulted(
+        "house.building.heating_reference_temperature_in_celsius",
+        design_temperature,
+        note=(
+            f"the reviewed outside design temperature of {country} (DesignTemperatures.BY_COUNTRY, to be "
+            "reviewed), handed to the weather, which owns that sizing fact and hands it to the building"
+        ),
+        target=Targets.describe_constructor(
+            Targets.WEATHER, "for_location", "heating_reference_temperature_in_celsius"
+        ),
     )
     state.report.used(
         "location.country",

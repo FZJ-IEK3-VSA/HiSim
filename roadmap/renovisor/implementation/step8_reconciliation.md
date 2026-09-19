@@ -177,8 +177,9 @@ Keep the registry-of-functions and the closed effect set; change what they read 
   `not_implemented_yet` (no `ems_without_battery` option in the twins).
 - **Constructor swaps** as today: `Building.for_tabula_code{building_code,
   absolute_conditioned_floor_area_in_m2, number_of_apartments: 1,
-  heating_reference_temperature_in_celsius}` — the reference temperature from the TABULA row's
-  `Theta_e_Base` column for the selected code (review §6; no per-country constant), reported
+  heating_reference_temperature_in_celsius}` — the reference temperature from `DesignTemperatures.BY_COUNTRY` in `constants.py`, a reviewed
+  per-country constant handed to `Weather.for_location`, which owns it since HiSim #771 (corrected
+  2026-09-19: TABULA's `Theta_e_Base` is the 12 °C degree-day base, not a design condition), reported
   `defaulted` with the value; `Weather.for_location{location: <country>}`;
   `UTSPConnector.for_household{household: CHR01 Couple both at Work (JsonReference with Name
   and Guid.StrVal), data_acquisition_mode: USE_PREDEFINED_PROFILE}` always (D-C), behind

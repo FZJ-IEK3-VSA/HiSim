@@ -13,6 +13,7 @@ the specification names on both sides.
 
 import pytest
 
+from hisim.renovisor.constants import DesignTemperatures
 from hisim.renovisor.tabula import (
     BuildingCodeSelector,
     TabulaIndex,
@@ -57,10 +58,11 @@ class TestTheIndex:
         """Detached and bungalow are SFH, semi-detached and terraced TH, apartment AB."""
         assert TabulaIndex.typologies("IE") >= {"SFH", "TH", "AB"}
 
-    def test_every_indexed_row_carries_an_outside_design_temperature(self) -> None:
-        """``Theta_e_Base`` is read from the row, so no per-country constant is needed."""
-        temperatures = TabulaIndex.reference_temperatures()
-        assert temperatures["IE.N.SFH.06.Gen.ReEx.001.001"] is not None
+    def test_every_simulable_country_has_a_reviewed_design_temperature(self) -> None:
+        """TABULA cannot supply the design condition (Theta_e_Base is the 12 °C degree-day base), so a
+        reviewed constant per indexed request country must exist, or the weather cannot be built."""
+        for country in TabulaIndex.countries() & {"IE", "NL", "ES"}:
+            assert country in DesignTemperatures.BY_COUNTRY, country
 
 
 @pytest.mark.base

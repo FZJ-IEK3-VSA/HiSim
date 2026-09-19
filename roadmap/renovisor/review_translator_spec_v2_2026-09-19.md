@@ -164,8 +164,10 @@ twin has `ems_without_battery`; `set_economic_parameters` exists. Two claims are
 ## 6. Smaller points, by section
 
 - **§3.3 `heating_reference_temperature_in_celsius` per country as a constant** (IE −3, NL −10,
-  ES 2, "to review"): TABULA carries `Theta_e_Base` per climate region on every row. Read it from
-  the row instead of a constant; one fewer number to review.
+  ES 2, "to review"): kept as a reviewed constant. *(Corrected 2026-09-19: this review first suggested
+  reading TABULA's `Theta_e_Base` instead; that column is the 12 °C heating-degree-day base for every
+  country and `Theta_e` the annual mean, so neither is a design condition. Since HiSim #771 the weather
+  owns the value and requires it, so the constant is the only honest source.)*
 - **§4.2 fixed layer defaults** (100/60/150/300 mm per measure) versus the register's Q11
   (target-driven thickness reaching the regulatory target U). Under D1 the frontend knows the
   current U-value and could send the thickness; either default is defensible, but the spec

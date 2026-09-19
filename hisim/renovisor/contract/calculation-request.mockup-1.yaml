@@ -19,7 +19,11 @@ location:
 
 house:
   building:
-    building_type: detached_sfh # + construction_year → TABULA IE.N.SFH.05.Gen.ReEx.001.001
+    # + construction_year → TABULA IE.N.SFH.06.Gen.ReEx.001.001, reported `approximated`: band 05
+    # (1967-1977) covers 1975 but its TABULA row has no door or window area, which the Building
+    # component cannot run with, so the translator takes the nearest usable band (C4; the band-05
+    # row gaining its areas would make this band 05 again).
+    building_type: detached_sfh
     construction_year: 1975
     absolute_conditioned_floor_area_in_m2: 140 # Building field, verbatim
     set_heating_temperature_in_celsius: 21 # Building field, verbatim; the form's kept default

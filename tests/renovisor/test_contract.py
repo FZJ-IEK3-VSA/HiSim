@@ -66,7 +66,7 @@ class TestVendoredContract:
         assert present == pinned, f"unpinned or missing contract files: {present ^ pinned}"
 
     def test_the_hisim_authored_results_extension_is_present_and_unpinned(self) -> None:
-        """HiSim's proposal for the capability document's ``results`` section, beside the copies."""
+        """The HiSim proposal for the capability document's ``results`` section, beside the copies."""
         assert ContractFiles.RESULTS_EXTENSION_FILENAME in ContractFiles.HISIM_AUTHORED
         assert ContractFiles.RESULTS_EXTENSION_FILENAME not in ContractFiles.pinned()["files"]
 

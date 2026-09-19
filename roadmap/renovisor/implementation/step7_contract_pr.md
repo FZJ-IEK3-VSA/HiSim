@@ -1,5 +1,7 @@
 # Step 7 — the contract PR: one `openapi.yaml` the catalogue, the materials database and HiSim agree on
 
+**Superseded** by the adoption of the frontend side's spec (`challenges.md` §13); kept for the reasoning.
+
 **Status:** implementation specification, 2026-09-15
 **Target repository:** `~/renovisor-api-contract` (GitHub `climatemedia/renovisor-api-contract`),
 branch `hisim-alignment` from `main` (`eeb49b5`). Reviewed by the CODEOWNERS of both teams; HiSim

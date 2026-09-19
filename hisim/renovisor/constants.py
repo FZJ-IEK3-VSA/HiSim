@@ -208,9 +208,11 @@ class DesignTemperatures:
     """
 
     #: Country code -> outside design temperature in °C.
-    #:   IE: -3.0 -- the external design temperature used for Irish heat-loss sizing
-    #:       (I.S. EN 12831 national annex / SEAI heat pump sizing guidance).           TO BE REVIEWED
-    #:   NL: -10.0 -- the Dutch design temperature (NEN 5060 / ISSO 51).                 TO BE REVIEWED
+    #:
+    #: * ``IE``: -3.0 -- the external design temperature used for Irish heat-loss sizing
+    #:   (I.S. EN 12831 national annex / SEAI heat pump sizing guidance). TO BE REVIEWED
+    #: * ``NL``: -10.0 -- the Dutch design temperature (NEN 5060 / ISSO 51). TO BE REVIEWED
+    #:
     #: ES has no entry: it has no TABULA typology and is refused before the weather is built.
     BY_COUNTRY: ClassVar[Dict[str, float]] = {"IE": -3.0, "NL": -10.0}
 

@@ -30,7 +30,7 @@ import json
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as SchemaValidationError
@@ -1294,15 +1294,7 @@ class SemanticChecks:
         if spec.name == CatalogueTable.MATERIAL:
             return cls._material(value, path)
         if spec.value_type is ValueType.BOOLEAN:
-            if isinstance(value, bool):
-                return []
-            return [
-                Problem(
-                    path=path,
-                    code=ProblemCode.TYPE_INVALID,
-                    message=f"'{spec.name}' of '{measure_id}' is a boolean and the request sends {value!r}",
-                )
-            ]
+            return cls._of_type(measure_id, spec, value, path, bool, "a boolean")
         if spec.values is not None and value not in spec.values:
             return [
                 Problem(
@@ -1312,23 +1304,44 @@ class SemanticChecks:
                     accepted=spec.values,
                 )
             ]
-        if spec.value_type is ValueType.INTEGER and not isinstance(value, int):
-            return [
-                Problem(
-                    path=path,
-                    code=ProblemCode.TYPE_INVALID,
-                    message=f"'{spec.name}' of '{measure_id}' is an integer and the request sends {value!r}",
-                )
-            ]
-        if spec.value_type is ValueType.NUMBER and not isinstance(value, (int, float)):
-            return [
-                Problem(
-                    path=path,
-                    code=ProblemCode.TYPE_INVALID,
-                    message=f"'{spec.name}' of '{measure_id}' is a number and the request sends {value!r}",
-                )
-            ]
+        if spec.value_type is ValueType.INTEGER:
+            return cls._of_type(measure_id, spec, value, path, int, "an integer")
+        if spec.value_type is ValueType.NUMBER:
+            return cls._of_type(measure_id, spec, value, path, (int, float), "a number")
         return []
+
+    @classmethod
+    def _of_type(
+        cls,
+        measure_id: str,
+        spec: OptionSpec,
+        value: Any,
+        path: str,
+        accepted: Union[type, Tuple[type, ...]],
+        description: str,
+    ) -> List[Problem]:
+        """Report one ``TYPE_INVALID`` problem when a value is not of the type its option declares.
+
+        Args:
+            measure_id: The catalogue id of the measure the option belongs to, for the message.
+            spec: The option's specification; only its name reaches the message.
+            value: The value the request sent.
+            path: The request path the problem is reported against.
+            accepted: The Python type, or tuple of types, that satisfies the declared type.
+            description: The declared type as the message spells it, e.g. ``"an integer"``.
+
+        Returns:
+            An empty list when the value is of the accepted type, otherwise the one problem.
+        """
+        if isinstance(value, accepted):
+            return []
+        return [
+            Problem(
+                path=path,
+                code=ProblemCode.TYPE_INVALID,
+                message=f"'{spec.name}' of '{measure_id}' is {description} and the request sends {value!r}",
+            )
+        ]
 
     @classmethod
     def _material(cls, value: Any, path: str) -> List[Problem]:

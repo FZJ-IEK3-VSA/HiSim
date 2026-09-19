@@ -21,7 +21,7 @@ Why copies and not a dependency: the decision of 2026-09-15 (``roadmap/renovisor
 Q28) was "vendored copy for now"; where the master version of the contract lives is still to be
 discussed in the project, and the installable-package option is on the table. Until then the
 copies are made safe by :mod:`hisim.renovisor.contract.refresh`, which is the only sanctioned way
-to change these files, and by ``tests/test_renovisor_contract.py``, which fails when a copy no
+to change these files, and by ``tests/renovisor/test_contract.py``, which fails when a copy no
 longer matches the hash ``PINNED.yaml`` records -- so a hand edit of a vendored copy, or a refresh
 that forgot to update the pin, is a failing build rather than silent drift.
 

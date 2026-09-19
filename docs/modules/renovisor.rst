@@ -8,95 +8,49 @@ RenoVisor Translation Layer
    :undoc-members:
    :show-inheritance:
 
-The :mod:`hisim.renovisor` package turns a RenoVisor home inventory and a
-renovation package into a HiSim simulation. It is built in layers, and the
-layering is the point: the measure layer writes the *inventory* and never names
-a HiSim component or configuration field, so a HiSim rename changes one binding
-rather than every measure function.
-
 Working Principle
 -----------------
 
-1. **Read the contract** (:mod:`hisim.renovisor.contract`) — the vendored copies
-   of ``openapi.yaml`` (the inventory schema), ``measures.yaml`` (the measure
-   catalogue) and ``materials.yaml`` (the insulation-material dump), pinned to a
-   contract commit by ``PINNED.yaml``. Everything reads them through
-   :class:`~hisim.renovisor.contract.ContractFiles`.
-
-2. **Normalise the vocabularies** (:mod:`hisim.renovisor.vocabulary`,
-   :mod:`hisim.renovisor.catalogue`) — the closed enum sets in HiSim spelling,
-   and the only reader of the catalogue, which derives the measure, option and
-   value ids a request uses.
-
-3. **Apply the measures** (:mod:`hisim.renovisor.options`,
-   :mod:`hisim.renovisor.registry`, :mod:`hisim.renovisor.effects`) — one
-   function per catalogue measure produces effects from validated option values;
-   the accumulator composes them once, so several insulation layers on one
-   element add up instead of overwriting each other.
-
-4. **Supply the physics** (:mod:`hisim.renovisor.envelope`,
-   :mod:`hisim.renovisor.materials`) — where an element's current U-value comes
-   from, how a missing thickness is derived from a regulatory target, and the
-   material conductivities, each with its source.
-
-5. **Write the result** (:mod:`hisim.renovisor.inventory`,
-   :mod:`hisim.renovisor.application`, :mod:`hisim.renovisor.report`,
-   :mod:`hisim.renovisor.base_files`) — the post-measure inventory, validated
-   against the contract, plus which recorded energy-system file to run, which
-   variants and groups to switch, and a report line for every field and every
-   measure.
-
-The bindings, the parametriser and the ``calculate`` command are a later step;
-:mod:`hisim.renovisor.__main__` carries the intended command-line interface and
-exits with a message rather than pretending to work.
+The :mod:`hisim.renovisor` package turns one **calculation request** -- a house
+inventory plus a list of catalogue measures -- into one finished HiSim
+simulation, in five steps that each own a module. **Validate**
+(:mod:`~hisim.renovisor.request`) checks the request against the vendored JSON
+Schema and against the frozen catalogue table, and reports every fault at once
+rather than the first. **Apply** (:mod:`~hisim.renovisor.apply`, with
+:mod:`~hisim.renovisor.envelope` for the U-value arithmetic) runs one function
+per catalogue measure over a deep copy of the house and never names a HiSim
+component, so a HiSim rename changes one binding rather than every measure.
+**Translate** (:mod:`~hisim.renovisor.translate`, with
+:mod:`~hisim.renovisor.tabula` for the archetype the dwelling is simulated as)
+writes the renovated house into one recorded ``*.energy_system.yaml`` twin, and
+:mod:`~hisim.renovisor.report` accounts for every leaf of the request in
+``mapping_report.json``. **Run** (:mod:`~hisim.renovisor.run`, with
+:mod:`~hisim.renovisor.simulation` for the release's own simulation parameters)
+builds that file, simulates it and collects what HiSim wrote. **Results**
+(:mod:`~hisim.renovisor.result`, fed by :mod:`~hisim.renovisor.kpis`,
+:mod:`~hisim.renovisor.costs`, :mod:`~hisim.renovisor.layers` and
+:mod:`~hisim.renovisor.provenance`) assemble ``result.json``, every value
+carrying where it came from. Beside the pipeline stands the **capability
+document**: :mod:`~hisim.renovisor.capabilities` runs the whole probe set
+through the pure layers and aggregates what this image can and cannot do, and
+:mod:`~hisim.renovisor.map` renders the same probe run as the committed
+``roadmap/renovisor/translation_map.html`` page.
 
 API Reference
 -------------
 
-hisim.renovisor.contract module
--------------------------------
-
-.. automodule:: hisim.renovisor.contract
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-hisim.renovisor.vocabulary module
----------------------------------
-
-.. automodule:: hisim.renovisor.vocabulary
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-hisim.renovisor.catalogue module
---------------------------------
-
-.. automodule:: hisim.renovisor.catalogue
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-hisim.renovisor.options module
+hisim.renovisor.request module
 ------------------------------
 
-.. automodule:: hisim.renovisor.options
+.. automodule:: hisim.renovisor.request
    :members:
    :undoc-members:
    :show-inheritance:
 
-hisim.renovisor.registry module
--------------------------------
+hisim.renovisor.apply module
+----------------------------
 
-.. automodule:: hisim.renovisor.registry
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-hisim.renovisor.effects module
-------------------------------
-
-.. automodule:: hisim.renovisor.effects
+.. automodule:: hisim.renovisor.apply
    :members:
    :undoc-members:
    :show-inheritance:
@@ -109,50 +63,34 @@ hisim.renovisor.envelope module
    :undoc-members:
    :show-inheritance:
 
-hisim.renovisor.materials module
+hisim.renovisor.constants module
 --------------------------------
 
-.. automodule:: hisim.renovisor.materials
+.. automodule:: hisim.renovisor.constants
    :members:
    :undoc-members:
    :show-inheritance:
 
-hisim.renovisor.materials\_import module
-----------------------------------------
+hisim.renovisor.tabula module
+-----------------------------
 
-.. automodule:: hisim.renovisor.materials_import
+.. automodule:: hisim.renovisor.tabula
    :members:
    :undoc-members:
    :show-inheritance:
 
-hisim.renovisor.inventory module
+hisim.renovisor.translate module
 --------------------------------
 
-.. automodule:: hisim.renovisor.inventory
+.. automodule:: hisim.renovisor.translate
    :members:
    :undoc-members:
    :show-inheritance:
 
-hisim.renovisor.base\_files module
-----------------------------------
+hisim.renovisor.whitelist module
+--------------------------------
 
-.. automodule:: hisim.renovisor.base_files
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-hisim.renovisor.application module
-----------------------------------
-
-.. automodule:: hisim.renovisor.application
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-hisim.renovisor.reasons module
-------------------------------
-
-.. automodule:: hisim.renovisor.reasons
+.. automodule:: hisim.renovisor.whitelist
    :members:
    :undoc-members:
    :show-inheritance:
@@ -165,18 +103,106 @@ hisim.renovisor.report module
    :undoc-members:
    :show-inheritance:
 
-hisim.renovisor.tabula\_ie module
+hisim.renovisor.simulation module
 ---------------------------------
 
-.. automodule:: hisim.renovisor.tabula_ie
+.. automodule:: hisim.renovisor.simulation
    :members:
    :undoc-members:
    :show-inheritance:
 
-hisim.renovisor.\_\_main\_\_ module
+hisim.renovisor.run module
+--------------------------
+
+.. automodule:: hisim.renovisor.run
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+hisim.renovisor.kpis module
+---------------------------
+
+.. automodule:: hisim.renovisor.kpis
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+hisim.renovisor.costs module
+----------------------------
+
+.. automodule:: hisim.renovisor.costs
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+hisim.renovisor.provenance module
+---------------------------------
+
+.. automodule:: hisim.renovisor.provenance
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+hisim.renovisor.result module
+-----------------------------
+
+.. automodule:: hisim.renovisor.result
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+hisim.renovisor.layers module
+-----------------------------
+
+.. automodule:: hisim.renovisor.layers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+hisim.renovisor.capabilities module
 -----------------------------------
 
-.. automodule:: hisim.renovisor.__main__
+.. automodule:: hisim.renovisor.capabilities
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+hisim.renovisor.map module
+--------------------------
+
+.. automodule:: hisim.renovisor.map
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+hisim.renovisor.occupancy module
+--------------------------------
+
+.. automodule:: hisim.renovisor.occupancy
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+hisim.renovisor.vocabulary module
+---------------------------------
+
+.. automodule:: hisim.renovisor.vocabulary
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+hisim.renovisor.contract package
+--------------------------------
+
+.. automodule:: hisim.renovisor.contract
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+hisim.renovisor.contract.refresh module
+---------------------------------------
+
+.. automodule:: hisim.renovisor.contract.refresh
    :members:
    :undoc-members:
    :show-inheritance:

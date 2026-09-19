@@ -144,14 +144,14 @@ arithmetic), `tabula.py` (the archetype, every `.N.` country), `translate.py` (t
 `result.py`/`kpis.py`/`costs.py`/`layers.py`/`provenance.py` (`result.json`), `capabilities.py` (the probe
 set and the document the backend serves per image), `map.py` (generates the committed
 `roadmap/renovisor/translation_map.html`; regenerate with `python -m hisim.renovisor map` whenever the
-catalogue, the registry or the bindings change, or `tests/test_renovisor_map.py` fails).
+catalogue, the registry or the bindings change, or `tests/renovisor/test_map.py` fails).
 
 The rule the package rests on: **fail loudly, except for what is written down.** A feature the translator
 has not implemented is a note in the mapping report and the calculation runs, but only if
 `not_implemented_yet.yaml` says so; anything else that cannot be mapped fails the translator's own build.
-`tests/test_renovisor_capabilities.py` keeps that list honest in both directions.
+`tests/renovisor/test_capabilities.py` keeps that list honest in both directions.
 
-Tests: `tests/test_renovisor_*.py`, all `base` except `test_renovisor_run.py` (`system_setups`).
+Tests: `tests/renovisor/test_*.py`, all `base` except `test_run.py` (`system_setups`).
 
 ## Adding a new component
 

@@ -9,7 +9,7 @@ cannot claim a capability the translator does not have::
     python -m hisim.renovisor map
 
 One file, inline CSS and no libraries, because it travels as an attachment to a contract
-discussion and has to open from a file system. ``tests/test_renovisor_map.py`` asserts that the
+discussion and has to open from a file system. ``tests/renovisor/test_map.py`` asserts that the
 committed page is the one this module renders today, so a change to the translator that nobody
 regenerated the page for is a failing test rather than a stale picture.
 
@@ -121,6 +121,48 @@ class ResultsPane:
         return f"<ul>{rendered}</ul>"
 
 
+class CommittedPageProvenance:
+    """Keeps the committed page independent of the commit it was rendered at.
+
+    A run's mapping report names the commit of the checkout it ran in, so that a stored result can
+    be traced to its code. The committed page embeds a worked example of such a report, and a page
+    that carried the live commit hash would be stale the moment it was committed: the freshness
+    test would pass only at the one commit the page was rendered at, and CI, which checks out the
+    pull request's merge commit, would never see that commit. The worked example therefore shows a
+    fixed placeholder where a real run shows the hash; nothing else in the report is touched.
+
+    Example::
+
+        CommittedPageProvenance.scrub({"translator": {"commit": "a9c983c8", ...}, ...})
+        # -> {"translator": {"commit": "<commit>", ...}, ...}
+    """
+
+    #: What the worked example shows in place of a commit hash.
+    PLACEHOLDER: ClassVar[str] = "<commit>"
+
+    #: The keys of the report's ``translator`` block that name a commit.
+    COMMIT_KEYS: ClassVar[Tuple[str, ...]] = ("commit", "hisim_commit")
+
+    @classmethod
+    def scrub(cls, report: Dict[str, Any]) -> Dict[str, Any]:
+        """Return a copy of *report* whose commit fields carry :attr:`PLACEHOLDER`.
+
+        Args:
+            report: A mapping report as ``MappingReport.to_json`` returns it.
+
+        Returns:
+            The same document with ``translator.commit`` and ``translator.hisim_commit`` replaced;
+            the input is not modified.
+        """
+        scrubbed = dict(report)
+        translator = dict(scrubbed.get("translator", {}))
+        for key in cls.COMMIT_KEYS:
+            if key in translator:
+                translator[key] = cls.PLACEHOLDER
+        scrubbed["translator"] = translator
+        return scrubbed
+
+
 @dataclass(frozen=True)
 class TraceExample:
     """The worked example the page traces, end to end.
@@ -151,7 +193,7 @@ class TraceExample:
             request=request.document,
             renovated=applied.house,
             yaml_text=translated.yaml_text,
-            report=translated.report.to_json(),
+            report=CommittedPageProvenance.scrub(translated.report.to_json()),
             base_file=translated.base_file_name,
         )
 

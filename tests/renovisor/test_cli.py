@@ -1,4 +1,4 @@
-"""T-CLI: the four commands, the four exit codes, and what each of them leaves on disk.
+"""T-CLI: the five commands, the four exit codes, and what each of them leaves on disk.
 
 The command line is the whole interface the backend's worker has, so every way a calculation can
 end has to be a file and a number rather than a traceback. Exit 0 writes everything of §2.2, exit
@@ -12,6 +12,7 @@ collection, and one that raises proves exit 5, neither of which needs a day of w
 
 import copy
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict
 
@@ -22,13 +23,13 @@ from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.run import Calculation, ExitCode, Outputs
 from hisim.renovisor.simulation import SimulationParameters
 
-BASE_FILES = Path(__file__).resolve().parents[1] / "energy_systems"
+BASE_FILES = Path(__file__).resolve().parents[2] / "energy_systems"
 
 
 class SilentRunner:
     """A simulation that does nothing, so the output collection can be tested in milliseconds."""
 
-    def run(self, energy_system_path: Path, parameters: SimulationParameters, record_directory: Path) -> None:
+    def run(self, _energy_system_path: Path, _parameters: SimulationParameters, record_directory: Path) -> None:
         """Write the three records HiSim would write, and run no timestep."""
         for name in Outputs.RECORDS:
             (record_directory / name).write_text("# a stand-in for HiSim's own record\n", encoding="utf-8")
@@ -195,13 +196,14 @@ class TestExitFive:
 
 @pytest.mark.base
 class TestTheCommandLineItself:
-    """Four commands, one subcommand deep, and no ``--variant``."""
+    """Five commands, one subcommand deep, and no ``--variant``."""
 
     def test_the_parser_declares_the_commands_the_backend_calls(self) -> None:
         """A command that quietly disappeared would be found by the backend, not by a test."""
-        parser = RenovisorCommandLine.parser()
-        actions = [action for action in parser._actions if action.dest == "command"]
-        assert actions and set(actions[0].choices) == {
+        listed = re.search(r"\{([a-z,]+)\}", RenovisorCommandLine.parser().format_help())
+
+        assert listed is not None
+        assert set(listed.group(1).split(",")) == {
             "run",
             "translate",
             "validate",

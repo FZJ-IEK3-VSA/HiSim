@@ -220,7 +220,7 @@ def test_the_year_one_bills_come_from_the_timeline(tmp_path: Path) -> None:
     assert maintenance == {"low": 5.0, "best_estimate": 6.0, "high": 7.0}
 
 
-def test_a_run_without_cost_exports_leaves_every_engine_field_missing(tmp_path: Path) -> None:
+def test_a_run_without_cost_exports_leaves_every_engine_field_missing() -> None:
     """No ``lifecycle_costs.json`` means no cost figures at all, with the reason stated."""
     block = build(None, layers_of())
 
@@ -269,7 +269,7 @@ def test_a_country_without_a_catalogue_has_none(tmp_path: Path) -> None:
     assert SubsidyCatalogue.path_for("DE") is not None
 
 
-def test_the_shipped_catalogue_directory_is_where_step_six_b_will_write(tmp_path: Path) -> None:
+def test_the_shipped_catalogue_directory_is_where_step_six_b_will_write() -> None:
     """A wrong directory would make the grant field stay absent forever without saying so."""
     assert SubsidyCatalogue.directory().name == SubsidyCatalogue.DIRECTORY_NAME
     assert (SubsidyCatalogue.directory() / "DE.json").is_file()

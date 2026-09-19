@@ -1,6 +1,6 @@
 """The command-line entry point of the RenoVisor translation layer.
 
-Four commands, files in and files out, and nothing posted anywhere -- the service that started
+Five commands, files in and files out, and nothing posted anywhere -- the service that started
 the container collects the files::
 
     python -m hisim.renovisor run          <request.{json,yaml}> --out DIR [--period ...]

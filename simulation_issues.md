@@ -52,7 +52,7 @@ unchanged by the fix (for `a > 0` the expression is algebraically identical).
 `hisim/renovisor/tabula_ie.py::_is_usable_by_building_component`, which currently excludes
 those rows from selection and silently shifts affected requests to a neighbouring age band
 (e.g. a 1968 house is simulated with the 1950–1966 archetype). Re-enable the excluded bands and
-update the expectations in `tests/test_renovisor_tabula.py` back to the exact bands
+update the expectations in `tests/renovisor/test_tabula.py` back to the exact bands
 (`IE.N.SFH.05.*`, `IE.N.AB.10.*`).
 
 ## 2. Same division pattern for windows — latent crash
@@ -135,7 +135,7 @@ through to `advanced_battery_bslib` / `more_advanced_heat_pump_hplib` configs wh
 **Testing:** extend the setup tests with a config carrying explicit sizes and assert the
 component configs received them; keep one auto-sizing test as regression. Translator side:
 the RenoVisor translation layer (`hisim/renovisor/registry.py` and the step-4 bindings; v1 `mapping.py` is gone) can then map `battery.kWh` and the `heat_pump` measure's `kW`
-as `used` instead of `approximated` (update `tests/test_renovisor_tabula.py`).
+as `used` instead of `approximated` (update `tests/renovisor/test_tabula.py`).
 
 ## 6. Heating setpoint is hard-coded; RenoVisor's `targetTempC` cannot be mapped
 

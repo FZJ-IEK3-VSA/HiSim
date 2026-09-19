@@ -1,8 +1,8 @@
 # Written by `python -m hisim.renovisor.contract.refresh`; do not edit by hand.
 # Records which contract revision each vendored file was copied from and the
-# SHA-256 it had; tests/test_renovisor_contract.py recomputes the hashes.
+# SHA-256 it had; tests/renovisor/test_contract.py recomputes the hashes.
 repository: https://github.com/climatemedia/renovisor-api-contract
-refreshed_at: '2026-09-19T09:27:50+00:00'
+refreshed_at: '2026-09-19T13:31:02+00:00'
 files:
   openapi.yaml:
     ref: origin/main

@@ -295,7 +295,7 @@ class HouseholdMatcher:
     request always choose the same household.
 
     Nothing calls it in the MVP (decision D-C); it is the seam the LoadProfileGenerator path
-    plugs back into, and ``tests/test_renovisor_occupancy.py`` keeps it working.
+    plugs back into, and ``tests/renovisor/test_occupancy.py`` keeps it working.
 
     Example::
 

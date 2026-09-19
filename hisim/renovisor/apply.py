@@ -469,7 +469,7 @@ class MeasureRegistry:
         Raises:
             AssertionError: Naming the measures that are in one and not the other. The message
                 is the whole point: a catalogue edit has to be a deliberate change here.
-            """
+        """
         registered = set(cls.INSULATION) | set(cls.BY_ID)
         catalogue = set(CatalogueTable.ids())
         missing = sorted(catalogue - registered)
@@ -548,7 +548,7 @@ class MeasureRegistry:
     # ------------------------------------------------------------------ envelope: openings
 
     @classmethod
-    def _window_replacement(cls, context: MeasureContext) -> None:
+    def window_replacement(cls, context: MeasureContext) -> None:
         """Replace the windows: panes, frame, coating, and the U-value the three imply."""
         panes = int(context.option("glazing_panes"))
         coating = bool(context.option("low_emissivity_coating"))
@@ -575,7 +575,7 @@ class MeasureRegistry:
         context.target("Building.config.window_u_value_in_watt_per_m2_per_kelvin")
 
     @classmethod
-    def _door_replacement(cls, context: MeasureContext) -> None:
+    def door_replacement(cls, context: MeasureContext) -> None:
         """Replace the door: panes, frame, and the U-value the panes imply."""
         panes = int(context.option("glazing_panes"))
         context.effects.set("building.door.glazing_panes", panes)
@@ -597,35 +597,35 @@ class MeasureRegistry:
         context.target("Building.config.door_u_value_in_watt_per_m2_per_kelvin")
 
     @classmethod
-    def _outside_shading(cls, context: MeasureContext) -> None:
+    def outside_shading(cls, context: MeasureContext) -> None:
         """Fit external shading to the windows; ``Building`` has no shading parameter."""
         context.effects.set("building.window.outside_shading", True)
 
     @classmethod
-    def _thermocover_for_the_windows(cls, context: MeasureContext) -> None:
+    def thermocover_for_the_windows(cls, context: MeasureContext) -> None:
         """Fit removable night covers to the windows; ``Building`` has no parameter for them."""
         context.effects.set("building.window.thermocover", True)
 
     # ------------------------------------------------------------------ ventilation and shallow
 
     @classmethod
-    def _ventilation_system(cls, context: MeasureContext) -> None:
+    def ventilation_system(cls, context: MeasureContext) -> None:
         """Install a ventilation system; HiSim reads the air-change rate from the TABULA row."""
         context.effects.set("ventilation.type_of_system", context.option("type_of_system"))
         context.defer("ventilation_system.type_of_system", context.option("type_of_system"), "type_of_system")
 
     @classmethod
-    def _shallow_air_tightness_measures(cls, context: MeasureContext) -> None:
+    def shallow_air_tightness_measures(cls, context: MeasureContext) -> None:
         """Seal the envelope professionally; ``Building`` has no infiltration parameter."""
         context.effects.set("ventilation.air_tightness", "professionally_sealed")
 
     @classmethod
-    def _diy_sealing_of_air_leaks(cls, context: MeasureContext) -> None:
+    def diy_sealing_of_air_leaks(cls, context: MeasureContext) -> None:
         """Seal the obvious draughts; ``Building`` has no infiltration parameter."""
         context.effects.set("ventilation.air_tightness", "diy_sealed")
 
     @classmethod
-    def _hot_water_tank_and_pipe_insulation(cls, context: MeasureContext) -> None:
+    def hot_water_tank_and_pipe_insulation(cls, context: MeasureContext) -> None:
         """Insulate the hot-water tank and its pipes; the tank's loss coefficient is halved."""
         context.effects.set("hot_water.tank_and_pipe_insulated", True)
         context.line.status = ReportStatus.APPROXIMATED
@@ -640,7 +640,7 @@ class MeasureRegistry:
     # ------------------------------------------------------------------ heating
 
     @classmethod
-    def _heating_system(cls, context: MeasureContext) -> None:
+    def heating_system(cls, context: MeasureContext) -> None:
         """Replace the heat generator, and drop the four facts that described the old one."""
         generator = context.option("type_of_system")
         context.effects.set("heating.type_of_system", generator)
@@ -654,20 +654,20 @@ class MeasureRegistry:
         context.target("the base file selected by heating.type_of_system")
 
     @classmethod
-    def _heating_installation(cls, context: MeasureContext) -> None:
+    def heating_installation(cls, context: MeasureContext) -> None:
         """Replace the emitters, which is what the heat distribution controller is told."""
         context.effects.set("heat_distribution.type_of_system", context.option("type_of_system"))
         context.record("type_of_system", ReportStatus.USED)
         context.target("HeatDistributionController.config.heating_system")
 
     @classmethod
-    def _air_conditioners(cls, context: MeasureContext) -> None:
+    def air_conditioners(cls, context: MeasureContext) -> None:
         """Install air conditioning of a stated power."""
         context.effects.set("air_conditioning.power_in_watt", context.option("power_in_watt"))
         context.defer("air_conditioners.power_in_watt", context.option("power_in_watt"), "power_in_watt")
 
     @classmethod
-    def _hot_water_system(cls, context: MeasureContext) -> None:
+    def hot_water_system(cls, context: MeasureContext) -> None:
         """Change how domestic hot water is made."""
         supply = context.option("supply")
         context.effects.set("hot_water.supply", supply)
@@ -675,7 +675,7 @@ class MeasureRegistry:
         context.target("the generator's with_domestic_hot_water_preparation")
 
     @classmethod
-    def _temperature_control_system(cls, context: MeasureContext) -> None:
+    def temperature_control_system(cls, context: MeasureContext) -> None:
         """Install a heating control; the recorded base files have no night-setback group."""
         context.effects.set("temperature_control.type_of_system", context.option("type_of_system"))
         context.defer(
@@ -685,12 +685,12 @@ class MeasureRegistry:
     # ------------------------------------------------------------------ appliances and renewables
 
     @classmethod
-    def _replace_white_appliances(cls, context: MeasureContext) -> None:
+    def replace_white_appliances(cls, context: MeasureContext) -> None:
         """Replace the large appliances; the precomputed profile has a fixed intensity."""
         context.effects.set("appliances.white_appliances", "new_efficient")
 
     @classmethod
-    def _photovoltaic_system(cls, context: MeasureContext) -> None:
+    def photovoltaic_system(cls, context: MeasureContext) -> None:
         """Install a photovoltaic array covering a share of the roof, replacing any existing one."""
         existing = context.effects.read(HousePaths.PV_SYSTEM) or {}
         replacement: Dict[str, Any] = {
@@ -704,7 +704,7 @@ class MeasureRegistry:
         context.target("PVSystem.config.share_of_maximum_pv_potential")
 
     @classmethod
-    def _battery_system(cls, context: MeasureContext) -> None:
+    def battery_system(cls, context: MeasureContext) -> None:
         """Install a battery sized by the days of household electricity it should cover."""
         context.effects.replace_block(HousePaths.BATTERY, {"days_to_cover": context.option("days_to_cover")})
         context.record("days_to_cover", ReportStatus.APPROXIMATED)
@@ -716,7 +716,7 @@ class MeasureRegistry:
         context.target("Battery.config.custom_battery_capacity_generic_in_kilowatt_hour")
 
     @classmethod
-    def _solar_thermal_system(cls, context: MeasureContext) -> None:
+    def solar_thermal_system(cls, context: MeasureContext) -> None:
         """Install a solar thermal collector, keeping whatever the request said about it."""
         existing = context.effects.read(HousePaths.SOLAR_THERMAL)
         block: Dict[str, Any] = dict(existing) if isinstance(existing, Mapping) else {}
@@ -726,7 +726,7 @@ class MeasureRegistry:
         context.target("groups.solar_thermal.enabled")
 
     @classmethod
-    def _electric_vehicle(cls, context: MeasureContext) -> None:
+    def electric_vehicle(cls, context: MeasureContext) -> None:
         """Buy electric cars; a car needs a driving profile the MVP image cannot compute."""
         existing = context.effects.read(HousePaths.ELECTRIC_VEHICLES)
         block: Dict[str, Any] = dict(existing) if isinstance(existing, Mapping) else {}
@@ -737,14 +737,14 @@ class MeasureRegistry:
     # ------------------------------------------------------------------ behaviour
 
     @classmethod
-    def _change_room_temperature(cls, context: MeasureContext) -> None:
+    def change_room_temperature(cls, context: MeasureContext) -> None:
         """Change the room set point, which propagates to the heat distribution controller."""
         context.effects.set(HousePaths.SET_HEATING_TEMPERATURE, context.option("new_room_temperature"))
         context.record("new_room_temperature", ReportStatus.USED)
         context.target("Building.config.set_heating_temperature_in_celsius")
 
     @classmethod
-    def _optimize_behaviour_for_self_consumption_of_pv(cls, context: MeasureContext) -> None:
+    def optimize_behaviour_for_self_consumption_of_pv(cls, context: MeasureContext) -> None:
         """Shift the household's loads into the sunshine; the twins have no EMS without a battery."""
         context.effects.set("occupancy.pv_self_consumption_optimised", True)
 
@@ -753,27 +753,27 @@ class MeasureRegistry:
 
 
 MeasureRegistry.BY_ID = {
-    "window_replacement": MeasureRegistry._window_replacement,
-    "door_replacement": MeasureRegistry._door_replacement,
-    "outside_shading": MeasureRegistry._outside_shading,
-    "thermocover_for_the_windows": MeasureRegistry._thermocover_for_the_windows,
-    "ventilation_system": MeasureRegistry._ventilation_system,
-    "shallow_air_tightness_measures": MeasureRegistry._shallow_air_tightness_measures,
-    "diy_sealing_of_air_leaks": MeasureRegistry._diy_sealing_of_air_leaks,
-    "hot_water_tank_and_pipe_insulation": MeasureRegistry._hot_water_tank_and_pipe_insulation,
-    "heating_system": MeasureRegistry._heating_system,
-    "heating_installation": MeasureRegistry._heating_installation,
-    "air_conditioners": MeasureRegistry._air_conditioners,
-    "hot_water_system": MeasureRegistry._hot_water_system,
-    "temperature_control_system": MeasureRegistry._temperature_control_system,
-    "replace_white_appliances": MeasureRegistry._replace_white_appliances,
-    "photovoltaic_system": MeasureRegistry._photovoltaic_system,
-    "battery_system": MeasureRegistry._battery_system,
-    "solar_thermal_system": MeasureRegistry._solar_thermal_system,
-    "electric_vehicle": MeasureRegistry._electric_vehicle,
-    "change_room_temperature": MeasureRegistry._change_room_temperature,
+    "window_replacement": MeasureRegistry.window_replacement,
+    "door_replacement": MeasureRegistry.door_replacement,
+    "outside_shading": MeasureRegistry.outside_shading,
+    "thermocover_for_the_windows": MeasureRegistry.thermocover_for_the_windows,
+    "ventilation_system": MeasureRegistry.ventilation_system,
+    "shallow_air_tightness_measures": MeasureRegistry.shallow_air_tightness_measures,
+    "diy_sealing_of_air_leaks": MeasureRegistry.diy_sealing_of_air_leaks,
+    "hot_water_tank_and_pipe_insulation": MeasureRegistry.hot_water_tank_and_pipe_insulation,
+    "heating_system": MeasureRegistry.heating_system,
+    "heating_installation": MeasureRegistry.heating_installation,
+    "air_conditioners": MeasureRegistry.air_conditioners,
+    "hot_water_system": MeasureRegistry.hot_water_system,
+    "temperature_control_system": MeasureRegistry.temperature_control_system,
+    "replace_white_appliances": MeasureRegistry.replace_white_appliances,
+    "photovoltaic_system": MeasureRegistry.photovoltaic_system,
+    "battery_system": MeasureRegistry.battery_system,
+    "solar_thermal_system": MeasureRegistry.solar_thermal_system,
+    "electric_vehicle": MeasureRegistry.electric_vehicle,
+    "change_room_temperature": MeasureRegistry.change_room_temperature,
     "optimize_behaviour_for_self_consumption_of_pv":
-        MeasureRegistry._optimize_behaviour_for_self_consumption_of_pv,
+        MeasureRegistry.optimize_behaviour_for_self_consumption_of_pv,
 }
 
 

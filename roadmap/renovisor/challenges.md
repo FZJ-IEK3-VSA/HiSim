@@ -5,7 +5,8 @@
 **Sources:** `~/renovisor-api-contract` at `eeb49b5` (`openapi.yaml` v0.3.0-draft, `measures.yaml`)
 and its `materials` branch at `a79f13d` (`materials.yaml`, 26 materials) · this branch's
 `roadmap/renovisor/{requirements,measures_v2_requirements,field_inventory}.md` and
-`mockups/` · HiSim `main` at `4612b899` for everything that names code
+`mockups/` (deleted in step 9; in git history) · HiSim `main` at `4612b899` for everything that
+names code
 **Purpose:** one list of what has to be solved or decided before and while the translation layer
 is written. Requirement ids (R/A/M/N/Q) are the ones in the two requirements documents; this file
 adds nothing to them, it orders them by the work and adds what the contract repository and the

@@ -11,7 +11,7 @@ and records the commit the ref resolved to and its date. A **local source** is a
 directory outside any repository -- today the frontend side's ``~/contract-proposals`` -- and is
 recorded with the phrase naming where it came from instead of a commit, because the proposal
 directory is not versioned. Both kinds record the SHA-256 of the content written, and
-``tests/test_renovisor_contract.py`` recomputes the hashes, so a vendored copy that was edited by
+``tests/renovisor/test_contract.py`` recomputes the hashes, so a vendored copy that was edited by
 hand, or a refresh that did not run to completion, fails the build.
 
 The sources are class attributes of :class:`ContractSources` so that a file moving to another
@@ -162,7 +162,7 @@ class ContractRefresher:
         header = (
             "# Written by `python -m hisim.renovisor.contract.refresh`; do not edit by hand.\n"
             "# Records which contract revision each vendored file was copied from and the\n"
-            "# SHA-256 it had; tests/test_renovisor_contract.py recomputes the hashes.\n"
+            "# SHA-256 it had; tests/renovisor/test_contract.py recomputes the hashes.\n"
         )
         (self.target_directory / ContractFiles.PINNED_FILENAME).write_text(
             header + yaml.safe_dump(pin, sort_keys=False), encoding="utf-8"

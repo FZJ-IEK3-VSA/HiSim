@@ -11,6 +11,8 @@ supplies both areas, in which case every row is usable and the exact band is use
 the specification names on both sides.
 """
 
+from typing import Optional
+
 import pytest
 
 from hisim.renovisor.constants import DesignTemperatures
@@ -28,7 +30,7 @@ def select(
     year: int,
     country: str = "IE",
     areas_given: bool = False,
-    requested_code: str = None,
+    requested_code: Optional[str] = None,
 ):
     """Return the selection for one dwelling, with the arguments named for readability."""
     return BuildingCodeSelector.select(
@@ -59,8 +61,11 @@ class TestTheIndex:
         assert TabulaIndex.typologies("IE") >= {"SFH", "TH", "AB"}
 
     def test_every_simulable_country_has_a_reviewed_design_temperature(self) -> None:
-        """TABULA cannot supply the design condition (Theta_e_Base is the 12 °C degree-day base), so a
-        reviewed constant per indexed request country must exist, or the weather cannot be built."""
+        """Every country a request can name carries a reviewed design temperature.
+
+        TABULA cannot supply the design condition -- its ``Theta_e_Base`` is the 12 °C degree-day
+        base -- so without that constant the weather cannot be built.
+        """
         for country in TabulaIndex.countries() & {"IE", "NL", "ES"}:
             assert country in DesignTemperatures.BY_COUNTRY, country
 
@@ -150,7 +155,7 @@ class TestTheUsableRowRule:
         )
 
         assert selection.code == "IE.N.SFH.08.Gen.ReEx.001.001"
-        assert selection.notes == ()
+        assert not selection.notes
 
     def test_an_unusable_expert_code_without_areas_is_refused(self) -> None:
         """An override cannot override physics: the Building would still divide by zero."""

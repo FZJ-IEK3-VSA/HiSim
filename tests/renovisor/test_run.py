@@ -29,7 +29,7 @@ from hisim.renovisor.translate import EmitterSubstitution
 from hisim.renovisor.vocabulary import HeatDistributionType
 from hisim.renovisor.whitelist import Whitelist
 
-BASE_FILES = Path(__file__).resolve().parents[1] / "energy_systems"
+BASE_FILES = Path(__file__).resolve().parents[2] / "energy_systems"
 
 
 def request_file(path: Path, document: Dict[str, Any]) -> Path:
@@ -127,7 +127,7 @@ class TestTheWholeChain:
         """The one documented exception is the cache directory, which this run does not use."""
         import subprocess
 
-        repository = Path(__file__).resolve().parents[1]
+        repository = Path(__file__).resolve().parents[2]
         before = subprocess.run(
             ["git", "-C", str(repository), "status", "--porcelain"],
             capture_output=True, text=True, check=True,

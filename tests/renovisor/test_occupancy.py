@@ -89,7 +89,7 @@ class TestTheMatcher:
         match = HouseholdMatcher().match(12)
 
         assert not match.is_exact()
-        assert match.household.Name in match.note
+        assert str(match.household.Name) in match.note
 
     def test_the_same_request_always_chooses_the_same_household(self) -> None:
         """Ties fall to the alphabetically first attribute, so two runs agree (requirement R10)."""

@@ -59,8 +59,8 @@ EXPECTED_NOT_IMPLEMENTED = {
 }
 
 
-@pytest.fixture(scope="module")
-def document() -> CapabilityDocument:
+@pytest.fixture(scope="module", name="document")
+def fixture_document() -> CapabilityDocument:
     """Build the capability document once; every test in this module reads the same probe run."""
     return CapabilityDocument.build(generated_at="2026-09-19T00:00:00+00:00")
 
@@ -108,7 +108,7 @@ class TestTheListIsHonestInBothDirections:
 
     def test_every_not_implemented_line_carries_a_note(self, document: CapabilityDocument) -> None:
         """Only the list may produce that status, so a line without a note cannot exist."""
-        assert unlisted_lines(document.results) == ()
+        assert not unlisted_lines(document.results)
 
     def test_every_entry_of_the_list_is_reached_by_a_probe(self, document: CapabilityDocument) -> None:
         """An entry nothing reaches is a promise no run can keep; delete it or reach it."""
@@ -249,8 +249,6 @@ class TestTheRunner:
 
     def test_a_refused_probe_is_a_result_rather_than_an_exception(self) -> None:
         """``ES`` has no TABULA typology; that is a refusal the document records, not a crash."""
-        from hisim.renovisor.capabilities import Probe
-
         probe = Probe(name="field:location.country=ES", kind=ProbeKind.FIELD)
         probe = Probe(
             name=probe.name, kind=ProbeKind.FIELD, location={"country": "ES"}, subject="location.country"

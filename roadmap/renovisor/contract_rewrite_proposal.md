@@ -1,5 +1,7 @@
 # Proposal: the rewritten `openapi.yaml`, seen from the simulation
 
+**Superseded** by the adoption of the frontend side's spec (`challenges.md` §13); kept for the reasoning.
+
 **Status:** proposal for the two contract teams, 2026-09-15
 **Basis:** `scripts/hisim_spec.md` (v1: the user's answers are the input, HiSim derives the physics),
 the UI's later additions as reflected in v0.3, the measure catalogue, and the decision register in

@@ -38,7 +38,7 @@ from hisim.renovisor.vocabulary import Provenance, ThermalElement
 pytestmark = pytest.mark.base
 
 KPI_PREPARATION = (
-    Path(__file__).resolve().parent.parent
+    Path(__file__).resolve().parent.parent.parent
     / "hisim"
     / "postprocessing"
     / "kpi_computation"

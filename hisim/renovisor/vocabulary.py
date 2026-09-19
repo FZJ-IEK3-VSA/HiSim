@@ -19,7 +19,7 @@ mapping of §3.7 of the contract.
 
 Nothing is added here that a request cannot carry. Every value below is a string the vendored
 ``measures.yaml`` (contract revision ``5181aa5``) or ``calculation-request.schema.json`` spells,
-and ``tests/test_renovisor_vocabulary.py`` asserts that member for member, so the two cannot
+and ``tests/renovisor/test_vocabulary.py`` asserts that member for member, so the two cannot
 drift.
 """
 

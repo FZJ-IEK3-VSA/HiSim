@@ -16,7 +16,7 @@ The three simulated figures and where they come from (decision Q22 fixed the bou
 
 Those names are HiSim internals that a later refactor may rename, which is exactly the drift the
 bindings table is guarded against, so they are gathered in :class:`KpiSources` and
-``tests/test_renovisor_kpis.py`` greps them out of ``kpi_preparation.py``: a rename becomes a
+``tests/renovisor/test_kpis.py`` greps them out of ``kpi_preparation.py``: a rename becomes a
 failing build rather than a field that quietly disappears from every result.
 
 Two properties of the period matter for every annual figure (requirement A14). A caller may run

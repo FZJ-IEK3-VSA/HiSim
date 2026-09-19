@@ -28,7 +28,7 @@ from hisim.renovisor.translate import BaseFiles, Targets, TranslatedSystem, Tran
 from hisim.renovisor.vocabulary import HeatGenerator, ReportStatus
 from hisim.renovisor.whitelist import Whitelist
 
-BASE_FILES = Path(__file__).resolve().parents[1] / "energy_systems"
+BASE_FILES = Path(__file__).resolve().parents[2] / "energy_systems"
 
 
 def translate(document: Mapping[str, Any]) -> TranslatedSystem:
@@ -153,8 +153,10 @@ class TestEveryTargetReceivesItsValue:
         assert "heating_reference_temperature_in_celsius" not in arguments
 
     def test_the_weather_carries_the_reviewed_design_temperature(self) -> None:
-        """The weather owns the design condition (HiSim #771); it is the per-country reviewed constant,
-        not TABULA's degree-day base of 12 °C."""
+        """The weather owns the design condition (HiSim #771).
+
+        It is the per-country reviewed constant, not TABULA's degree-day base of 12 °C.
+        """
         system = translate(baseline())
 
         arguments = constructor_of(system, Targets.WEATHER)

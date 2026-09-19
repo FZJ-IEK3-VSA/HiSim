@@ -22,8 +22,8 @@ from hisim.renovisor.map import MapPalette, ResultsPane, TranslationMap
 from hisim.renovisor.request import CatalogueTable
 
 
-@pytest.fixture(scope="module")
-def page() -> str:
+@pytest.fixture(scope="module", name="page")
+def fixture_page() -> str:
     """Render the page once; every test in this module reads the same render."""
     return TranslationMap.render()
 
@@ -104,13 +104,13 @@ class TestTheResultPane:
 
     def test_every_payload_field_has_a_row(self, page: str) -> None:
         """A field added to the payload without a row on the page is a failing build."""
-        for field in KpiField:
-            assert f"<code>kpis.{field.value}</code>" in page
-        for field in CostField:
-            assert f"<code>costs.{field.value}</code>" in page
+        for kpi_field in KpiField:
+            assert f"<code>kpis.{kpi_field.value}</code>" in page
+        for cost_field in CostField:
+            assert f"<code>costs.{cost_field.value}</code>" in page
 
     def test_a_field_nobody_computes_is_marked_absent_with_its_reason(self, page: str) -> None:
-        """The honest answer to "what will I get here" is printed where the field is." """
+        """The honest answer to 'what will I get here' is printed where the field is."""
         row = page[page.index("<code>costs.grant_in_euro</code>"):][:1200]
 
         assert "absent" in row

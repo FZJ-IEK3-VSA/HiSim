@@ -29,7 +29,7 @@ here runs a simulation.
 
 *the run* -- :mod:`~hisim.renovisor.simulation` (the release's own parameters) and
 :mod:`~hisim.renovisor.run` (validate, translate, simulate, assemble), which
-:mod:`hisim.renovisor.__main__` exposes as four commands.
+:mod:`hisim.renovisor.__main__` exposes as five commands.
 
 *the result* -- :mod:`~hisim.renovisor.result`, :mod:`~hisim.renovisor.kpis`,
 :mod:`~hisim.renovisor.costs`, :mod:`~hisim.renovisor.layers` and

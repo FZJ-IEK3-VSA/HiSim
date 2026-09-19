@@ -5,7 +5,7 @@ plus one list of catalogue measures; the baseline is the same request with `meas
 is no variant switch, and nothing in the body identifies the submission: the body is the cache
 key.
 
-## The four commands
+## The five commands
 
 ```bash
 python -m hisim.renovisor run          request.yaml --out DIR [--period full_year|one_day_15min|one_week_15min]
@@ -33,7 +33,7 @@ image. `map` regenerates `roadmap/renovisor/translation_map.html`.
 | --- | --- |
 | `renovisor_<hash>.energy_system.yaml` | the file that ran; `<hash>` is the first 16 hex of the SHA-256 of the canonical request |
 | `mapping_report.json` | what the translator did with every leaf of the request and every measure |
-| `realized.energy_system.yaml`, `realized.audit.yaml`, `component_connections.json` | what HiSim made of it, written before the first timestep |
+| `realized.energy_system.yaml`, `realized.audit.yaml`, `realized.simulation.yaml`, `component_connections.json` | what HiSim made of it, written before the first timestep |
 | `results/` | the simulation's own outputs, including `all_kpis.json` |
 | `result.json` | the KPIs and the costs, every value with its provenance |
 | `calculation.json` | the success manifest: the translator version, the image digest, the options used |
@@ -41,7 +41,8 @@ image. `map` regenerates `roadmap/renovisor/translation_map.html`.
 | `translator_error.json` | only on exit 3: what the translator could not map |
 
 Nothing is written outside `--out` except the cache directory `--cache-dir` names, which is
-shared state rather than output.
+shared state rather than output. `run` and `translate` also take `--base-files`, the directory
+of recorded energy-system files to translate against; it defaults to `energy_systems/`.
 
 ## Exit codes
 

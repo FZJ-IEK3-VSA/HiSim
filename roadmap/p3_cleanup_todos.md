@@ -1,28 +1,15 @@
 # P3 — what is still open before and after the stack merges
 
-**Date:** 2026-09-05 · **Updated:** 2026-09-07 · **Owner:** Noah Pflugradt
+**Date:** 2026-09-05 · **Updated:** 2026-09-19 · **Owner:** Noah Pflugradt
 **Context:** #598 was split into seven stacked PRs (`p3_identifier_names` → `p3_declarative_fixes` →
 `p3_recordable_components` → `p3_recorder_core` → `p3_recorded_fleet` → `p3_parity_rig` →
 `p3_grouping_pass`), each based on the previous branch and merged in that order — all seven are on
-main as of 2026-09-07, with the follow-up rounds #644–#647 merged and #648/#649 in review. This
-file collects everything the split, the spec check of 2026-09-05 and the golden-coverage work left
-open, so nothing survives only in a conversation. Items are removed when done, not ticked and kept.
+main as of 2026-09-07, with the follow-up rounds #644–#649 merged. This file collects everything
+the split, the spec check of 2026-09-05 and the golden-coverage work left open, so nothing survives
+only in a conversation. Items are removed when done, not ticked and kept.
 
 ## Missing deliverables (code)
 
-- [x] **Multi-instance KPI collision — fixed 2026-09-07 on `kpi_multi_instance`.**
-  `Component.component_kpi_entries` is now the method the collector calls: it asks the overridable
-  `get_component_kpi_entries` and stamps every entry that names no source with the component's own
-  name, so no component has to remember the field. `KpiPreparation.keyed_component_entries` then
-  keys one building's entries: where several components share an entry name, each keys as
-  `"<name> (<source component>)"`, a collision whose colliders do not all name a source is refused
-  rather than silently overwritten, and one component emitting a name twice is refused too.
-  `Building`'s duplicate emission is hoisted out of its per-output loop, the diesel car's two
-  entries got distinct names, and the meter lookup in `read_opex_and_capex_costs_from_results`
-  matches an entry's own `name` instead of the collection key and sums across the meters of a
-  building, so qualification neither zeroes a general KPI nor lets one of two meters stand for
-  both. Seven goldens re-blessed (`dynamic_components` plus the six setups whose collisions had
-  been hiding a component). Remove this entry once it is on main.
 - [ ] **Stable KPI addresses.** Keys are still volatile (bare unless a collision exists) and
   consumers rebuild key strings by hand. Spec: `roadmap/kpi_address_spec.md`; its own PR after #653
   is on main.
@@ -34,29 +21,8 @@ open, so nothing survives only in a conversation. Items are removed when done, n
 
 ## Operational, after the stack merges
 
-- [ ] **Dispatch the parity rig once over the whole fleet** (AC-P3.17) and keep the verdict table as
-  the baseline — the "known state" for the seven KPI-broken setups. The dispatch covers the January
-  window only while July is fenced (R11.5 as amended 2026-09-06; `roadmap/midyear_start_epic.md`).
-- [ ] **Retarget #649 to `main` once #648 squash-merges** (`gh pr edit 649 --base main`), or delete
-  the merged branch so GitHub retargets automatically.
 - [ ] **Delete the `json_v2` spike branch** (local and origin) — the parity/templating halves are
   ported. (#598 itself was closed 2026-09-07.)
-- [ ] **Give the Electrolyzer and the Transformer cost models** (noted 2026-09-05, #641 review
-  round). A bare `hisim_main.py electrolyzer_with_renewables.py` falls back to
-  `full_year_all_options`, and COMPUTE_OPEX/COMPUTE_CAPEX run before COMPUTE_KPIS — both
-  components are real devices (MODELS_NO_DEVICE would be a lie) with no `get_cost_opex`/
-  `get_cost_capex`, so the stock all-options run still dies before the new KPIs compute.
-  Pre-existing, and the golden gate now runs COMPUTE_OPEX and COMPUTE_CAPEX as well (from
-  `golden_gate_costs` on), so the building-level cost KPIs are pinned by the references; fixing it
-  means real cost data for both devices, its own small PR.
-- [ ] **Extract the shared child-recorder helper** (decided 2026-09-05, #638 review round; both
-  #636 and #638 are on main, so this is unblocked). `scripts/record_all_setups.py::Recorder` and
-  `hisim/energy_system/recording/probe_session.py::ProbeRunner` both build the identical child
-  command (`-m hisim.cli energy-system record`), strip the same `HISIM_LOCAL_LPG_CALC_INDEX`
-  variable and run the same subprocess shape — deliberate duplication while the two lived on
-  different stack branches. The helper's home is the recording package, with the script importing
-  it.
-
 ## Deferred by design (not P3's debt, listed so it is findable)
 
 - P6 tears down the parity rig (R11.8 amended; AC-P3.20 moved there) and decides which setups the rig's
@@ -86,3 +52,16 @@ turned up: `roadmap/declarative_energy_systems/grouping_worklist.md`.
 The freshness gate flipped to blocking: 2026-09-08, #654 — eleven green runs on main
 across 2026-09-06..08 (one cancelled by a newer push, none failed), which the owner judged
 sufficient to grant the bit ahead of the nominal week.
+
+Four operational items removed 2026-09-19, each verified rather than assumed. The **fleet-wide
+parity dispatch** (AC-P3.17) ran on 2026-09-19 against main at `dd6cb78b`: twenty-two triples,
+twenty-two green, exact equality with no slack, and the run before it on 2026-09-18 was green too.
+The entry expected the table to record "the known state for the seven KPI-broken setups" -- there
+are none left, and the baseline is full parity across the fleet. The evidence is recorded where P6
+will use it, in `plan.md`. The **Electrolyzer and Transformer cost models** both exist
+(`get_cost_opex`/`get_cost_capex` on `generic_electrolyzer_h2.Electrolyzer` and
+`transformer_rectifier.Transformer`), and `electrolyzer_with_renewables` runs `COMPUTE_OPEX`,
+`COMPUTE_CAPEX` and `COMPUTE_KPIS` to completion, which is the failure that entry described. The
+**shared child-recorder helper** is `hisim/energy_system/recording/child_recorder.py`, used by the
+fleet driver and the probe runner alike. The **#649 retarget** is moot: #648 and #649 are both
+merged and closed.

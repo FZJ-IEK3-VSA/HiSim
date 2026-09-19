@@ -174,6 +174,15 @@ eight setups that have no KPI oracle at all.
 **Entry condition: P1, P2, P2.1, P3, P4 and P5 are all merged.** Until then the rig is dispatched by every
 batch that re-records, and its renaming tables are kept current as P4 renames the legacy aggregator ports.
 
+**Accumulated evidence so far** (the first checklist item below is about exactly this). Fleet-wide dispatches
+of the rig on 2026-09-18 (`8f619e4a`) and 2026-09-19 (`dd6cb78b`) were both green: twenty-two triples each,
+January window, `rel_tol` and `abs_tol` both zero, so every recorded setup reproduced its Python original at
+exact equality. That is the whole fleet, across the P4 close-out, the D-21 move and the kernel cleanups.
+`roadmap/p3_cleanup_todos.md`'s expectation of "seven KPI-broken setups" no longer holds -- there are none,
+and the baseline the rig leaves behind is full parity rather than a list of exceptions. Two consecutive green
+fleet runs are a start on the second item as well: the candidates for the permanent gate are now every setup,
+which makes the question one of cost rather than of trust.
+
 - [ ] Confirm the whole stack is green with the rig still in place, over every runnable window
       (July is fenced pending `roadmap/midyear_start_epic.md`; R11.5 as amended 2026-09-06)
 - [ ] Decide which setups earned a place in the permanent gate, on the rig's accumulated evidence — the six the

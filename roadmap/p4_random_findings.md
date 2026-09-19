@@ -1,6 +1,6 @@
 # P4 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-18 (25 findings)
+**Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-19 (26 findings)
 **Context:** things that surfaced while working through
 `roadmap/declarative_energy_systems/p4_component_sweep_requirements.md` — the component sweep, decisions
 D-1 … D-32 — and were **not** what the work set out to do. Kept separately so the requirements stay about
@@ -923,4 +923,29 @@ and no description that anything consumes.
 
 Logged rather than done on the owner's instruction (2026-09-18): it is separable from F-9, bigger, and turns
 on a fact only the people running scenario comparisons have.
+
+### F-26 — a shipped parameter file has named two options that do not exist for three months **[verified]**
+
+Found on 2026-09-18 while building the simulation-parameters library. `system_setups/2021_minutely_full.simulation.json`
+-- the repository's only "full" parameter set, the one a reader reaches for when they want everything -- lists
+`MAKE_RESULT_JSON_FOR_WEBTOOL` and `MAKE_OPERATION_RESULTS_FOR_WEBTOOL` among its options. Both left
+`PostProcessingOptions` on 2026-06-26 (`88869070`, "more old webtool cleanup"). The Python entry point resolves
+option names with `PostProcessingOptions[option]` (`hisim_main.py:148`), so loading that file raises a bare
+`KeyError` naming the string, wherever it is loaded rather than where it is wrong. The declarative reader
+refuses an unknown name properly, by name and location; the JSON path does not.
+
+The other six `system_setups/*.simulation.json` load cleanly, checked the same way. Nothing in the repository
+references the broken one, which is why nothing noticed: no test loads it, and the option set it describes is
+not what any gate runs.
+
+*Cost of not finding it: whoever next wanted "the full set" -- the question the library answers as of
+2026-09-18 -- would have started from a file that cannot be read, and the message would have named a webtool
+option rather than the file.*
+
+**Where it stands.** Left broken deliberately, and recorded here instead. It belongs to the imperative JSON
+parameter path, which retires with the Python setups in P5/P6; repairing it now would suggest the file is
+maintained. The YAML library that replaces it holds every file to the rule this one broke: a test loads each
+one and refuses an option name the enum does not have. Two ways to close it: delete the file when the Python
+path goes, or -- if someone wants it before then -- drop the two dead names, which makes it the one JSON
+parameter set with a live full option list.
 

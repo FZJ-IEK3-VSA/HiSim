@@ -87,7 +87,10 @@ Every device is a `Component` subclass. Each component:
   - `i_simulate(timestep, stsv, force_convergence)` — called each iteration within a timestep
   - `i_save_state()` / `i_restore_state()` — checkpoint/rollback for convergence iterations
   - `i_doublecheck(timestep, stsv)` — optional sanity check
-- Has a `ConfigBase` dataclass (inherits `JSONWizard`) for all parameters, with a `get_default_*` classmethod
+- Has a `ConfigBase` dataclass for all parameters, naming its component in one line with
+  `MAIN_CLASS` and offering its named defaults as `@preset` classmethods (`preset_<name>(cls, name)`).
+  The `get_default_*` factories the P4 sweep replaced are gone; a value the surrounding system
+  decides is a `sized_field(rule=...)` rather than an argument
 - Has a `DisplayConfig` to control webtool/report visibility
 
 ### Dynamic components (`hisim/dynamic_component.py`)
@@ -126,7 +129,16 @@ All RenoVisor translation code lives in `hisim/renovisor/` — schema validation
 
 ## Adding a new component
 
-1. Create `hisim/components/my_component.py`, using `hisim/components/example_component.py` as a template.
-2. Define a `@dataclass MyComponentConfig(ConfigBase)` with `get_main_classname()` and a `get_default_*` classmethod.
+1. Create `hisim/components/my_component.py`, using `hisim/components/example_template.py` as a
+   template — it teaches the current shape, including the parts below.
+2. Define a `@dataclass MyComponentConfig(ConfigBase)` that declares `MAIN_CLASS` (the dotted path of
+   its component; `ConfigBase.__init_subclass__` refuses a class that declares neither it nor its own
+   `get_main_classname`, which is the exception a test double with no real component states) and at
+   least one `@preset` classmethod, `preset_<name>(cls, name)`, taking the instance name and nothing
+   else. A field the surrounding system decides — a power from the building's heating load, a carrier
+   from the generator beside it — is a `sized_field(rule=...)`, left `AUTO` by the preset; a class that
+   computes such a value for others declares it in `SIZING_CONTRIBUTIONS`.
 3. Subclass `Component`, declare inputs/outputs in `__init__`, implement the four lifecycle methods.
 4. Add a test in `tests/test_my_component.py`; use `SimulationParameters.full_year(year=2021, seconds_per_timestep=60)` for a minimal test setup.
+5. `hisim energy-system describe hisim.components.my_component.MyComponent` prints what the class now
+   offers — its presets, what each sets, and the law behind every sizable field.

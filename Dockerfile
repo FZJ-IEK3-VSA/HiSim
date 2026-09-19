@@ -19,9 +19,6 @@ COPY hisim hisim
 # Copy the system_setups folder
 COPY system_setups system_setups 
 
-# Set an environment variable flag so HiSim can check whether it runs in a container or not
-ENV HISIM_IN_DOCKER_CONTAINER true
-
 # Create a folder for the input files
 RUN mkdir /input
 

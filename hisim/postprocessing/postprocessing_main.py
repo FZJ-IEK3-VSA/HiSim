@@ -15,10 +15,13 @@ The post-processing behaviour is driven entirely by the flags stored in
 ``ppdt.post_processing_options``, a list of
 :class:`~hisim.postprocessingoptions.PostProcessingOptions` enum members. Each enabled
 option triggers a corresponding step inside :meth:`PostProcessor.run`; disabled options are
-silently skipped. When the ``HISIM_IN_DOCKER_CONTAINER`` environment variable is set to a
-truthy value (``"true"``, ``"yes"``, ``"y"``, or ``"1"``), the option set is restricted
-in-place to a container-safe subset (CSV, KPI, cost, and JSON exports) and all chart and
-PDF generation is disabled. Output files are written into
+silently skipped. Nothing else adds or removes options: the caller's simulation parameters
+are authoritative, also inside a container. (Until September 2026 an environment variable set
+by the Dockerfile restricted the set to an allow-list written in 2022 for the UTSP batch
+workers; every option added since was blocked in containers until someone noticed, most
+recently the lifecycle costs. The override is gone; a container that wants no charts leaves
+them out of its simulation file. ``tests/test_postprocessing_options_are_taken_as_given.py``
+pins that.) Output files are written into
 ``ppdt.simulation_parameters.result_directory``, so that directory must exist and be
 writable before :meth:`PostProcessor.run` is called.
 
@@ -173,11 +176,8 @@ class PostProcessor:
         :class:`~hisim.simulator.Simulator` after the time-step loop has converged. Which
         steps execute is driven entirely by ``ppdt.post_processing_options``, a list of
         :class:`~hisim.postprocessingoptions.PostProcessingOptions` members: each enabled
-        option triggers a corresponding step and disabled options are skipped. When the
-        ``HISIM_IN_DOCKER_CONTAINER`` environment variable is set to a truthy value
-        (``"true"``, ``"yes"``, ``"y"``, or ``"1"``), ``ppdt.post_processing_options`` is
-        restricted in place to a container-safe subset (CSV, KPI, cost, and JSON exports)
-        before any step runs, disabling all chart and PDF generation. Depending on the
+        option triggers a corresponding step and disabled options are skipped. The list is
+        taken as given; no environment variable narrows it. Depending on the
         enabled options, this method writes files into
         ``ppdt.simulation_parameters.result_directory`` (CSV and Pickle exports, a PDF
         report, housing-database CSVs, scenario-evaluation outputs, and KPI JSON files),
@@ -191,8 +191,7 @@ class PostProcessor:
                 :class:`~hisim.component.ComponentOutput` entries, the wrapped components,
                 the :class:`~hisim.simulationparameters.SimulationParameters` (notably
                 ``result_directory`` and ``duration``), and the ``post_processing_options``
-                list that selects which steps run. ``ppdt.post_processing_options`` may be
-                mutated in place when running inside a Docker container.
+                list that selects which steps run.
 
         Returns:
             None. All output is produced through the file I/O and plotting side effects
@@ -211,24 +210,6 @@ class PostProcessor:
         for option in ppdt.post_processing_options:
             log.information(f"Selected post processing option: {option}")
         report_image_entries: List[ReportImageEntry] = []
-        # Check whether HiSim is running in a docker container
-        docker_flag = os.getenv("HISIM_IN_DOCKER_CONTAINER", "false")
-        if docker_flag.lower() in ("true", "yes", "y", "1"):
-            # Charts etc. are not needed when executing HiSim in a container. Allow only csv files and KPI.
-            allowed_options_for_docker = {
-                PostProcessingOptions.EXPORT_TO_CSV,
-                PostProcessingOptions.COMPUTE_KPIS,
-                PostProcessingOptions.COMPUTE_OPEX,
-                PostProcessingOptions.COMPUTE_CAPEX,
-                PostProcessingOptions.WRITE_KPIS_TO_JSON,
-                PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER,
-            }
-            # Of all specified options, select those that are allowed
-            valid_options = list(set(ppdt.post_processing_options) & allowed_options_for_docker)
-            if len(valid_options) < len(ppdt.post_processing_options):
-                # At least one invalid option was set
-                ppdt.post_processing_options = valid_options
-                log.warning("Hisim is running in a docker container. Disabled invalid postprocessing options.")
         report: Optional[reportgenerator.ReportGenerator] = None
         single_day_plot_selection = {"month": 0, "day": 0}
         system_chart_entries: List[SystemChartEntry] = []

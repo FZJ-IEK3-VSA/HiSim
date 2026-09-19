@@ -1,21 +1,19 @@
-"""Tests that the run's name and description reach the files post-processing writes.
+"""Tests that the run's name reaches the files post-processing writes.
 
-The scenario name and the description are metadata of one run, and since 2026-09-12 they
-travel on the run's own :class:`~hisim.simulator.Simulator` instead of a process-global
-dictionary. Everything up to the transfer object is pinned elsewhere; what is pinned here is
-the last stretch, the one a user sees: the ``scenario`` column of the yearly pyam export, and
-the ``name`` and ``description`` of ``scenario.json``.
+The scenario name is metadata of one run, and since 2026-09-12 it travels on the run's own
+:class:`~hisim.simulator.Simulator` instead of a process-global dictionary. Everything up to
+the transfer object is pinned elsewhere; what is pinned here is the last stretch, the one a
+user sees: the ``scenario`` column of the yearly pyam export.
 
-The two consumers are selected by two independent post-processing options, and the second of
-them used to read the description off an attribute only the first one assigned — so a run
-asking for component configurations alone wrote an anonymous, undescribed file. Both options
-therefore run here, and both artifacts are read.
+The run's *description* had one consumer, the ``description`` field of ``scenario.json``, and
+that file retired with its writer on 2026-09-18 (F-9). Nothing reads a run's description now,
+so nothing here pins where it arrives; the second test of this file went with the artifact and
+is archived in ``obsolete/tests/test_json_generator.py``.
 """
 
 from __future__ import annotations
 
 import datetime
-import json
 import shutil
 import warnings
 from pathlib import Path
@@ -42,8 +40,9 @@ from tests.postprocessing_option_test_framework import (
 #: fallback for an unnamed run cannot make the assertions pass.
 SCENARIO_NAME = "Gas boiler household [heating=floor]"
 
-#: The run's description, likewise unlike anything the post-processing could derive itself.
-DESCRIPTION = "The one-line description this run carries into its scenario.json."
+#: The run's description. Nothing reads it since ``scenario.json`` retired; the run still
+#: carries one, so the fixture still gives it one.
+DESCRIPTION = "The one-line description this run carries."
 
 
 @pytest.fixture(name="named_case", scope="module")
@@ -82,30 +81,26 @@ def _post_process(case: PreparedPostProcessingCase, options: List[PostProcessing
     ppdt = _clone_ppdt(case=case, simulation_parameters=simulation_parameters)
     log.logger.reset()
     log.logger.setup(run_directory)
-    postprocessing_main.PostProcessor().run(ppdt=ppdt, simulator=case.simulator)
+    postprocessing_main.PostProcessor().run(ppdt=ppdt)
     return Path(run_directory)
 
 
 @pytest.mark.base
-def test_the_runs_name_and_description_reach_the_files_post_processing_writes(
+def test_the_runs_name_reaches_the_pyam_export(
     named_case: PreparedPostProcessingCase,
 ) -> None:
-    """Catches the run's metadata being lost between the transfer object and the artifacts.
+    """Catches the run's name being lost between the transfer object and the yearly export.
 
-    Both consumers run: the scenario evaluation, which writes the pyam ``scenario`` column, and
-    the component-configuration export, which writes ``scenario.json`` into the result
-    directory itself. The second one read the description off an attribute the first one set,
-    so with only the second option selected it wrote an empty description; that is the failure
-    this pins, together with the two names agreeing.
+    The scenario evaluation writes one row per variable, each carrying the run's name in the
+    ``scenario`` column, and that name comes off the run rather than off a global: a run whose
+    name went missing would be reported under the module file name instead, which is a
+    plausible-looking wrong answer rather than a failure.
     """
     directories_to_clean: List[Path] = []
     try:
         run_directory = _post_process(
             named_case,
-            [
-                PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION,
-                PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON,
-            ],
+            [PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION],
         )
         directories_to_clean.append(run_directory)
 
@@ -113,34 +108,6 @@ def test_the_runs_name_and_description_reach_the_files_post_processing_writes(
         assert yearly_files, f"the scenario evaluation wrote no yearly CSV below {run_directory}"
         yearly = pd.read_csv(yearly_files[0])
         assert set(yearly["scenario"].unique()) == {SCENARIO_NAME}
-
-        scenario_json = json.loads((run_directory / "scenario.json").read_text(encoding="utf-8"))
-        assert scenario_json["name"] == SCENARIO_NAME
-        assert scenario_json["description"] == DESCRIPTION
-    finally:
-        _clean_up(directories_to_clean)
-
-
-@pytest.mark.base
-def test_the_description_reaches_scenario_json_without_the_scenario_evaluation(
-    named_case: PreparedPostProcessingCase,
-) -> None:
-    """Catches ``scenario.json`` depending on a second, independently selected option.
-
-    ``WRITE_COMPONENT_CONFIGS_TO_JSON`` is the option a run selects when it wants the
-    configuration of its components and nothing else. It writes ``scenario.json``, and until
-    the metadata was read off the transfer object where it is used, the name and the description
-    in that file were whatever the scenario-evaluation option had left behind — nothing, when
-    that option was not selected.
-    """
-    directories_to_clean: List[Path] = []
-    try:
-        run_directory = _post_process(named_case, [PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON])
-        directories_to_clean.append(run_directory)
-
-        scenario_json = json.loads((run_directory / "scenario.json").read_text(encoding="utf-8"))
-        assert scenario_json["name"] == SCENARIO_NAME
-        assert scenario_json["description"] == DESCRIPTION
     finally:
         _clean_up(directories_to_clean)
 

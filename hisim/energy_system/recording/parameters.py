@@ -197,14 +197,12 @@ class ParameterFileName:
                 "EXPORT_TO_PKL",
                 "EXPORT_MONTHLY_RESULTS",
                 "EXPORT_RESULTS_IN_ONE_FILE",
-                "WRITE_COMPONENT_CONFIGS_TO_JSON",
             ),
         ),
         (
             "scenarios",
             (
                 "PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION",
-                "WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON",
             ),
         ),
     )

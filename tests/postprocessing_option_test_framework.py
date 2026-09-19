@@ -122,7 +122,7 @@ class PostProcessingOptionTestFramework:
         post_processor = postprocessing_main.PostProcessor()
         if option == PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER:
             post_processor.open_dir_in_file_explorer = lambda ppdt: None  # type: ignore[method-assign]
-        post_processor.run(ppdt=ppdt, simulator=case.simulator)
+        post_processor.run(ppdt=ppdt)
         files_after_postprocessing = _file_signatures_below(run_directory)
         files_changed_by_postprocessing = _changed_files(
             before=files_before_postprocessing,

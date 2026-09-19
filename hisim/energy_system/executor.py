@@ -309,8 +309,9 @@ class EnergySystemExecutor:
 
         The run metadata a Python setup has to assemble by hand — the scenario name and the
         description — the file already carries: its ``name`` becomes the scenario name that
-        post-processing writes into the pyam "scenario" column and into ``scenario.json``, and
-        its ``description`` the run's description. Before this, a declarative run left both
+        post-processing writes into the pyam "scenario" column, and its ``description`` the
+        run's description, which documents the file and, since ``scenario.json`` retired with
+        its writer (F-9), reaches no artifact. Before this, a declarative run left both
         empty: only the Python path set them, the twelve building-sizer setups writing the
         scenario name and :mod:`hisim.hisim_main` the description.
 

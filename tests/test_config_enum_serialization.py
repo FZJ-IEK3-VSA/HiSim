@@ -243,11 +243,12 @@ def test_config_round_trips_through_json_unchanged(case_name: str) -> None:
 def test_config_round_trips_through_to_dict_and_plain_json_dump(case_name: str) -> None:
     """A default config also survives HiSim's own ``to_dict`` plus ``json.dump`` path.
 
-    ``hisim.json_generator.convert_component_to_json`` writes scenario files by
-    calling ``to_dict`` and handing the result to the JSON encoder, without going
-    through ``to_json``. That only works when every enum member is itself a string
-    subclass, which is precisely what the ``str`` mixin on the converted enums
-    buys; this test guards that second, less obvious encode path.
+    Several writers dump a configuration by calling ``to_dict`` and handing the result
+    straight to the JSON encoder, without going through ``to_json`` -- the building
+    sizer's household config (``modular_household_config.py``), the RenoVisor request's
+    ``moduleConfig`` and the webtool KPI export among them. That only works when every
+    enum member is itself a string subclass, which is precisely what the ``str`` mixin on
+    the converted enums buys; this test guards that second, less obvious encode path.
     """
     config = ConfigEnumSerializationCases.CONFIG_FACTORIES[case_name]()
     encoded = json.loads(json.dumps(config.to_dict()))

@@ -114,7 +114,7 @@ class Simulator:
         self.module_directory = module_directory
         self.my_module_config = my_module_config
         #: Name of the scenario this run represents, carried into post-processing as the
-        #: pyam "scenario" column and as the ``name`` of ``scenario.json``. A Python setup
+        #: pyam "scenario" column. A Python setup
         #: function sets it on the simulator it is handed (the building-sizer setups write
         #: their scenario hash string here); a declarative run gets the energy-system file's
         #: own ``name``, followed by the option each variant selected when the file has any.
@@ -124,8 +124,9 @@ class Simulator:
         self.scenario_name: str = ""
         #: One-line description of the run. The Python entry point takes it from the first
         #: line of the setup file — a docstring or a comment, triple quotes stripped — a
-        #: declarative run from the energy-system file's ``description`` field.
-        #: Post-processing writes it into ``scenario.json``.
+        #: declarative run from the energy-system file's ``description`` field, where it
+        #: documents the system. Nothing in post-processing has read it since ``scenario.json``
+        #: retired with its writer (F-9, 2026-09-18); it is carried, not consumed.
         self.description: str = ""
         self.simulation_repository = sim_repository.SimRepository()
         self.results_data_frame: pd.DataFrame
@@ -514,7 +515,7 @@ class Simulator:
         from hisim.postprocessing import postprocessing_main as pp  # pylint: disable=import-outside-toplevel
 
         my_post_processor = pp.PostProcessor()
-        my_post_processor.run(ppdt=postprocessing_datatransfer, simulator=self)
+        my_post_processor.run(ppdt=postprocessing_datatransfer)
         for wrapped_component in self.wrapped_components:
             wrapped_component.clear()
         del all_result_lines

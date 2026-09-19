@@ -1,0 +1,196 @@
+{
+  "comment": "User-facing eligibility questionnaire catalog for Ireland (cost_spec.md §5.7). AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED: the questions were written from the SEAI page texts together with hisim/subsidy_catalog/IE.json and neither the wording nor the legal reading behind it has been verified by a person. Languages shipped in v1: de + en (spec Q31).",
+  "questions": [
+    {
+      "field": "applicant.actor",
+      "answer_kind": "CHOICE",
+      "options": [
+        "OWNER_OCCUPIER",
+        "LANDLORD",
+        "CONDOMINIUM_ASSOCIATION",
+        "TENANT"
+      ],
+      "question": {
+        "de": "In welcher Rolle stellen Sie den Foerderantrag?",
+        "en": "In what role are you applying for the grant?"
+      },
+      "option_labels": {
+        "de": {
+          "OWNER_OCCUPIER": "Selbstnutzende:r Eigentuemer:in",
+          "LANDLORD": "Vermieter:in",
+          "CONDOMINIUM_ASSOCIATION": "Eigentuemergemeinschaft (owners' management company)",
+          "TENANT": "Mieter:in"
+        },
+        "en": {
+          "OWNER_OCCUPIER": "Owner-occupier",
+          "LANDLORD": "Landlord",
+          "CONDOMINIUM_ASSOCIATION": "Owners' management company",
+          "TENANT": "Tenant"
+        }
+      },
+      "help": {
+        "de": "Mieter:innen koennen keine SEAI-Foerderung beantragen. Das Warmer Homes Scheme steht nur selbstnutzenden Eigentuemer:innen offen.",
+        "en": "Tenants cannot apply for an SEAI grant. The Warmer Homes Scheme is open to owner-occupiers only."
+      }
+    },
+    {
+      "field": "applicant.receives_means_tested_benefit",
+      "answer_kind": "BOOLEAN",
+      "question": {
+        "de": "Beziehen Sie eine beduerftigkeitsabhaengige Sozialleistung (in Irland: eine 'qualifying welfare payment')?",
+        "en": "Do you receive a means-tested social welfare payment (in Ireland: a qualifying welfare payment)?"
+      },
+      "help": {
+        "de": "Fuer Dach- und Hohlwanddaemmung gibt es dann einen hoeheren Festbetrag; ausserdem kommt das Warmer Homes Scheme in Frage, das die Arbeiten vollstaendig finanziert. Welche Leistungen zaehlen, legt SEAI fest.",
+        "en": "Attic and cavity wall insulation then carry a higher fixed grant, and the Warmer Homes Scheme, which funds the works outright, becomes possible. SEAI decides which payments qualify."
+      }
+    },
+    {
+      "field": "applicant.first_time_buyer",
+      "answer_kind": "BOOLEAN",
+      "question": {
+        "de": "Haben Sie dieses Haus als Ersterwerber:in gekauft, also am oder nach dem 1. Januar 2025 und ohne vorher jemals ein Eigenheim besessen zu haben?",
+        "en": "Did you buy this home as a first-time buyer, that is on or after 1 January 2025 and having never owned a home before?"
+      },
+      "help": {
+        "de": "Nur die Dachdaemmung wird dann hoeher gefoerdert, und nur fuer Bestandsgebaeude, die am oder vor dem 31. Dezember 2010 gebaut und bezogen wurden.",
+        "en": "Only attic insulation is paid at the higher rate, and only for an existing home built and occupied on or before 31 December 2010."
+      }
+    },
+    {
+      "field": "applicant.managed_full_retrofit",
+      "answer_kind": "BOOLEAN",
+      "question": {
+        "de": "Werden die Arbeiten als eine gemanagte Komplettsanierung ausgefuehrt (in Irland: durch einen registrierten One Stop Shop)?",
+        "en": "Are the works carried out as one managed complete upgrade (in Ireland: by a registered One Stop Shop)?"
+      },
+      "help": {
+        "de": "Sparren-, Boden- und Lueftungsfoerderung sowie die Luftdichtheitsfoerderung gibt es nur auf diesem Weg, ebenso den guenstigen Kredit. Die Foerderung wird dabei vorab von den Kosten abgezogen.",
+        "en": "The rafter, floor, mechanical ventilation and air tightness grants exist only on that route, and so does the low-cost loan. The grant is then deducted from the cost of the works upfront."
+      }
+    },
+    {
+      "field": "building.construction_year",
+      "answer_kind": "YEAR",
+      "question": {
+        "de": "In welchem Jahr wurde das Gebaeude gebaut und bezogen?",
+        "en": "In what year was the home built and occupied?"
+      },
+      "help": {
+        "de": "Daemmung, Fenster und Tueren setzen ein Baujahr vor 2011 voraus, Waermepumpe, Solarthermie und Photovoltaik ein Baujahr vor 2021; das Warmer Homes Scheme verlangt ein Baujahr vor 2006.",
+        "en": "Insulation, windows and doors require a home built before 2011, a heat pump, solar thermal and solar PV a home built before 2021; the Warmer Homes Scheme requires a home built before 2006."
+      }
+    },
+    {
+      "field": "building.dwelling_type",
+      "answer_kind": "CHOICE",
+      "options": [
+        "DETACHED",
+        "SEMI_DETACHED_OR_END_TERRACE",
+        "MID_TERRACE",
+        "APARTMENT"
+      ],
+      "question": {
+        "de": "Um welche Gebaeudeart handelt es sich?",
+        "en": "What kind of dwelling is it?"
+      },
+      "option_labels": {
+        "de": {
+          "DETACHED": "Freistehendes Haus",
+          "SEMI_DETACHED_OR_END_TERRACE": "Doppelhaushaelfte oder Reihenendhaus",
+          "MID_TERRACE": "Reihenmittelhaus",
+          "APARTMENT": "Wohnung"
+        },
+        "en": {
+          "DETACHED": "Detached house",
+          "SEMI_DETACHED_OR_END_TERRACE": "Semi-detached or end-of-terrace house",
+          "MID_TERRACE": "Mid-terrace house",
+          "APARTMENT": "Apartment"
+        }
+      },
+      "help": {
+        "de": "Fast jede SEAI-Foerderung ist ein Festbetrag, der von dieser Einstufung abhaengt: fuer Dachdaemmung etwa 2.000 EUR freistehend gegenueber 1.400 EUR im Reihenmittelhaus.",
+        "en": "Nearly every SEAI grant is a fixed amount that depends on this band: attic insulation pays EUR 2,000 for a detached house and EUR 1,400 for a mid-terrace one."
+      }
+    },
+    {
+      "field": "building.existing_heating.energy_carrier",
+      "answer_kind": "CHOICE",
+      "options": [
+        "NATURAL_GAS",
+        "HEATING_OIL",
+        "PELLETS",
+        "WOOD_CHIPS",
+        "DISTRICT_HEATING",
+        "ELECTRICITY"
+      ],
+      "question": {
+        "de": "Womit heizt das Gebaeude derzeit?",
+        "en": "What does the home currently heat with?"
+      },
+      "option_labels": {
+        "de": {
+          "NATURAL_GAS": "Erdgas",
+          "HEATING_OIL": "Heizoel",
+          "PELLETS": "Pellets",
+          "WOOD_CHIPS": "Hackschnitzel",
+          "DISTRICT_HEATING": "Fernwaerme",
+          "ELECTRICITY": "Strom"
+        },
+        "en": {
+          "NATURAL_GAS": "Natural gas",
+          "HEATING_OIL": "Heating oil",
+          "PELLETS": "Pellets",
+          "WOOD_CHIPS": "Wood chips",
+          "DISTRICT_HEATING": "District heating",
+          "ELECTRICITY": "Electricity"
+        }
+      },
+      "help": {
+        "de": "Der Renewable Heat Bonus von 4.000 EUR wird nur gezahlt, wenn eine Oel- oder Gasheizung, eine Festbrennstoffheizung oder eine elektrische Speicherheizung ersetzt wird.",
+        "en": "The EUR 4,000 Renewable Heat Bonus is only paid for replacing an oil or gas boiler, a solid-fuel system or electric storage heating."
+      }
+    },
+    {
+      "field": "building.existing_heating.asset_class",
+      "answer_kind": "CHOICE",
+      "options": [
+        "GasHeater",
+        "OilHeater",
+        "PelletHeater",
+        "WoodChipHeater",
+        "DistrictHeating",
+        "ElectricHeater",
+        "HeatPump"
+      ],
+      "question": {
+        "de": "Welche Art von Waermeerzeuger ist derzeit eingebaut?",
+        "en": "What kind of heat generator is currently installed?"
+      },
+      "option_labels": {
+        "de": {
+          "GasHeater": "Gaskessel",
+          "OilHeater": "Oelkessel",
+          "PelletHeater": "Pelletheizung",
+          "WoodChipHeater": "Hackschnitzel- oder Festbrennstoffheizung",
+          "DistrictHeating": "Fernwaerme-Uebergabestation",
+          "ElectricHeater": "Elektrische Heizung",
+          "HeatPump": "Waermepumpe"
+        },
+        "en": {
+          "GasHeater": "Gas boiler",
+          "OilHeater": "Oil boiler",
+          "PelletHeater": "Pellet boiler",
+          "WoodChipHeater": "Wood chip or solid fuel system",
+          "DistrictHeating": "District heating connection",
+          "ElectricHeater": "Electric heating",
+          "HeatPump": "Heat pump"
+        }
+      },
+      "help": {
+        "de": "Wer eine vorhandene Waermepumpe ersetzt, erhaelt nur die Foerderung fuer das Geraet selbst: weder der Renewable Heat Bonus noch die Foerderung fuer die Heizflaechen wird dann gezahlt.",
+        "en": "Replacing an existing heat pump pays the unit grant only: neither the Renewable Heat Bonus nor the central heating grant is paid in that case."
+      }
+    }
+  ]
+}

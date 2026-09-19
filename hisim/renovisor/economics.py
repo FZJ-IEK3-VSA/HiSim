@@ -20,9 +20,11 @@ Four things go into it, and each answers a question the run cannot:
   ``cost`` block, written there by the frontend out of the contract's material table, and a
   measure that arrives without one is added to the plan **unpriced** rather than silently left
   out, so the result says what it does not know;
-* **the technical attributes** — achieved U-values per element, and the seasonal performance
-  factor where the new generator is a heat pump. Subsidy conditions read them and nothing else
-  can supply them;
+* **the technical attributes** — the achieved U-value of each envelope element, the build-up
+  position a layer goes to, and the peak power of the array where the request pins it. Subsidy
+  conditions read them and nothing else can supply them: Ireland's cavity-fill and dry-lining
+  grants share one asset class and are told apart by the placement alone, and its solar PV grant
+  steps with the array size;
 * **the applicant** — who is applying, which decides eligibility. Unanswered fields stay
   *undetermined* rather than false (§5.7), which is what turns a half-filled questionnaire into a
   question in the result instead of a denied grant.
@@ -39,12 +41,17 @@ from hisim.economics.bridge import EconomicContext
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.evaluator import SubjectCostFacts
 from hisim.economics.facts import ComponentCostFacts, ExistingAsset, ExistingAssetRegister
-from hisim.economics.subsidies import ApplicantProfile, SubsidyBuildingContext, SubsidyContext
+from hisim.economics.subsidies import (
+    ApplicantProfile,
+    DwellingType,
+    SubsidyBuildingContext,
+    SubsidyContext,
+)
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
 from hisim.renovisor.constants import AnywayShareByPlacement
 from hisim.renovisor.request import House, Measure, Request
-from hisim.renovisor.vocabulary import HeatGenerator, ThermalElement
+from hisim.renovisor.vocabulary import BuildingType, HeatGenerator, ThermalElement
 
 
 class GeneratorAssets:
@@ -236,6 +243,58 @@ class DeviceAssets:
         return cls.ALL
 
 
+class DwellingTypes:
+    """What the request's ``building_type`` is to a subsidy programme that bands its amounts.
+
+    Ireland's SEAI grants pay a different fixed amount per measure for a detached house, a
+    semi-detached or end-of-terrace house, a mid-terrace house and an apartment, so the engine's
+    eligibility context carries a :class:`~hisim.economics.subsidies.DwellingType` and this table
+    is where the frontend's own vocabulary is translated into it.
+
+    Two rows are worth a reader's attention. A bungalow is a detached house for this purpose —
+    the band is about how many walls are shared, not about how many storeys there are. And a
+    terraced house is mapped to ``MID_TERRACE`` although the request cannot say whether it is at
+    the end of its terrace, which would be the better-paid band; the mapping report says so with
+    the word ``approximated``, and nothing guesses in the other direction. ``other`` maps to
+    nothing at all, which the engine reads as *unanswered* and reports as a question.
+    """
+
+    #: The request's building type -> the band the eligibility context uses, or None for "unknown".
+    BY_BUILDING_TYPE: ClassVar[Dict[BuildingType, Optional[DwellingType]]] = {
+        BuildingType.DETACHED_SFH: DwellingType.DETACHED,
+        BuildingType.BUNGALOW: DwellingType.DETACHED,
+        BuildingType.SEMI_DETACHED_SFH: DwellingType.SEMI_DETACHED_OR_END_TERRACE,
+        BuildingType.TERRACED_SFH: DwellingType.MID_TERRACE,
+        BuildingType.APARTMENT: DwellingType.APARTMENT,
+        BuildingType.OTHER: None,
+    }
+
+    #: The building types whose band is an approximation rather than a translation.
+    APPROXIMATED: ClassVar[Tuple[BuildingType, ...]] = (BuildingType.TERRACED_SFH,)
+
+    #: What the mapping report says about an approximated band.
+    APPROXIMATION_NOTE: ClassVar[str] = (
+        "approximated: a terraced house is banded as mid-terrace because the request cannot say "
+        "whether it stands at the end of its terrace, which several grants pay more for"
+    )
+
+    @classmethod
+    def of(cls, building_type: Optional[BuildingType]) -> Optional[DwellingType]:
+        """The band one building type falls into, or ``None`` when it falls into none.
+
+        Args:
+            building_type: The request's ``house.building.building_type``, or ``None`` when the
+                request does not state one.
+
+        Returns:
+            The :class:`~hisim.economics.subsidies.DwellingType`, or ``None`` for ``other`` and
+            for an unstated building type — both of which the engine treats as unanswered.
+        """
+        if building_type is None:
+            return None
+        return cls.BY_BUILDING_TYPE.get(building_type)
+
+
 @dataclass
 class EconomicContextResult:
     """What the builder produced: the context, and the two things the mapping report publishes.
@@ -255,12 +314,18 @@ class EconomicContextResult:
         defaults: One ``(request path, value, sentence)`` per request leaf the builder had to
             default, so the mapping report can state it with the value it used. Nothing the
             builder does is silent.
+        approximations: One ``(path, value, sentence)`` per context field the builder could only
+            fill with something close but not equal — today the dwelling-type band, which cannot
+            tell an end-of-terrace house from a mid-terrace one. Published as ``approximated``
+            lines of the mapping report, under paths of their own so that the request leaf they
+            were derived from keeps the line it already has.
     """
 
     context: EconomicContext
     subjects: Dict[str, Optional[str]] = field(default_factory=dict)
     unpriced_subjects: List[str] = field(default_factory=list)
     defaults: List[Tuple[str, Any, str]] = field(default_factory=list)
+    approximations: List[Tuple[str, Any, str]] = field(default_factory=list)
 
 
 class EconomicContextBuilder:
@@ -298,6 +363,19 @@ class EconomicContextBuilder:
     #: today; read when present, and every field it does not answer stays undetermined.
     APPLICANT_KEY: ClassVar[str] = "applicant"
 
+    #: The fields of that block the builder copies onto the applicant profile, by their name on
+    #: :class:`~hisim.economics.subsidies.ApplicantProfile`. The last three are the ones the
+    #: Irish catalogue reads (step 11 §3.2/§3.3); a field the block omits stays undetermined.
+    APPLICANT_FIELDS: ClassVar[Tuple[str, ...]] = (
+        "taxable_household_income_in_euro",
+        "household_size",
+        "main_residence",
+        "region",
+        "receives_means_tested_benefit",
+        "first_time_buyer",
+        "managed_full_retrofit",
+    )
+
     #: The per-measure price block the frontend writes out of the contract's material table
     #: (E-spec §7). Absent from the vendored schema today (findings F7/F10).
     COST_KEY: ClassVar[str] = "cost"
@@ -323,6 +401,20 @@ class EconomicContextBuilder:
     #: The technical attribute the U-value of an envelope subject is published under.
     U_VALUE_ATTRIBUTE: ClassVar[str] = "achieved_u_value_in_watt_per_m2_per_kelvin"
 
+    #: The technical attribute the build-up position of an envelope subject is published under.
+    #: Two different grants can share one asset class and be told apart only by it — Ireland pays
+    #: a cavity-fill grant and a dry-lining grant, both of which are ``WALL_INTERNAL_INSULATION``.
+    PLACEMENT_ATTRIBUTE: ClassVar[str] = "placement"
+
+    #: The technical attribute the peak power of the photovoltaic array is published under.
+    #: Grants that step with array size read it; it is only published when the request pins the
+    #: array's power, because an array sized as a share of the roof has no peak power until the
+    #: simulation has run.
+    PEAK_POWER_ATTRIBUTE: ClassVar[str] = "peak_power_in_kwp"
+
+    #: Watt per kilowatt, for the conversion into that attribute's unit.
+    WATT_PER_KILOWATT: ClassVar[float] = 1000.0
+
     #: The note an unpriced envelope subject carries into the mapping report.
     UNPRICED_NOTE: ClassVar[str] = (
         "no cost block on the measure, so the subject is in the economics with an investment of "
@@ -337,6 +429,15 @@ class EconomicContextBuilder:
 
     #: The catalogue measure that installs a new heat generator.
     HEATING_MEASURE_ID: ClassVar[str] = "heating_system"
+
+    #: The component the engine files the photovoltaic array's cost flows under, which is the
+    #: subject the array's technical attributes are published for.
+    PHOTOVOLTAIC_COMPONENT: ClassVar[str] = "PVSystem"
+
+    #: The mapping-report path the dwelling-type band is reported under. It is a derived context
+    #: field rather than a request leaf, so it gets a path of its own and leaves the line the
+    #: request's own ``house.building.building_type`` already carries untouched.
+    DWELLING_TYPE_PATH: ClassVar[str] = "economic_context.building.dwelling_type"
 
     def __init__(
         self,
@@ -368,7 +469,7 @@ class EconomicContextBuilder:
         facts = self._envelope_cost_facts(result)
         result.context = EconomicContext(
             existing_assets=register,
-            subsidy_context=self._subsidy_context(),
+            subsidy_context=self._subsidy_context(result),
             extra_cost_facts=facts,
             technical_attributes_by_subject=self._technical_attributes(facts),
             living_area_in_m2=self._living_area(),
@@ -619,21 +720,62 @@ class EconomicContextBuilder:
     def _technical_attributes(
         self, facts: List[SubjectCostFacts]
     ) -> Dict[str, Dict[str, Any]]:
-        """The achieved U-value of every envelope subject, for the subsidy conditions.
+        """What the subsidy conditions may ask about a subject beyond its asset class and size.
 
-        Only what the run actually realizes is published: the U-value comes from the ``Building``
-        config the translator wrote, which is the value the simulation runs with. A subject whose
-        element has no U-value in the config gets no attribute rather than a guessed one.
+        Three attributes, and only what the run actually realizes is published. The achieved
+        U-value of an envelope subject comes from the ``Building`` config the translator wrote,
+        which is the value the simulation runs with; the build-up position comes from the applied
+        layer, and is what tells two grants on one asset class apart (a cavity fill and a dry
+        lining are both ``WALL_INTERNAL_INSULATION``); the array's peak power comes from the
+        renovated house when the request pins it. A subject whose element has no U-value in the
+        config gets no U-value attribute rather than a guessed one, and an array sized as a share
+        of the roof publishes no peak power, so a grant that steps with array size comes out
+        *undetermined* instead of being decided on a number nobody stated.
+
+        Args:
+            facts: The envelope cost subjects this builder produced.
+
+        Returns:
+            Subject name -> attribute map, ready for
+            :attr:`~hisim.economics.bridge.EconomicContext.technical_attributes_by_subject`.
+            A subject with nothing to say about it is absent from the map.
         """
         attributes: Dict[str, Dict[str, Any]] = {}
+        placements = {layer.measure_id: layer.placement for layer in self._applied.layers}
         for subject_facts in facts:
-            element = self._element_of_subject(subject_facts.subject)
-            if element is None:
-                continue
-            value = self._building.get(f"{element.value}{self.U_VALUE_SUFFIX}")
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
-                attributes[subject_facts.subject] = {self.U_VALUE_ATTRIBUTE: float(value)}
+            subject = subject_facts.subject
+            entry: Dict[str, Any] = {}
+            placement = placements.get(subject)
+            if placement is not None:
+                entry[self.PLACEMENT_ATTRIBUTE] = placement
+            element = self._element_of_subject(subject)
+            if element is not None:
+                value = self._building.get(f"{element.value}{self.U_VALUE_SUFFIX}")
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    entry[self.U_VALUE_ATTRIBUTE] = float(value)
+            if entry:
+                attributes[subject] = entry
+        peak_power = self._peak_power_in_kwp()
+        if peak_power is not None:
+            attributes[self.PHOTOVOLTAIC_COMPONENT] = {self.PEAK_POWER_ATTRIBUTE: peak_power}
         return attributes
+
+    def _peak_power_in_kwp(self) -> Optional[float]:
+        """The renovated array's peak power in kilowatt-peak, or ``None`` when it has none.
+
+        Reads the house the package produced rather than the request, so an array a measure
+        installed or enlarged is the one reported. A request that sizes the array as a share of
+        the roof states no power at all, and a house with no array states zero; both give
+        ``None``, because a grant that steps with array size must then stay undetermined rather
+        than be denied on a zero nobody wrote.
+
+        Returns:
+            The peak power in kWp, or ``None``.
+        """
+        array = self._house.pv_system
+        if array is None or array.power_in_watt is None or array.power_in_watt <= 0:
+            return None
+        return float(array.power_in_watt) / self.WATT_PER_KILOWATT
 
     def _element_of_subject(self, subject: str) -> Optional[ThermalElement]:
         """Which envelope element one cost subject improves, or ``None`` when it is not one."""
@@ -643,25 +785,45 @@ class EconomicContextBuilder:
                 return element
         return EnvelopeAssets.UNIT_REPLACEMENTS.get(subject)
 
-    def _subsidy_context(self) -> SubsidyContext:
+    def _subsidy_context(self, result: EconomicContextResult) -> SubsidyContext:
         """Who is applying and what the building is, for the eligibility conditions.
 
         The applicant half comes from the request's ``applicant`` block when it carries one
         (E-spec §7); every field it does not answer stays ``None``, which the engine reads as
-        *undetermined* and reports as a question rather than as a denial (§5.7). The building
-        half is what the request already states: the construction year, the floor area, and one
-        dwelling unit, which is the archetype every RenoVisor calculation simulates.
+        *undetermined* and reports as a question rather than as a denial (§5.7). The three
+        fields the Irish catalogue reads — ``receives_means_tested_benefit``, ``first_time_buyer``
+        and ``managed_full_retrofit``, the last of which is the One Stop Shop route — are read
+        from that block exactly like the others and are never inferred from anything else.
+
+        The building half is what the request already states: the construction year, the floor
+        area, one dwelling unit (the archetype every RenoVisor calculation simulates) and the
+        dwelling-type band of :class:`DwellingTypes`, which grants with per-dwelling-type amounts
+        read. A band that could only be approximated is recorded on ``result.approximations``, so
+        the mapping report says so.
+
+        Args:
+            result: The result being assembled, for the approximation the band may carry.
+
+        Returns:
+            The context the eligibility conditions resolve against.
         """
         raw = self._request.document.get(self.APPLICANT_KEY)
         profile = ApplicantProfile()
         if isinstance(raw, Mapping):
-            for name in ("taxable_household_income_in_euro", "household_size", "main_residence", "region"):
+            for name in self.APPLICANT_FIELDS:
                 if name in raw:
                     setattr(profile, name, raw[name])
+        building_type = self._original.building.building_type
+        dwelling_type = DwellingTypes.of(building_type)
+        if building_type in DwellingTypes.APPROXIMATED and dwelling_type is not None:
+            result.approximations.append(
+                (self.DWELLING_TYPE_PATH, dwelling_type.value, DwellingTypes.APPROXIMATION_NOTE)
+            )
         return SubsidyContext(
             applicant=profile,
             building=SubsidyBuildingContext(
                 construction_year=self._original.building.construction_year,
+                dwelling_type=dwelling_type,
                 heated_floor_area_in_m2=self._floor_area(),
                 residential_floor_area_in_m2=self._floor_area(),
             ),

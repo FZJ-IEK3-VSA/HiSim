@@ -968,6 +968,9 @@ class Translator:
         for path, value, note in built.defaults:
             if not report.has(path):
                 report.defaulted(path, value, note)
+        for path, value, note in built.approximations:
+            if not report.has(path):
+                report.approximated(path, note, value=value)
         translated = TranslatedSystem(
             model=model,
             base_file_name=base_file_name,

@@ -144,12 +144,19 @@ class SimulationSetup:
 class SubsidyCatalogue:
     """Where the country subsidy catalogues live, and which of them exists.
 
-    Ireland has none today (decision Q24 builds it), so the engine books no catalogue support
-    and the payload publishes no grant. The moment ``hisim/subsidy_catalog/IE.json`` appears,
-    this finds it and the grant field starts being published with no other change.
+    A country whose ``<COUNTRY>.json`` is not in the shipped directory gets no catalogue at all,
+    which makes the engine run ``subsidy_mode: NONE`` and the result document publish one
+    undetermined row saying so; a country whose file is there evaluates its schemes. Ireland used
+    to be the first case and is now the second: ``IE.json`` exists since step 11, as an
+    AI-generated placeholder every scheme of which is marked "needs examination" (see
+    ``hisim/subsidy_catalog/README_IE.md``).
+
+    The directory is resolved from this file rather than from the working directory, so the path
+    the economic parameters carry is absolute — which is what the catalogue loader requires of it,
+    since it refuses a relative path that could name two different directories.
     """
 
-    #: The shipped catalogue directory, relative to the repository root.
+    #: The shipped catalogue directory, resolved absolutely from this module's location.
     DIRECTORY: ClassVar[Path] = Path(__file__).resolve().parents[1] / "subsidy_catalog"
 
     @classmethod

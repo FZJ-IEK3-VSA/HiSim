@@ -13,6 +13,7 @@ milliseconds, and nothing else.
 
 import copy
 import dataclasses
+import os
 from typing import Any, Dict, Optional
 
 import pytest
@@ -20,12 +21,20 @@ import pytest
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.facts import ExistingAssetRegister
 from hisim.loadtypes import ComponentType, Units
+from hisim.simulationparameters import SimulationParameters
 from hisim.renovisor.apply import apply
 from hisim.renovisor.constants import AnywayShareByPlacement
 from hisim.renovisor.contract import ContractFiles
-from hisim.renovisor.economics import EconomicContextBuilder, EnvelopeAssets, GeneratorAssets
+from hisim.economics.subsidies import DwellingType, SubsidyCatalog
+from hisim.renovisor.economics import (
+    DwellingTypes,
+    EconomicContextBuilder,
+    EnvelopeAssets,
+    GeneratorAssets,
+)
 from hisim.renovisor.request import Request
-from hisim.renovisor.vocabulary import HeatGenerator, ThermalElement
+from hisim.renovisor.simulation import EconomicSetup, SubsidyCatalogue
+from hisim.renovisor.vocabulary import BuildingType, HeatGenerator, ThermalElement
 from hisim.renovisor.whitelist import Whitelist
 
 pytestmark = pytest.mark.base
@@ -235,6 +244,139 @@ class TestTheSubsidyContext:
         context = _built(_mockup()).context.subsidy_context
         assert context.applicant.taxable_household_income_in_euro is None
         assert context.applicant.household_size is None
+
+    def test_the_three_irish_applicant_answers_stay_none_without_an_applicant_block(self) -> None:
+        """The vendored schema has no ``applicant`` block yet, so nothing may be inferred."""
+        context = _built(_mockup()).context.subsidy_context
+        assert context.applicant.receives_means_tested_benefit is None
+        assert context.applicant.first_time_buyer is None
+        assert context.applicant.managed_full_retrofit is None
+
+    def test_an_applicant_block_is_read_when_the_request_carries_one(self) -> None:
+        """Step 11 §3.2/§3.3: read when present, never guessed, never defaulted to false."""
+        document = _mockup()
+        document["applicant"] = {
+            "receives_means_tested_benefit": True,
+            "first_time_buyer": False,
+            "managed_full_retrofit": True,
+        }
+        request = Request.parse(_mockup())
+        request = dataclasses.replace(request, document=document)
+        applied = apply(request.document["house"], request.measures, Whitelist.load())
+        context = EconomicContextBuilder(request, applied, {}).build().context.subsidy_context
+
+        assert context is not None
+        assert context.applicant.receives_means_tested_benefit is True
+        assert context.applicant.first_time_buyer is False
+        assert context.applicant.managed_full_retrofit is True
+
+    def test_the_dwelling_type_comes_from_the_building_type(self) -> None:
+        """The mockup is a detached house, which is the band nearly every SEAI grant pays most for."""
+        context = _built(_mockup()).context.subsidy_context
+        assert context.building.dwelling_type is DwellingType.DETACHED
+
+    @pytest.mark.parametrize(
+        "building_type, expected",
+        [
+            (BuildingType.DETACHED_SFH, DwellingType.DETACHED),
+            (BuildingType.BUNGALOW, DwellingType.DETACHED),
+            (BuildingType.SEMI_DETACHED_SFH, DwellingType.SEMI_DETACHED_OR_END_TERRACE),
+            (BuildingType.TERRACED_SFH, DwellingType.MID_TERRACE),
+            (BuildingType.APARTMENT, DwellingType.APARTMENT),
+            (BuildingType.OTHER, None),
+        ],
+    )
+    def test_every_building_type_maps_to_its_band(self, building_type, expected) -> None:
+        """``other`` gives ``None``, which the engine reads as a question rather than a denial."""
+        assert DwellingTypes.of(building_type) is expected
+
+    def test_a_terraced_house_is_banded_as_mid_terrace_and_says_so(self) -> None:
+        """An end-of-terrace house is paid more and cannot be told apart, so it is approximated."""
+        document = _mockup()
+        document["house"]["building"]["building_type"] = BuildingType.TERRACED_SFH.value
+        built = _built(document)
+
+        assert built.context.subsidy_context.building.dwelling_type is DwellingType.MID_TERRACE
+        paths = {path for path, _value, _note in built.approximations}
+        assert EconomicContextBuilder.DWELLING_TYPE_PATH in paths
+        assert all("approximated" in note for _path, _value, note in built.approximations)
+
+
+class TestTheTechnicalAttributes:
+    """What a subsidy condition may ask about a subject that its asset class does not say."""
+
+    def test_an_envelope_subject_carries_the_placement_of_its_layer(self) -> None:
+        """Ireland's cavity and dry-lining grants share an asset class and differ only in this."""
+        attributes = _built(_mockup()).context.technical_attributes_by_subject
+        assert attributes["external_insulation"]["placement"] == "external_wall_external"
+
+    def test_an_envelope_subject_carries_its_achieved_u_value(self) -> None:
+        """Unchanged by step 11: the U-value the run simulates with, not an assumed one."""
+        attributes = _built(
+            _mockup(),
+            {"absolute_conditioned_floor_area_in_m2": 140.0, "facade_area_in_m2": 173.0,
+             "facade_u_value_in_watt_per_m2_per_kelvin": 0.19},
+        ).context.technical_attributes_by_subject
+        assert attributes["external_insulation"][
+            EconomicContextBuilder.U_VALUE_ATTRIBUTE
+        ] == pytest.approx(0.19)
+
+    def test_an_array_sized_as_a_share_of_the_roof_publishes_no_peak_power(self) -> None:
+        """The mockup sizes its array by roof share, so no kilowatt-peak is known before the run."""
+        attributes = _built(_mockup()).context.technical_attributes_by_subject
+        assert EconomicContextBuilder.PHOTOVOLTAIC_COMPONENT not in attributes
+
+    def test_a_pinned_array_publishes_its_peak_power_in_kilowatt_peak(self) -> None:
+        """Ireland's solar PV grant steps with the array size and reads exactly this attribute."""
+        document = _mockup()
+        document["house"]["pv_system"] = {"power_in_watt": 3500}
+        document["measures"] = [
+            measure for measure in document["measures"] if measure["id"] != "photovoltaic_system"
+        ]
+        attributes = _built(document).context.technical_attributes_by_subject
+        assert attributes[EconomicContextBuilder.PHOTOVOLTAIC_COMPONENT] == {
+            EconomicContextBuilder.PEAK_POWER_ATTRIBUTE: pytest.approx(3.5)
+        }
+
+
+class TestTheCatalogueTheRunIsPointedAt:
+    """Step 11 §3.12: a country whose catalogue ships is evaluated against it, not at NONE.
+
+    The wiring is one line of :mod:`hisim.renovisor.simulation`, but it decides whether a whole
+    run books grants or publishes "this country has no catalogue", so it gets a test of its own
+    that needs no simulation. The path has to be absolute as well as right: the catalogue loader
+    refuses a relative path that could name two different directories.
+    """
+
+    def test_ireland_now_has_a_shipped_catalogue(self) -> None:
+        """``IE.json`` exists, so an Irish run evaluates the SEAI schemes."""
+        assert SubsidyCatalogue.path_for("IE") is not None
+
+    def test_a_country_without_one_still_gets_none(self) -> None:
+        """The other branch is what keeps a country with no catalogue from being priced wrongly."""
+        assert SubsidyCatalogue.path_for("ZZ") is None
+
+    def test_the_parameters_name_the_shipped_directory_absolutely(self) -> None:
+        """``resolve_base_path`` refuses an ambiguous relative path, so this one is absolute."""
+        parameters = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=900)
+        catalogue = EconomicSetup.attach(parameters, "IE")
+
+        assert catalogue is not None
+        economic = parameters.economic_parameters
+        assert economic is not None
+        configured = economic.subsidy_catalog_path
+        assert configured is not None
+        assert os.path.isabs(configured)
+        assert SubsidyCatalog.load("IE", configured).schemes
+
+    def test_a_country_without_a_catalogue_names_no_path(self) -> None:
+        """Naming a catalogue that does not exist is a hard error, so none is named."""
+        parameters = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=900)
+
+        assert EconomicSetup.attach(parameters, "ZZ") is None
+        economic = parameters.economic_parameters
+        assert economic is not None
+        assert economic.subsidy_catalog_path is None
 
 
 class TestTheTables:

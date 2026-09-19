@@ -119,13 +119,41 @@ class TestTheEndToEndDocument:
         assert "external_insulation" in rows
         assert rows["external_insulation"]["unpriced"] is True
 
-    def test_every_subsidy_row_is_undetermined(self, document) -> None:
-        """No Irish catalogue exists, so nothing is awarded and nothing is published as zero."""
+    def test_the_subsidy_rows_are_no_longer_all_undetermined(self, document) -> None:
+        """Ireland has a catalogue now, so the rows carry real verdicts (step 11 §3.12)."""
         rows = document["plan"]["subsidies"]
         assert rows
-        for row in rows:
-            assert row["status"] == "undetermined"
-            assert row["amount_in_euro"] is None
+        statuses = {row["status"] for row in rows}
+        assert statuses - {"undetermined"}, "every row is still undetermined"
+        assert all(row["scheme"] for row in rows), "a row names no scheme, i.e. no catalogue ran"
+
+    def test_the_heat_pump_unit_grant_is_awarded(self, document) -> None:
+        """The mockup is a detached 1975 house buying a heat pump: SEAI pays 6,500 EUR for it."""
+        awarded = {
+            row["scheme"]: row for row in document["plan"]["subsidies"] if row["status"] == "awarded"
+        }
+        assert "IE_SEAI_HEAT_PUMP_UNIT_HOUSE" in awarded, sorted(awarded)
+        # Support is signed as a credit on the timeline, so the published band is negative.
+        amount = awarded["IE_SEAI_HEAT_PUMP_UNIT_HOUSE"]["amount_in_euro"]
+        assert amount["best"] == pytest.approx(-6500.0)
+
+    def test_every_row_names_a_scheme_whose_display_name_carries_the_ai_marker(self, document) -> None:
+        """Step 11 §1: a user must see that the Irish amounts are an unexamined AI draft.
+
+        The document puts the scheme *id* in ``scheme`` and the display name in ``note`` of an
+        awarded row, so the marker is checked on the catalogue entry every row points at — which
+        is the string a report renders — and, where the document carries it, on the note too.
+        """
+        from hisim.economics.subsidies import SubsidyCatalog
+
+        catalog = SubsidyCatalog.load("IE")
+        marker = " [AI draft \u2014 needs examination]"
+        for row in document["plan"]["subsidies"]:
+            scheme = catalog.scheme_by_id(row["scheme"])
+            assert scheme is not None, row["scheme"]
+            assert scheme.label.endswith(marker), scheme.id
+            if row["status"] == "awarded":
+                assert str(row["note"]).endswith(marker), row
 
     def test_the_reference_costs_money(self, document) -> None:
         """Doing nothing has a price too: twenty years of gas, maintenance and replacements."""

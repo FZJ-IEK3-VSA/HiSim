@@ -49,5 +49,9 @@ the translator's own build rather than a user's request.
 #: The version of the translation layer itself, distinct from the contract revision
 #: ``contract/PINNED.yaml`` records and from the HiSim version. It is echoed in the mapping
 #: report and in the capability document so a result can be traced back to the rules that
-#: produced it.
-TRANSLATOR_VERSION: str = "2.0.0"
+#: produced it, and the backend gates artifact requirements on it. Meaning of the steps:
+#: ``2.0.0`` the v2 request and outputs of the frontend spec; ``2.1.0`` every run writes the three
+#: economics artifacts (``economic_inputs.json``, ``lifecycle_costs.json``,
+#: ``cost_provenance.json``) also inside a container, because post-processing no longer strips
+#: options there (shared todo H2) -- the backend requires them from this version on.
+TRANSLATOR_VERSION: str = "2.1.0"

@@ -334,6 +334,12 @@ class Calculation:
             self._period, self._output, self._cache, country=request.country.value
         )
         catalogue = EconomicSetup.attach(parameters, request.country.value, self._catalogue_directory)
+        # What the engine cannot learn from the simulation: what was already in the building, what
+        # the envelope measures cost and who is applying for support (step 10 §4). Attached beside
+        # the economic parameters and before the run, because the postprocessing bridge merges it
+        # into `economic_inputs.json` as the simulation finishes.
+        if translated.economic_context is not None:
+            parameters.set_economic_context(translated.economic_context)
         energy_system_path = self._output / translated.file_name
         self._runner.run(energy_system_path, parameters, self._output)
         self._written.extend(Outputs.RECORDS)

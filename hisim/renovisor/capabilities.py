@@ -957,11 +957,14 @@ class CapabilityDocument:
         measures = Aggregation.measures(results)
         body = {
             "engine": cls.ENGINE,
-            "engine_version": f"{cls.ENGINE}-{HiSimCommit.of() or 'unknown'}",
+            # `or_unknown` rather than `of`: the vendored contract schema types both commit
+            # fields as strings, so an image with no commit marker at all would otherwise produce
+            # a document that does not validate against the contract it is meant to satisfy.
+            "engine_version": f"{cls.ENGINE}-{HiSimCommit.or_unknown()}",
             "translator": {
                 "version": TRANSLATOR_VERSION,
-                "commit": HiSimCommit.of(),
-                "hisim_commit": HiSimCommit.of(),
+                "commit": HiSimCommit.or_unknown(),
+                "hisim_commit": HiSimCommit.or_unknown(),
                 "request_schema_version": 1,
                 "catalogue_revision": cls.catalogue_revision(),
                 "generated_at": generated_at or datetime.datetime.now(datetime.timezone.utc)

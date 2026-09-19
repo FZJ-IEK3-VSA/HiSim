@@ -290,3 +290,63 @@ class PredefinedHousehold:
     def reference(cls) -> Dict[str, object]:
         """Return the household as the energy-system file's constructor-argument codec reads it."""
         return {"Name": cls.NAME, "Guid": {"StrVal": cls.GUID}}
+
+
+class AnywayShareByPlacement:
+    """How much of an envelope measure's price the building would have spent anyway (§4.1).
+
+    The lifecycle cost engine credits a renovation with the cost it *avoids*: money the building
+    would have had to spend regardless, on a like-for-like replacement, is not a cost of the
+    renovation. ``ExistingAsset.anyway_share`` is the fraction of the **new** measure's price that
+    counterfactual would truly have bought, and it is the number that decides how flattering a
+    retrofit's economics look. A first-time improvement must be well below 1: a facade that was
+    never insulated would have been *repaired*, not insulated, so only the repair share —
+    scaffolding, render, paint — was going to be paid. A genuine like-for-like replacement is 1.0:
+    dead windows are replaced by windows.
+
+    The table is keyed by the ``materials.yaml`` ``building_components`` placement, because that
+    is what distinguishes the three cases that matter: an external layer that comes with
+    scaffolding and a new render, an internal or cavity layer that comes with almost no shared
+    work, and a replacement of a whole unit.
+
+    Every share here is an estimate and none of them is measured.
+    """
+
+    # Source: cost_module_issues.md #12, which records that the anyway shares are rough and asks
+    # for a reviewed table. These three are the shares the RenoVisor translator writes; they are
+    # estimates of the like-for-like share of a first-time envelope improvement, not measurements
+    # and not taken from any price list. TO BE REVIEWED.
+    EXTERNAL_FIRST_TIME: ClassVar[float] = 0.3
+    INTERNAL_FIRST_TIME: ClassVar[float] = 0.15
+    LIKE_FOR_LIKE: ClassVar[float] = 1.0
+
+    #: Placement -> the share of the new measure's price the counterfactual would have spent.
+    #: An external layer carries the render-and-scaffolding share; an internal, cavity or
+    #: basement layer carries almost nothing, because nothing about the existing build-up had to
+    #: be touched. TO BE REVIEWED, with the three shares above.
+    BY_PLACEMENT: ClassVar[Dict[str, float]] = {
+        "external_wall_external": EXTERNAL_FIRST_TIME,
+        "external_wall_internal": INTERNAL_FIRST_TIME,
+        "external_wall_cavity": INTERNAL_FIRST_TIME,
+        "basement_ceiling": INTERNAL_FIRST_TIME,
+        "basement_floor_and_walls_inside": INTERNAL_FIRST_TIME,
+        "basement_floor_and_walls_outside": EXTERNAL_FIRST_TIME,
+        "floor_and_ceiling": INTERNAL_FIRST_TIME,
+        "roof_external_rafter": EXTERNAL_FIRST_TIME,
+        "roof_between_rafter": INTERNAL_FIRST_TIME,
+        "top_floor_ceiling": INTERNAL_FIRST_TIME,
+    }
+
+    @classmethod
+    def of(cls, placement: str) -> float:
+        """Return the anyway share of one build-up position.
+
+        Args:
+            placement: The ``building_components`` value the insulation measure records.
+
+        Returns:
+            The share in ``(0, 1]``. A placement the table does not know falls back to
+            :attr:`INTERNAL_FIRST_TIME`, the smaller of the two first-time shares, so an unlisted
+            build-up is credited conservatively rather than generously.
+        """
+        return cls.BY_PLACEMENT.get(placement, cls.INTERNAL_FIRST_TIME)

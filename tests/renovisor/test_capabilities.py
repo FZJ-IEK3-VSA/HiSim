@@ -388,19 +388,26 @@ class TestTheResultsSection:
         assert "Purchased energy consumption" in demand["source"]
         assert any("PARTIAL when the period" in condition for condition in demand["conditions"])
 
-    def test_an_absent_field_carries_the_reason_the_payload_writes(
+    def test_every_cost_field_is_absent_with_the_reason_the_payload_writes(
         self, document: CapabilityDocument
     ) -> None:
-        """Decision R8 forbids the plausible zero, so the document announces the absence."""
+        """Since step 10 the money is in ``economics_result.json``, and the document says so.
+
+        Decision R8 forbids the plausible zero, so a field ``result.json`` does not carry has to
+        announce its absence. Every cost field is now such a field: the staged evaluator prices
+        the whole plan, and the reason names the document, the key inside it and the command that
+        writes it -- except the property-value figure, which moved nowhere because no model
+        produces it (A13).
+        """
         entries = {entry["field"]: entry for entry in document.body["results"]["costs"]}
 
-        for field in ("costs.grant_in_euro", "costs.payback_period_in_years",
-                      "costs.property_value_increase_in_percent",
-                      "costs.investment_breakdown.envelope_material"):
-            assert entries[field]["provenance"] == "absent"
-            assert entries[field]["reason"]
-            assert entries[field]["when"]
-        assert "subsidy_catalog/IE.json" in entries["costs.grant_in_euro"]["reason"]
+        for field in CostField:
+            entry = entries[f"costs.{field.value}"]
+            assert entry["provenance"] == "absent"
+            assert entry["reason"]
+            assert entry["when"]
+        assert "economics_result.json" in entries["costs.grant_in_euro"]["reason"]
+        assert "A13" in entries["costs.property_value_increase_in_percent"]["reason"]
 
     def test_a_field_that_is_published_but_can_be_absent_says_both(
         self, document: CapabilityDocument

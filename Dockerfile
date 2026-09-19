@@ -16,6 +16,16 @@ RUN pip install -e .
 # Copy source code to image
 COPY hisim hisim
 
+# Bake the commit the image was built from into the source tree, so that every document the
+# image produces can name the code that produced it. A container is not a git checkout -- there
+# is no .git here -- so `git rev-parse` inside the image answers nothing and the mapping report's
+# `translator.commit` used to be null on every calculation the image ran (todo H6).
+# `hisim.renovisor.report.HiSimCommit` reads this file first, then the HISIM_COMMIT environment
+# variable, and only then git. Build with `--build-arg HISIM_COMMIT=$(git rev-parse --short HEAD)`;
+# an image built without it writes an empty file, which is read as "no commit" exactly as before.
+ARG HISIM_COMMIT=""
+RUN printf '%s' "$HISIM_COMMIT" > hisim/COMMIT
+
 # Copy the system_setups folder
 COPY system_setups system_setups 
 

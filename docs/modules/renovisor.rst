@@ -30,7 +30,23 @@ builds that file, simulates it and collects what HiSim wrote. **Results**
 (:mod:`~hisim.renovisor.result`, fed by :mod:`~hisim.renovisor.kpis`,
 :mod:`~hisim.renovisor.costs`, :mod:`~hisim.renovisor.layers` and
 :mod:`~hisim.renovisor.provenance`) assemble ``result.json``, every value
-carrying where it came from. Beside the pipeline stands the **capability
+carrying where it came from.
+
+The **money** is not in ``result.json``. A renovation is a plan over several
+years, and one run of one state cannot price it, so
+:mod:`~hisim.renovisor.economics` builds the economic context the lifecycle cost
+engine needs -- the existing-asset register, the envelope cost subjects and the
+applicant -- and the whole of the money is produced afterwards by
+:mod:`hisim.economics.staged` over the finished jobs of a plan::
+
+    python -m hisim.economics staged \
+        --stage jobs/baseline:0:baseline --stage jobs/package:0:"stage 1" \
+        --out economics_result.json
+
+That writes ``economics_result.json`` (:mod:`hisim.economics.staged_document`,
+validated against ``hisim/economics/economics_result.schema.json``), and
+``result.json`` lists every cost field of the contract under ``missing`` with
+the key of that document which answers it. Beside the pipeline stands the **capability
 document**: :mod:`~hisim.renovisor.capabilities` runs the whole probe set
 through the pure layers and aggregates what this image can and cannot do, and
 :mod:`~hisim.renovisor.map` renders the same probe run as the committed
@@ -131,6 +147,14 @@ hisim.renovisor.costs module
 ----------------------------
 
 .. automodule:: hisim.renovisor.costs
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+hisim.renovisor.economics module
+--------------------------------
+
+.. automodule:: hisim.renovisor.economics
    :members:
    :undoc-members:
    :show-inheritance:

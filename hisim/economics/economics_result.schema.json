@@ -1,0 +1,403 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/FZJ-IEK3-VSA/HiSim/hisim/economics/economics_result.schema.json",
+  "title": "economics_result.json",
+  "description": "One staged renovation plan priced by hisim.economics.staged, in the shape the RenoVisor frontend draws from (economics-hisim-spec.md section 3). Every amount is a band {min, best, max}; costs are positive and money arriving is negative; years are relative to the start of the horizon and every row carries its calendar year; every subject, asset class, measure and scheme is an id the frontend labels itself.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "engine",
+    "parameters",
+    "currency",
+    "groups",
+    "stages",
+    "reference",
+    "plan",
+    "comparison",
+    "provenance"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "engine": {
+      "type": "object",
+      "required": ["hisim_commit", "economics_version"],
+      "properties": {
+        "hisim_commit": {
+          "type": ["string", "null"],
+          "description": "Short commit of the HiSim checkout, from hisim/COMMIT, HISIM_COMMIT or git; null outside a repository."
+        },
+        "economics_version": {"type": "string"}
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "required": [
+        "horizon_years",
+        "interest_rate",
+        "country",
+        "price_basis_year",
+        "simulation_year",
+        "perspective_id",
+        "escalation",
+        "subsidy_catalog"
+      ],
+      "properties": {
+        "horizon_years": {"type": "integer", "minimum": 1},
+        "interest_rate": {"type": "number"},
+        "country": {"type": "string"},
+        "price_basis_year": {"type": ["integer", "null"]},
+        "simulation_year": {"type": ["integer", "null"]},
+        "perspective_id": {"type": "string"},
+        "escalation": {
+          "type": "object",
+          "required": ["general", "investment", "feed_in", "energy"],
+          "properties": {
+            "general": {"type": "number"},
+            "investment": {"type": "number"},
+            "feed_in": {"type": "number"},
+            "energy": {"type": "object", "additionalProperties": {"type": "number"}}
+          }
+        },
+        "subsidy_catalog": {
+          "type": ["string", "null"],
+          "description": "The catalogue in force, or null when the plan ran with subsidy_mode NONE."
+        }
+      }
+    },
+    "currency": {"const": "EUR"},
+    "groups": {
+      "description": "The eight cost stacks, in the fixed order every chart draws them in.",
+      "type": "array",
+      "items": {"$ref": "#/$defs/group"},
+      "minItems": 8,
+      "maxItems": 8,
+      "prefixItems": [
+        {"const": "Investment & financing"},
+        {"const": "Residual value & anyway credit"},
+        {"const": "Subsidies"},
+        {"const": "Replacements"},
+        {"const": "Energy"},
+        {"const": "CO2"},
+        {"const": "Maintenance & operation"},
+        {"const": "Levy & transfers"}
+      ]
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["index", "label", "from_year", "job_id", "measures"],
+        "properties": {
+          "index": {"type": "integer", "minimum": 0},
+          "label": {"type": "string"},
+          "from_year": {"type": "integer", "minimum": 0},
+          "job_id": {"type": ["string", "null"]},
+          "measures": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "reference": {"$ref": "#/$defs/evaluation"},
+    "plan": {"$ref": "#/$defs/evaluation"},
+    "comparison": {
+      "type": "object",
+      "required": [
+        "npv_delta_in_euro",
+        "equivalent_annual_cost_delta_in_euro",
+        "monthly_cost_year1_delta_in_euro",
+        "discounted_payback_year",
+        "cumulative_delta",
+        "lifecycle_co2_delta_in_kg",
+        "warm_rent_change_in_euro_per_m2_month"
+      ],
+      "properties": {
+        "npv_delta_in_euro": {"$ref": "#/$defs/band"},
+        "equivalent_annual_cost_delta_in_euro": {"$ref": "#/$defs/band"},
+        "monthly_cost_year1_delta_in_euro": {"$ref": "#/$defs/nullableBand"},
+        "discounted_payback_year": {
+          "description": "The first year the plan has paid back, per uncertainty slot; null means never within the horizon.",
+          "type": "object",
+          "required": ["min", "best", "max"],
+          "properties": {
+            "min": {"type": ["integer", "null"]},
+            "best": {"type": ["integer", "null"]},
+            "max": {"type": ["integer", "null"]}
+          }
+        },
+        "cumulative_delta": {"type": "array", "items": {"$ref": "#/$defs/cumulativeRow"}},
+        "lifecycle_co2_delta_in_kg": {"$ref": "#/$defs/band"},
+        "warm_rent_change_in_euro_per_m2_month": {"$ref": "#/$defs/nullableBand"}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["cost_provenance", "explain_command"],
+      "properties": {
+        "cost_provenance": {"type": "string"},
+        "explain_command": {"type": "string"}
+      }
+    }
+  },
+  "$defs": {
+    "band": {
+      "description": "One amount in the engine's three uncertainty slots.",
+      "type": "object",
+      "required": ["min", "best", "max"],
+      "properties": {
+        "min": {"type": "number"},
+        "best": {"type": "number"},
+        "max": {"type": "number"}
+      },
+      "additionalProperties": false
+    },
+    "nullableBand": {
+      "oneOf": [{"$ref": "#/$defs/band"}, {"type": "null"}]
+    },
+    "group": {
+      "enum": [
+        "Investment & financing",
+        "Residual value & anyway credit",
+        "Subsidies",
+        "Replacements",
+        "Energy",
+        "CO2",
+        "Maintenance & operation",
+        "Levy & transfers"
+      ]
+    },
+    "groupStack": {
+      "description": "One band per group; all eight are present even at zero, so a stack never shifts.",
+      "type": "object",
+      "required": [
+        "Investment & financing",
+        "Residual value & anyway credit",
+        "Subsidies",
+        "Replacements",
+        "Energy",
+        "CO2",
+        "Maintenance & operation",
+        "Levy & transfers"
+      ],
+      "additionalProperties": {"$ref": "#/$defs/band"}
+    },
+    "cumulativeRow": {
+      "type": "object",
+      "required": ["year", "nominal_in_euro", "discounted_in_euro"],
+      "properties": {
+        "year": {"type": "integer", "minimum": 0},
+        "nominal_in_euro": {"$ref": "#/$defs/band"},
+        "discounted_in_euro": {"$ref": "#/$defs/band"}
+      }
+    },
+    "event": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {"enum": ["investment", "subsidy", "stage_start", "replacement"]},
+        "subject": {"type": ["string", "null"]},
+        "measure_id": {"type": ["string", "null"]},
+        "scheme": {"type": ["string", "null"]},
+        "stage": {"type": ["integer", "null"]}
+      }
+    },
+    "evaluation": {
+      "description": "One variant priced over the horizon: the reference or the staged plan, in the same shape.",
+      "type": "object",
+      "required": [
+        "totals",
+        "by_group",
+        "by_category",
+        "by_payer",
+        "by_subject",
+        "annual",
+        "cumulative",
+        "energy_year1",
+        "co2",
+        "subsidies",
+        "financing"
+      ],
+      "properties": {
+        "totals": {
+          "type": "object",
+          "required": [
+            "npv_in_euro",
+            "equivalent_annual_cost_in_euro",
+            "monthly_cost_year1_in_euro",
+            "investment_year0_in_euro",
+            "sunk_cost_written_off_in_euro",
+            "levelized_cost_of_heat_in_euro_per_kwh"
+          ],
+          "properties": {
+            "npv_in_euro": {"$ref": "#/$defs/band"},
+            "equivalent_annual_cost_in_euro": {"$ref": "#/$defs/band"},
+            "monthly_cost_year1_in_euro": {"$ref": "#/$defs/nullableBand"},
+            "investment_year0_in_euro": {"$ref": "#/$defs/band"},
+            "sunk_cost_written_off_in_euro": {"$ref": "#/$defs/band"},
+            "levelized_cost_of_heat_in_euro_per_kwh": {"$ref": "#/$defs/nullableBand"}
+          }
+        },
+        "by_group": {"$ref": "#/$defs/groupStack"},
+        "by_category": {"type": "object", "additionalProperties": {"$ref": "#/$defs/band"}},
+        "by_payer": {"type": "object", "additionalProperties": {"$ref": "#/$defs/band"}},
+        "by_subject": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "subject",
+              "kind",
+              "asset_class",
+              "measure_id",
+              "stage",
+              "unpriced",
+              "npv_in_euro",
+              "investment_in_euro",
+              "subsidy_in_euro",
+              "replacements_in_euro",
+              "maintenance_in_euro",
+              "residual_value_in_euro",
+              "service_life_years",
+              "replacement_years"
+            ],
+            "properties": {
+              "subject": {"type": "string"},
+              "kind": {"enum": ["component", "carrier"]},
+              "asset_class": {"type": ["string", "null"]},
+              "measure_id": {"type": ["string", "null"]},
+              "stage": {"type": ["integer", "null"]},
+              "unpriced": {"type": "boolean"},
+              "npv_in_euro": {"$ref": "#/$defs/band"},
+              "investment_in_euro": {"$ref": "#/$defs/band"},
+              "subsidy_in_euro": {"$ref": "#/$defs/band"},
+              "replacements_in_euro": {"$ref": "#/$defs/band"},
+              "maintenance_in_euro": {"$ref": "#/$defs/band"},
+              "residual_value_in_euro": {"$ref": "#/$defs/band"},
+              "service_life_years": {"type": ["number", "null"]},
+              "replacement_years": {"type": "array", "items": {"type": "integer"}}
+            }
+          }
+        },
+        "annual": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "year",
+              "calendar_year",
+              "stage",
+              "total_nominal_in_euro",
+              "total_discounted_in_euro",
+              "by_group",
+              "events"
+            ],
+            "properties": {
+              "year": {"type": "integer", "minimum": 0},
+              "calendar_year": {"type": ["integer", "null"]},
+              "stage": {"type": "integer", "minimum": 0},
+              "total_nominal_in_euro": {"$ref": "#/$defs/band"},
+              "total_discounted_in_euro": {"$ref": "#/$defs/band"},
+              "by_group": {"$ref": "#/$defs/groupStack"},
+              "events": {"type": "array", "items": {"$ref": "#/$defs/event"}}
+            }
+          }
+        },
+        "cumulative": {"type": "array", "items": {"$ref": "#/$defs/cumulativeRow"}},
+        "energy_year1": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "carrier",
+              "bought_in_kwh",
+              "sold_in_kwh",
+              "cost_in_euro",
+              "revenue_in_euro",
+              "effective_price_in_euro_per_kwh"
+            ],
+            "properties": {
+              "carrier": {"type": "string"},
+              "bought_in_kwh": {"type": "number"},
+              "sold_in_kwh": {"type": "number"},
+              "cost_in_euro": {"$ref": "#/$defs/band"},
+              "revenue_in_euro": {"$ref": "#/$defs/band"},
+              "effective_price_in_euro_per_kwh": {"$ref": "#/$defs/nullableBand"}
+            }
+          }
+        },
+        "co2": {
+          "type": "object",
+          "required": ["embodied_in_kg", "operational_year1_in_kg", "lifecycle_in_kg", "by_year_in_kg"],
+          "properties": {
+            "embodied_in_kg": {"$ref": "#/$defs/band"},
+            "operational_year1_in_kg": {"$ref": "#/$defs/band"},
+            "lifecycle_in_kg": {"$ref": "#/$defs/band"},
+            "by_year_in_kg": {"type": "array", "items": {"$ref": "#/$defs/band"}}
+          }
+        },
+        "subsidies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "scheme",
+              "measure_id",
+              "stage",
+              "status",
+              "amount_in_euro",
+              "binding_cap",
+              "open_questions",
+              "note"
+            ],
+            "properties": {
+              "scheme": {"type": ["string", "null"]},
+              "measure_id": {"type": ["string", "null"]},
+              "stage": {"type": ["integer", "null"]},
+              "status": {"enum": ["awarded", "ineligible", "undetermined"]},
+              "amount_in_euro": {
+                "description": "The support this scheme pays on this timeline, negative like every credit. Null for a scheme that was refused or could not be decided: an unanswered question is never published as a zero.",
+                "oneOf": [{"$ref": "#/$defs/band"}, {"type": "null"}]
+              },
+              "binding_cap": {"type": ["string", "null"]},
+              "open_questions": {"type": "array", "items": {"type": "string"}},
+              "note": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "financing": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["loans"],
+              "properties": {
+                "loans": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "stage",
+                      "principal_in_euro",
+                      "rate",
+                      "term_years",
+                      "debt_service_by_year_in_euro"
+                    ],
+                    "properties": {
+                      "stage": {"type": "integer", "minimum": 0},
+                      "principal_in_euro": {"$ref": "#/$defs/band"},
+                      "rate": {"type": "number"},
+                      "term_years": {"type": "integer", "minimum": 1},
+                      "debt_service_by_year_in_euro": {
+                        "type": "array",
+                        "items": {"$ref": "#/$defs/band"}
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {"type": "null"}
+          ]
+        }
+      }
+    }
+  }
+}

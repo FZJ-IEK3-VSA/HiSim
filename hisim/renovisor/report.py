@@ -14,7 +14,9 @@ Its shape is §6 of the calculation-request specification::
       "base_file": "household_gas_building_sizer.grouped.energy_system.yaml",
       "energy_system_file": "renovisor_<hash>.energy_system.yaml",
       "fields": [{"path", "status", "target?", "value?", "note?"}],
-      "measures": [{"id", "status", "options": [{"name", "status", "note?"}], "targets"}]
+      "measures": [{"id", "status", "options": [{"name", "status", "note?"}], "targets"}],
+      "subjects": {"<cost subject>": "<measure id or null>"},
+      "unpriced_subjects": ["<cost subject>"]
     }
 
 :meth:`MappingReport.assert_complete` is the invariant as a check rather than as a promise: it
@@ -23,10 +25,11 @@ approximated or defaulted silently" (rule 6) a property of the build rather than
 discipline.
 """
 
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, ClassVar, Dict, Iterator, List, Mapping, Optional, Tuple
+from typing import Any, ClassVar, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 from hisim.renovisor import TRANSLATOR_VERSION
 from hisim.renovisor.vocabulary import ReportStatus
@@ -75,18 +78,92 @@ class FieldLine:
 
 
 class HiSimCommit:
-    """The commit of the repository the translator is running out of.
+    """The commit of the code the translator is running out of, however it was shipped.
 
-    It goes into the report and into the capability document so that a stored result can be
-    traced back to the code that produced it. A checkout without git, or an installed package
-    outside a repository, reports ``None`` rather than failing a calculation over provenance.
+    It goes into the mapping report, into the capability document and into
+    ``economics_result.json`` so that a stored result can be traced back to the code that produced
+    it. The problem it solves is that a container image is not a git checkout: the Dockerfile
+    copies the source and leaves ``.git`` behind, so asking git inside the image answers nothing
+    and every result the image produced used to claim no provenance at all.
+
+    Three sources are tried, in the order of how much they are worth trusting:
+
+    1. ``hisim/COMMIT`` — a one-line file the image build writes (``RUN echo "$COMMIT" >
+       hisim/COMMIT``), which is the commit the image was *built from* and travels with it;
+    2. the ``HISIM_COMMIT`` environment variable, for a container run whose orchestrator knows
+       the revision but whose image was built without the file;
+    3. ``git rev-parse --short HEAD`` in the checkout, which is the developer case and is
+       unchanged in behaviour, including the ``None`` it returns when there is no git.
+
+    ``None`` stays a legitimate answer throughout: a checkout without git, an installed package
+    outside a repository, an image built without either marker. A calculation is never failed over
+    provenance, and the capability document stays valid with a null commit.
+
+    Example::
+
+        HISIM_COMMIT=8f307a53 python -m hisim.renovisor translate request.json --out jobs/abc
     """
 
     #: Where the repository is, relative to this module.
     ROOT: ClassVar[Path] = Path(__file__).resolve().parents[2]
 
+    #: The baked marker file, relative to the repository root. Written by the image build.
+    COMMIT_FILE: ClassVar[str] = "hisim/COMMIT"
+
+    #: The environment variable read when the file is absent.
+    COMMIT_VARIABLE: ClassVar[str] = "HISIM_COMMIT"
+
+    #: What a document whose schema demands a string says when no source knows the commit. The
+    #: capability document is validated against the vendored contract schema, which types
+    #: ``translator.commit`` as a string, so a null there would make the document invalid rather
+    #: than merely uninformative; :meth:`or_unknown` is what such a caller uses.
+    UNKNOWN: ClassVar[str] = "unknown"
+
+    #: How many characters of a full hash the short form keeps, so the three sources agree on
+    #: one spelling. Git's own ``--short`` default is seven; a baked file is normally already
+    #: short and is truncated only when it carries a full hash.
+    SHORT_LENGTH: ClassVar[int] = 7
+
     @classmethod
     def of(cls) -> Optional[str]:
+        """Return the short commit of this HiSim, or ``None`` when nothing states one.
+
+        Returns:
+            The commit as the baked file, the environment or git gives it, shortened to
+            :attr:`SHORT_LENGTH` when it is a full 40-character hash; ``None`` when no source
+            answers.
+        """
+        for candidate in (cls._baked(), cls._environment(), cls._git()):
+            if candidate:
+                return cls._shortened(candidate)
+        return None
+
+    @classmethod
+    def or_unknown(cls) -> str:
+        """The short commit, or :attr:`UNKNOWN` — for the documents that cannot carry a null.
+
+        Returns:
+            :meth:`of`, or ``"unknown"`` when it answered ``None``.
+        """
+        return cls.of() or cls.UNKNOWN
+
+    @classmethod
+    def _baked(cls) -> Optional[str]:
+        """The commit the image build wrote into ``hisim/COMMIT``, or ``None``."""
+        path = cls.ROOT / cls.COMMIT_FILE
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            return None
+        return text.strip() or None
+
+    @classmethod
+    def _environment(cls) -> Optional[str]:
+        """The commit the run's environment states in ``HISIM_COMMIT``, or ``None``."""
+        return (os.environ.get(cls.COMMIT_VARIABLE) or "").strip() or None
+
+    @classmethod
+    def _git(cls) -> Optional[str]:
         """Return the short commit hash of the checkout, or ``None`` when there is no git."""
         try:
             completed = subprocess.run(
@@ -98,6 +175,14 @@ class HiSimCommit:
         except (OSError, subprocess.CalledProcessError):
             return None
         return completed.stdout.strip() or None
+
+    @classmethod
+    def _shortened(cls, commit: str) -> str:
+        """One spelling for all three sources: a full hash is truncated, anything else is kept."""
+        stripped = commit.strip()
+        if len(stripped) == 40 and all(character in "0123456789abcdef" for character in stripped.lower()):
+            return stripped[: cls.SHORT_LENGTH]
+        return stripped
 
 
 class MappingReport:
@@ -132,6 +217,8 @@ class MappingReport:
         self._country = country
         self._fields: Dict[str, FieldLine] = {}
         self._measures: List[Dict[str, Any]] = []
+        self._subjects: Dict[str, Optional[str]] = {}
+        self._unpriced_subjects: List[str] = []
         self.base_file: Optional[str] = None
         self.energy_system_file: Optional[str] = None
 
@@ -190,6 +277,42 @@ class MappingReport:
         """Return the measure entries, in package order."""
         return tuple(self._measures)
 
+    def set_subjects(self, subjects: Mapping[str, Optional[str]]) -> None:
+        """Store which catalogue measure created which cost subject.
+
+        The economics half of the report, and the reason it exists: the lifecycle cost engine
+        names a cost subject after the HiSim component or the envelope measure it prices, and
+        knows nothing about the catalogue. ``economics_result.json`` has to stamp a ``measure_id``
+        on every row of its investment build-up, so the correspondence is recorded here, where
+        the translator that decided it can still see both halves.
+
+        Args:
+            subjects: Cost subject -> the measure that created it, or ``None`` for a subject that
+                was already in the building.
+        """
+        self._subjects = dict(subjects)
+
+    def subjects(self) -> Dict[str, Optional[str]]:
+        """Return the cost subject to measure map, sorted by subject."""
+        return {subject: self._subjects[subject] for subject in sorted(self._subjects)}
+
+    def set_unpriced_subjects(self, subjects: Sequence[str]) -> None:
+        """Store the cost subjects the request carried no price for.
+
+        A measure with no price behind it is not left out of the economics -- it is in the plan
+        and its cost is unknown, which is a different statement and the honest one. The list
+        travels to the staged evaluator, which flags those rows in the result document instead of
+        showing them at zero.
+
+        Args:
+            subjects: The subject names, in the order the package added them.
+        """
+        self._unpriced_subjects = list(subjects)
+
+    def unpriced_subjects(self) -> Tuple[str, ...]:
+        """Return the cost subjects with no price behind them, in package order."""
+        return tuple(self._unpriced_subjects)
+
     def to_json(self) -> Dict[str, Any]:
         """Return the whole document, ready to be written."""
         return {
@@ -204,6 +327,8 @@ class MappingReport:
             "energy_system_file": self.energy_system_file,
             "fields": [line.to_json() for line in self.lines()],
             "measures": list(self._measures),
+            "subjects": self.subjects(),
+            "unpriced_subjects": list(self._unpriced_subjects),
         }
 
     def legacy_factors(self) -> str:

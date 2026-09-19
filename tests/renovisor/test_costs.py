@@ -1,291 +1,106 @@
-"""The cost block: the engine's figures, the envelope materials, and what is still missing.
+"""The cost half of ``result.json``: that it is empty, and that it says where the money went.
 
-Four things are worth asserting here. The envelope arithmetic, because it is the one number in
-the payload HiSim computes itself and decisions Q8/Q9 are strict about where it may come from --
-the material table's euro per cubic metre, times thickness, times element area, and nothing else.
-The translation of the engine's ``min``/``best_estimate``/``max`` band into the contract's
-``low``/``best_estimate``/``high`` one. The subsidy wiring of step 6 §5: the moment a country
-catalogue file exists, the grant field starts being published, which a synthetic ``IE.json`` in a
-temporary directory proves without anyone having written the real one. And the three fields that
-are absent by decision -- the grant, the payback period and the property-value increase -- each
-of which has to be in ``missing`` with a reason a caller can act on.
+Step 6 published a ``costs`` block read out of one run's cost-engine exports. Step 10 removed it:
+a renovation is a plan over several years, the staged evaluator prices the whole of it into
+``economics_result.json``, and keeping a second, single-state implementation of the money beside
+it is exactly what the E-spec's "one implementation of the money" rule forbids.
+
+So what is asserted here is the *statement of the absence*, which decision R8 makes a deliverable
+in its own right: every contract cost field is in ``result.json["missing"]``, each with a reason
+naming the document, the key inside it and the command that writes it; the one field that moved
+nowhere says why instead; and the capability document and the translation map are generated from
+the same rows, so a caller sees the split before the first payload exists.
 """
 
-import json
-from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Tuple
 
 import pytest
 
-from hisim.renovisor.costs import (
-    CostBuilder,
-    CostDocuments,
-    CostField,
-    CostSchema,
-    CostSources,
-    EnvelopeMaterialCost,
-    SubsidyCatalogue,
-)
-from hisim.renovisor.apply import AddedLayer
-from hisim.renovisor.layers import ElementAreas, EnvelopeLayers
-from hisim.renovisor.request import Material
-from hisim.renovisor.provenance import Range
-from hisim.renovisor.vocabulary import Provenance, ThermalElement
+from hisim.renovisor.costs import CostBuilder, CostField, CostSchema, EconomicsDocument
 
 pytestmark = pytest.mark.base
 
 
-def layers_of(*additions: AddedLayer, area_in_m2: float = 100.0) -> EnvelopeLayers:
-    """Return the layers of a package with one fixed area per element.
+class TestTheCostBlockIsEmpty:
+    """``result.json`` carries the KPI half of a calculation and nothing monetary."""
 
-    Args:
-        *additions: The insulation effects.
-        area_in_m2: The area every element is given, so the arithmetic stays checkable by eye.
+    def test_the_block_has_no_values_at_all(self) -> None:
+        """A block with one figure left in it would be a second implementation of the money."""
+        assert not CostBuilder().build().values
 
-    Returns:
-        The resolved layers.
-    """
-    areas = ElementAreas(
-        areas={element: area_in_m2 for element in ThermalElement},
-        sources={element: "a test" for element in ThermalElement},
-    )
-    return EnvelopeLayers.of(additions, areas)
+    def test_every_cost_field_is_listed_as_missing(self) -> None:
+        """Decision R8: a field that is not published is named, never quietly left out."""
+        block = CostBuilder().build()
+        fields = [entry.field for entry in block.missing]
 
+        assert fields == [f"{CostBuilder.MISSING_PREFIX}.{field.value}" for field in CostField]
 
-def one_layer() -> EnvelopeLayers:
-    """Return a single 100 mm EPS layer on a 100 m2 facade."""
-    return layers_of(
-        AddedLayer(
-            element=ThermalElement.FACADE,
-            placement="external_wall_external",
-            thickness_in_mm=100,
-            material=Material(
-                asp_id="polystyrene_eps_rigid_board", thermal_conductivity_w_mk=0.0355
-            ),
-            measure_id="external_insulation",
-        )
-    )
+    def test_the_order_is_the_payload_order(self) -> None:
+        """Two runs of one request produce the same bytes (requirement R10)."""
+        first = [entry.field for entry in CostBuilder().build().missing]
+        second = [entry.field for entry in CostBuilder().build().missing]
+
+        assert first == second
 
 
-def engine_exports(
-    tmp_path: Path,
-    perspective: str = CostSources.PERSPECTIVE_ID,
-    subsidy_npv: Optional[float] = None,
-) -> Path:
-    """Write a minimal pair of cost-engine exports into a result directory.
+class TestTheReasonsSayWhereTheMoneyIs:
+    """A reason a caller can act on: the document, the key inside it and how to produce it."""
 
-    The shapes are the ones ``hisim/economics/exports.py`` writes: a perspective map in
-    ``lifecycle_costs.json`` and a semicolon-separated long-format timeline.
+    def test_a_moved_field_names_the_document_the_key_and_the_command(self) -> None:
+        """Following the reason has to lead somewhere, not merely say "elsewhere"."""
+        reason = CostBuilder.reason_for(CostField.NET_PRESENT_VALUE)
 
-    Args:
-        tmp_path: The directory to write into.
-        perspective: The perspective id the rows are written under.
-        subsidy_npv: When given, a ``SUBSIDY`` entry in ``npv_by_category`` of the *net*
-            perspective, negative-signed as the engine books support.
+        assert EconomicsDocument.FILE_NAME in reason
+        assert "plan.totals.npv_in_euro" in reason
+        assert "python -m hisim.economics staged" in reason
 
-    Returns:
-        The result directory.
-    """
-    results = tmp_path / "results"
-    results.mkdir(exist_ok=True)
-    categories: Dict[str, Any] = {}
-    document: Dict[str, Any] = {
-        perspective: {
-            "perspective": perspective,
-            "parameters": {CostSources.HORIZON_FIELD: 20},
-            "total_npv_in_euro": {"min": 100.0, "best_estimate": 200.0, "max": 300.0},
-            "equivalent_annual_cost_in_euro": {"min": 12.0, "best_estimate": 24.0, "max": 36.0},
-            "npv_by_category": categories,
-        }
-    }
-    if subsidy_npv is not None:
-        document[CostSources.SUBSIDY_PERSPECTIVE_ID] = {
-            "perspective": CostSources.SUBSIDY_PERSPECTIVE_ID,
-            "parameters": {CostSources.HORIZON_FIELD: 20},
-            "npv_by_category": {CostSources.SUBSIDY_CATEGORY: subsidy_npv},
-        }
-    (results / CostDocuments.COSTS_FILE_NAME).write_text(json.dumps(document), encoding="utf-8")
-    rows = [
-        (0, CostSources.INVESTMENT_CATEGORY, 1000.0, 2000.0, 3000.0),
-        (1, CostSources.ENERGY_CATEGORIES[0], 10.0, 20.0, 30.0),
-        (1, CostSources.ENERGY_CATEGORIES[1], 1.0, 2.0, 3.0),
-        (1, CostSources.MAINTENANCE_CATEGORY, 5.0, 6.0, 7.0),
-    ]
-    header = ";".join(
-        [
-            CostDocuments.PERSPECTIVE_COLUMN,
-            CostDocuments.YEAR_COLUMN,
-            CostDocuments.CATEGORY_COLUMN,
-            CostDocuments.NOMINAL_LOW_COLUMN,
-            CostDocuments.NOMINAL_BEST_COLUMN,
-            CostDocuments.NOMINAL_HIGH_COLUMN,
-        ]
-    )
-    body = "\n".join(
-        f"{perspective};{year};{category};{low};{best};{high}" for year, category, low, best, high in rows
-    )
-    (results / CostDocuments.TIMELINE_FILE_NAME).write_text(f"{header}\n{body}\n", encoding="utf-8")
-    return results
+    def test_the_payback_period_names_the_comparison_it_is_now_part_of(self) -> None:
+        """It was absent for want of a second run; the staged plan always has its reference."""
+        assert "comparison.discounted_payback_year" in CostBuilder.reason_for(CostField.PAYBACK)
+
+    def test_the_property_value_figure_moved_nowhere_and_says_why(self) -> None:
+        """The one cost field nothing anywhere produces: decision A13 records that no model exists."""
+        reason = CostBuilder.reason_for(CostField.PROPERTY_VALUE)
+
+        assert reason == CostBuilder.PROPERTY_VALUE_REASON
+        assert "A13" in reason
+        assert EconomicsDocument.FILE_NAME not in reason
+
+    def test_every_field_but_that_one_has_a_key_in_the_document(self) -> None:
+        """A cost field added without deciding where its figure lives now is a failing build."""
+        addressed = set(EconomicsDocument.WHERE)
+        expected = {field.value for field in CostField} - {CostField.PROPERTY_VALUE.value}
+
+        assert addressed == expected
 
 
-def build(
-    results: Optional[Path],
-    layers: EnvelopeLayers,
-    catalogue: Optional[Path] = None,
-    country: str = "IE",
-) -> Any:
-    """Return the cost block for one set of inputs.
+class TestTheSchemaRows:
+    """What the capability document and the translation map show before any payload exists."""
 
-    The ten-year re-evaluation is deliberately left out by passing no result directory to the
-    builder: it runs the real cost engine, which belongs in the end-to-end test rather than in a
-    base-marked one.
-    """
-    return CostBuilder(
-        documents=CostDocuments.load(results) if results is not None else None,
-        layers=layers,
-        country=country,
-        results_directory=None,
-        subsidy_catalogue_path=catalogue,
-    ).build()
+    def test_there_is_one_row_per_cost_field_and_no_other(self) -> None:
+        """The breakdown leaf of step 6 is gone with the block; the staged document carries it."""
+        described: Tuple[str, ...] = tuple(row.field for row in CostSchema.rows())
 
+        assert set(described) == {field.value for field in CostField}
+        assert {row.block for row in CostSchema.rows()} == {CostBuilder.MISSING_PREFIX}
 
-def test_the_envelope_cost_is_absent_because_the_request_carries_no_price() -> None:
-    """Rule 5 moved the material into the request, and a request carries physics, not prices.
+    def test_every_row_is_an_absent_one_with_its_reason_and_its_condition(self) -> None:
+        """A row that still claimed a provenance would promise a figure the payload has not got."""
+        for row in CostSchema.rows():
+            assert row.provenance is None
+            assert row.reason
+            assert row.when
 
-    Decisions Q8/Q9 priced an envelope measure from the materials database's total-cost column.
-    The request now carries the material itself -- conductivity, density, CO2 -- and no price at
-    all, so the figure is absent with the reason published rather than filled with a number
-    nobody owns.
-    """
-    total, note = EnvelopeMaterialCost(one_layer()).total()
+    def test_a_moved_row_names_what_produces_the_figure_now(self) -> None:
+        """The source column points at the document and the key, so a reader can follow it."""
+        rows = {row.field: row for row in CostSchema.rows()}
 
-    assert total is None
-    assert "no material price" in note
+        assert EconomicsDocument.FILE_NAME in rows[CostField.INVESTMENT.value].source
+        assert rows[CostField.INVESTMENT.value].when == CostSchema.MOVED_WHEN
 
+    def test_the_property_value_row_names_no_source_at_all(self) -> None:
+        """There is nothing to point at, and an invented source would be worse than none."""
+        rows = {row.field: row for row in CostSchema.rows()}
 
-def test_the_absent_envelope_cost_is_listed_under_missing(tmp_path: Path) -> None:
-    """Decision R8: a field with no source is named in ``missing``, never silently dropped."""
-    block = build(engine_exports(tmp_path), one_layer())
-
-    reasons = {entry.field: entry.reason for entry in block.missing}
-    assert "costs.investment_breakdown.envelope_material" in reasons
-    assert "no material price" in reasons["costs.investment_breakdown.envelope_material"]
-
-
-def test_the_engine_band_becomes_the_contracts_own_slot_names(tmp_path: Path) -> None:
-    """C3: ``min``/``max`` on the engine's side, ``low``/``high`` on the contract's."""
-    block = build(engine_exports(tmp_path), layers_of())
-
-    value = block.values[CostField.NET_PRESENT_VALUE.value]
-    assert value["value"] == {"low": 100.0, "best_estimate": 200.0, "high": 300.0}
-    assert value["provenance"] == Provenance.PARTIAL.value
-
-
-def test_the_monthly_cost_is_the_equivalent_annual_cost_over_twelve(tmp_path: Path) -> None:
-    """The engine's headline KPI, divided by twelve and by nothing else."""
-    block = build(engine_exports(tmp_path), layers_of())
-
-    value = block.values[CostField.MONTHLY_TWENTY_YEARS.value]["value"]
-    assert value["best_estimate"] == pytest.approx(24.0 / 12.0)
-
-
-def test_the_investment_is_the_devices_alone_and_says_what_it_leaves_out(
-    tmp_path: Path,
-) -> None:
-    """Decision Q23 as rule 5 left it: one total, and a source naming the half that is absent.
-
-    The devices come from the engine. The envelope half has no price anywhere in the
-    translator's inputs, so it is not in the breakdown, the total is the devices alone, and the
-    total's ``source`` says so rather than letting a reader take it for the whole investment.
-    """
-    block = build(engine_exports(tmp_path), one_layer())
-
-    breakdown = block.values[CostField.INVESTMENT_BREAKDOWN.value]
-    devices = Range(**breakdown[CostBuilder.DEVICES_KEY]["value"])
-    total = Range(**block.values[CostField.INVESTMENT.value]["value"])
-
-    assert CostBuilder.ENVELOPE_KEY not in breakdown
-    assert devices == Range(low=1000.0, best_estimate=2000.0, high=3000.0)
-    assert total == devices
-    assert "no envelope material cost" in block.values[CostField.INVESTMENT.value]["source"]
-
-
-def test_the_year_one_bills_come_from_the_timeline(tmp_path: Path) -> None:
-    """Energy is the sum of the energy categories of year 1; maintenance is its own category."""
-    block = build(engine_exports(tmp_path), layers_of())
-
-    energy = block.values[CostField.ENERGY.value]["value"]
-    maintenance = block.values[CostField.MAINTENANCE.value]["value"]
-    assert energy == {"low": 11.0, "best_estimate": 22.0, "high": 33.0}
-    assert maintenance == {"low": 5.0, "best_estimate": 6.0, "high": 7.0}
-
-
-def test_a_run_without_cost_exports_leaves_every_engine_field_missing() -> None:
-    """No ``lifecycle_costs.json`` means no cost figures at all, with the reason stated."""
-    block = build(None, layers_of())
-
-    missing = {entry.field: entry.reason for entry in block.missing}
-    for field in (
-        CostField.NET_PRESENT_VALUE,
-        CostField.ENERGY,
-        CostField.MAINTENANCE,
-        CostField.MONTHLY_TWENTY_YEARS,
-    ):
-        assert f"costs.{field.value}" in missing
-    assert CostDocuments.COSTS_FILE_NAME in missing[f"costs.{CostField.NET_PRESENT_VALUE.value}"]
-
-
-def test_the_three_fields_with_no_source_are_missing_with_their_reasons(tmp_path: Path) -> None:
-    """The grant, the payback period and the property-value increase, each with its own reason."""
-    block = build(engine_exports(tmp_path), one_layer())
-
-    missing = {entry.field: entry.reason for entry in block.missing}
-    assert "Q24" in missing[f"costs.{CostField.GRANT.value}"]
-    assert "base calculation" in missing[f"costs.{CostField.PAYBACK.value}"]
-    assert "A13" in missing[f"costs.{CostField.PROPERTY_VALUE.value}"]
-
-
-def test_the_grant_appears_the_moment_a_country_catalogue_exists(tmp_path: Path) -> None:
-    """Step 6 §5: the payload picks the solver's result up when ``IE.json`` lands, with no edit."""
-    catalogue_directory = tmp_path / "subsidy_catalog"
-    catalogue_directory.mkdir()
-    (catalogue_directory / "IE.json").write_text(
-        json.dumps({"country": "IE", "schemes": []}), encoding="utf-8"
-    )
-    catalogue = SubsidyCatalogue.path_for("IE", catalogue_directory)
-    assert catalogue is not None
-
-    results = engine_exports(tmp_path, subsidy_npv=-4000.0)
-    block = build(results, one_layer(), catalogue=catalogue)
-
-    value = block.values[CostField.GRANT.value]["value"]
-    assert value == {"low": 4000.0, "best_estimate": 4000.0, "high": 4000.0}
-    assert f"costs.{CostField.GRANT.value}" not in {entry.field for entry in block.missing}
-
-
-def test_a_country_without_a_catalogue_has_none(tmp_path: Path) -> None:
-    """The lookup is a file check, so no catalogue is ``None`` rather than an empty one."""
-    assert SubsidyCatalogue.path_for("IE", tmp_path) is None
-    assert SubsidyCatalogue.path_for("DE") is not None
-
-
-def test_the_shipped_catalogue_directory_is_where_step_six_b_will_write() -> None:
-    """A wrong directory would make the grant field stay absent forever without saying so."""
-    assert SubsidyCatalogue.directory().name == SubsidyCatalogue.DIRECTORY_NAME
-    assert (SubsidyCatalogue.directory() / "DE.json").is_file()
-
-
-def test_the_map_pane_describes_every_cost_field() -> None:
-    """A field added to the payload without a row on the translation map is a failing build.
-
-    The rows cover every ``CostField`` and one leaf beyond them: the envelope half of the
-    investment breakdown is absent on its own, with its own entry in ``result.json["missing"]``,
-    so it has its own row.
-    """
-    described: Tuple[str, ...] = tuple(row.field for row in CostSchema.rows())
-
-    assert {field.value for field in CostField} <= set(described)
-    assert set(described) - {field.value for field in CostField} == {
-        f"{CostField.INVESTMENT_BREAKDOWN.value}.{CostBuilder.ENVELOPE_KEY}"
-    }
-    assert {row.block for row in CostSchema.rows()} == {CostBuilder.MISSING_PREFIX}
+        assert rows[CostField.PROPERTY_VALUE.value].source == ""
+        assert rows[CostField.PROPERTY_VALUE.value].when == CostSchema.PROPERTY_VALUE_WHEN

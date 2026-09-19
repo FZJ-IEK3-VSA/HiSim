@@ -4,7 +4,7 @@
 **Governing documents, in order of authority:**
 1. The owner's decisions in `roadmap/renovisor/challenges.md` §13 (2026-09-19) and, where §13 is
    silent, §9 and §12.
-2. `~/contract-proposals/translator-implementation-spec.md` and `calculation-request.md` — the
+2. `/home/contract-proposals/translator-implementation-spec.md` and `calculation-request.md` — the
    frontend side's spec ("the F-spec" below), read together with `calculation-request.schema.json`,
    `calculation-request.mockup-1.yaml`, `measure-capabilities.md` and
    `measure-capabilities.openapi.yaml`. Copies of these five files are vendored by this step (§1).
@@ -44,7 +44,7 @@ string the catalogue or the F-spec spells; invent none.**
   stays vendored but its `PINNED.yaml` entry gains `authoritative: false` and a note that it is
   superseded by the request schema. Extend `refresh.py` with a second source kind, a local file,
   and vendor `calculation-request.schema.json`, `calculation-request.mockup-1.yaml`,
-  `measure-capabilities.openapi.yaml` from `~/contract-proposals/` with `source: contract-proposals
+  `measure-capabilities.openapi.yaml` from `/home/contract-proposals/` with `source: contract-proposals
   2026-09-19` and their SHA-256 in `PINNED.yaml`. `ContractFiles` gains `request_schema()`,
   `request_mockup()`, `capabilities_schema()`.
 - The `test_renovisor_contract.py` hash test covers the new files unchanged.

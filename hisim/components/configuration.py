@@ -2,7 +2,7 @@
 
 # clean
 
-from typing import Optional
+from typing import Any, ClassVar, Optional, Tuple
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 from hisim.loadtypes import LoadTypes, ComponentType
@@ -690,6 +690,88 @@ class EmissionFactorsAndCostsForDevicesConfig:
         capex_techno_economic_values = cls(**capex_techno_economic_parameters[country][year][device])
 
         return capex_techno_economic_values
+
+
+class PlaceholderCountryFactors:
+    """Registers a country in the legacy cost and emission tables with values that cannot be mistaken for data.
+
+    The two module-level tables above, ``opex_techno_economic_parameters`` (fuel prices and emission
+    factors per year) and ``capex_techno_economic_parameters`` (device costs per year), carry reviewed
+    numbers for Germany and Austria only. Every component's ``get_cost_opex`` reads them through
+    :meth:`EmissionFactorsAndCostsForFuelsConfig.get_values_for_year`, and the KPI collection calls
+    ``get_cost_opex`` on every component, so a simulation whose country is not in the tables crashes
+    in post-processing. The two easy ways out are both wrong: leaving the country at ``DE`` prices an
+    Irish house with German numbers and nobody sees it, and returning zeros hides the gap just as well.
+
+    This class takes the third way. For a country without reviewed data it copies the German table
+    row for row and replaces every number by :attr:`SENTINEL`, minus one billion, so that any KPI
+    computed from it is visibly absurd. A run then completes, and the presence of the sentinel in a
+    cost or emission figure says "no data for this country yet" louder than any log line. The real
+    fix for a country is to replace its placeholder block by sourced values; :meth:`is_placeholder`
+    lets a consumer tell the two apart.
+
+    Example::
+
+        factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(2021, "IE")
+        factors.electricity_costs_in_euro_per_kwh   # -1000000000.0 until Irish data exists
+    """
+
+    #: The value every placeholder number takes. Large, negative and round, so it cannot pass as data.
+    SENTINEL: ClassVar[float] = -1_000_000_000.0
+
+    #: Countries registered as placeholders, in registration order.
+    REGISTERED: ClassVar[Tuple[str, ...]] = ()
+
+    @classmethod
+    def like(cls, template: Any) -> Any:
+        """Return a deep copy of *template* with every number replaced by :attr:`SENTINEL`.
+
+        Dictionary keys (years, component types, field names) are kept, so the copy has exactly the
+        shape the getters expect; booleans are kept too, being flags rather than data.
+
+        Args:
+            template: A per-year table of one country, e.g. ``opex_techno_economic_parameters["DE"]``.
+
+        Returns:
+            The placeholder table.
+        """
+        if isinstance(template, dict):
+            return {key: cls.like(value) for key, value in template.items()}
+        if isinstance(template, bool):
+            return template
+        if isinstance(template, (int, float)):
+            return cls.SENTINEL
+        return template
+
+    @classmethod
+    def register(cls, country: str, template_country: str = "DE") -> None:
+        """Add *country* to both legacy tables as a placeholder copy of *template_country*.
+
+        Args:
+            country: The ISO 3166-1 alpha-2 code to register, e.g. ``"IE"``.
+            template_country: The country whose table shape is copied; ``DE`` has the most years.
+
+        Raises:
+            KeyError: If *template_country* is not in the tables.
+            ValueError: If *country* already has a table, so a reviewed dataset is never overwritten.
+        """
+        if country in opex_techno_economic_parameters or country in capex_techno_economic_parameters:
+            raise ValueError(f"Country '{country}' already has legacy cost and emission tables; not overwriting them.")
+        opex_techno_economic_parameters[country] = cls.like(opex_techno_economic_parameters[template_country])
+        capex_techno_economic_parameters[country] = cls.like(capex_techno_economic_parameters[template_country])
+        cls.REGISTERED = cls.REGISTERED + (country,)
+
+    @classmethod
+    def is_placeholder(cls, country: str) -> bool:
+        """Return whether *country*'s legacy tables are sentinel placeholders rather than data."""
+        return country in cls.REGISTERED
+
+
+# Ireland is simulated by the RenoVisor translation layer, and its legacy tables are placeholders
+# until sourced Irish fuel prices, emission factors and device costs exist (roadmap/renovisor/
+# challenges.md, finding F2). Every legacy cost and CO2 KPI of an Irish run therefore reads as
+# -1e9-scaled nonsense on purpose; the lifecycle cost engine has its own Irish data files and is unaffected.
+PlaceholderCountryFactors.register("IE")
 
 
 class GasHeaterConfig:

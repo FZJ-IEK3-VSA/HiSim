@@ -440,3 +440,12 @@ post-measure inventory's battery block when no measure selects it. Every end-to-
 run a package with a battery measure, which is why the most common request — a baseline without PV
 or battery — had never been exercised. Lesson recorded: the probe set of the capability document
 (the spec's §9) must include the bare baseline and every block absent.
+
+**F2 revisited (2026-09-19, owner):** rather than leaving `SimulationParameters.country` at `DE` so the
+legacy KPI path keeps working — a shim that would be rediscovered in three months as "the country setting
+does nothing" — Ireland is registered in the legacy opex/capex tables as a **placeholder with every number
+set to −1 000 000 000** (`hisim/components/configuration.py`, `PlaceholderCountryFactors`). A run with
+`country = "IE"` completes, and every legacy cost or CO₂ KPI of an Irish run is visibly absurd until sourced
+Irish rows replace the block. The payload reads none of those KPIs: emissions come from the lifecycle engine's
+Irish factors; energy demand and self-sufficiency do not depend on the tables. Verified: the KPI path ran,
+"Costs of grid electricity" = −1.2 × 10¹⁰ EUR for one January day.

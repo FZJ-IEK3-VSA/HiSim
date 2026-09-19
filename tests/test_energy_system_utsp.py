@@ -69,7 +69,7 @@ class References:
 
     #: The one-day parameters the shipped household is exercised with.
     PARAMETERS: ClassVar[Path] = (
-        Path(__file__).resolve().parents[1] / "energy_systems" / "one_day_15min.simulation.yaml"
+        Path(__file__).resolve().parents[1] / "simulation_parameters" / "one_day_15min_export.simulation.yaml"
     )
 
     @classmethod

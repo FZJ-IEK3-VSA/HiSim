@@ -29,6 +29,9 @@ class Shipped:
     #: The directory holding the energy-system files this repository ships.
     DIRECTORY: ClassVar[Path] = Path(__file__).resolve().parents[1] / "energy_systems"
 
+    #: Where the shared simulation-parameters files live, one directory over.
+    PARAMETERS_DIRECTORY: ClassVar[Path] = Path(__file__).resolve().parents[1] / "simulation_parameters"
+
     #: The runnable gas-boiler household.
     HOUSEHOLD: ClassVar[Path] = DIRECTORY / "gas_boiler_household.energy_system.yaml"
 
@@ -40,8 +43,11 @@ class Shipped:
         / "energy_system_mockup_minimal.yaml"
     )
 
-    #: The simulation-parameters files shipped beside the household.
-    PARAMETERS: ClassVar[List[str]] = ["one_day_15min.simulation.yaml", "2021_minutely.simulation.yaml"]
+    #: The simulation-parameters files of the shared library.
+    PARAMETERS: ClassVar[List[str]] = [
+        "one_day_15min_export.simulation.yaml",
+        "2021_minutely_plots.simulation.yaml",
+    ]
 
 
 def parsed(*inputs: str) -> argparse.Namespace:
@@ -59,11 +65,11 @@ def parsed(*inputs: str) -> argparse.Namespace:
 @pytest.mark.base
 def test_an_energy_system_file_selects_the_new_mode() -> None:
     """Catches the third mode not being reachable from the command line at all."""
-    config = validate_args(parsed(str(Shipped.HOUSEHOLD), str(Shipped.DIRECTORY / Shipped.PARAMETERS[0])))
+    config = validate_args(parsed(str(Shipped.HOUSEHOLD), str(Shipped.PARAMETERS_DIRECTORY / Shipped.PARAMETERS[0])))
 
     assert config["mode"] == "energy_system"
     assert config["energy_system"] == str(Shipped.HOUSEHOLD)
-    assert config["simulation"] == str(Shipped.DIRECTORY / Shipped.PARAMETERS[0])
+    assert config["simulation"] == str(Shipped.PARAMETERS_DIRECTORY / Shipped.PARAMETERS[0])
 
 
 @pytest.mark.base
@@ -113,7 +119,7 @@ def test_a_plain_yaml_first_argument_is_not_mistaken_for_an_energy_system() -> N
     are both YAML, and handing over the wrong one has to be reported rather than parsed.
     """
     with pytest.raises(ValueError, match="First argument must be"):
-        validate_args(parsed(str(Shipped.DIRECTORY / Shipped.PARAMETERS[0]), str(Shipped.HOUSEHOLD)))
+        validate_args(parsed(str(Shipped.PARAMETERS_DIRECTORY / Shipped.PARAMETERS[0]), str(Shipped.HOUSEHOLD)))
 
 
 @pytest.mark.base
@@ -157,7 +163,7 @@ def test_the_shipped_household_is_the_design_reference_word_for_word() -> None:
 @pytest.mark.parametrize("name", Shipped.PARAMETERS)
 def test_every_shipped_parameters_file_reads(name: str) -> None:
     """Catches a shipped example that cannot be run, which is worse than no example at all."""
-    parameters = SimulationParametersReader.read(Shipped.DIRECTORY / name)
+    parameters = SimulationParametersReader.read(Shipped.PARAMETERS_DIRECTORY / name)
 
     assert parameters.seconds_per_timestep > 0
     assert parameters.end_date > parameters.start_date

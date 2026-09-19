@@ -94,10 +94,10 @@ class Fixtures:
 
     #: The shipped simulation parameters this repository's example run uses, so that the tests and
     #: the documented command line exercise the same file rather than two copies of it.
-    SHIPPED: ClassVar[Path] = Path(__file__).resolve().parent.parent / "energy_systems"
+    SHIPPED: ClassVar[Path] = Path(__file__).resolve().parent.parent / "simulation_parameters"
 
     #: One January day at a quarter-hour resolution, asking only for the result table.
-    PARAMETERS: ClassVar[Path] = SHIPPED / "one_day_15min.simulation.yaml"
+    PARAMETERS: ClassVar[Path] = SHIPPED / "one_day_15min_export.simulation.yaml"
 
     #: The committed record of the minimal mockup, with its version and its source files pinned.
     GOLDEN: ClassVar[Path] = ENERGY_SYSTEMS / "uc1.realized.energy_system.yaml"

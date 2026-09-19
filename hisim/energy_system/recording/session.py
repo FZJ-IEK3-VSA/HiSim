@@ -207,9 +207,14 @@ class RecordingSession:
     #: recorder, the probe list and the command line all find the same checkout.
     ROOT_MARKERS: ClassVar[Tuple[str, ...]] = RepositoryLayout.ROOT_MARKERS
 
-    #: Where recorded files go unless a caller says otherwise: beside the hand-written exemplar and
-    #: the shared parameter files, which is where every file of this format lives.
+    #: Where recorded files go unless a caller says otherwise: beside the hand-written exemplar,
+    #: which is where every energy-system file of this repository lives.
     DEFAULT_OUTPUT_DIRECTORY: ClassVar[str] = "energy_systems"
+
+    #: Where the shared simulation-parameters files live. They are a library of their own rather
+    #: than neighbours of the twins: a recording references one, a hand-started run picks one, and
+    #: which system a parameter set is used with is nobody's business but the caller's.
+    PARAMETERS_DIRECTORY: ClassVar[str] = "simulation_parameters"
 
     def __init__(
         self,
@@ -254,10 +259,14 @@ class RecordingSession:
     def default_library(cls, near: Path, out_dir: Path) -> ParameterFileLibrary:
         """Builds the parameter-file library a single recording uses when a caller supplies none.
 
-        It searches the repository's own directory first and the output directory second, so that
-        a caller recording into a temporary place still references the committed parameter files
-        instead of writing private copies of them, while a genuinely new parameter set lands where
-        the caller asked for the recording.
+        It searches the repository's own parameter library first and the output directory second,
+        so that a caller recording into a temporary place still references the committed parameter
+        files instead of writing private copies of them.
+
+        Where a genuinely new parameter set lands follows the same reasoning: a recording into the
+        repository adds it to the library, where the next recording and any hand-started run will
+        find it, while a recording into a temporary directory keeps everything it writes there --
+        which is what lets the freshness check record the whole fleet without touching the tree.
 
         Args:
             near: The setup being recorded, from which the repository is found.
@@ -266,9 +275,24 @@ class RecordingSession:
         Returns:
             The library.
         """
+        library = cls.parameters_directory(near)
+        into_the_repository = Path(out_dir).resolve() == cls.default_output_directory(near).resolve()
         return ParameterFileLibrary(
-            search=(cls.default_output_directory(near), Path(out_dir)), write_to=Path(out_dir)
+            search=(library, Path(out_dir)),
+            write_to=library if into_the_repository else Path(out_dir),
         )
+
+    @classmethod
+    def parameters_directory(cls, near: Path) -> Path:
+        """The repository's library of shared simulation-parameters files.
+
+        Args:
+            near: The setup module being recorded, from which the repository is found.
+
+        Returns:
+            The ``simulation_parameters/`` directory of the checkout the setup belongs to.
+        """
+        return RepositoryLayout.root(near) / cls.PARAMETERS_DIRECTORY
 
     @classmethod
     def default_output_directory(cls, near: Path) -> Path:

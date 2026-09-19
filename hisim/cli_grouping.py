@@ -54,7 +54,10 @@ class GroupingPaths:
 
     #: The simulation parameters a probe is recorded under unless the caller names another file.
     #: The shortest shipped horizon, because a probe constructs components and never simulates.
-    DEFAULT_PARAMETERS: ClassVar[str] = "one_day_15min.simulation.yaml"
+    DEFAULT_PARAMETERS: ClassVar[str] = "one_day_15min_export.simulation.yaml"
+
+    #: Where that file lives: the shared library rather than the directory of twins.
+    PARAMETERS_DIRECTORY: ClassVar[str] = RecordingSession.PARAMETERS_DIRECTORY
 
     #: The suffix of the workbook, which is the only one of the four that is not committed.
     WORKBOOK_SUFFIX: ClassVar[str] = ".grouping.xlsx"
@@ -92,9 +95,11 @@ class GroupingPaths:
             given: What the caller asked for, or ``None``.
 
         Returns:
-            The caller's file, or the shortest shipped one.
+            The caller's file, or the shortest one of the shared library.
         """
-        return Path(given) if given else cls.directory(near) / cls.DEFAULT_PARAMETERS
+        if given:
+            return Path(given)
+        return cls.root(near) / cls.PARAMETERS_DIRECTORY / cls.DEFAULT_PARAMETERS
 
     @classmethod
     def workbook(cls, setup: Path, given: Optional[str]) -> Path:

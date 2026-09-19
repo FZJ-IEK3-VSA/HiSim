@@ -71,12 +71,15 @@ class Paths:
     #: Where the Python setups live.
     SETUPS = REPO_ROOT / "system_setups"
 
-    #: Where the recorded twins and the shared simulation-parameters files live.
+    #: Where the recorded twins live.
     ENERGY_SYSTEMS = REPO_ROOT / "energy_systems"
+
+    #: Where the shared simulation-parameters files live, a library of their own beside the twins.
+    SIMULATION_PARAMETERS = REPO_ROOT / "simulation_parameters"
 
     #: The parameters a setup is recorded under unless the caller names another file. A setup is
     #: free to replace what it is handed; what the recording follows is what it ended up with.
-    DEFAULT_PARAMETERS = ENERGY_SYSTEMS / "one_day_15min.simulation.yaml"
+    DEFAULT_PARAMETERS = SIMULATION_PARAMETERS / "one_day_15min_export.simulation.yaml"
 
     #: Suffix of a recorded energy-system file.
     RECORDED_SUFFIX = ".energy_system.yaml"
@@ -397,7 +400,7 @@ class DuplicateParameterCheck:
 
         return [
             f"{first.name} and {second.name} describe the same run"
-            for first, second in ParameterFileLibrary.duplicates(Paths.ENERGY_SYSTEMS)
+            for first, second in ParameterFileLibrary.duplicates(Paths.SIMULATION_PARAMETERS)
         ]
 
 

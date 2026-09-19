@@ -49,6 +49,9 @@ setup(
     package_data={
         "hisim": [
             "inputs/*",
+            # The commit the image was built from, baked in by the Dockerfile (todo H6) so a
+            # container that is not a git checkout can still say which code produced a result.
+            "COMMIT",
             # Data files of the lifecycle cost engine (cost_spec.md §3.5, §5.2):
             "cost_database/*.json",
             "cost_database/tariffs/*.json",
@@ -56,6 +59,9 @@ setup(
             "subsidy_catalog/*.json",
             # JSON Schema of the energy-system file format, which editors bind to:
             "energy_system_v3.schema.json",
+            # JSON Schema of economics_result.json, which the staged evaluator validates every
+            # document it writes against and which the frontend binds to:
+            "economics/economics_result.schema.json",
             # Vendored RenoVisor API contract, the one list of what the translator accepts
             # without acting on it, and the page of usage the image ships beside them:
             "renovisor/contract/*.yaml",

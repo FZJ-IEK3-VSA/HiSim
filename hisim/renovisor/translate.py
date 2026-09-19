@@ -43,6 +43,7 @@ from hisim.energy_system.model import (
 )
 from hisim.renovisor import TRANSLATOR_VERSION
 from hisim.renovisor.apply import AppliedPackage
+from hisim.renovisor.economics import EconomicContextBuilder
 from hisim.renovisor.constants import (
     BatteryLaw,
     BoilerEfficiency,
@@ -767,6 +768,11 @@ class TranslatedSystem:
         yaml_text: The canonical text, byte-stable for one request.
         edits: Every change made, with its provenance.
         report: The mapping report, complete.
+        economic_context: What the lifecycle cost engine has to be told about the dwelling that
+            the simulation cannot tell it -- the existing-asset register, the envelope cost
+            subjects and the applicant. ``run`` attaches it to the simulation parameters beside
+            the economic parameters; ``None`` only for a translation built before the context
+            existed, which nothing in the package does.
     """
 
     model: EnergySystemFile
@@ -775,6 +781,7 @@ class TranslatedSystem:
     yaml_text: str
     edits: Tuple[Edit, ...]
     report: MappingReport
+    economic_context: Optional[Any] = None
 
     def assert_only_permitted_edits(self, base: EnergySystemFile) -> None:
         """Raise when the translation changed something the diff rule does not permit."""
@@ -948,6 +955,19 @@ class Translator:
         file_name = f"{name}{BaseFiles.SUFFIX}"
         report.energy_system_file = file_name
         report.set_measures([line.to_json() for line in applied.measures])
+        # The economic context is built from the *edited* model, because its envelope subjects are
+        # sized in square metres of the building the run will actually simulate.
+        built = EconomicContextBuilder(
+            request,
+            applied,
+            _building_config(model),
+            generator_component=BaseFiles.generator_component(base_file_name),
+        ).build()
+        report.set_subjects(built.subjects)
+        report.set_unpriced_subjects(built.unpriced_subjects)
+        for path, value, note in built.defaults:
+            if not report.has(path):
+                report.defaulted(path, value, note)
         translated = TranslatedSystem(
             model=model,
             base_file_name=base_file_name,
@@ -955,6 +975,7 @@ class Translator:
             yaml_text=text,
             edits=tuple(edits),
             report=report,
+            economic_context=built.context,
         )
         translated.assert_only_permitted_edits(base)
         self._self_check(text, file_name)
@@ -976,6 +997,25 @@ class Translator:
                 f"the translated {file_name} does not load back: {type(error).__name__}: {error}",
                 "the self-check of §5.1 step 3 failed; the file was not written",
             ) from error
+
+
+def _building_config(model: EnergySystemFile) -> Mapping[str, Any]:
+    """The ``Building`` config of a translated model, or an empty mapping when it has none.
+
+    The envelope cost subjects are sized in square metres of the element they cover, and the
+    areas live here: the translator writes them from the request, and where the request stated
+    none the archetype derives them, in which case the field is absent and the subject ends up
+    unpriced rather than sized by a guess.
+
+    Args:
+        model: The edited energy-system document.
+
+    Returns:
+        The config mapping, or ``{}``.
+    """
+    entry = model.components.get(Targets.BUILDING) if isinstance(model.components, Mapping) else None
+    config = getattr(entry, "config", None) if entry is not None else None
+    return config if isinstance(config, Mapping) else {}
 
 
 @dataclass

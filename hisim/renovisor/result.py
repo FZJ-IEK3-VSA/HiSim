@@ -20,7 +20,7 @@ under ``missing`` with a reason rather than being filled with a plausible zero (
       "base_file": "household_heatpump_building_sizer.grouped.energy_system.yaml",
       "weather_basis": {"location": "IE", "dataset": "NSRDB_15MIN", "year": 2019},
       "period": {"start": "...", "end": "...", "fraction_of_year": 0.0027},
-      "kpis": {...}, "costs": {...},
+      "kpis": {...},
       "missing": [{"field": "costs.grant_in_euro", "reason": "..."}]
     }
 
@@ -36,7 +36,7 @@ from typing import Any, ClassVar, Dict, List, Mapping, Optional
 
 from hisim.renovisor import TRANSLATOR_VERSION
 from hisim.renovisor.apply import AppliedPackage
-from hisim.renovisor.costs import CostBuilder, CostDocuments
+from hisim.renovisor.costs import CostBuilder
 from hisim.renovisor.kpis import KpiBuilder, KpiDocument, LifecycleCo2
 from hisim.renovisor.layers import ElementAreas, EnvelopeLayers
 from hisim.renovisor.request import House, Request
@@ -245,13 +245,9 @@ class ResultBuilder:
             lifecycle_co2=LifecycleCo2.load(results),
             country=country,
         ).build()
-        costs = CostBuilder(
-            documents=CostDocuments.load(results),
-            layers=layers,
-            country=country,
-            results_directory=results,
-            subsidy_catalogue_path=self._catalogue,
-        ).build()
+        # No figures, only the reasons: the money moved to economics_result.json in step 10, and
+        # `missing` is where the payload says so field by field.
+        costs = CostBuilder().build()
 
         missing: List[MissingField] = list(kpis.missing) + list(costs.missing)
         return {
@@ -262,7 +258,6 @@ class ResultBuilder:
             "weather_basis": WeatherBasis.of(self._translated.model, realized),
             "period": period.to_json(),
             "kpis": kpis.values,
-            "costs": costs.values,
             "missing": [entry.to_json() for entry in missing],
         }
 

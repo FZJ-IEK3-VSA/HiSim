@@ -3,12 +3,13 @@
 Usage::
 
     python -m hisim.renovisor.contract.refresh /path/to/renovisor-api-contract \
-        --proposals ~/contract-proposals
+        [--proposals /home/contract-proposals]
 
 A vendored file has one of two source kinds. A **git source** is a branch (or any git ref) of the
 contract repository and a path inside it; the script reads the file at that ref with ``git show``
 and records the commit the ref resolved to and its date. A **local source** is a file in a
-directory outside any repository -- today the frontend side's ``~/contract-proposals`` -- and is
+directory outside any repository -- the shared ``/home/contract-proposals``, the single home of
+every specification the three repositories share -- and is
 recorded with the phrase naming where it came from instead of a commit, because the proposal
 directory is not versioned. Both kinds record the SHA-256 of the content written, and
 ``tests/renovisor/test_contract.py`` recomputes the hashes, so a vendored copy that was edited by
@@ -61,7 +62,11 @@ class ContractSources:
     #: The phrase recorded as the ``source`` of every locally vendored file. It names the
     #: directory and the day the proposal was read, which is all the provenance an unversioned
     #: directory can carry.
-    LOCAL_SOURCE: ClassVar[str] = "contract-proposals 2026-09-19"
+    LOCAL_SOURCE: ClassVar[str] = "/home/contract-proposals"
+
+    #: Where the shared specifications live on the machines that have them. CI and the container
+    #: image do not, which is why the files are vendored at all.
+    SHARED_DIRECTORY: ClassVar[str] = "/home/contract-proposals"
 
     #: Vendored files that are kept for the record but must not be read as the truth about
     #: anything. ``openapi.yaml`` is the v0.3 draft the request schema supersedes.
@@ -204,8 +209,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("checkout", help="local clone of renovisor-api-contract")
     parser.add_argument(
         "--proposals",
-        default=None,
-        help="directory holding the frontend side's proposal files (~/contract-proposals)",
+        default=ContractSources.SHARED_DIRECTORY,
+        help="the shared specification directory (default: /home/contract-proposals)",
     )
     arguments = parser.parse_args(argv)
     proposals = Path(arguments.proposals).expanduser().resolve() if arguments.proposals else None

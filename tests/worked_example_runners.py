@@ -14,7 +14,12 @@ from typing import Any, Dict, List, Tuple
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs, SubjectCostFacts
-from hisim.economics.facts import BillingDeterminants, ComponentCostFacts
+from hisim.economics.facts import (
+    BillingDeterminants,
+    ComponentCostFacts,
+    ExistingAsset,
+    ExistingAssetRegister,
+)
 from hisim.economics.financing import FinancingPlan, LoanType, loan_flows
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
@@ -829,4 +834,333 @@ def _end_to_end_values(inputs: Dict[str, Any], database: CostDatabase) -> Dict[s
     for entry in result.timeline.entries:
         key = f"nominal_{entry.category.value.lower()}_year_{entry.year}_in_euro"
         values[key] = values.get(key, 0.0) + entry.amount_in_euro.best_estimate
+    return values
+
+
+class StagedRoles:
+    """The three cost subjects a staged worked example can describe, and what each is for.
+
+    A workbook is a flat table of scalars, so the plan it describes has a fixed vocabulary rather
+    than an arbitrary list of stages: one device the building starts with and up to two measures
+    added later, each with its own year, price, lifetime and energy bill. That is enough for every
+    plan shape the E-spec's §2 asks for — one stage, a kept-and-then-removed generator, and three
+    stages with a loan and a late grant — and it keeps the input labels readable as English.
+
+    The asset class of each role is a workbook input rather than a constant here, because which
+    device a role stands for is part of what the example says: the one-stage example's baseline
+    device *is* the heat pump, and the three-stage example's is the gas boiler it replaces.
+    """
+
+    #: The subject the building starts with, present in stage 0 and kept until a stage drops it.
+    BASELINE = "baseline_device"
+
+    #: What the first staged measure installs.
+    STAGE_ONE = "stage_one_device"
+
+    #: What the second staged measure installs.
+    STAGE_TWO = "stage_two_device"
+
+    #: The prefix each role's workbook inputs carry.
+    PREFIX = {BASELINE: "baseline_", STAGE_ONE: "stage_one_", STAGE_TWO: "stage_two_"}
+
+    #: Id of the synthetic grant the three-stage example declares.
+    SCHEME_ID = "WORKED_EXAMPLE_GRANT"
+
+
+def _staged_facts(inputs: Dict[str, Any], role: str) -> ComponentCostFacts:
+    """The fully overridden cost facts of one role, so no shipped price reaches an example.
+
+    Every monetary figure is an override and the asset class is the workbook's own word, which is
+    what keeps a staged example a statement about the *splice* rather than about the cost database
+    it happens to run against.
+
+    Args:
+        inputs: The example's declared inputs.
+        role: One of :class:`StagedRoles`' three subjects.
+
+    Returns:
+        The facts.
+    """
+    prefix = StagedRoles.PREFIX[role]
+    asset_class = ComponentType(str(inputs[f"{prefix}asset_class"]))
+    return ComponentCostFacts(
+        asset_class=asset_class,
+        size=float(inputs.get(f"{prefix}size", 10.0)),
+        size_unit=Units.SQUARE_METER if asset_class in _ENVELOPE_CLASSES else Units.KILOWATT,
+        investment_cost_override_in_euro=UncertainValue.exact(float(inputs[f"{prefix}investment_in_euro"])),
+        installation_cost_override_in_euro=UncertainValue.exact(0.0),
+        lifetime_override_in_years=float(inputs[f"{prefix}lifetime_in_years"]),
+        maintenance_rate_override=UncertainValue.exact(_fraction(inputs, "maintenance_rate", 0.0)),
+        fixed_operation_cost_override_in_euro_per_year=UncertainValue.exact(0.0),
+        embodied_co2_override_in_kg=0.0,
+        override_source="worked example (cost-spec-v2 §3)",
+    )
+
+
+#: Asset classes a staged example sizes in square metres rather than kilowatts. Only the envelope
+#: roles of the library's own examples are listed; anything else is a device and is sized in kW.
+_ENVELOPE_CLASSES = (
+    ComponentType.WALL_EXTERNAL_INSULATION,
+    ComponentType.WALL_INTERNAL_INSULATION,
+    ComponentType.WARM_ROOF_INSULATION,
+)
+
+
+def _staged_tariff(inputs: Dict[str, Any]) -> TariffContract:
+    """The flat electricity contract every stage of a staged example is billed under.
+
+    Built here rather than read from the database for the same reason the other end-to-end
+    examples build theirs: the synthetic country's price entry is zero, so the price a worked
+    example asserts against is the one its own table declares and no shipped tariff can reach it.
+    One contract serves every stage, which is what makes the plan's energy saving a statement
+    about the kilowatt-hours the stages differ in and about nothing else.
+    """
+    return TariffContract(
+        id="WORKED_EXAMPLE_STAGED_FLAT",
+        carrier=EnergyCarrier.ELECTRICITY,
+        country=SYNTHETIC_COUNTRY,
+        region=None,
+        valid_from_year=EXAMPLE_YEAR,
+        supply=TariffSupply(
+            kind=SupplyKind.FLAT,
+            working_price_in_euro_per_kwh=UncertainValue.exact(
+                float(inputs.get("electricity_price_in_euro_per_kwh", 0.0))
+            ),
+        ),
+        standing_charge_in_euro_per_year=UncertainValue.exact(
+            float(inputs.get("standing_charge_in_euro_per_year", 0.0))
+        ),
+        feed_in=FeedIn(kind=FeedInKind.NONE, rate_in_euro_per_kwh=UncertainValue.exact(0.0), duration_in_years=20),
+        source_ids=("inline:worked example",),
+    )
+
+
+def _staged_state(
+    inputs: Dict[str, Any], roles: List[str], energy_in_kwh: float, register: Any
+) -> EvaluationInputs:
+    """One state of the house: the roles it holds, its meter, and the register it was simulated with.
+
+    Args:
+        inputs: The example's declared inputs.
+        roles: The subjects present in this state, in the order the plan installed them.
+        energy_in_kwh: What the state's meter bought over a full simulated year.
+        register: The existing-asset register, or None for a greenfield state.
+
+    Returns:
+        The evaluation inputs of that state.
+    """
+    return EvaluationInputs(
+        simulation_year=EXAMPLE_YEAR,
+        simulated_period_fraction=1.0,
+        cost_facts=[SubjectCostFacts(role, _staged_facts(inputs, role)) for role in roles],
+        billing=[
+            BillingDeterminants(carrier=EnergyCarrier.ELECTRICITY, energy_bought_in_kwh=energy_in_kwh)
+        ],
+        tariff_contracts={EnergyCarrier.ELECTRICITY: _staged_tariff(inputs)},
+        existing_assets=register,
+        subsidy_context=SubsidyContext(building=SubsidyBuildingContext(dwelling_units=1)),
+    )
+
+
+def _staged_catalog(inputs: Dict[str, Any]) -> Any:
+    """The synthetic one-scheme catalogue a staged example may declare, or None.
+
+    The scheme is an upfront grant of `subsidy_share_of_investment` on one asset class, and that
+    asset class is the point: a grant scoped to what a *later* stage installs is awarded in that
+    stage and nowhere else, which is how "a subsidy that is only available once stage 2 happens"
+    is expressed in the engine's own eligibility language. The catalogue is built in memory here
+    rather than read from `hisim/subsidy_catalog/`, so no shipped Irish or German scheme can
+    influence a worked example.
+
+    Args:
+        inputs: The example's declared inputs.
+
+    Returns:
+        A :class:`~hisim.economics.subsidies.SubsidyCatalog`, or None when the example declares no
+        `subsidy_share_of_investment`.
+    """
+    if "subsidy_share_of_investment" not in inputs:
+        return None
+    benefit_kind, benefit = parse_benefit(
+        {"kind": "SHARE_OF_ELIGIBLE_COST", "rate": _fraction(inputs, "subsidy_share_of_investment", 0.0)},
+        StagedRoles.SCHEME_ID,
+    )
+    scheme = SubsidyScheme(
+        id=StagedRoles.SCHEME_ID,
+        country=SYNTHETIC_COUNTRY,
+        region=None,
+        valid_from="1900-01-01",
+        valid_to=None,
+        legal_basis="synthetic worked-example scheme (cost-spec-v2 §3)",
+        url="https://example.invalid/worked-example",
+        asset_classes=[ComponentType(str(inputs["subsidy_asset_class"]))],
+        measure_kinds=["INSTALL", "REPLACE"],
+        eligibility=Condition(kind="all"),  # no children: satisfied by every context
+        benefit_kind=benefit_kind,
+        benefit=benefit,
+        eligible_cost=EligibleCostSpec(),
+        cumulation_group=None,
+        combined_rate_cap=None,
+        excludes=[],
+        payout_kind=PayoutKind.UPFRONT_GRANT,
+    )
+    return SubsidyCatalog(
+        schemes=[scheme],
+        questions={},
+        snapshot_date=None,
+        overall_cap_share=None,
+        base_path="",
+        country=SYNTHETIC_COUNTRY,
+    )
+
+
+def _staged_plan(inputs: Dict[str, Any]) -> List[Any]:
+    """The stages the workbook describes, in order, each with the state it puts the house in.
+
+    Stage 0 is the building as it stands. A `stage_one_` block adds a second stage, a `stage_two_`
+    block a third; each says which year it starts in, what it installs and whether it keeps what
+    the stage before it had. "Does not keep" is how the boiler of E-spec §2(b) leaves the plan: it
+    is in the register while it is kept, ages for the years the plan leaves it there, and is
+    removed by the stage that drops it.
+
+    Args:
+        inputs: The example's declared inputs.
+
+    Returns:
+        The stages, ready for :meth:`~hisim.economics.staged.StagedEvaluator.evaluate`.
+    """
+    from hisim.economics.staged import Stage
+
+    register = None
+    if bool(inputs.get("register_the_baseline_device", False)):
+        baseline = _staged_facts(inputs, StagedRoles.BASELINE)
+        replaced = [ComponentType(str(inputs["baseline_replaced_by_asset_class"]))] if (
+            "baseline_replaced_by_asset_class" in inputs
+        ) else []
+        register = ExistingAssetRegister(
+            assets=[
+                ExistingAsset(
+                    asset_class=baseline.asset_class,
+                    size=baseline.size,
+                    size_unit=baseline.size_unit,
+                    installation_year=EXAMPLE_YEAR - int(inputs.get("baseline_age_in_years", 0)),
+                    is_functional=True,
+                    replaced_by_asset_classes=replaced,
+                )
+            ]
+        )
+    stages = [
+        Stage(
+            inputs=_staged_state(
+                inputs, [StagedRoles.BASELINE], float(inputs["baseline_energy_bought_in_kwh"]), register
+            ),
+            from_year=0,
+            label="baseline",
+        )
+    ]
+    roles = [StagedRoles.BASELINE]
+    for role, label in ((StagedRoles.STAGE_ONE, "stage 1"), (StagedRoles.STAGE_TWO, "stage 2")):
+        prefix = StagedRoles.PREFIX[role]
+        if f"{prefix}investment_in_euro" not in inputs:
+            continue
+        if not bool(inputs.get(f"{prefix}keeps_the_previous_devices", True)):
+            roles = []
+        roles = roles + [role]
+        stages.append(
+            Stage(
+                inputs=_staged_state(
+                    inputs, roles, float(inputs[f"{prefix}energy_bought_in_kwh"]), register
+                ),
+                from_year=int(inputs[f"{prefix}from_year"]),
+                label=label,
+                measures=(role,),
+            )
+        )
+    return stages
+
+
+def _staged_values(inputs: Dict[str, Any], database: CostDatabase) -> Dict[str, float]:
+    """Prices one staged plan through `StagedEvaluator.evaluate` (E-spec §1, §2).
+
+    The entry point of the `staged` group. It turns the workbook's flat table into the plan of
+    :func:`_staged_plan`, prices it under one perspective built from the same table, and publishes
+    the plan's and the reference's headline figures, the per-category NPVs, the nominal amount of
+    every category in every year, and the comparison between the two.
+
+    Two figures deserve their own sentence. `single_variant_npv_in_euro` is the same state priced
+    by the *plain* `EconomicEvaluator`, published for every plan of one stage: E-spec §2(a) asks
+    that a one-stage plan equal an ordinary evaluation, and an example asserting the two are the
+    same number pins that as arithmetic rather than as a property test. And every per-category and
+    per-year figure is pre-seeded with 0.0 before the timeline is folded in, so a workbook can
+    assert that a category is *absent* in a year -- no investment before the stage that buys it --
+    as an explicit zero instead of the collector reporting "no such label".
+
+    Unlike the other end-to-end runners this one may build a subsidy catalogue, because the third
+    example of E-spec §2 is about a grant that only a later stage can claim; it is synthetic and
+    in-memory (:func:`_staged_catalog`), so no shipped scheme reaches a worked example.
+    """
+    from hisim.economics.staged import StagedEvaluator
+
+    horizon = int(inputs["horizon_in_years"])
+    parameters = EconomicParameters(
+        observation_period_in_years=horizon,
+        interest_rate=_fraction(inputs, "interest_rate", 0.0),
+        general_price_escalation_rate=float(inputs.get("general_price_escalation_rate", 0.0)),
+        investment_price_escalation_rate=float(inputs.get("investment_price_escalation_rate", 0.0)),
+        energy_price_escalation_rates={
+            carrier: float(inputs.get("energy_price_escalation_rate", 0.0)) for carrier in EnergyCarrier
+        },
+        feed_in_escalation_rate=0.0,
+        co2_price_scenario="none",
+        country=SYNTHETIC_COUNTRY,
+        price_basis_year=EXAMPLE_YEAR,
+    )
+    catalog = _staged_catalog(inputs)
+    financing = None
+    if "loan_interest_rate" in inputs:
+        financing = FinancingPlan(
+            financed_share=_fraction(inputs, "loan_financed_share", 1.0),
+            nominal_interest_rate=_fraction(inputs, "loan_interest_rate", 0.0),
+            term_in_years=int(inputs["loan_term_in_years"]),
+        )
+    perspective = Perspective(
+        id="worked_example",
+        installation_context=(
+            InstallationContext.BROWNFIELD
+            if bool(inputs.get("register_the_baseline_device", False))
+            else InstallationContext.GREENFIELD
+        ),
+        subsidy_mode=SubsidyMode.full() if catalog is not None else SubsidyMode.none(),
+        financing=financing,
+    )
+    stages = _staged_plan(inputs)
+    result = StagedEvaluator(database).evaluate(stages, parameters, perspective, catalog)
+
+    values: Dict[str, float] = {
+        "plan_npv_in_euro": result.plan.total_npv_in_euro.best_estimate,
+        "plan_eac_in_euro": result.plan.equivalent_annual_cost_in_euro.best_estimate,
+        "reference_npv_in_euro": result.reference.total_npv_in_euro.best_estimate,
+        "reference_eac_in_euro": result.reference.equivalent_annual_cost_in_euro.best_estimate,
+        "npv_delta_in_euro": result.comparison.npv_delta_in_euro.best_estimate,
+        "eac_delta_in_euro": result.comparison.equivalent_annual_cost_delta_in_euro.best_estimate,
+        "annuity_factor": parameters.annuity_factor(),
+    }
+    payback = result.comparison.discounted_payback_years.get("best_estimate")
+    if payback is not None:
+        values["discounted_payback_year"] = float(payback)
+    if len(stages) == 1:
+        plain = EconomicEvaluator(database, parameters, catalog).evaluate(stages[0].inputs, perspective)
+        values["single_variant_npv_in_euro"] = plain.total_npv_in_euro.best_estimate
+        values["single_variant_eac_in_euro"] = plain.equivalent_annual_cost_in_euro.best_estimate
+    for category in CostCategory:
+        values[f"plan_npv_{category.value.lower()}_in_euro"] = 0.0
+        for year in range(0, horizon + 1):
+            values[f"plan_nominal_{category.value.lower()}_year_{year}_in_euro"] = 0.0
+    for category, band in result.plan.npv_by_category.items():
+        values[f"plan_npv_{category.value.lower()}_in_euro"] = band.best_estimate
+    for entry in result.plan.timeline.entries:
+        key = f"plan_nominal_{entry.category.value.lower()}_year_{entry.year}_in_euro"
+        values[key] = values.get(key, 0.0) + entry.amount_in_euro.best_estimate
+    for year, band in enumerate(result.plan.annual_cost_series_nominal_in_euro):
+        values[f"plan_annual_cost_year_{year}_in_euro"] = band.best_estimate
     return values

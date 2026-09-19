@@ -7,7 +7,7 @@ co-owned by the RenoVisor frontend and backend teams. ``calculation-request.sche
 request the translator validates against), ``calculation-request.mockup-1.yaml`` (the worked
 example every probe set anchors on) and ``measure-capabilities.openapi.yaml`` (the shape of the
 capability document the translator generates) come from the frontend side's proposal directory
-``~/contract-proposals`` and are vendored as local files until they move into the contract
+``/home/contract-proposals`` and are vendored as local files until they move into the contract
 repository. This package holds a copy of each, together with ``PINNED.yaml``, which records where
 every copy came from and the content hash it had at that moment.
 

@@ -110,11 +110,15 @@ class TestTheResultPane:
             assert f"<code>costs.{cost_field.value}</code>" in page
 
     def test_a_field_nobody_computes_is_marked_absent_with_its_reason(self, page: str) -> None:
-        """The honest answer to 'what will I get here' is printed where the field is."""
-        row = page[page.index("<code>costs.grant_in_euro</code>"):][:1200]
+        """The honest answer to 'what will I get here' is printed where the field is.
+
+        Every cost field is such a field since step 10: the money is in
+        ``economics_result.json``, and the row says which key of it answers the question.
+        """
+        row = page[page.index("<code>costs.grant_in_euro</code>"):][:1600]
 
         assert "absent" in row
-        assert "subsidy_catalog/IE.json" in row
+        assert "economics_result.json" in row
 
     def test_the_provenances_borrow_the_page_own_colours(self, page: str) -> None:
         """One legend serves the page, so a provenance is coloured like the status it matches."""

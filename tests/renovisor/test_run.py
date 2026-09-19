@@ -22,6 +22,7 @@ from typing import Any, Dict
 
 import pytest
 
+from hisim.renovisor.costs import CostField
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.run import Calculation, ExitCode, Outputs
 from hisim.renovisor.simulation import Period
@@ -151,10 +152,12 @@ class TestTheResultPayload:
         assert run(package_document(), tmp_path, "package") == ExitCode.FINISHED
 
         payload = json.loads((tmp_path / "package" / Outputs.RESULT).read_text(encoding="utf-8"))
-        for block in ("kpis", "costs"):
-            for name, value in payload[block].items():
-                if isinstance(value, dict) and "provenance" in value:
-                    assert value["source"], f"{block}.{name} has no source"
+        # Only the KPI half is published: step 10 moved the money to economics_result.json, and
+        # the payload carries no `costs` block at all any more.
+        assert "costs" not in payload
+        for name, value in payload["kpis"].items():
+            if isinstance(value, dict) and "provenance" in value:
+                assert value["source"], f"kpis.{name} has no source"
 
     def test_the_operational_carbon_comes_from_the_cost_engine(self, tmp_path: Path) -> None:
         """Never from the legacy KPI: Ireland's rows in that table are sentinel placeholders."""
@@ -175,14 +178,28 @@ class TestTheResultPayload:
         report = json.loads((tmp_path / "baseline" / Outputs.MAPPING_REPORT).read_text(encoding="utf-8"))
         assert report["translator"]["legacy_factors"] == "placeholder"
 
-    def test_the_envelope_material_cost_is_absent_with_its_reason(self, tmp_path: Path) -> None:
-        """Rule 5 moved the material into the request, and a request carries no price."""
+    def test_every_cost_field_is_missing_and_says_where_the_money_is(self, tmp_path: Path) -> None:
+        """Step 10 moved the money; decision R8 says the payload has to state that, field by field."""
         assert run(package_document(), tmp_path, "package") == ExitCode.FINISHED
 
         payload = json.loads((tmp_path / "package" / Outputs.RESULT).read_text(encoding="utf-8"))
         reasons = {entry["field"]: entry["reason"] for entry in payload["missing"]}
-        assert "costs.investment_breakdown.envelope_material" in reasons
-        assert "no material price" in reasons["costs.investment_breakdown.envelope_material"]
+        for field in CostField:
+            assert f"costs.{field.value}" in reasons
+        assert "economics_result.json" in reasons[f"costs.{CostField.NET_PRESENT_VALUE.value}"]
+        assert "A13" in reasons[f"costs.{CostField.PROPERTY_VALUE.value}"]
+
+    def test_the_mapping_report_names_the_cost_subjects_and_the_unpriced_ones(
+        self, tmp_path: Path
+    ) -> None:
+        """The staged evaluator stamps `measure_id` from this map, and flags what has no price."""
+        assert run(package_document(), tmp_path, "package") == ExitCode.FINISHED
+
+        report = json.loads((tmp_path / "package" / Outputs.MAPPING_REPORT).read_text(encoding="utf-8"))
+        assert report["subjects"], "a package with measures names at least one cost subject"
+        # The vendored mockup carries no `cost` block on its envelope measures (findings F7/F10),
+        # so every envelope subject is in the economics unpriced rather than left out.
+        assert set(report["unpriced_subjects"]) <= set(report["subjects"])
 
     def test_the_payload_names_the_weather_year_it_was_computed_against(self, tmp_path: Path) -> None:
         """Two results computed against different years are not comparable (requirement A4)."""

@@ -1,6 +1,6 @@
 # Review: the frontend side's translator implementation spec v2 (2026-09-19)
 
-**Reviewed:** `~/contract-proposals/translator-implementation-spec.md` with its companions
+**Reviewed:** `/home/contract-proposals/translator-implementation-spec.md` with its companions
 `calculation-request.md`, `calculation-request.schema.json`, `calculation-request.mockup-1.yaml`,
 `measure-capabilities.md`, `note-to-contract-owner-2026-09-19.md`, `backend-changes.md`.
 **Checked against:** HiSim `origin/main` at `6f127c52` (the spec cites `8f619e4a`, five commits

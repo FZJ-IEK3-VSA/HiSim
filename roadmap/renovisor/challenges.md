@@ -420,3 +420,23 @@ Consequences for the register above:
 | Q30 | **A stage's start year changes the economics only.** Weather stays the fixed Irish dataset; prices escalate to the stage year; devices installed in earlier stages carry their installation year. No ageing of the building state. |
 | Q31 | **The categorical envelope descriptors are defined jointly with the catalogue owners**, so the existing building and the measures share one material vocabulary. The input schema's structure can be drafted now; its value lists for construction, insulation, window and door types wait for that meeting. v1's Irish ids are the starting proposal to bring to it. |
 | — | Grants: `selected_grant_schemes` and the package's `grants` block feed the subsidy engine's eligibility context (needs `subsidy_catalog/IE.json`, step 6b). Financing: `loan_term_years`, `own_contribution_in_euro` become `EconomicParameters` inputs for the monthly-net-cost figures. |
+
+## 13. Decisions of 2026-09-19 on the frontend side's translator spec v2
+
+Reviewed in `review_translator_spec_v2_2026-09-19.md`. Owner's decisions on its six questions:
+
+| Id | Decision |
+|---|---|
+| D-C | **CHR01 for everyone in the MVP** (the spec's D7/D10 stand; Q20 is deferred, not reversed). Reason: LPG calculation times in early testing. The battery estimate for `days_to_cover` uses the shipped CHR01 profile's own electricity, which the run also uses, so no invented table is needed. `number_of_residents`, `white_appliances`, `electric_vehicles` are `not_implemented_yet` until the LPG binary is in the image; the capability document says so. |
+| D-D | **One set of base files: the recorded grouped twins**, as they are today (Q18 stands; the spec's translator-owned copies are rejected). Everything the spec's base files would have added — the `pv` group, `ems_without_battery`, night setback, air conditioner, solar thermal or EV on further generators — is `not_implemented_yet` for the MVP; base-file work starts after the MVP runs. "No PV" is a zero-power pin (verified 2026-09-19: the baseline runs, output 0). |
+| D-E | **The spec's rule 6 as written**: a feature on the `not_implemented_yet` whitelist is reported and the calculation runs; anything not on the whitelist fails hard. The register's refusals for `HYBRID_HEAT_PUMP`, direct-electric DHW, solar thermal on other generators, missing material rows become whitelist entries with notes. (Q4 stays: an unknown key or a stage-0 entry is not a feature, it is invalid input.) Whether the UI hides system-selecting `not_implemented_yet` values is the frontend's call; the capability document distinguishes `no_model` from `substituted` so it can. |
+| D-A, D-B, D-F | Not yet answered by the owner; the review's recommendations (frontend derives the physics with `envelope_source` provenance; catalogue lowercase on the wire, carried as the HiSim enums' values; the branch's `result.py` is the result spec, with `COMPUTE_LIFECYCLE_COSTS` added to the spec's option set) are the working assumption until said otherwise. |
+
+**Defect found and fixed the same day (`application.py`):** the parametriser selected the
+`electricity_management` variant only from a `BATTERY_SYSTEM` measure; a base-state house without a
+battery kept the twin's default `ems_with_battery`, whose battery sizes itself from the PV array,
+and with a zero-power array the battery library divided by zero. The variant is now derived from the
+post-measure inventory's battery block when no measure selects it. Every end-to-end test before had
+run a package with a battery measure, which is why the most common request — a baseline without PV
+or battery — had never been exercised. Lesson recorded: the probe set of the capability document
+(the spec's §9) must include the bare baseline and every block absent.

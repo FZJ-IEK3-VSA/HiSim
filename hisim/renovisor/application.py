@@ -45,7 +45,7 @@ from hisim.renovisor.inventory import Inventory
 from hisim.renovisor.materials import InsulationMaterials
 from hisim.renovisor.options import Options
 from hisim.renovisor.reasons import ReasonCode, RefusalDetail, RefusalError, ValidationError
-from hisim.renovisor.registry import MeasureRegistry
+from hisim.renovisor.registry import MeasureRegistry, MeasureSwitches
 from hisim.renovisor.report import MappingReport, ReportStatus
 from hisim.renovisor.tabula_ie import TabulaLookupError
 from hisim.renovisor.vocabulary import DhwSupply, HeatGenerator, VocabularyLookup
@@ -190,6 +190,33 @@ class InventorySystem:
         area = inventory.get(cls.COLLECTOR_AREA)
         return isinstance(area, (int, float)) and not isinstance(area, bool) and area > 0
 
+    #: The battery block and its capacity; a zero or absent capacity is no battery.
+    BATTERY_CAPACITY: ClassVar[str] = "energy_system_config.battery_storage.capacity_in_kwh"
+
+    @classmethod
+    def has_battery(cls, inventory: Inventory) -> bool:
+        """Return whether the dwelling has a battery worth the name.
+
+        The contract has no "present" flag for the battery block, so the capacity decides: a block
+        that is absent, or whose capacity is null or zero, is no battery. This matters because the
+        recorded base files default to the ``ems_with_battery`` variant, whose battery sizes itself
+        from the PV array; a house without PV would then get a zero-capacity battery, which the
+        battery library cannot simulate (division by its capacity).
+        """
+        capacity = inventory.get(cls.BATTERY_CAPACITY)
+        return isinstance(capacity, (int, float)) and not isinstance(capacity, bool) and capacity > 0
+
+    @classmethod
+    def electricity_management(cls, inventory: Inventory) -> str:
+        """Return the ``electricity_management`` option the inventory alone implies.
+
+        ``ems_with_battery`` when :meth:`has_battery`, else ``metered_directly``. A ``BATTERY_SYSTEM``
+        measure overrides this through its own variant selection; this is the base state.
+        """
+        if cls.has_battery(inventory):
+            return MeasureSwitches.ELECTRICITY_MANAGEMENT_WITH_BATTERY
+        return MeasureSwitches.ELECTRICITY_MANAGEMENT_WITHOUT_BATTERY
+
     @classmethod
     def car_count(cls, inventory: Inventory) -> int:
         """Return how many electric vehicles the dwelling charges."""
@@ -268,6 +295,15 @@ class PackageApplication:
             raise RefusalError(refusals)
 
         u_values = self._write_results(post, resolved, report)
+        variant_selections = dict(resolved.variant_selections)
+        if MeasureSwitches.ELECTRICITY_MANAGEMENT_VARIANT not in variant_selections:
+            option = InventorySystem.electricity_management(post)
+            variant_selections[MeasureSwitches.ELECTRICITY_MANAGEMENT_VARIANT] = option
+            report.add(
+                InventorySystem.BATTERY_CAPACITY,
+                ReportStatus.USED if InventorySystem.has_battery(post) else ReportStatus.DEFAULTED,
+                f"electricity_management variant '{option}' from the inventory's battery block",
+            )
         self._report_measures(entries, effects, report)
         report.finalize(post.to_dict())
         post.validate()
@@ -275,7 +311,7 @@ class PackageApplication:
             inventory=post,
             base_file_key=base_key,
             base_file_name=base_file_name,
-            variant_selections=dict(resolved.variant_selections),
+            variant_selections=variant_selections,
             enabled_groups=resolved.enabled_groups,
             pending_laws=dict(resolved.pending_laws),
             report=report,

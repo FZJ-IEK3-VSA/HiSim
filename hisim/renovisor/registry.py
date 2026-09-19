@@ -76,6 +76,8 @@ class MeasureSwitches:
 
     #: The option of that variant which puts a battery behind an energy-management controller.
     ELECTRICITY_MANAGEMENT_WITH_BATTERY: ClassVar[str] = "ems_with_battery"
+    #: The option a dwelling without a battery runs: the meter reads the grid exchange directly.
+    ELECTRICITY_MANAGEMENT_WITHOUT_BATTERY: ClassVar[str] = "metered_directly"
 
 
 class MeasureDefaults:

@@ -290,3 +290,35 @@ def test_an_unknown_generator_in_the_inventory_is_a_schema_violation(
         application.apply(inventory, [])
 
     assert error.value.reason is ReasonCode.SCHEMA_VIOLATION
+
+
+def test_a_house_without_a_battery_runs_metered_directly(
+    application: PackageApplication, inventory: Inventory
+) -> None:
+    """The base state decides the electricity-management variant when no measure does.
+
+    The recorded base files default to ``ems_with_battery``, whose battery sizes itself from the
+    PV array. A baseline without a battery must therefore select ``metered_directly``; keeping the
+    default gave a zero-capacity battery on a house without PV, which the battery library cannot
+    simulate. The example inventory states a battery block with capacity 0, which is no battery.
+    """
+    result = application.apply(inventory, [])
+    assert result.variant_selections == {"electricity_management": "metered_directly"}
+    line = next(entry for entry in result.report.to_list() if entry["path"].endswith("battery_storage.capacity_in_kwh"))
+    assert line["status"] == ReportStatus.DEFAULTED.value
+
+
+def test_a_house_with_a_battery_runs_the_ems_variant(application: PackageApplication, inventory: Inventory) -> None:
+    """A stated battery capacity selects ``ems_with_battery`` without any measure."""
+    with_battery = Inventory.from_dict(inventory.to_dict())
+    with_battery.set("energy_system_config.battery_storage.capacity_in_kwh", 8.0)
+    result = application.apply(with_battery, [])
+    assert result.variant_selections == {"electricity_management": "ems_with_battery"}
+
+
+def test_a_battery_measure_still_wins_over_the_base_state(
+    application: PackageApplication, inventory: Inventory
+) -> None:
+    """The ``BATTERY_SYSTEM`` measure's own selection is not overwritten by the base-state rule."""
+    result = application.apply(inventory, [{"measure_id": "BATTERY_SYSTEM", "options": {"days_to_cover": 2}}])
+    assert result.variant_selections["electricity_management"] == "ems_with_battery"

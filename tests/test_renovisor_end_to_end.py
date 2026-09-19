@@ -212,3 +212,38 @@ def test_the_result_payload_says_where_every_number_came_from(tmp_path: Path) ->
         f"costs.{CostField.PAYBACK.value}",
         f"costs.{CostField.PROPERTY_VALUE.value}",
     }
+
+
+def test_the_bare_baseline_without_photovoltaics_or_battery_runs(tmp_path: Path) -> None:
+    """The most common request of all: the house as it stands, no measures, no PV, no battery.
+
+    Every earlier end-to-end run carried a package with a battery measure, which hid that a
+    baseline kept the base file's ``ems_with_battery`` default and crashed the battery library
+    on a zero capacity. This run has the battery block absent and the array pinned to zero, and
+    must finish with the ``metered_directly`` variant selected.
+
+    Args:
+        tmp_path: The output location for the run.
+    """
+    weather = irish_weather_file()
+    if not weather.is_file():
+        pytest.skip(f"the Irish NSRDB weather file is not in this checkout: {weather}")
+
+    inventory = json.loads(TraceExample.INVENTORY_PATH.read_text(encoding="utf-8"))
+    inventory["energy_system_config"].pop("battery_storage", None)
+    inputs = tmp_path / "in"
+    inputs.mkdir()
+    (inputs / InputFiles.INVENTORY).write_text(json.dumps(inventory), encoding="utf-8")
+    (inputs / InputFiles.PACKAGE).write_text(json.dumps({"measures": []}), encoding="utf-8")
+    (inputs / InputFiles.PARAMETER_NAMES[0]).write_text(
+        PARAMETERS_PATH.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    output = tmp_path / "out"
+
+    code = CalculationRunner(inputs, output, base_files_directory=BASE_FILES).run()
+
+    assert code is ExitCode.FINISHED, (output / OutputFiles.ERRORS).read_text(encoding="utf-8")
+    parametrised = load_energy_system(output / OutputFiles.PARAMETRISED)
+    assert parametrised.variants["electricity_management"].selected == "metered_directly"
+    payload: Dict[str, Any] = json.loads((output / OutputFiles.RESULT).read_text(encoding="utf-8"))
+    assert payload["kpis"]["self_sufficiency_in_percent"]["value"] == 0.0

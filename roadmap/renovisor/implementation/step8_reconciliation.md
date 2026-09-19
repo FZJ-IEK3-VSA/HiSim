@@ -324,3 +324,49 @@ vendored `measure-capabilities.openapi.yaml` schema; `translation_map.html` rege
 final report lists: the capability tally, every constant in `constants.py` with its source
 comment, every whitelist entry with the probe that hits it, the wall time of the mockup run, and
 every place where the F-spec, the review and §13 disagreed and which one you followed.
+
+## 13. Addendum of 2026-09-19 (after review of the generated capability document)
+
+Three changes, decided by the owner after reading the document.
+
+**A. Field-level note aggregation is wrong.** For a `fields[]` entry whose status is the worst
+over several probes, the top-level `note` may come from a *different* probe than the one that set
+the status (`house.solar_thermal_system.supplies` is `not_implemented_yet` because of
+`dhw_and_space_heating`, but its note is the `dhw_only` sentence). Fix: the entry's `note` is the
+note of the probe that produced the worst status; when several probes tie at the worst status
+with different notes, join them with `" | "` in probe order. Same rule for `options[]` (the
+`heating_system.type_of_system` option is `used` yet carries a `not_implemented_yet` value's note;
+an option's note is the note of its own worst *option-level* observation, or absent when the option
+itself is `used` and only values are listed). Add a test that builds a two-probe field with
+different statuses and asserts the note follows the status.
+
+**B. A `results` section.** The document gains `results: {kpis: [...], costs: [...]}`, one entry
+per field `result.py` can emit, generated from `KpiSources`/`CostSources` (the same tables, not a
+second list): `{"field": "kpis.energy_demand_in_kilowatt_hour_per_year", "provenance": "SIMULATED" |
+"PARTIAL" | "MOCKED", "source": "<the source string result.py writes>", "conditions": ["PARTIAL when
+the period is shorter than a year"]}`, and for fields that can be absent `{"field": …,
+"provenance": "absent", "reason": "<the missing reason result.py writes>", "when": "<condition>"}`
+(embodied CO₂ without element areas; envelope material price always until the request carries one;
+grant until `subsidy_catalog/IE.json`; payback needs the base run; property value has no model).
+The vendored `measure-capabilities.openapi.yaml` has no `additionalProperties: false`, so the
+document still validates; additionally write the `results` schema as a HiSim-side proposal file
+`hisim/renovisor/contract/measure-capabilities.results-extension.yaml` (an OpenAPI schema fragment
+for the frontend team to merge; not pinned, HiSim-authored) and validate `results` against it too.
+Render the section in `map.py` (the trace tab's result pane already lists these; reuse).
+
+**C. `low_temperature_radiator` is `not_implemented_yet`.** The cost engine's adapter returns no
+cost facts for that emitter on purpose and the evaluation aborts (exit 5). Decision: whitelist it
+as a *substitution*: entries `measure: heating_installation.type_of_system=low_temperature_radiator`
+and `path: house.heat_distribution.type_of_system` with `except: [surface_heating,
+conventional_radiator]`, note "No cost row for a low-temperature radiator in the cost database yet;
+modelled as surface heating (floor heating), the heat pump's other low-temperature emitter."
+`translate.py` writes `FLOORHEATING` for it, so a heat-pump package with that emitter runs and is
+priced; the mapping report line and the capability document carry the note; `substitution: true`.
+Verify with the vendored mockup **verbatim** (it asks for `low_temperature_radiator`): `run
+--period one_day_15min` exits 0 and `result.json` is written; make that the end-to-end test instead
+of the `surface_heating` copy, and keep `TestTheLowTemperatureRadiatorBlocker` pointing at the
+cost adapter so the entry is removed the day a cost row exists (T-NIY will then also demand it).
+
+Regenerate the capability document fixture, the map, and the tally (expect the
+`heating_installation` measure to become `approximated` at measure level or stay `supported` with
+one `not_implemented_yet` value — follow the status rules of the F-spec §4.2 and report which).

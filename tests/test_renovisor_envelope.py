@@ -1,207 +1,97 @@
-"""Tests of the envelope physics: U-value sources, the thickness rule, composition, and the checks.
+"""T-ENV: the insulation arithmetic on known numbers, and the note that shows it.
 
-The numbers here are the ones a wrong result would hide behind, so each is pinned against a worked
-example rather than against whatever the code currently returns.
+Series resistance and nothing else (§4.3 of the calculation-request specification). The point of
+these tests is that the numbers are checkable by eye: a 1.1 W/(m²·K) wall with 120 mm of a
+material whose lambda is 0.0355 W/(m·K) becomes 1/(1/1.1 + 0.12/0.0355), and the mapping note
+has to carry that division so a reader can redo it.
 """
-
-import json
-from pathlib import Path
 
 import pytest
 
-from hisim.renovisor.envelope import (
-    EnvelopePaths,
-    ExclusivityTable,
-    FitToBuilding,
-    InventoryThenTabula,
-    RegulatoryTargets,
-    TabulaUValues,
-    ThicknessDefault,
-    UValueComposer,
-)
-from hisim.renovisor.inventory import Inventory
-from hisim.renovisor.reasons import ReasonCode
-from hisim.renovisor.vocabulary import ThermalElement
-
-pytestmark = pytest.mark.base
-
-EXAMPLE_INVENTORY_PATH = Path(__file__).resolve().parent / "renovisor" / "example_inventory_ie_1988_detached.json"
+from hisim.renovisor.envelope import LayerNote, UValueComposer
 
 
-@pytest.fixture(name="inventory")
-def fixture_inventory() -> Inventory:
-    """The example Irish 1988 detached house, fresh for each test."""
-    return Inventory.from_dict(json.loads(EXAMPLE_INVENTORY_PATH.read_text(encoding="utf-8")))
+@pytest.mark.base
+class TestTheComposer:
+    """``U_new = 1 / (1 / U_existing + sum of d/lambda)``, and nothing else."""
 
+    def test_one_layer_on_a_known_wall(self) -> None:
+        """The mockup's own facade: 1.1 W/(m2K) plus 120 mm of EPS at lambda 0.0355."""
+        resistance = UValueComposer.resistance(120, 0.0355)
 
-@pytest.fixture(name="targets", scope="module")
-def fixture_targets() -> RegulatoryTargets:
-    """The committed Irish target table."""
-    return RegulatoryTargets.load()
+        assert resistance == pytest.approx(0.12 / 0.0355)
+        assert UValueComposer.compose(1.1, [resistance]) == pytest.approx(
+            1.0 / (1.0 / 1.1 + 0.12 / 0.0355)
+        )
 
+    def test_two_layers_stack_and_the_order_does_not_change_the_answer(self) -> None:
+        """Series resistances add, so a wall insulated twice is one wall with two layers."""
+        first = UValueComposer.resistance(100, 0.035)
+        second = UValueComposer.resistance(60, 0.022)
 
-def test_u_value_paths_follow_the_contract_s_naming() -> None:
-    """Each element's U-value sits under envelope_details, named after the element."""
-    assert EnvelopePaths.u_value_path(ThermalElement.ROOF) == (
-        "building_config.envelope_details.roof_u_value_in_watt_per_m2_per_kelvin"
+        forwards = UValueComposer.compose(2.4, [first, second])
+        backwards = UValueComposer.compose(2.4, [second, first])
+
+        assert forwards == pytest.approx(backwards)
+        assert forwards == pytest.approx(1.0 / (1.0 / 2.4 + 0.1 / 0.035 + 0.06 / 0.022))
+
+    def test_a_layer_always_lowers_the_u_value(self) -> None:
+        """A positive resistance can only raise the total resistance, never lower it."""
+        assert UValueComposer.compose(0.4, [UValueComposer.resistance(300, 0.04)]) < 0.4
+
+    def test_no_layers_leaves_the_element_as_it_was(self) -> None:
+        """An element no measure touched keeps exactly the U-value the request states."""
+        assert UValueComposer.compose(0.7, []) == pytest.approx(0.7)
+
+    @pytest.mark.parametrize(
+        "existing, resistances",
+        [(0.0, [1.0]), (-0.5, [1.0]), (1.0, [-1.0])],
     )
-    assert EnvelopePaths.u_value_path(ThermalElement.FACADE).endswith("facade_u_value_in_watt_per_m2_per_kelvin")
+    def test_a_number_that_describes_no_wall_is_refused(self, existing: float, resistances: list) -> None:
+        """A non-positive U-value or a negative resistance is a bug in a table, not a wall."""
+        with pytest.raises(ValueError):
+            UValueComposer.compose(existing, resistances)
+
+    @pytest.mark.parametrize("thickness, conductivity", [(100, 0.0), (100, -0.03), (-10, 0.04)])
+    def test_a_layer_that_describes_no_material_is_refused(
+        self, thickness: int, conductivity: float
+    ) -> None:
+        """Lambda has to be positive and a thickness cannot be negative."""
+        with pytest.raises(ValueError):
+            UValueComposer.resistance(thickness, conductivity)
 
 
-def test_tabula_supplies_five_u_values_for_one_code() -> None:
-    """The archetype row carries one U-value per element, read from the U_Actual columns."""
-    values = TabulaUValues.for_code("IE.N.SFH.04.Gen.ReEx.001.001")
+@pytest.mark.base
+class TestTheNote:
+    """The note carries the whole division, because it is the only place a reader can check it."""
 
-    assert values[ThermalElement.FACADE] == pytest.approx(2.4)
-    assert values[ThermalElement.WINDOW] == pytest.approx(5.7)
-    assert set(values) == set(ThermalElement)
+    def test_the_note_contains_every_number_of_the_arithmetic(self) -> None:
+        """The starting U-value, the thickness, the conductivity and the result, all in one line."""
+        composed = UValueComposer.compose(1.1, [UValueComposer.resistance(120, 0.0355)])
 
+        note = LayerNote.of(
+            1.1, [("external_insulation", 120.0, "polystyrene_eps_rigid_board", 0.0355)], composed
+        )
 
-def test_the_inventory_wins_per_element(inventory: Inventory) -> None:
-    """Decision Q10: a surveyed element beats the archetype, one element at a time."""
-    source = InventoryThenTabula(inventory)
+        assert "1.1 W/(m2K)" in note
+        assert "external_insulation 120 mm of polystyrene_eps_rigid_board" in note
+        assert "lambda 0.0355 W/mK" in note
+        assert "1/(1/1.1 + 0.12/0.0355)" in note
+        assert f"{composed:.4g}" in note
 
-    assert source.u_value(ThermalElement.WINDOW) == pytest.approx(4.8)
-    assert source.source_of(ThermalElement.WINDOW) == "the inventory's envelope_details"
-    assert source.u_value(ThermalElement.FACADE) == pytest.approx(0.6)
-    assert "TABULA" in source.source_of(ThermalElement.FACADE)
-    assert source.building_code == "IE.N.SFH.07.Gen.ReEx.001.001"
+    def test_two_layers_are_both_named_and_both_in_the_division(self) -> None:
+        """A wall with two measures on it says which measure put which layer on."""
+        resistances = [UValueComposer.resistance(100, 0.035), UValueComposer.resistance(60, 0.022)]
+        composed = UValueComposer.compose(2.4, resistances)
 
+        note = LayerNote.of(
+            2.4,
+            [
+                ("external_insulation", 100.0, "polystyrene_eps_rigid_board", 0.035),
+                ("internal_dry_lining_insulation", 60.0, "pir", 0.022),
+            ],
+            composed,
+        )
 
-def test_a_null_envelope_value_falls_back_to_tabula(inventory: Inventory) -> None:
-    """A field that exists and holds null means 'not stated', not 'zero'."""
-    inventory.set(EnvelopePaths.u_value_path(ThermalElement.WINDOW), None)
-
-    assert InventoryThenTabula(inventory).u_value(ThermalElement.WINDOW) == pytest.approx(3.1)
-
-
-def test_every_regulatory_row_carries_a_source_and_a_status(targets: RegulatoryTargets) -> None:
-    """A regulatory number without provenance is a wrong result that looks right."""
-    assert targets.target_ids() == (
-        "pitched_roof_insulated_at_ceiling",
-        "pitched_roof_insulated_on_slope",
-        "flat_roof",
-        "wall",
-        "cavity_fill_wall",
-        "ground_floor",
-        "window",
-        "door",
-    )
-    for target_id in targets.target_ids():
-        row = targets.target(target_id)
-        assert row.source.startswith("Building Regulations TGD L")
-        assert row.status.startswith("PROVISIONAL")
-        assert row.u_value_in_watt_per_m2_per_kelvin > 0
-
-
-def test_the_regulatory_values(targets: RegulatoryTargets) -> None:
-    """The eight target values, pinned so a silent edit of the data file fails the build."""
-    assert targets.u_value("pitched_roof_insulated_at_ceiling") == 0.16
-    assert targets.u_value("pitched_roof_insulated_on_slope") == 0.25
-    assert targets.u_value("flat_roof") == 0.25
-    assert targets.u_value("wall") == 0.35
-    assert targets.u_value("cavity_fill_wall") == 0.55
-    assert targets.u_value("ground_floor") == 0.45
-    assert targets.u_value("window") == 1.6
-    assert targets.u_value("door") == 1.6
-
-
-def test_a_missing_target_row_raises(targets: RegulatoryTargets) -> None:
-    """A measure needing a target the table lacks refuses; it does not invent one."""
-    with pytest.raises(KeyError):
-        targets.u_value("conservatory")
-
-
-def test_the_worked_thickness_example() -> None:
-    """A 1.5 W/m2K wall insulated with EPS to the 0.35 target needs 77.8 mm, so 80 mm."""
-    assert ThicknessDefault.for_target(1.5, 0.0355, 0.35) == 80
-
-
-def test_a_thicker_layer_is_needed_for_a_harder_target() -> None:
-    """The 0.16 attic target asks much more of the same material than the 0.35 wall target."""
-    assert ThicknessDefault.for_target(1.5, 0.041, 0.16) > ThicknessDefault.for_target(1.5, 0.041, 0.35)
-
-
-def test_an_element_already_at_the_target_needs_no_layer() -> None:
-    """The rule is honest rather than useful here: the request should then state a thickness."""
-    assert ThicknessDefault.for_target(0.2, 0.04, 0.35) == 0
-
-
-def test_thickness_rejects_impossible_inputs() -> None:
-    """A zero conductivity or U-value would make the formula meaningless."""
-    with pytest.raises(ValueError):
-        ThicknessDefault.for_target(1.5, 0.0, 0.35)
-    with pytest.raises(ValueError):
-        ThicknessDefault.for_target(0.0, 0.04, 0.35)
-
-
-def test_two_layers_on_one_element_add_up() -> None:
-    """Requirement M2: the second layer improves on the first rather than replacing it."""
-    first = UValueComposer.resistance(80, 0.0355)
-    second = UValueComposer.resistance(60, 0.04)
-
-    one_layer = UValueComposer.compose(2.4, [first])
-    two_layers = UValueComposer.compose(2.4, [first, second])
-
-    assert two_layers < one_layer < 2.4
-    assert two_layers == pytest.approx(1.0 / (1.0 / 2.4 + first + second))
-
-
-def test_a_replacement_sets_the_baseline() -> None:
-    """A replaced window starts from the new unit's U-value, not the old one's."""
-    assert UValueComposer.compose(1.4, []) == pytest.approx(1.4)
-
-
-def test_composition_rejects_impossible_inputs() -> None:
-    """A non-positive baseline or a negative resistance is a programming error, not a result."""
-    with pytest.raises(ValueError):
-        UValueComposer.compose(0.0, [])
-    with pytest.raises(ValueError):
-        UValueComposer.compose(1.0, [-0.5])
-    with pytest.raises(ValueError):
-        UValueComposer.resistance(-10, 0.04)
-
-
-def test_exclusivity_refuses_two_floor_constructions() -> None:
-    """A basement ceiling and a suspended floor describe two different buildings."""
-    refusals = ExclusivityTable.check(
-        ["BASEMENT_CEILING_INSULATION", "SUSPENDED_GROUND_FLOOR_INSULATION"]
-    )
-
-    assert len(refusals) == 1
-    assert refusals[0].reason is ReasonCode.CONTRADICTORY_MEASURES
-    assert "floor" in refusals[0].detail
-
-
-def test_exclusivity_allows_two_layers_within_one_group() -> None:
-    """Rafter and rolled-out attic insulation are two layers of one loft, not two roofs."""
-    assert ExclusivityTable.check(["RAFTER_INSULATION", "ROLLED_OUT_ATTIC_INSULATION"]) == ()
-
-
-def test_exclusivity_allows_external_plus_internal_wall_insulation() -> None:
-    """The facade has no groups on purpose: both measures are real layers on one wall."""
-    assert ExclusivityTable.check(["EXTERNAL_INSULATION", "INTERNAL_DRY_LINING_INSULATION"]) == ()
-
-
-def test_fit_is_not_checked_when_the_inventory_is_silent(inventory: Inventory) -> None:
-    """The construction facts are not in the contract yet, so a silent inventory is trusted."""
-    assert FitToBuilding.check(["CAVITY_WALL_INSULATION"], inventory) == ()
-
-
-def test_fit_refuses_a_measure_the_building_cannot_take(inventory: Inventory) -> None:
-    """A cavity measure on a solid wall is a refusal once the inventory states the construction."""
-    inventory.set(EnvelopePaths.WALL_CONSTRUCTION, "SOLID")
-
-    refusals = FitToBuilding.check(["CAVITY_WALL_INSULATION"], inventory)
-
-    assert len(refusals) == 1
-    assert refusals[0].reason is ReasonCode.MEASURE_DOES_NOT_FIT_BUILDING
-    assert refusals[0].measure_id == "CAVITY_WALL_INSULATION"
-
-
-def test_fit_accepts_a_measure_the_building_can_take(inventory: Inventory) -> None:
-    """A cavity measure on a cavity wall passes; so does a basement measure over a basement."""
-    inventory.set(EnvelopePaths.WALL_CONSTRUCTION, "CAVITY")
-    inventory.set(EnvelopePaths.FLOOR_CONSTRUCTION, "OVER_UNHEATED_BASEMENT")
-
-    assert FitToBuilding.check(["CAVITY_WALL_INSULATION", "BASEMENT_CEILING_INSULATION"], inventory) == ()
+        assert "external_insulation" in note and "internal_dry_lining_insulation" in note
+        assert "0.1/0.035 + 0.06/0.022" in note

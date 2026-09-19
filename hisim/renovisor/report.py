@@ -1,227 +1,275 @@
-"""The translation report: what happened to every input field and every measure (requirement R7).
+"""``mapping_report.json``: what the translator did with every leaf of the request.
 
-A RenoVisor calculation must be able to say, for each field of the home inventory and each measure
-of the package, whether it was used as given, approximated, defaulted, ignored, or accepted while
-changing nothing. The report is that statement, built while the translation runs and written
-beside the results::
+A calculation is only as trustworthy as its account of itself, so the report accounts for the
+whole request: every leaf of ``location`` and ``house`` appears exactly once under ``fields``,
+every measure appears exactly once under ``measures`` with every option it carried, every
+default the translator applied is a line with the value it used, and every
+``not_implemented_yet`` line carries the note of its ``not_implemented_yet.yaml`` entry
+verbatim.
 
-    report = MappingReport()
-    report.used("building_config.general.construction_year", "TABULA band 04 (1950-1966)")
-    report.measure("EXTERNAL_INSULATION", ReportStatus.DEFAULTED,
-                   "thickness 80 mm", rule="Q11 target-driven thickness")
-    report.finalize(inventory.to_dict())     # every untouched leaf becomes an 'ignored' line
+Its shape is §6 of the calculation-request specification::
 
-Why a class and not a list of strings: :meth:`MappingReport.finalize` has to know which leaves are
-already covered, including leaves under a path that was recorded as a whole (recording
-``energy_system_config.photovoltaics`` covers ``…photovoltaics.tilt_in_degree``), and that
-prefix rule belongs in one place.
+    {
+      "translator": {"version", "commit", "request_schema_version", "hisim_commit"},
+      "base_file": "household_gas_building_sizer.grouped.energy_system.yaml",
+      "energy_system_file": "renovisor_<hash>.energy_system.yaml",
+      "fields": [{"path", "status", "target?", "value?", "note?"}],
+      "measures": [{"id", "status", "options": [{"name", "status", "note?"}], "targets"}]
+    }
 
-This module is the v1 ``MappingReport`` moved out of the deleted ``mapping.py``, with its statuses
-turned into an enum, a per-measure line added, and an optional ``rule`` naming the law, table or
-formula that produced a number (decision Q27).
+:meth:`MappingReport.assert_complete` is the invariant as a check rather than as a promise: it
+walks the request and raises when a leaf has no line or has two. That is what makes "nothing is
+approximated or defaulted silently" (rule 6) a property of the build rather than of anyone's
+discipline.
 """
 
+import subprocess
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any, ClassVar, Dict, Iterator, List, Optional
+from pathlib import Path
+from typing import Any, ClassVar, Dict, Iterator, List, Mapping, Optional, Tuple
+
+from hisim.renovisor import TRANSLATOR_VERSION
+from hisim.renovisor.vocabulary import ReportStatus
 
 
-class ReportStatus(str, Enum):
-    """What the translation did with one field or one measure.
+class ReportError(Exception):
+    """The report does not account for the request, which is a bug in the translator.
 
-    ``USED`` — taken as given. ``APPROXIMATED`` — represented by something close but not equal,
-    with ``rule`` naming what produced it. ``DEFAULTED`` — absent from the request and replaced by
-    a default whose source the note carries. ``IGNORED`` — accepted and not used. ``NON_SIMULATION``
-    — a measure that HiSim has no model for, simulated unchanged and reported with a reason code
-    (requirement M8).
+    Raised by :meth:`MappingReport.assert_complete`, named after the leaf it is about, and
+    turned into exit 3 like every other translator error: a report with a hole in it must not
+    reach a user.
     """
-
-    USED = "USED"
-    APPROXIMATED = "APPROXIMATED"
-    DEFAULTED = "DEFAULTED"
-    IGNORED = "IGNORED"
-    NON_SIMULATION = "NON_SIMULATION"
 
 
 @dataclass(frozen=True)
-class ReportEntry:
-    """One report line: what happened at one JSON path.
+class FieldLine:
+    """One line of ``fields``: what became of one request leaf.
 
     Args:
-        path: The dotted, index-bearing path of the field or package entry, e.g.
-            ``building_config.envelope_details.roof_u_value_in_watt_per_m2_per_kelvin`` or
-            ``package.measures[2]``.
-        status: One of :class:`ReportStatus`.
-        note: A sentence a person can read: what happened and, for a default, where the number
-            came from.
-        rule: The name of the law, table or formula that produced the value, when one did.
-            ``None`` for a plain pass-through.
-        measure_id: The catalogue measure this line is about; ``None`` for inventory-field lines.
+        path: The leaf's dotted path in the request, e.g.
+            ``house.building.facade.u_value_in_watt_per_m2_per_kelvin``.
+        status: What the translator did with it.
+        target: The HiSim component and field it landed on, when it landed on one.
+        value: The value used, which a ``defaulted`` line always carries and a ``used`` line
+            carries when the value the request sent is not the value that was written.
+        note: The sentence a person reads; for a ``not_implemented_yet`` line it is the
+            whitelist entry's note, verbatim and nothing else.
     """
 
     path: str
     status: ReportStatus
-    note: str = ""
-    rule: Optional[str] = None
-    measure_id: Optional[str] = None
+    target: Optional[str] = None
+    value: Any = None
+    note: Optional[str] = None
+
+    def to_json(self) -> Dict[str, Any]:
+        """Return the line as the report writes it, omitting the keys it does not carry."""
+        row: Dict[str, Any] = {"path": self.path, "status": self.status.value}
+        if self.target is not None:
+            row["target"] = self.target
+        if self.value is not None:
+            row["value"] = self.value
+        if self.note is not None:
+            row["note"] = self.note
+        return row
+
+
+class HiSimCommit:
+    """The commit of the repository the translator is running out of.
+
+    It goes into the report and into the capability document so that a stored result can be
+    traced back to the code that produced it. A checkout without git, or an installed package
+    outside a repository, reports ``None`` rather than failing a calculation over provenance.
+    """
+
+    #: Where the repository is, relative to this module.
+    ROOT: ClassVar[Path] = Path(__file__).resolve().parents[2]
+
+    @classmethod
+    def of(cls) -> Optional[str]:
+        """Return the short commit hash of the checkout, or ``None`` when there is no git."""
+        try:
+            completed = subprocess.run(
+                ["git", "-C", str(cls.ROOT), "rev-parse", "--short", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except (OSError, subprocess.CalledProcessError):
+            return None
+        return completed.stdout.strip() or None
 
 
 class MappingReport:
-    """Collects one report line per inventory field and per package measure.
+    """The account of one translation, built as it runs and written beside the file it produced.
 
-    Lines are keyed by path, so recording the same path twice replaces the first line: the last
-    word on a field wins, which is what happens when a measure overwrites an inventory value.
-    :meth:`finalize` then fills in every inventory leaf that no line covers, so the report is
-    complete by construction rather than by discipline.
+    Lines are appended in the order the translator visits the request, and a second line for a
+    path replaces the first, because the last word on a field is what happened to it: a measure
+    that overwrites a request value writes the line that describes the value simulated.
+
+    Args:
+        request_schema_version: The schema version the request declared.
+        country: The dwelling's country, which decides whether the header warns about the
+            legacy factor tables.
     """
 
-    #: The path prefix under which per-measure lines are recorded, indexed by the order in which
-    #: measures were first reported.
-    MEASURE_PATH_PREFIX: ClassVar[str] = "package.measures"
+    #: The file this report is written to.
+    FILE_NAME: ClassVar[str] = "mapping_report.json"
 
-    #: The note :meth:`finalize` gives a leaf that no measure and no binding touched.
-    UNTOUCHED_NOTE: ClassVar[str] = "no measure changed this field"
+    #: What the header says about the legacy per-year fuel-price, emission-factor and device-cost
+    #: tables of ``hisim/components/configuration.py``. ``reviewed`` is a country with sourced
+    #: rows; ``placeholder`` is one registered with the sentinel ``-1e9`` in every number, which
+    #: is why the cost and CO2 entries of that run's ``all_kpis.json`` read as visible nonsense.
+    #: The payload publishes none of those leaves -- its operational CO2 comes from the lifecycle
+    #: cost engine, which has its own per-country data files -- but a reader of the raw KPI
+    #: document needs to know before they read one.
+    LEGACY_REVIEWED: ClassVar[str] = "reviewed"
+    LEGACY_PLACEHOLDER: ClassVar[str] = "placeholder"
 
-    def __init__(self) -> None:
-        """Create an empty report."""
-        self._entries: Dict[str, ReportEntry] = {}
-        self._measure_order: List[str] = []
+    def __init__(self, request_schema_version: int = 1, country: str = "DE") -> None:
+        """Create an empty report for one request."""
+        self._schema_version = request_schema_version
+        self._country = country
+        self._fields: Dict[str, FieldLine] = {}
+        self._measures: List[Dict[str, Any]] = []
+        self.base_file: Optional[str] = None
+        self.energy_system_file: Optional[str] = None
 
-    def add(self, path: str, status: ReportStatus, note: str = "", rule: Optional[str] = None) -> None:
-        """Record (or replace) the line for *path*.
-
-        Args:
-            path: The dotted path the line is about.
-            status: One of :class:`ReportStatus`.
-            note: The human-readable sentence.
-            rule: The law, table or formula that produced the value, if any.
-        """
-        self._entries[path] = ReportEntry(path=path, status=status, note=note, rule=rule)
-
-    def used(self, path: str, note: str = "", rule: Optional[str] = None) -> None:
-        """Record *path* as taken from the request unchanged."""
-        self.add(path, ReportStatus.USED, note, rule)
-
-    def approximated(self, path: str, note: str = "", rule: Optional[str] = None) -> None:
-        """Record *path* as represented only approximately, with *rule* naming what produced it."""
-        self.add(path, ReportStatus.APPROXIMATED, note, rule)
-
-    def defaulted(self, path: str, note: str = "", rule: Optional[str] = None) -> None:
-        """Record *path* as absent from the request and replaced by a default."""
-        self.add(path, ReportStatus.DEFAULTED, note, rule)
-
-    def ignored(self, path: str, note: str = "", rule: Optional[str] = None) -> None:
-        """Record *path* as accepted but not used by the translation."""
-        self.add(path, ReportStatus.IGNORED, note, rule)
-
-    def non_simulation(self, path: str, note: str = "", rule: Optional[str] = None) -> None:
-        """Record *path* as accepted while changing nothing, because HiSim has no model for it."""
-        self.add(path, ReportStatus.NON_SIMULATION, note, rule)
-
-    def measure(
+    def field(
         self,
-        measure_id: str,
+        path: str,
         status: ReportStatus,
-        note: str = "",
-        rule: Optional[str] = None,
-        index: Optional[int] = None,
+        target: Optional[str] = None,
+        value: Any = None,
+        note: Optional[str] = None,
     ) -> None:
-        """Record the line for one package measure.
+        """Record (or replace) the line for one request leaf.
 
         Args:
-            measure_id: The catalogue measure id, e.g. ``EXTERNAL_INSULATION``.
-            status: One of :class:`ReportStatus`.
-            note: What the measure did, or why it did nothing.
-            rule: The law, table or formula behind the number the measure produced.
-            index: The measure's position in the package. Omit it to use the position at which
-                this measure was first reported, which is the package order when the application
-                walks the package once.
+            path: The leaf's dotted path.
+            status: What the translator did with it.
+            target: The HiSim component and field it reached, when it reached one.
+            value: The value written, which a default always names.
+            note: The sentence a person reads.
         """
-        position = self.measure_index(measure_id) if index is None else index
-        path = f"{self.MEASURE_PATH_PREFIX}[{position}]"
-        self._entries[path] = ReportEntry(
-            path=path, status=status, note=note, rule=rule, measure_id=measure_id
+        self._fields[path] = FieldLine(path=path, status=status, target=target, value=value, note=note)
+
+    def used(self, path: str, target: str, value: Any = None, note: Optional[str] = None) -> None:
+        """Record a leaf that was written to a HiSim target exactly as the request stated it."""
+        self.field(path, ReportStatus.USED, target=target, value=value, note=note)
+
+    def approximated(self, path: str, note: str, target: Optional[str] = None, value: Any = None) -> None:
+        """Record a leaf that was represented by something close but not equal."""
+        self.field(path, ReportStatus.APPROXIMATED, target=target, value=value, note=note)
+
+    def defaulted(self, path: str, value: Any, note: str, target: Optional[str] = None) -> None:
+        """Record a leaf the request did not carry, with the value the translator used for it."""
+        self.field(path, ReportStatus.DEFAULTED, target=target, value=value, note=note)
+
+    def not_implemented_yet(self, path: str, note: str, value: Any = None) -> None:
+        """Record a leaf that was accepted and acted on by nothing, with its whitelist note."""
+        self.field(path, ReportStatus.NOT_IMPLEMENTED_YET, value=value, note=note)
+
+    def has(self, path: str) -> bool:
+        """Return whether a line has already been recorded for one path."""
+        return path in self._fields
+
+    def line(self, path: str) -> Optional[FieldLine]:
+        """Return the line recorded for one path, or ``None``."""
+        return self._fields.get(path)
+
+    def lines(self) -> Tuple[FieldLine, ...]:
+        """Return every field line, sorted by path."""
+        return tuple(sorted(self._fields.values(), key=lambda entry: entry.path))
+
+    def set_measures(self, measures: List[Dict[str, Any]]) -> None:
+        """Store the measure half of the report, as :mod:`hisim.renovisor.apply` produced it."""
+        self._measures = list(measures)
+
+    def measures(self) -> Tuple[Dict[str, Any], ...]:
+        """Return the measure entries, in package order."""
+        return tuple(self._measures)
+
+    def to_json(self) -> Dict[str, Any]:
+        """Return the whole document, ready to be written."""
+        return {
+            "translator": {
+                "version": TRANSLATOR_VERSION,
+                "commit": HiSimCommit.of(),
+                "request_schema_version": self._schema_version,
+                "hisim_commit": HiSimCommit.of(),
+                "legacy_factors": self.legacy_factors(),
+            },
+            "base_file": self.base_file,
+            "energy_system_file": self.energy_system_file,
+            "fields": [line.to_json() for line in self.lines()],
+            "measures": list(self._measures),
+        }
+
+    def legacy_factors(self) -> str:
+        """Return whether this country's legacy factor tables are data or sentinel placeholders.
+
+        Returns:
+            ``"reviewed"`` or ``"placeholder"``. Ireland is a placeholder until sourced Irish
+            fuel prices, emission factors and device costs exist (finding F2), so every legacy
+            cost and CO2 entry of an Irish run's ``all_kpis.json`` is ``-1e9``-scaled on
+            purpose. Nothing the payload publishes reads one of them.
+        """
+        from hisim.components.configuration import PlaceholderCountryFactors
+
+        return (
+            self.LEGACY_PLACEHOLDER
+            if PlaceholderCountryFactors.is_placeholder(self._country)
+            else self.LEGACY_REVIEWED
         )
 
-    def measure_index(self, measure_id: str) -> int:
-        """Return the position this measure holds in the report, registering it if it is new.
+    def assert_complete(self, document: Mapping[str, Any]) -> None:
+        """Raise when the report does not account for exactly the leaves the request carries.
 
         Args:
-            measure_id: The catalogue measure id.
+            document: The validated request, as it arrived.
 
-        Returns:
-            The zero-based position, assigned in order of first appearance.
+        Raises:
+            ReportError: Naming the leaves with no line. A line for a path the request does not
+                carry is allowed and expected -- that is what a ``defaulted`` line is -- so only
+                the missing direction is a fault.
         """
-        if measure_id not in self._measure_order:
-            self._measure_order.append(measure_id)
-        return self._measure_order.index(measure_id)
-
-    def has_measure(self, measure_id: str) -> bool:
-        """Return whether a line for *measure_id* has already been recorded, wherever it sits.
-
-        Lets a caller that does not know a measure's position ask the question anyway; a caller
-        that does know it asks :meth:`has_measure_line`, which cannot be confused by two measures
-        whose lines were recorded out of order.
-        """
-        return any(entry.measure_id == measure_id for entry in self._entries.values())
-
-    def has_measure_line(self, index: int) -> bool:
-        """Return whether a line has already been recorded for the package entry at *index*.
-
-        Args:
-            index: The measure's position in the package.
-
-        Returns:
-            ``True`` when something -- a registry function, usually -- already said what this
-            entry did, so that a derived line does not overwrite a more precise one.
-        """
-        return f"{self.MEASURE_PATH_PREFIX}[{index}]" in self._entries
-
-    def finalize(self, inventory_dict: Dict[str, Any]) -> None:
-        """Add an ``IGNORED`` line for every inventory leaf no line covers yet.
-
-        Args:
-            inventory_dict: The post-measure inventory as plain dictionaries and lists.
-        """
-        for leaf_path in self._iter_leaf_paths(inventory_dict):
-            if not self._is_covered(leaf_path):
-                self.add(leaf_path, ReportStatus.IGNORED, self.UNTOUCHED_NOTE)
-
-    def to_list(self) -> List[Dict[str, Any]]:
-        """Return the lines as JSON-ready dictionaries, sorted by path.
-
-        Returns:
-            One dictionary per line with ``path``, ``status`` and ``note``, plus ``rule`` and
-            ``measure_id`` where the line carries them.
-        """
-        rows: List[Dict[str, Any]] = []
-        for entry in sorted(self._entries.values(), key=lambda item: item.path):
-            row: Dict[str, Any] = {"path": entry.path, "status": entry.status.value, "note": entry.note}
-            if entry.rule is not None:
-                row["rule"] = entry.rule
-            if entry.measure_id is not None:
-                row["measure_id"] = entry.measure_id
-            rows.append(row)
-        return rows
-
-    def _is_covered(self, leaf_path: str) -> bool:
-        """Return whether *leaf_path* equals, or lies under, an already recorded path."""
-        if leaf_path in self._entries:
-            return True
-        return any(
-            leaf_path.startswith(recorded) and leaf_path[len(recorded)] in ".["
-            for recorded in self._entries
-        )
+        missing = [path for path in self.request_leaves(document) if not self._covers(path)]
+        if missing:
+            raise ReportError(
+                "the mapping report does not account for " + ", ".join(sorted(missing))
+            )
 
     @classmethod
-    def _iter_leaf_paths(cls, value: Any, prefix: str = "") -> Iterator[str]:
-        """Yield the dotted, index-bearing path of every leaf in a nested JSON-like structure."""
-        if isinstance(value, dict):
+    def request_leaves(cls, document: Mapping[str, Any]) -> Tuple[str, ...]:
+        """Return the dotted path of every leaf of ``schema_version``, ``location`` and ``house``.
+
+        The measures are not leaves here: they are accounted for one entry each under
+        ``measures``, which is a different invariant and a different test.
+        """
+        leaves: List[str] = []
+        for key in ("schema_version", "location", "house"):
+            if key in document:
+                leaves.extend(cls._leaves(document[key], key))
+        return tuple(leaves)
+
+    @classmethod
+    def _leaves(cls, value: Any, prefix: str) -> Iterator[str]:
+        """Yield the dotted path of every leaf of a nested JSON-like structure."""
+        if isinstance(value, Mapping):
             for key, child in value.items():
-                child_prefix = f"{prefix}.{key}" if prefix else str(key)
-                yield from cls._iter_leaf_paths(child, child_prefix)
-        elif isinstance(value, list) and any(isinstance(item, (dict, list)) for item in value):
+                yield from cls._leaves(child, f"{prefix}.{key}")
+        elif isinstance(value, list):
             for index, item in enumerate(value):
-                yield from cls._iter_leaf_paths(item, f"{prefix}[{index}]")
-        elif prefix:
+                yield from cls._leaves(item, f"{prefix}[{index}]")
+        else:
             yield prefix
+
+    def _covers(self, leaf: str) -> bool:
+        """Return whether a leaf has a line of its own or lies under a line for its block."""
+        if leaf in self._fields:
+            return True
+        return any(
+            leaf.startswith(recorded) and leaf[len(recorded)] in ".["
+            for recorded in self._fields
+        )

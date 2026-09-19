@@ -20,8 +20,9 @@ from typing import Any, Dict
 import pytest
 
 from hisim.renovisor.contract import ContractFiles
-from hisim.renovisor.effects import AddThermalResistance
+from hisim.renovisor.apply import AddedLayer
 from hisim.renovisor.kpis import (
+    LifecycleCo2,
     ContractExamples,
     KpiBuilder,
     KpiDocument,
@@ -30,7 +31,7 @@ from hisim.renovisor.kpis import (
     KpiSources,
 )
 from hisim.renovisor.layers import ElementAreas, EnvelopeLayers
-from hisim.renovisor.materials import InsulationMaterials
+from hisim.renovisor.request import Material
 from hisim.renovisor.provenance import Period
 from hisim.renovisor.vocabulary import Provenance, ThermalElement
 
@@ -76,7 +77,7 @@ def a_full_year() -> Period:
     return Period.from_dates(datetime.datetime(2021, 1, 1), datetime.datetime(2022, 1, 1))
 
 
-def layers_of(*additions: AddThermalResistance) -> EnvelopeLayers:
+def layers_of(*additions: AddedLayer) -> EnvelopeLayers:
     """Return the layers of a package, with one fixed area per element.
 
     Args:
@@ -92,15 +93,26 @@ def layers_of(*additions: AddThermalResistance) -> EnvelopeLayers:
     return EnvelopeLayers.of(additions, areas)
 
 
-def build(document: Any, period: Period, layers: EnvelopeLayers) -> Any:
-    """Return the KPI block for one set of inputs, with the committed material table."""
+def a_material(footprint: float = 21.207108) -> Material:
+    """Return the mockup's own material, which is what a request carries under rule 5."""
+    return Material(
+        asp_id="polystyrene_eps_rigid_board",
+        thermal_conductivity_w_mk=0.0355,
+        heat_capacity_j_kgk=1400.0,
+        density_kg_m3=20.5,
+        co2_footprint_a1_a3_c3_c4_kg_m2=footprint,
+        lifespan_years=57.5,
+    )
+
+
+def build(document: Any, period: Period, layers: EnvelopeLayers, co2: Any = None) -> Any:
+    """Return the KPI block for one set of inputs."""
     return KpiBuilder(
         document=document,
         period=period,
         layers=layers,
-        materials=InsulationMaterials.load(),
-        emission_factor_country="DE",
-        dwelling_country="DE",
+        lifecycle_co2=co2,
+        country="IE",
     ).build()
 
 
@@ -125,11 +137,11 @@ def test_an_annual_figure_from_a_short_run_is_scaled_and_partial() -> None:
 
 def test_an_annual_figure_from_a_full_year_is_simulated_and_unscaled() -> None:
     """Nothing is extrapolated when a whole year was simulated, so nothing is labelled PARTIAL."""
-    document = document_of({KpiSources.EMISSIONS_NAME: 3000.0})
+    document = document_of({KpiSources.ENERGY_DEMAND_NAME: 3000.0})
 
     block = build(document, a_full_year(), layers_of())
 
-    value = block.values[KpiField.EMISSIONS.value]
+    value = block.values[KpiField.ENERGY_DEMAND.value]
     assert value["provenance"] == Provenance.SIMULATED.value
     assert value["value"] == pytest.approx(3000.0, rel=1e-2)
 
@@ -205,24 +217,44 @@ def test_the_energy_label_is_a_labelled_null() -> None:
     assert value["provenance"] == Provenance.MOCKED.value
 
 
-def test_embodied_carbon_is_the_material_footprint_times_the_installed_volume() -> None:
-    """Decision Q22: kg CO2 per m3 from the material table times thickness times area."""
-    material = InsulationMaterials.load().by_asp_id("polystyrene_eps_rigid_board")
-    assert material.co2_footprint_in_kg_per_m3 is not None
+def test_embodied_carbon_is_the_request_materials_footprint_times_the_element_area() -> None:
+    """Decision Q22 under rule 5: the request's own kg CO2 per m2 times the element's area."""
+    material = a_material()
     layers = layers_of(
-        AddThermalResistance(
+        AddedLayer(
             element=ThermalElement.FACADE,
-            material_asp_id="polystyrene_eps_rigid_board",
+            placement="external_wall_external",
             thickness_in_mm=100,
-            measure_id="EXTERNAL_INSULATION",
+            material=material,
+            measure_id="external_insulation",
         )
     )
 
     block = build(document_of({}), one_day(), layers)
 
     value = block.values[KpiField.EMBODIED_CO2.value]
-    assert value["value"] == pytest.approx(material.co2_footprint_in_kg_per_m3 * 0.1 * 100.0)
+    assert material.co2_footprint_a1_a3_c3_c4_kg_m2 is not None
+    assert value["value"] == pytest.approx(material.co2_footprint_a1_a3_c3_c4_kg_m2 * 100.0)
     assert value["provenance"] == Provenance.SIMULATED.value
+
+
+def test_embodied_carbon_is_absent_when_the_request_states_no_footprint() -> None:
+    """A material the frontend sent without a CO2 column makes the figure absent, not zero."""
+    layers = layers_of(
+        AddedLayer(
+            element=ThermalElement.FACADE,
+            placement="external_wall_external",
+            thickness_in_mm=100,
+            material=Material(asp_id="pir", thermal_conductivity_w_mk=0.022),
+            measure_id="external_insulation",
+        )
+    )
+
+    block = build(document_of({}), one_day(), layers)
+
+    assert KpiField.EMBODIED_CO2.value not in block.values
+    reasons = {entry.field: entry.reason for entry in block.missing}
+    assert "co2_footprint_a1_a3_c3_c4_kg_m2" in reasons[f"kpis.{KpiField.EMBODIED_CO2.value}"]
 
 
 def test_a_package_without_an_envelope_measure_has_no_embodied_carbon_field() -> None:
@@ -238,11 +270,12 @@ def test_a_layer_with_no_element_area_makes_the_whole_figure_missing() -> None:
     areas = ElementAreas(areas={}, sources={})
     layers = EnvelopeLayers.of(
         (
-            AddThermalResistance(
+            AddedLayer(
                 element=ThermalElement.ROOF,
-                material_asp_id="wood_fiber_rigid_board",
+                placement="top_floor_ceiling",
                 thickness_in_mm=160,
-                measure_id="ROLLED_OUT_ATTIC_INSULATION",
+                material=a_material(),
+                measure_id="rolled_out_attic_insulation",
             ),
         ),
         areas,
@@ -295,24 +328,38 @@ def test_the_map_pane_describes_every_kpi_field() -> None:
     assert described == {field.value for field in KpiField}
 
 
-def test_emissions_stay_partial_when_another_countrys_grid_factors_were_used() -> None:
-    """Decision Q21's own definition: a real computation over an unreviewed input is PARTIAL.
+def test_emissions_come_from_the_cost_engine_with_the_dwellings_own_factors() -> None:
+    """The legacy CO2 KPI is not read: its factor table has rows for DE and AT only.
 
-    HiSim's legacy emission-factor table has rows for ``DE`` and ``AT`` only, so an Irish dwelling's
-    operational CO2 is computed with a German grid. That is an honest number about the wrong grid,
-    and the label has to say so even when a whole year was simulated.
+    The cost engine prices and weighs the run against ``energy_prices_<country>.json`` for the
+    country the economic parameters name, so an Irish dwelling's operational carbon is Ireland's
+    grid. Over a whole year the figure is a measurement of the run and therefore ``SIMULATED``.
     """
-    document = document_of({KpiSources.EMISSIONS_NAME: 3000.0})
+    co2 = LifecycleCo2(
+        {
+            "operational_co2_by_year_in_kg": [0.0, 2500.0, 2500.0],
+            "operational_co2_by_carrier_in_kg": {"ELECTRICITY": 50000.0},
+            "emission_factor_by_carrier_in_kg_per_kwh": {"ELECTRICITY": 0.28},
+        }
+    )
 
-    block = KpiBuilder(
-        document=document,
-        period=a_full_year(),
-        layers=layers_of(),
-        materials=InsulationMaterials.load(),
-        emission_factor_country="DE",
-        dwelling_country="IE",
-    ).build()
+    block = build(document_of({}), a_full_year(), layers_of(), co2)
 
     value = block.values[KpiField.EMISSIONS.value]
-    assert value["provenance"] == Provenance.PARTIAL.value
+    assert value["value"] == pytest.approx(2500.0)
+    assert value["provenance"] == Provenance.SIMULATED.value
     assert "IE" in value["source"]
+    assert "ELECTRICITY at 0.28 kg/kWh" in value["source"]
+
+
+def test_emissions_are_partial_over_a_part_year_and_absent_without_the_engine() -> None:
+    """A part-year figure is the engine's extrapolation; no engine export means no figure."""
+    co2 = LifecycleCo2({"operational_co2_by_year_in_kg": [0.0, 2500.0]})
+
+    partial = build(document_of({}), one_day(), layers_of(), co2)
+    assert partial.values[KpiField.EMISSIONS.value]["provenance"] == Provenance.PARTIAL.value
+
+    absent = build(document_of({}), a_full_year(), layers_of(), None)
+    assert KpiField.EMISSIONS.value not in absent.values
+    reasons = {entry.field: entry.reason for entry in absent.missing}
+    assert "lifecycle_costs.json" in reasons[f"kpis.{KpiField.EMISSIONS.value}"]

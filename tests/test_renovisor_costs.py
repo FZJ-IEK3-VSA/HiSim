@@ -26,16 +26,16 @@ from hisim.renovisor.costs import (
     EnvelopeMaterialCost,
     SubsidyCatalogue,
 )
-from hisim.renovisor.effects import AddThermalResistance
+from hisim.renovisor.apply import AddedLayer
 from hisim.renovisor.layers import ElementAreas, EnvelopeLayers
-from hisim.renovisor.materials import InsulationMaterials
+from hisim.renovisor.request import Material
 from hisim.renovisor.provenance import Range
 from hisim.renovisor.vocabulary import Provenance, ThermalElement
 
 pytestmark = pytest.mark.base
 
 
-def layers_of(*additions: AddThermalResistance, area_in_m2: float = 100.0) -> EnvelopeLayers:
+def layers_of(*additions: AddedLayer, area_in_m2: float = 100.0) -> EnvelopeLayers:
     """Return the layers of a package with one fixed area per element.
 
     Args:
@@ -55,11 +55,14 @@ def layers_of(*additions: AddThermalResistance, area_in_m2: float = 100.0) -> En
 def one_layer() -> EnvelopeLayers:
     """Return a single 100 mm EPS layer on a 100 m2 facade."""
     return layers_of(
-        AddThermalResistance(
+        AddedLayer(
             element=ThermalElement.FACADE,
-            material_asp_id="polystyrene_eps_rigid_board",
+            placement="external_wall_external",
             thickness_in_mm=100,
-            measure_id="EXTERNAL_INSULATION",
+            material=Material(
+                asp_id="polystyrene_eps_rigid_board", thermal_conductivity_w_mk=0.0355
+            ),
+            measure_id="external_insulation",
         )
     )
 
@@ -131,7 +134,7 @@ def build(
     catalogue: Optional[Path] = None,
     country: str = "IE",
 ) -> Any:
-    """Return the cost block for one set of inputs, with the committed material table.
+    """Return the cost block for one set of inputs.
 
     The ten-year re-evaluation is deliberately left out by passing no result directory to the
     builder: it runs the real cost engine, which belongs in the end-to-end test rather than in a
@@ -140,35 +143,33 @@ def build(
     return CostBuilder(
         documents=CostDocuments.load(results) if results is not None else None,
         layers=layers,
-        materials=InsulationMaterials.load(),
         country=country,
         results_directory=None,
         subsidy_catalogue_path=catalogue,
     ).build()
 
 
-def test_the_envelope_cost_is_the_material_price_times_the_installed_volume() -> None:
-    """Decision Q8/Q9: euro per cubic metre from the database, times thickness, times area."""
-    prices = InsulationMaterials.load().by_asp_id("polystyrene_eps_rigid_board")
-    band = prices.investment_cost_in_euro_per_m3["IE"]
-    assert band.low is not None and band.high is not None
+def test_the_envelope_cost_is_absent_because_the_request_carries_no_price() -> None:
+    """Rule 5 moved the material into the request, and a request carries physics, not prices.
 
-    total, note = EnvelopeMaterialCost(one_layer(), InsulationMaterials.load(), "IE").total()
-
-    assert total is not None
-    volume = 0.1 * 100.0
-    assert total.low == pytest.approx(band.low * volume)
-    assert total.high == pytest.approx(band.high * volume)
-    assert total.best_estimate == pytest.approx(0.5 * (band.low + band.high) * volume)
-    assert "material only" in note
-
-
-def test_the_envelope_cost_needs_a_price_column_for_the_country() -> None:
-    """A country the database has no price column for makes the whole envelope figure absent."""
-    total, note = EnvelopeMaterialCost(one_layer(), InsulationMaterials.load(), "XX").total()
+    Decisions Q8/Q9 priced an envelope measure from the materials database's total-cost column.
+    The request now carries the material itself -- conductivity, density, CO2 -- and no price at
+    all, so the figure is absent with the reason published rather than filled with a number
+    nobody owns.
+    """
+    total, note = EnvelopeMaterialCost(one_layer()).total()
 
     assert total is None
-    assert "XX" in note
+    assert "no material price" in note
+
+
+def test_the_absent_envelope_cost_is_listed_under_missing(tmp_path: Path) -> None:
+    """Decision R8: a field with no source is named in ``missing``, never silently dropped."""
+    block = build(engine_exports(tmp_path), one_layer())
+
+    reasons = {entry.field: entry.reason for entry in block.missing}
+    assert "costs.investment_breakdown.envelope_material" in reasons
+    assert "no material price" in reasons["costs.investment_breakdown.envelope_material"]
 
 
 def test_the_engine_band_becomes_the_contracts_own_slot_names(tmp_path: Path) -> None:
@@ -188,20 +189,25 @@ def test_the_monthly_cost_is_the_equivalent_annual_cost_over_twelve(tmp_path: Pa
     assert value["best_estimate"] == pytest.approx(24.0 / 12.0)
 
 
-def test_the_investment_is_the_devices_plus_the_envelope_with_the_split_visible(
+def test_the_investment_is_the_devices_alone_and_says_what_it_leaves_out(
     tmp_path: Path,
 ) -> None:
-    """Decision Q23: one total, and a breakdown that says which half came from where."""
+    """Decision Q23 as rule 5 left it: one total, and a source naming the half that is absent.
+
+    The devices come from the engine. The envelope half has no price anywhere in the
+    translator's inputs, so it is not in the breakdown, the total is the devices alone, and the
+    total's ``source`` says so rather than letting a reader take it for the whole investment.
+    """
     block = build(engine_exports(tmp_path), one_layer())
 
     breakdown = block.values[CostField.INVESTMENT_BREAKDOWN.value]
     devices = Range(**breakdown[CostBuilder.DEVICES_KEY]["value"])
-    envelope = Range(**breakdown[CostBuilder.ENVELOPE_KEY]["value"])
     total = Range(**block.values[CostField.INVESTMENT.value]["value"])
 
+    assert CostBuilder.ENVELOPE_KEY not in breakdown
     assert devices == Range(low=1000.0, best_estimate=2000.0, high=3000.0)
-    assert total.low == pytest.approx(devices.low + envelope.low)
-    assert total.high == pytest.approx(devices.high + envelope.high)
+    assert total == devices
+    assert "no envelope material cost" in block.values[CostField.INVESTMENT.value]["source"]
 
 
 def test_the_year_one_bills_come_from_the_timeline(tmp_path: Path) -> None:

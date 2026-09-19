@@ -1,32 +1,26 @@
 """The command-line entry point of the RenoVisor translation layer.
 
-The interface is files in, files out, and nothing else: a container invocation receives a home
-inventory, a renovation package and the calculation parameters as files in one directory, runs one
-simulation, and writes its results, its translation report and, on failure, its errors into
-another. Nothing is posted anywhere -- the service that started the container collects the files::
+Four commands, files in and files out, and nothing posted anywhere -- the service that started
+the container collects the files::
 
-    python -m hisim.renovisor calculate INPUT_DIR OUTPUT_DIR [--cache-dir DIR] [--base-files DIR]
+    python -m hisim.renovisor run          <request.{json,yaml}> --out DIR [--period ...]
+    python -m hisim.renovisor translate    <request> --out DIR
+    python -m hisim.renovisor validate     <request>
+    python -m hisim.renovisor capabilities --out FILE [--measures measures.yaml]
+    python -m hisim.renovisor map          [--out translation_map.html]
 
-    INPUT_DIR/                         OUTPUT_DIR/
-      home_inventory.json                parametrised.energy_system.yaml   the file that ran
-      package.json                       realized.energy_system.yaml       what was built
-      simulation.yaml                    realized.audit.yaml               where each number came from
-                                         component_connections.json        every wire that was made
-                                         translation_report.json           the fate of every field
-                                         result.json                       the KPIs and costs, with provenance
-                                         calculation.json                  the outcome
-                                         errors.json                       only when it went wrong
-                                         results/                          the simulation's output
+``run`` is what the backend calls. ``translate`` stops after the energy-system file and the
+mapping report, which is what the verification harness and every probe use. ``validate`` prints
+the problems JSON and exits without touching the disk. ``capabilities`` writes the document the
+backend serves as ``GET /measures`` for this image. ``map`` regenerates the committed HTML page
+that shows the whole translation at a glance.
 
-Exit codes: 0 finished, 2 the request was malformed, 3 the request was well formed and cannot be
-simulated, 4 the calculation failed after being accepted. ``--cache-dir`` is where the occupancy
-and weather caches live, which is the one location outside the output directory a calculation
-writes to (decision Q25); ``--base-files`` is where the recorded energy-system files live, and
-defaults to this repository's ``energy_systems/``.
+There is no ``--variant``: the baseline is a request with ``measures: []``.
 
-This module is a thin layer over :class:`hisim.renovisor.calculate.CalculationRunner`: it parses
-the command line and returns an exit code, and everything that could fail happens inside the
-runner, which turns failure into files rather than into a traceback on standard error.
+Exit codes are the translator's, not argparse's: ``0`` finished, ``2`` the request is not a
+request, ``3`` the translator could not map something nobody listed, ``5`` HiSim refused the
+file or the simulation raised. The last line on standard error for ``3`` and ``5`` is one line,
+because the backend shows it as the job's error message.
 """
 
 import argparse
@@ -34,70 +28,191 @@ import sys
 from pathlib import Path
 from typing import Any, ClassVar, List, Optional
 
-from hisim.renovisor.calculate import CalculationRunner, ExitCode
+from hisim.renovisor.run import Calculation
+from hisim.renovisor.simulation import Period, PeriodNames
 
 
-class CalculateCommand:
-    """The ``calculate`` subcommand: one input directory in, one output directory out.
-
-    Kept as a class so that the argument names are stated once and the help text lives beside the
-    runner's own description of what each location is for.
-    """
+class RunCommand:
+    """The ``run`` subcommand: one request in, one directory of results out."""
 
     #: The subcommand's name on the command line.
-    NAME: ClassVar[str] = "calculate"
+    NAME: ClassVar[str] = "run"
 
     #: What the command does, printed by ``--help``.
-    HELP: ClassVar[str] = "translate one inventory and package into a simulation and write its results"
+    HELP: ClassVar[str] = "validate, translate and simulate one calculation request"
 
     @classmethod
     def add_to(cls, subparsers: Any) -> None:
-        """Declare the subcommand and its arguments on an argument parser.
-
-        Args:
-            subparsers: The subparser collection of the top-level parser, as
-                ``ArgumentParser.add_subparsers`` returns it.
-        """
+        """Declare the subcommand and its arguments on an argument parser."""
         parser = subparsers.add_parser(cls.NAME, help=cls.HELP)
+        _add_request_argument(parser)
+        _add_out_argument(parser, "directory to write every output file into")
         parser.add_argument(
-            "input_directory",
-            metavar="INPUT_DIR",
-            help="directory holding home_inventory.json, package.json and simulation.yaml",
+            "--period",
+            default=PeriodNames.DEFAULT,
+            choices=list(PeriodNames.CHOICES),
+            help="how long the simulation covers (default: %(default)s)",
         )
-        parser.add_argument(
-            "output_directory",
-            metavar="OUTPUT_DIR",
-            help="directory to write every output file into; nothing is written anywhere else",
+        _add_shared_arguments(parser)
+        parser.set_defaults(handler=cls.run)
+
+    @classmethod
+    def run(cls, arguments: argparse.Namespace) -> int:
+        """Run one calculation and return its exit code."""
+        return int(_calculation(arguments).run())
+
+
+class TranslateCommand:
+    """The ``translate`` subcommand: the energy-system file and the report, without a simulation."""
+
+    #: The subcommand's name on the command line.
+    NAME: ClassVar[str] = "translate"
+
+    #: What the command does, printed by ``--help``.
+    HELP: ClassVar[str] = "write the energy-system file and the mapping report, and stop"
+
+    @classmethod
+    def add_to(cls, subparsers: Any) -> None:
+        """Declare the subcommand and its arguments on an argument parser."""
+        parser = subparsers.add_parser(cls.NAME, help=cls.HELP)
+        _add_request_argument(parser)
+        _add_out_argument(parser, "directory to write the file and the report into")
+        _add_shared_arguments(parser)
+        parser.set_defaults(handler=cls.run)
+
+    @classmethod
+    def run(cls, arguments: argparse.Namespace) -> int:
+        """Translate one request and return the exit code."""
+        return int(_calculation(arguments).translate_only())
+
+
+class ValidateCommand:
+    """The ``validate`` subcommand: say whether a request is one, and print every problem."""
+
+    #: The subcommand's name on the command line.
+    NAME: ClassVar[str] = "validate"
+
+    #: What the command does, printed by ``--help``.
+    HELP: ClassVar[str] = "print the problems of one calculation request as JSON"
+
+    @classmethod
+    def add_to(cls, subparsers: Any) -> None:
+        """Declare the subcommand and its arguments on an argument parser."""
+        parser = subparsers.add_parser(cls.NAME, help=cls.HELP)
+        _add_request_argument(parser)
+        parser.set_defaults(handler=cls.run)
+
+    @classmethod
+    def run(cls, arguments: argparse.Namespace) -> int:
+        """Validate one request and return ``0`` or ``2``."""
+        return int(
+            Calculation(
+                request_path=Path(arguments.request),
+                output_directory=Path("."),
+            ).validate()
         )
+
+
+class CapabilitiesCommand:
+    """The ``capabilities`` subcommand: the document the backend serves per image."""
+
+    #: The subcommand's name on the command line.
+    NAME: ClassVar[str] = "capabilities"
+
+    #: What the command does, printed by ``--help``.
+    HELP: ClassVar[str] = "write the capability document of this translator build"
+
+    @classmethod
+    def add_to(cls, subparsers: Any) -> None:
+        """Declare the subcommand and its arguments on an argument parser."""
+        parser = subparsers.add_parser(cls.NAME, help=cls.HELP)
+        parser.add_argument("--out", required=True, metavar="FILE", help="where to write the JSON")
         parser.add_argument(
-            "--cache-dir",
+            "--measures",
             default=None,
-            help="directory for the occupancy and weather caches, shared between calculations",
+            help="a measures.yaml to check the frozen table against (default: the vendored copy)",
         )
         parser.add_argument(
-            "--base-files",
+            "--generated-at",
             default=None,
-            help="directory holding the recorded energy-system files (default: energy_systems/)",
+            help="override the document's timestamp, so that a test can compare two runs",
         )
         parser.set_defaults(handler=cls.run)
 
     @classmethod
     def run(cls, arguments: argparse.Namespace) -> int:
-        """Run one calculation.
+        """Build the capability document and write it."""
+        from hisim.renovisor.capabilities import CapabilityDocument
 
-        Args:
-            arguments: The parsed command line.
+        document = CapabilityDocument.build(
+            measures_path=Path(arguments.measures) if arguments.measures else None,
+            generated_at=arguments.generated_at,
+        )
+        return int(document.write(Path(arguments.out)))
 
-        Returns:
-            The exit code of the outcome: 0 finished, 2 invalid, 3 refused, 4 failed.
-        """
-        exit_code: ExitCode = CalculationRunner(
-            input_directory=Path(arguments.input_directory),
-            output_directory=Path(arguments.output_directory),
-            cache_directory=Path(arguments.cache_dir) if arguments.cache_dir else None,
-            base_files_directory=Path(arguments.base_files) if arguments.base_files else None,
-        ).run()
-        return int(exit_code)
+
+class MapCommand:
+    """The ``map`` subcommand: regenerate the committed translation map."""
+
+    #: The subcommand's name on the command line.
+    NAME: ClassVar[str] = "map"
+
+    #: What the command does, printed by ``--help``.
+    HELP: ClassVar[str] = "regenerate roadmap/renovisor/translation_map.html"
+
+    @classmethod
+    def add_to(cls, subparsers: Any) -> None:
+        """Declare the subcommand and its arguments on an argument parser."""
+        parser = subparsers.add_parser(cls.NAME, help=cls.HELP)
+        parser.add_argument(
+            "--out",
+            default=None,
+            metavar="FILE",
+            help="where to write the page (default: the committed roadmap/renovisor page)",
+        )
+        parser.set_defaults(handler=cls.run)
+
+    @classmethod
+    def run(cls, arguments: argparse.Namespace) -> int:
+        """Render the map and write it."""
+        from hisim.renovisor.map import TranslationMap
+
+        return int(TranslationMap.write(Path(arguments.out) if arguments.out else None))
+
+
+def _add_request_argument(parser: argparse.ArgumentParser) -> None:
+    """Declare the positional request file every request-taking command has."""
+    parser.add_argument("request", metavar="REQUEST", help="the calculation request, JSON or YAML")
+
+
+def _add_out_argument(parser: argparse.ArgumentParser, help_text: str) -> None:
+    """Declare the ``--out`` directory the writing commands share."""
+    parser.add_argument("--out", required=True, metavar="DIR", help=help_text)
+
+
+def _add_shared_arguments(parser: argparse.ArgumentParser) -> None:
+    """Declare the two optional locations a container maps in."""
+    parser.add_argument(
+        "--cache-dir",
+        default=None,
+        help="directory for the occupancy and weather caches, shared between calculations",
+    )
+    parser.add_argument(
+        "--base-files",
+        default=None,
+        help="directory holding the recorded energy-system files (default: energy_systems/)",
+    )
+
+
+def _calculation(arguments: argparse.Namespace) -> Calculation:
+    """Build the calculation one command line describes."""
+    return Calculation(
+        request_path=Path(arguments.request),
+        output_directory=Path(arguments.out),
+        period=Period(getattr(arguments, "period", PeriodNames.DEFAULT)),
+        cache_directory=Path(arguments.cache_dir) if arguments.cache_dir else None,
+        base_files_directory=Path(arguments.base_files) if arguments.base_files else None,
+    )
 
 
 class RenovisorCommandLine:
@@ -107,14 +222,15 @@ class RenovisorCommandLine:
     PROGRAM: ClassVar[str] = "python -m hisim.renovisor"
 
     #: The one-line description ``--help`` prints under it.
-    DESCRIPTION: ClassVar[str] = "Translate a RenoVisor request into a HiSim simulation."
+    DESCRIPTION: ClassVar[str] = "Translate a RenoVisor calculation request into a HiSim simulation."
 
     @classmethod
     def parser(cls) -> argparse.ArgumentParser:
         """Return the argument parser with every subcommand declared on it."""
         parser = argparse.ArgumentParser(prog=cls.PROGRAM, description=cls.DESCRIPTION)
         subparsers = parser.add_subparsers(dest="command", required=True)
-        CalculateCommand.add_to(subparsers)
+        for command in (RunCommand, TranslateCommand, ValidateCommand, CapabilitiesCommand, MapCommand):
+            command.add_to(subparsers)
         return parser
 
     @classmethod
@@ -133,4 +249,4 @@ class RenovisorCommandLine:
 
 
 if __name__ == "__main__":
-    sys.exit(RenovisorCommandLine.main())
+    sys.exit(int(RenovisorCommandLine.main()))

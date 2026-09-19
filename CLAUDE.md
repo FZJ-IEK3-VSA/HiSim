@@ -122,22 +122,36 @@ hungrier, jobs near the 16 GB runner limit — into its own job summary. Nothing
 See `.github/ci-monitoring.md`; the probe never fails the job it measures.
 
 ### RenoVisor translation layer (`hisim/renovisor/`)
-Turns a RenoVisor home inventory plus a package of renovation measures into a parametrised energy-system
-file and, later, a result payload. Design and decisions: `roadmap/renovisor/requirements.md`,
-`measures_v2_requirements.md`, and the decision register in `roadmap/renovisor/challenges.md` §9;
-implementation specs under `roadmap/renovisor/implementation/`. Layers: `contract/` (vendored copy of the
-RenoVisor API contract, pinned in `PINNED.yaml`; refresh with `python -m hisim.renovisor.contract.refresh
-<checkout>`), `vocabulary.py` (closed enums in HiSim spelling), `catalogue.py` (the measure catalogue with
-id derivation), `options.py`, `effects.py` (closed effect set + resolver), `registry.py` (one function per
-catalogue measure; never names a HiSim component or field), `envelope.py` (U-value derivation),
-`materials.py` + `materials_import.py` (typed insulation-material table under `data/`), `inventory.py`
-(schema-validated inventory), `base_files.py` (selection over the recorded `*_building_sizer.grouped`
-energy-system files), `application.py` (apply a package), `report.py`, `reasons.py`, `tabula_ie.py`,
-`bindings.py` (which recorded component and field an inventory path reaches; no value maps, decision C3),
-`map.py` (generates the committed `roadmap/renovisor/translation_map.html`; regenerate with
-`python -m hisim.renovisor.map` whenever the catalogue, registry or bindings change, or
-`tests/test_renovisor_map.py` fails). Parametriser and the `calculate` entry point follow in step 5.
-Tests: `tests/test_renovisor_*.py` (all `base`).
+Turns one **calculation request** — a house inventory plus a list of catalogue measures — into one
+runnable energy-system file, runs it, and writes a result payload beside it. The contract it implements is
+the frontend side's `calculation-request` specification; the decision register is
+`roadmap/renovisor/challenges.md` (§9, §12 and the decisions of §13), and the implementation specs are
+under `roadmap/renovisor/implementation/`. One page of usage: `hisim/renovisor/how_to_use.md`.
+
+Commands: `python -m hisim.renovisor {run|translate|validate|capabilities|map}`. Exit codes 0 finished,
+2 the request is not a request (`problems.json` lists every fault), 3 a translator error
+(`translator_error.json`), 5 HiSim refused the file or the simulation raised.
+
+Layers: `contract/` (vendored measure catalogue, material database, request schema, worked mockup and
+capability-document schema, each pinned in `PINNED.yaml`; refresh with
+`python -m hisim.renovisor.contract.refresh <checkout> --proposals <dir>`), `vocabulary.py` (closed enums
+whose *values* are the catalogue's lowercase strings and whose *names* are HiSim's), `request.py` (the
+JSON Schema itself plus the frozen catalogue table and every semantic check), `apply.py` (one function per
+measure, over a deep copy of the house; never names a HiSim component), `envelope.py` (the U-value
+arithmetic), `tabula.py` (the archetype, every `.N.` country), `translate.py` (the house into one recorded
+`*_building_sizer.grouped` twin), `report.py` (`mapping_report.json`), `whitelist.py` +
+`not_implemented_yet.yaml` (the one list of what is accepted and not acted on), `simulation.py`, `run.py`,
+`result.py`/`kpis.py`/`costs.py`/`layers.py`/`provenance.py` (`result.json`), `capabilities.py` (the probe
+set and the document the backend serves per image), `map.py` (generates the committed
+`roadmap/renovisor/translation_map.html`; regenerate with `python -m hisim.renovisor map` whenever the
+catalogue, the registry or the bindings change, or `tests/test_renovisor_map.py` fails).
+
+The rule the package rests on: **fail loudly, except for what is written down.** A feature the translator
+has not implemented is a note in the mapping report and the calculation runs, but only if
+`not_implemented_yet.yaml` says so; anything else that cannot be mapped fails the translator's own build.
+`tests/test_renovisor_capabilities.py` keeps that list honest in both directions.
+
+Tests: `tests/test_renovisor_*.py`, all `base` except `test_renovisor_run.py` (`system_setups`).
 
 ## Adding a new component
 

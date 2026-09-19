@@ -34,7 +34,6 @@ from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.layers import EnvelopeLayers
-from hisim.renovisor.materials import InsulationMaterials
 from hisim.renovisor.provenance import MissingField, Period, ProvenancedValue
 from hisim.renovisor.vocabulary import Provenance
 
@@ -166,11 +165,15 @@ class KpiSources:
         "Total energy consumption",
     )
 
-    #: Operational CO2 of the simulated period (decision Q22). It is the sum of the grid
-    #: electricity, grid gas and other-fuel footprints plus the *equipment* footprint, and that
-    #: last term is zero unless ``COMPUTE_CAPEX`` was among the run's options -- which a RenoVisor
-    #: calculation does not ask for, so what this reads is operational carbon alone.
-    EMISSIONS_NAME: ClassVar[str] = "Total CO2 emissions for simulated period"
+    #: There is deliberately no entry here for any KPI computed from the legacy per-year tables
+    #: of ``hisim/components/configuration.py`` -- no cost KPI and, above all, not
+    #: ``"Total CO2 emissions for simulated period"``. Those tables carry reviewed rows for
+    #: Germany and Austria and sentinel placeholders (``-1e9``) for every other country HiSim
+    #: registers, Ireland included, so reading one of them would publish either the wrong
+    #: country's grid or visible nonsense. The two names below are energy and a rate, which no
+    #: price or emission factor touches; the operational CO2 comes from the lifecycle cost
+    #: engine instead (:class:`LifecycleCo2`), which prices and weighs the run against
+    #: ``energy_prices_<country>.json`` for the country the economic parameters name.
 
     #: The share of the dwelling's electricity that came from its own generation, in per cent
     #: (decision A10: a number, not a grade). A rate, so it is never scaled to a year.
@@ -184,10 +187,7 @@ class KpiSources:
             Field -> HiSim KPI name. A value read through this table is divided by the period's
             share of a year and is ``PARTIAL`` whenever that share is not one.
         """
-        return {
-            KpiField.ENERGY_DEMAND: cls.ENERGY_DEMAND_NAME,
-            KpiField.EMISSIONS: cls.EMISSIONS_NAME,
-        }
+        return {KpiField.ENERGY_DEMAND: cls.ENERGY_DEMAND_NAME}
 
     @classmethod
     def rate_names(cls) -> Dict[KpiField, str]:
@@ -293,6 +293,111 @@ class KpiBlock:
     missing: Tuple[MissingField, ...]
 
 
+class LifecycleCo2:
+    """The cost engine's parallel CO2 accounting, read out of one run's result directory.
+
+    The engine runs a mass balance alongside the money: operational carbon per carrier and per
+    year from the run's own energy flows, with the emission factors of the country the
+    ``EconomicParameters`` named. That is why the payload's operational CO2 comes from here and
+    not from the legacy KPI path, whose factor table has rows for Germany and Austria only
+    (``hisim/components/configuration.py``) and which therefore cannot answer the question for
+    an Irish dwelling at all.
+
+    Args:
+        block: The ``lifecycle_co2`` object of the perspective the payload reads.
+    """
+
+    #: The engine's primary export, in the run's result directory.
+    FILE_NAME: ClassVar[str] = "lifecycle_costs.json"
+
+    #: The perspective the payload reads: the whole system priced without subsidies, which is
+    #: the one the cost block reads too, so the two cannot describe different worlds.
+    PERSPECTIVE_ID: ClassVar[str] = "greenfield_gross"
+
+    #: The keys inside it.
+    BLOCK: ClassVar[str] = "lifecycle_co2"
+    OPERATIONAL_BY_YEAR: ClassVar[str] = "operational_co2_by_year_in_kg"
+    OPERATIONAL_BY_CARRIER: ClassVar[str] = "operational_co2_by_carrier_in_kg"
+    FACTORS: ClassVar[str] = "emission_factor_by_carrier_in_kg_per_kwh"
+
+    #: The index of the first simulated year in the by-year array; index 0 is the investment
+    #: year and is always zero.
+    FIRST_YEAR: ClassVar[int] = 1
+
+    def __init__(self, block: Mapping[str, Any]) -> None:
+        """Store the parsed ``lifecycle_co2`` object."""
+        self._block = dict(block)
+
+    @classmethod
+    def load(cls, results_directory: Path) -> Optional["LifecycleCo2"]:
+        """Read the engine's CO2 accounting out of one run's result directory.
+
+        Args:
+            results_directory: The simulation's own output directory.
+
+        Returns:
+            The accounting, or ``None`` when the run wrote no lifecycle result -- which is what
+            a run without ``COMPUTE_LIFECYCLE_COSTS`` leaves behind, and makes the operational
+            CO2 absent with the reason rather than fall back to the German factors.
+        """
+        path = results_directory / cls.FILE_NAME
+        if not path.is_file():
+            return None
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        perspective = document.get(cls.PERSPECTIVE_ID)
+        if not isinstance(perspective, Mapping):
+            return None
+        block = perspective.get(cls.BLOCK)
+        return cls(block) if isinstance(block, Mapping) else None
+
+    def annual_operational_in_kg(self) -> Optional[float]:
+        """Return the operational CO2 of one year, in kilograms.
+
+        Returns:
+            The first simulated year of the engine's by-year array, which the engine has
+            already extrapolated from the simulated period; ``None`` when the array is absent
+            or too short.
+        """
+        series = self._block.get(self.OPERATIONAL_BY_YEAR)
+        if not isinstance(series, list) or len(series) <= self.FIRST_YEAR:
+            return None
+        value = series[self.FIRST_YEAR]
+        return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+    def carriers(self) -> Dict[str, float]:
+        """Return the operational CO2 over the whole horizon, per energy carrier."""
+        raw = self._block.get(self.OPERATIONAL_BY_CARRIER)
+        if not isinstance(raw, Mapping):
+            return {}
+        return {str(name): float(value) for name, value in raw.items()}
+
+    def factors(self) -> Dict[str, float]:
+        """Return the emission factor the engine used for each carrier, in kg CO2 per kWh."""
+        raw = self._block.get(self.FACTORS)
+        if not isinstance(raw, Mapping):
+            return {}
+        return {str(name): float(value) for name, value in raw.items()}
+
+    def describe_carriers(self) -> str:
+        """Return the carriers and their factors as one phrase for the payload's ``source``.
+
+        Returns:
+            E.g. ``"carriers: ELECTRICITY at 0.28 kg/kWh"`` -- the multiplication behind the
+            mass, so a reader can check it rather than take it.
+        """
+        factors = self.factors()
+        names = sorted(self.carriers())
+        if not names:
+            return "the engine names no carrier"
+        described = ", ".join(
+            f"{name} at {factors[name]:g} kg/kWh" if name in factors else name for name in names
+        )
+        return f"carriers: {described}"
+
+
 class KpiBuilder:
     """Builds the ``kpis`` block of one calculation's ``result.json``.
 
@@ -304,15 +409,14 @@ class KpiBuilder:
     Args:
         document: The run's ``all_kpis.json``, or ``None`` when it wrote none.
         period: The simulated period, which decides scaling and provenance.
-        layers: The package's insulation layers, for the embodied-carbon figure.
-        materials: The insulation-material table the carbon figures come from.
-        emission_factor_country: The country whose emission and price factors the legacy KPI path
-            used, named in the emissions field's ``source`` because it is the one input of that
-            figure the RenoVisor request does not choose.
-        dwelling_country: The country the dwelling is in. When it differs from
-            *emission_factor_country* the operational CO2 figure rests on another country's grid,
-            which is an unreviewed input and therefore makes the field ``PARTIAL`` however long
-            the run was (decision Q21's own definition of the label).
+        layers: The package's insulation layers, for the embodied-carbon figure. Each carries
+            the material's own CO2 footprint, because the request sends the material's
+            properties rather than its id (rule 5 of the contract).
+        lifecycle_co2: The cost engine's parallel CO2 accounting, which is where the
+            operational carbon comes from; ``None`` when the run wrote none, in which case the
+            field is absent with the reason.
+        country: The country the dwelling is in, which the economic parameters named and whose
+            emission factors the engine therefore used. It appears in the field's ``source``.
     """
 
     #: The prefix every missing KPI field carries in ``result.json["missing"]``.
@@ -340,17 +444,15 @@ class KpiBuilder:
         document: Optional[KpiDocument],
         period: Period,
         layers: EnvelopeLayers,
-        materials: InsulationMaterials,
-        emission_factor_country: str,
-        dwelling_country: str,
+        lifecycle_co2: Optional["LifecycleCo2"],
+        country: str,
     ) -> None:
         """Store the inputs; nothing is read until :meth:`build`."""
         self._document = document
         self._period = period
         self._layers = layers
-        self._materials = materials
-        self._country = emission_factor_country
-        self._dwelling_country = dwelling_country
+        self._lifecycle_co2 = lifecycle_co2
+        self._country = country
         self._missing: List[MissingField] = []
 
     def build(self) -> KpiBlock:
@@ -365,6 +467,7 @@ class KpiBuilder:
         values: Dict[str, Any] = {}
         for field, name in KpiSources.annual_names().items():
             self._put(values, field, self._annual(field, name))
+        self._put(values, KpiField.EMISSIONS, self._emissions())
         for field, name in KpiSources.rate_names().items():
             self._put(values, field, self._rate(name))
         self._put(values, KpiField.EMBODIED_CO2, self._embodied_co2())
@@ -424,17 +527,6 @@ class KpiBuilder:
                 "; delivered energy bought over every carrier (Q22), summed by HiSim from "
                 + ", ".join(f"'{carrier}'" for carrier in KpiSources.ENERGY_DEMAND_CARRIER_NAMES)
             )
-        if field is KpiField.EMISSIONS:
-            source += (
-                f"; operational CO2 (Q22), computed with the '{self._country}' emission factors of "
-                "hisim/components/configuration.py"
-            )
-            if self._country != self._dwelling_country:
-                source += (
-                    f", which are not the '{self._dwelling_country}' grid's: that table has no "
-                    f"'{self._dwelling_country}' row"
-                )
-                reviewed = False
         if not self._period.is_full_year():
             source += f"; scaled to a year by 1 / {fraction:.6g}"
             reviewed = False
@@ -467,15 +559,65 @@ class KpiBuilder:
             period=self._period,
         ).to_json()
 
+    def _emissions(self) -> Optional[Dict[str, Any]]:
+        """Return the operational CO2 of one year, from the lifecycle cost engine.
+
+        Decision Q22 defines the figure as operational carbon per year, and the engine is the
+        only place in HiSim that computes it with the dwelling's own country factors: it reads
+        ``energy_prices_<country>.json`` through the ``EconomicParameters`` the run attached,
+        while the legacy KPI path reads a table with rows for Germany and Austria only. The
+        engine has already extrapolated a part-year run to a year, which is exactly what makes
+        such a run ``PARTIAL``: the number is a year of the weather and the occupancy those few
+        days happened to contain.
+
+        Returns:
+            The provenance object, or ``None`` when the run wrote no lifecycle result.
+        """
+        if self._lifecycle_co2 is None:
+            self._absent(
+                KpiField.EMISSIONS,
+                f"the run wrote no {LifecycleCo2.FILE_NAME}, so the cost engine's operational "
+                "CO2 accounting is not there; the legacy KPI is not read, because its emission "
+                "factors have rows for DE and AT only",
+            )
+            return None
+        value = self._lifecycle_co2.annual_operational_in_kg()
+        if value is None:
+            self._absent(
+                KpiField.EMISSIONS,
+                f"{LifecycleCo2.FILE_NAME} carries no year-1 operational CO2 under "
+                f"'{LifecycleCo2.PERSPECTIVE_ID}'",
+            )
+            return None
+        source = (
+            f"{LifecycleCo2.FILE_NAME}: {LifecycleCo2.PERSPECTIVE_ID}."
+            f"{LifecycleCo2.BLOCK}.{LifecycleCo2.OPERATIONAL_BY_YEAR}[{LifecycleCo2.FIRST_YEAR}], "
+            f"operational CO2 per year (Q22) with the '{self._country}' emission factors the "
+            f"cost engine was given; {self._lifecycle_co2.describe_carriers()}"
+        )
+        if not self._period.is_full_year():
+            source += (
+                f"; the engine extrapolated it from the simulated period "
+                f"({self._period.fraction_of_year:.6g} of a year)"
+            )
+        return ProvenancedValue(
+            value=value,
+            provenance=Provenance.SIMULATED if self._period.is_full_year() else Provenance.PARTIAL,
+            source=source,
+            period=self._period,
+        ).to_json()
+
     def _embodied_co2(self) -> Optional[Dict[str, Any]]:
         """Return the embodied carbon of the package's insulation layers.
 
         Decision Q22 made embodied carbon a field of its own rather than a term inside the
-        operational figure, and the materials table is where it comes from: cradle-to-gate CO2
-        equivalent per cubic metre times the volume each layer installs. A material whose dump row
-        carries no per-cubic-metre figure, or a layer whose element area neither the realized
-        record nor the inventory states, makes the whole field absent -- a partial sum over some
-        of a building's insulation would read as the whole building's carbon.
+        operational figure, and the request's own material objects are where it comes from:
+        ``co2_footprint_a1_a3_c3_c4_kg_m2`` is an EN 15804+A2 figure per square metre at the
+        thickness for U = 0.3, so the product is the footprint times the element's area. A
+        material whose request object carries no footprint, or a layer whose element area
+        neither the realized record nor the request states, makes the whole field absent -- a
+        partial sum over some of a building's insulation would read as the whole building's
+        carbon.
 
         Returns:
             The provenance object, or ``None`` when the field is absent.
@@ -490,32 +632,25 @@ class KpiBuilder:
                 "no element area for " + ", ".join(layer.describe() for layer in unresolved),
             )
             return None
-        total = 0.0
-        terms: List[str] = []
-        for layer in self._layers.all():
-            if not self._materials.contains(layer.material_asp_id):
-                self._absent(
-                    KpiField.EMBODIED_CO2,
-                    f"the material table has no row for '{layer.material_asp_id}'",
-                )
-                return None
-            footprint = self._materials.by_asp_id(layer.material_asp_id).co2_footprint_in_kg_per_m3
-            if footprint is None:
-                self._absent(
-                    KpiField.EMBODIED_CO2,
-                    f"the material dump states no CO2 footprint per m3 for "
-                    f"'{layer.material_asp_id}', so the package's embodied carbon is incomplete",
-                )
-                return None
-            volume = layer.volume_in_m3()
-            assert volume is not None  # guarded by the unresolved() check above
-            total += footprint * volume
-            terms.append(f"{layer.describe()} = {volume:g} m3 x {footprint:g} kg/m3")
+        without = self._layers.without_footprint()
+        if without:
+            self._absent(
+                KpiField.EMBODIED_CO2,
+                "the request states no co2_footprint_a1_a3_c3_c4_kg_m2 for "
+                + ", ".join(layer.describe() for layer in without),
+            )
+            return None
+        total = self._layers.total_embodied_co2_in_kg()
+        if total is None:
+            self._absent(KpiField.EMBODIED_CO2, "the package's embodied carbon is incomplete")
+            return None
         return ProvenancedValue(
             value=total,
             provenance=Provenance.SIMULATED,
-            source="insulation_materials.json co2_footprint_in_kg_per_m3 x layer volume (Q22): "
-            + "; ".join(terms),
+            source=(
+                "the request's own material properties, co2_footprint_a1_a3_c3_c4_kg_m2 x element "
+                "area (Q22): " + self._layers.describe_terms()
+            ),
         ).to_json()
 
     def _mocked(self, *names: str) -> Optional[Dict[str, Any]]:
@@ -602,7 +737,8 @@ class KpiSchema:
             ),
             PayloadFieldRow(
                 KpiField.EMISSIONS.value,
-                f"all_kpis.json '{KpiSources.EMISSIONS_NAME}' (operational CO2, Q22)",
+                f"{LifecycleCo2.FILE_NAME} {LifecycleCo2.PERSPECTIVE_ID}.{LifecycleCo2.BLOCK} "
+                "(operational CO2 per year, the cost engine's own country factors, Q22)",
                 cls.SCALED_PROVENANCE,
             ),
             PayloadFieldRow(
@@ -612,7 +748,7 @@ class KpiSchema:
             ),
             PayloadFieldRow(
                 KpiField.EMBODIED_CO2.value,
-                "insulation_materials.json co2_footprint_in_kg_per_m3 x thickness x element area",
+                "the request material's co2_footprint_a1_a3_c3_c4_kg_m2 x element area",
                 f"{Provenance.SIMULATED.value}; absent when the package insulates nothing",
             ),
             PayloadFieldRow(

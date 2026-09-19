@@ -1,0 +1,200 @@
+# Proposal — GET /api/v1/hisim/{version}/measures
+#
+# A SELF-CONTAINED OpenAPI 3.1 document for ONE endpoint of the simulation
+# backend: which measures of the measure catalogue one engine version implements, as
+# reported BY THE HISIM–RENOVISOR TRANSLATION LAYER ITSELF.
+#
+# Deliberately separate from what the backend as a service can do (countries,
+# variants, queue, lookups — see backend-functions.md). It references nothing
+# in renovisor-api-contract/openapi.yaml, which is an old hand-written draft and
+# is not binding.
+#
+# ONE DOCUMENT PER ENGINE VERSION. The backend is a version registry hosting many
+# pinned HiSim images at /api/v1/hisim/{version}/...; the frontend resolves its
+# track's channel to a version at startup and never writes the segment itself.
+# The document is produced once at version registration by running the
+# translator's `capabilities` command in the image, and is immutable for the
+# life of the version.
+openapi: 3.1.0
+info:
+  title: RenoVisor simulation backend — implemented measures (proposal)
+  version: 0.2.0-proposal
+  description: |
+    The measure capabilities of one registered engine version.
+
+    THE DOCUMENT IS AN OUTPUT OF THE TRANSLATION LAYER, NOT A HAND-KEPT LIST.
+    The translator that turns a RenoVisor request into a HiSim configuration
+    already reports, per run, what it did with every field (`mapping_report`:
+    `used` / `approximated` / `defaulted` / `not_implemented_yet`). This document is that
+    same report taken over the whole measure catalogue instead of over one
+    request: at image build time the translator is run against a probe set —
+    a reference home plus, for every catalogue measure, one request per enum
+    value and per numeric boundary — and the per-field results are aggregated
+    per measure and option. A measure the translator accepts without acting on it
+    (an entry of its not_implemented_yet list) is `not_implemented_yet`.
+
+    Because it is produced by running the translator, it cannot announce
+    something the translator does not do. It is produced once per engine
+    version, at registration, by running the translator in the image, and is
+    served verbatim for the life of that version.
+servers:
+  - url: https://host.example/renosfh-backend/api/v1/hisim
+    description: The backend; {version} below is resolved from GET /versions → channels.<track>.
+security:
+  - ApiKey: []
+paths:
+  /{version}/measures:
+    get:
+      parameters:
+        - name: version
+          in: path
+          required: true
+          schema: { type: string, examples: ['v20260919-1'] }
+          description: A registered engine version; the frontend uses the one its track's channel resolves to.
+      operationId: getImplementedMeasures
+      summary: The catalogue measures this engine version implements, per the translation layer
+      description: |
+        Guarantees:
+        - EVERY measure of the measure catalogue appears exactly once, and every
+          option the catalogue declares for it appears exactly once in its
+          `options`. A consumer that finds one missing treats the answer as
+          invalid and refuses to start against this version.
+        - Compatibility is checked by content: a consumer verifies that every
+          id, option name and enum value of ITS catalogue appears here (present
+          with `not_implemented_yet` counts as appearing) and refuses to start naming
+          each one that does not. There is no catalogue hash: it would need a
+          second catalogue parser on this side and would reject every request
+          after any unrelated catalogue edit.
+        - The statuses are the `mapping_report` vocabulary, so what is announced
+          here and what a run reports can be compared one to one. A run that
+          reports an option WORSE than announced here (announced `used`,
+          reported `not_implemented_yet`) is a translator bug.
+        - A submission holding a measure announced here as `not_implemented_yet`
+          is accepted and simulated without it; the run's mapping report carries
+          this document's note for it. Only a measure, option or value the
+          catalogue does not have is refused (422, see the calculation-request
+          spec §7).
+        - Immutable for the life of the version: the document is produced at
+          registration from the pinned image and never changes afterwards.
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              description: Strong; distinct per version.
+              schema: { type: string }
+            Cache-Control: { schema: { type: string, examples: ['max-age=31536000, immutable'] } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImplementedMeasures' }
+        '304': { description: Not modified. }
+        '401': { description: Missing or wrong X-Api-Key. }
+components:
+  securitySchemes:
+    ApiKey: { type: apiKey, in: header, name: X-Api-Key }
+  schemas:
+    ImplementedMeasures:
+      type: object
+      required: [engine, engine_version, translator, measures]
+      properties:
+        engine: { type: string, examples: [hisim] }
+        engine_version:
+          type: string
+          description: |
+            The HiSim build inside this container. Identification, not routing: it
+            appears in results too, so a consumer can tell that two runs came from
+            the same build (and must compare base and measures runs only if they did).
+          examples: ['hisim-7b8d517']
+        translator:
+          type: object
+          description: The translation layer that produced this document.
+          required: [commit]
+          properties:
+            commit: { type: string, description: Commit of the translator in this image. }
+            generated_at: { type: string, format: date-time }
+            probes:
+              type: integer
+              description: How many probe requests the document was aggregated from.
+            hisim_commit:
+              { type: string, description: The HiSim commit the translator was built against. }
+            request_schema_version:
+              type: integer
+              description: The calculation-request schema version this build accepts.
+            catalogue_revision:
+              type: string
+              description: |
+                Identification only (never compared): the contract-repo revision the
+                probe set read measures.yaml from, e.g. `renovisor-api-contract@c3d9e1f`.
+        measures:
+          type: array
+          description: One entry per catalogue measure — all of them, implemented or not.
+          items: { $ref: '#/components/schemas/ImplementedMeasure' }
+    ImplementedMeasure:
+      type: object
+      required: [measure_id, status, options]
+      properties:
+        measure_id:
+          type: string
+          description: The `id` of the measure in measures.yaml.
+          examples: [external_insulation]
+        status:
+          type: string
+          enum: [supported, approximated, not_implemented_yet]
+          description: |
+            Derived from the probes, never declared:
+            supported           — the measure is mapped and every `everyone` option is `used`.
+            approximated        — mapped, but an `everyone` option is `approximated` or
+                                  `not_implemented_yet` (the measure acts, a detail does not).
+            not_implemented_yet — the measure itself is listed: accepted, no effect on
+                                  the simulation, its note carried here.
+            `experts` options and individual values carry their own status and never
+            change the measure's.
+        options:
+          type: array
+          description: One entry per option the catalogue declares for this measure.
+          items: { $ref: '#/components/schemas/ImplementedOption' }
+        hisim_targets:
+          type: array
+          description: |
+            What the translator writes in the HiSim configuration for this
+            measure (component and parameter names). For debugging and review;
+            consumers must not build logic on it.
+          items: { type: string }
+        note:
+          type: string
+          description: |
+            The translator's own note, in plain language — the same text its
+            mapping_report carries. Shown to the user next to the measure.
+    ImplementedOption:
+      type: object
+      required: [name, status]
+      properties:
+        name: { type: string, examples: [thickness_in_mm] }
+        status:
+          type: string
+          enum: [used, approximated, defaulted, not_implemented_yet]
+          description: |
+            The option's own status: how the option as a whole is mapped. Individual
+            values carry their own status in `values` and do not change it.
+        accepted_values:
+          type: array
+          description: |
+            For enums — every catalogue value (all of them are accepted; a value not
+            in the catalogue is refused as unknown). Kept for consumers that only
+            need the list; `values` carries the status per value.
+          items: {}
+        values:
+          type: array
+          description: For enums — one entry per catalogue value with its own status and note.
+          items:
+            type: object
+            required: [value, status]
+            properties:
+              value: {}
+              status:
+                type: string
+                enum: [used, approximated, not_implemented_yet]
+              note: { type: string }
+        minimum: { type: number, description: Lowest probed value the translator accepted. }
+        maximum: { type: number, description: Highest probed value the translator accepted. }
+        note: { type: string }

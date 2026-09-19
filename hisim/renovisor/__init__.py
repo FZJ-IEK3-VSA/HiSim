@@ -1,41 +1,53 @@
-"""The RenoVisor translation layer: a home inventory plus a renovation package into a simulation.
+"""The RenoVisor translation layer: one calculation request into one HiSim simulation.
 
 RenoVisor is a renovation-advice product whose backend asks HiSim what a given renovation of a
-given dwelling would do to its energy use, its emissions and its costs. This package is the layer
-that turns its vocabulary into HiSim's, in three parts that the contract, not HiSim, fixes the
-shape of:
+given dwelling would do to its energy use, its emissions and its costs. This package is the
+layer that turns its vocabulary into HiSim's. One request is one house inventory plus one list
+of catalogue measures, and the baseline is the same request with an empty list.
 
-*the contract* (:mod:`hisim.renovisor.contract`) — a vendored copy of the shared API contract:
-the inventory schema an incoming request is validated against, the catalogue of renovation
-measures, and the insulation-material database.
+The pipeline, and the module that owns each step::
 
-*the pure translation layer* — :mod:`~hisim.renovisor.vocabulary` (the closed vocabularies),
-:mod:`~hisim.renovisor.catalogue` (the only reader of the catalogue),
-:mod:`~hisim.renovisor.options` (reading one measure's option values),
-:mod:`~hisim.renovisor.registry` (one function per measure),
-:mod:`~hisim.renovisor.effects` (the closed effect set and its resolver),
-:mod:`~hisim.renovisor.envelope` and :mod:`~hisim.renovisor.materials` (the physics and its data),
-:mod:`~hisim.renovisor.inventory` (the path-addressed document) and
-:mod:`~hisim.renovisor.application` (applying one package to one inventory). Nothing here runs a
-simulation or opens an energy-system file.
+    request ──validate──▶ Request ──apply──▶ renovated house ──translate──▶ *.energy_system.yaml
+                                                     │                              │
+                                                     └──────▶ mapping_report.json   └──▶ run ──▶ result.json
 
-*the run* — :mod:`~hisim.renovisor.bindings` (which component of a recorded energy-system file
-owns which inventory leaf), :mod:`~hisim.renovisor.occupancy` (the nearest household of the
-LoadProfileGenerator catalogue), :mod:`~hisim.renovisor.laws` (the sizing laws the measure layer
-leaves pending, and the demand estimates they read), :mod:`~hisim.renovisor.parametriser` (writing
-all of it into one recorded base file, within what requirement R4 permits) and
-:mod:`~hisim.renovisor.calculate` (one input directory in, one output directory out), which
-:mod:`hisim.renovisor.__main__` exposes as a single ``calculate`` command.
+*the vocabulary* -- :mod:`~hisim.renovisor.vocabulary` holds every closed string set a request
+may carry, spelled as the measure catalogue spells it and named as HiSim would name it.
 
-*the map* — :mod:`~hisim.renovisor.map` renders the whole translation as one committed HTML page,
-including a worked example traced from the inventory through to the parametrised file.
+*the contract* (:mod:`hisim.renovisor.contract`) -- vendored copies of the measure catalogue,
+the material database, the request schema, the worked mockup and the capability document's own
+shape, each pinned to the revision it was taken from.
 
-The layering rule the whole package rests on: the measure layer writes the *inventory* and never
-names a HiSim component or config field, so a HiSim rename changes one binding rather than 33
-measure functions (requirement M6 of ``roadmap/renovisor/measures_v2_requirements.md``).
+*the pure layers* -- :mod:`~hisim.renovisor.request` (the schema, the frozen catalogue table and
+every semantic check), :mod:`~hisim.renovisor.apply` (one function per measure, over a deep copy
+of the house), :mod:`~hisim.renovisor.envelope` (the insulation arithmetic),
+:mod:`~hisim.renovisor.tabula` (which archetype a dwelling is simulated as),
+:mod:`~hisim.renovisor.translate` (the house into one recorded twin),
+:mod:`~hisim.renovisor.report` (the account of every leaf) and
+:mod:`~hisim.renovisor.whitelist` (the one list of what is accepted and not acted on). Nothing
+here runs a simulation.
+
+*the run* -- :mod:`~hisim.renovisor.simulation` (the release's own parameters) and
+:mod:`~hisim.renovisor.run` (validate, translate, simulate, assemble), which
+:mod:`hisim.renovisor.__main__` exposes as four commands.
+
+*the result* -- :mod:`~hisim.renovisor.result`, :mod:`~hisim.renovisor.kpis`,
+:mod:`~hisim.renovisor.costs`, :mod:`~hisim.renovisor.layers` and
+:mod:`~hisim.renovisor.provenance`: ``result.json``, every value carrying where it came from.
+
+*the announcement* -- :mod:`~hisim.renovisor.capabilities` runs the whole probe set through the
+pure layers and aggregates it into the document the backend serves per image;
+:mod:`~hisim.renovisor.map` renders the same probe run as one committed HTML page.
+
+The rule the whole package rests on: **fail loudly, except for what is written down.** An
+invalid request is refused by name with every problem at once; a feature the translator has not
+implemented is a note and the calculation runs, but only if
+``hisim/renovisor/not_implemented_yet.yaml`` says so; anything else that cannot be mapped fails
+the translator's own build rather than a user's request.
 """
 
 #: The version of the translation layer itself, distinct from the contract revision
-#: ``contract/PINNED.yaml`` records and from the HiSim version. It is echoed in the translation
-#: report so a result can be traced back to the rules that produced it.
-TRANSLATOR_VERSION: str = "2.0.0-dev"
+#: ``contract/PINNED.yaml`` records and from the HiSim version. It is echoed in the mapping
+#: report and in the capability document so a result can be traced back to the rules that
+#: produced it.
+TRANSLATOR_VERSION: str = "2.0.0"

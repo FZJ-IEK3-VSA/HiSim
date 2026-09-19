@@ -35,12 +35,12 @@ from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Mapping, Optional
 
 from hisim.renovisor import TRANSLATOR_VERSION
-from hisim.renovisor.application import ApplicationResult
+from hisim.renovisor.apply import AppliedPackage
 from hisim.renovisor.costs import CostBuilder, CostDocuments
-from hisim.renovisor.kpis import KpiBuilder, KpiDocument
+from hisim.renovisor.kpis import KpiBuilder, KpiDocument, LifecycleCo2
 from hisim.renovisor.layers import ElementAreas, EnvelopeLayers
-from hisim.renovisor.materials import InsulationMaterials
-from hisim.renovisor.parametriser import ParametrisedSystem
+from hisim.renovisor.request import House, Request
+from hisim.renovisor.translate import TranslatedSystem
 from hisim.renovisor.provenance import MissingField, Period
 from hisim.simulationparameters import SimulationParameters
 
@@ -75,11 +75,11 @@ class WeatherBasis:
     YEAR_PATTERN: ClassVar["re.Pattern[str]"] = re.compile(r"_(\d{4})\.csv$")
 
     @classmethod
-    def of(cls, parametrised: Any, realized: Any) -> Dict[str, Any]:
+    def of(cls, translated: Any, realized: Any) -> Dict[str, Any]:
         """Return the weather block of ``result.json``.
 
         Args:
-            parametrised: The parametrised energy-system model, whose ``Weather`` constructor
+            translated: The translated energy-system model, whose ``Weather`` constructor
                 names the country the location was chosen for.
             realized: The realized record's model, whose ``Weather`` config holds the station, the
                 data set and the file that was read; ``None`` when the record could not be read.
@@ -88,7 +88,7 @@ class WeatherBasis:
             ``{"location": …, "station": …, "dataset": …, "year": …}``, with ``None`` for anything
             neither model states.
         """
-        arguments = cls._constructor_arguments(parametrised)
+        arguments = cls._constructor_arguments(translated)
         config = cls._config(realized)
         source_path = config.get(cls.SOURCE_PATH_KEY)
         match = cls.YEAR_PATTERN.search(str(source_path)) if source_path is not None else None
@@ -183,14 +183,13 @@ class ResultBuilder:
     against an archived output directory.
 
     Args:
-        application: What applying the package produced; the insulation layers and the
-            post-measure inventory come from it.
-        parametrised: The parametrised system, for the base file it came from and the weather
+        request: The validated request, for the country the cost engine prices against.
+        applied: What applying the package produced; the insulation layers come from it.
+        translated: The translated system, for the base file it came from and the weather
             location the constructor named.
         output_directory: The calculation's output directory, holding the records and ``results/``.
         simulation_parameters: The parameters the run used, for the period and the emission-factor
             country.
-        materials: The insulation-material table, for the carbon and price figures.
         image_digest: The container image digest the caller passed in, or ``None`` (decision Q26).
         subsidy_catalogue_path: The country subsidy catalogue this run was configured with, or
             ``None`` when the country has none.
@@ -204,20 +203,20 @@ class ResultBuilder:
 
     def __init__(
         self,
-        application: ApplicationResult,
-        parametrised: ParametrisedSystem,
+        request: Request,
+        applied: AppliedPackage,
+        translated: TranslatedSystem,
         output_directory: Path,
         simulation_parameters: SimulationParameters,
-        materials: InsulationMaterials,
         image_digest: Optional[str] = None,
         subsidy_catalogue_path: Optional[Path] = None,
     ) -> None:
         """Store the inputs; nothing is read until :meth:`build`."""
-        self._application = application
-        self._parametrised = parametrised
+        self._request = request
+        self._applied = applied
+        self._translated = translated
         self._output = Path(output_directory)
         self._parameters = simulation_parameters
-        self._materials = materials
         self._image_digest = image_digest
         self._catalogue = subsidy_catalogue_path
 
@@ -233,8 +232,9 @@ class ResultBuilder:
         """
         results = self._output / self.RESULTS_DIRECTORY
         realized = RealizedRecord.load(self._output)
-        areas = ElementAreas.resolve(RealizedRecord.building_config(realized), self._application.inventory)
-        layers = EnvelopeLayers.of(self._application.insulation_layers, areas)
+        house = House.from_dict(self._applied.house)
+        areas = ElementAreas.resolve(RealizedRecord.building_config(realized), house)
+        layers = EnvelopeLayers.of(self._applied.layers, areas)
         period = Period.from_parameters(self._parameters)
         country = self._country()
 
@@ -242,14 +242,12 @@ class ResultBuilder:
             document=KpiDocument.load(results),
             period=period,
             layers=layers,
-            materials=self._materials,
-            emission_factor_country=getattr(self._parameters, "country", country),
-            dwelling_country=country,
+            lifecycle_co2=LifecycleCo2.load(results),
+            country=country,
         ).build()
         costs = CostBuilder(
             documents=CostDocuments.load(results),
             layers=layers,
-            materials=self._materials,
             country=country,
             results_directory=results,
             subsidy_catalogue_path=self._catalogue,
@@ -260,8 +258,8 @@ class ResultBuilder:
             "translator_version": TRANSLATOR_VERSION,
             "calculation_version": {"image_digest": self._image_digest},
             "contract": dict(contract),
-            "base_file": self._parametrised.base_file_name,
-            "weather_basis": WeatherBasis.of(self._parametrised.model, realized),
+            "base_file": self._translated.base_file_name,
+            "weather_basis": WeatherBasis.of(self._translated.model, realized),
             "period": period.to_json(),
             "kpis": kpis.values,
             "costs": costs.values,
@@ -271,14 +269,12 @@ class ResultBuilder:
     def _country(self) -> str:
         """Return the country code the dwelling is in, as the request stated it.
 
-        It is the inventory's own ``location.country_code``, which is what selects the material
-        price column and the subsidy catalogue. The simulation parameters' ``country`` is a
-        different thing -- the country whose legacy emission and price factors the KPI path uses --
-        and the two are read separately on purpose.
+        It is ``location.country``, which is what selects the cost engine's data files and the
+        subsidy catalogue. The simulation parameters' ``country`` is a different thing -- the
+        country whose legacy emission and price factors the KPI path uses -- and the two are
+        read separately on purpose.
 
         Returns:
-            The country code, upper-cased; the economics engine's own default when the inventory
-            states none.
+            The country code.
         """
-        raw = self._application.inventory.get("location.country_code")
-        return str(raw).upper() if raw else "DE"
+        return self._request.country.value

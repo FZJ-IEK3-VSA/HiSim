@@ -38,7 +38,6 @@ from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 
 from hisim.renovisor.kpis import PayloadFieldRow
 from hisim.renovisor.layers import EnvelopeLayers
-from hisim.renovisor.materials import InsulationMaterials
 from hisim.renovisor.provenance import MissingField, ProvenancedValue, Range
 from hisim.renovisor.vocabulary import Provenance
 
@@ -291,65 +290,43 @@ class CostDocuments:
 
 
 class EnvelopeMaterialCost:
-    """The material cost of a package's insulation layers, in euro, per country.
+    """Why the envelope half of the investment is absent, and what would make it appear.
 
-    Decisions Q8/Q9 are the whole content of this class: an envelope measure is priced from the
-    materials database and from nothing else, and the database states a minimum and a maximum
-    price per cubic metre per country. So the figure is ``price per m3 x thickness x area`` summed
-    over the layers, with the low and high bounds carried through and the midpoint as the best
-    estimate, and it is *material only* -- no labour, no scaffolding, no system parts -- until the
-    materials team's total-cost column arrives.
+    Decisions Q8/Q9 said an envelope measure is priced from the materials database and from
+    nothing else, and that the database gains a total-cost column owned by the materials team.
+    Rule 5 of the calculation request then moved the material into the request itself -- as its
+    physical properties, which carry no price. So there is no price anywhere in this
+    translator's inputs today, and the field is absent with the reason published rather than
+    filled with a number nobody owns.
 
-    It is deliberately not fed to the cost engine as a ``SubjectCostFacts``: the engine would price
-    it identically, since the number is handed in either way, and adding it here keeps the
-    envelope half of the investment visible as its own figure in ``investment_breakdown``.
+    The class is kept rather than deleted because the moment the request schema gains a price
+    per square metre, or the frontend sends the materials team's total, this is the one place
+    that has to change.
+
+    Args:
+        layers: The package's insulation layers.
     """
 
-    #: What the figure covers and what it does not, quoted in the payload's ``source``.
-    SCOPE_NOTE: ClassVar[str] = (
-        "material only, from insulation_materials.json investment_cost_in_euro_per_m3; no labour, "
-        "scaffolding or system parts until the materials database gains its total-cost column "
-        "(Q8/Q9)"
+    #: What the payload's ``missing`` entry says, verbatim.
+    REASON: ClassVar[str] = (
+        "the request carries no material price (D-A); the materials team's total-cost column is "
+        "the source, and the request schema does not carry it yet"
     )
 
-    def __init__(self, layers: EnvelopeLayers, materials: InsulationMaterials, country: str) -> None:
-        """Store the layers, the table and the country whose price column is read."""
+    def __init__(self, layers: EnvelopeLayers) -> None:
+        """Store the layers, which decide only whether there was anything to price."""
         self._layers = layers
-        self._materials = materials
-        self._country = country
 
     def total(self) -> Tuple[Optional[Range], str]:
         """Return the material cost of every layer and the sentence describing it.
 
         Returns:
-            ``(range, source)`` when every layer could be priced, and ``(None, reason)`` when one
-            could not -- an unresolved area, a material with no row, or a country with no price
-            column for it. A partial envelope cost would understate a retrofit's price, so the
-            whole figure drops out and the reason is published instead.
+            ``(None, reason)`` always today: either the package insulates nothing, or it does
+            and the request carries no price for what it installed.
         """
         if self._layers.is_empty():
             return None, "the package adds no insulation layer"
-        total = Range.zero()
-        terms: List[str] = []
-        for layer in self._layers.all():
-            volume = layer.volume_in_m3()
-            if volume is None:
-                return None, f"no element area for {layer.describe()}"
-            if not self._materials.contains(layer.material_asp_id):
-                return None, f"the material table has no row for '{layer.material_asp_id}'"
-            prices = self._materials.by_asp_id(layer.material_asp_id).investment_cost_in_euro_per_m3
-            price = prices.get(self._country)
-            if price is None or price.low is None or price.high is None:
-                return None, (
-                    f"the material table states no {self._country} price per m3 for "
-                    f"'{layer.material_asp_id}'"
-                )
-            total = total.plus(Range.from_bounds(price.low * volume, price.high * volume))
-            terms.append(
-                f"{layer.describe()} = {volume:g} m3 x {price.low:g}-{price.high:g} EUR/m3 "
-                f"[{self._country}]"
-            )
-        return total, f"{self.SCOPE_NOTE}: " + "; ".join(terms)
+        return None, self.REASON
 
 
 class ShortHorizonEvaluation:
@@ -483,8 +460,8 @@ class CostBuilder:
 
     Args:
         documents: The run's cost-engine exports, or ``None`` when it produced none.
-        layers: The package's insulation layers, for the envelope half of the investment.
-        materials: The insulation-material table the envelope prices come from.
+        layers: The package's insulation layers, which decide whether the envelope half of the
+            investment has anything to price at all.
         country: The country code whose price column is read and whose subsidy catalogue is
             looked for.
         results_directory: Where the run's exports are, for the second evaluation over the shorter
@@ -521,7 +498,6 @@ class CostBuilder:
         self,
         documents: Optional[CostDocuments],
         layers: EnvelopeLayers,
-        materials: InsulationMaterials,
         country: str,
         results_directory: Optional[Path] = None,
         subsidy_catalogue_path: Optional[Path] = None,
@@ -529,7 +505,6 @@ class CostBuilder:
         """Store the inputs; nothing is read until :meth:`build`."""
         self._documents = documents
         self._layers = layers
-        self._materials = materials
         self._country = country
         self._results_directory = results_directory
         self._catalogue = subsidy_catalogue_path
@@ -576,9 +551,10 @@ class CostBuilder:
     def _investment(self, values: Dict[str, Any]) -> None:
         """Fill the investment field and its two-part breakdown.
 
-        The devices come from the engine's year-0 investment entries and the envelope from the
-        material table; each half is published on its own as well as in the total, so the seam
-        decision Q23 draws stays visible in the payload.
+        The devices come from the engine's year-0 investment entries. The envelope half has no
+        source today -- the request carries the material's physics and not its price (rule 5) --
+        so it is absent and listed under ``missing`` with the reason, rather than folded
+        silently into a total that would then understate a retrofit.
 
         Args:
             values: The block being assembled.
@@ -592,9 +568,7 @@ class CostBuilder:
             if self._documents is not None
             else None
         )
-        envelope, envelope_note = EnvelopeMaterialCost(
-            self._layers, self._materials, self._country
-        ).total()
+        envelope, envelope_note = EnvelopeMaterialCost(self._layers).total()
         breakdown: Dict[str, Any] = {}
         if devices is not None:
             breakdown[self.DEVICES_KEY] = self._partial(
@@ -605,6 +579,14 @@ class CostBuilder:
             )
         if envelope is not None:
             breakdown[self.ENVELOPE_KEY] = self._partial(envelope, envelope_note)
+        else:
+            self._missing.append(
+                MissingField(
+                    field=f"{self.MISSING_PREFIX}.{CostField.INVESTMENT_BREAKDOWN.value}."
+                    f"{self.ENVELOPE_KEY}",
+                    reason=envelope_note,
+                )
+            )
         if devices is None and envelope is None:
             self._absent(
                 CostField.INVESTMENT,
@@ -798,7 +780,7 @@ class CostSchema:
             PayloadFieldRow(
                 CostField.INVESTMENT.value,
                 f"{engine}: year-0 {CostSources.INVESTMENT_CATEGORY} entries, plus the envelope "
-                "material cost from insulation_materials.json (Q9)",
+                "no envelope material cost: the request carries the material's physics, not its price",
                 f"{Provenance.PARTIAL.value}: device prices are AI estimates, the envelope is "
                 "material only",
             ),

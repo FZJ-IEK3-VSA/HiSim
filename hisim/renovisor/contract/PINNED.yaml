@@ -2,23 +2,38 @@
 # Records which contract revision each vendored file was copied from and the
 # SHA-256 it had; tests/test_renovisor_contract.py recomputes the hashes.
 repository: https://github.com/climatemedia/renovisor-api-contract
-refreshed_at: '2026-09-15T09:47:25+00:00'
+refreshed_at: '2026-09-19T09:27:50+00:00'
 files:
   openapi.yaml:
-    ref: main
+    ref: origin/main
     path: openapi.yaml
-    commit: eeb49b59ffe0e76d5c62dd8e0476cf5e5045b63c
-    commit_date: '2026-09-14T14:32:21+02:00'
-    sha256: 8100cbeebaba4b4465682b879bbe706320f93c88d4f67a2a69fa55569eee1a21
+    commit: 5181aa5452e5b273e69d5d7c6f9c2901ae7df632
+    commit_date: '2026-09-17T15:26:57+02:00'
+    sha256: bf8078752f583ab3f76d321fcb34b310eafe7e6e032bff6e7d27274ce30beacb
+    authoritative: false
+    note: v0.3 draft written before the energy-system redesign; superseded by calculation-request.schema.json,
+      which the translator validates against
   measures.yaml:
-    ref: main
+    ref: origin/main
     path: measures.yaml
-    commit: eeb49b59ffe0e76d5c62dd8e0476cf5e5045b63c
-    commit_date: '2026-09-14T14:32:21+02:00'
-    sha256: 51112170218210fe80ef1948d4f93618eaccdc6a8a0c7dde17d1d3b166f8e296
+    commit: 5181aa5452e5b273e69d5d7c6f9c2901ae7df632
+    commit_date: '2026-09-17T15:26:57+02:00'
+    sha256: d800e6ca16acab1619bf607c510bd5acad0efb313c56b9c72246854860a8ece2
   materials.yaml:
-    ref: materials
+    ref: origin/main
     path: materials.yaml
-    commit: a79f13d4a88d5cdbc5a809d46bd98dab4cb7aba0
-    commit_date: '2026-09-14T16:27:56+02:00'
-    sha256: d4a12e02242e5dd95f5630dc0329ec5dfce4eaf85afbf7880463d5bad8c94a7f
+    commit: 5181aa5452e5b273e69d5d7c6f9c2901ae7df632
+    commit_date: '2026-09-17T15:26:57+02:00'
+    sha256: 46a2f7d02705c4adc3409f710d26eaeef84d459e5dad17c1ade3b25e4703799d
+  calculation-request.schema.json:
+    source: contract-proposals 2026-09-19
+    path: calculation-request.schema.json
+    sha256: a405d7a983b9391dd053a88cc8c8dc8f88ee04287737d89cf026122d0a38f928
+  calculation-request.mockup-1.yaml:
+    source: contract-proposals 2026-09-19
+    path: calculation-request.mockup-1.yaml
+    sha256: 8270f3bc2359672be1df71e3d0f78438bddb049083830be0dd3e2e5856a27678
+  measure-capabilities.openapi.yaml:
+    source: contract-proposals 2026-09-19
+    path: measure-capabilities.openapi.yaml
+    sha256: f41ddbd06c326c810dd71f24118892e5e5c431d717dfe3d5d67e3c9aca14c3d2

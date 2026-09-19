@@ -2,55 +2,79 @@
 # Generated from spreadsheet and adapted manually.
 #
 # Conventions:
-# - display_name is unique and serves as the identifier.
+# - id is unique and serves as the identifier. It is snake_case, and it is what
+#   `dependencies.yaml` names on both sides of a rule. It was `display_name`, a prose
+#   name the engine slugified before every comparison — so the id below is the string
+#   that was always being compared, now written out instead of derived. Renaming one
+#   still orphans every rule naming it; the id being the thing reviewers see is what
+#   makes that visible rather than a surprise two layers down.
 # - category and subcategory use natural language.
 # - value_type is inferred from the spreadsheet structure.
+# - Option names are snake_case and carry their unit as a suffix where they have one
+#   (`thickness_in_mm`, `power_in_watt`). The engine slugifies every name through
+#   `asp_id` before comparing it, so this is the spelling it already compares — writing
+#   it out means the file, `option_grids.yaml` and a rule's guards agree on sight.
+# - `options` is always a list. A measure with nothing to specify carries `[]` rather
+#   than an empty key: a bare `options:` parses as null, so two spellings meant one
+#   thing and a reader had to know that the loader coalesces them.
+# - access_level is lower-case — one of `everyone`, `experts` (yaml_types::ACCESS_LEVELS).
 # - Comments mark places where information appears incomplete or ambiguous.
 
 measures:
 
-  - display_name: external insulation
+  - id: external_insulation
     category: building envelope measures
     subcategory: wall insulation
     options:
       - name: material
-        access_level: Everyone
+        access_level: everyone
         value_type: enum
         values: [EPS, XPS]
 
       - name: thickness_in_mm
-        access_level: Experts
+        access_level: experts
         value_type: integer
 
-  - display_name: internal dry lining insulation
+  # The single internal-lining measure. `add internal dry lining` was a second one, in
+  # `fabric measures`, for the lining board without insulation behind it — and it earned
+  # nothing: every rule naming it was a copy of one naming this measure (damp walls,
+  # fully protected buildings), plus a `done_after_or_with` whose only job was to link the
+  # two. An uninsulated lining is not a renovation this catalogue offers, so the split
+  # described a distinction nobody was making.
+  #
+  # The `internal_dry_lining` parameter went with it. It named the state this measure
+  # creates, so the same fact had a parameter and a measure with nothing linking them —
+  # and the rule reading the parameter could not see a lining the pathway itself
+  # installed. A building that already has one is now a stage-0 occurrence of this
+  # measure, which every rule sees alike.
+  - id: internal_dry_lining_insulation
     category: building envelope measures
     subcategory: wall insulation
     options:
       - name: material
-        access_level: Everyone
+        access_level: everyone
         value_type: enum
         values:
-          - Thermal Laminate drylining board
+          # Often as thermal laminate drylining board
+          - PIR
+          - XPS
+          - EPS
+          # As Staenderbauwerk
           - Mineral wool
 
       - name: thickness_in_mm
-        access_level: Experts
+        access_level: experts
         value_type: integer
 
-  - display_name: add internal dry lining
-    category: building envelope measures
-    subcategory: fabric measures
-    options:
-
-  - display_name: cavity wall insulation
+  - id: cavity_wall_insulation
     category: building envelope measures
     subcategory: wall insulation
     options:
       - name: thickness_in_mm
-        access_level: Experts
+        access_level: experts
         value_type: integer
 
-  - display_name: window replacement
+  - id: window_replacement
     category: building envelope measures
     subcategory: openings
     options:
@@ -58,16 +82,50 @@ measures:
       # building's worst_window_glazing_panes. Single glazing is not offered: it is
       # not something anyone installs today.
       - name: glazing_panes
-        access_level: Everyone
+        access_level: everyone
         value_type: integer
         values: [2, 3]
 
-  - display_name: outside shading
+      # The frame of the new window, in the SAME vocabulary as the building's
+      # `existing_window_frame_material` — `constructions::FRAME_MATERIALS`, which
+      # `construction_rules.yaml` classifies the existing frames into. One vocabulary is
+      # the whole point: a rule can then compare what is installed against what is there
+      # ("a protected facade keeps its wooden frames"), which two spellings of the same
+      # four materials could not express.
+      #
+      # `plastic` covers PVC and uPVC, `metal` covers aluminium and steel, and
+      # `composite` is a frame of more than one material — wood/aluminium being the
+      # common one — kept visibly composite rather than collapsed into whichever
+      # material happens to be named first.
+      - name: frame_material
+        access_level: everyone
+        value_type: enum
+        values: [wood, plastic, metal, composite]
+
+      # A low-emissivity coating on the glazing. Boolean rather than a count of coated
+      # surfaces: the count is a construction-level fact TABULA records for the EXISTING
+      # window (`Indicator_Window_LowE`, which settles pane-count conflicts — see
+      # construction_rules.yaml), while what a specifier chooses is whether the unit is
+      # coated at all.
+      - name: low_emissivity_coating
+        access_level: everyone
+        value_type: boolean
+
+      # The performance of the window this measure INSTALLS. Deliberately not the same
+      # fact as the building's `window_u_value_in_watt_per_m2_per_kelvin`, which is the
+      # area-weighted average over every window sub-element and stays a scenario
+      # parameter: replacement may be partial, so the installed unit's U-value is not the
+      # building's afterwards. See OpenQuestions.md Q15.
+      - name: u_value_in_watt_per_m2_per_kelvin
+        access_level: experts
+        value_type: number
+
+  - id: outside_shading
     category: building envelope measures
     subcategory: openings
     options: []
 
-  - display_name: door replacement
+  - id: door_replacement
     category: building envelope measures
     subcategory: openings
     options:
@@ -76,124 +134,149 @@ measures:
       # rule asking for at least 2 panes then excludes a solid door rather than
       # silently skipping it, as a separate "is it glazed" flag would.
       - name: glazing_panes
-        access_level: Everyone
+        access_level: everyone
         value_type: integer
         values: [0, 2, 3]
 
+      # Same vocabulary as the window's frame, for the same reason — see there. A door
+      # leaf is specified by material the way a window frame is, and sharing the list
+      # keeps one meaning of `wood` across the catalogue.
+      - name: frame_material
+        access_level: everyone
+        value_type: enum
+        values: [wood, plastic, metal, composite]
+
+      # The performance of the door this measure installs. Less fraught than the window
+      # case: `door_u_value_in_watt_per_m2_per_kelvin` is a plain value rather than an
+      # aggregate over sub-elements, so the installed door's U-value and the building's
+      # coincide whenever every door is replaced. They still differ on a partial
+      # replacement, which is why this stays an option rather than restating the
+      # parameter — see OpenQuestions.md Q15.
+      - name: u_value_in_watt_per_m2_per_kelvin
+        access_level: experts
+        value_type: number
+
+      # No `low_emissivity_coating` here, deliberately. Low-E is a property of glazing,
+      # and `glazing_panes: 0` — a solid door — is a real and common choice in this list,
+      # where the option would be undefined rather than false. On a part-glazed door it
+      # would describe a small fraction of the element while reading as a statement about
+      # the whole. Add it if a source treats it as a door specification; nothing does
+      # today.
+
   # This insulates the ceiling of the basement, good if basement not heated.
-  - display_name: basement ceiling insulation
+  - id: basement_ceiling_insulation
     category: building envelope measures
     subcategory: floor insulation
     options:
       - name: material
-        access_level: Everyone
+        access_level: everyone
         value_type: enum
         values: [EPS Foam, Mineral Wool]
 
       - name: thickness_in_mm
-        access_level: Experts
+        access_level: experts
         value_type: integer
 
-  - display_name: basement internal insulation
+  - id: basement_internal_insulation
     category: building envelope measures
     subcategory: floor insulation
-    options:
+    options: []
 
   # Always might require damp proof course
-  - display_name: basement external insulation
+  - id: basement_external_insulation
     category: building envelope measures
     subcategory: floor insulation
     options:
       - name: material
-        access_level: Everyone
+        access_level: everyone
         value_type: enum
         values: [EPS Foam, Mineral Wool]
 
       - name: thickness_in_mm
-        access_level: Experts
+        access_level: experts
         value_type: integer
 
   # This is for a solid concrete slab floor (Bodenplatte): Heated room, concrete slab, ground.
-  - display_name: solid ground floor insulation
+  - id: solid_ground_floor_insulation
     category: building envelope measures
     subcategory: floor insulation
     options:
       - name: material
-        access_level: Everyone
+        access_level: everyone
         value_type: enum
         values: [Liquid Insulation, EPS Foam]
 
       - name: thickness_in_mm
-        access_level: Experts
+        access_level: experts
         value_type: integer
 
   # This is for timber suspended floors: Heated room, timber floor, ventilated crawl space, ground.
-  - display_name: suspended ground floor insulation
+  - id: suspended_ground_floor_insulation
     category: building envelope measures
     subcategory: floor insulation
     options:
       - name: material
-        access_level: Everyone
+        access_level: everyone
         value_type: enum
         values: [EPS Foam, Mineral Wool]
 
       - name: thickness_in_mm
-        access_level: Experts
+        access_level: experts
         value_type: integer
 
       # No values list: `boolean` already fixes the domain, as `integer` does above.
       # Spelling them out would also mislead — YAML reads `yes`/`no` as the strings
       # "yes"/"no", while an actual boolean canonicalises to "true"/"false", so the two
       # spellings would never match each other.
-      - name: air barrier
-        access_level: Experts
+      - name: air_barrier
+        access_level: experts
         value_type: boolean
 
-  - display_name: warm roof insulation
+  - id: warm_roof_insulation
     category: building envelope measures
     subcategory: roof insulation
     options:
       - name: material
-        access_level: Everyone
+        access_level: everyone
         value_type: enum
         values: [PIR, mineral wool, glass wool, wood fiber]
 
       - name: thickness_in_mm
-        access_level: Experts
+        access_level: experts
         value_type: integer
 
-  - display_name: rafter insulation
+  - id: rafter_insulation
     category: building envelope measures
     subcategory: roof insulation
     options:
       - name: material
-        access_level: Everyone
+        access_level: everyone
         value_type: enum
         values: [open cell spray foam, PIR, glass wool, wood fiber]
 
       - name: thickness_in_mm
-        access_level: Experts
+        access_level: experts
         value_type: integer
 
-  - display_name: rolled out attic insulation
+  - id: rolled_out_attic_insulation
     category: building envelope measures
     subcategory: roof insulation
     options:
       - name: material
-        access_level: Everyone
+        access_level: everyone
         value_type: enum
         values: [mineral wool, glass wool, wood fiber]
 
       - name: thickness_in_mm
-        access_level: Experts
+        access_level: experts
         value_type: integer
 
-  - display_name: top floor ceiling insulation
+  - id: top_floor_ceiling_insulation
     category: building envelope measures
     subcategory: roof insulation
-    options:
+    options: []
 
-  - display_name: ventilation system
+  - id: ventilation_system
     category: ventilation system
     subcategory: ventilation
     options:
@@ -202,21 +285,56 @@ measures:
       # given on `heating installation` above. The prose labels this list used to carry
       # ("Demand controlled ventilation with humidity sensors and central fan (DCD)") are
       # the descriptions in that schema field, not separate values.
-      - name: type of system
-        access_level: Everyone
+      #
+      # These four were `MechanicalExtract` and friends until openapi.yaml was moved to
+      # snake_case alongside them. PascalCase was the one casing the engine could not
+      # carry: `asp_id` lowercases and splits on non-alphanumerics, so it had nothing to
+      # split on and `MechanicalVentilationWithHeatRecovery` slugged to
+      # `mechanicalventilationwithheatrecovery` — a single unreadable word in every
+      # `availability.json` and violation message. The heating lists next door were
+      # already snake_case, so one contract spoke two casings for no reason anyone could
+      # state. Keep this list and the openapi enum spelled identically.
+      - name: type_of_system
+        access_level: everyone
         value_type: enum
         values:
-          - MechanicalExtract
-          - DemandControlledExtract
-          - MechanicalVentilationWithHeatRecovery
+          - mechanical_extract
+          - demand_controlled_extract
+          - mechanical_ventilation_with_heat_recovery
+          # Passive slots in the window frame or head, driven by wind and stack
+          # pressure — no fan, no heat recovery, no control. The one value in this
+          # list that is not a mechanical unit, which is why `openapi.yaml`'s field
+          # description was widened from "mechanical ventilation unit" to
+          # "ventilation provision".
+          - window_trickle_vent
 
-# attic hatch sealing, services penetrations, window sealing
-  - display_name: shallow air tightness measures
-    category: ventilation system
+      # Year of installation — see `heating system` for why this is an option rather than
+      # a parameter.
+      - name: installation_year
+        access_level: experts
+        value_type: integer
+    source: ACE-Retrofitting D2.1.2 for window_trickle_vent
+
+# attic hatch sealing, services penetrations, window sealing -> draught proofing
+  - id: shallow_air_tightness_measures
+    category: shallow measures
     subcategory: ventilation
-    options:
+    options: []
 
-  - display_name: heating system
+  - id: hot_water_tank_and_pipe_insulation
+    category: shallow measures
+    subcategory: domestic hot water
+    options: []
+    source: ACE-Retrofitting D2.1.2
+
+  # Taken out, argument: Already
+  #- id: low_energy_lighting
+  #  category: shallow measures
+  #  subcategory: lighting
+  #  options: []
+  #  source: ACE-Retrofitting D2.1.2
+
+  - id: heating_system
     category: heating system
     subcategory: heat generator
     options:
@@ -236,11 +354,12 @@ measures:
       # existing states but poor outcomes. Which of them may be newly installed is a
       # question for dependencies.yaml, not for this list — a measure catalogue that
       # cannot name a building's current boiler cannot express replacing it.
-      - name: type of system
-        access_level: Everyone
+      - name: type_of_system
+        access_level: everyone
         value_type: enum
         values:
-          - heat_pump
+          - air_source_heat_pump
+          - ground_source_heat_pump
           - hybrid_heat_pump
           - electric_heating
           - biomass_heating
@@ -249,10 +368,33 @@ measures:
           - district_heating
           - hvo_heating
           - hydrogen_heating
-          - gas_heating
-          - oil_heating
+          - conventional_gas_heating
+          - conventional_oil_heating
+          - conventional_lpg_heating
+          - condensing_gas_heating
+          - condensing_oil_heating
+          - condensing_lpg_heating
 
-  - display_name: heating installation
+      # When the system was installed. Carried on the measure rather than as a parameter,
+      # which is what makes it answerable at all: a building's EXISTING system is a
+      # stage-0 occurrence of this measure, so the year rides along with it, and a rule
+      # about age ("a generator under 15 years is rarely worth replacing") reads the same
+      # option for a unit that is already there as for one a pathway installs.
+      #
+      # It replaces `existing_heating_installation_year`, a parameter that could only ever
+      # describe the existing generator — the retirement of which is what this option is
+      # for. Every system block in openapi.yaml carries an `installation_year`, so all
+      # five system measures take it.
+      #
+      # Unset on a newly selected measure means "installed as part of this pathway"; the
+      # engine reads it only where a rule asks, and `requires_*` fires on an absent option
+      # while `forbids_*` stays silent, as everywhere else.
+      - name: installation_year
+        access_level: experts
+        value_type: integer
+    source: ACE-Retrofitting D2.1.2 for LPG and conventional/condensing and air pump types air_source/ground_source
+
+  - id: heating_installation
     category: heating system
     subcategory: heat distribution system
     options:
@@ -262,121 +404,142 @@ measures:
       # becomes a stage-0 `heating installation` carrying its type as this option, so a
       # value the inventory cannot express would be an outcome no building could start
       # from. `surface_heating` covers underfloor, wall and ceiling circuits alike.
-      - name: type of system
-        access_level: Everyone
+      - name: type_of_system
+        access_level: everyone
         value_type: enum
         values:
           - surface_heating
           - low_temperature_radiator
           - conventional_radiator
 
-  - display_name: air conditioners
+  - id: air_conditioners
     category: heating system
     subcategory: a/c
     options:
       # Was "3-15 kW" as a single string. The unit now lives in the option name and the
       # value is a plain number; the 3-15 kW span was a product range, not a constraint.
       - name: power_in_watt
-        access_level: Everyone
+        access_level: everyone
         value_type: integer
 
-  - display_name: hot water system
+  # Question: Should this be kept?
+  - id: hot_water_system
     category: heating system
     subcategory: domestic hot water
     options:
       - name: supply
-        access_level: Everyone
+        access_level: everyone
         value_type: enum
         values:
-          - Heat pump
-          - Direct electric
+          - together_with_heating_system
+          - separate_heat_pump
+          - separate_direct_electric
 
-  - display_name: temperature control system
+  - id: temperature_control_system
     category: heating system
     subcategory: heating control system
     options:
-      - name: type of system
-        access_level: Everyone
+      - name: type_of_system
+        access_level: everyone
         value_type: enum
         values:
-          - traditional thermostats
-          - smart heating control system
+          - traditional_thermostats
+          - smart_heating_control_system
 
-  - display_name: replace white appliances
+  - id: replace_white_appliances
     category: appliances
     subcategory: electric appliances
     options: []
 
-  - display_name: install new led lights
-    category: appliances
-    subcategory: electric appliances
-    options: []
-
-  - display_name: photovoltaic system
+  - id: photovoltaic_system
     category: appliances
     subcategory: renewable energy systems
     options:
-      - name: size in percent of roof area
-        access_level: Everyone
+      - name: size_in_percent_of_roof_area
+        access_level: everyone
         value_type: integer
 
-  - display_name: battery system
+      # Year of installation — see `heating system` for why this is an option rather than
+      # a parameter.
+      - name: installation_year
+        access_level: experts
+        value_type: integer
+
+  - id: battery_system
     category: appliances
     subcategory: renewable energy systems
     options:
-      - name: days to cover
-        access_level: Everyone
+      - name: days_to_cover
+        access_level: everyone
         value_type: integer
 
-  - display_name: solar thermal system
+      # Year of installation — see `heating system` for why this is an option rather than
+      # a parameter.
+      - name: installation_year
+        access_level: experts
+        value_type: integer
+
+  - id: solar_thermal_system
     category: appliances
     subcategory: renewable energy systems
     options:
       # What the collector feeds. This is the distinction that decides whether the
       # measure interacts with the heating system at all: a dhw-only collector is by far
       # the common case and touches nothing about space heating, while one that also
-      # feeds the heating circuit does. `used_for_space_heating` / `used_for_dhw` in
-      # openapi.yaml are the two booleans this enumerates, minus the both-false case,
-      # which would be a collector heating nothing.
+      # feeds the heating circuit does.
       #
       # Sized in openapi.yaml by `collector_area_in_m2` rather than here: unlike the PV
       # measure's roof-area percentage, collector area is set by the hot-water demand,
       # not by how much roof is free.
+      #
+      # `space_heating_only` is deliberately absent, and the assembler REJECTS a collector
+      # declaring it rather than folding it onto the nearest value. In practice no
+      # collector is installed for space heating alone: such an array is sized well above
+      # the summer counterpart of the winter heating demand, the cylinder is already
+      # plumbed in, and the surplus has nowhere else to go — so it carries the hot water
+      # too. `openapi.yaml` still permits the combination, `used_for_dhw` and
+      # `used_for_space_heating` being independent booleans, which is why the check lives
+      # in the assembler and is a hard error naming both flags.
       - name: supplies
-        access_level: Everyone
+        access_level: everyone
         value_type: enum
         values:
           - dhw_only
-          - space_heating_only
           - dhw_and_space_heating
 
-  - display_name: electric vehicle
+      # Year of installation — see `heating system` for why this is an option rather than
+      # a parameter.
+      - name: installation_year
+        access_level: experts
+        value_type: integer
+
+  - id: electric_vehicle
     category: appliances
     subcategory: electric transportation
     options:
       - name: number
-        access_level: Everyone
+        access_level: everyone
         value_type: integer
 
-  - display_name: change room temperature
+  - id: change_room_temperature
     category: behaviour measures
     subcategory: comfort changes
     options:
-      - name: new room temperature
-        access_level: Everyone
+      - name: new_room_temperature
+        access_level: everyone
         value_type: integer
 
-  - display_name: diy sealing of air leaks
+  - id: diy_sealing_of_air_leaks
     category: behaviour measures
     subcategory: diy measures
     options: []
 
-  - display_name: thermocover for the windows
+  - id: thermocover_for_the_windows
     category: behaviour measures
     subcategory: diy measures
     options: []
 
-  - display_name: optimize behaviour for self-consumption of PV
+  - id: optimize_behaviour_for_self_consumption_of_pv
     category: behaviour measures
     subcategory: behaviour changes
     options: []

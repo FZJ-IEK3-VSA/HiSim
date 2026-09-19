@@ -16,6 +16,7 @@ Each test states the failure mode it catches.
 from __future__ import annotations
 
 import datetime
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -23,6 +24,7 @@ from typing import ClassVar, List, Sequence, Tuple
 
 import pytest
 
+import hisim
 from hisim.cli import build_parser
 from hisim.energy_system.executor import SimulationParametersReader
 from hisim.energy_system.recording.child_recorder import ChildRecorder
@@ -466,6 +468,34 @@ def test_a_recording_child_picks_its_own_profile_directory(monkeypatch: pytest.M
         "the recorder pinned or passed on a local-LPG calculation index; cleared, the child derives "
         "its own from its process and cannot collide with another run"
     )
+
+
+@pytest.mark.base
+def test_a_recording_child_records_the_code_its_parent_is_running(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The child's ``PYTHONPATH`` starts at the parent's own package root, whatever the operator set.
+
+    Failure mode caught: a recording made in one worktree that describes another checkout's code,
+    because the child resolved ``hisim`` to whichever copy happens to be installed. It reports
+    every twin fresh and is a false all-clear on exactly the files this script exists to keep
+    honest -- P3's F-2, seen twice on the scenario-JSON regenerator before that script was retired.
+    """
+    recorded = RecordedChildEnvironment()
+    monkeypatch.setattr("hisim.energy_system.recording.child_recorder.subprocess.run", recorded)
+    monkeypatch.setenv(ChildRecorder.PATH_VARIABLE, os.pathsep.join(["/somewhere/else", ChildRecorder.package_root()]))
+
+    Recorder.record(
+        setup=Fleet.SETUPS / f"{Fleet.CHEAPEST_SETUP}.py",
+        parameters=Fleet.ONE_DAY,
+        out_dir=tmp_path,
+        python=sys.executable,
+    )
+
+    path = recorded.environments[0][ChildRecorder.PATH_VARIABLE].split(os.pathsep)
+    assert path[0] == ChildRecorder.package_root() == str(Path(hisim.__file__).resolve().parent.parent)
+    # What the operator set is kept behind it, and the root does not appear twice.
+    assert path == [ChildRecorder.package_root(), "/somewhere/else"]
 
 
 class CopyingStubRecorder:

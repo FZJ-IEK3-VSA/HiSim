@@ -24,6 +24,8 @@ import sys
 from pathlib import Path
 from typing import ClassVar, Dict, Optional, Sequence, Tuple
 
+import hisim
+
 
 class ChildRecorder:
     """The recorder's child command, its environment and the subprocess call that runs it.
@@ -49,19 +51,52 @@ class ChildRecorder:
     #: hour.
     LPG_INDEX_VARIABLE: ClassVar[str] = "HISIM_LOCAL_LPG_CALC_INDEX"
 
+    #: Environment variable naming the interpreter's extra import path. The child's copy of it is
+    #: prefixed with the parent's own package root so that the two processes run the same code;
+    #: see :meth:`environment`.
+    PATH_VARIABLE: ClassVar[str] = "PYTHONPATH"
+
+    @classmethod
+    def package_root(cls) -> str:
+        """The directory the parent's own ``hisim`` package lives in.
+
+        Returns:
+            The absolute path of the directory containing the imported ``hisim`` package --
+            the worktree root for an editable checkout, the site-packages directory for an
+            installed copy.
+        """
+        return str(Path(hisim.__file__).resolve().parent.parent)
+
     @classmethod
     def environment(cls) -> Dict[str, str]:
-        """Builds the child's environment: this process's own, minus the local-profile index.
+        """Builds the child's environment: this process's own, plus the code the parent is running.
 
         The parent's environment is inherited wholesale, because a recording has to see what a
         hand run of the same setup sees — the load profile provider's settings among it — and only
         :attr:`LPG_INDEX_VARIABLE` is removed.
 
+        The child must record the *parent's* HiSim, and it would not by default: a worktree with no
+        editable install of its own resolves ``hisim`` to whatever checkout the environment happens
+        to have installed, so a run inside worktree B can report every twin fresh while describing
+        checkout A's code (P3's F-2, seen twice, each time as a false all-clear on a script whose
+        whole job is to keep generated files honest). Prepending the parent's own package root to
+        ``PYTHONPATH`` makes the child import what the parent imported, whether or not the operator
+        remembered to export anything. An existing ``PYTHONPATH`` is kept behind it rather than
+        replaced, so the load profile provider's own path settings survive, and a root already on
+        it moves to the front instead of appearing twice.
+
         Returns:
-            A copy of this process's environment without the local-profile index variable.
+            A copy of this process's environment, without the local-profile index variable and
+            with the parent's package root at the front of ``PYTHONPATH``.
         """
         environment = dict(os.environ)
         environment.pop(cls.LPG_INDEX_VARIABLE, None)
+        root = cls.package_root()
+        inherited = [
+            entry for entry in environment.get(cls.PATH_VARIABLE, "").split(os.pathsep)
+            if entry and entry != root
+        ]
+        environment[cls.PATH_VARIABLE] = os.pathsep.join([root, *inherited])
         return environment
 
     @classmethod

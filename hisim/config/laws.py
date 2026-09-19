@@ -113,6 +113,21 @@ class SizingLaw:
         """Renders the law as a short human-readable formula for errors and the audit."""
         raise NotImplementedError
 
+    def describe_as_operand(self) -> str:
+        """Renders the law for use *inside* another law's rendering, bracketed if needed.
+
+        ``Size.PV_PEAK_POWER_IN_WATT`` renders the same either way, but a law whose own
+        rendering is an infix expression has to be bracketed before a suffix is appended
+        to it, or the suffix reads as belonging to the expression's last term:
+        ``(0.5 * Size.PV_PEAK_POWER_IN_WATT).rounded(2)`` rather than
+        ``0.5 * Size.PV_PEAK_POWER_IN_WATT.rounded(2)``, which is a different arithmetic.
+        The default renders the law unchanged, and the infix laws override it.
+
+        Returns:
+            The law's rendering, in brackets where the rendering is an infix expression.
+        """
+        return self.describe()
+
     def facts_read(self) -> Tuple[Tuple[str, Cardinality], ...]:
         """Names the context facts this law reads, each with its cardinality.
 
@@ -281,7 +296,11 @@ class _ScaledLaw(_UnaryLaw):
 
     def describe(self) -> str:
         """Renders as ``factor * inner``."""
-        return f"{self.factor} * {self.inner.describe()}"
+        return f"{self.factor} * {self.inner.describe_as_operand()}"
+
+    def describe_as_operand(self) -> str:
+        """Renders bracketed: the product is infix, so a suffix must not bind to its tail."""
+        return f"({self.describe()})"
 
 
 class _ClampedLaw(_UnaryLaw):
@@ -304,7 +323,7 @@ class _ClampedLaw(_UnaryLaw):
 
     def describe(self) -> str:
         """Renders the bounds as ``.at_least``/``.at_most`` suffixes."""
-        rendered = self.inner.describe()
+        rendered = self.inner.describe_as_operand()
         if self.minimum is not None:
             rendered += f".at_least({self.minimum})"
         if self.maximum is not None:
@@ -326,7 +345,7 @@ class _RoundedLaw(_UnaryLaw):
 
     def describe(self) -> str:
         """Renders as a ``.rounded(n)`` suffix."""
-        return f"{self.inner.describe()}.rounded({self.digits})"
+        return f"{self.inner.describe_as_operand()}.rounded({self.digits})"
 
 
 class _ConstantLaw(SizingLaw):

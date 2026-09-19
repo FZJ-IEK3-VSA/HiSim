@@ -12,7 +12,7 @@ import copy
 import dataclasses
 import json
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Optional
 
 import pytest
 from dataclasses_json import dataclass_json
@@ -115,6 +115,31 @@ def test_expression_laws_read_like_the_formula_and_name_their_facts():
 
 
 @pytest.mark.base
+def test_a_suffix_brackets_the_product_it_is_appended_to():
+    """A rounded or clamped product renders bracketed, so the suffix cannot read as the term's.
+
+    The rendering is not decoration: a ``ConfigSizingError`` quotes ``describe()``, so a
+    failing field would otherwise name a law that differs from the one that ran. Pinned on
+    the battery's own two laws, the first compound laws under a rounding in the repository.
+    """
+    assert (Size.PV_PEAK_POWER_IN_WATT * 0.5).rounded(2).describe() == (
+        "(0.5 * Size.PV_PEAK_POWER_IN_WATT).rounded(2)"
+    )
+    assert (Size.PV_PEAK_POWER_IN_WATT * 1e-3).rounded(2).describe() == (
+        "(0.001 * Size.PV_PEAK_POWER_IN_WATT).rounded(2)"
+    )
+    assert (1.1 * Size.HEATING_LOAD_IN_WATT).at_least(5_000).at_most(9_000).describe() == (
+        "(1.1 * Size.HEATING_LOAD_IN_WATT).at_least(5000).at_most(9000)"
+    )
+    # A bare term takes no brackets, and neither does a suffixed one scaled afterwards:
+    # the suffix already binds to the term alone.
+    assert Size.HEATING_LOAD_IN_WATT.rounded(2).describe() == "Size.HEATING_LOAD_IN_WATT.rounded(2)"
+    assert (Size.HEATING_LOAD_IN_WATT.rounded(2) * 1.1).describe() == (
+        "1.1 * Size.HEATING_LOAD_IN_WATT.rounded(2)"
+    )
+
+
+@pytest.mark.base
 def test_resolve_computes_auto_fields_and_records_provenance():
     """AUTO fields resolve by their laws; the copy carries a per-field sizing record."""
     resolved = _fixture_config().resolve(SizingContext(heating_load_in_watt=10_000.0))
@@ -190,6 +215,46 @@ def test_a_failing_function_law_errors_naming_the_field():
 
     with pytest.raises(ConfigSizingError, match="value_in_watt"):
         _FunctionLawConfig(component_id=ComponentID(name="F")).resolve(SizingContext())
+
+
+@pytest.mark.base
+def test_an_optional_field_resolves_to_nothing_when_its_fact_is_nothing():
+    """A ``None`` fact answers an optional field and still refuses a required one.
+
+    ``None`` on a fact means two different things depending on the field reading it: for a
+    required field it is the absence of an answer, which the fact term refuses by name, and
+    for an optional one it is the answer -- district heat has no heating value because it
+    burns nothing. Before F-12 both raised, so a setup had to assign the ``None`` itself.
+    """
+
+    @dataclass_json
+    @dataclass
+    class _OptionalFieldConfig(ConfigBase):
+        """Fixture reading one fact from an optional field and one from a required field."""
+
+        component_id: ComponentID
+        maybe_in_watt: Sizable[Optional[float]] = sized_field(
+            rule=Size.HEATING_LOAD_IN_WATT, optional=True
+        )
+        always_in_watt: Sizable[float] = sized_field(rule=Size.MAXIMAL_THERMAL_POWER_IN_WATT)
+
+        @classmethod
+        def get_main_classname(cls) -> str:
+            """Returns a dummy classname, as the ConfigBase contract requires."""
+            return "tests.test_sizing._OptionalFieldConfig"
+
+    resolved = _OptionalFieldConfig(component_id=ComponentID(name="M")).resolve(
+        SizingContext(maximal_thermal_power_in_watt=5_000.0)
+    )
+    assert resolved.maybe_in_watt is None
+    assert resolved.always_in_watt == 5_000.0
+    entry = next(entry for entry in resolved.sizing_record if entry.field == "maybe_in_watt")
+    assert entry.law == "Size.HEATING_LOAD_IN_WATT" and entry.value is None
+
+    with pytest.raises(ConfigSizingError, match="always_in_watt.*maximal_thermal_power_in_watt"):
+        _OptionalFieldConfig(component_id=ComponentID(name="M")).resolve(
+            SizingContext(heating_load_in_watt=9_000.0)
+        )
 
 
 @pytest.mark.base

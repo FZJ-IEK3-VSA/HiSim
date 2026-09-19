@@ -426,20 +426,21 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
 
     # Build Heating Meter
-    # The meter accounts what the connection delivers, so the carrier is a fact of the district
-    # heating's configuration and is read off the same class constant its contribution uses,
-    # instead of being named a second time here. The two fuel constants are None -- district heat
-    # burns nothing in the house -- and a law cannot resolve a field to None, so they are assigned
-    # before resolving, which is what leaves them out of the sizing entirely.
-    my_fuel_meter_config = fuel_meter.FuelMeterConfig.preset_standard("FuelMeter")
-    my_fuel_meter_config.heating_value_of_fuel_in_kwh_per_liter = (
-        generic_district_heating.DistrictHeatingConfig.HEATING_VALUE_IN_KWH_PER_LITER
-    )
-    my_fuel_meter_config.fuel_density_in_kg_per_m3 = (
-        generic_district_heating.DistrictHeatingConfig.FUEL_DENSITY_IN_KG_PER_M3
-    )
-    my_fuel_meter_config = my_fuel_meter_config.resolve(
-        SizingContext(energy_carrier=generic_district_heating.DistrictHeatingConfig.ENERGY_CARRIER)
+    # The meter accounts what the connection delivers, so all three values are facts of the
+    # district heating's configuration and are read off the same class constants its contribution
+    # uses, instead of being named a second time here. The two fuel constants are None -- district
+    # heat burns nothing in the house -- and both fields are declared optional, so the None is an
+    # answer they resolve to rather than something the setup has to pin.
+    my_fuel_meter_config = fuel_meter.FuelMeterConfig.preset_standard("FuelMeter").resolve(
+        SizingContext(
+            energy_carrier=generic_district_heating.DistrictHeatingConfig.ENERGY_CARRIER,
+            heating_value_of_fuel_in_kwh_per_liter=(
+                generic_district_heating.DistrictHeatingConfig.HEATING_VALUE_IN_KWH_PER_LITER
+            ),
+            fuel_density_in_kg_per_m3=(
+                generic_district_heating.DistrictHeatingConfig.FUEL_DENSITY_IN_KG_PER_M3
+            ),
+        )
     )
     my_fuel_meter = fuel_meter.FuelMeter(
         my_simulation_parameters=my_simulation_parameters,

@@ -40,6 +40,7 @@ from hisim.config import (
     law,
     preset,
     preset_provenance,
+    replace_config,
     presets_of,
     resolve_all,
     sized_field,
@@ -208,6 +209,27 @@ def test_a_preset_builds_only_with_an_instance_name_and_stamps_its_provenance():
     assert preset_provenance(_StorageConfig(component_id=ComponentID(name="Manual"))) is None
     with pytest.raises(TypeError):
         _StorageConfig.preset_standard()  # type: ignore[call-arg]  # pylint: disable=no-value-for-parameter
+
+
+@pytest.mark.base
+def test_replace_config_keeps_the_stamp_that_dataclasses_replace_drops():
+    """A copy made with ``replace_config`` still knows its preset; a plain ``replace`` does not.
+
+    Failure mode caught: a variant built by copying a preset instance records as a full
+    literal block instead of ``preset:`` plus its overrides, because the stamp is an
+    attribute and ``dataclasses.replace`` copies fields only (F-13). The twin still loads
+    and runs identically, so nothing but this test notices.
+    """
+    built = _StorageConfig.preset_standard("TankA")
+    variant = replace_config(built, volume_in_liter=123.0)
+    assert variant.volume_in_liter == 123.0
+    assert variant is not built and built.volume_in_liter != 123.0
+    assert preset_provenance(variant) == "standard"
+    assert preset_provenance(dataclasses.replace(built, volume_in_liter=123.0)) is None
+    # No changes at all is a plain copy, stamp included, which is what the executor's
+    # per-entry copy needs; and an unstamped config stays unstamped rather than gaining one.
+    assert preset_provenance(replace_config(built)) == "standard"
+    assert preset_provenance(replace_config(_StorageConfig(component_id=ComponentID(name="M")))) is None
 
 
 @pytest.mark.base

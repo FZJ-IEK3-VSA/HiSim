@@ -12,6 +12,7 @@ leaves behind in ``sizing_record`` and the ``ResolutionReport``.
 import json
 import random
 from dataclasses import dataclass
+from typing import Optional
 
 import pytest
 from dataclasses_json import dataclass_json
@@ -112,6 +113,39 @@ class _ConsumerConfig(ConfigBase):
     def get_main_classname(cls) -> str:
         """Returns a dummy classname, as the ConfigBase contract requires."""
         return "tests.test_sizing_engine._ConsumerConfig"
+
+
+@dataclass_json
+@dataclass
+class _OptionalConsumerConfig(ConfigBase):
+    """A fixture consumer whose one sized field may legitimately end up holding nothing."""
+
+    component_id: ComponentID
+    band_in_watt: Sizable[Optional[float]] = sized_field(
+        rule=0.5 * Size.MAXIMAL_THERMAL_POWER_IN_WATT, optional=True
+    )
+
+    @classmethod
+    def get_main_classname(cls) -> str:
+        """Returns a dummy classname, as the ConfigBase contract requires."""
+        return "tests.test_sizing_engine._OptionalConsumerConfig"
+
+
+@dataclass_json
+@dataclass
+class _MixedConsumerConfig(ConfigBase):
+    """A fixture consumer reading one fact from both an optional and a required field."""
+
+    component_id: ComponentID
+    band_in_watt: Sizable[Optional[float]] = sized_field(
+        rule=0.5 * Size.MAXIMAL_THERMAL_POWER_IN_WATT, optional=True
+    )
+    floor_in_watt: Sizable[float] = sized_field(rule=0.25 * Size.MAXIMAL_THERMAL_POWER_IN_WATT)
+
+    @classmethod
+    def get_main_classname(cls) -> str:
+        """Returns a dummy classname, as the ConfigBase contract requires."""
+        return "tests.test_sizing_engine._MixedConsumerConfig"
 
 
 @dataclass_json
@@ -326,6 +360,50 @@ def test_binding_to_the_null_provider_names_it_in_the_error():
             ],
             seed=SizingContext(heating_load_in_watt=10_000.0),
             sources={"DhwController": {"maximal_thermal_power_in_watt": "HeatPump.maximal_thermal_power_in_watt"}},
+        )
+
+
+@pytest.mark.base
+def test_a_null_fact_resolves_an_optional_field_to_nothing():
+    """A fact only optional fields read is answered by ``None``, not refused.
+
+    The fuel meter beside a district heating connection is the real case: the connection
+    burns nothing in the house, so it contributes no heating value and no density, and both
+    of the meter's fields are declared ``optional=True``. Before F-12 the setup had to assign
+    the two ``None``s before resolving, which left them out of the sizing and put two
+    ``null`` lines into the twin.
+    """
+    resolved = resolve_all(
+        [
+            _NullProducerConfig(component_id=ComponentID(name="HeatPump")),
+            _OptionalConsumerConfig(component_id=ComponentID(name="Meter")),
+        ],
+    )
+
+    meter = next(config for config in resolved if config.component_id.name == "Meter")
+    assert meter.band_in_watt is None
+    # The audit still names the law that answered, so an empty field is explained rather
+    # than merely empty.
+    entry = next(entry for entry in meter.sizing_record if entry.field == "band_in_watt")
+    assert entry.law == "0.5 * Size.MAXIMAL_THERMAL_POWER_IN_WATT"
+    assert entry.value is None
+    assert entry.inputs == (("HeatPump.maximal_thermal_power_in_watt", None),)
+
+
+@pytest.mark.base
+def test_a_null_fact_is_still_refused_where_a_required_field_reads_it():
+    """One optional reader does not make a fact nullable for the field beside it.
+
+    Failure mode caught: a config with an optional and a required field over the same fact
+    resolving the required one from nothing, which is the invention of a number the null
+    rule exists to prevent.
+    """
+    with pytest.raises(ConfigSizingError, match="provided as null by 'HeatPump'"):
+        resolve_all(
+            [
+                _NullProducerConfig(component_id=ComponentID(name="HeatPump")),
+                _MixedConsumerConfig(component_id=ComponentID(name="Meter")),
+            ],
         )
 
 

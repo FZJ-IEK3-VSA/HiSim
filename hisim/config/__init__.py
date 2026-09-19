@@ -73,6 +73,7 @@ from hisim.config.presets import (
     constructors_of,
     preset,
     preset_provenance,
+    replace_config,
     presets_of,
 )
 from hisim.config.laws import (
@@ -172,6 +173,7 @@ __all__ = [
     "law",
     "preset",
     "preset_provenance",
+    "replace_config",
     "presets_of",
     "resolve_all",
     "resolve_config",

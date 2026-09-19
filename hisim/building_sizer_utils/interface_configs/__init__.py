@@ -25,11 +25,12 @@ The package is consumed by three integration boundaries:
   :class:`~hisim.building_sizer_utils.interface_configs.kpi_config.KPIForRatingInOptimization`
   enum selects which KPI acts as the optimisation fitness function.
 
-* **RenoVisor** (external request interface) -- the
-  :mod:`hisim.renovisor.mapping` translator converts a RenoVisor home-inventory
-  JSON request into a
-  :class:`~hisim.building_sizer_utils.interface_configs.modular_household_config.ModularHouseholdConfig`
-  for simulation.
+* **RenoVisor** (external request interface) -- the :mod:`hisim.renovisor`
+  translation layer converts a RenoVisor home-inventory request into a
+  simulation. It no longer produces a
+  :class:`~hisim.building_sizer_utils.interface_configs.modular_household_config.ModularHouseholdConfig`:
+  since its rewrite it parametrises the recorded grouped energy-system files
+  instead.
 
 * **Modular-household system setups** (internal) -- the
   ``system_setups/*_building_sizer.py`` entry points construct

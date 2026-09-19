@@ -112,7 +112,7 @@ were resolved with a documented default to keep the implementation moving; they 
     CO2 values are rough per-m2 AI estimates.
 13. **RenoVisor integration**: engine-side APIs (perspectives, existing assets, question list,
     economic parameters) are implemented and additive optional request fields are documented, but
-    wiring them through `hisim/renovisor/mapping.py` was deferred to keep the translator stable —
+    wiring them through the RenoVisor translation layer (`hisim/renovisor/`, v1 `mapping.py` since replaced by `registry.py` and the step-4 bindings) was deferred to keep the translator stable —
     the translator has its own spec/test suite and should adopt the cost engine in its own PR.
     (See §10 Phase 3: "RenoVisor request schema gains ... additive, optional fields".)
 14. **Attribution view (Q7b)** is implemented per-component as each consumer's kWh share of the

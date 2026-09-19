@@ -1,0 +1,253 @@
+# Everything the translator accepts and does not act on. An entry is a promise that the omission
+# is known; anything the translator cannot map that is NOT here fails its build (exit 3), never
+# the user's request. The format and the semantics are section 4.4 of the calculation-request
+# specification:
+#
+#   path:    a request path, optionally narrowed by `except` (values that ARE implemented) and
+#            by `when` (a condition on the RENOVATED house). A path covers its own subtree.
+#   measure: a catalogue measure id, `id.option`, or `id.option=value`.
+#   note:    the sentence the mapping report and the capability document carry, verbatim.
+#   tracked: optional; the issue that would let the entry be deleted.
+#
+# The list can only shrink by someone implementing the item (T-NIY fails on an entry whose probes
+# report `used` or `approximated`) and can only grow by someone writing the sentence users read.
+
+# --- The building ---------------------------------------------------------------------------
+
+- path: house.building.number_of_storeys
+  note: The archetype's n_Storey is used.
+
+- path: house.building.window.outside_shading
+  note: No shading parameter on Building.
+
+- path: house.building.window.thermocover
+  note: No window parameter for a removable cover on Building.
+
+- path: house.building.window.frame_material
+  note: No frame parameter on Building; the U-value carries the whole window.
+
+- path: house.building.window.glazing_panes
+  note: No pane-count parameter on Building; the U-value carries the whole window.
+
+- path: house.building.window.low_emissivity_coating
+  note: No coating parameter on Building; the U-value carries the whole window.
+
+- path: house.building.door.frame_material
+  note: No frame parameter on Building; the U-value carries the whole door.
+
+- path: house.building.door.glazing_panes
+  note: No pane-count parameter on Building; the U-value carries the whole door.
+
+# The `air_barrier` option of an insulation measure is listed under `measure:` below. There is
+# no `path:` entry for it: a request may not carry `added_insulation` at all (it is refused with
+# `added_insulation.not_allowed`), so no request leaf ever names one and a path entry could
+# never be reached by a probe.
+
+# --- Occupancy: the MVP image ships one precomputed profile and no LoadProfileGenerator -------
+
+- path: house.occupancy.number_of_residents
+  note: Every household is simulated as a working couple (CHR01) until the LoadProfileGenerator is in the image.
+  tracked: challenges.md D-C
+
+- path: house.occupancy.home_office_days_per_week
+  note: No LoadProfileGenerator parameter.
+
+- path: house.occupancy.pv_self_consumption_optimised
+  note: No EMS-without-battery option in the recorded base files yet.
+  tracked: challenges.md D-D
+
+- path: house.appliances.white_appliances
+  note: The precomputed occupancy profile has a fixed appliance intensity.
+  tracked: challenges.md D-C
+
+- path: house.electric_vehicles
+  note: A car needs a computed driving profile; the image has no LoadProfileGenerator.
+  tracked: challenges.md D-C
+
+# --- Heating --------------------------------------------------------------------------------
+
+- path: house.heating.type_of_system
+  except:
+    - air_source_heat_pump
+    - electric_heating
+    - biomass_heating
+    - pellet_heating
+    - woodchip_heating
+    - district_heating
+    - hvo_heating
+    - hydrogen_heating
+    - conventional_gas_heating
+    - conventional_oil_heating
+    - condensing_gas_heating
+    - condensing_oil_heating
+    - solid_fuel_heating
+  note: No brine/water heat-pump preset, no hybrid twin and no LPG fuel in HiSim; modelled as the nearest implemented generator.
+
+- path: house.heating.cooking_range
+  note: No HiSim component for a range cooker.
+
+- path: house.heating.secondary
+  note: No HiSim component for a secondary heater.
+
+- path: house.heating.flow_temperature_in_celsius
+  when: heating.type_of_system != air_source_heat_pump
+  note: Boilers have no flow-temperature field.
+
+- path: house.heating.seasonal_efficiency_in_percent
+  when: heating.type_of_system == air_source_heat_pump
+  note: The heat pump follows its hplib model curve.
+
+- path: house.heat_distribution.type_of_system
+  when: heating.type_of_system == electric_heating
+  note: Electric heating has no heat distribution system.
+
+# The emitter itself is modelled -- HiSim has a LOW_TEMPERATURE_RADIATOR member -- but the cost
+# database has no row for it, and an unpriced subject aborts the whole lifecycle evaluation
+# (cost specification D7, `hisim/economics/adapter.py` `_hds_facts`). So the translator writes
+# floor heating instead, which is the heat pump's other low-temperature emitter and is priced.
+- path: house.heat_distribution.type_of_system
+  except: [surface_heating, conventional_radiator]
+  note: No cost row for a low-temperature radiator in the cost database yet; modelled as surface
+    heating (floor heating), the heat pump's other low-temperature emitter.
+  tracked: hisim/economics/adapter.py _hds_facts (no HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR row)
+
+- path: house.hot_water.supply
+  except: [together_with_heating_system]
+  when: heating.type_of_system != air_source_heat_pump
+  note: No separate domestic-hot-water heat pump or immersion component.
+
+- path: house.hot_water.supply
+  except: [together_with_heating_system, separate_heat_pump]
+  note: No immersion-heater component.
+
+- path: house.temperature_control.type_of_system
+  except: [traditional_thermostats]
+  note: No night-setback group in the recorded base files yet.
+  tracked: challenges.md D-D
+
+- path: house.air_conditioning
+  note: No air-conditioner group in the recorded base files yet.
+  tracked: challenges.md D-D
+
+# --- Ventilation ------------------------------------------------------------------------------
+
+- path: house.ventilation.type_of_system
+  except: [natural]
+  note: Ventilation is not configurable in HiSim; the Building reads the air-change rate from the TABULA row.
+  tracked: simulation_issues.md item 8
+
+- path: house.ventilation.air_tightness
+  except: [as_built]
+  note: No infiltration parameter on Building.
+  tracked: simulation_issues.md item 8
+
+# --- Solar thermal ----------------------------------------------------------------------------
+
+- path: house.solar_thermal_system
+  when: heating.type_of_system not in [conventional_gas_heating, condensing_gas_heating, air_source_heat_pump]
+  note: No recorded solar-thermal wiring for this generator; the collector is left out.
+
+- path: house.solar_thermal_system.supplies
+  except: [dhw_only]
+  note: The collector is wired to the hot-water storage only; modelled as dhw_only.
+
+- path: house.solar_thermal_system.collector_type
+  except: [flat_plate]
+  note: No evacuated-tube preset; modelled as flat_plate.
+
+# --- Location -----------------------------------------------------------------------------------
+
+- path: location.postcode
+  note: One weather station per country; the postcode is recorded and has no target.
+
+# --- Measures -------------------------------------------------------------------------------
+
+- measure: heating_system.type_of_system=ground_source_heat_pump
+  note: No brine/water preset; modelled as air_source_heat_pump.
+
+- measure: heating_system.type_of_system=hybrid_heat_pump
+  note: No hybrid twin; modelled as air_source_heat_pump.
+
+- measure: heating_system.type_of_system=conventional_lpg_heating
+  note: No LPG fuel in HiSim; modelled as gas.
+
+- measure: heating_system.type_of_system=condensing_lpg_heating
+  note: No LPG fuel in HiSim; modelled as gas.
+
+- measure: heating_installation.type_of_system=low_temperature_radiator
+  note: No cost row for a low-temperature radiator in the cost database yet; modelled as surface
+    heating (floor heating), the heat pump's other low-temperature emitter.
+  tracked: hisim/economics/adapter.py _hds_facts (no HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR row)
+
+- measure: heating_system.installation_year
+  note: No HiSim parameter for the age of a new generator.
+
+- measure: ventilation_system.installation_year
+  note: No HiSim parameter for the age of a new ventilation system.
+
+- measure: photovoltaic_system.installation_year
+  note: No HiSim parameter for the age of a new array.
+
+- measure: battery_system.installation_year
+  note: No HiSim parameter for the age of a new battery.
+
+- measure: solar_thermal_system.installation_year
+  note: No HiSim parameter for the age of a new collector.
+
+- measure: window_replacement.frame_material
+  note: No frame parameter on Building; the U-value carries the whole window.
+
+- measure: door_replacement.frame_material
+  note: No frame parameter on Building; the U-value carries the whole door.
+
+- measure: suspended_ground_floor_insulation.air_barrier
+  note: No HiSim parameter.
+
+- measure: hot_water_system.supply=separate_direct_electric
+  note: No immersion-heater component.
+
+- measure: hot_water_system.supply=separate_heat_pump
+  when: heating.type_of_system != air_source_heat_pump
+  note: No separate domestic-hot-water heat pump component.
+
+- measure: solar_thermal_system
+  when: heating.type_of_system not in [conventional_gas_heating, condensing_gas_heating, air_source_heat_pump]
+  note: No recorded solar-thermal wiring for this generator; the collector is left out.
+
+- measure: outside_shading
+  note: No shading parameter on Building.
+
+- measure: ventilation_system
+  note: Ventilation is not configurable in HiSim; the Building reads the air-change rate from the TABULA row.
+  tracked: simulation_issues.md item 8
+
+- measure: shallow_air_tightness_measures
+  note: No infiltration parameter on Building.
+  tracked: simulation_issues.md item 8
+
+- measure: diy_sealing_of_air_leaks
+  note: No infiltration parameter on Building.
+  tracked: simulation_issues.md item 8
+
+- measure: thermocover_for_the_windows
+  note: No window parameter for a removable cover on Building.
+
+- measure: replace_white_appliances
+  note: The precomputed occupancy profile has a fixed appliance intensity.
+  tracked: challenges.md D-C
+
+- measure: electric_vehicle
+  note: A car needs a computed driving profile; the image has no LoadProfileGenerator.
+  tracked: challenges.md D-C
+
+- measure: temperature_control_system
+  note: No night-setback group in the recorded base files yet.
+  tracked: challenges.md D-D
+
+- measure: air_conditioners
+  note: No air-conditioner group in the recorded base files yet.
+  tracked: challenges.md D-D
+
+- measure: optimize_behaviour_for_self_consumption_of_pv
+  note: No EMS-without-battery option in the recorded base files yet.
+  tracked: challenges.md D-D

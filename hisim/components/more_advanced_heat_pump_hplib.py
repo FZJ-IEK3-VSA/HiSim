@@ -110,8 +110,8 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     #: whole device database for the given group; a manufacturer's model name picks that one
     #: machine instead.
     model: str = "Generic"
-    #: Medium on the primary (source) side: air, brine or water. Together with ``group_id`` it
-    #: says which kind of heat pump the parameters describe.
+    #: Medium on the primary -- that is, the source -- side: air, brine or water. Together with
+    #: ``group_id`` it says which kind of heat pump the parameters describe.
     fluid_primary_side: str = "air"
     #: hplib device group: 1 air/water, 2 brine/water, 3 water/water, 4 air/air.
     group_id: int = 1

@@ -369,6 +369,45 @@ class UtspLpgConnector(cp.Component):
 
     Electricity_Demand_Forecast_24h: str = "Electricity_Demand_Forecast_24h"
 
+    @classmethod
+    def electricity_consumption_of(
+        cls,
+        config: UtspLpgConnectorConfig,
+        my_simulation_parameters: SimulationParameters,
+    ) -> Tuple[float, ...]:
+        """Return one household's electricity consumption in watt per timestep, without a simulation.
+
+        A caller that has to know how much electricity a household uses before any simulation
+        exists -- the RenoVisor translation layer sizes a battery from it, decision Q12 of
+        ``roadmap/renovisor/challenges.md`` -- would otherwise have to reach into this component's
+        attributes, or run a whole system to learn one number about one household. This is the
+        supported way to ask.
+
+        The profile is obtained through the component's own loading path, with the configuration
+        and the simulation parameters the run itself will use, so the cache entry it warms is the
+        one the run then finds: asking costs the profile once rather than twice. Which source the
+        profile comes from is the configuration's, exactly as in a run.
+
+        Example::
+
+            watts = UtspLpgConnector.electricity_consumption_of(config, parameters)
+            kilowatt_hours = sum(watts) * parameters.seconds_per_timestep / 3_600_000
+
+        Args:
+            config: The occupancy configuration, as the run's own energy-system file builds it.
+            my_simulation_parameters: The parameters of the run, which decide the period and the
+                resolution the profile is loaded for.
+
+        Returns:
+            The electrical power of the household, in watt, one value per timestep of the period.
+
+        Raises:
+            ValueError: If the configured profile source cannot serve the requested household;
+                there is no fallback to a different household here either (see :meth:`build`).
+        """
+        connector = cls(my_simulation_parameters=my_simulation_parameters, config=config)
+        return tuple(float(value) for value in connector.electricity_consumption)
+
     # Similar components to connect to:
     # None
     @utils.measure_execution_time

@@ -48,8 +48,9 @@ supply side at every integration boundary of the modular-household framework:
   :class:`EnergySystemConfig` inside a
   :class:`~hisim.building_sizer_utils.interface_configs.modular_household_config.ModularHouseholdConfig`;
   HiSim reads it back and runs the matching simulation.
-* **RenoVisor translator** (:mod:`hisim.renovisor.mapping`) -- builds an
-  :class:`EnergySystemConfig` from a RenoVisor home-inventory request.
+  The :mod:`hisim.renovisor` translation layer used to build an
+  :class:`EnergySystemConfig` this way too; since its rewrite it parametrises
+  the recorded grouped energy-system files instead.
 * **Modular-household system setups** (``system_setups/*_building_sizer.py``)
   -- consume the config in-process to wire the concrete HiSim components.
 

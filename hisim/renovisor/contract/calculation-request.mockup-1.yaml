@@ -38,6 +38,7 @@ house:
       shape: pitched # → PV and solar-thermal tilt 30°
     facade:
       u_value_in_watt_per_m2_per_kelvin: 1.78 # "300mm_cavity", uninsulated — TABULA IE uninsulated cavity wall (1.1 is the partially filled one)
+      area_in_m2: 140 # two storeys of 10 m × 7 m; with it, the measure's cost band prices the subject
     floor:
       u_value_in_watt_per_m2_per_kelvin: 0.7 # "solid_ground", uninsulated (illustrative; TABULA IE floors run 0.42–1.96 — the physics owner settles the id → code mapping)
     window:
@@ -51,6 +52,7 @@ house:
 
   heating:
     type_of_system: conventional_gas_heating # SAME enum as measure heating_system.type_of_system → base file "gas", boiler_type CONVENTIONAL
+    installation_year: 2008 # when the boiler went in; dates its like-for-like replacement and the sunk-cost credit
   heat_distribution:
     type_of_system: conventional_radiator # SAME enum as measure heating_installation.type_of_system → RADIATOR
 
@@ -85,6 +87,10 @@ measures:
         density_kg_m3: 20.5 # midpoint of the file's range 11–30
         co2_footprint_a1_a3_c3_c4_kg_m2: 21.207108
         lifespan_years: 57.5 # midpoint of the file's range 40–75
+    cost: # the band the frontend copies out of materials.yaml measure_costs; prices the facade subject
+      min_in_euro_per_m2: 90
+      max_in_euro_per_m2: 120
+      source: materials.yaml measure_costs, IE, External Wall Insulation
   - id: photovoltaic_system
     options:
       size_in_percent_of_roof_area: 60

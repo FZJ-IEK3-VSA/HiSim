@@ -42,6 +42,7 @@ from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.evaluator import SubjectCostFacts
 from hisim.economics.facts import ComponentCostFacts, ExistingAsset, ExistingAssetRegister
 from hisim.economics.subsidies import (
+    ApplicantActor,
     ApplicantProfile,
     DwellingType,
     SubsidyBuildingContext,
@@ -399,6 +400,17 @@ class EconomicContextBuilder:
     #: today; read when present, and every field it does not answer stays undetermined.
     APPLICANT_KEY: ClassVar[str] = "applicant"
 
+    #: The key of that block naming who signs the funding application, and the request values it
+    #: may carry, mapped onto the engine's own vocabulary. The schema refuses every other value,
+    #: so the lookup below cannot miss.
+    APPLICANT_ROLE_KEY: ClassVar[str] = "role"
+    APPLICANT_ROLES: ClassVar[Mapping[str, ApplicantActor]] = {
+        "owner_occupier": ApplicantActor.OWNER_OCCUPIER,
+        "landlord": ApplicantActor.LANDLORD,
+        "tenant": ApplicantActor.TENANT,
+        "condominium_association": ApplicantActor.CONDOMINIUM_ASSOCIATION,
+    }
+
     #: The fields of that block the builder copies onto the applicant profile, by their name on
     #: :class:`~hisim.economics.subsidies.ApplicantProfile`. The last three are the ones the
     #: Irish catalogue reads (step 11 §3.2/§3.3); a field the block omits stays undetermined.
@@ -454,6 +466,17 @@ class EconomicContextBuilder:
     #: power until the simulation has run.
     PEAK_POWER_ATTRIBUTE: ClassVar[str] = "peak_power_in_kwp"
 
+    #: The technical attribute the seasonal performance factor of the heat pump is published
+    #: under, for the subsidy conditions that read one (`measure.technical_attributes.scop`).
+    SCOP_ATTRIBUTE: ClassVar[str] = "scop"
+
+    #: The request path of that factor and the note its mapping-report line carries.
+    SCOP_PATH: ClassVar[str] = "house.heating.scop"
+    SCOP_NOTE: ClassVar[str] = (
+        "the seasonal performance factor of the heat pump, published as a technical attribute "
+        "for the subsidy conditions that read one"
+    )
+
     #: Watt per kilowatt, for the conversion into that attribute's unit.
     WATT_PER_KILOWATT: ClassVar[float] = 1000.0
 
@@ -467,6 +490,23 @@ class EconomicContextBuilder:
     INSTALLATION_YEAR_NOTE: ClassVar[str] = (
         "the request states no installation year for this asset, so the building's construction "
         "year is used as its age"
+    )
+
+    #: The note a stated installation year carries.
+    INSTALLATION_YEAR_USED_NOTE: ClassVar[str] = (
+        "the age of the existing asset, as the request states it, for the like-for-like "
+        "replacement price and the sunk-cost credit"
+    )
+
+    #: The note a defaulted living area carries.
+    LIVING_AREA_NOTE: ClassVar[str] = (
+        "the request states no living area, so the conditioned floor area is used for the cost "
+        "lines that scale with it"
+    )
+
+    #: The note a stated living area carries.
+    LIVING_AREA_USED_NOTE: ClassVar[str] = (
+        "the living area the cost lines that scale with it are taken over, as the request states it"
     )
 
     #: The catalogue measure that installs a new heat generator.
@@ -547,16 +587,86 @@ class EconomicContextBuilder:
         result = EconomicContextResult(context=EconomicContext())
         register = ExistingAssetRegister(assets=self._register_assets(result))
         facts = self._envelope_cost_facts(result)
+        living_area = self._living_area(result)
         result.context = EconomicContext(
             existing_assets=register,
             subsidy_context=self._subsidy_context(result),
             extra_cost_facts=facts,
             technical_attributes_by_subject=self._technical_attributes(facts),
-            living_area_in_m2=self._living_area(),
+            living_area_in_m2=living_area,
             heated_floor_area_in_m2=self._floor_area(),
         )
         self._record_device_subjects(result)
         return result
+
+    # ------------------------------------------------------------------ the stated leaves
+
+    #: The ``house`` blocks whose installation year the register reads, beside the building's
+    #: five envelope elements.
+    DATED_HOUSE_BLOCKS: ClassVar[Tuple[str, ...]] = (
+        "heating",
+        *(device.house_block for device in DeviceAssets.ALL),
+    )
+
+    @classmethod
+    def stated_leaves(cls, document: Mapping[str, Any]) -> List[Tuple[str, Any, str]]:
+        """The economics-only leaves one request states, with the value and the report note.
+
+        The installation years, the living area and the heat pump's seasonal performance factor
+        feed the economic context and no simulation component. The translator records them
+        *before* its stages run — the fail-loud stage that accounts for every leftover leaf runs
+        inside the translation, while the builder, which needs the translated model for its
+        subjects, runs after it — and both spellings live here so they cannot drift.
+
+        Args:
+            document: The validated request.
+
+        Returns:
+            One ``(request path, value, sentence)`` per stated leaf, in path order.
+        """
+        leaves: List[Tuple[str, Any, str]] = []
+        house = document.get("house", {})
+        if not isinstance(house, Mapping):
+            return leaves
+        for block in cls.DATED_HOUSE_BLOCKS:
+            raw = house.get(block)
+            if isinstance(raw, Mapping) and isinstance(raw.get(cls.INSTALLATION_YEAR_KEY), int):
+                leaves.append(
+                    (
+                        f"house.{block}.{cls.INSTALLATION_YEAR_KEY}",
+                        int(raw[cls.INSTALLATION_YEAR_KEY]),
+                        cls.INSTALLATION_YEAR_USED_NOTE,
+                    )
+                )
+        building = house.get("building")
+        if isinstance(building, Mapping):
+            for element in ThermalElement:
+                raw = building.get(element.value)
+                if isinstance(raw, Mapping) and isinstance(
+                    raw.get(cls.INSTALLATION_YEAR_KEY), int
+                ):
+                    leaves.append(
+                        (
+                            f"house.building.{element.value}.{cls.INSTALLATION_YEAR_KEY}",
+                            int(raw[cls.INSTALLATION_YEAR_KEY]),
+                            cls.INSTALLATION_YEAR_USED_NOTE,
+                        )
+                    )
+            stated = cls._as_positive_float(building.get(cls.LIVING_AREA_KEY))
+            if stated is not None:
+                leaves.append(
+                    (
+                        f"house.building.{cls.LIVING_AREA_KEY}",
+                        stated,
+                        cls.LIVING_AREA_USED_NOTE,
+                    )
+                )
+        heating = house.get("heating")
+        if isinstance(heating, Mapping):
+            scop = cls._as_positive_float(heating.get(cls.SCOP_ATTRIBUTE))
+            if scop is not None:
+                leaves.append((cls.SCOP_PATH, scop, cls.SCOP_NOTE))
+        return leaves
 
     # ------------------------------------------------------------------ the register
 
@@ -569,8 +679,8 @@ class EconomicContextBuilder:
         construction year otherwise — and the asset classes of the measures that supersede it.
         """
         assets = [self._generator_asset(result)]
-        assets.extend(self._device_assets())
-        assets.extend(self._envelope_assets())
+        assets.extend(self._device_assets(result))
+        assets.extend(self._envelope_assets(result))
         return [asset for asset in assets if asset is not None]
 
     def _generator_asset(self, result: EconomicContextResult) -> ExistingAsset:
@@ -674,7 +784,7 @@ class EconomicContextBuilder:
         load = BuildingInformation(config).max_thermal_building_demand_in_watt
         return float(load) / self.WATT_PER_KILOWATT
 
-    def _device_assets(self) -> List[ExistingAsset]:
+    def _device_assets(self, result: Optional[EconomicContextResult] = None) -> List[ExistingAsset]:
         """One register entry per inventory device the request carries.
 
         A block the request does not carry is a device the building does not have, so it produces
@@ -697,7 +807,7 @@ class EconomicContextBuilder:
                     asset_class=device.asset_class,
                     size=size,
                     size_unit=device.size_unit,
-                    installation_year=self._installation_year(device.house_block),
+                    installation_year=self._installation_year(device.house_block, result),
                     is_functional=True,
                     replaced_by_asset_classes=(
                         [device.asset_class] if device.measure_id in self._measure_ids else []
@@ -706,7 +816,7 @@ class EconomicContextBuilder:
             )
         return assets
 
-    def _envelope_assets(self) -> List[ExistingAsset]:
+    def _envelope_assets(self, result: Optional[EconomicContextResult] = None) -> List[ExistingAsset]:
         """One register entry per envelope element, with the share it would have cost anyway.
 
         The element is as old as the building unless the request says otherwise, and it is
@@ -728,7 +838,7 @@ class EconomicContextBuilder:
                     size=area,
                     size_unit=Units.SQUARE_METER,
                     installation_year=self._installation_year(
-                        f"building.{element.value}", block=self._raw_element(element)
+                        f"building.{element.value}", result, block=self._raw_element(element)
                     ),
                     is_functional=True,
                     replaced_by_asset_classes=replaced,
@@ -894,10 +1004,10 @@ class EconomicContextBuilder:
             :attr:`~hisim.economics.bridge.EconomicContext.technical_attributes_by_subject`.
             A subject with nothing to say about it is absent from the map.
         """
-        # No SCOP: neither the request nor the recorded twins state a seasonal performance factor
-        # for a heat pump today, and the engine's subsidy conditions read one as an attribute
-        # (`subsidies/context.py`). A scheme keyed on it therefore stays *undetermined* rather
-        # than being decided on an invented figure. Recorded as an F-item in `todos.md` H7.
+        # The heat pump's seasonal performance factor is a stated request field now (the schema's
+        # ``house.heating.scop``); before it was, neither the request nor the recorded twins
+        # stated one, and a scheme keyed on it stayed *undetermined* rather than being decided on
+        # an invented figure. It is published for the generator subject exactly as stated.
         attributes: Dict[str, Dict[str, Any]] = {}
         placements = {layer.measure_id: layer.placement for layer in self._applied.layers}
         for subject_facts in facts:
@@ -916,7 +1026,24 @@ class EconomicContextBuilder:
         peak_power = self._peak_power_in_kwp()
         if peak_power is not None:
             attributes[self.PHOTOVOLTAIC_COMPONENT] = {self.PEAK_POWER_ATTRIBUTE: peak_power}
+        scop = self._stated_scop()
+        if scop is not None and self._generator_component:
+            attributes.setdefault(self._generator_component, {})[self.SCOP_ATTRIBUTE] = scop
         return attributes
+
+    def _stated_scop(self) -> Optional[float]:
+        """The seasonal performance factor the request states, or ``None`` when it states none.
+
+        Args:
+            (none — reads the raw request.)
+
+        Returns:
+            The factor as a float, when the request states one and it is a positive number.
+        """
+        heating = self._raw_original.get("heating")
+        if not isinstance(heating, Mapping):
+            return None
+        return self._as_positive_float(heating.get(self.SCOP_ATTRIBUTE))
 
     def _peak_power_in_kwp(self) -> Optional[float]:
         """The renovated array's peak power in kilowatt-peak, or ``None`` when it has none.
@@ -952,7 +1079,10 @@ class EconomicContextBuilder:
         *undetermined* and reports as a question rather than as a denial (§5.7). The three
         fields the Irish catalogue reads — ``receives_means_tested_benefit``, ``first_time_buyer``
         and ``managed_full_retrofit``, the last of which is the One Stop Shop route — are read
-        from that block exactly like the others and are never inferred from anything else.
+        from that block exactly like the others and are never inferred from anything else. The
+        block's ``role`` is mapped onto the profile's actor, which decides which programmes are
+        open to the applicant at all; a block that names no role leaves the profile's default
+        (owner-occupier) standing, which is the engine's own assertion.
 
         The building half is what the request already states: the construction year, the floor
         area, one dwelling unit (the archetype every RenoVisor calculation simulates) and the
@@ -969,6 +1099,9 @@ class EconomicContextBuilder:
         raw = self._request.document.get(self.APPLICANT_KEY)
         profile = ApplicantProfile()
         if isinstance(raw, Mapping):
+            role = raw.get(self.APPLICANT_ROLE_KEY)
+            if role is not None:
+                profile.actor = self.APPLICANT_ROLES[role]
             for name in self.APPLICANT_FIELDS:
                 if name in raw:
                     setattr(profile, name, raw[name])
@@ -1012,14 +1145,14 @@ class EconomicContextBuilder:
     ) -> int:
         """The installation year of one part of the house, defaulting to the construction year.
 
-        ``installation_year`` is an E-spec §7 field the vendored request schema does not carry
-        yet, so most requests state none and the building's construction year stands in for it.
+        A year the request states is read as it stands; one it omits is recorded on the result's
+        ``defaults`` list with the construction year that stood in, so the mapping report says
+        which figure the asset's age is. A stated year's ``used`` line is the translator's own
+        early recording (:meth:`stated_leaves`), which runs before the fail-loud stage.
 
         Args:
             block_name: The ``house`` key the part lives under, for the mapping-report path.
-            result: The result being assembled. When given, a defaulted year is recorded on its
-                ``defaults`` list with the value used; the register's device and envelope entries
-                pass ``None``, because their blocks already carry a line of their own.
+            result: The result being assembled, for the ``defaulted`` line.
             block: The raw block to read, when it is not ``house[block_name]`` — an envelope
                 element lives one level down, under ``house.building``.
 
@@ -1027,13 +1160,12 @@ class EconomicContextBuilder:
             The year the part was installed.
         """
         raw = self._raw_original.get(block_name) if block is None else block
+        path = f"house.{block_name}.{self.INSTALLATION_YEAR_KEY}"
         if isinstance(raw, Mapping) and isinstance(raw.get(self.INSTALLATION_YEAR_KEY), int):
             return int(raw[self.INSTALLATION_YEAR_KEY])
         year = self._original.building.construction_year
         if result is not None:
-            result.defaults.append(
-                (f"house.{block_name}.{self.INSTALLATION_YEAR_KEY}", year, self.INSTALLATION_YEAR_NOTE)
-            )
+            result.defaults.append((path, year, self.INSTALLATION_YEAR_NOTE))
         return year
 
     def _raw_element(self, element: ThermalElement) -> Mapping[str, Any]:
@@ -1057,14 +1189,30 @@ class EconomicContextBuilder:
             return realized
         return self._as_positive_float(self._raw_element(element).get(self.ELEMENT_AREA_KEY))
 
-    def _living_area(self) -> Optional[float]:
-        """The dwelling's living area: the request's own, else the conditioned floor area."""
+    def _living_area(self, result: Optional[EconomicContextResult] = None) -> Optional[float]:
+        """The dwelling's living area: the request's own, else the conditioned floor area.
+
+        A fallen-back area is recorded on the result's ``defaults`` list, so the mapping report
+        says which figure the cost lines scale with; a stated one is covered by the translator's
+        own early recording (:meth:`stated_leaves`).
+
+        Args:
+            result: The result being assembled, for the ``defaulted`` line.
+
+        Returns:
+            The living area in square metres, when one is known.
+        """
         building = self._raw_original.get("building")
         if isinstance(building, Mapping):
             stated = self._as_positive_float(building.get(self.LIVING_AREA_KEY))
             if stated is not None:
                 return stated
-        return self._floor_area()
+        area = self._floor_area()
+        if area is not None and result is not None:
+            result.defaults.append(
+                (f"house.building.{self.LIVING_AREA_KEY}", area, self.LIVING_AREA_NOTE)
+            )
+        return area
 
     def _floor_area(self) -> Optional[float]:
         """The conditioned floor area the translated building carries, or ``None``."""

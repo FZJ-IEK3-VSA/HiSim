@@ -366,8 +366,18 @@ class ProbeSet:
         "pv_system.size_in_percent_of_roof_area": (1, 100),
         "pv_system.azimuth": (0, 360),
         "pv_system.tilt": (0, 90),
+        "pv_system.installation_year": (1900, 2100),
+        "building.living_area_in_m2": (30, 400),
+        "building.roof.installation_year": (1900, 2100),
+        "building.facade.installation_year": (1900, 2100),
+        "building.floor.installation_year": (1900, 2100),
+        "building.window.installation_year": (1900, 2100),
+        "building.door.installation_year": (1900, 2100),
+        "heating.installation_year": (1900, 2100),
         "battery.days_to_cover": (1, 14),
+        "battery.installation_year": (1900, 2100),
         "solar_thermal_system.area_m2": (0.1, 100),
+        "solar_thermal_system.installation_year": (1900, 2100),
     }
 
     #: Which block each inventory path needs present before it can be set at all.

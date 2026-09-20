@@ -874,6 +874,10 @@ class Translator:
         "RenoVisor translator {version} from base {base}"
     )
 
+    #: The target the ``used`` lines of the economics-only leaves name. These leaves write no
+    #: simulation component; they feed the economic context the engine evaluates.
+    ECONOMICS_TARGET: ClassVar[str] = "the economic context the lifecycle engine evaluates"
+
     #: The note explaining the transmission adjustment factor a written U-value fixes.
     ADJUSTMENT_NOTE: ClassVar[str] = (
         "overriding this element's U-value also fixes its transmission adjustment factor "
@@ -913,6 +917,11 @@ class Translator:
         editor = SystemEditor(base)
         report = MappingReport(request.schema_version, request.country.value)
         report.base_file = base_file_name
+        # The economics-only leaves are covered before the stages run: the fail-loud stage below
+        # accounts for every leftover leaf, and the builder that reads these leaves needs the
+        # translated model, which only exists after it.
+        for path, value, note in EconomicContextBuilder.stated_leaves(request.document):
+            report.used(path, self.ECONOMICS_TARGET, value=value, note=note)
         edits: List[Edit] = []
         state = _TranslationState(
             request=request,

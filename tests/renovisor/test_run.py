@@ -198,9 +198,21 @@ class TestTheResultPayload:
 
         report = json.loads((tmp_path / "package" / Outputs.MAPPING_REPORT).read_text(encoding="utf-8"))
         assert report["subjects"], "a package with measures names at least one cost subject"
-        # The vendored mockup carries no `cost` block on its envelope measures (findings F7/F10),
-        # so every envelope subject is in the economics unpriced rather than left out.
+        # The vendored mockup prices its envelope measure out of materials.yaml (E-spec §7), so
+        # nothing is unpriced; the invariant is the subset either way.
         assert set(report["unpriced_subjects"]) <= set(report["subjects"])
+
+    def test_the_mapping_report_accounts_for_the_economics_only_leaves(self, tmp_path: Path) -> None:
+        """The stated installation year is covered before the fail-loud stage runs (hisim-epc.14)."""
+        document = package_document()
+        assert run(document, tmp_path, "dated") == ExitCode.FINISHED
+
+        report = json.loads((tmp_path / "dated" / Outputs.MAPPING_REPORT).read_text(encoding="utf-8"))
+        line = next(
+            entry for entry in report["fields"] if entry["path"] == "house.heating.installation_year"
+        )
+        assert line["status"] == "used"
+        assert line["value"] == document["house"]["heating"]["installation_year"]
 
     def test_the_payload_names_the_weather_year_it_was_computed_against(self, tmp_path: Path) -> None:
         """Two results computed against different years are not comparable (requirement A4)."""

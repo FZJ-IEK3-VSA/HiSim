@@ -16,8 +16,11 @@ directory is not versioned. Both kinds record the SHA-256 of the content written
 hand, or a refresh that did not run to completion, fails the build.
 
 The sources are class attributes of :class:`ContractSources` so that a file moving to another
-branch (``materials.yaml`` lives on the ``materials`` branch today), or a proposal file moving
-into the contract repository, is a one-line change here and nowhere else.
+branch, or a proposal file moving into the contract repository, is a one-line change here and
+nowhere else. ``materials.yaml`` moved the other way on 2026-09-20: it exists in the contract
+repository, but the copy that is vendored is the shared folder's, because that one carries the
+``measure_material_values`` field the catalogue's ``material`` option values are resolved
+through. Its pin entry says so in a ``note`` from :attr:`ContractSources.NOTES`.
 """
 
 import argparse
@@ -34,11 +37,13 @@ from hisim.renovisor.contract import ContractFiles
 
 
 class ContractSources:
-    """Where each vendored file comes from inside the contract repository.
+    """Where each vendored file comes from: the contract repository or the shared folder.
 
     ``BY_FILENAME`` maps the vendored file name to ``(git ref, path in the repository)``. The
     ref is resolved to a commit at refresh time and that commit is what ``PINNED.yaml`` records,
     so the pin names an immutable revision even when the ref is a moving branch.
+    ``LOCAL_BY_FILENAME`` maps the vendored file name to a file name in the shared folder, whose
+    pin entry records the folder instead of a commit because the folder is not versioned.
     """
 
     #: The repository the files are taken from, recorded verbatim in ``PINNED.yaml``.
@@ -48,15 +53,27 @@ class ContractSources:
     BY_FILENAME: ClassVar[Dict[str, Tuple[str, str]]] = {
         ContractFiles.OPENAPI_FILENAME: ("origin/main", "openapi.yaml"),
         ContractFiles.MEASURES_FILENAME: ("origin/main", "measures.yaml"),
-        ContractFiles.MATERIALS_FILENAME: ("origin/main", "materials.yaml"),
     }
 
     #: vendored file name -> file name inside the proposal directory, for the files that have no
-    #: home in the contract repository yet.
+    #: home in the contract repository yet and for ``materials.yaml``, which has one but is taken
+    #: from the shared folder because the shared copy carries a local fix (see :attr:`NOTES`).
     LOCAL_BY_FILENAME: ClassVar[Dict[str, str]] = {
         ContractFiles.REQUEST_SCHEMA_FILENAME: "calculation-request.schema.json",
         ContractFiles.REQUEST_MOCKUP_FILENAME: "calculation-request.mockup-1.yaml",
         ContractFiles.CAPABILITIES_SCHEMA_FILENAME: "measure-capabilities.openapi.yaml",
+        ContractFiles.MATERIALS_FILENAME: "materials.yaml",
+    }
+
+    #: vendored file name -> the ``note`` its pin entry carries, for a copy that deliberately
+    #: differs from the contract repository's own file. The note names the revision it deviates
+    #: from and why, so the deviation is a recorded fact rather than unexplained drift.
+    NOTES: ClassVar[Dict[str, str]] = {
+        ContractFiles.MATERIALS_FILENAME: (
+            "local deviation from renovisor-api-contract@5181aa5: rows carry "
+            "measure_material_values so the material option values of measures.yaml resolve to a "
+            "row (owner decision 2026-09-20, pending the contract owner's cleanup, todo C1)"
+        ),
     }
 
     #: The phrase recorded as the ``source`` of every locally vendored file. It names the
@@ -125,7 +142,8 @@ class ContractRefresher:
             The ``files`` mapping of the pin record: vendored file name to a dictionary with the
             source description and the ``sha256`` of the content written. A git-sourced file
             carries ``ref``, ``path``, ``commit`` and ``commit_date``; a locally sourced one
-            carries ``source`` and ``path``.
+            carries ``source`` and ``path``. Either kind additionally carries a ``note`` when
+            :attr:`ContractSources.NOTES` or :attr:`ContractSources.NOT_AUTHORITATIVE` names it.
         """
         previous = self._previous_entries()
         entries: Dict[str, Dict[str, Any]] = {}
@@ -158,6 +176,9 @@ class ContractRefresher:
         for filename, note in ContractSources.NOT_AUTHORITATIVE.items():
             if filename in entries:
                 entries[filename]["authoritative"] = False
+                entries[filename]["note"] = note
+        for filename, note in ContractSources.NOTES.items():
+            if filename in entries:
                 entries[filename]["note"] = note
         pin = {
             "repository": ContractSources.REPOSITORY,

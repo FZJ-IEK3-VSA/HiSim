@@ -21,9 +21,14 @@ storage volumes, and that a TABULA row can be found. The catalogue facts those c
 frozen table in this module (:class:`CatalogueTable`), not a YAML read at request time, so a
 catalogue edit fails the build by name (T-CAT) and never a user's request.
 
-Rule 5 of the contract is why no material database is read here: the request carries the physical
-*properties* of a material, and its ``asp_id`` travels as provenance only. The only thing checked
-about a material is that its conductivity is a positive number, which the schema already says.
+Rule 5 of the contract is why no material database is read *for a request*: the request carries
+the physical *properties* of a material, and its ``asp_id`` travels as provenance only. The only
+thing checked about a material is that its conductivity is a positive number, which the schema
+already says. The one place the database is read is :meth:`CatalogueTable.material_rows`, which
+resolves the catalogue's ``material`` class names (``EPS``, ``Mineral wool``, ...) to the
+``materials.yaml`` row each of them means, through the ``measure_material_values`` field that row
+carries. That mapping is a build-time fact, checked once and exact: a value resolving to no row or
+to several is a translator build failure (exit 3), never a refused request.
 """
 
 import json
@@ -52,6 +57,7 @@ from hisim.renovisor.vocabulary import (
     VentilationType,
     WhiteAppliances,
 )
+from hisim.renovisor.whitelist import TranslatorError
 
 
 class ProblemCode(str, Enum):
@@ -195,6 +201,15 @@ class CatalogueTable:
     #: The option whose request value is the material object of the schema rather than one of the
     #: catalogue's class names; rule 5 of the contract moved the resolution to the frontend.
     MATERIAL: ClassVar[str] = "material"
+
+    #: The field of a ``materials.yaml`` row listing the ``material`` option values that name it.
+    #: It is the local addition of 2026-09-20 to the contract's material database (todo C1): the
+    #: catalogue's class names stay as they are and the database says which row each one means.
+    MATERIAL_VALUES_FIELD: ClassVar[str] = "measure_material_values"
+
+    #: ``material`` option value -> ``asp_id``, built once by :meth:`material_rows` and kept so
+    #: that ``materials.yaml`` is parsed once per process. ``None`` until the first call.
+    RESOLVED_MATERIAL_ROWS: ClassVar[Optional[Dict[str, str]]] = None
 
     #: measure id -> its options, in the order the catalogue declares them.
     BY_ID: ClassVar[Dict[str, Tuple[OptionSpec, ...]]] = {
@@ -411,6 +426,100 @@ class CatalogueTable:
             if option.name == name:
                 return option
         return None
+
+    @classmethod
+    def material_values(cls) -> Tuple[str, ...]:
+        """Return every distinct ``material`` option value the catalogue offers, in sorted order.
+
+        The 2026-09-17 catalogue spells them as class names rather than as database ids -- ``EPS``,
+        ``EPS Foam``, ``XPS``, ``PIR``, ``Mineral wool``, ``Mineral Wool``, ``mineral wool``,
+        ``glass wool``, ``wood fiber``, ``open cell spray foam``, ``Liquid Insulation`` -- and the
+        owner's decision of 2026-09-20 keeps those names authoritative.
+
+        Returns:
+            The values, each once, sorted so that a message built from them is stable.
+        """
+        values = {
+            str(value)
+            for options in cls.BY_ID.values()
+            for option in options
+            if option.name == cls.MATERIAL
+            for value in (option.values or ())
+        }
+        return tuple(sorted(values))
+
+    @classmethod
+    def material_rows(cls) -> Dict[str, str]:
+        """Return the ``material`` option value -> ``asp_id`` mapping, building it once.
+
+        The mapping is read out of the vendored ``materials.yaml``, whose rows carry
+        :attr:`MATERIAL_VALUES_FIELD`; a row's list names the catalogue values that mean that
+        row. Example: ``CatalogueTable.material_rows()["EPS Foam"]`` is
+        ``'polystyrene_eps_rigid_board'``. The mapping is checked as it is built, so a database
+        that resolves a catalogue value to no row or to two of them is a build failure here and
+        never a refused user request.
+
+        Returns:
+            A fresh dictionary of every catalogue ``material`` value to the ``asp_id`` of its row.
+
+        Raises:
+            TranslatorError: When a ``material`` value of the catalogue is claimed by no row or by
+                more than one, which is a fault in the vendored files and exits 3.
+        """
+        if cls.RESOLVED_MATERIAL_ROWS is None:
+            cls.RESOLVED_MATERIAL_ROWS = cls._build_material_rows()
+        return dict(cls.RESOLVED_MATERIAL_ROWS)
+
+    @classmethod
+    def material_row_for(cls, value: str) -> str:
+        """Return the ``asp_id`` of the ``materials.yaml`` row one ``material`` option value names.
+
+        Args:
+            value: A ``material`` option value exactly as ``measures.yaml`` spells it, for instance
+                ``'Mineral wool'``.
+
+        Returns:
+            The row's ``asp_id``, for instance ``'stone_wool_flexible_insulation_blankets'``.
+
+        Raises:
+            TranslatorError: When the value is not a catalogue ``material`` value at all, or when
+                the material database does not resolve it to exactly one row. Both are faults in
+                this package or in the vendored files, so both exit 3 rather than refusing a
+                request.
+        """
+        rows = cls.material_rows()
+        if value not in rows:
+            raise TranslatorError(
+                f"'{value}' is not a material value of the measure catalogue",
+                detail=f"known values: {', '.join(cls.material_values())}",
+            )
+        return rows[value]
+
+    @classmethod
+    def _build_material_rows(cls) -> Dict[str, str]:
+        """Read ``materials.yaml`` and return the checked value -> ``asp_id`` mapping.
+
+        Raises:
+            TranslatorError: Naming every catalogue value that no row claims and every value that
+                more than one row claims, so one run reports the whole disagreement.
+        """
+        claims: Dict[str, List[str]] = {}
+        for row in ContractFiles.materials()["materials"]:
+            for value in row.get(cls.MATERIAL_VALUES_FIELD) or ():
+                claims.setdefault(str(value), []).append(str(row["asp_id"]))
+        unresolved = [value for value in cls.material_values() if len(claims.get(value, [])) != 1]
+        if unresolved:
+            faults = "; ".join(
+                f"'{value}' -> {claims.get(value) or 'no row'}" for value in unresolved
+            )
+            raise TranslatorError(
+                "the material database does not resolve every catalogue material value to exactly one row",
+                detail=(
+                    f"{ContractFiles.MATERIALS_FILENAME} rows carry "
+                    f"'{cls.MATERIAL_VALUES_FIELD}'; unresolved: {faults}"
+                ),
+            )
+        return {value: rows[0] for value, rows in claims.items() if len(rows) == 1}
 
 
 class SchemaProblems:

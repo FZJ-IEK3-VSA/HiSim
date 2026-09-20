@@ -206,6 +206,7 @@ measure_costs:
 materials:
 - name: Wood fiber - Rigid board
   asp_id: wood_fiber_rigid_board
+  measure_material_values: ['wood fiber']
   origin:
   - bio_based
   origin_description: Softwood residues are processed into fiber materials and pressed into boards
@@ -505,6 +506,7 @@ materials:
       bio_based_fraction: 0.865
 - name: Wood wool - Rigid board
   asp_id: wood_wool_rigid_board
+  measure_material_values: []
   origin:
   - bio_based
   - mineral
@@ -610,6 +612,7 @@ materials:
       price_checked_on: 46084
 - name: Hemp - Semi-flexible mats
   asp_id: hemp_semi_flexible_mats
+  measure_material_values: []
   origin:
   - bio_based
   origin_description: made with industrial hemp, with soda salts as a fire protection agent and low melting
@@ -819,6 +822,7 @@ materials:
       bio_based_fraction: 0.88
 - name: Hemp-lime - Blown-in insulation
   asp_id: hemp_lime_blown_in_insulation
+  measure_material_values: []
   origin:
   - bio_based
   - mineral
@@ -902,6 +906,7 @@ materials:
       relevance_notes: 'Facade: Erecting a stud against the perimeter wall'
 - name: Hemp-lime - Blocks
   asp_id: hemp_lime_blocks
+  measure_material_values: []
   origin:
   - bio_based
   - mineral
@@ -1011,6 +1016,7 @@ materials:
       price_checked_on: 46219
 - name: Flax - Flexible insulation blankets
   asp_id: flax_flexible_insulation_blankets
+  measure_material_values: []
   origin:
   - bio_based
   origin_description: Flax fibers from the flax plant are mechanically flocked and processed into insulation
@@ -1113,6 +1119,7 @@ materials:
       relevance_notes: see bove
 - name: Sheep's wool - Flexible insulation blankets
   asp_id: sheeps_wool_flexible_insulation_blankets
+  measure_material_values: []
   origin:
   - bio_based
   origin_description: sheep's wool + biocide-free anti-moth protection
@@ -1279,6 +1286,7 @@ materials:
       bio_based_fraction: 1
 - name: Cellulose - Flexible insulation blankets
   asp_id: cellulose_flexible_insulation_blankets
+  measure_material_values: []
   origin:
   - bio_based
   origin_description: waste paper using only water, heat and pressure, without any additives
@@ -1339,6 +1347,7 @@ materials:
     Overall, this straightforward handling still makes them suitable for DIY projects.
 - name: Cellulose - Blown-in insulation
   asp_id: cellulose_blown_in_insulation
+  measure_material_values: []
   origin:
   - bio_based
   origin_description: recyled waste paper and fire retardant additives
@@ -1595,6 +1604,7 @@ materials:
         into a loft floor in the attic: 15 - 25 €/m²
 - name: Straw - Bale
   asp_id: straw_bale
+  measure_material_values: []
   origin:
   - bio_based
   origin_description: Waste product from grain cultivation
@@ -1686,6 +1696,7 @@ materials:
       origin: Spain
 - name: Straw - Blown-in insulation
   asp_id: straw_blown_in_insulation
+  measure_material_values: []
   origin:
   - bio_based
   origin_description: Waste product from grain cultivation
@@ -1827,6 +1838,7 @@ materials:
       bio_based_fraction: 1
 - name: Cork - Rigid board
   asp_id: cork_rigid_board
+  measure_material_values: []
   origin:
   - bio_based
   origin_description: made from the expansion of the cork granules, by steaming. The agglutination of
@@ -1954,6 +1966,7 @@ materials:
       price_checked_on: 46189
 - name: Grass Insulation - Semi-flexible mats
   asp_id: grass_insulation_semi_flexible_mats
+  measure_material_values: []
   origin:
   - bio_based
   - synthetic
@@ -2059,6 +2072,7 @@ materials:
       bio_based_fraction: 0.88
 - name: Cellular glass boards
   asp_id: cellular_glass_boards
+  measure_material_values: []
   origin:
   - mineral
   - recycled
@@ -2227,6 +2241,7 @@ materials:
       installation_cost_notes: 'Delivery cost: BE € 97 | NL € 146 Incl. VAT'
 - name: Lime-cork-clay-based insulating plaster
   asp_id: lime_cork_clay_based_insulating_plaster
+  measure_material_values: []
   origin:
   - bio_based
   - mineral
@@ -2333,6 +2348,7 @@ materials:
       origin: Portugal
 - name: Textile insulation
   asp_id: textile_insulation
+  measure_material_values: []
   origin:
   - bio_based
   - synthetic
@@ -2455,6 +2471,7 @@ materials:
       bio_based_fraction: 0.8
 - name: polystyrene EPS - Rigid board
   asp_id: polystyrene_eps_rigid_board
+  measure_material_values: ['EPS', 'EPS Foam']
   comparison_baseline: true
   origin:
   - synthetic
@@ -2520,6 +2537,7 @@ materials:
   cost_es_max_eur_m3: 80
 - name: Extruded Polystyrene (XPS)
   asp_id: extruded_polystyrene_xps
+  measure_material_values: ['XPS']
   comparison_baseline: true
   origin:
   - fossil
@@ -2585,6 +2603,7 @@ materials:
   cost_es_max_eur_m3: 80
 - name: Stone wool - Flexible insulation blankets
   asp_id: stone_wool_flexible_insulation_blankets
+  measure_material_values: ['Mineral wool', 'Mineral Wool', 'mineral wool']
   comparison_baseline: true
   origin:
   - mineral
@@ -2647,6 +2666,7 @@ materials:
   cost_es_max_eur_m3: 12
 - name: Metac -Glasswool
   asp_id: metac_glasswool
+  measure_material_values: ['glass wool']
   comparison_baseline: true
   origin:
   - mineral
@@ -2710,6 +2730,7 @@ materials:
   cost_es_max_eur_m3: 12
 - name: EPS beads-Cavity
   asp_id: eps_beads_cavity
+  measure_material_values: []
   comparison_baseline: true
   origin:
   - fossil
@@ -2772,6 +2793,7 @@ materials:
   cost_es_max_eur_m3: 8
 - name: Cement Based Insulating screed (perlite)
   asp_id: cement_based_insulating_screed_perlite
+  measure_material_values: []
   comparison_baseline: true
   origin:
   - mineral
@@ -2841,6 +2863,7 @@ materials:
   cost_es_max_eur_m3: 72
 - name: Cement Based Insulating screed (eps)
   asp_id: cement_based_insulating_screed_eps
+  measure_material_values: []
   comparison_baseline: true
   origin:
   - fossil
@@ -2910,6 +2933,7 @@ materials:
   cost_es_max_eur_m3: 72
 - name: Cement Based Insulatiing screed (vermiculite)
   asp_id: cement_based_insulatiing_screed_vermiculite
+  measure_material_values: []
   comparison_baseline: true
   origin:
   - mineral
@@ -2975,6 +2999,7 @@ materials:
   cost_es_max_eur_m3: 72
 - name: Open cell Spray Foam
   asp_id: open_cell_spray_foam
+  measure_material_values: ['open cell spray foam']
   comparison_baseline: true
   origin:
   - fossil
@@ -3041,6 +3066,7 @@ materials:
   cost_es_max_eur_m3: 82
 - name: Closed Cell spray foam
   asp_id: closed_cell_spray_foam
+  measure_material_values: []
   comparison_baseline: true
   origin:
   - fossil
@@ -3109,11 +3135,13 @@ materials:
   cost_es_max_eur_m3: 82
 - name: Liquid insulation
   asp_id: liquid_insulation
+  measure_material_values: ['Liquid Insulation']
   comparison_baseline: true
   building_components:
   - basement_floor_and_walls_inside
 - name: PIR
   asp_id: pir
+  measure_material_values: ['PIR']
   comparison_baseline: true
   origin_description: Polyisocyanurat
   building_components:

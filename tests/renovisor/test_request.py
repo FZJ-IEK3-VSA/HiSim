@@ -9,13 +9,14 @@ schema itself leaves nothing to prove, so the corpus is what the test became.
 
 **T-VAL**: every code of §7 of the contract has a request producing it, all problems are
 reported at once, and ``validate`` and ``run`` agree. **T-CAT**: the frozen catalogue table in
-:mod:`hisim.renovisor.request` equals the vendored ``measures.yaml``.
+:mod:`hisim.renovisor.request` equals the vendored ``measures.yaml``, and every ``material``
+class name it offers resolves to exactly one ``materials.yaml`` row.
 """
 
 import copy
 import json
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Tuple
+from typing import Any, ClassVar, Dict, Iterator, List, Tuple
 
 import pytest
 
@@ -31,6 +32,7 @@ from hisim.renovisor.request import (
     SemanticChecks,
     ValueType,
 )
+from hisim.renovisor.whitelist import TranslatorError
 
 
 def mockup() -> Dict[str, Any]:
@@ -408,6 +410,88 @@ class TestTheFrozenCatalogue:
             for option in CatalogueTable.options_of(measure_id):
                 assert option.access_level in (AccessLevel.EVERYONE, AccessLevel.EXPERTS)
                 assert option.value_type in tuple(ValueType)
+
+
+@pytest.mark.base
+class TestMaterialValuesResolveToRows:
+    """Every ``material`` class name of the catalogue names exactly one ``materials.yaml`` row.
+
+    The catalogue's names (``EPS``, ``EPS Foam``, ``Mineral wool``, ...) stay authoritative and
+    the material database carries ``measure_material_values`` to say which row each of them means
+    (owner decision 2026-09-20). A name that resolves to no row or to several is a translator
+    build failure, so these tests stand where the build would break.
+    """
+
+    #: The eleven distinct ``material`` values of the 2026-09-17 catalogue with the ``asp_id``
+    #: each resolves to, from the mapping table of ``note-to-contract-owner-2026-09-19.md`` §1.
+    EXPECTED: ClassVar[Dict[str, str]] = {
+        "EPS": "polystyrene_eps_rigid_board",
+        "EPS Foam": "polystyrene_eps_rigid_board",
+        "XPS": "extruded_polystyrene_xps",
+        "PIR": "pir",
+        "Mineral wool": "stone_wool_flexible_insulation_blankets",
+        "Mineral Wool": "stone_wool_flexible_insulation_blankets",
+        "mineral wool": "stone_wool_flexible_insulation_blankets",
+        "glass wool": "metac_glasswool",
+        "wood fiber": "wood_fiber_rigid_board",
+        "open cell spray foam": "open_cell_spray_foam",
+        "Liquid Insulation": "liquid_insulation",
+    }
+
+    def test_the_catalogue_material_values_are_the_eleven_of_the_vendored_file(self) -> None:
+        """The frozen table's material values are exactly the ones ``measures.yaml`` spells."""
+        from_file = {
+            str(value)
+            for measure in ContractFiles.measures()["measures"]
+            for option in measure["options"] or []
+            if option["name"] == CatalogueTable.MATERIAL
+            for value in option["values"] or []
+        }
+
+        assert set(CatalogueTable.material_values()) == from_file
+        assert set(CatalogueTable.material_values()) == set(self.EXPECTED)
+
+    def test_every_material_value_resolves_to_exactly_one_row(self) -> None:
+        """One row per value, and the row is the one the note's mapping table names."""
+        for value, asp_id in self.EXPECTED.items():
+            assert CatalogueTable.material_row_for(value) == asp_id
+        assert CatalogueTable.material_rows() == self.EXPECTED
+
+    def test_a_value_the_table_does_not_know_is_refused_by_name(self) -> None:
+        """An unknown class name is a translator error naming it, not a silently wrong material."""
+        with pytest.raises(TranslatorError) as raised:
+            CatalogueTable.material_row_for("Styrofoam")
+
+        assert "Styrofoam" in str(raised.value)
+
+    def test_the_build_check_names_a_value_no_row_claims(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A material database that lost a row's values fails the build, naming the value."""
+        stripped = copy.deepcopy(ContractFiles.materials())
+        for row in stripped["materials"]:
+            if row["asp_id"] == "metac_glasswool":
+                row[CatalogueTable.MATERIAL_VALUES_FIELD] = []
+        monkeypatch.setattr(ContractFiles, "materials", classmethod(lambda cls: stripped))
+        monkeypatch.setattr(CatalogueTable, "RESOLVED_MATERIAL_ROWS", None)
+
+        with pytest.raises(TranslatorError) as raised:
+            CatalogueTable.material_rows()
+
+        assert "glass wool" in raised.value.detail
+
+    def test_the_build_check_names_a_value_two_rows_claim(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Two rows claiming one class name is as broken as none, and is reported the same way."""
+        doubled = copy.deepcopy(ContractFiles.materials())
+        for row in doubled["materials"]:
+            if row["asp_id"] == "eps_beads_cavity":
+                row[CatalogueTable.MATERIAL_VALUES_FIELD] = ["EPS"]
+        monkeypatch.setattr(ContractFiles, "materials", classmethod(lambda cls: doubled))
+        monkeypatch.setattr(CatalogueTable, "RESOLVED_MATERIAL_ROWS", None)
+
+        with pytest.raises(TranslatorError) as raised:
+            CatalogueTable.material_rows()
+
+        assert "eps_beads_cavity" in raised.value.detail
+        assert "polystyrene_eps_rigid_board" in raised.value.detail
 
 
 @pytest.mark.base

@@ -151,7 +151,7 @@ git push                # Push to remote
 - **Beads is the only todo list of this repository.** Findings, open questions, deferred work and
   review follow-ups go into `br`, not into markdown lists. A markdown document may *describe* a
   problem; the tracked item is the `br` issue, and the document names its id (`hisim-…`).
-- The shared folder `/home/contract-proposals/todos.md` (frontend, backend, contract owner) keeps
+- The shared todo file `/home/renovisor-api-contract/specs/todos.md` (frontend, backend, contract owner) keeps
   only items owned by the other agents; a HiSim-owned item there is a one-line pointer to its
   `br` id. When another agent files a HiSim finding there, create the `br` issue and leave the
   pointer.
@@ -159,6 +159,9 @@ git push                # Push to remote
   `ci`, `docs`, `rust`, `cleanup`, `data`, `spec-text`. Types: `bug`, `task`, `feature`, `docs`,
   `question` (a decision the owner has to take), `epic`. Priority as `br` defines it; an item that
   blocks the RenoVisor MVP is P1.
+- `mvp` marks what the RenoVisor MVP needs end to end (frontend, backend, HiSim, Irish house);
+  `post-mvp` what the owner deferred; `human` a review or data-sourcing task a person does —
+  implementation agents never pick up a `human` issue. `br ready -l mvp` is the MVP work list.
 - Every issue carries exactly one difficulty label, so work can be routed by model strength:
   `difficulty:easy` (mechanical, one file or a data/doc edit, unambiguous done-when, no design
   choice, no cross-repo coordination), `difficulty:medium` (a few files in one package, a small

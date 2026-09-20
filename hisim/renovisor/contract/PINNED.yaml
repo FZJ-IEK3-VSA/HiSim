@@ -2,7 +2,7 @@
 # Records which contract revision each vendored file was copied from and the
 # SHA-256 it had; tests/renovisor/test_contract.py recomputes the hashes.
 repository: https://github.com/climatemedia/renovisor-api-contract
-refreshed_at: '2026-09-20T15:17:47+00:00'
+refreshed_at: '2026-09-20T15:29:04+00:00'
 files:
   openapi.yaml:
     ref: origin/main
@@ -31,10 +31,3 @@ files:
     source: /home/renovisor-api-contract
     path: specs/measure-capabilities.openapi.yaml
     sha256: 79d29faed57c3e5079186b89b8888a24741bde52d4b5d571ae34cd0718824cf0
-  materials.yaml:
-    source: /home/renovisor-api-contract
-    path: materials.yaml
-    sha256: 2ecac4e78842b37d1a0e5198ab0a75c9753e5edbca39f924a5c27eedb9e16f7d
-    note: 'local deviation from renovisor-api-contract@5181aa5: rows carry measure_material_values
-      so the material option values of measures.yaml resolve to a row (owner decision
-      2026-09-20, pending the contract owner''s cleanup, todo C1)'

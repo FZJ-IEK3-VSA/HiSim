@@ -6,14 +6,12 @@ pin, so a hand edit or a half-done refresh fails the build. They also parse each
 that is not valid YAML or JSON -- or a request schema that lost the definitions the validator
 resolves -- is caught before any translation code reads it.
 
-Two of the six pinned files come from the contract repository at a named commit and four from the
-shared specification folder with only the phrase naming where they were read; one of those four,
-``materials.yaml``, exists in the contract repository too and is taken from the shared folder
-because that copy adds the ``measure_material_values`` field, which its pin records as a ``note``.
-One file -- ``openapi.yaml`` -- is pinned with ``authoritative: false`` because the request schema
-supersedes it and it is kept only so that the revision the branch once aligned against stays a
-committed fact. A seventh file, ``measure-capabilities.results-extension.yaml``, is HiSim's own
-proposal back to the frontend team and is deliberately unpinned; it is listed in
+Two of the five pinned files come from the contract repository at a named commit and three from
+the shared specification folder with only the phrase naming where they were read. One file --
+``openapi.yaml`` -- is pinned with ``authoritative: false`` because the request schema supersedes
+it and it is kept only so that the revision the branch once aligned against stays a committed
+fact. A sixth file, ``measure-capabilities.results-extension.yaml``, is HiSim's own proposal back
+to the frontend team and is deliberately unpinned; it is listed in
 ``ContractFiles.HISIM_AUTHORED`` so that the "everything here is pinned" test stays exact
 instead of being loosened.
 """
@@ -21,13 +19,12 @@ instead of being loosened.
 import hashlib
 
 from pathlib import Path
-from typing import ClassVar, Dict, List
+from typing import ClassVar
 
 import pytest
 
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.contract.refresh import ContractSources
-from hisim.renovisor.request import CatalogueTable
 
 
 @pytest.mark.base
@@ -109,65 +106,50 @@ class TestVendoredContract:
         for name in ("ImplementedMeasures", "ImplementedMeasure", "ImplementedOption"):
             assert name in schemas, f"measure-capabilities.openapi.yaml lacks {name}"
 
-    def test_measures_and_materials_parse_to_their_lists(self) -> None:
-        """The catalogue and the materials dump parse and expose their top-level lists."""
+    def test_the_catalogue_parses_to_its_list(self) -> None:
+        """``measures.yaml`` parses and exposes the top-level list the frozen table mirrors."""
         assert ContractFiles.measures()["measures"], "measures.yaml has no measures"
-        assert ContractFiles.materials()["materials"], "materials.yaml has no materials"
 
 
 @pytest.mark.base
-class TestTheMaterialClassField:
-    """``materials.yaml`` carries the field that resolves the catalogue's material class names.
+class TestTheMaterialDatabaseIsNotVendored:
+    """No ``materials.yaml`` is vendored here, and the pin has no entry for one.
 
-    The 2026-09-17 catalogue spells its ``material`` option values as class names rather than as
-    database ids. The owner's decision of 2026-09-20 keeps those names and fixes the material
-    database instead: every row carries ``measure_material_values``, the list of catalogue values
-    that mean it. These tests pin the eight rows that carry values, so a refresh that loses the
-    field or spells a value differently fails here by name rather than at the first request.
+    The translator reads no material data at run time: rule 5 of the contract has the request
+    carry a material's physical properties, and its ``asp_id`` travels as provenance only. A
+    vendored copy of the material database would therefore be a file nothing reads, kept in step
+    with the contract for nothing. The one thing worth checking about it -- that every ``material``
+    option value of ``measures.yaml`` resolves to exactly one material row -- is a fact about two
+    files of the contract repository, so the owner's decision of 2026-09-20 put that check in that
+    repository's CI (``specs/check_material_values.py``) and dropped the copy from HiSim. This test
+    is what would notice a refresh quietly bringing it back.
     """
 
-    #: ``asp_id`` -> the catalogue values that row claims, from the mapping table of
-    #: ``note-to-contract-owner-2026-09-19.md`` section 1, which is its only source.
-    EXPECTED: ClassVar[Dict[str, List[str]]] = {
-        "polystyrene_eps_rigid_board": ["EPS", "EPS Foam"],
-        "extruded_polystyrene_xps": ["XPS"],
-        "pir": ["PIR"],
-        "stone_wool_flexible_insulation_blankets": ["Mineral wool", "Mineral Wool", "mineral wool"],
-        "metac_glasswool": ["glass wool"],
-        "wood_fiber_rigid_board": ["wood fiber"],
-        "open_cell_spray_foam": ["open cell spray foam"],
-        "liquid_insulation": ["Liquid Insulation"],
-    }
+    #: The file name this package deliberately does not hold, spelled out because there is no
+    #: ``ContractFiles`` attribute for it any more.
+    MATERIALS_FILENAME: ClassVar[str] = "materials.yaml"
 
-    def test_every_row_carries_the_field_and_the_eight_named_ones_carry_the_values(self) -> None:
-        """Every row has the list; the eight of the mapping table have exactly these values."""
-        claimed = {}
-        for row in ContractFiles.materials()["materials"]:
-            values = row.get(CatalogueTable.MATERIAL_VALUES_FIELD)
-            assert isinstance(values, list), f"{row['asp_id']} has no {CatalogueTable.MATERIAL_VALUES_FIELD}"
-            if values:
-                claimed[str(row["asp_id"])] = list(values)
+    def test_the_vendored_directory_holds_no_material_database(self) -> None:
+        """No ``materials.yaml`` beside the other vendored copies."""
+        assert not (ContractFiles.DIRECTORY / self.MATERIALS_FILENAME).exists(), (
+            f"{self.MATERIALS_FILENAME} is vendored again; the translator reads no material data "
+            "and the resolution check lives in the contract repository's CI"
+        )
 
-        assert claimed == self.EXPECTED
-
-    def test_the_vendored_materials_file_is_pinned_to_the_shared_folder_with_its_deviation_note(self) -> None:
-        """The copy comes from the shared folder, and its pin says why it is not the repository's."""
-        entry = ContractFiles.pinned()["files"][ContractFiles.MATERIALS_FILENAME]
-
-        assert entry["source"] == ContractSources.LOCAL_SOURCE
-        assert "commit" not in entry, "materials.yaml is no longer taken from the contract repository"
-        assert CatalogueTable.MATERIAL_VALUES_FIELD in entry["note"]
-        assert "5181aa5" in entry["note"]
+    def test_the_pin_records_no_material_database(self) -> None:
+        """``PINNED.yaml`` has no entry for it either, so no refresh would write one back."""
+        assert self.MATERIALS_FILENAME not in ContractFiles.pinned()["files"]
 
 
 @pytest.mark.base
 class TestTheSharedFolder:
     """The vendored copies equal the shared specifications wherever the shared folder exists.
 
-    ``/home/renovisor-api-contract/specs`` (the contract checkout) is the single home of every specification the three repositories
-    share; the copies under ``hisim/renovisor/contract/`` exist only because CI and the container
-    image cannot see that folder. On a machine that has it, a copy that differs from the shared
-    file is drift, and this test says so by name; elsewhere it skips.
+    ``/home/renovisor-api-contract/specs`` (the contract checkout) is the single home of every
+    specification the three repositories share; the copies under ``hisim/renovisor/contract/``
+    exist only because CI and the container image cannot see that folder. On a machine that has
+    it, a copy that differs from the shared file is drift, and this test says so by name;
+    elsewhere it skips.
     """
 
     def test_every_locally_vendored_file_equals_the_shared_one(self) -> None:

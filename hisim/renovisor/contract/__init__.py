@@ -4,20 +4,19 @@ The contract lives in two places. ``measures.yaml`` (the catalogue of renovation
 ``openapi.yaml`` (the superseded v0.3 draft) come from the separate repository
 ``climatemedia/renovisor-api-contract``, which is co-owned by the RenoVisor frontend and backend
 teams. ``calculation-request.schema.json`` (the request the translator validates against),
-``calculation-request.mockup-1.yaml`` (the worked example every probe set anchors on),
+``calculation-request.mockup-1.yaml`` (the worked example every probe set anchors on) and
 ``measure-capabilities.openapi.yaml`` (the shape of the capability document the translator
-generates) and ``materials.yaml`` (the insulation-material database) come from the shared
-specification folder ``/home/renovisor-api-contract/specs`` (the contract checkout) and are vendored as local files. This package
-holds a copy of each, together with ``PINNED.yaml``, which records where every copy came from and
-the content hash it had at that moment.
+generates) come from the shared specification folder ``/home/renovisor-api-contract/specs`` (the
+contract checkout) and are vendored as local files. This package holds a copy of each, together
+with ``PINNED.yaml``, which records where every copy came from and the content hash it had at
+that moment.
 
-``materials.yaml`` is the one file taken from the shared folder although the contract repository
-has it too. The shared copy is that repository's ``origin/main`` file plus one field --
-``measure_material_values`` on every ``materials`` row -- through which each ``material`` option
-value of ``measures.yaml`` (``EPS``, ``EPS Foam``, ``Mineral wool``, ...) resolves to exactly one
-row; the owner's decision of 2026-09-20 was to keep the catalogue's names authoritative and fix
-the material database locally until the contract owner folds the spelling variants (todo C1).
-Its pin entry carries that as a ``note``.
+The contract's material database, ``materials.yaml``, is deliberately not among them. The
+translator reads no material data at run time: rule 5 of the contract has the request carry a
+material's physical properties and its ``asp_id`` as provenance only. The check that every
+``material`` option value of ``measures.yaml`` resolves to exactly one material row therefore
+runs in the contract repository's own CI (``specs/check_material_values.py``), where both files
+live, rather than in a HiSim copy of a file nothing here reads (owner decision 2026-09-20).
 
 One file here is not a copy at all. ``measure-capabilities.results-extension.yaml`` is HiSim's
 own proposal back to the frontend team -- the shape of the capability document's ``results``
@@ -71,10 +70,9 @@ class ContractFiles:
     #: The directory holding the vendored copies: the directory of this module.
     DIRECTORY: ClassVar[Path] = Path(__file__).resolve().parent
 
-    #: File names of the three vendored contract files and the pin record.
+    #: File names of the five vendored contract files and the pin record.
     OPENAPI_FILENAME: ClassVar[str] = "openapi.yaml"
     MEASURES_FILENAME: ClassVar[str] = "measures.yaml"
-    MATERIALS_FILENAME: ClassVar[str] = "materials.yaml"
     REQUEST_SCHEMA_FILENAME: ClassVar[str] = "calculation-request.schema.json"
     REQUEST_MOCKUP_FILENAME: ClassVar[str] = "calculation-request.mockup-1.yaml"
     CAPABILITIES_SCHEMA_FILENAME: ClassVar[str] = "measure-capabilities.openapi.yaml"
@@ -116,11 +114,6 @@ class ContractFiles:
     def measures(cls) -> Dict[str, Any]:
         """Return the parsed ``measures.yaml``; its ``measures`` key holds the catalogue list."""
         return cast(Dict[str, Any], cls._load(cls.MEASURES_FILENAME))
-
-    @classmethod
-    def materials(cls) -> Dict[str, Any]:
-        """Return the parsed ``materials.yaml``; its ``materials`` key holds the material list."""
-        return cast(Dict[str, Any], cls._load(cls.MATERIALS_FILENAME))
 
     @classmethod
     def pinned(cls) -> Dict[str, Any]:

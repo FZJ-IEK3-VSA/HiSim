@@ -89,3 +89,46 @@ contract owner's job (C1 stays open with that wording). A `vocabularies` entry
 every touched file; `python -m hisim.renovisor capabilities --out /tmp/x.json` still writes the same
 `material` values; the final report lists the rows changed, the refresh-script change, every shared
 edit (quote the new sentences) and anything left undone.
+
+---
+
+## Revision 2026-09-20 (second) — HiSim vendors no material database
+
+**Owner decision (2026-09-20, after §3 landed):** HiSim drops the vendored `materials.yaml`, its
+loader and the build-time guard. The question that prompted it was why HiSim carried the material
+database at all: at run time the translator reads no material data — rule 5 of the contract has
+the request carry a material's physical properties, and `asp_id` travels as provenance only — so
+the vendored copy was a file nothing read, kept in step with the contract for nothing.
+
+The check itself is not dropped, it moves. That every `material` option value of `measures.yaml`
+resolves to exactly one `materials.yaml` row is a fact about two files that both live in the
+contract repository, so it belongs in that repository's CI, next to the schema validation, where a
+change to either file is what triggers it. §1 and §3 above are superseded accordingly:
+
+- **No vendored `materials.yaml`.** `hisim/renovisor/contract/materials.yaml` is deleted, together
+  with `ContractFiles.MATERIALS_FILENAME`, `ContractFiles.materials()`, the `materials.yaml`
+  entries in `ContractSources.LOCAL_BY_FILENAME` and `ContractSources.NOTES` (now empty), and the
+  pin entry, which the refresh script drops because it writes the pin from the sources every run.
+- **No build-time guard in HiSim.** `CatalogueTable.MATERIAL_VALUES_FIELD`,
+  `RESOLVED_MATERIAL_ROWS`, `material_values()`, `material_rows()`, `material_row_for()` and
+  `_build_material_rows()` are removed from `hisim/renovisor/request.py`, and
+  `assert_catalogue_matches` in `hisim/renovisor/capabilities.py` is back to comparing the frozen
+  catalogue table with `measures.yaml` only.
+- **The guard in the contract repository.** `specs/check_material_values.py` (stdlib and PyYAML)
+  loads `measures.yaml` and `materials.yaml` from the repository root, resolves every `material`
+  option value through `measure_material_values`, and exits 1 naming every value no row claims and
+  every value several rows claim; a row claiming a value no measure uses is a warning only. A step
+  in `.github/workflows/validate.yml` runs it, another validates
+  `specs/calculation-request.schema.json` as JSON Schema 2020-12, and the `paths:` trigger now
+  covers `measures.yaml`, `materials.yaml`, `specs/**` and the workflow itself.
+- **What HiSim keeps.** The `material` option values themselves, in the frozen `CatalogueTable`
+  (they are `measures.yaml`'s, unchanged), and the citations of `materials.yaml` in the `Material`
+  dataclass' docstring, which says the request's field names are that file's verbatim because the
+  frontend copies the row. Those are citations of a contract file, not a copy of it.
+- **Tests.** `TestTheMaterialClassField` (`tests/renovisor/test_contract.py`) and
+  `TestMaterialValuesResolveToRows` (`tests/renovisor/test_request.py`) are deleted; a new
+  `TestTheMaterialDatabaseIsNotVendored` asserts that the vendored directory holds no
+  `materials.yaml` and that the pin has no entry for one, with the reason in its docstring.
+
+§2 (the field and its eight rows) and §4 (the shared bookkeeping) stand as written: the field lives
+in the contract repository's `materials.yaml`, and the request to the contract owner is unchanged.

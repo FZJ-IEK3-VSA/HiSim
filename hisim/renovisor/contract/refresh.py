@@ -17,10 +17,10 @@ hand, or a refresh that did not run to completion, fails the build.
 
 The sources are class attributes of :class:`ContractSources` so that a file moving to another
 branch, or a proposal file moving into the contract repository, is a one-line change here and
-nowhere else. ``materials.yaml`` moved the other way on 2026-09-20: it exists in the contract
-repository, but the copy that is vendored is the shared folder's, because that one carries the
-``measure_material_values`` field the catalogue's ``material`` option values are resolved
-through. Its pin entry says so in a ``note`` from :attr:`ContractSources.NOTES`.
+nowhere else. A file dropped from those attributes is dropped from the pin as well: the pin is
+written from the sources every run, so a vendored copy stops being recorded the moment it stops
+being a source. That is what happened to ``materials.yaml`` on 2026-09-20, when HiSim stopped
+vendoring the material database it never reads.
 """
 
 import argparse
@@ -58,25 +58,18 @@ class ContractSources:
     #: vendored file name -> path inside the contract checkout's working tree, for the files that
     #: are taken from the working tree rather than from a git ref: the shared specifications under
     #: ``specs/`` (moved there from ``/home/contract-proposals`` on 2026-09-20, on the branch
-    #: ``shared-specs`` until it merges) and ``materials.yaml``, whose working-tree copy carries the
-    #: local fix of :attr:`NOTES` that ``origin/main`` does not have yet.
+    #: ``shared-specs`` until it merges).
     LOCAL_BY_FILENAME: ClassVar[Dict[str, str]] = {
         ContractFiles.REQUEST_SCHEMA_FILENAME: "specs/calculation-request.schema.json",
         ContractFiles.REQUEST_MOCKUP_FILENAME: "specs/calculation-request.mockup-1.yaml",
         ContractFiles.CAPABILITIES_SCHEMA_FILENAME: "specs/measure-capabilities.openapi.yaml",
-        ContractFiles.MATERIALS_FILENAME: "materials.yaml",
     }
 
     #: vendored file name -> the ``note`` its pin entry carries, for a copy that deliberately
     #: differs from the contract repository's own file. The note names the revision it deviates
-    #: from and why, so the deviation is a recorded fact rather than unexplained drift.
-    NOTES: ClassVar[Dict[str, str]] = {
-        ContractFiles.MATERIALS_FILENAME: (
-            "local deviation from renovisor-api-contract@5181aa5: rows carry "
-            "measure_material_values so the material option values of measures.yaml resolve to a "
-            "row (owner decision 2026-09-20, pending the contract owner's cleanup, todo C1)"
-        ),
-    }
+    #: from and why, so the deviation is a recorded fact rather than unexplained drift. Empty
+    #: since 2026-09-20: every vendored copy is now the source's own bytes.
+    NOTES: ClassVar[Dict[str, str]] = {}
 
     #: The phrase recorded as the ``source`` of every locally vendored file. It names the
     #: directory and the day the proposal was read, which is all the provenance an unversioned
@@ -233,7 +226,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--proposals",
         default=ContractSources.SHARED_DIRECTORY,
-        help="the contract checkout whose working tree holds specs/ and the fixed materials.yaml "
+        help="the contract checkout whose working tree holds the shared specs/ directory "
         "(default: /home/renovisor-api-contract)",
     )
     arguments = parser.parse_args(argv)

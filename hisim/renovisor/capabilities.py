@@ -1049,20 +1049,13 @@ class CapabilityDocument:
 def assert_catalogue_matches(measures_path: Optional[Path] = None) -> None:
     """Raise when the frozen catalogue table does not equal ``measures.yaml`` (T-CAT).
 
-    It also resolves every ``material`` option value of the table against the vendored
-    ``materials.yaml``, because the two files only agree while each class name names exactly one
-    material row. Both checks run before the capability document is written, so a contract refresh
-    that breaks either of them fails the translator's build rather than a user's request.
-
     Args:
-        measures_path: The file to compare against; the vendored copy when omitted. The material
-            database is always the vendored one, which is the only copy the translator ships.
+        measures_path: The file to compare against; the vendored copy when omitted.
 
     Raises:
         AssertionError: Naming the first difference. A catalogue edit has to be a deliberate
             change to :class:`hisim.renovisor.request.CatalogueTable`, not a surprise in a
             user's refused request.
-        TranslatorError: When a ``material`` value resolves to no material row or to several.
     """
     if measures_path is None:
         catalogue = ContractFiles.measures()
@@ -1099,7 +1092,6 @@ def assert_catalogue_matches(measures_path: Optional[Path] = None) -> None:
             "the frozen catalogue table and measures.yaml disagree: "
             f"missing {missing}, extra {extra}, changed {changed}"
         )
-    CatalogueTable.material_rows()
 
 
 def unlisted_lines(results: Iterable[ProbeResult]) -> Tuple[str, ...]:

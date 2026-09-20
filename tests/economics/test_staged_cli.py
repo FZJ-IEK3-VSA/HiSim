@@ -372,7 +372,9 @@ class TestTheCatalogueIsNamedInTheDocument:
         """
         from hisim.economics.subsidies import SubsidyCatalog
 
-        catalog = SubsidyCatalog.load("IE", str(Path("hisim") / "subsidy_catalog"))
+        # The shipped directory by its absolute path: CI runs pytest from `tests/`, so a path
+        # relative to the working directory would name a directory that is not there.
+        catalog = SubsidyCatalog.load("IE", SubsidyCatalog.DEFAULT_PATH)
 
         assert catalog.snapshot_date is not None
         assert StagedCli.catalog_id(catalog, "IE") == f"IE@{catalog.snapshot_date}"

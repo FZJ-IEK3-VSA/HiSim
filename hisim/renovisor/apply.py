@@ -457,12 +457,13 @@ class MeasureRegistry:
         "conductivity used; heat capacity, density, CO2 footprint and lifespan recorded only"
     )
 
-    #: The four heating facts that described the generator a heating_system measure replaces.
+    #: The five heating facts that described the generator a heating_system measure replaces.
     SUPERSEDED_BY_NEW_GENERATOR: ClassVar[Tuple[str, ...]] = (
         "heating.flow_temperature_in_celsius",
         "heating.seasonal_efficiency_in_percent",
         "heating.secondary",
         "heating.cooking_range",
+        "heating.installation_year",
     )
 
     @classmethod

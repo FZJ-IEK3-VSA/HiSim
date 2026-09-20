@@ -25,7 +25,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.renovisor.apply import MeasureRegistry, apply
 from hisim.renovisor.constants import AnywayShareByPlacement, Placement
 from hisim.renovisor.contract import ContractFiles
-from hisim.economics.subsidies import DwellingType, SubsidyCatalog
+from hisim.economics.subsidies import ApplicantActor, DwellingType, SubsidyCatalog
 from hisim.renovisor.economics import (
     DeviceAssets,
     DwellingTypes,
@@ -149,12 +149,24 @@ class TestTheRegister:
         assert boiler.energy_carrier is EnergyCarrier.NATURAL_GAS
         assert boiler.is_functional is True
 
-    def test_the_boilers_age_is_the_buildings_construction_year(self) -> None:
-        """The request states no installation year, so the asset is as old as the building."""
+    def test_the_boilers_age_is_the_year_the_request_states(self) -> None:
+        """The mockup dates its boiler, so the register says that year, not the building's."""
         document = _mockup()
         register = _built(document).context.existing_assets
         boiler = register.find(ComponentType.GAS_HEATER)
+        assert boiler.installation_year == document["house"]["heating"]["installation_year"]
+
+    def test_an_undated_asset_is_as_old_as_the_building(self) -> None:
+        """A block that states no installation year falls back to the construction year."""
+        document = _mockup()
+        del document["house"]["heating"]["installation_year"]
+        built = _built(document)
+        boiler = built.context.existing_assets.find(ComponentType.GAS_HEATER)
         assert boiler.installation_year == document["house"]["building"]["construction_year"]
+        assert (
+            "house.heating.installation_year",
+            document["house"]["building"]["construction_year"],
+        ) == built.defaults[0][:2]
 
     def test_a_stated_installation_year_wins_over_the_construction_year(self) -> None:
         """E-spec §7's additive field: read when present, defaulted to the construction year.
@@ -220,7 +232,9 @@ class TestTheEnvelopeCostSubjects:
 
     def test_a_measure_without_a_cost_block_is_unpriced_rather_than_free(self) -> None:
         """Step 10 §1: the document says what it does not know instead of hiding the measure."""
-        built = _built(_mockup())
+        document = _mockup()
+        del document["measures"][2]["cost"]
+        built = _built(document)
         assert "external_insulation" in built.unpriced_subjects
         facts = {entry.subject: entry.facts for entry in built.context.extra_cost_facts}
         assert facts["external_insulation"].investment_cost_override_in_euro.best_estimate == 0.0
@@ -264,6 +278,50 @@ class TestTheMappingReportHalf:
             assert path and note
             assert value is not None
 
+    def test_a_stated_living_area_wins_and_an_unstated_one_falls_back(self) -> None:
+        """hisim-epc.14: the area the cost lines scale with, stated or defaulted with a line."""
+        document = _mockup()
+        document["house"]["building"]["living_area_in_m2"] = 128.0
+        built = _built(document)
+        assert built.context.living_area_in_m2 == 128.0
+        assert ("house.building.living_area_in_m2", 128.0, EconomicContextBuilder.LIVING_AREA_USED_NOTE) in (
+            EconomicContextBuilder.stated_leaves(document)
+        )
+
+        del document["house"]["building"]["living_area_in_m2"]
+        built = _built(document)
+        assert built.context.living_area_in_m2 == 140.0
+        assert any(
+            path == "house.building.living_area_in_m2" and value == 140.0
+            for path, value, _note in built.defaults
+        )
+
+    def test_the_stated_leaves_carry_the_dated_boiler_the_mockup_states(self) -> None:
+        """The translator covers these before its fail-loud stage; the mockup dates its boiler."""
+        leaves = EconomicContextBuilder.stated_leaves(_mockup())
+
+        assert leaves == [
+            (
+                "house.heating.installation_year",
+                _mockup()["house"]["heating"]["installation_year"],
+                EconomicContextBuilder.INSTALLATION_YEAR_USED_NOTE,
+            )
+        ]
+
+    def test_a_stated_installation_year_on_a_device_and_an_element_is_picked_up(self) -> None:
+        """Every block the schema lets carry a year reaches the translator's early accounting."""
+        document = _mockup()
+        document["house"]["building"]["facade"]["installation_year"] = 1995
+        document["house"]["pv_system"] = {"power_in_watt": 4000, "installation_year": 2015}
+
+        paths = [path for path, _value, _note in EconomicContextBuilder.stated_leaves(document)]
+
+        assert paths == [
+            "house.heating.installation_year",
+            "house.pv_system.installation_year",
+            "house.building.facade.installation_year",
+        ]
+
 
 class TestTheSubsidyContext:
     """Who is applying, and what stays unanswered rather than false."""
@@ -282,7 +340,7 @@ class TestTheSubsidyContext:
         assert context.applicant.household_size is None
 
     def test_the_three_irish_applicant_answers_stay_none_without_an_applicant_block(self) -> None:
-        """The vendored schema has no ``applicant`` block yet, so nothing may be inferred."""
+        """The mockup carries no block, so nothing may be inferred."""
         context = _built(_mockup()).context.subsidy_context
         assert context.applicant.receives_means_tested_benefit is None
         assert context.applicant.first_time_buyer is None
@@ -296,24 +354,29 @@ class TestTheSubsidyContext:
             "first_time_buyer": False,
             "managed_full_retrofit": True,
         }
-        request = Request.parse(_mockup())
-        request = dataclasses.replace(request, document=document)
-        applied = apply(request.document["house"], request.measures, Whitelist.load())
-        context = (
-            EconomicContextBuilder(
-                request,
-                applied,
-                _building(),
-                heating_reference_temperature_in_celsius=MOCKUP_DESIGN_TEMPERATURE_IN_CELSIUS,
-            )
-            .build()
-            .context.subsidy_context
-        )
+        context = _built(document).context.subsidy_context
 
         assert context is not None
         assert context.applicant.receives_means_tested_benefit is True
         assert context.applicant.first_time_buyer is False
         assert context.applicant.managed_full_retrofit is True
+
+    def test_the_applicant_role_becomes_the_profiles_actor(self) -> None:
+        """hisim-epc.14: a landlord applies to landlord programmes, not to owner-occupier ones."""
+        document = _mockup()
+        document["applicant"] = {"role": "landlord"}
+        context = _built(document).context.subsidy_context
+
+        assert context.applicant.actor is ApplicantActor.LANDLORD
+
+    def test_an_applicant_block_without_a_role_keeps_the_default_actor(self) -> None:
+        """The profile's own assertion stands: the archetype is an owner-occupied dwelling."""
+        document = _mockup()
+        document["applicant"] = {"household_size": 4}
+        context = _built(document).context.subsidy_context
+
+        assert context.applicant.actor is ApplicantActor.OWNER_OCCUPIER
+        assert context.applicant.household_size == 4
 
     def test_the_dwelling_type_comes_from_the_building_type(self) -> None:
         """The mockup is a detached house, which is the band nearly every SEAI grant pays most for."""
@@ -381,6 +444,32 @@ class TestTheTechnicalAttributes:
         assert attributes[EconomicContextBuilder.PHOTOVOLTAIC_COMPONENT] == {
             EconomicContextBuilder.PEAK_POWER_ATTRIBUTE: pytest.approx(3.5)
         }
+
+    def test_a_stated_scop_is_published_for_the_generator_subject(self) -> None:
+        """hisim-epc.14: a scheme keyed on SCOP is decided on the stated figure, not undetermined."""
+        document = _mockup()
+        document["house"]["heating"]["type_of_system"] = "air_source_heat_pump"
+        document["house"]["heating"]["scop"] = 3.2
+        document["measures"] = []
+        request = Request.parse(document)
+        applied = apply(request.document["house"], request.measures, Whitelist.load())
+        context = EconomicContextBuilder(
+            request,
+            applied,
+            _building(),
+            generator_component="MoreAdvancedHeatPumpHPLib",
+            heating_reference_temperature_in_celsius=MOCKUP_DESIGN_TEMPERATURE_IN_CELSIUS,
+        ).build().context.technical_attributes_by_subject
+
+        assert context["MoreAdvancedHeatPumpHPLib"][
+            EconomicContextBuilder.SCOP_ATTRIBUTE
+        ] == pytest.approx(3.2)
+
+    def test_no_scop_is_published_when_the_request_states_none(self) -> None:
+        """The absence keeps the schemes keyed on it undetermined rather than denied."""
+        attributes = _built(_mockup()).context.technical_attributes_by_subject
+
+        assert all(EconomicContextBuilder.SCOP_ATTRIBUTE not in entry for entry in attributes.values())
 
 
 class TestTheCatalogueTheRunIsPointedAt:

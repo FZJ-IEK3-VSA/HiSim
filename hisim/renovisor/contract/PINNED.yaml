@@ -22,11 +22,11 @@ files:
   calculation-request.schema.json:
     source: /home/renovisor-api-contract
     path: specs/calculation-request.schema.json
-    sha256: a405d7a983b9391dd053a88cc8c8dc8f88ee04287737d89cf026122d0a38f928
+    sha256: 97d4509c5d683b14fdd2a894bdbb36415ece562b362e794cddf47c4840458b14
   calculation-request.mockup-1.yaml:
     source: /home/renovisor-api-contract
     path: specs/calculation-request.mockup-1.yaml
-    sha256: 34c5bc36d2f912fcfe6fe3813e0ce4350a44190e36bd18d4d261bbd0d898c5c7
+    sha256: 2e9a4f0b7faf555611ac621441e4a806a77b87fb0e93c5e05036cf1eb4ab2fa1
   measure-capabilities.openapi.yaml:
     source: /home/renovisor-api-contract
     path: specs/measure-capabilities.openapi.yaml

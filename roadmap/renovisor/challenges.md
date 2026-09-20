@@ -141,7 +141,7 @@ stated so nobody adds a fifth mapping.
 
 ## 4. Turning options into physics
 
-**Challenge C12 — the U-value derivation (M1, §5.1 of the v2 document).** Five inputs, none of
+**Challenge C12 — the U-value derivation (M1, §5.1 of the v2 document).** Five inputs, none of → hisim-4g9.5
 which exists in HiSim: λ per material (from §3), a default thickness per measure where the
 Experts option is absent (11 defaults with a source, M7), the element's current U-value (TABULA
 row or `envelope_details`, precedence A8 undecided), the formula `U_new = 1/(1/U_old + Σ d/λ)`
@@ -163,13 +163,13 @@ daily demand (which loads, which day). Both are sizing laws with named inputs, b
 `approximated`, both resolved *before* the inventory is written so the post-measure inventory is
 in watts and kWh (A6.4). A11 (stated size beats law) becomes required.
 
-**Challenge C15 — two-field writes and measures with no model.** `change room temperature`
+**Challenge C15 — two-field writes and measures with no model.** `change room temperature` → hisim-4g9.3, hisim-4g9.6, hisim-epc.21
 writes the building set-point and the HDS controller set-point (M11). Nine measures have no
 model and are reported, not dropped (M8); three of them become cheap once `BuildingConfig` gains
 optional infiltration, shading and air-change/heat-recovery fields (M3). `hot water system:
 Direct electric` needs a component that does not exist.
 
-**Challenge C16 — the eleven heat generators.** Five are `generic_boiler` presets today.
+**Challenge C16 — the eleven heat generators.** Five are `generic_boiler` presets today. → hisim-epc.19, hisim-epc.20
 `hvo_heating` is a new fuel + preset (M12). `biomass_heating` needs a decision (alias to pellets
 or ask). `heat_pump`, `electric_heating`, `district_heating` wait for P4 B1 presets.
 `hybrid_heat_pump` has no component. The `heating system` measure is also the one measure that
@@ -249,12 +249,12 @@ The v1 `MappingReport` class is a usable starting point for the field half.
 
 ## 7. Running inside a reused container
 
-**Challenge C25 — reuse safety (C13).** `SingletonSimRepository.reset()` and
+**Challenge C25 — reuse safety (C13).** `SingletonSimRepository.reset()` and → hisim-epc.23
 `ResultPathProviderSingleton.reset()` exist and nothing on a production path calls them; module
 caches (weather, TABULA, pvlib) are unsurveyed. One reset point at the start of a calculation,
 and AC11.1's differing-sequence identity test.
 
-**Challenge C26 — write only into the output location (R13.4).** Two defaults write into the
+**Challenge C26 — write only into the output location (R13.4).** Two defaults write into the → hisim-epc.22, hisim-hi1.8
 repository: `ResultPathProviderSingleton` (`<repo>/results/`) and the input cache
 (`hisim/inputs/cache/Building_<hash>.cache` is on disk on `main` right now). The cache is
 content-keyed and deterministic, so keeping it *across* calculations is fine and even wanted,
@@ -324,11 +324,11 @@ noted. Ids Q1–Q28 are the interview's; C3 and V1–V3 preceded it.
 
 | Id | Decision |
 |---|---|
-| Q10 | The current U-value: **inventory wins per element**, TABULA otherwise; the report says which. Same rule for the base simulation (settles A8). |
+| Q10 | The current U-value: **inventory wins per element**, TABULA otherwise; the report says which. Same rule for the base simulation (settles A8). | → hisim-4g9.5
 | Q11 | Missing thickness is **target-driven, no thermal-bridge surcharge**: the thickness that reaches the Irish regulatory target U-value for the element from `U_old` and λ, rounded up to the material's increments; targets as a sourced table; the simplification is stated in the report. |
 | Q12 | Battery `days_to_cover` is sized on **household load plus heat pump plus EV**: LPG profile annual sum / 365, plus the TABULA annual heating demand / an assumed seasonal heat-pump efficiency, plus mileage × consumption. Stated in the report as `approximated` with the law's name. |
-| Q14 | `HYBRID_HEAT_PUMP` and `HOT_WATER_SYSTEM: DIRECT_ELECTRIC` are **refused** with a reason code; `BIOMASS_HEATING` is **simulated as pellets**, reported `approximated`, with a request to the owners to drop the value. |
-| Q15 | The three optional `BuildingConfig` fields (infiltration, shading, air change / heat recovery) are **not built for the MVP**; `OUTSIDE_SHADING`, `SHALLOW_AIR_TIGHTNESS_MEASURES`, `DIY_SEALING_OF_AIR_LEAKS`, `VENTILATION_SYSTEM` stay `NoEffect`, reported. |
+| Q14 | `HYBRID_HEAT_PUMP` and `HOT_WATER_SYSTEM: DIRECT_ELECTRIC` are **refused** with a reason code; `BIOMASS_HEATING` is **simulated as pellets**, reported `approximated`, with a request to the owners to drop the value. | → hisim-epc.20, hisim-epc.21
+| Q15 | The three optional `BuildingConfig` fields (infiltration, shading, air change / heat recovery) are **not built for the MVP**; `OUTSIDE_SHADING`, `SHALLOW_AIR_TIGHTNESS_MEASURES`, `DIY_SEALING_OF_AIR_LEAKS`, `VENTILATION_SYSTEM` stay `NoEffect`, reported. | → hisim-4g9.6
 | Q16 | PV sizing reads **roof form and orientation from new inventory fields**, with TABULA roof geometry as the fallback. Contract change. The rule is the existing `rooftop` law with an added input, not a new law. |
 
 ### Base files and the container
@@ -337,9 +337,9 @@ noted. Ids Q1–Q28 are the interview's; C3 and V1–V3 preceded it.
 |---|---|
 | Q17 | Variant coverage: **resolve every combination, simulate a sample** over one day; request an expected-feeds assertion in the format. |
 | Q18 | Base files are the **recorded grouped files as they stand**; selection is a lookup table; missing combinations are refusals; additions only through the golden gate (details in C17–C19). |
-| Q19 | Zero-area TABULA rows: **keep the v1 workaround** (nearest usable age band, reported with the substituted code); the `Building` fix is a separate scheduled item. |
+| Q19 | Zero-area TABULA rows: **keep the v1 workaround** (nearest usable age band, reported with the substituted code); the `Building` fix is a separate scheduled item. | → hisim-epc.18, hisim-4g9.1
 | Q20 | Occupancy profiles: **local LPG executable in the image plus a warm content-keyed cache**. |
-| Q25 | A **cache directory is mapped into the container**; HiSim's simulation parameters accept a **list of cache directories**. The cache is exempt from the output-location cleanliness rule. |
+| Q25 | A **cache directory is mapped into the container**; HiSim's simulation parameters accept a **list of cache directories**. The cache is exempt from the output-location cleanliness rule. | → hisim-epc.22
 | Q26 | The calculation version is the **image digest only**, passed in by the caller and echoed in the result. |
 
 ### Results
@@ -377,14 +377,14 @@ Facts the code surfaced that were not visible from the documents. Each names who
 | # | Finding | Action |
 |---|---|---|
 | F1 | A recorded value on a sized field **pins** it: keeping the recorded `Building.weather_identity` on a Dublin house kept Aachen's solar-gain key. The parametriser removes `weather_identity` and `Weather.location`; the diff rule allows exactly those removals. | Done in step 5. Any future constructor swap must list the recorded keys it invalidates. |
-| F2 | The legacy KPI path has emission and price factors for `DE` and `AT` only (`hisim/components/configuration.py`, `EmissionFactorsAndCostsForFuelsConfig`); `simulation_parameters.country = "IE"` crashes `COMPUTE_KPIS`. The lifecycle engine prices against the Irish files via attached `EconomicParameters`, so costs are Irish but `emissions_in_kg_co2_per_year` uses German grid factors and is labelled `PARTIAL` with the country named. | **Data task:** Irish rows for that table, sourced (SEAI/CRU emission and price factors). |
+| F2 | The legacy KPI path has emission and price factors for `DE` and `AT` only (`hisim/components/configuration.py`, `EmissionFactorsAndCostsForFuelsConfig`); `simulation_parameters.country = "IE"` crashes `COMPUTE_KPIS`. The lifecycle engine prices against the Irish files via attached `EconomicParameters`, so costs are Irish but `emissions_in_kg_co2_per_year` uses German grid factors and is labelled `PARTIAL` with the country named. | **Data task:** Irish rows for that table, sourced (SEAI/CRU emission and price factors). | → hisim-l07.14
 | F3 | `HISIM_IN_DOCKER_CONTAINER` makes `postprocessing_main.py` whitelist post-processing options, and `COMPUTE_LIFECYCLE_COSTS` is not on the list: a container with that variable set produces a `result.json` whose whole `costs` block is `missing`. | **HiSim change** before the container ships. Decided 2026-09-19: the override is removed altogether rather than widened; the simulation file is authoritative in a container too (the allow-list dated from the 2022 UTSP workers and blocked every option added since). |
 | F4 | `greenfield_net` applies a flat subsidy shim when no country catalogue exists; on the Irish example it booked 4 626 € of "support" from a German-shaped percentage. The payload reads `greenfield_gross` and publishes a grant only from a real catalogue. | Nothing further; `subsidy_catalog/IE.json` (step 6b, Q24) activates the grant without a code change. |
-| F5 | Embodied CO₂ of the example is **negative** (−2 224 kg): the materials dump gives wood fibre −174.8 kg CO₂-eq./m³ with biogenic storage netted in at A1–A3. | **Question to the materials team:** does `embodied_co2_in_kg` want storage netted in or reported separately (the dump has both columns)? |
+| F5 | Embodied CO₂ of the example is **negative** (−2 224 kg): the materials dump gives wood fibre −174.8 kg CO₂-eq./m³ with biogenic storage netted in at A1–A3. | **Question to the materials team:** does `embodied_co2_in_kg` want storage netted in or reported separately (the dump has both columns)? | → hisim-l07.10
 | F6 | Two recorded files lack components some inventory blocks bind to: district and electric heating have no `SimpleHotWaterStorage`; electric heating has no `HeatDistributionController`. Base-state inventory values for those report `ignored`; a measure needing them is a refusal. | Accepted behaviour (Q18: additions only through the golden gate). |
 | F7 | The battery law's household term is the mean over the simulated period, not annual/365, so that the estimate warms the very LPG cache entry the run then uses; identical for a full-year run. | Accepted; the rule string names the period. Revisit if a winter-day run should not size a battery. |
 | F8 | The report-line bug: measures writing no line of their own shifted later measures' lines (PV and battery had none). Fixed in step 5, with the test that had hidden it corrected. | Done. |
-| F9 | Two LPG catalogue names cannot be read into a household composition (`CHR06 Jak Jobless`, `CHR20 …`) and `CHR52 Student Flatsharing` reads as one adult; excluded or documented rather than guessed. | Decide whether to widen the phrase rules. |
+| F9 | Two LPG catalogue names cannot be read into a household composition (`CHR06 Jak Jobless`, `CHR20 …`) and `CHR52 Student Flatsharing` reads as one adult; excluded or documented rather than guessed. | Decide whether to widen the phrase rules. | → hisim-epc.25
 | F10 | `PVSystem` is in every recorded file; "no PV" is a pinned `power_in_watt: 0`, which the parametriser drops as stale when a PV measure writes a roof share. Solar-thermal files wire the collector to DHW only, so `DHW_ONLY` is the one supported supply mode — a fact now, not a PROVISIONAL. | Done; `base_files.py` updated. |
 
 ## 12. Course correction of 2026-09-15 (evening): the input contract is rewritten, not aligned
@@ -451,7 +451,7 @@ Irish rows replace the block. The payload reads none of those KPIs: emissions co
 Irish factors; energy demand and self-sufficiency do not depend on the tables. Verified: the KPI path ran,
 "Costs of grid electricity" = −1.2 × 10¹⁰ EUR for one January day.
 
-**F11 (2026-09-19, found on the merge with main):** HiSim #771 moved the outside design temperature to the
+**F11 (2026-09-19, found on the merge with main):** HiSim #771 moved the outside design temperature to the → hisim-epc.8
 weather (`Weather.for_location` requires `heating_reference_temperature_in_celsius`; the building reads it as a
 sizing fact). The translator had been passing TABULA's `Theta_e_Base` for it — which is the heating-degree-day
 base of 12 °C for every country, not a design condition (`Theta_e` is the annual mean). The value is now the

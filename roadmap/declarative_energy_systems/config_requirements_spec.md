@@ -354,10 +354,10 @@ pump and PV, 35 components). Resolved there: O1 (placement of connections → R2
 O3 (uniqueness scope → R14), O2 (exclusive groups → R14). Still open, none of them
 format questions:
 
-- **O5** Single-zone `Building`: per-apartment sizes (HDS floor area, DHW volume, DHW
+- **O5** Single-zone `Building`: per-apartment sizes (HDS floor area, DHW volume, DHW → hisim-b3b.29
   heater power) must be written explicitly today — 4 lines per apartment in the MFH
   mockup. Per-unit building facts (Q1) remove them without a format change.
-- **O6** The `Building` has one occupancy input; several apartments need an
+- **O6** The `Building` has one occupancy input; several apartments need an → hisim-b3b.29
   aggregating input on it (component work).
 - **O7** A central heat pump SH controller with three HDS controllers — a modeling
   question the format must not paper over.

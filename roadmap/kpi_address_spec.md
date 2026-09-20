@@ -95,7 +95,7 @@ class KpiFinder:
    in every golden changes; the values do not). The manifest's config hash moves with it.
 5. Record the key format in the webtool JSON contract note in `kpi_structure.py` and in the
    `energy_systems/README.md` KPI section, with one before/after example.
-6. Remove the "volatile keys" remark from `roadmap/p3_cleanup_todos.md` once merged.
+6. Remove the "volatile keys" remark from `roadmap/p3_cleanup_todos.md` once merged. → hisim-b3b.1
 
 ## Acceptance
 

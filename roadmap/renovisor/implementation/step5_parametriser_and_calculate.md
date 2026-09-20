@@ -7,7 +7,7 @@ files; refusals for missing combinations), Q19 (TABULA workaround), Q20/Q25 (cac
 Q26 (image digest echoed), R4/M10 (what a parametrised file may differ in), R7 (report), R11/R13.2
 (`errors.json`, three distinguishable outcomes), R16 (records written), V1 (trace page).
 **Out of scope:** the result payload (`kpis`, `costs`, provenance objects) — step 6; the contract
-PR — step 7; a list of cache directories on `SimulationParameters` — step 7b (Q25 follow-up).
+PR — step 7; a list of cache directories on `SimulationParameters` — step 7b (Q25 follow-up). → hisim-epc.22
 
 Ground rules are those of step 3 §0 (worktree, interpreter, no commits, class-scope constants,
 plain complete docstrings, flake8 + mypy clean). New unit tests are `@pytest.mark.base`; the one

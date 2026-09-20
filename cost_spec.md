@@ -1849,7 +1849,7 @@ revertable by turning the flag off.
 
 ---
 
-## 11. Open questions (decisions needed before the respective phase)
+## 11. Open questions (decisions needed before the respective phase) → hisim-l07.4, hisim-l07.6, hisim-l07.8, hisim-l07.13, hisim-cyc.10, hisim-cyc.20, hisim-cyc.21
 
 **Phase 1**
 1. Nominal vs. real rates as the documented default. Proposal: nominal (interest 3 %, general

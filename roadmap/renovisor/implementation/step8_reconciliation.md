@@ -133,7 +133,7 @@ Keep the registry-of-functions and the closed effect set; change what they read 
   `low_emissivity_coating` and the U-value (expert `u_value_in_watt_per_m2_per_kelvin` when
   given, else `NEW_WINDOW_U[(panes, coating)]` = {(2,False):1.4, (2,True):1.1, (3,False):0.8,
   (3,True):0.7}); `door_replacement` likewise with `NEW_DOOR_U` = {0:1.4, 2:1.8, 3:1.2}. Both
-  tables in `constants.py`, `approximated`, "to be reviewed" in the comment.
+  tables in `constants.py`, `approximated`, "to be reviewed" in the comment. → hisim-epc.8
 - `hot_water_tank_and_pipe_insulation` → `hot_water.tank_and_pipe_insulated = true` →
   `DHWStorage.config.heat_transfer_coefficient_in_watt_per_m2_per_kelvin: 0.18`
   (`TANK_INSULATED_HEAT_TRANSFER`, half the class default), `approximated`.

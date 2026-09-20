@@ -341,7 +341,7 @@ file, or a hand-written setup) only ever says *concrete value* or *`AUTO`*. One 
 resolver turns `AUTO` into numbers when the context is known. The
 nominal/scaled/required distinction dissolves into *which fields of a preset say `AUTO`*.
 
-### 4.1 The three pieces
+### 4.1 The three pieces → hisim-b3b.27
 
 ```python
 AUTO: Final = _AutoSize()          # the single sentinel; reprs as "AUTO"

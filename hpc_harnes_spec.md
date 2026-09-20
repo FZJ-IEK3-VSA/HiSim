@@ -1247,7 +1247,7 @@ Keep the existing pytest markers; add a `harness` marker for the integration tes
 
 ---
 
-## 17. Open questions / future
+## 17. Open questions / future → hisim-o6a.5
 
 - **Autoscaler:** whole-node autoscaling and proactively cancelling *running* (not just
   Slurm-`PENDING`) surplus workers are the natural follow-ups.

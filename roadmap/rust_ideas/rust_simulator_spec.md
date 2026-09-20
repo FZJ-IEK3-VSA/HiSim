@@ -44,33 +44,33 @@ under active development.
 
 These gate everything in §3. All of them are small, and none requires a Rust toolchain except **M2**.
 
-- [ ] **M0 — per-element container costs on our CPython.** Read and write cost for `list`,
+- [ ] **M0 — per-element container costs on our CPython.** Read and write cost for `list`, → hisim-9ks.23
   `array.array('d')`, `memoryview` format `'d'`, and numpy scalar indexing. Establishes where the
   boxing conversion is cheapest to pay. Expected ordering (to be confirmed, not assumed): list
   fastest per element, every unboxed buffer slower, numpy slowest — which is why an unboxed buffer
   handed to Python is the wrong shape.
-- [ ] **M1 — call-site variants.** One representative component, four `i_simulate` bodies:
+- [ ] **M1 — call-site variants.** One representative component, four `i_simulate` bodies: → hisim-9ks.24
   (a) current `stsv.set_output_value(self.channel, v)`; (b) `o[self.channel.local_index] = v`;
   (c) `o[self.IDX_X] = v` with a class-level int; (d) `o[2] = v` with the index hoisted to a local.
   Decides whether rewriting 717 call sites earns its churn, and which spelling to rewrite them to.
-- [ ] **M2 — PyO3 boundary stub.** One extension call that gathers 10 scattered f64 into a Python
+- [ ] **M2 — PyO3 boundary stub.** One extension call that gathers 10 scattered f64 into a Python → hisim-9ks.25
   list and scatters 7 back. Yields the real crossing cost and the real per-float boxing cost on our
   platform, which every estimate in §3 depends on. This is also the cheapest available probe of the
   Rust build and wheel story.
-- [ ] **M3 — loop profile.** Per-iteration time split into component physics versus value plumbing
+- [ ] **M3 — loop profile.** Per-iteration time split into component physics versus value plumbing → hisim-9ks.26
   (writes + reads + compare + copies), on two or three representative setups. Without this, every
   speedup figure below is unanchored.
-- [ ] **M4 — residual argmax.** Per timestep, log which output index fails
+- [ ] **M4 — residual argmax.** Per timestep, log which output index fails → hisim-9ks.27
   `is_close_enough_to_previous` last. Answers two questions at once: whether the outputs driving the
   iteration count are wired signals or write-only diagnostics, and whether any output's magnitude
   makes the **absolute** 1e-4 threshold unsatisfiable (a counter at 1e9 needs ~1e-13 relative, so it
   would fail on every iteration and silently force the 10-iteration cutoff on every timestep).
-- [ ] **M5 — iteration histogram and memory high-water.** Distribution of iterations per timestep,
+- [ ] **M5 — iteration histogram and memory high-water.** Distribution of iterations per timestep, → hisim-9ks.28
   and the peak size of `all_result_lines`. A year at 1 min × 141 outputs is ~593 MB as raw f64 but
   roughly 2–3 GB as a Python list of lists of boxed floats; at 500 outputs it is ~2 GB versus
   ~10 GB. Given the 16 GB runner ceiling tracked by `ci-usage`, this may be worth more than any CPU
   figure here.
-- [ ] **M6 — state-leak test (correctness, not performance).** Run a timestep, then force one extra
+- [ ] **M6 — state-leak test (correctness, not performance).** Run a timestep, then force one extra → hisim-9ks.29
   iteration, and assert the outputs are identical. This checks the premise that `i_restore_state`
   undoes everything `i_simulate` mutates. If it fails anywhere, the loop is not a fixed-point
   iteration, iteration count changes results, and several arguments in §3 and Appendix A do not
@@ -191,7 +191,7 @@ list.
   existing raise at 100 iterations.
 - **Gate:** O2 shipped, M2, M3. **Status:** the step after O2 proves the boundary.
 
-### O8 — Per-output tolerance vector
+### O8 — Per-output tolerance vector → hisim-9ks.11
 
 Replace the single absolute 1e-4 with a per-output (or per-unit) tolerance, supplied at construction.
 

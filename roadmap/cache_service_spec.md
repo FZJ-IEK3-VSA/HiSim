@@ -469,7 +469,7 @@ Findings that fall out of the survey:
 - `hisim/caching/producers.py` only maps artifact kinds to producer functions for the
   prewarm CLI.
 
-## 13. Open questions
+## 13. Open questions → hisim-hi1.7
 
 1. Blob size cap and total quota — need measured sizes of the largest current `.cache` files
    (UTSP full-year minutely results are the likely maximum).

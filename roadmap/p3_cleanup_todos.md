@@ -1,5 +1,7 @@
 # P3 — what is still open before and after the stack merges
 
+Open items are tracked in beads since 2026-09-20 (`br ready`); the ids below point at them. This file is no longer maintained as a list.
+
 **Date:** 2026-09-05 · **Updated:** 2026-09-19 · **Owner:** Noah Pflugradt
 **Context:** #598 was split into seven stacked PRs (`p3_identifier_names` → `p3_declarative_fixes` →
 `p3_recordable_components` → `p3_recorder_core` → `p3_recorded_fleet` → `p3_parity_rig` →
@@ -10,7 +12,7 @@ only in a conversation. Items are removed when done, not ticked and kept.
 
 ## Missing deliverables (code)
 
-- [ ] **Stable KPI addresses.** Keys are still volatile (bare unless a collision exists) and
+- [ ] **Stable KPI addresses.** Keys are still volatile (bare unless a collision exists) and → hisim-b3b.1
   consumers rebuild key strings by hand. Spec: `roadmap/kpi_address_spec.md`; its own PR after #653
   is on main.
 
@@ -21,17 +23,17 @@ only in a conversation. Items are removed when done, not ticked and kept.
 
 ## Operational, after the stack merges
 
-- [ ] **Delete the `json_v2` spike branch** (local and origin) — the parity/templating halves are
+- [ ] **Delete the `json_v2` spike branch** (local and origin) — the parity/templating halves are → hisim-b3b.2
   ported. (#598 itself was closed 2026-09-07.)
 ## Deferred by design (not P3's debt, listed so it is findable)
 
-- P6 tears down the parity rig (R11.8 amended; AC-P3.20 moved there) and decides which setups the rig's
+- P6 tears down the parity rig (R11.8 amended; AC-P3.20 moved there) and decides which setups the rig's → hisim-b3b.22
   evidence promotes into the permanent full-year gate.
 - ~~v1 scenario JSONs, `json_executor.py` and `scenario-json-freshness.yml` retire in P5 (Q-P3.4).~~
   **Done 2026-09-12**, in P4 rather than P5 (owner): retired together with `hisim_convert_to_json.py`,
   `scripts/regenerate_scenario_jsons.py` and `golden-json-check.yml`, because every setup has a
   recorded twin and the YAML gates cover what the JSON pair covered, at ~48 CI minutes per PR less.
-- The `cars` field on `UtspLpgConnectorConfig` is dead (declared, read by nothing) — removal is a small
+- The `cars` field on `UtspLpgConnectorConfig` is dead (declared, read by nothing) — removal is a small → hisim-b3b.3
   serialization change with a scenario regeneration, noted 2026-09-05 during the #625 review.
 
 ## Done and removed (dates only, so the removals are auditable)

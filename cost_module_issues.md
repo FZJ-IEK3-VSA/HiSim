@@ -1,18 +1,20 @@
 # Cost module implementation — open issues and decisions to clarify
 
+Open items are tracked in beads since 2026-09-20 (`br ready`); the ids below point at them. This file is no longer maintained as a list.
+
 Running log of ambiguities found while implementing `cost_spec.md`. Items marked **DECIDED (provisional)**
 were resolved with a documented default to keep the implementation moving; they should be reviewed.
 
 ## Spec open questions (§11) — provisional defaults taken in code
 
 - **Q1 (nominal vs real rates)**: implemented nominal as documented default (interest 3 %, general escalation 2 %).
-- **Q2 (default escalation rates / CO2 paths)**: `escalation_defaults_DE.json` ships with a small,
+- **Q2 (default escalation rates / CO2 paths)**: `escalation_defaults_DE.json` ships with a small, → hisim-l07.6
   clearly-labeled EXPERT_ESTIMATE table (electricity 2 %, gas 3 %, oil 3 %, others 2 %); the
   per-asset-class investment escalation table ships **empty** per the spec proposal. CO2 price paths
   for DE encode nEHS 2024–2026 fixed prices and an ETS2 corridor estimate from 2027 — values are
   EXPERT_ESTIMATE and need team review against sources [33]–[35].
 - **Q4 (replacement timing)**: end-of-year convention everywhere, as proposed.
-- **Q5 (gross vs net storage)**: device entries migrated from `configuration.py` carry
+- **Q5 (gross vs net storage)**: device entries migrated from `configuration.py` carry → hisim-l07.4
   `vat_rate: 0.19` (DE) / `0.20` (AT) and are stored **as-is** from the legacy dicts. The legacy
   numbers' VAT status is *undocumented* — parity requires using them unchanged, so the migrated
   entries are flagged `"price_basis": "AS_LEGACY"` and the gross-up for FINANCIAL accounting is a
@@ -28,7 +30,7 @@ were resolved with a documented default to keep the implementation moving; they 
   active; behavioral counterfactual is a second run (not automated).
 - **Q19 (§14a depth)**: grid-fee discount as tariff data only; no dimming simulation requirement.
 - **Q21 (cube explosion)**: warn > 1 000 scenarios, error > 100 000.
-- **Q25 (bands beyond money)**: service lives and emission factors stay exact in v1.
+- **Q25 (bands beyond money)**: service lives and emission factors stay exact in v1. → hisim-cyc.20
 - **Q27 (source granularity)**: per-entry `source_ids` mandatory, per-field `field_sources` optional.
 - **Q28 (registry scope)**: one `sources.json` per directory (cost_database and subsidy_catalog).
 - **Q30 (subsidy overlays)**: data overlays on subsidy catalog entries are accepted by the schema and
@@ -36,7 +38,7 @@ were resolved with a documented default to keep the implementation moving; they 
 
 ## New issues found during implementation
 
-1. **Legacy capex dict has meter "maintenance rates" > 1** (`ELECTRICITY_METER: 2.4`,
+1. **Legacy capex dict has meter "maintenance rates" > 1** (`ELECTRICITY_METER: 2.4`, → hisim-l07.1
    `GAS_METER: 1.8` in DE/2024, i.e. 240 %/180 % of investment per year — these encode absolute
    yearly fees, not rates). Migrated 1:1 into `devices_DE.json` for parity, but they violate the
    sanity range a maintenance *rate* should have. The new schema has
@@ -44,46 +46,46 @@ were resolved with a documented default to keep the implementation moving; they 
    240 €/a resp. 360 €/a there and zero the rate — that would be a deliberate, visible KPI delta.
    The AT entries (0.2 / 0.15) look like the same confusion with different magnitudes (20 €/month
    comment vs 0.2 rate).
-2. **Legacy `ENERGY_MANAGEMENT_SYSTEM` investment comment says "EUR/kW" but the key is absolute EUR**
+2. **Legacy `ENERGY_MANAGEMENT_SYSTEM` investment comment says "EUR/kW" but the key is absolute EUR** → hisim-l07.2
    (`investment_costs_in_euro: 3500`). Migrated as absolute (per_unit = null); needs review.
-3. **`opex_techno_economic_parameters` mixes carriers and units** (oil in €/l, pellets in €/t,
+3. **`opex_techno_economic_parameters` mixes carriers and units** (oil in €/l, pellets in €/t, → hisim-l07.3
    diesel absurdly `128.90` €/l for DE/2018 — an obvious typo for 1.2890). Migrated 1:1 (parity),
    but the DE/2018 diesel price should be corrected in a data PR.
-4. **VAT status of legacy prices unknown** (see Q5 above): all migrated energy prices and device
+4. **VAT status of legacy prices unknown** (see Q5 above): all migrated energy prices and device → hisim-l07.4
    costs are treated as household-final prices; `tax_and_levy_share` is only filled where a source
    exists, otherwise 0 with an EXPERT_ESTIMATE source — macroeconomic results for migrated data are
    therefore approximate until the data review.
-5. **`EconomicParameters` on `SimulationParameters`**: `SimulationParameters` has a custom
+5. **`EconomicParameters` on `SimulationParameters`**: `SimulationParameters` has a custom → hisim-cyc.10
    `__init__` and its JSONWizard field list does not include e.g. `country`. To stay strictly
    additive (identical `*.simulation.json` round-trips), `economic_parameters` is a plain attribute
    (default None) set via keyword arg or `set_economic_parameters()`, **not** a dataclass field. A
    follow-up decision is needed on how `*.simulation.json` should carry it (spec Q3 proposes
    serializing it there — that changes the JSON schema of simulation files).
-6. **New namespaced lifecycle KPIs are written to `lifecycle_kpis.json`**, not merged into
+6. **New namespaced lifecycle KPIs are written to `lifecycle_kpis.json`**, not merged into → hisim-cyc.11
    `all_kpis.json`, so the legacy KPI JSON stays byte-identical during the parallel phase. The spec
    (§7.3) is ambiguous on whether new names should already appear in the existing KPI collection;
    merging them in is a one-line change at cutover.
-7. **`KpiEntry` gains optional `value_min`/`value_max` fields (spec §7.3)**. dataclass-wizard emits
+7. **`KpiEntry` gains optional `value_min`/`value_max` fields (spec §7.3)**. dataclass-wizard emits → hisim-cyc.11
    `null` for unset optional fields, so `all_kpis.json` gains two null keys per entry. This is the
    one visible (backward-compatible) change to a legacy artifact; if the JSON golden parity check
    diffs byte-wise it must be re-baselined once.
-8. **Meter identification during the parallel phase**: the compatibility adapter maps the known
+8. **Meter identification during the parallel phase**: the compatibility adapter maps the known → hisim-cyc.8
    meter classes (`ElectricityMeter`, `GasMeter`, `FuelMeter`, `HeatingMeter`) to carriers by class
    name to avoid importing component modules (import cycles). District/EMS-as-meter setups are not
    yet covered by the adapter and fall back to a postprocessing warning listing unbilled carriers.
-9. **Peak billing intervals**: `BillingDeterminants` peaks are computed from the meter's power
+9. **Peak billing intervals**: `BillingDeterminants` peaks are computed from the meter's power → hisim-cyc.12
    series in postprocessing; if `seconds_per_timestep` does not divide the billing interval the
    pre-check fails per spec §8.4. For setups with 3600 s timesteps and 15-min intervals this means
    capacity tariffs simply cannot be billed — acceptable? (Spec says fail; implemented as fail.)
-10. **CO2KostAufG tier table and modernization levy parameters** are shipped as data
+10. **CO2KostAufG tier table and modernization levy parameters** are shipped as data → hisim-l07.8
     (`allocation_DE_2024.json`) with values per §559/§559e BGB and CO2KostAufG as of 2024 — the spec
     itself requires a legal review pass before release (§10 Phase 5).
-11. **BEG EM catalog values** (`subsidy_catalog/DE.json`): base 30 %, speed bonus 20 %, income bonus
+11. **BEG EM catalog values** (`subsidy_catalog/DE.json`): base 30 %, speed bonus 20 %, income bonus → hisim-l07.9
     30 % (income ≤ 40 000 €), efficiency bonus 5 %, combined cap 70 %, eligible-cost cap
     30 000 € first unit / 15 000 € units 2–6 / 8 000 € further; §35c EStG 20 % over 3 years
     (7/7/6 %) mutually exclusive with BEG. Encoded from the Richtlinie as of 2024 — needs legal
     verification, as the spec demands.
-12. **Building envelope measures (Q7) — IMPLEMENTED** (2026-07-07, user-approved design;
+12. **Building envelope measures (Q7) — IMPLEMENTED** (2026-07-07, user-approved design; → hisim-cyc.7, hisim-l07.10, hisim-l07.11, hisim-epc.24
     taxonomy refined 2026-08-18 per review round 3): thirteen `ComponentType`s — ten insulation/
     window measures following the renovation measure database element by element
     (WALL_EXTERNAL_INSULATION, WALL_INTERNAL_INSULATION, ROOF_INSULATION_BETWEEN_JOISTS,
@@ -110,7 +112,7 @@ were resolved with a documented default to keep the implementation moving; they 
     Still open: BEG's 60 kEUR-with-iSFP eligible-cost cap cannot be expressed (caps are not
     conditional on context fields yet; shipped cap is the 30 kEUR base), and envelope embodied
     CO2 values are rough per-m2 AI estimates.
-13. **RenoVisor integration**: engine-side APIs (perspectives, existing assets, question list,
+13. **RenoVisor integration**: engine-side APIs (perspectives, existing assets, question list, → hisim-epc.24
     economic parameters) are implemented and additive optional request fields are documented, but
     wiring them through the RenoVisor translation layer (`hisim/renovisor/`, v1 `mapping.py` since replaced by `registry.py` and the step-4 bindings) was deferred to keep the translator stable —
     the translator has its own spec/test suite and should adopt the cost engine in its own PR.
@@ -118,25 +120,25 @@ were resolved with a documented default to keep the implementation moving; they 
 14. **Attribution view (Q7b)** is implemented per-component as each consumer's kWh share of the
     carrier total, sourced from `get_component_kpi_entries()` consumption KPIs where available.
     Components without consumption KPIs simply don't appear in the attribution view.
-15. **Simulated-period fraction**: simulations shorter than a year are annualized by linear
+15. **Simulated-period fraction**: simulations shorter than a year are annualized by linear → hisim-cyc.13
     extrapolation with a warning (spec §3.6 rule 5). Simulations *longer* than a year are not
     supported by the lifecycle engine (first simulated year is used, warning emitted) — spec is
     silent on multi-year simulations.
-16. **Dynamic-tariff in-simulation cost integration** (§8.4) is implemented in postprocessing from
+16. **Dynamic-tariff in-simulation cost integration** (§8.4) is implemented in postprocessing from → hisim-cyc.14
     the meter power series and the contract's spot series (native resolution). The optional
     `simulated_cost_in_euro` hand-off from a meter that already integrated cost during simulation
     is honored when present, but no meter currently computes it.
-17. **`TariffProvider` component** publishes price signals per timestep; the price *forecast*
+17. **`TariffProvider` component** publishes price signals per timestep; the price *forecast* → hisim-cyc.14
     publication to `SingletonSimRepository` mirrors what `generic_price_signal.py` does today
     (24 h horizon). Whether MPC should consume the new provider already in the parallel phase is a
     control-side decision (spec keeps EMS work out of scope).
-18. **Heating meter / district heating carrier mapping**: `HeatingMeter` maps to DISTRICT_HEATING.
+18. **Heating meter / district heating carrier mapping**: `HeatingMeter` maps to DISTRICT_HEATING. → hisim-cyc.8
     Setups that use `HeatingMeter` for contracting-style heat delivery may need a different carrier;
     flagged in the adapter with a warning.
 19. **Hydrogen price key**: legacy opex dict prices "green hydrogen gas" per kWh; the EnergyCarrier
     enum has HYDROGEN. Migrated as HYDROGEN with the legacy value; the name difference is recorded
     in the entry notes.
-20a. **Latent legacy bug — battery capex size**: `advanced_battery_bslib.get_cost_capex` computes
+20a. **Latent legacy bug — battery capex size**: `advanced_battery_bslib.get_cost_capex` computes → hisim-cyc.9
     `size_of_energy_system = config.custom_battery_capacity_generic_in_kilowatt_hour * 1e-3`,
     i.e. it prices a 10 kWh battery as 0.01 kWh. The adapter declares the physically correct
     kWh size, so the parity report will show a deliberate, explained discrepancy for batteries
@@ -151,20 +153,20 @@ were resolved with a documented default to keep the implementation moving; they 
     division previously happened at resolution. The conversion machinery (`in_euro_per_kwh`,
     `converted_from`) stays for user-supplied files that quote natively.
 
-22. **`scenario_cube.csv` and `scenario_evaluation`**: the export is written in the long format
+22. **`scenario_cube.csv` and `scenario_evaluation`**: the export is written in the long format → hisim-cyc.22
     the spec prescribes so the existing `scenario_evaluation` aggregation can consume it, but no
     ingestion code was added on the `scenario_evaluation` side (that module aggregates across
     runs and should adopt the cube in its own PR — spec §4.6 "which this layer feeds, not
     replaces").
 
-24. **Emission-factor units in migrated pellet/wood-chip price entries**: the legacy dicts price
+24. **Emission-factor units in migrated pellet/wood-chip price entries**: the legacy dicts price → hisim-l07.5
     pellets/wood chips per ton but state their emission factors per kWh; the migration kept both
     as-is, so for these two carriers the engine multiplies tons by a per-kWh factor —
     understating CO2 by a factor of a few thousand. The new AI-estimate entries (2026/2035)
     carry per-ton factors (pellets ~175 kg/t, wood chips ~80 kg/t); the migrated pre-2026
     entries should be corrected in the same data-review PR as issue #21.
 
-25. **AI-estimate data for DE and IE, 2026 and 2035** (added 2026-07-07 for testing): all device
+25. **AI-estimate data for DE and IE, 2026 and 2035** (added 2026-07-07 for testing): all device → hisim-l07.7
     classes and carriers have entries under source id `src_ai_estimates` ("AI Estimates",
     kind EXPERT_ESTIMATE) with real min/best_estimate/max bands. Deliberate modeling differences vs the
     migrated legacy entries, all of which exercise engine features the legacy data cannot:
@@ -182,7 +184,7 @@ were resolved with a documented default to keep the implementation moving; they 
     grants would be the natural content) — the legacy flat shim fields carry rough SEAI-like
     shares (HP 25 %, solar 30 %, PV 20 %) so `*_net` perspectives differ from `*_gross`.
 
-26. **Report layer (LIFECYCLE_COST_REPORT, added 2026-07-07)**: `reporting.py` +
+26. **Report layer (LIFECYCLE_COST_REPORT, added 2026-07-07)**: `reporting.py` + → hisim-cyc.23
     `report_plots.py` write `cost_summary.md`, `lifecycle_report.html` and five PNGs; the flag
     implies COMPUTE_LIFECYCLE_COSTS. Plausibility thresholds live in
     `cost_database/plausibility_checks.json` (deliberately generous — they catch unit mix-ups,
@@ -210,7 +212,7 @@ were resolved with a documented default to keep the implementation moving; they 
     set *before* the simulation remain legitimate overrides; only post-hoc mutation is
     excluded by this ordering.
 
-28. **EconomicContext + the economic clock** (2026-07-07): system setups can now attach an
+28. **EconomicContext + the economic clock** (2026-07-07): system setups can now attach an → hisim-cyc.16
     `EconomicContext` (existing assets, subsidy context, envelope measures, technical
     attributes per subject, tenancy data, scenario set) via
     `SimulationParameters.set_economic_context()`; the bridge merges it and the full
@@ -223,7 +225,7 @@ were resolved with a documented default to keep the implementation moving; they 
     Open question: should `WEATHER_YEAR != PRICE_BASIS_YEAR` emit an advisory note in the
     report header (currently only visible in the parameters line)?
 
-29. **Report coverage pass + Ireland example** (2026-07-07): after a spec-coverage review,
+29. **Report coverage pass + Ireland example** (2026-07-07): after a spec-coverage review, → hisim-cyc.14
     the report gained CO2 section 4b (§3.8 was previously unvisualized), the sources-used
     table (§3.10), category/subject/perspective/payer/investment/delta result tables, the
     loan amortization chart (§4.4), the subsidy composition bars + awards table (with a
@@ -258,7 +260,7 @@ were resolved with a documented default to keep the implementation moving; they 
     credit outweigh the investment in the optimistic world. Regression test pins that
     residual-value segments render on the credit side with negative tooltips.
 
-32. **Year-2 "residual value" drop in the German example explained + detail table added**
+32. **Year-2 "residual value" drop in the German example explained + detail table added** → hisim-cyc.15, hisim-l07.11
     (2026-07-07, user-reported): the spike is 58 kEUR of ANYWAY_COST_CREDIT — the example's
     old wall/windows/top-ceiling (1988/1993/1988) have exactly 2 years of life left at the
     2026 price basis, so §4.1 books the avoided like-for-like renovation at year 2. Correct
@@ -278,7 +280,7 @@ were resolved with a documented default to keep the implementation moving; they 
     `PhysicsConfig` (pellets 4.9 kWh/kg — LHV 11.7 GJ/m3 at 650 kg/m3; wood chips 17.3 GJ/m3 at
     250 kg/m3). The conversion factors are recorded in the entry notes and the provenance ledger.
 
-34. **PRICED components with no facts source (2026-09-08, stack part 8/8 review)**: fourteen
+34. **PRICED components with no facts source (2026-09-08, stack part 8/8 review)**: fourteen → hisim-l07.12
     component classes declare `cost_relevance = CostRelevance.PRICED` while nothing can produce
     `ComponentCostFacts` for them — no `get_cost_facts()` of their own and no entry in
     `adapter.FactsExtractors.BY_CLASS_NAME`. Each of them therefore fails

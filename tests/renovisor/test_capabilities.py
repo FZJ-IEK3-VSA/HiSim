@@ -194,6 +194,43 @@ class TestTheDocument:
         )
         assert "modelled as" in hybrid["note"]
         assert Aggregation.is_substitution(hybrid["note"])
+        assert hybrid["substitution"] is True
+
+    def test_every_value_entry_announces_whether_it_is_a_substitution(
+        self, document: CapabilityDocument
+    ) -> None:
+        """hisim-epc.10: the per-value flag the frontend's F8 wording keys on.
+
+        Every ``values`` entry of every option and every inventory field carries the flag, and
+        it is true exactly when the entry's own note says "modelled as" or "stands in for".
+        """
+        for entry in document.body["measures"]:
+            for option in entry["options"]:
+                for value in option.get("values", ()):
+                    assert isinstance(value["substitution"], bool)
+                    assert value["substitution"] is Aggregation.is_substitution(value.get("note"))
+        for entry in document.body["fields"]:
+            for value in entry.get("values", ()):
+                assert isinstance(value["substitution"], bool)
+                assert value["substitution"] is Aggregation.is_substitution(value.get("note"))
+
+    def test_the_heat_pump_values_carry_their_own_flags(self, document: CapabilityDocument) -> None:
+        """The concrete values F8 reads: stand-ins say so, implemented values do not."""
+        heating = next(
+            entry for entry in document.body["measures"] if entry["measure_id"] == "heating_system"
+        )
+        statuses = {
+            value["value"]: value
+            for option in heating["options"]
+            if option["name"] == "type_of_system"
+            for value in option["values"]
+        }
+
+        assert statuses["air_source_heat_pump"]["substitution"] is False
+        assert statuses["hybrid_heat_pump"]["substitution"] is True
+        assert statuses["ground_source_heat_pump"]["substitution"] is True
+        assert statuses["conventional_lpg_heating"]["substitution"] is True
+        assert statuses["condensing_lpg_heating"]["substitution"] is True
 
     def test_a_value_that_is_not_implemented_does_not_change_its_measures_status(
         self, document: CapabilityDocument

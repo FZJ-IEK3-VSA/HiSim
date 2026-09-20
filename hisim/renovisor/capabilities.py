@@ -775,7 +775,12 @@ class Aggregation:
 
     @classmethod
     def _value(cls, value: Any, observed: Optional[Tuple[ReportStatus, Optional[str]]]) -> Dict[str, Any]:
-        """Return one ``values`` entry: the catalogue value with the status its probe observed."""
+        """Return one ``values`` entry: the catalogue value with the status its probe observed.
+
+        The ``substitution`` flag is the value's own, from its own note, so the frontend can
+        offer ``hybrid_heat_pump`` with its "modelled as ..." sentence while hiding a value
+        whose absence no stand-in covers.
+        """
         status, note = observed if observed is not None else (ReportStatus.USED, None)
         entry: Dict[str, Any] = {
             "value": value,
@@ -784,6 +789,7 @@ class Aggregation:
                 if status is ReportStatus.DEFAULTED
                 else status.value
             ),
+            "substitution": cls.is_substitution(note),
         }
         if note is not None:
             entry["note"] = note
@@ -828,6 +834,7 @@ class Aggregation:
                             if value_status is ReportStatus.DEFAULTED
                             else value_status.value
                         ),
+                        "substitution": cls.is_substitution(value_note),
                         **({"note": value_note} if value_note else {}),
                     }
                     for value, (value_status, value_note) in per_value[path].items()

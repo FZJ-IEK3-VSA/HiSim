@@ -1,4 +1,4 @@
-# IE.json — an AI-generated placeholder catalogue
+# IE.json — an AI-generated placeholder catalogue → hisim-cyc.2
 
 **Status: AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED.**
 

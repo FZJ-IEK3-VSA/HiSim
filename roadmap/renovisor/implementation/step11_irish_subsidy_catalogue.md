@@ -1,4 +1,4 @@
-# Step 11 — an Irish subsidy catalogue as an AI-generated placeholder (todo H8, option 1)
+# Step 11 — an Irish subsidy catalogue as an AI-generated placeholder (todo H8, option 1) → hisim-cyc.2
 
 **Status:** implementation specification, 2026-09-19. **Owner decision (2026-09-19):** "go with
 option 1", i.e. the SEAI grants are encoded in the engine's catalogue language

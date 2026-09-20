@@ -1,5 +1,7 @@
 # HiSim simulation — suggested fixes and improvements
 
+Open items are tracked in beads since 2026-09-20 (`br ready`); the ids below point at them. This file is no longer maintained as a list.
+
 Collected 2026-07-05 while building the RenoVisor translator (`hisim/renovisor/`). Each item is
 self-contained so it can be reviewed, implemented and tested one by one. Items 1–3 are bugs
 observed or directly adjacent to observed behavior; the rest are fidelity improvements that
@@ -55,7 +57,7 @@ those rows from selection and silently shifts affected requests to a neighbourin
 update the expectations in `tests/renovisor/test_tabula.py` back to the exact bands
 (`IE.N.SFH.05.*`, `IE.N.AB.10.*`).
 
-## 2. Same division pattern for windows — latent crash
+## 2. Same division pattern for windows — latent crash → hisim-4g9.1
 
 **Where:** `hisim/components/building.py`, `set_window_heat_transfer_parameter` (around
 line 2820).
@@ -97,7 +99,7 @@ delta_u_thermalbridging = float(self.buildingdata_ref["delta_U_ThermalBridging"]
 **Testing:** construct two `BuildingInformation` instances for a code whose
 `delta_U_ThermalBridging` is 0 and assert the underlying dataframe still contains 0 afterwards.
 
-## 4. Hard-coded cluster paths in the building-sizer setups
+## 4. Hard-coded cluster paths in the building-sizer setups → hisim-hi1.1
 
 **Where:** all `system_setups/household_*_building_sizer.py`, e.g.
 `cache_dir_path_utsp = "/benchtop/2024-k-rieck-hisim/lpg-utsp-cache"` and
@@ -117,7 +119,7 @@ setups.
 config picks it up; run one of the fast marker tests twice and assert the second run hits the
 cache.
 
-## 5. Battery and heat-pump sizes cannot be specified
+## 5. Battery and heat-pump sizes cannot be specified → hisim-4g9.2
 
 **Where:** `hisim/building_sizer_utils/interface_configs/system_config.py`
 (`EnergySystemConfig`) and the building-sizer setups.
@@ -137,7 +139,7 @@ component configs received them; keep one auto-sizing test as regression. Transl
 the RenoVisor translation layer (`hisim/renovisor/registry.py` and the step-4 bindings; v1 `mapping.py` is gone) can then map `battery.kWh` and the `heat_pump` measure's `kW`
 as `used` instead of `approximated` (update `tests/renovisor/test_tabula.py`).
 
-## 6. Heating setpoint is hard-coded; RenoVisor's `targetTempC` cannot be mapped
+## 6. Heating setpoint is hard-coded; RenoVisor's `targetTempC` cannot be mapped → hisim-4g9.3
 
 **Where:** building-sizer setups, e.g. `household_heatpump_building_sizer.py` lines ~122–124:
 `building_set_heating_temperature_in_celsius = 20.0` (and 25.0 for cooling).
@@ -154,7 +156,7 @@ baselines.
 integration assertion that a higher setpoint yields higher annual heating demand. Translator:
 map `homeInputs.targetTempC` → new field, flip its report status to `used`.
 
-## 7. Per-element U-value overrides exist in `BuildingConfig` but are unreachable
+## 7. Per-element U-value overrides exist in `BuildingConfig` but are unreachable → hisim-4g9.5
 
 **Where:** `hisim/components/building.py` (`BuildingConfig` has
 `window_u_value_in_watt_per_m2_per_kelvin`, `door_u_value_...` overrides) vs.
@@ -176,7 +178,7 @@ scale. Insulation measures (e.g. "20 cm roof insulation") only bump that variant
 setup test that the override reaches `BuildingConfig`. Translator: map `*.uValueWPerM2K` and
 insulation-measure params to the new fields.
 
-## 8. Ventilation and airtightness are not configurable
+## 8. Ventilation and airtightness are not configurable → hisim-4g9.6
 
 **Where:** `hisim/components/building.py` (infiltration/ventilation handling; the setups only
 set `enable_opening_windows = True`).
@@ -193,7 +195,7 @@ under-represented (only via the TABULA variant bump).
 **Testing:** component-level: heating demand decreases monotonically with lower n50 and with
 higher heat-recovery efficiency; energy balance stays closed (`i_doublecheck`).
 
-## 9. Boiler seasonal efficiency and flow temperature are not configurable
+## 9. Boiler seasonal efficiency and flow temperature are not configurable → hisim-4g9.4
 
 **Where:** gas/oil/pellet/wood setups (fixed component defaults);
 `heat_distribution_system.py` flow-temperature handling.
@@ -208,7 +210,7 @@ controller (also improves heat-pump COP realism, issue 5).
 
 **Testing:** setup test that a lower efficiency raises annual fuel energy proportionally.
 
-## 10. Solar thermal only exists paired with gas or heat pump, and is not sizeable
+## 10. Solar thermal only exists paired with gas or heat pump, and is not sizeable → hisim-4g9.7
 
 **Where:** setup selection matrix (`household_gas_solar_thermal_building_sizer.py`,
 `household_heatpump_solar_thermal_building_sizer.py` are the only solar-thermal setups).
@@ -225,7 +227,7 @@ each setup. Add optional collector area / storage volume fields.
 **Testing:** marker test per new combination; assert DHW energy from the boiler decreases when
 solar thermal is enabled.
 
-## 11. Electric vehicles / home charging are only available in one special setup
+## 11. Electric vehicles / home charging are only available in one special setup → hisim-4g9.8
 
 **Where:** `household_heatpump_car_building_sizer.py` is the only building-sizer setup with a
 car; none of the others model vehicles.
@@ -242,7 +244,7 @@ present, following the pattern of `household_heatpump_car_building_sizer.py`.
 **Testing:** setup test asserting total electricity consumption grows by ~`km * kWh/km`;
 check EMS still converges (marker test).
 
-## 12. East/west PV cannot be represented
+## 12. East/west PV cannot be represented → hisim-4g9.9
 
 **Where:** `ArcheTypeConfig` has a single `pv_azimuth`; the setups build one PV array.
 
@@ -256,7 +258,7 @@ underestimates evening generation and distorts self-consumption.
 **Testing:** compare annual generation profiles: the east/west split should flatten the midday
 peak vs. a south array of equal kWp.
 
-## 13. Weather resolution vs. simulation year is implicit
+## 13. Weather resolution vs. simulation year is implicit → hisim-9g2.1
 
 **Where:** `hisim/components/weather.py` `LocationEnum` (NSRDB 2019 files for IE/GB/…,
 DWD/TRY for German locations); setups default to `year=2021`.
@@ -273,7 +275,7 @@ file; expose the data year on `LocationEnum` entries instead of parsing it from 
 **Testing:** unit test that a mismatched year triggers the warning; no behavior change
 otherwise.
 
-## 14. `weather_try_region` and other German-only defaults in `ArcheTypeConfig`
+## 14. `weather_try_region` and other German-only defaults in `ArcheTypeConfig` → hisim-4g9.10
 
 **Where:** `hisim/building_sizer_utils/interface_configs/archetype_config.py` (defaults:
 `weather_try_region: int = 6`, Aachen coordinates, German postal code, DE building code).
@@ -289,7 +291,7 @@ from `weather_location`/`building_code` when unset; log which defaults were appl
 **Testing:** construct an IE archetype without optional fields and assert no German TRY region
 is used downstream.
 
-## 15. DHW storage temperature runs away at hourly resolution — **observed crash**
+## 15. DHW storage temperature runs away at hourly resolution — **observed crash** → hisim-4g9.11
 
 **Where:** DHW storage / DHW heat source control loop used by the building-sizer setups
 (`simple_water_storage.py` and the DHW heat-source controller).

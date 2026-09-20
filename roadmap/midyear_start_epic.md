@@ -118,7 +118,7 @@ epic that changes what a cached producer writes bumps it, with the PR number as 
 history reads. CI never shares a cache across the epic's branches (the per-run empty cache
 directory pattern the parity rig already uses).
 
-## Initial states (storages, thermal mass, batteries)
+## Initial states (storages, thermal mass, batteries) → hisim-9g2.2, hisim-4g9.14
 
 The inventory, measured and cited in the analyses, in one line each: building thermal mass starts
 at 22 °C (winter-typical; still 4.9 % off on day 7 after a 6 K perturbation — the largest and
@@ -185,7 +185,7 @@ anchors — Berlin 00:30, Berlin 00:00 after the padding row ``Weather.interpola
 UTC 00:00 — which is exactly why "resolve against the delivered frame" is the rule); and the
 cold-then-warm cache equality assertion.
 
-## The PR plan
+## The PR plan → hisim-9g2.3, hisim-9g2.4, hisim-9g2.5, hisim-9g2.6, hisim-9g2.7, hisim-9g2.8, hisim-9g2.9
 
 ```
 PR1 (window contract; YEARLYFORECAST→window renames; plot labels; delete dead smart device)
@@ -215,7 +215,7 @@ blesses the first true July references. The PR8+ series moves no golden at all: 
 default to today's constants, and each PR's proof is its component's columns going exactly to zero
 in the seeded oracle.
 
-## Independent repairs surfaced by the analyses
+## Independent repairs surfaced by the analyses → hisim-9g2.10, hisim-9g2.11, hisim-4g9.12, hisim-4g9.13, hisim-4g9.14, hisim-9g2.2
 
 In scope, batched as noted: the leap-year refusal (PR2 — the offset lookup is where "this source
 cannot serve this date" is decidable); the DWD_15MIN reader sizing its index from the *run's*

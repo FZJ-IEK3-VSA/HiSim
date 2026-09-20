@@ -1,4 +1,4 @@
-# Step 12 — answering the review of PR #779
+# Step 12 — answering the review of PR #779 → hisim-cyc.1, hisim-cyc.4
 
 **Status:** implementation specification, 2026-09-20. **Source:** the aggregated multi-reviewer
 report on PR #779 (`/hisimreviews/779.md`, 50 deduplicated findings against head `3cbac31d`),

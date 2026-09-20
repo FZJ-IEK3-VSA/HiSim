@@ -86,7 +86,7 @@ listed here for the design review's physics section.
     `hisim.components.building.Building` strings working), and
     `project_code_overview_generator.py` uses `os.walk` — all recurse into packages. The
     `# clean` tag the overview generator reads was carried onto every new submodule.
-15. **Docs reference the package path and still resolve, but autodoc member visibility is
+15. **Docs reference the package path and still resolve, but autodoc member visibility is → hisim-o6a.6
     untested.** `docs/api/hisim.components.building.rst` uses `automodule` on the package;
     the classes are now imported names in `__init__` (listed in `__all__`). The docs build is
     not a CI gate, so this was left unchanged — worth a look whenever the Sphinx docs are

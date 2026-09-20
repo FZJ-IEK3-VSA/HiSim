@@ -1,5 +1,7 @@
 # Grouping the fleet: the worklist
 
+Open items are tracked in beads since 2026-09-20 (`br ready`); the ids below point at them. This file is no longer maintained as a list.
+
 An inventory of every configuration-dependent branch and condition in the 22 recorded setups
 (read 2026-09-06, on the grouping branch), taken as the plan for grouping the whole fleet the way
 `household_heatpump_building_sizer` was grouped. The generated state of the work lives in
@@ -67,12 +69,12 @@ config, ignores all four of its fields, and reads one archetype value
   The whole resolution moved to `ArcheTypeConfig.resolve_lpg_households`, beside the
   `lpg_households` field it reads; all eleven sizers call it, and an unknown name is refused with
   the typo, the registry that holds the legal names and the closest known spellings.
-- [ ] **Nine sizers mutate `my_sim.my_module_config` to a dict on the fallback path**; the two
+- [ ] **Nine sizers mutate `my_sim.my_module_config` to a dict on the fallback path**; the two → hisim-b3b.16
   heat-pump sizers do not, so downstream readers see a different type depending on the sibling.
   One behavior for all eleven. `read_in_configs` is string-only by decision (review round of
   2026-09-06: it refuses a non-string with a `TypeError`), so this repair has to settle what the
   attribute is allowed to hold rather than widening the reader to accept both.
-- [ ] **Four sizers ignore `weather_filepath`/`weather_datasource`**
+- [ ] **Four sizers ignore `weather_filepath`/`weather_datasource`** → hisim-b3b.17
   (gas_solar_thermal_building_sizer, heatpump_car, heatpump_solar_thermal, hydrogen): the same
   archetype config yields a different weather source across the fleet. Either read them or refuse
   them.
@@ -85,11 +87,11 @@ config, ignores all four of its fields, and reads one archetype value
   path is what wires it. Both wirings are written out in full in the grouped file's two options, so
   a reader can hold them side by side instead of re-deriving them; nothing about that world needed
   deciding before the grouping could state it.
-- [ ] **`air_conditioned_house` duplicates its location** (a `"Seville"` string for the PV beside
+- [ ] **`air_conditioned_house` duplicates its location** (a `"Seville"` string for the PV beside → hisim-b3b.18
   `LocationEnum.SEVILLE` for the weather); one edit without the other silently desynchronizes the
   two. One spelling, one place.
 
-- [ ] **`ModularHouseholdConfig.get_hash()` is not round-trip stable** (found 2026-09-06 while
+- [ ] **`ModularHouseholdConfig.get_hash()` is not round-trip stable** (found 2026-09-06 while → hisim-b3b.19
   testing the reader). `pv_azimuth: float = 180` and `pv_tilt: float = 30` hold ints in memory and
   come back as floats from any JSON round trip, so a config built from defaults and the same config
   read from its own file hash differently — and the building sizer hashes configs. Normalise in
@@ -157,7 +159,7 @@ no recording and no proof, and is the one loose end of the pass.
    and the overview page has prose for exactly that shape. The other six read no module
    configuration at all, so their probe list would hold one column and their grouped file would be
    the twin with a header line added; they stay flat.
-5. - [ ] **`automatic_default_connections` and `air_conditioned_house`**: small, but each carries
+5. - [ ] **`automatic_default_connections` and `air_conditioned_house`**: small, but each carries → hisim-b3b.20
    one environment coupling (hplib database; reference-temperature CSV plus the duplicated
    location) to pin first. Still open, and untouched by the 2026-09-07 pass: neither reads a module
    configuration, so neither has an axis a probe list could stand on until the coupling above it is

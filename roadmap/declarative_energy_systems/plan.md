@@ -110,7 +110,7 @@ Migration parity rig (R11) — temporary, `workflow_dispatch` only, exists to ma
 - [x] Rig: run each (setup, probe configuration, window) triple twice in one container — Python path and recorded file — and compare component set, wire set, shared result columns and KPIs at **exact equality** (same machine, so no tolerance is needed) *(2026-09-06, #637)*
 - [x] Structural verdict for the seven setups whose KPI layer crashes today, so they are covered without waiting for repairs *(2026-09-06, #637; amended 2026-09-05 — an unavailable stage fails its triple, and the crashes have since healed, so the case is pinned synthetically)*
 - [x] One dispatch prints one table of every triple; failures upload both KPI sets, both CSVs and the wire diff *(2026-09-06, #637; the fleet-wide baseline dispatch, AC-P3.17, is still to run)*
-- [ ] The rig stays until **P6** (R11.8, amended 2026-08-31): P4 re-records the fleet on every batch, so the rig is what proves a re-recorded file still reproduces its setup
+- [ ] The rig stays until **P6** (R11.8, amended 2026-08-31): P4 re-records the fleet on every batch, so the rig is what proves a re-recorded file still reproduces its setup → hisim-b3b.22
 
 Not blocking P3 — the KPI-layer repair list found by `golden_validate.py --scan-all` (2026-08-28):
 
@@ -155,9 +155,9 @@ Batches in R7 order (presets replace `get_default_*`/`get_scaled_*`; laws replac
 
 ## P5 — Consumer integration (outline; document later)
 
-- [ ] RenoVisor: base file per heating system; `mapping.py` → overrides + group flags; post-processing selection moves to the simulation-parameters file
-- [ ] Building sizer: same path; `ModularHouseholdConfig`, `EnergySystemConfig`, `ArcheTypeConfig` deleted
-- [ ] HPC harness: payload = energy-system string + simulation parameters; worker loads from string
+- [ ] RenoVisor: base file per heating system; `mapping.py` → overrides + group flags; post-processing selection moves to the simulation-parameters file → hisim-b3b.21
+- [ ] Building sizer: same path; `ModularHouseholdConfig`, `EnergySystemConfig`, `ArcheTypeConfig` deleted → hisim-b3b.21
+- [ ] HPC harness: payload = energy-system string + simulation parameters; worker loads from string → hisim-b3b.21
 
 ## P6 — Retire the migration scaffolding
 
@@ -183,24 +183,24 @@ and the baseline the rig leaves behind is full parity rather than a list of exce
 fleet runs are a start on the second item as well: the candidates for the permanent gate are now every setup,
 which makes the question one of cost rather than of trust.
 
-- [ ] Confirm the whole stack is green with the rig still in place, over every runnable window
+- [ ] Confirm the whole stack is green with the rig still in place, over every runnable window → hisim-b3b.22
       (July is fenced pending `roadmap/midyear_start_epic.md`; R11.5 as amended 2026-09-06)
-- [ ] Decide which setups earned a place in the permanent gate, on the rig's accumulated evidence — the six the
+- [ ] Decide which setups earned a place in the permanent gate, on the rig's accumulated evidence — the six the → hisim-b3b.22
       2026-08-28 scan cleared are the candidates, not the answer
-- [ ] Add those to `scripts/golden_config.json` and bless their references
-- [ ] Delete `.github/workflows/p3-parity.yml`, `scripts/p3_parity_*.py` and the renaming tables
-- [ ] Confirm the repository contains no reference to any of it (AC-P3.20)
+- [ ] Add those to `scripts/golden_config.json` and bless their references → hisim-b3b.22
+- [ ] Delete `.github/workflows/p3-parity.yml`, `scripts/p3_parity_*.py` and the renaming tables → hisim-b3b.22
+- [ ] Confirm the repository contains no reference to any of it (AC-P3.20) → hisim-b3b.22
 
 ## Parking lot (deferred; trigger named)
 
 | Item | Trigger |
 |---|---|
-| Many-cardinality laws (epic E3, P1 leaves the hook) | first real consumer: buffer storage over a hybrid generator pair, or battery/price signal over several PVs |
-| Climate facts from the Weather (design temperature, PV yield, heating season) | first law that reads them; inventory §1a |
-| Template / repeat layer (preprocessor to a flat file) | MFH work after the multi-zone Building (UC3, O8) |
-| Multi-zone `Building`, per-unit facts, aggregating occupancy input | separate epic |
-| Nested groups, inter-group `requires` | only if flat groups prove insufficient in real files |
-| `at_least` / `at_most` law operators | first law that needs a clamp; otherwise delete (Q-P1.2) |
-| Runtime half of `SingletonSimRepository` (MPC/PID heat-flux and price forecasts) — still live, needs its own redesign, probably proper wiring | separate decision after P4 removes the dead construction-time keys |
+| Many-cardinality laws (epic E3, P1 leaves the hook) | first real consumer: buffer storage over a hybrid generator pair, or battery/price signal over several PVs | → hisim-b3b.23
+| Climate facts from the Weather (design temperature, PV yield, heating season) | first law that reads them; inventory §1a | → hisim-b3b.32
+| Template / repeat layer (preprocessor to a flat file) | MFH work after the multi-zone Building (UC3, O8) | → hisim-b3b.29
+| Multi-zone `Building`, per-unit facts, aggregating occupancy input | separate epic | → hisim-b3b.29
+| Nested groups, inter-group `requires` | only if flat groups prove insufficient in real files | → hisim-b3b.31
+| `at_least` / `at_most` law operators | first law that needs a clamp; otherwise delete (Q-P1.2) | → hisim-b3b.30
+| Runtime half of `SingletonSimRepository` (MPC/PID heat-flux and price forecasts) — still live, needs its own redesign, probably proper wiring | separate decision after P4 removes the dead construction-time keys | → hisim-b3b.33
 
 2026-09-12: the weather half of that row is done — the Weather's ten full-year series and the occupancy's heating-by-residents forecast now travel through the per-simulation `SimRepository`, under key names owned by their writers (`Weather.YEARLY_*`, `UtspLpgConnector.YEARLY_HEATING_BY_RESIDENTS`). The readers are unchanged otherwise: the PV system and the predictive branch of the `Building`. What is left in the singleton's runtime half is the MPC/PID heat-flux forecasts, the price forecasts, the PV yearly forecast, and the two process-wide strings postprocessing reads. Later the same day the two strings left it too: `RESULT_SCENARIO_NAME` and `DESCRIPTION` became `Simulator.scenario_name` / `Simulator.description`, and a declarative run now carries its file's `name`, plus the option each variant selected, as the scenario name; a Python run that names no scenario is named after its module file. The row is closed — module removed 2026-09-12: `hisim/sim_repository_singleton.py` was deleted with no shim, and its thread-safe `SingletonMeta` moved to `hisim/result_path_provider.py`, beside the one class that legitimately is process-wide.

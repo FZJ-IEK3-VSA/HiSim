@@ -93,8 +93,8 @@ These hold across all phases; each phase document owns the detailed requirements
 ## 9. Constraints, Invariants and Assumptions
 
 - **C1** `[given]` Golden parity (E7); `.github/workflows/golden-*.yml`.
-- **C2** `[proposed]` The `Building` is one thermal zone (`hisim/components/building/`); per-apartment quantities are explicit until that changes.
-- **C3** `[proposed]` The `Building` has one occupancy input; several apartments need an aggregating input — component work outside this epic.
+- **C2** `[proposed]` The `Building` is one thermal zone (`hisim/components/building/`); per-apartment quantities are explicit until that changes. → hisim-b3b.29
+- **C3** `[proposed]` The `Building` has one occupancy input; several apartments need an aggregating input — component work outside this epic. → hisim-b3b.29
 - **C4** `[proposed]` `hisim/config/` imports nothing from the rest of HiSim except `hisim.log` (layering rule on `config_presets`).
 - **C5** `[proposed; inventory §4]` The scalar law algebra on `config_presets` covers 100 % of sizing math in use.
 - **A1** `[proposed]` The `json_v2` decisions A3 (YAML canonical for generated files) and A4 (three-file audit layout, YAML-comment provenance) carry over — confirm in P2 (Q8).
@@ -108,7 +108,7 @@ These hold across all phases; each phase document owns the detailed requirements
 | EAC2 | The three mockups run end to end without Python setup code and their realized records re-execute bit-for-bit. | E1, E2, E3, E4, E5, G1–G3 |
 | EAC3 | All golden suites pass on recorded setups. | E7 |
 | EAC4 | A new component with presets and laws appears in an energy system with no change outside its module. | E6 |
-| EAC5 | RenoVisor, building sizer and HPC harness run from energy-system files; `ModularHouseholdConfig` is deleted. | G5 |
+| EAC5 | RenoVisor, building sizer and HPC harness run from energy-system files; `ModularHouseholdConfig` is deleted. | G5 | → hisim-b3b.21
 | EAC6 | A wire-format test pins every released preset, field and fact name; renaming one fails the test until the change is recorded as breaking. | E8 |
 
 ## 11. Open Questions and Decision Register
@@ -134,7 +134,7 @@ These hold across all phases; each phase document owns the detailed requirements
 *Recommendation.* (c): names are cheap to fix during the sweep and expensive afterwards; after P5 acceptance, (a) applies with no aliases.
 *Decision.* `[decided 2026-08-26, owner]` **(c)** — preset, field and fact names may change freely until P5 (consumer integration) is accepted; from then on (a) applies: a rename is a breaking change with a `schema_version` bump and a migration note, no alias table, and a wire-format test pins every released name (EAC6). Consequence for P2/P4: names minted for UC1's classes and in the sweep are provisional until P5.
 
-**EQ2 — Is deferring many-cardinality (several providers feeding one law) until its first real consumer acceptable, or must P1 ship it?** · blocks E3 wording, A2, P1 R4.4, plan parking lot
+**EQ2 — Is deferring many-cardinality (several providers feeding one law) until its first real consumer acceptable, or must P1 ship it?** · blocks E3 wording, A2, P1 R4.4, plan parking lot → hisim-b3b.23
 *Context.* The inventory found **0** readers that consume several providers today (`sizing_fact_inventory.md` §2); the only candidates are hypothetical (a buffer storage over a hybrid heat pump + boiler pair; a battery or price signal over several PV systems — UC2/UC3 in the mockups). The file syntax for it (a list under `sizing_sources`) is fixed by E3 regardless. Implementing it in P1 means: a `many` term in the law algebra, a tuple side-table in `SizingContext`, `sum/max/count` aggregates, ~100 lines plus tests, all without a consumer to validate against.
 *Options.* (a) **Defer** — P1 declares `many` in the algebra so a law can be written, but evaluation raises `NotImplementedError`; implemented with the first converted class that needs it (P4 batch B4 or B5). Consequence: P1 is smaller and reviewable against real pilots; the mockups' EMS example (UC2) is not executable until then. (b) **Ship in P1** — implement against the UC2 mockup's EMS lists as a synthetic consumer. Consequence: P1 grows by roughly a third; the design is validated on a fabricated use case and may be revised when a real one arrives.
 *Recommendation.* (a); the syntax is fixed, the mechanism can wait for evidence, and UC2 stays a format test rather than an execution test until then.

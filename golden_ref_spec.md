@@ -165,7 +165,7 @@ tests/
   matrix is the shipped design; add a `--shard` mode only if per-pair spin-up
   overhead becomes a problem.
 
-## 7. Determinism & tolerance policy
+## 7. Determinism & tolerance policy → hisim-b3b.6
 
 - Same-machine is byte-exact (proven); drift only appears cross-platform (last-ULP).
 - **Compare with `rel_tol = 1e-9`, `abs_tol = 0.0`** (confirmed, §14.2) — absorbs

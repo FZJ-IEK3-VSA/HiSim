@@ -680,7 +680,7 @@ Redirect `calculation_src_directory` to `calculation_directory` after the execut
 `lpg_simengine_filepath` resolves to the copy `pylpg` already made. Each calculation then runs its own
 binary beside its own database. An improvement, not a cure — see §4a.
 
-### F13 — hold the lock for the whole calculation *(shipped in #611, and meant to be deleted)*
+### F13 — hold the lock for the whole calculation *(shipped in #611, and meant to be deleted)* → hisim-hi1.5
 
 Since F12 did not end the contention and the remaining route was never found, the lock F10 introduced is
 held for the length of a calculation and local runs serialise. Of the twenty-two system setups four run
@@ -750,7 +750,7 @@ with no warning whatsoever.
 
 and parallel local runs should set `HISIM_LOCAL_LPG_CALC_INDEX` to a distinct value per process.
 
-## 13. Every component that caches, not just this one
+## 13. Every component that caches, not just this one → hisim-hi1.2
 
 The worst fault here (§6) is a **caching pattern**: a key taken from what the caller asked for, contents
 produced by what the code actually did. Nothing about it is specific to load profiles, so the verification
@@ -768,7 +768,7 @@ Six components use the shared helper `hisim.utils.get_cache_file`:
 | `solar_thermal_system.py` | collector output | |
 | `generic_car.py` | car profiles | Its data originates from the occupancy, so Fault D can reach it second-hand. |
 
-### The PV cache does not round-trip exactly
+### The PV cache does not round-trip exactly → hisim-hi1.3
 
 `generic_pv_system.py` writes its cache with `database.to_csv(...)` (`:790`) and reads it back with
 `pd.read_csv(...)` (`:669`) — a **text** round trip of float64 data. The P3 parity work already ran into
@@ -803,7 +803,7 @@ different hat.
    there is no evidence they agree bit for bit — so it is still a silent change of results. If that
    equivalence is ever demonstrated, the hop could be reconsidered on the evidence; until then it is the
    same defect wearing a friendlier face.
-4. **By what route do two calculations still reach one sqlite database?** With F12 in place each runs its own
+4. **By what route do two calculations still reach one sqlite database?** With F12 in place each runs its own → hisim-hi1.6
    executable beside its own `profilegenerator.db3`, and one still died with `database is locked`. Some path
    — an absolute location compiled in, a temp directory, a user-profile location — is shared and was not
    found. F13 serialises around it. The question only matters if the serialisation ever has to be lifted

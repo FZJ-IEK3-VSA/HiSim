@@ -1,5 +1,7 @@
 # P4 — random findings and defects
 
+Open items are tracked in beads since 2026-09-20 (`br ready`); the ids below point at them. This file is no longer maintained as a list.
+
 **Status:** living document · **Opened:** 2026-09-01 · **Last entry:** 2026-09-19 (26 findings)
 **Context:** things that surfaced while working through
 `roadmap/declarative_energy_systems/p4_component_sweep_requirements.md` — the component sweep, decisions
@@ -306,7 +308,7 @@ the week ends having burnt slightly more. Seven golden references go stale and n
 (one-week and full-year each) and `household_gas_solar_thermal` (one-week).
 
 
-### F-7 — `PVSystemConfig.location` is a string nobody reads, and it now sits beside a field it can contradict **[verified]**
+### F-7 — `PVSystemConfig.location` is a string nobody reads, and it now sits beside a field it can contradict **[verified]** → hisim-b3b.11
 
 `PVSystemConfig.location: str` (`hisim/components/generic_pv_system.py:116`) is passed by 23 setup call
 sites (`location=weather_location`) and written into all 27 PV blocks of the committed energy-system YAMLs,
@@ -332,7 +334,7 @@ rewritten anyway. Until then it costs nothing but a misleading line in every PV 
 piecemeal; fold into the PV conversion.*
 
 
-### F-8 — the caches did not know which code filled them, so a physics change was invisible to the golden gate **[verified, fixed]**
+### F-8 — the caches did not know which code filled them, so a physics change was invisible to the golden gate **[verified, fixed]** → hisim-hi1.4
 
 Found by #628. That branch changes the direct normal irradiance at every low-sun timestep — the zenith
 clamp was a chained assignment that pandas' copy-on-write discarded — and on a cold cache it moves 33 KPIs
@@ -649,7 +651,7 @@ law-computed field unwritten when its facts have a declared provider in the reco
 preset's `AUTO` stands; assigned fields stay concrete, a pinned law field says why; a twin whose
 left-to-the-preset fields do not resolve to the run's values fails the recording. Implemented on `twins_resize`.
 
-### F-15 — the parity rig cannot run any occupancy-driven setup on a machine whose local LoadProfileGenerator does not work **[reported]**
+### F-15 — the parity rig cannot run any occupancy-driven setup on a machine whose local LoadProfileGenerator does not work **[reported]** → hisim-b3b.10
 
 Found on 2026-09-15 while accepting the hplib heat-pump conversion (B4). `scripts/p3_parity_check.py`
 gives each of its two sides a private, empty cache directory and deletes the whole work directory at the
@@ -748,7 +750,7 @@ used. Nothing read the alias and no twin carries the controller, so the schema d
 the RSOC controller gone under D-16 this was the last one: the repository now has no `dataclasses_json`
 field alias at all.
 
-### F-20 — a config field is mutable component state: the car battery writes its own totals into its configuration **[reported]**
+### F-20 — a config field is mutable component state: the car battery writes its own totals into its configuration **[reported]** → hisim-b3b.12
 
 Found on 2026-09-16 while converting `CarBatteryConfig` (B7). Two of its fields,
 `total_charged_energy_in_kilowatthour` and `total_discharged_energy_in_kilowatthour`, are not
@@ -839,7 +841,7 @@ sites declare one — the three lambdas in `generic_boiler.py`, `heat_distributi
 twice because two classes share it. That shared law now reads the same in both, as the arithmetic
 it is and not as a class of another name.
 
-### F-23 — two sibling controllers derive the heating threshold from the fact, a third recomputes it **[reported; the third has no provider to read]**
+### F-23 — two sibling controllers derive the heating threshold from the fact, a third recomputes it **[reported; the third has no provider to read]** → hisim-b3b.28
 
 Found on 2026-09-16 in the same review. R2.1 added the fact
 `set_heating_threshold_outside_temperature_in_celsius`, contributed by
@@ -867,7 +869,7 @@ one appears: a law that reads the fact when a provider exists and falls back to 
 otherwise (new kernel semantics), or an emitter-less system stating the threshold as a plain
 override. Recorded; not a B8 change.
 
-### F-24 — a run carries a description nothing reads **[reported]**
+### F-24 — a run carries a description nothing reads **[reported]** → hisim-b3b.13
 
 Found on 2026-09-18 while retiring the scenario JSON (F-9). A run's one-line description travels a long way:
 the Python entry point takes it from the first line of the setup file, a declarative run takes it from the
@@ -885,7 +887,7 @@ which is what this entry does for now.
 The scenario *name* is in a similar position but not the same one: its one remaining consumer, the `scenario`
 column of the pyam export, is live, and the eleven building sizers write their scenario hash into it.
 
-### F-25 — the pyam export outlived its reader by six weeks, and carries the last of the run metadata **[reported]**
+### F-25 — the pyam export outlived its reader by six weeks, and carries the last of the run metadata **[reported]** → hisim-b3b.14, hisim-cyc.22
 
 Found on 2026-09-18 while retiring the scenario JSON (F-9), when the owner asked whether the pyam output is
 needed either. The facts, in the order they decide the question:
@@ -924,7 +926,7 @@ and no description that anything consumes.
 Logged rather than done on the owner's instruction (2026-09-18): it is separable from F-9, bigger, and turns
 on a fact only the people running scenario comparisons have.
 
-### F-26 — a shipped parameter file has named two options that do not exist for three months **[verified]**
+### F-26 — a shipped parameter file has named two options that do not exist for three months **[verified]** → hisim-b3b.15
 
 Found on 2026-09-18 while building the simulation-parameters library. `system_setups/2021_minutely_full.simulation.json`
 -- the repository's only "full" parameter set, the one a reader reaches for when they want everything -- lists

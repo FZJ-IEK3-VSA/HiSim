@@ -20,7 +20,7 @@ Ground rules as in step 3 §0 (worktree `/home/noah/hisim/HiSim-renovisor`, inte
 mypy clean on `hisim/economics`, `hisim/renovisor` and the tests; prospector clean on every file
 you touch — run `prospector --profile .prospector.yml <file>`; the three CI mypy runs). New tests
 `@pytest.mark.base`; the end-to-end one `system_setups`. **Invent no numbers**: every constant
-carries a source comment and the words TO BE REVIEWED; the worked examples' expected values are
+carries a source comment and the words TO BE REVIEWED; the worked examples' expected values are → hisim-epc.8, hisim-cyc.1
 computed by the harness and left `unreviewed` for a person to attest, never typed as if reviewed.
 
 ---

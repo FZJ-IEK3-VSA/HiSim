@@ -1,5 +1,7 @@
 # P3 — random findings and defects
 
+Open items are tracked in beads since 2026-09-20 (`br ready`); the ids below point at them. This file is no longer maintained as a list.
+
 **Status:** living document · **Opened:** 2026-08-28 · **Last entry:** 2026-09-06 (35 findings)
 **Context:** things that surfaced while implementing `roadmap/declarative_energy_systems/p3_implementation_spec.md`
 and were **not** what the work set out to do. Kept separately so the requirements and the spec stay about the
@@ -30,7 +32,7 @@ Needs `PYTHONPATH=<repo>` or an invocation via `python -m`. **Still open** — t
 *This one is nastier than it looks: it fails by producing plausible output, on a script whose whole job is to
 keep generated files honest.*
 
-### F-3 — `@constructor` never stamps provenance **[reported]**
+### F-3 — `@constructor` never stamps provenance **[reported]** → hisim-b3b.4
 Only `@preset` writes the provenance attribute (`hisim/config/presets.py:_declare`), and the stamp carries a
 builder name with no arguments. A recorder can therefore never emit a `constructor:` entry, and P3's R2.2 and
 spec §3.4 are preset-only in practice. **Open** — belongs to P1's kernel, not to P3. Recording a constructor
@@ -90,7 +92,7 @@ that already existed (`loadtypes.py:111,147`) and that `wiring_checks.py` alread
 so channel matching merely became consistent with port matching. The wildcard is on the load type only; the
 unit stays concrete and the **tags** still discriminate, so no ambiguity is introduced and EF-28 is untouched.
 
-### F-9 — `Car` cannot be built from configuration alone **[reported]**
+### F-9 — `Car` cannot be built from configuration alone **[reported]** → hisim-4g9.8
 `Car.__init__` requires `data_dict_with_car_information`, computed from the occupancy **instance** at setup
 time, while the declarative path constructs from `(parameters, config)` only. `household_heatpump_car_building_sizer`
 is therefore unrecordable (EF-33). Owner decision 2026-08-30: leave unrecorded and name it as a **P4** gap —
@@ -120,7 +122,7 @@ Recorded so the spec is corrected rather than quietly worked around.
 
 ## 5. Tooling that cannot be trusted as-is
 
-### F-16 — `golden_validate.py --scan-all` is not deterministic **[reported]**
+### F-16 — `golden_validate.py --scan-all` is not deterministic **[reported]** → hisim-b3b.5
 In a full 21-setup scan, `automatic_default_connections` and `household_district_heating_building_sizer` were
 reported **non-deterministic** (12 and 16 differing KPIs), yet both PASS when re-run in isolation with
 `--setup`. Cross-run LPG/cache interference inside one long scan session, not a property of the setups.
@@ -128,7 +130,7 @@ reported **non-deterministic** (12 and 16 differing KPIs), yet both PASS when re
 `declarative_energy_systems/p3_setup_inventory.md` §4f — which came from one such scan — should be read as
 indicative, not authoritative. Per-setup runs are the reliable form. **Open.**
 
-### F-21 — the golden gate cannot compare a KPI that is numerically zero **[verified]**
+### F-21 — the golden gate cannot compare a KPI that is numerically zero **[verified]** → hisim-b3b.6
 A full-fleet `golden_check.py` run fails one pair of sixteen:
 `household_electric_heating_building_sizer / one_week_60s`, on the KPI
 *"Temperature deviation … below set temperature 20.0 Celsius"* — `ref = 1.216772342142273e-09`,
@@ -208,7 +210,7 @@ committed twins were wrong. Implementing that fix made 11 of 21 setups **unrecor
 dispatch block. The twins were faithful all along; the defect was entirely on the replay side, and no twin
 needed re-recording.
 
-### F-25 — a latent twin of F-24, deliberately left alone **[reported]**
+### F-25 — a latent twin of F-24, deliberately left alone **[reported]** → hisim-b3b.7
 `L2GenericEnergyManagementSystem.__init__` already creates **two** `HEAT_PUMP_BUILDING` + `ELECTRICITY_TARGET`
 weight-2 outputs, one for `HeatPumpHplib` and one for `MoreAdvancedHeatPumpHPLib`. It is harmless today only
 because pruning removes whichever class is absent. A symmetric guard on the imperative path would fail every
@@ -230,7 +232,7 @@ without, since the recording run has already filled the caches). Honest caveat, 
 extension would **not** have caught F-26, which needs a timestep to fail. Closing that class of defect means
 simulating.
 
-### F-28 — KPI keys carry aggregator port names **[verified]**
+### F-28 — KPI keys carry aggregator port names **[verified]** → hisim-b3b.1
 After F-24 was fixed, every EMS household still failed on four KPI keys **whose values were identical**:
 `Priority for Input_Battery_AcBatteryPowerUsed_6` against `Priority for AcBatteryPowerUsedFromBattery`. The
 EMS builds `KpiEntry(name=f"Priority for {input_sorted.field_name}")`, so a port name is embedded in a KPI
@@ -259,7 +261,7 @@ Removing the duplicate occupancy feed from `household_gas_solar_thermal.py` (F-4
 regeneration ran. Regenerated. *The gates exist for exactly this: a setup and its twins move together, and a
 human will forget.*
 
-### F-36 — the imperative wiring path checks tags but never units **[reported]**
+### F-36 — the imperative wiring path checks tags but never units **[reported]** → hisim-b3b.8
 The two build paths now share one participant vocabulary — every aggregator's ``CHANNELS``
 declaration — but only the declarative path enforces the whole declaration. A feed resolved from an
 energy-system file passes ``ChannelMatcher.match_and_validate``, which checks tags, carrier *and
@@ -279,7 +281,7 @@ channel is known), not inside ``get_channel_inputs`` — a lookup that silently 
 inputs would trade a wrong sum for a silently smaller one. The blast radius over existing setups
 is unknown until tried, which is why it is a finding and not a patch.*
 
-### F-34 — a failed recording leaves an unbuildable file in the tree **[verified]**
+### F-34 — a failed recording leaves an unbuildable file in the tree **[verified]** → hisim-b3b.9
 `record_all_setups.py` writes the file and then verifies it builds, and on failure leaves it "in place for
 inspection" — so after a failed run an untracked `energy_systems/<stem>.energy_system.yaml` sits there that
 must never be committed. Sensible for debugging, hazardous next to `git add -A`. Should either be written to
@@ -292,7 +294,7 @@ July as well**, so the window is not the cause of that particular crash. The sec
 justification — a January-only fleet measures cooling and solar-thermal setups at their annual minimum, and
 running both windows is what proved this — but the air conditioner is a KPI-layer defect, not a seasonal one.
 
-### F-31 — the near-zero golden KPI reproduces differently on different branches **[verified]**
+### F-31 — the near-zero golden KPI reproduces differently on different branches **[verified]** → hisim-b3b.6
 F-21's failing pair passed in isolation on the documents branch and fails in isolation on the implementation
 branch, bit-identically at `1.2167721052946946e-09`. Independently proven unrelated to any change here: with
 the only two golden-path files reverted (`dynamic_component.py`, `config/channels.py` — everything else
@@ -300,7 +302,7 @@ touched lives in `hisim/energy_system/`, which the Python path never executes) t
 It is one ULP against `abs_tol = 0`, and which way it falls depends on cache state, not on code. Reinforces
 F-21: the fix is an absolute floor, not a re-bless.
 
-### F-32 — two runs must not share a cache directory **[reported]**
+### F-32 — two runs must not share a cache directory **[reported]** → hisim-hi1.3
 Giving both sides of a parity comparison one cache directory let the second run read the first run's PV
 output back out of a CSV. That masks a real configuration difference *and*, because the round trip is not
 bit-exact, invents a fake one. Each side now gets its own empty cache, and both run the same post-processing

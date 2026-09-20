@@ -37,6 +37,37 @@ class ReserveConstants:
     RESERVE_SUBJECT = "replacement reserve"
 
 
+def replacement_reserve_amount(
+    replacement_flows: List[Tuple[int, UncertainValue]],
+    parameters: EconomicParameters,
+) -> UncertainValue:
+    """The level annual sinking-fund payment one set of replacement flows implies (§4.2).
+
+    The arithmetic half of :func:`build_replacement_reserve_entries`, separated from the emitting
+    half because the staged evaluator needs the figure without the entries: a plan's replacements
+    fall in different years from any single stage's, so the plan's reserve has to be recomputed
+    from the re-dated flows and written into the entries the splice already carries (step 12
+    §2.1 item 3).
+
+    Example::
+
+        replacement_reserve_amount([(10, UncertainValue.exact(20000.0))], parameters)
+
+    Args:
+        replacement_flows: ``(year, amount)`` pairs, nominal and already escalated to their year,
+            cost-positive, in the order they were collected. The fold is left-to-right in that
+            order because float addition is not associative and the total is published.
+        parameters: Economic parameters — supplies the discount factor and the annuity factor.
+
+    Returns:
+        The equal amount paid in each year 1..T; the exact zero band for an empty list.
+    """
+    discounted_band = UncertainValue.exact(0.0)
+    for repl_year, amount in replacement_flows:
+        discounted_band = discounted_band + amount.scale(parameters.discount_factor(repl_year))
+    return discounted_band.scale(parameters.annuity_factor())
+
+
 def build_replacement_reserve_entries(
     replacement_flows: List[Tuple[int, UncertainValue]],
     parameters: EconomicParameters,
@@ -67,10 +98,7 @@ def build_replacement_reserve_entries(
         An empty `replacement_flows` list still yields T zero-valued entries, so the caller only
         invokes this when there is something to reserve for.
     """
-    discounted_band = UncertainValue.exact(0.0)
-    for repl_year, amount in replacement_flows:
-        discounted_band = discounted_band + amount.scale(parameters.discount_factor(repl_year))
-    reserve = discounted_band.scale(parameters.annuity_factor())
+    reserve = replacement_reserve_amount(replacement_flows, parameters)
     return [
         CashFlowEntry(
             year=year,

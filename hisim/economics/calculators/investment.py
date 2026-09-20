@@ -47,6 +47,82 @@ from hisim.economics.timeline import CashFlowEntry, CashFlowTimeline, CostCatego
 from hisim.economics.uncertainty import UncertainValue
 
 
+class InvestmentDating:
+    """When a subject is re-bought and how much of its last unit is left at the horizon.
+
+    The two dating rules of cost_spec.md §3.6 rules 2-3 as pure arithmetic over an installation
+    year, a service life and the horizon: `replacement_years` says in which years the unit is
+    re-purchased and `residual_fraction` what share of the last one's life extends past the
+    horizon. They are a class of their own because two callers must not drift apart —
+    :func:`build_investment_schedule` prices one state with the whole investment in year 0, and
+    :class:`hisim.economics.staged.StagedEvaluator` re-dates the same purchases to the year the
+    stage that buys them starts in (step 12 §2.1). A second copy of either rule in the staged
+    splice would let a battery be replaced in the wrong year in exactly one of the two paths.
+
+    Example::
+
+        InvestmentDating.replacement_years(10, 10.0, 25)   # [10, 20]
+        InvestmentDating.residual_fraction(20, 10.0, 25)   # 0.5
+
+    Neither method reads or escalates a price; the amount at a replacement year and the amount the
+    residual is a fraction *of* stay with the callers, which is what lets the staged splice apply
+    its own escalation to an already-escalated figure.
+    """
+
+    @staticmethod
+    def replacement_years(first_replacement_year: int, service_life_years: float, horizon: int) -> List[int]:
+        """The years one subject is re-purchased in, ascending (§3.6 rule 2).
+
+        Replacements fall at the first replacement year and then every (rounded) service life,
+        strictly *before* the horizon: a replacement due exactly at year T is not bought, because
+        the observation period ends there. A year below 1 is skipped rather than booked in year 0,
+        where the purchase itself already sits.
+
+        Args:
+            first_replacement_year: The relative year of the first re-purchase — the rounded
+                service life for a newly bought unit, `service_life - age` for a kept one.
+            service_life_years: The subject's service life; rounded to whole years for the rhythm
+                and floored at one year, so a nonsensical sub-year life cannot loop forever.
+            horizon: Observation period T in years.
+
+        Returns:
+            The replacement years, ascending; empty when nothing is due inside the horizon.
+        """
+        years: List[int] = []
+        step = max(1, int(round(service_life_years)))
+        year = first_replacement_year
+        while year < horizon:
+            if year >= 1:
+                years.append(year)
+            year += step
+        return years
+
+    @staticmethod
+    def residual_fraction(last_install_year: int, service_life_years: float, horizon: int) -> float:
+        """The share of the last installed unit's life that extends past the horizon (§3.6 rule 3).
+
+        The straight-line (VDI 2067-1 / DIN EN 15459-1) write-down: a unit installed in
+        `last_install_year` with a life of `service_life_years` has `last_install + life - horizon`
+        years left at T, and that many years out of its whole life is what is credited back.
+
+        Args:
+            last_install_year: The relative year of the last installation the timeline charged —
+                the purchase year or the last in-horizon replacement.
+            service_life_years: The subject's service life in years.
+            horizon: Observation period T in years.
+
+        Returns:
+            A fraction in ``(0, 1]``, or ``0.0`` when nothing is left at the horizon or the
+            service life is not a positive number of years.
+        """
+        if service_life_years <= 0:
+            return 0.0
+        remaining_at_horizon = last_install_year + service_life_years - horizon
+        if remaining_at_horizon <= 0:
+            return 0.0
+        return remaining_at_horizon / service_life_years
+
+
 @dataclass
 class InvestmentSchedule:
     """One subject's dated capital expenditure, plus the totals it feeds (§3.6 rules 1-3).
@@ -180,14 +256,12 @@ def build_investment_schedule(
         schedule.embodied_co2_addends.append(costing.embodied_co2_kg)
 
     # --- replacements (§3.6 rule 2)
-    replacement_years: List[int] = []
-    replacement_year = costing.first_replacement_year if not costing.is_new_investment else int(
+    first_replacement_year = costing.first_replacement_year if not costing.is_new_investment else int(
         round(costing.service_life_years)
     )
-    while replacement_year < horizon:
-        if replacement_year >= 1:
-            replacement_years.append(replacement_year)
-        replacement_year += max(1, int(round(costing.service_life_years)))
+    replacement_years = InvestmentDating.replacement_years(
+        first_replacement_year, costing.service_life_years, horizon
+    )
     for repl_year in replacement_years:
         amount = escalate(gross, asset_rate, repl_year)
         schedule.reserve_flows.append((repl_year, amount))
@@ -212,11 +286,12 @@ def build_investment_schedule(
         # Either the last in-horizon replacement or, when there is none, the year-0 purchase —
         # the gate above leaves no third case, so the install year is never negative.
         last_install_year = replacement_years[-1] if replacement_years else 0
-        life = costing.service_life_years
-        remaining_at_horizon = last_install_year + life - horizon
-        if remaining_at_horizon > 0 and life > 0:
+        fraction = InvestmentDating.residual_fraction(
+            last_install_year, costing.service_life_years, horizon
+        )
+        if fraction > 0:
             escalated_price = escalate(gross, asset_rate, last_install_year)
-            residual = escalated_price.scale(remaining_at_horizon / life)
+            residual = escalated_price.scale(fraction)
             schedule.residual_entry = CashFlowEntry(
                 year=horizon,
                 amount_in_euro=residual.as_revenue(),

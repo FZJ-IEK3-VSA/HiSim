@@ -49,9 +49,10 @@ from hisim.economics.subsidies import (
 )
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
-from hisim.renovisor.constants import AnywayShareByPlacement
+from hisim.renovisor.constants import AnywayShareByPlacement, Placement
 from hisim.renovisor.request import House, Measure, Request
 from hisim.renovisor.vocabulary import BuildingType, HeatGenerator, ThermalElement
+from hisim.renovisor.whitelist import TranslatorError
 
 
 class GeneratorAssets:
@@ -138,17 +139,29 @@ class EnvelopeAssets:
 
     #: The build-up position a measure writes to -> the class the new layer is priced under.
     BY_PLACEMENT: ClassVar[Dict[str, ComponentType]] = {
-        "external_wall_external": ComponentType.WALL_EXTERNAL_INSULATION,
-        "external_wall_internal": ComponentType.WALL_INTERNAL_INSULATION,
-        "external_wall_cavity": ComponentType.WALL_INTERNAL_INSULATION,
-        "basement_ceiling": ComponentType.BASEMENT_CEILING_BOTTOM_INSULATION,
-        "basement_floor_and_walls_inside": ComponentType.BASEMENT_WALLS_INTERNAL_INSULATION,
-        "basement_floor_and_walls_outside": ComponentType.GROUND_EXTERNAL_INSULATION,
-        "floor_and_ceiling": ComponentType.BASEMENT_CEILING_BOTTOM_INSULATION,
-        "roof_external_rafter": ComponentType.ROOF_INSULATION_OVER_JOISTS,
-        "roof_between_rafter": ComponentType.ROOF_INSULATION_BETWEEN_JOISTS,
-        "top_floor_ceiling": ComponentType.TOP_CEILING_UPPER_INSULATION,
+        Placement.EXTERNAL_WALL_EXTERNAL.value: ComponentType.WALL_EXTERNAL_INSULATION,
+        Placement.EXTERNAL_WALL_INTERNAL.value: ComponentType.WALL_INTERNAL_INSULATION,
+        Placement.EXTERNAL_WALL_CAVITY.value: ComponentType.WALL_INTERNAL_INSULATION,
+        Placement.BASEMENT_CEILING.value: ComponentType.BASEMENT_CEILING_BOTTOM_INSULATION,
+        Placement.BASEMENT_FLOOR_AND_WALLS_INSIDE.value: (
+            ComponentType.BASEMENT_WALLS_INTERNAL_INSULATION
+        ),
+        Placement.BASEMENT_FLOOR_AND_WALLS_OUTSIDE.value: ComponentType.GROUND_EXTERNAL_INSULATION,
+        Placement.FLOOR_AND_CEILING.value: ComponentType.BASEMENT_CEILING_BOTTOM_INSULATION,
+        Placement.ROOF_EXTERNAL_RAFTER.value: ComponentType.ROOF_INSULATION_OVER_JOISTS,
+        Placement.ROOF_BETWEEN_RAFTER.value: ComponentType.ROOF_INSULATION_BETWEEN_JOISTS,
+        Placement.TOP_FLOOR_CEILING.value: ComponentType.TOP_CEILING_UPPER_INSULATION,
     }
+
+    #: What the build refuses with when a layer names a build-up position this table has no row
+    #: for. It is a translator bug and not a bad request: the placement comes from
+    #: ``apply.MeasureBinding.INSULATION``, never from the request.
+    UNKNOWN_PLACEMENT_MESSAGE: ClassVar[str] = (
+        "no cost-database asset class for build-up position {placement!r}. "
+        "EnvelopeAssets.BY_PLACEMENT knows {known}; a placement the measure catalogue added has "
+        "to be given a row there, because pricing a layer at the wrong class is a plausible "
+        "number for a different build-up."
+    )
 
     #: The two measures that replace a whole unit rather than adding a layer -> its element.
     UNIT_REPLACEMENTS: ClassVar[Dict[str, ThermalElement]] = {
@@ -165,11 +178,27 @@ class EnvelopeAssets:
     def of_placement(cls, placement: str) -> ComponentType:
         """The class a new layer at one build-up position is priced under.
 
-        A placement the table does not know falls back to the external-wall class, which is the
-        most expensive of the wall rows, so an unlisted build-up is priced conservatively rather
-        than cheaply.
+        Args:
+            placement: The ``materials.yaml`` build-up position the applied layer records.
+
+        Returns:
+            The cost-database asset class the layer is priced under.
+
+        Raises:
+            TranslatorError: If the table has no row for the placement. Like
+                :meth:`GeneratorAssets.of`, an unmapped key is a build failure (exit 3) and not a
+                bad request: every catalogue placement is exercised by the capability probe set,
+                so a gap here is a table that was not extended with the catalogue. The earlier
+                fallback to the external-wall class published a plausible price for a different
+                build-up with nothing in the mapping report to say so.
         """
-        return cls.BY_PLACEMENT.get(placement, ComponentType.WALL_EXTERNAL_INSULATION)
+        if placement not in cls.BY_PLACEMENT:
+            raise TranslatorError(
+                cls.UNKNOWN_PLACEMENT_MESSAGE.format(
+                    placement=placement, known=", ".join(sorted(cls.BY_PLACEMENT))
+                )
+            )
+        return cls.BY_PLACEMENT[placement]
 
 
 class DeviceAssets:
@@ -188,11 +217,19 @@ class DeviceAssets:
         Args:
             house_block: The ``house`` key the request carries it under.
             component: The HiSim component name the engine files its cost flows under, which is
-                the same name the energy-system file gives the component.
+                the same name the energy-system file gives the component. It must stay equal to
+                the corresponding ``translate.Targets`` constant, which
+                ``tests/renovisor/test_economics_context.py`` pins, because the two spell the same
+                identifier on either side of an import cycle.
             asset_class: What the cost database prices it as.
             measure_id: The catalogue measure that replaces it, so the register can say so.
             size_key: The request field holding its size, when it has one.
-            size_unit: The unit that field is in.
+            size_unit: The unit the register records the size in, which is the unit the cost
+                database prices that asset class per.
+            to_register_size: What the request's field has to be multiplied by to become
+                ``size_unit``. One where the request already states the register's unit, and
+                ``1/1000`` for the array, whose request field is in watts while the database
+                prices photovoltaics per kilowatt.
         """
 
         house_block: str
@@ -201,46 +238,40 @@ class DeviceAssets:
         measure_id: str
         size_key: Optional[str]
         size_unit: Units
+        to_register_size: float = 1.0
+
+    #: Watts per kilowatt: the array's request field is ``power_in_watt`` and the register's unit
+    #: is the kilowatt the cost database prices photovoltaics per.
+    WATT_PER_KILOWATT: ClassVar[float] = 1000.0
 
     #: The devices the register carries besides the generator and the envelope.
-    ALL: ClassVar[Tuple["DeviceAssets.Device", ...]] = ()
-
-    @classmethod
-    def all_devices(cls) -> Tuple["DeviceAssets.Device", ...]:
-        """The device table, built once on first use.
-
-        A method rather than a class attribute because the rows name the enum members of two
-        other modules, and building them lazily keeps the import of this module free of that
-        ordering question.
-        """
-        if not cls.ALL:
-            cls.ALL = (
-                cls.Device(
-                    house_block="pv_system",
-                    component="PVSystem",
-                    asset_class=ComponentType.PV,
-                    measure_id="photovoltaic_system",
-                    size_key="power_in_watt",
-                    size_unit=Units.KILOWATT,
-                ),
-                cls.Device(
-                    house_block="battery",
-                    component="Battery",
-                    asset_class=ComponentType.BATTERY,
-                    measure_id="battery_system",
-                    size_key="custom_battery_capacity_generic_in_kilowatt_hour",
-                    size_unit=Units.KWH,
-                ),
-                cls.Device(
-                    house_block="solar_thermal_system",
-                    component="SolarThermalSystem",
-                    asset_class=ComponentType.SOLAR_THERMAL_SYSTEM,
-                    measure_id="solar_thermal_system",
-                    size_key="area_m2",
-                    size_unit=Units.SQUARE_METER,
-                ),
-            )
-        return cls.ALL
+    ALL: ClassVar[Tuple["DeviceAssets.Device", ...]] = (
+        Device(
+            house_block="pv_system",
+            component="PVSystem",
+            asset_class=ComponentType.PV,
+            measure_id="photovoltaic_system",
+            size_key="power_in_watt",
+            size_unit=Units.KILOWATT,
+            to_register_size=1.0 / WATT_PER_KILOWATT,
+        ),
+        Device(
+            house_block="battery",
+            component="Battery",
+            asset_class=ComponentType.BATTERY,
+            measure_id="battery_system",
+            size_key="custom_battery_capacity_generic_in_kilowatt_hour",
+            size_unit=Units.KWH,
+        ),
+        Device(
+            house_block="solar_thermal_system",
+            component="SolarThermalSystem",
+            asset_class=ComponentType.SOLAR_THERMAL_SYSTEM,
+            measure_id="solar_thermal_system",
+            size_key="area_m2",
+            size_unit=Units.SQUARE_METER,
+        ),
+    )
 
 
 class DwellingTypes:
@@ -345,9 +376,14 @@ class EconomicContextBuilder:
             block and the optional per-measure price blocks.
         applied: The package as :func:`hisim.renovisor.apply.apply` produced it — the renovated
             house, the layers it added and the measures it applied.
-        building_config: The ``Building`` config the translator wrote, whose
-            ``<element>_area_in_m2`` fields size the envelope subjects. An empty mapping is
-            legitimate and makes every element fall back to the request.
+        building_config: Every ``Building`` configuration field the translator wrote, its
+            ``for_tabula_code`` constructor arguments merged in (``translate._building_config``).
+            The ``<element>_area_in_m2`` fields size the envelope subjects and may legitimately be
+            absent, in which case each element falls back to the request; the archetype and the
+            floor area may not, because the existing generator is sized from the design heat load
+            they decide.
+        heating_reference_temperature_in_celsius: The outside design temperature the translated
+            ``Weather`` carries, which the same heat load is computed against (decision D-21).
         generator_component: The name of the component that produces space heat in the twin the
             translator wrote into -- the cost subject the engine files the generator's flows
             under. It is needed for one thing only: saying that the ``heating_system`` measure is
@@ -387,6 +423,10 @@ class EconomicContextBuilder:
 
     #: The request field holding the dwelling's living area (E-spec §7).
     LIVING_AREA_KEY: ClassVar[str] = "living_area_in_m2"
+
+    #: The request field holding one envelope element's area, the fallback when the translated
+    #: ``Building`` config carries none.
+    ELEMENT_AREA_KEY: ClassVar[str] = "area_in_m2"
 
     #: The ``Building`` config field holding the conditioned floor area, the fallback for it.
     FLOOR_AREA_KEY: ClassVar[str] = "absolute_conditioned_floor_area_in_m2"
@@ -430,6 +470,42 @@ class EconomicContextBuilder:
     #: The catalogue measure that installs a new heat generator.
     HEATING_MEASURE_ID: ClassVar[str] = "heating_system"
 
+    #: The ``Building`` config field naming the TABULA archetype, which the design heat load is
+    #: computed from. Written by the translator as a ``for_tabula_code`` constructor argument.
+    BUILDING_CODE_KEY: ClassVar[str] = "building_code"
+
+    #: Its dwelling-unit count, the second constructor argument the load depends on.
+    APARTMENTS_KEY: ClassVar[str] = "number_of_apartments"
+
+    #: The name the rebuilt ``BuildingConfig`` carries. It never reaches a file: the configuration
+    #: exists only to be handed to ``BuildingInformation`` for the heat-load calculation.
+    BUILDING_COMPONENT: ClassVar[str] = "Building"
+
+    #: The three fields the rebuilt configuration gets from its constructor, which must not be
+    #: overwritten afterwards by the same keys read out of the merged mapping.
+    BUILDING_CONSTRUCTOR_KEYS: ClassVar[Tuple[str, ...]] = (
+        BUILDING_CODE_KEY,
+        APARTMENTS_KEY,
+        "absolute_conditioned_floor_area_in_m2",
+    )
+
+    #: The mapping-report path the existing generator's size is reported under. It is a derived
+    #: context field rather than a request leaf, so it gets a path of its own.
+    GENERATOR_SIZE_PATH: ClassVar[str] = "house.heating.nominal_power_in_kw"
+
+    #: What the mapping report says about that size.
+    GENERATOR_SIZE_NOTE: ClassVar[str] = (
+        "sized from the building's design heat load, as the run sizes a new generator; the "
+        "request states no boiler rating"
+    )
+
+    #: What the build refuses with when the load cannot be computed.
+    GENERATOR_SIZE_MESSAGE: ClassVar[str] = (
+        "the existing generator cannot be sized: {missing} is missing from the translated "
+        "configuration. Its size prices the like-for-like replacement, the sunk cost and the "
+        "anyway credit, so a nominal value would publish a plausible price for a different boiler."
+    )
+
     #: The component the engine files the photovoltaic array's cost flows under, which is the
     #: subject the array's technical attributes are published for.
     PHOTOVOLTAIC_COMPONENT: ClassVar[str] = "PVSystem"
@@ -445,12 +521,14 @@ class EconomicContextBuilder:
         applied: Any,
         building_config: Optional[Mapping[str, Any]] = None,
         generator_component: Optional[str] = None,
+        heating_reference_temperature_in_celsius: Optional[float] = None,
     ) -> None:
         """Store the inputs; nothing is read until :meth:`build`."""
         self._request = request
         self._applied = applied
         self._building = dict(building_config or {})
         self._generator_component = generator_component
+        self._heating_reference_temperature = heating_reference_temperature_in_celsius
         self._house = House.from_dict(applied.house)
         self._original = House.from_dict(dict(request.document["house"]))
         self._raw_original: Mapping[str, Any] = request.document["house"]
@@ -508,7 +586,7 @@ class EconomicContextBuilder:
             replaced = [new_class]
         return ExistingAsset(
             asset_class=asset_class,
-            size=self._generator_size(),
+            size=self._generator_size(result),
             size_unit=Units.KILOWATT,
             installation_year=self._installation_year("heating", result),
             is_functional=True,
@@ -516,16 +594,83 @@ class EconomicContextBuilder:
             replaced_by_asset_classes=replaced,
         )
 
-    def _generator_size(self) -> float:
-        """The generator's rated output in kilowatts, as the engine's register needs it.
+    def _generator_size(self, result: EconomicContextResult) -> float:
+        """The existing generator's rated output in kilowatts, as the engine's register needs it.
 
-        The request does not state one and the simulation has not run, so the register carries a
-        nominal one-kilowatt entry: what the register decides is the asset's *age*, its carrier
-        and what replaces it, none of which depends on the size, and the *new* generator's size
-        comes from the simulation through the ordinary extraction. A size of zero is refused by
-        :class:`~hisim.economics.facts.ExistingAsset`, so it cannot simply be left out.
+        The size matters, which an earlier version of this method denied: the engine prices the
+        like-for-like replacement of a replaced asset at ``investment_for_size(replaced.size)``
+        (``calculators/context_resolution.py``), so the register's size decides the old boiler's
+        sunk cost and the anyway-cost credit the new generator is given. A nominal one kilowatt
+        priced a fifteen-kilowatt boiler at a fifteenth of its cost, and nothing said so.
+
+        The request states no boiler rating, so the size is the building's **design heat load** --
+        the same figure the run itself sizes a *new* generator from, so the two generators are
+        compared at one capacity. It is computed here exactly as the ``Building`` component
+        computes it, through :class:`~hisim.components.building.BuildingInformation` over the
+        translated configuration and the design temperature the translated ``Weather`` carries,
+        and it is published as an ``approximated`` line of the mapping report, because a
+        building's heat load is not a boiler's nameplate.
+
+        Args:
+            result: The result being assembled, for the approximation line.
+
+        Returns:
+            The design heat load in kilowatts.
+
+        Raises:
+            TranslatorError: If the translated configuration states neither the archetype nor the
+                design temperature the load is computed from. Sizing the register nominally
+                instead would put a plausible price on the wrong boiler, which is the failure this
+                method exists to end.
         """
-        return 1.0
+        load_in_kw = self._design_heat_load_in_kw()
+        result.approximations.append((self.GENERATOR_SIZE_PATH, load_in_kw, self.GENERATOR_SIZE_NOTE))
+        return load_in_kw
+
+    def _design_heat_load_in_kw(self) -> float:
+        """The building's design heat load in kilowatts, as the ``Building`` component derives it.
+
+        One instantiation of :class:`~hisim.components.building.BuildingInformation` over a
+        configuration rebuilt from what the translator wrote: the TABULA archetype, the floor area
+        and the apartment count from the ``for_tabula_code`` constructor, the envelope U-values
+        and areas from the component's own config block, and the outside design temperature from
+        the weather. Every one of those is a translated value, so the load is the one the run will
+        compute rather than a second model of the same thing.
+
+        Returns:
+            ``max_thermal_building_demand_in_watt`` divided by one thousand.
+
+        Raises:
+            TranslatorError: Naming exactly which of the two required inputs is missing.
+        """
+        # Function-local: this module is a translation table a test drives with no HiSim component
+        # at all, and the building package pulls the TABULA table and pandas in with it.
+        from hisim.components.building import (  # pylint: disable=import-outside-toplevel
+            BuildingConfig,
+            BuildingInformation,
+        )
+
+        missing = []
+        code = self._building.get(self.BUILDING_CODE_KEY)
+        temperature = self._heating_reference_temperature
+        if not isinstance(code, str) or not code:
+            missing.append(f"the Building config's {self.BUILDING_CODE_KEY}")
+        if temperature is None:
+            missing.append("the Weather's heating_reference_temperature_in_celsius")
+        if missing or temperature is None:
+            raise TranslatorError(self.GENERATOR_SIZE_MESSAGE.format(missing=" and ".join(missing)))
+        config = BuildingConfig.for_tabula_code(
+            name=self.BUILDING_COMPONENT,
+            building_code=str(code),
+            number_of_apartments=self._as_positive_float(self._building.get(self.APARTMENTS_KEY)),
+            absolute_conditioned_floor_area_in_m2=self._floor_area(),
+        )
+        for name, value in self._building.items():
+            if name not in self.BUILDING_CONSTRUCTOR_KEYS and hasattr(config, name):
+                setattr(config, name, value)
+        config.heating_reference_temperature_in_celsius = float(temperature)
+        load = BuildingInformation(config).max_thermal_building_demand_in_watt
+        return float(load) / self.WATT_PER_KILOWATT
 
     def _device_assets(self) -> List[ExistingAsset]:
         """One register entry per inventory device the request carries.
@@ -535,17 +680,22 @@ class EconomicContextBuilder:
         battery of unknown size" visible in the register rather than in a comment.
         """
         assets = []
-        for device in DeviceAssets.all_devices():
+        for device in DeviceAssets.ALL:
             block = self._raw_original.get(device.house_block)
             if not isinstance(block, Mapping):
                 continue
-            size = block.get(device.size_key) if device.size_key else None
+            stated = self._as_positive_float(block.get(device.size_key) if device.size_key else None)
+            # The request's unit is not always the register's: the array's field is in watts and
+            # the cost database prices photovoltaics per kilowatt, so the row carries the factor
+            # between them. A device the request carries without a size is still a device that is
+            # there, and one is the size that says "present, size unstated".
+            size = stated * device.to_register_size if stated is not None else 1.0
             assets.append(
                 ExistingAsset(
                     asset_class=device.asset_class,
-                    size=self._positive(size),
+                    size=size,
                     size_unit=device.size_unit,
-                    installation_year=self._year_of(block),
+                    installation_year=self._installation_year(device.house_block),
                     is_functional=True,
                     replaced_by_asset_classes=(
                         [device.asset_class] if device.measure_id in self._measure_ids else []
@@ -575,7 +725,9 @@ class EconomicContextBuilder:
                     asset_class=EnvelopeAssets.of_element(element),
                     size=area,
                     size_unit=Units.SQUARE_METER,
-                    installation_year=self._year_of(self._raw_element(element)),
+                    installation_year=self._installation_year(
+                        f"building.{element.value}", block=self._raw_element(element)
+                    ),
                     is_functional=True,
                     replaced_by_asset_classes=replaced,
                     anyway_share=share,
@@ -740,6 +892,10 @@ class EconomicContextBuilder:
             :attr:`~hisim.economics.bridge.EconomicContext.technical_attributes_by_subject`.
             A subject with nothing to say about it is absent from the map.
         """
+        # No SCOP: neither the request nor the recorded twins state a seasonal performance factor
+        # for a heat pump today, and the engine's subsidy conditions read one as an attribute
+        # (`subsidies/context.py`). A scheme keyed on it therefore stays *undetermined* rather
+        # than being decided on an invented figure. Recorded as an F-item in `todos.md` H7.
         attributes: Dict[str, Dict[str, Any]] = {}
         placements = {layer.measure_id: layer.placement for layer in self._applied.layers}
         for subject_facts in facts:
@@ -837,7 +993,7 @@ class EconomicContextBuilder:
         measure put them there, and that is exactly what the result document stamps on the
         investment build-up, so it is recorded here.
         """
-        for device in DeviceAssets.all_devices():
+        for device in DeviceAssets.ALL:
             if device.measure_id in self._measure_ids:
                 result.subjects[device.component] = device.measure_id
         if self._generator_component and self.HEATING_MEASURE_ID in self._measure_ids:
@@ -845,22 +1001,37 @@ class EconomicContextBuilder:
 
     # ------------------------------------------------------------------ small readers
 
-    def _installation_year(self, block_name: str, result: EconomicContextResult) -> int:
-        """The installation year of one house block, defaulting to the construction year."""
-        block = self._raw_original.get(block_name)
-        if isinstance(block, Mapping) and isinstance(block.get(self.INSTALLATION_YEAR_KEY), int):
-            return int(block[self.INSTALLATION_YEAR_KEY])
-        year = self._original.building.construction_year
-        result.defaults.append(
-            (f"house.{block_name}.{self.INSTALLATION_YEAR_KEY}", year, self.INSTALLATION_YEAR_NOTE)
-        )
-        return year
+    def _installation_year(
+        self,
+        block_name: str,
+        result: Optional[EconomicContextResult] = None,
+        block: Optional[Mapping[str, Any]] = None,
+    ) -> int:
+        """The installation year of one part of the house, defaulting to the construction year.
 
-    def _year_of(self, block: Optional[Mapping[str, Any]]) -> int:
-        """One block's installation year, or the building's construction year."""
-        if isinstance(block, Mapping) and isinstance(block.get(self.INSTALLATION_YEAR_KEY), int):
-            return int(block[self.INSTALLATION_YEAR_KEY])
-        return self._original.building.construction_year
+        ``installation_year`` is an E-spec §7 field the vendored request schema does not carry
+        yet, so most requests state none and the building's construction year stands in for it.
+
+        Args:
+            block_name: The ``house`` key the part lives under, for the mapping-report path.
+            result: The result being assembled. When given, a defaulted year is recorded on its
+                ``defaults`` list with the value used; the register's device and envelope entries
+                pass ``None``, because their blocks already carry a line of their own.
+            block: The raw block to read, when it is not ``house[block_name]`` — an envelope
+                element lives one level down, under ``house.building``.
+
+        Returns:
+            The year the part was installed.
+        """
+        raw = self._raw_original.get(block_name) if block is None else block
+        if isinstance(raw, Mapping) and isinstance(raw.get(self.INSTALLATION_YEAR_KEY), int):
+            return int(raw[self.INSTALLATION_YEAR_KEY])
+        year = self._original.building.construction_year
+        if result is not None:
+            result.defaults.append(
+                (f"house.{block_name}.{self.INSTALLATION_YEAR_KEY}", year, self.INSTALLATION_YEAR_NOTE)
+            )
+        return year
 
     def _raw_element(self, element: ThermalElement) -> Mapping[str, Any]:
         """The request's raw block for one envelope element, or an empty mapping."""
@@ -878,39 +1049,41 @@ class EconomicContextBuilder:
         the archetype derives it — the request cannot supply one either and the answer is
         ``None``, which makes the subject unpriced rather than sized by a guess.
         """
-        from_config = self._building.get(f"{element.value}{self.AREA_SUFFIX}")
-        if isinstance(from_config, (int, float)) and not isinstance(from_config, bool) and from_config > 0:
-            return float(from_config)
-        from_request = self._raw_element(element).get("area_in_m2")
-        if isinstance(from_request, (int, float)) and not isinstance(from_request, bool) and from_request > 0:
-            return float(from_request)
-        return None
+        realized = self._as_positive_float(self._building.get(f"{element.value}{self.AREA_SUFFIX}"))
+        if realized is not None:
+            return realized
+        return self._as_positive_float(self._raw_element(element).get(self.ELEMENT_AREA_KEY))
 
     def _living_area(self) -> Optional[float]:
         """The dwelling's living area: the request's own, else the conditioned floor area."""
         building = self._raw_original.get("building")
         if isinstance(building, Mapping):
-            stated = building.get(self.LIVING_AREA_KEY)
-            if isinstance(stated, (int, float)) and not isinstance(stated, bool):
-                return float(stated)
+            stated = self._as_positive_float(building.get(self.LIVING_AREA_KEY))
+            if stated is not None:
+                return stated
         return self._floor_area()
 
     def _floor_area(self) -> Optional[float]:
         """The conditioned floor area the translated building carries, or ``None``."""
-        value = self._building.get(self.FLOOR_AREA_KEY)
-        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
-            return float(value)
-        return None
+        return self._as_positive_float(self._building.get(self.FLOOR_AREA_KEY))
 
     @staticmethod
-    def _positive(value: Any) -> float:
-        """One size as the register needs it: a positive number, or a nominal one.
+    def _as_positive_float(value: Any) -> Optional[float]:
+        """One raw request or config value as a positive number, or ``None``.
 
-        :class:`~hisim.economics.facts.ExistingAsset` refuses a size of zero, and a device the
-        request carries without a size is still a device that is there. One is the size that says
-        "present, size unstated": what the register decides for such an asset is its age and what
-        replaces it, neither of which depends on how big it is.
+        The shape check every numeric leaf of this module needs, in one place: a JSON value is a
+        number, is not a boolean (``True`` is an ``int`` in Python and would otherwise pass as a
+        size of one), and is greater than zero, because none of the quantities read here — an
+        area, a capacity, a peak power — is meaningfully zero or negative. What to do when the
+        answer is ``None`` is the caller's decision and differs per call site, which is why the
+        helper returns the absence rather than a substitute for it.
+
+        Args:
+            value: Whatever the request or the translated config carried.
+
+        Returns:
+            The value as a float, or ``None`` when it is not a positive number.
         """
         if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
             return float(value)
-        return 1.0
+        return None

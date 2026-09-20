@@ -3,7 +3,7 @@
 name: "one_stage_equals_a_plain_evaluation"
 group: "staged"
 spec_section: "3.7"
-computed_by: "the staged-evaluator harness (tests/worked_example_runners.py::_staged_values), 2026-09-19"
+computed_by: "the staged-evaluator harness (tests/worked_example_runners.py::_staged_values), 2026-09-20"
 description: "A single-stage plan: a 20,000 EUR heat pump bought in year 0 into a greenfield building, over a 20-year horizon at 3 % interest, with 1.5 % maintenance and 4,000 kWh of electricity a year at the synthetic country's zero price. What it pins is E-spec §2(a): a plan of one stage must equal the plain evaluator entry for entry, so the example asserts the staged NPV and the single-variant NPV as two numbers that have to agree. Every device figure is an override and the country is the synthetic XX, so no shipped price can reach a value here."
 inputs:
   horizon_in_years: 20

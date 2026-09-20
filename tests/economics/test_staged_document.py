@@ -87,9 +87,16 @@ class TestTheSchema:
         StagedDocument.validate(document)
 
     def test_the_schema_is_shipped_beside_the_module(self):
-        """A packaged HiSim carries the schema, or nothing downstream can check a document."""
+        """A packaged HiSim carries the schema, or nothing downstream can check a document.
+
+        The ``$schema`` dialect string is deliberately not asserted: it is an upstream meta
+        version and pinning it fails on a dialect upgrade that has no bearing on the document.
+        What matters is that the file is there and describes the document's own top level.
+        """
         assert StagedDocument.schema_path().is_file()
-        assert StagedDocument.schema()["$schema"].endswith("2020-12/schema")
+        schema = StagedDocument.schema()
+        assert set(schema["required"]) <= set(schema["properties"])
+        assert "plan" in schema["properties"] and "reference" in schema["properties"]
 
     def test_a_document_missing_a_stack_is_rejected(self, document):
         """The schema would catch a group quietly disappearing from an evaluation."""
@@ -251,9 +258,16 @@ class TestTheDocumentShape:
         assert delta == pytest.approx(plan - reference, abs=0.01)
 
     def test_the_engine_block_names_the_code_that_produced_it(self, document):
-        """A stored document says which commit and which specification revision made it."""
-        assert document["engine"]["economics_version"] == StagedDocument.ECONOMICS_VERSION
-        assert "hisim_commit" in document["engine"]
+        """A stored document says which commit and which specification revision made it.
+
+        The version is compared to a fixed literal rather than to the constant it was written
+        from: comparing it to ``StagedDocument.ECONOMICS_VERSION`` passes whatever that constant
+        says, so a wrong one would ship. ``cost-spec-v2`` is the specification revision this
+        engine implements, and changing it is a decision that belongs in a diff of this line.
+        """
+        assert document["engine"]["economics_version"] == "cost-spec-v2"
+        commit = document["engine"]["hisim_commit"]
+        assert commit is None or isinstance(commit, str) and commit.strip() == commit
 
 
 class TestFinancing:
@@ -282,3 +296,117 @@ class TestFinancing:
             assert loan["principal_in_euro"]["best"] > 0
             assert len(loan["debt_service_by_year_in_euro"]) == parameters.observation_period_in_years + 1
         assert Path(path).is_file()
+
+    def test_each_loans_debt_service_is_the_loan_that_borrowed_it(self, database, parameters, tmp_path):
+        """Two loans repaid at once are told apart by the stage that took them out (step 12 §2.2).
+
+        The envelope stage borrows in year 0 on a ten-year term and the heat-pump stage in year 3
+        on another, so years 4..10 carry instalments of both. Attributing a payment to the stage
+        *active* in its year — the rule the operating flows are spliced by — moves the first
+        loan's years 3..10 onto the second loan, and the block then shows a ten-year loan repaid
+        in two years. Each schedule must instead run the loan's own term from its own year: 1..10
+        for the first and 4..12 for the second, the latter cut off by the twelve-year horizon.
+        """
+        from hisim.economics.financing import FinancingPlan
+        from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
+
+        perspective = Perspective(
+            id="owner_monthly",
+            installation_context=InstallationContext.BROWNFIELD,
+            subsidy_mode=SubsidyMode.none(),
+            financing=FinancingPlan(term_in_years=10),
+        )
+        result = StagedEvaluator(database).evaluate(
+            [baseline_stage(), envelope_stage(0), heat_pump_stage(3)], parameters, perspective
+        )
+        written = StagedDocument(result, parameters, perspective).write(tmp_path / "two_loans.json")
+        loans = written["plan"]["financing"]["loans"]
+        paying_years = [
+            [
+                year
+                for year, band in enumerate(loan["debt_service_by_year_in_euro"])
+                if abs(band["best"]) > 1e-9
+            ]
+            for loan in loans
+        ]
+        assert paying_years == [list(range(1, 11)), list(range(4, 13))]
+
+
+class TestBandOrder:
+    """Every amount the document writes reads ``min <= best <= max`` (step 12 §2.3)."""
+
+    def test_the_cumulative_difference_stays_ordered_when_the_reference_band_is_wider(
+        self, database, parameters, tmp_path
+    ):
+        """A per-slot sign flip must swap the ends, or the chart draws the range backwards.
+
+        ``comparison.cumulative_discounted_savings_in_euro`` holds three independent per-slot
+        curves rather than an envelope, so the low-world saving can exceed the high-world one when
+        the reference's cost band is wider than the plan's — a volatile gas bill against a mostly
+        fixed heat-pump investment. The document reports plan minus reference, which is the
+        negation of that, and negating slot by slot would leave ``min = 100`` above ``max = -700``
+        for savings of ``low = -100``, ``best = 250``, ``high = 700``. The ends are therefore taken
+        by value: ``min = -700``, ``best = -250``, ``max = 100``.
+        """
+        perspective = brownfield_perspective()
+        result = StagedEvaluator(database).evaluate(
+            [baseline_stage(), heat_pump_stage(3)], parameters, perspective
+        )
+        horizon = parameters.observation_period_in_years
+        result.comparison.cumulative_discounted_savings_in_euro = {
+            "low": [-100.0] * (horizon + 1),
+            "best_estimate": [250.0] * (horizon + 1),
+            "high": [700.0] * (horizon + 1),
+        }
+        written = StagedDocument(result, parameters, perspective).write(tmp_path / "wide.json")
+        for row in written["comparison"]["cumulative_delta"]:
+            assert row["discounted_in_euro"] == {"min": -700.0, "best": -250.0, "max": 100.0}
+
+    def test_an_unordered_band_is_refused_before_the_file_is_written(self, tmp_path):
+        """The check the schema cannot express, stated as a refusal rather than as a chart bug."""
+        from hisim.economics.staged_document import BandOrderError
+
+        with pytest.raises(BandOrderError, match="min <= best <= max"):
+            StagedDocument.assert_bands_ordered(
+                {"plan": {"totals": {"npv_in_euro": {"min": 5.0, "best": 1.0, "max": 2.0}}}}
+            )
+        assert not list(Path(tmp_path).iterdir())
+
+
+class TestTheEmissionsAreOnePhysicalFact:
+    """Operational CO2 is the same series under every perspective of one plan.
+
+    ``hisim/renovisor/kpis.py`` reads the lifecycle CO2 of whichever perspective it finds first
+    when its preferred one is absent, which is only safe if the figure does not depend on the
+    perspective. It does not, and this pins the reason: operational emissions are accumulated from
+    the energy flows (``calculators/co2.py`` through ``accumulate_operational_emissions``) before
+    any payer scoping or investment-context filtering happens, so a perspective can change who
+    pays for a kilowatt-hour but not how much carbon burning it released.
+    """
+
+    def test_the_by_year_series_is_identical_across_perspectives(self, database, parameters):
+        """Three perspectives that account for capital differently, one emissions series."""
+        from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
+
+        stages = [baseline_stage(), envelope_stage(0), heat_pump_stage(4)]
+        perspectives = [
+            Perspective(
+                id=name,
+                installation_context=context,
+                subsidy_mode=SubsidyMode.none(),
+            )
+            for name, context in (
+                ("greenfield_gross", InstallationContext.GREENFIELD),
+                ("brownfield_gross", InstallationContext.BROWNFIELD),
+                ("operating", InstallationContext.OPERATING_ONLY),
+            )
+        ]
+        series = [
+            StagedEvaluator(database)
+            .evaluate(stages, parameters, perspective)
+            .plan.lifecycle_co2_result.operational_co2_by_year_in_kg
+            for perspective in perspectives
+        ]
+
+        assert series[0] == series[1] == series[2]
+        assert any(mass > 0 for mass in series[0]), "a house that burns nothing would prove nothing"

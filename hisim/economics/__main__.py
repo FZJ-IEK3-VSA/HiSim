@@ -104,6 +104,7 @@ from hisim.economics.scenarios import (
 from hisim.economics.serialization import read_inputs, read_results, read_stored_parameters
 from hisim.economics.staged import Stage, StagedEvaluationError, StagedEvaluator
 from hisim.economics.staged_document import StagedDocument
+from hisim.renovisor.report import MappingReport
 from hisim.economics.subsidies import SubsidyCatalog
 from hisim.economics.validation import validate_all
 
@@ -687,11 +688,22 @@ class StagedCli:
     #: the directory the backend already has rather than a path into it.
     RESULTS_SUBDIRECTORY: ClassVar[str] = "results"
 
-    #: Its key holding that map.
-    SUBJECTS_KEY: ClassVar[str] = "subjects"
+    #: Its two keys, taken from the class that writes the file so the two sides of the process
+    #: seam cannot drift: a rename in ``MappingReport.to_json`` would otherwise silently drop
+    #: every measure stamp and every unpriced flag from the document.
+    SUBJECTS_KEY: ClassVar[str] = MappingReport.SUBJECTS_FIELD
 
     #: Its key holding the subjects the translator could not price.
-    UNPRICED_KEY: ClassVar[str] = "unpriced_subjects"
+    UNPRICED_KEY: ClassVar[str] = MappingReport.UNPRICED_SUBJECTS_FIELD
+
+    #: What a stage directory with stored inputs but no mapping report is refused with.
+    MISSING_MAPPING_MESSAGE: ClassVar[str] = (
+        "--stage #{index} {argument!r}: {directory!r} carries {inputs} but no {report}, in it or "
+        "beside it. The report is what says which catalogue measure created which cost subject "
+        "and which subjects the request carried no price for; without it every row of the "
+        "document would claim a known price, and a measure of unknown cost would be published as "
+        "one that costs nothing."
+    )
 
     @classmethod
     def parse_stage(cls, argument: str, index: int) -> Tuple[str, int, str, Optional[str]]:
@@ -783,30 +795,50 @@ class StagedCli:
         return None
 
     @classmethod
-    def read_mapping(cls, directories: List[str]) -> Tuple[Dict[str, Optional[str]], List[str]]:
+    def read_mapping(
+        cls, directories: List[str], arguments: Optional[List[str]] = None
+    ) -> Tuple[Dict[str, Optional[str]], List[str]]:
         """The subject-to-measure map and the unpriced subjects, over every stage directory.
 
-        A stage directory may carry the translator's ``mapping_report.json``; when it does, its
-        ``subjects`` map says which catalogue measure created which cost subject and its
-        ``unpriced_subjects`` list says which of them have no price behind them. Later stages win
-        over earlier ones, because a subject a later stage re-declares is the later stage's.
+        Every stage directory must carry the translator's ``mapping_report.json``, in itself or
+        beside it: its ``subjects`` map says which catalogue measure created which cost subject
+        and its ``unpriced_subjects`` list says which of them the request carried no price for.
+        Later stages win over earlier ones, because a subject a later stage re-declares is the
+        later stage's.
+
+        A directory without one is refused rather than read as "nothing is unpriced". An unpriced
+        subject reaches the engine with an investment of zero
+        (``hisim/renovisor/economics.py``), and the flag is the only thing that distinguishes that
+        zero from a price of nothing; defaulting it to ``False`` publishes a complete-looking
+        total that understates the plan, which a reader of the document cannot detect.
 
         Args:
             directories: The stage directories, in stage order.
+            arguments: The ``--stage`` arguments they came from, for the refusal message; the
+                directories themselves when the caller does not pass them.
 
         Returns:
-            ``(measure ids by subject, unpriced subjects)``. Both are empty when no directory
-            carries a report, which only costs the document its ``measure_id`` stamps.
+            ``(measure ids by subject, unpriced subjects)``.
+
+        Raises:
+            StagedEvaluationError: Naming the first directory with no report, which the CLI turns
+                into exit 2 with a ``problems.json``.
         """
+        spelled = arguments if arguments is not None else directories
         measures: Dict[str, Optional[str]] = {}
         unpriced: List[str] = []
-        for directory in directories:
-            path = os.path.join(directory, cls.MAPPING_REPORT_FILE_NAME)
-            if not os.path.isfile(path):
-                # A caller who named the `results` subdirectory outright still gets the map.
-                path = os.path.join(os.path.dirname(os.path.abspath(directory)), cls.MAPPING_REPORT_FILE_NAME)
-            if not os.path.isfile(path):
-                continue
+        for index, directory in enumerate(directories):
+            path = cls.mapping_report_path(directory)
+            if path is None:
+                raise StagedEvaluationError(
+                    cls.MISSING_MAPPING_MESSAGE.format(
+                        index=index,
+                        argument=spelled[index],
+                        directory=directory,
+                        inputs=cls.INPUTS_FILE_NAME,
+                        report=cls.MAPPING_REPORT_FILE_NAME,
+                    )
+                )
             with open(path, encoding="utf-8") as handle:
                 report = json.load(handle)
             subjects = report.get(cls.SUBJECTS_KEY)
@@ -816,6 +848,27 @@ class StagedCli:
                 if subject not in unpriced:
                     unpriced.append(subject)
         return measures, unpriced
+
+    @classmethod
+    def mapping_report_path(cls, directory: str) -> Optional[str]:
+        """Where one stage's mapping report is: in the directory, or in its parent.
+
+        A RenoVisor job writes the report beside its records and the simulation's own outputs one
+        level down, so a caller who named the ``results`` subdirectory outright still finds it.
+
+        Args:
+            directory: The ``--stage`` argument's first field.
+
+        Returns:
+            The path, or ``None`` when neither candidate carries one.
+        """
+        for candidate in (
+            os.path.join(directory, cls.MAPPING_REPORT_FILE_NAME),
+            os.path.join(os.path.dirname(os.path.abspath(directory)), cls.MAPPING_REPORT_FILE_NAME),
+        ):
+            if os.path.isfile(candidate):
+                return candidate
+        return None
 
     @classmethod
     def perspective(cls, requested: Optional[str]) -> Perspective:
@@ -887,6 +940,33 @@ class StagedCli:
             "silently answer a different question. Pass --parameters <file>."
         )
 
+    #: How a catalogue is named in the document: the country it applies to and the date the
+    #: catalogue was taken from the programmes' own pages, which is the pair that identifies one
+    #: version of one country's support landscape. The bare country would not: Ireland's schemes
+    #: change every few months and a stored document has to say which of them it priced.
+    CATALOG_ID_FORMAT: ClassVar[str] = "{country}@{snapshot}"
+
+    #: What stands in the date's place when the catalogue states no snapshot date.
+    UNDATED_CATALOG: ClassVar[str] = "undated"
+
+    @classmethod
+    def catalog_id(cls, catalog: Optional[SubsidyCatalog], country: str) -> Optional[str]:
+        """How the document names the subsidy catalogue a plan was priced under.
+
+        Args:
+            catalog: The catalogue in force, or ``None`` when the plan ran with none, in which
+                case every subsidy row of the document is undetermined.
+            country: The country the plan was priced for.
+
+        Returns:
+            ``"IE@2026-09-19"``-style id, or ``None`` for a plan priced with no catalogue.
+        """
+        if catalog is None:
+            return None
+        return cls.CATALOG_ID_FORMAT.format(
+            country=country, snapshot=catalog.snapshot_date or cls.UNDATED_CATALOG
+        )
+
     @classmethod
     def write_problems(cls, out_path: str, message: str) -> str:
         """Write the ``problems.json`` a refused plan produces, beside the requested output.
@@ -952,14 +1032,19 @@ def _cmd_staged(args: argparse.Namespace) -> int:
         print(str(error), file=sys.stderr)
         return StagedCli.ENGINE_FAILED
 
-    measures, unpriced = StagedCli.read_mapping(directories)
+    try:
+        measures, unpriced = StagedCli.read_mapping(directories, args.stage)
+    except StagedEvaluationError as error:
+        path = StagedCli.write_problems(args.out, str(error))
+        print(f"{error} (problems written to {path})", file=sys.stderr)
+        return StagedCli.PLAN_REFUSED
     document = StagedDocument(
         result=result,
         parameters=parameters,
         perspective=perspective,
         measure_ids=measures,
         unpriced_subjects=unpriced,
-        subsidy_catalog_id=None if catalog is None else parameters.country,
+        subsidy_catalog_id=StagedCli.catalog_id(catalog, parameters.country),
     )
     document.write(Path(args.out))
     print(f"Wrote {args.out} for {len(stages)} stages under perspective {perspective.id}.")

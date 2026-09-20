@@ -35,7 +35,7 @@ import enum
 import json
 import os
 from pathlib import Path
-from typing import Any, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Set
+from typing import Any, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Set, Tuple
 
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import Perspective
@@ -53,6 +53,18 @@ class SchemaValidationUnavailableError(RuntimeError):
     unvalidated would ship whatever shape the code happened to produce. Refusing before the file
     exists is the same choice ``__main__.AuditLayerProbe`` makes for the audit exports: a
     half-kept promise is worse than a named refusal.
+    """
+
+
+class BandOrderError(ValueError):
+    """A band in the document is not ``min <= best <= max``.
+
+    Raised by :meth:`StagedDocument.assert_bands_ordered` before the file is written. The schema
+    can say that a band is three numbers but not that they are ordered, so the one invariant the
+    frontend relies on when it draws a range — the low world is the low end — is checked here
+    instead. It is always a bug in this module: every band it publishes comes from an
+    :class:`~hisim.economics.uncertainty.UncertainValue`, which cannot be unordered, unless the
+    document builds one out of separate slot values and gets the ends wrong.
     """
 
 
@@ -326,9 +338,11 @@ class StagedDocument:
             SchemaValidationUnavailableError: If ``jsonschema`` cannot be imported.
             jsonschema.ValidationError: If the document does not match the schema, which is a bug
                 in this module rather than in its inputs.
+            BandOrderError: If any band in the document is not ``min <= best <= max``.
         """
         document = self.to_json()
         self.validate(document)
+        self.assert_bands_ordered(document)
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -366,6 +380,46 @@ class StagedDocument:
                 "against economics_result.schema.json and is not written."
             ) from error
         jsonschema.validate(instance=document, schema=cls.schema())
+
+    #: The three keys that make a mapping in the document a band, and their order.
+    BAND_KEYS: ClassVar[Tuple[str, str, str]] = ("min", "best", "max")
+
+    @classmethod
+    def assert_bands_ordered(cls, document: Any, path: str = "") -> None:
+        """Raise unless every band in the document reads ``min <= best <= max``.
+
+        The schema types a band as three numbers and cannot express their order, so a band that
+        got its ends the wrong way round — a sign flip applied slot by slot, a difference not
+        re-enveloped — validates and then draws backwards in the frontend. Checking it once over
+        the finished document is cheap and catches every such mistake at the place the document is
+        written rather than in a chart.
+
+        Args:
+            document: The document, or any part of it while recursing.
+            path: The dotted path of ``document`` inside the whole, for the message.
+
+        Raises:
+            BandOrderError: Naming the first band that is out of order and where it is.
+        """
+        if isinstance(document, Mapping):
+            if set(document) == set(cls.BAND_KEYS) and all(
+                isinstance(document[key], (int, float)) and not isinstance(document[key], bool)
+                for key in cls.BAND_KEYS
+            ):
+                low, best, high = (document[key] for key in cls.BAND_KEYS)
+                if not low <= best <= high:
+                    raise BandOrderError(
+                        f"the band at {path or '<document>'} is {low}/{best}/{high}, which is not "
+                        "min <= best <= max. Every amount in economics_result.json is an ordered "
+                        "band; a sign flip applied slot by slot is the usual cause."
+                    )
+                return
+            for key, value in document.items():
+                cls.assert_bands_ordered(value, f"{path}.{key}" if path else str(key))
+            return
+        if isinstance(document, list):
+            for index, value in enumerate(document):
+                cls.assert_bands_ordered(value, f"{path}[{index}]")
 
     # ------------------------------------------------------------------ header blocks
 
@@ -427,8 +481,9 @@ class StagedDocument:
 
         The same shape serves both, which is what lets the frontend draw the two side by side with
         one renderer. ``staged`` decides only where the per-row stage index comes from: the plan's
-        rows carry the stage that paid for or is active in them, and the reference — one state held
-        over the whole horizon — carries stage 0 throughout.
+        rows carry the stage that paid for or is active in them; the reference — one state held
+        over the whole horizon — carries ``0`` in its ``annual`` series and ``null`` in its
+        ``by_subject`` rows and its ``subsidies`` rows, because no stage bought its subjects.
 
         Args:
             result: The evaluated variant.
@@ -456,7 +511,7 @@ class StagedDocument:
             "energy_year1": self._energy_year1(result),
             "co2": self._co2(result),
             "subsidies": self._subsidies(result, staged),
-            "financing": self._financing(result, horizon),
+            "financing": self._financing(result, horizon, staged),
         }
 
     def _totals(self, result: LifecycleCostResult) -> Dict[str, Any]:
@@ -790,17 +845,41 @@ class StagedDocument:
             amounts[entry.subsidy_scheme_id] = previous + entry.amount_in_euro
         return amounts
 
-    def _financing(self, result: LifecycleCostResult, horizon: int) -> Optional[Dict[str, Any]]:
-        """The loans of the plan, one per stage that borrowed, or ``None`` for a cash purchase."""
+    def _financing(
+        self, result: LifecycleCostResult, horizon: int, staged: bool
+    ) -> Optional[Dict[str, Any]]:
+        """The loans of the plan, one per stage that borrowed, or ``None`` for a cash purchase.
+
+        Every debt-service entry is attributed to the loan it repays rather than to the loan of
+        whichever stage is active in the payment year. The two differ whenever a later stage
+        borrows before an earlier loan's term is up: the first loan's remaining instalments would
+        otherwise move onto the second loan's schedule, and the block would show a ten-year loan
+        repaid in two years (step 12 §2.2). Plan totals are unaffected — the same entries are
+        reported either way — but the per-loan series is what the financing chart draws.
+
+        Args:
+            result: The evaluated variant.
+            horizon: The last year index of the horizon; every loan's schedule spans 0..T.
+            staged: Whether this is the staged plan, whose entries carry the stage they came from.
+
+        Returns:
+            The financing block, or ``None`` when the perspective buys for cash or nothing was
+            borrowed.
+        """
         plan = self._perspective.financing
         disbursed: Dict[int, UncertainValue] = {}
         service: Dict[int, Dict[int, UncertainValue]] = {}
-        for entry in result.timeline.entries:
+        entries = list(result.timeline.entries)
+        disbursement_years = sorted(
+            entry.year for entry in entries if entry.category == CostCategory.LOAN_DISBURSEMENT
+        )
+        for position, entry in enumerate(entries):
             if entry.category == CostCategory.LOAN_DISBURSEMENT:
                 previous = disbursed.get(entry.year, UncertainValue.exact(0.0))
                 disbursed[entry.year] = previous + entry.amount_in_euro
             elif entry.category in (CostCategory.LOAN_INTEREST, CostCategory.LOAN_PRINCIPAL):
-                by_year = service.setdefault(self._borrowing_year(entry.year), {})
+                borrowed = self._borrowing_year(position, entry.year, disbursement_years, staged)
+                by_year = service.setdefault(borrowed, {})
                 previous = by_year.get(entry.year, UncertainValue.exact(0.0))
                 by_year[entry.year] = previous + entry.amount_in_euro
         if plan is None or not disbursed:
@@ -810,7 +889,7 @@ class StagedDocument:
             by_year = service.get(year, {})
             loans.append(
                 {
-                    "stage": self._result.stage_of_year(year),
+                    "stage": self._result.stage_of_year(year) if staged else 0,
                     "principal_in_euro": self._negated_band(disbursed[year]),
                     "rate": plan.nominal_interest_rate,
                     "term_years": plan.term_in_years,
@@ -822,15 +901,34 @@ class StagedDocument:
             )
         return {"loans": loans}
 
-    def _borrowing_year(self, year: int) -> int:
-        """The disbursement year of the loan a debt-service entry in ``year`` belongs to.
+    def _borrowing_year(
+        self, position: int, year: int, disbursement_years: List[int], staged: bool
+    ) -> int:
+        """The disbursement year of the loan a debt-service entry belongs to.
 
-        One loan per stage, each starting in its stage's year, so a payment in year ``y`` belongs
-        to the last stage that started at or before ``y``. With one loan the answer is 0 and the
-        attribution is trivially right; with several it is the same rule the operating splice uses.
+        On the plan the answer is carried rather than derived: the splice records which stage
+        every entry came from (:meth:`~hisim.economics.staged.StagedResult.stage_of_timeline_entry`)
+        and a stage's loan disburses in that stage's own year, so the attribution is exact even
+        when two loans are being repaid in the same year. On the reference — one state, at most one
+        loan — and for a result whose entries carry no stage, the fallback is the last
+        disbursement at or before the payment year, which is the same answer wherever the map
+        exists and never blames a loan that had not been taken out yet.
+
+        Args:
+            position: The entry's index in the timeline it was read from.
+            year: The payment year.
+            disbursement_years: The years a loan was disbursed in, ascending.
+            staged: Whether the timeline is the staged plan's.
+
+        Returns:
+            The year the loan being repaid was disbursed in.
         """
-        stage = self._result.stages[self._result.stage_of_year(year)]
-        return stage.from_year
+        if staged:
+            stage_index = self._result.stage_of_timeline_entry(position)
+            if stage_index is not None:
+                return self._result.stages[stage_index].from_year
+        earlier = [candidate for candidate in disbursement_years if candidate <= year]
+        return earlier[-1] if earlier else 0
 
     # ------------------------------------------------------------------ comparison
 
@@ -860,11 +958,9 @@ class StagedDocument:
                     "year": year,
                     "nominal_in_euro": self._band(nominal),
                     # `savings` is reference - plan; the document reports plan - reference.
-                    "discounted_in_euro": {
-                        "min": -savings["low"][year],
-                        "best": -savings["best_estimate"][year],
-                        "max": -savings["high"][year],
-                    },
+                    "discounted_in_euro": self._negated_slots(
+                        savings["low"][year], savings["best_estimate"][year], savings["high"][year]
+                    ),
                 }
             )
         return {
@@ -923,6 +1019,29 @@ class StagedDocument:
         which is why the ends are exchanged rather than negated in place.
         """
         return {"min": -value.maximum, "best": -value.best_estimate, "max": -value.minimum}
+
+    @staticmethod
+    def _negated_slots(low: float, best: float, high: float) -> Dict[str, float]:
+        """Three per-slot values negated into one ordered band.
+
+        The document's cumulative difference is the sign flip of the engine's cumulative *savings*
+        curves, which are stored slot by slot (``results.compare``) and are not an envelope: the
+        low-world saving can exceed the high-world one when the reference's band is wider than the
+        plan's. Negating the three slots in place would then leave ``min > max`` and the chart
+        would draw the range backwards, which is why the ends are chosen by value rather than by
+        position — the same thing :meth:`_negated_band` does for an already-ordered band, and what
+        :meth:`UncertainValue.__sub__` does when it re-sorts a difference into an envelope.
+
+        Args:
+            low: The value in the LOW world.
+            best: The best estimate.
+            high: The value in the HIGH world.
+
+        Returns:
+            The band with the sign flipped and ``min <= best <= max`` restored.
+        """
+        negated = (-low, -best, -high)
+        return {"min": min(negated), "best": -best, "max": max(negated)}
 
     @staticmethod
     def _scalar_band(value: float) -> Dict[str, float]:

@@ -25,7 +25,7 @@ from __future__ import annotations
 import enum
 import re
 from dataclasses import dataclass, field
-from typing import ClassVar, Dict, List, Optional
+from typing import ClassVar, Dict, List, Optional, Tuple
 
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.provenance import (
@@ -834,6 +834,15 @@ class LifecycleCostResult:
     #: serialized before the field existed; the assumptions section then renders the parameter
     #: half only and says which half is missing rather than inventing it.
     assumptions: Optional[EconomicAssumptions] = None
+    #: The dated replacement schedule behind the timeline: ``(subject, year, nominal escalated
+    #: amount)`` per scheduled re-purchase, in the order the subjects were priced. It is the same
+    #: schedule the REPLACEMENT entries carry — and the only record of it under OPERATING_ONLY,
+    #: where those entries are suppressed in favour of the levelized reserve (§4.2). Carried so
+    #: that :class:`hisim.economics.staged.StagedEvaluator` can re-date a stage's replacements to
+    #: the year that stage starts in and rebuild the plan's reserve from the re-dated flows. Not
+    #: serialized: it is derivable from the priced inputs and is read in-process only, so it is
+    #: empty for a result read back from ``lifecycle_costs.json``.
+    replacement_flows: List[Tuple[str, int, UncertainValue]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         """Checks that the three anyway-credit records describe the same set of credits.

@@ -428,6 +428,12 @@ class TimelineBuildResult:
     #: The tariff contracts the energy calculator actually billed under, for the assumptions
     #: record the report's assumptions section publishes.
     tariffs_applied: List[TariffContract] = field(default_factory=list)
+    #: Every scheduled replacement as ``(subject, year, nominal escalated amount)``, in the order
+    #: the subjects were processed. The same flows the OPERATING_ONLY reserve is levelized from,
+    #: carried *per subject* because the staged evaluator re-dates them to the year the stage that
+    #: bought the subject starts in and has to know whose flow each one is. Collected under every
+    #: perspective, including the ones that carry the REPLACEMENT entries themselves.
+    replacement_flows: List[Tuple[str, int, UncertainValue]] = field(default_factory=list)
 
 
 def _levy_summary(outcome: Optional[ModernizationLevyOutcome]) -> Optional[ModernizationLevySummary]:
@@ -750,6 +756,7 @@ class EconomicEvaluator:
         macro = perspective.accounting == Accounting.MACROECONOMIC
 
         replacement_flows_for_reserve: List[Tuple[int, UncertainValue]] = []
+        replacement_flows_by_subject: List[Tuple[str, int, UncertainValue]] = []
 
         for subject_facts in inputs.cost_facts:
             costing = resolve_device(
@@ -795,6 +802,9 @@ class EconomicEvaluator:
                     installations=len(schedule.embodied_co2_addends),
                 )
             replacement_flows_for_reserve.extend(schedule.reserve_flows)
+            replacement_flows_by_subject.extend(
+                (subject, repl_year, amount) for repl_year, amount in schedule.reserve_flows
+            )
 
             # --- replaced asset: sunk cost and anyway-cost credit (§4.1)
             if include_investment and costing.is_new_investment and costing.replaced_asset is not None:
@@ -910,6 +920,7 @@ class EconomicEvaluator:
             anyway_basis_by_subject=anyway_basis_by_subject,
             anyway_basis_kind_by_subject=anyway_basis_kind_by_subject,
             tariffs_applied=list(energy_result.tariffs_applied),
+            replacement_flows=replacement_flows_by_subject,
         )
 
     # ------------------------------------------------------------------ evaluation (§3.7)
@@ -1042,6 +1053,9 @@ class EconomicEvaluator:
             # the fallback chains resolved them, the tariff terms actually billed, and the heat
             # demand every per-kWh heat figure divides by.
             assumptions=self._resolve_assumptions(inputs, build),
+            # The dated replacement schedule behind the timeline, which the staged evaluator
+            # re-dates per stage and the OPERATING_ONLY reserve is levelized from.
+            replacement_flows=build.replacement_flows,
         )
 
     def _resolve_assumptions(

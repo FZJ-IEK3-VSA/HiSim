@@ -3,7 +3,7 @@
 name: "three_stages_with_loans_and_a_staged_grant"
 group: "staged"
 spec_section: "5.4"
-computed_by: "the staged-evaluator harness (tests/worked_example_runners.py::_staged_values), 2026-09-19"
+computed_by: "the staged-evaluator harness (tests/worked_example_runners.py::_staged_values), 2026-09-20"
 description: "The plan of the previous example, financed and subsidised: each stage takes its own ten-year annuity loan at 4 % for the whole of its net investment, and a synthetic upfront grant of 30 % is available for the heat pump's asset class only. E-spec §2(c) asks for a subsidy that only a later stage can claim; the engine's eligibility language keys a scheme on the asset classes it covers, so the grant here is scoped to the heat pump and is therefore awarded in year 3 and in no earlier year, which the example asserts against an explicit zero in year 0. The catalogue is built in memory by the test runner, so no shipped Irish or German scheme reaches it."
 inputs:
   horizon_in_years: 20
@@ -42,11 +42,11 @@ inputs:
   subsidy_asset_class: "HeatPump"
 expected:
   plan_npv_in_euro:
-    value: 70328.54
+    value: 60648.44
     abs_tol: 0.01
     note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
   plan_eac_in_euro:
-    value: 4727.18
+    value: 4076.53
     abs_tol: 0.01
     note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
   reference_npv_in_euro:
@@ -54,7 +54,7 @@ expected:
     abs_tol: 0.01
     note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
   npv_delta_in_euro:
-    value: 24827.80
+    value: 15147.70
     abs_tol: 0.01
     note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
   plan_npv_subsidy_in_euro:

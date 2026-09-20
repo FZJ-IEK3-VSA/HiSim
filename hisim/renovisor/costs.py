@@ -70,19 +70,38 @@ class EconomicsDocument:
         "economics_result.json"
     )
 
-    #: Which key of it answers each cost field ``result.json`` no longer carries. Every
-    #: :class:`CostField` but ``property_value_increase_in_percent`` has one; that figure moved
-    #: nowhere because nothing anywhere produces it (decision A13).
+    #: Which key of it answers each cost field ``result.json`` no longer carries, and how to read
+    #: that key where it is not the figure itself. Two :class:`CostField` members have no entry:
+    #: ``property_value_increase_in_percent``, which moved nowhere because nothing anywhere
+    #: produces it (decision A13), and ``monthly_net_cost_10y_in_euro``, which no key of a
+    #: document evaluated over one horizon can answer (:attr:`NO_KEY`).
     WHERE: ClassVar[Dict[str, str]] = {
         CostField.INVESTMENT.value: "plan.totals.investment_year0_in_euro",
         CostField.ENERGY.value: "plan.energy_year1[].cost_in_euro",
         CostField.MAINTENANCE.value: "plan.by_subject[].maintenance_in_euro",
         CostField.NET_PRESENT_VALUE.value: "plan.totals.npv_in_euro",
-        CostField.MONTHLY_TWENTY_YEARS.value: "plan.totals.monthly_cost_year1_in_euro",
-        CostField.MONTHLY_TEN_YEARS.value: "plan.totals.equivalent_annual_cost_in_euro",
+        CostField.MONTHLY_TWENTY_YEARS.value: "plan.totals.equivalent_annual_cost_in_euro",
         CostField.GRANT.value: "plan.subsidies[]",
         CostField.PAYBACK.value: "comparison.discounted_payback_year",
         CostField.INVESTMENT_BREAKDOWN.value: "plan.by_subject[]",
+    }
+
+    #: The arithmetic between a key and the field it answers, for the fields where the two are
+    #: not the same number. The twenty-year monthly figure is the annuity the document publishes
+    #: per year: ``equivalent_annual_cost_in_euro`` is NPV times the capital recovery factor over
+    #: the plan's horizon, and the contract states it per month.
+    HOW: ClassVar[Dict[str, str]] = {
+        CostField.MONTHLY_TWENTY_YEARS.value: "divided by twelve",
+    }
+
+    #: The fields the document does not answer at all, and why. A ten-year monthly figure is a
+    #: different evaluation and not a different key: the staged document prices one plan over one
+    #: horizon, so the figure exists only for a plan evaluated with ``horizon_years: 10``.
+    NO_KEY: ClassVar[Dict[str, str]] = {
+        CostField.MONTHLY_TEN_YEARS.value: (
+            "the staged document is evaluated over one horizon; a ten-year figure needs a plan "
+            "evaluated with `horizon_years: 10`"
+        ),
     }
 
     @classmethod
@@ -93,14 +112,22 @@ class EconomicsDocument:
             field_name: The :class:`CostField` value.
 
         Returns:
-            One sentence naming the document, the key inside it and the command that writes it.
+            One sentence naming the document and either the key inside it — with the arithmetic
+            between the key and the field, where they differ — or why no key answers the field.
 
         Raises:
-            KeyError: If the field has no key in :attr:`WHERE`, which means a cost field was
-                added without deciding where its figure lives now.
+            KeyError: If the field is in neither :attr:`WHERE` nor :attr:`NO_KEY`, which means a
+                cost field was added without deciding where its figure lives now.
         """
+        if field_name in cls.NO_KEY:
+            return (
+                f"the money is in {cls.FILE_NAME}, which does not carry this figure: "
+                f"{cls.NO_KEY[field_name]}. Write the document with `{cls.COMMAND}`"
+            )
+        how = cls.HOW.get(field_name)
+        key = cls.WHERE[field_name] + (f", {how}" if how else "")
         return (
-            f"the money is in {cls.FILE_NAME} ({cls.WHERE[field_name]}), which prices the whole "
+            f"the money is in {cls.FILE_NAME} ({key}), which prices the whole "
             f"staged plan rather than this one job; write it with `{cls.COMMAND}`"
         )
 
@@ -189,6 +216,9 @@ class CostSchema:
     #: When every moved field is absent from ``result.json``: from step 10 onwards, always.
     MOVED_WHEN: ClassVar[str] = f"always absent; the money is in {EconomicsDocument.FILE_NAME}"
 
+    #: When a field no document answers is absent: always, and no key will produce it.
+    NO_KEY_WHEN: ClassVar[str] = "always absent; no document carries this figure"
+
     #: When the property-value figure is absent: always; decision A13 records that no model exists.
     PROPERTY_VALUE_WHEN: ClassVar[str] = "always absent (A13)"
 
@@ -207,14 +237,28 @@ class CostSchema:
                 field.value,
                 cls._produced_by(field),
                 reason=CostBuilder.reason_for(field),
-                when=cls.PROPERTY_VALUE_WHEN if field is CostField.PROPERTY_VALUE else cls.MOVED_WHEN,
+                when=cls._when(field),
             )
             for field in CostField
         )
 
     @classmethod
-    def _produced_by(cls, field: CostField) -> str:
-        """What produces one cost figure now, for the row's source column."""
+    def _when(cls, field: CostField) -> str:
+        """When one cost field is absent from ``result.json``, for the row's condition column."""
         if field is CostField.PROPERTY_VALUE:
+            return cls.PROPERTY_VALUE_WHEN
+        if field.value in EconomicsDocument.NO_KEY:
+            return cls.NO_KEY_WHEN
+        return cls.MOVED_WHEN
+
+    @classmethod
+    def _produced_by(cls, field: CostField) -> str:
+        """What produces one cost figure now, for the row's source column.
+
+        Empty for the two fields nothing produces: the property-value increase, which no model
+        anywhere computes (A13), and the ten-year monthly cost, which needs a second evaluation
+        over a ten-year horizon rather than a key of this document.
+        """
+        if field is CostField.PROPERTY_VALUE or field.value in EconomicsDocument.NO_KEY:
             return ""
         return f"{EconomicsDocument.FILE_NAME}: {EconomicsDocument.WHERE[field.value]}"

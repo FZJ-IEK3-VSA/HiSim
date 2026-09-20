@@ -962,6 +962,7 @@ class Translator:
             applied,
             _building_config(model),
             generator_component=BaseFiles.generator_component(base_file_name),
+            heating_reference_temperature_in_celsius=_design_temperature(model),
         ).build()
         report.set_subjects(built.subjects)
         report.set_unpriced_subjects(built.unpriced_subjects)
@@ -1003,22 +1004,60 @@ class Translator:
 
 
 def _building_config(model: EnergySystemFile) -> Mapping[str, Any]:
-    """The ``Building`` config of a translated model, or an empty mapping when it has none.
+    """Every ``Building`` configuration field of a translated model, however it is written.
 
-    The envelope cost subjects are sized in square metres of the element they cover, and the
-    areas live here: the translator writes them from the request, and where the request stated
-    none the archetype derives them, in which case the field is absent and the subject ends up
-    unpriced rather than sized by a guess.
+    Two things read this. The envelope cost subjects are sized in square metres of the element
+    they cover, and the areas live in the component's ``config`` block: the translator writes them
+    from the request, and where the request stated none the archetype derives them, in which case
+    the field is absent and the subject ends up unpriced rather than sized by a guess. The design
+    heat load the existing generator is sized from needs the archetype itself — the TABULA code,
+    the conditioned floor area and the apartment count — and those are *constructor arguments*
+    after the ``for_tabula_code`` swap rather than config keys.
+
+    Both halves are the same configuration seen through two spellings of the file format, so they
+    are merged into one mapping here; a constructor argument wins, because it is what the
+    constructor will put on the config the run is built with.
 
     Args:
         model: The edited energy-system document.
 
     Returns:
-        The config mapping, or ``{}``.
+        The merged mapping, or ``{}`` when the model has no building.
     """
     entry = model.components.get(Targets.BUILDING) if isinstance(model.components, Mapping) else None
-    config = getattr(entry, "config", None) if entry is not None else None
-    return config if isinstance(config, Mapping) else {}
+    if entry is None:
+        return {}
+    config = getattr(entry, "config", None)
+    merged: Dict[str, Any] = dict(config) if isinstance(config, Mapping) else {}
+    constructor = getattr(entry, "constructor", None)
+    arguments = getattr(constructor, "arguments", None) if constructor is not None else None
+    if isinstance(arguments, Mapping):
+        merged.update(arguments)
+    return merged
+
+
+def _design_temperature(model: EnergySystemFile) -> Optional[float]:
+    """The outside design temperature the translated ``Weather`` carries, or ``None``.
+
+    The design condition belongs to the place the building stands in, so ``WeatherConfig`` states
+    it and the building reads it through the sizing engine (decision D-21). Nothing has run yet
+    when the economic context is built, so the value is taken from the weather's own constructor
+    argument, which is where the translator wrote the country's reviewed design temperature.
+
+    Args:
+        model: The edited energy-system document.
+
+    Returns:
+        The temperature in degrees Celsius, or ``None`` when the model has no weather or the
+        weather states none.
+    """
+    entry = model.components.get(Targets.WEATHER) if isinstance(model.components, Mapping) else None
+    constructor = getattr(entry, "constructor", None) if entry is not None else None
+    arguments = getattr(constructor, "arguments", None) if constructor is not None else None
+    if not isinstance(arguments, Mapping):
+        return None
+    value = arguments.get("heating_reference_temperature_in_celsius")
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
 @dataclass

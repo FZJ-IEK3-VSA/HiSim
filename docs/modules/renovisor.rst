@@ -45,8 +45,11 @@ applicant -- and the whole of the money is produced afterwards by
 
 That writes ``economics_result.json`` (:mod:`hisim.economics.staged_document`,
 validated against ``hisim/economics/economics_result.schema.json``), and
-``result.json`` lists every cost field of the contract under ``missing`` with
-the key of that document which answers it. Beside the pipeline stands the **capability
+``result.json`` lists every cost field of the contract under ``missing``: with
+the key of that document which answers it, for the fields the document answers,
+and with a reason instead for the two it does not -- the property-value increase,
+which no model anywhere produces, and the ten-year monthly cost, which needs a
+plan evaluated over a ten-year horizon rather than a key of this one. Beside the pipeline stands the **capability
 document**: :mod:`~hisim.renovisor.capabilities` runs the whole probe set
 through the pure layers and aggregates what this image can and cannot do, and
 :mod:`~hisim.renovisor.map` renders the same probe run as the committed

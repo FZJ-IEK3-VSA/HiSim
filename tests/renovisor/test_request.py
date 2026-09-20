@@ -21,12 +21,14 @@ import pytest
 
 from hisim.renovisor.capabilities import assert_catalogue_matches
 from hisim.renovisor.contract import ContractFiles
+from hisim.renovisor.economics import EconomicContextBuilder
 from hisim.renovisor.request import (
     AccessLevel,
     CatalogueTable,
     ProblemCode,
     Request,
     RequestError,
+    SemanticChecks,
     ValueType,
 )
 
@@ -434,3 +436,87 @@ class TestTheContentHash:
 
         assert len(content_hash) == 16
         assert all(character in "0123456789abcdef" for character in content_hash)
+
+
+class TestTheMeasurePriceBand:
+    """T-VAL: a ``measures[i].cost`` block that is not a price band is a request problem.
+
+    The block is the E-spec §7 proposal the vendored schema has not adopted yet (findings
+    F7/F10), so a request carrying one does not get past the schema; the semantic checks are
+    therefore driven directly here, which is the same way the economic-context tests exercise the
+    other unadopted field. What the checks decide is what happens the day the schema grows the
+    block: an inverted band raises out of the middle of a translation and a negative one prices a
+    renovation that pays the owner, so both are refused before anything is translated, with exit 2
+    and a ``problems.json``.
+    """
+
+    @staticmethod
+    def _with_cost(block: Dict[str, Any]) -> Dict[str, Any]:
+        """The mockup with one price block on its first measure."""
+        document = mockup()
+        document["measures"] = [dict(document["measures"][0], cost=block)]
+        return document
+
+    def test_a_valid_band_is_accepted(self) -> None:
+        """The ordinary case: a cheap end, an expensive end, and nothing to say about them."""
+        problems = SemanticChecks.of(
+            self._with_cost({"min_in_euro_per_m2": 100.0, "max_in_euro_per_m2": 200.0})
+        )
+
+        assert [problem for problem in problems if problem.code is ProblemCode.MEASURE_COST_BAND_INVALID] == []
+
+    def test_a_band_whose_cheap_end_is_above_its_expensive_end_is_refused(self) -> None:
+        """``UncertainValue`` refuses it mid-translation; the request says so first."""
+        problems = SemanticChecks.of(
+            self._with_cost({"min_in_euro_per_m2": 200.0, "max_in_euro_per_m2": 100.0})
+        )
+
+        assert len(problems) == 1
+        assert problems[0].code is ProblemCode.MEASURE_COST_BAND_INVALID
+        assert problems[0].path == "measures[0].cost"
+        assert "cheap end" in problems[0].message
+
+    @pytest.mark.parametrize(
+        "block",
+        [
+            {"min_in_euro_per_m2": -10.0, "max_in_euro_per_m2": 200.0},
+            {"min_in_euro_per_m2": 100.0, "max_in_euro_per_m2": -200.0},
+        ],
+        ids=["negative minimum", "negative maximum"],
+    )
+    def test_a_negative_price_is_refused(self, block: Dict[str, Any]) -> None:
+        """A renovation that pays the owner per square metre is not a price band."""
+        problems = SemanticChecks.of(self._with_cost(block))
+
+        assert [problem.code for problem in problems] == [ProblemCode.MEASURE_COST_BAND_INVALID]
+        assert "negative" in problems[0].message
+
+    def test_a_non_finite_price_is_refused(self) -> None:
+        """``inf`` survives JSON in Python and would make every total infinite."""
+        problems = SemanticChecks.of(
+            self._with_cost({"min_in_euro_per_m2": 0.0, "max_in_euro_per_m2": float("inf")})
+        )
+
+        assert [problem.code for problem in problems] == [ProblemCode.MEASURE_COST_BAND_INVALID]
+        assert "finite" in problems[0].message
+
+    def test_every_bad_band_is_reported_at_once(self) -> None:
+        """A frontend fixing one measure per round trip is the slow way to fix a form."""
+        document = mockup()
+        document["measures"] = [
+            dict(document["measures"][0], cost={"min_in_euro_per_m2": 5.0, "max_in_euro_per_m2": 1.0}),
+            dict(document["measures"][1], cost={"min_in_euro_per_m2": -1.0, "max_in_euro_per_m2": 1.0}),
+        ]
+        problems = SemanticChecks.of(document)
+
+        assert [problem.path for problem in problems] == ["measures[0].cost", "measures[1].cost"]
+
+    def test_a_measure_without_a_block_is_not_a_problem(self) -> None:
+        """An absent price makes the measure unpriced, which the document states rather than hides."""
+        assert not SemanticChecks.of(mockup())
+
+    def test_the_two_sides_spell_the_block_the_same_way(self) -> None:
+        """The check and the reader of the block are in two modules and must agree on three keys."""
+        assert SemanticChecks.COST_KEY == EconomicContextBuilder.COST_KEY
+        assert SemanticChecks.COST_MINIMUM_KEY == EconomicContextBuilder.COST_MINIMUM_KEY
+        assert SemanticChecks.COST_MAXIMUM_KEY == EconomicContextBuilder.COST_MAXIMUM_KEY

@@ -864,10 +864,12 @@ class ResultsSection:
     a partly-estimated figure, or nothing at all.
 
     It is generated from the two tables ``result.json`` is itself built out of --
-    :class:`hisim.renovisor.kpis.KpiSchema` and :class:`hisim.renovisor.costs.CostSchema`, both
-    written in terms of ``KpiSources`` and ``CostSources`` -- and not from a second list beside
-    them, so the section cannot announce a field the payload does not carry or a source the
-    builder does not read. Its shape is
+    :class:`hisim.renovisor.kpis.KpiSchema`, written in terms of ``KpiSources``, and
+    :class:`hisim.renovisor.costs.CostSchema`, whose rows name no source at all since step 10
+    because the money left the payload: each of them says instead which key of
+    ``economics_result.json`` answers the field (:class:`hisim.renovisor.costs.EconomicsDocument`)
+    or why no key does. Neither is a second list beside the builders, so the section cannot
+    announce a field the payload does not carry or a source the builder does not read. Its shape is
     ``measure-capabilities.results-extension.yaml``'s ``ResultFields``, which is HiSim's proposal
     to the frontend team rather than a vendored file, and which
     :meth:`CapabilityDocument.validate` checks the section against.

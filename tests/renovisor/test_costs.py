@@ -12,13 +12,70 @@ nowhere says why instead; and the capability document and the translation map ar
 the same rows, so a caller sees the split before the first payload exists.
 """
 
-from typing import Tuple
+from typing import Any, Mapping, Tuple
 
 import pytest
 
+from hisim.economics.__main__ import StagedCli
+from hisim.economics.staged_document import StagedDocument
 from hisim.renovisor.costs import CostBuilder, CostField, CostSchema, EconomicsDocument
 
 pytestmark = pytest.mark.base
+
+
+def _resolves(schema: Mapping[str, Any], key: str) -> bool:
+    """Whether one dotted document key names a field the shipped JSON Schema declares.
+
+    The keys the ``missing`` reasons point at are read by a person and by a frontend, so what has
+    to be true of them is that the field exists — not that the sentence quoting them was written.
+    ``[]`` in a key means "each element of this array", which is how the document spells a figure
+    that is one row per subject or per carrier.
+
+    Args:
+        schema: The parsed ``economics_result.schema.json``.
+        key: A dotted key such as ``plan.totals.npv_in_euro`` or ``plan.by_subject[]``.
+
+    Returns:
+        Whether the key resolves to a declared property.
+    """
+    node: Any = _dereferenced(schema, schema)
+    for step in key.split("."):
+        name, array = (step[:-2], True) if step.endswith("[]") else (step, False)
+        properties = node.get("properties") if isinstance(node, Mapping) else None
+        if not isinstance(properties, Mapping) or name not in properties:
+            return False
+        node = _dereferenced(schema, properties[name])
+        if array:
+            if node.get("type") != "array":
+                return False
+            node = _dereferenced(schema, node.get("items", {}))
+    return True
+
+
+def _dereferenced(schema: Mapping[str, Any], node: Any) -> Any:
+    """One schema node with a local ``$ref`` followed, or the node itself.
+
+    The document's schema factors its repeated shapes into ``$defs`` — one ``evaluation`` serves
+    both the reference and the plan — so walking a key means following those references. Only the
+    local ``#/...`` form is resolved, which is the only form the shipped schema uses.
+
+    Args:
+        schema: The whole schema, the references are relative to.
+        node: The node to dereference.
+
+    Returns:
+        The referenced node, or ``node`` when it is not a reference.
+    """
+    seen = 0
+    while isinstance(node, Mapping) and isinstance(node.get("$ref"), str) and seen < 10:
+        target: Any = schema
+        for step in node["$ref"].lstrip("#/").split("/"):
+            if not isinstance(target, Mapping) or step not in target:
+                return {}
+            target = target[step]
+        node = target
+        seen += 1
+    return node
 
 
 class TestTheCostBlockIsEmpty:
@@ -46,13 +103,50 @@ class TestTheCostBlockIsEmpty:
 class TestTheReasonsSayWhereTheMoneyIs:
     """A reason a caller can act on: the document, the key inside it and how to produce it."""
 
-    def test_a_moved_field_names_the_document_the_key_and_the_command(self) -> None:
-        """Following the reason has to lead somewhere, not merely say "elsewhere"."""
+    def test_a_moved_field_names_a_key_the_document_schema_really_has(self) -> None:
+        """Following the reason has to lead somewhere, which is checked against the schema.
+
+        The reason points at a dotted key of ``economics_result.json``; asserting that the string
+        appears in the sentence proves only that the sentence was written. What a caller needs is
+        that the key *resolves*, so every entry of the ``WHERE`` map is walked through the shipped
+        JSON Schema here -- a key naming a field the document does not have then fails the build
+        instead of sending a frontend to a null.
+        """
+        schema = StagedDocument.schema()
+        for field_name, key in EconomicsDocument.WHERE.items():
+            assert _resolves(schema, key), f"{field_name} points at {key!r}, which the schema has not got"
+            assert key in CostBuilder.reason_for(CostField(field_name))
+
+    def test_the_command_that_writes_the_document_is_the_one_the_cli_offers(self) -> None:
+        """A reason naming a subcommand nobody registered would send a caller nowhere."""
         reason = CostBuilder.reason_for(CostField.NET_PRESENT_VALUE)
 
         assert EconomicsDocument.FILE_NAME in reason
-        assert "plan.totals.npv_in_euro" in reason
-        assert "python -m hisim.economics staged" in reason
+        assert EconomicsDocument.COMMAND.split()[:4] == ["python", "-m", "hisim.economics", "staged"]
+        assert "--stage" in EconomicsDocument.COMMAND and "--out" in EconomicsDocument.COMMAND
+        assert StagedCli.DEFAULT_PERSPECTIVE
+        assert EconomicsDocument.COMMAND in reason
+
+    def test_the_twenty_year_monthly_figure_says_the_annuity_and_the_division(self) -> None:
+        """It is the annual annuity divided by twelve, not the year-1 cash flow.
+
+        The map used to point it at ``monthly_cost_year1_in_euro``, which is what the plan
+        actually pays in its first year and equals the annuity only when the cost is flat. A
+        caller following the reason then read a different concept with the same unit.
+        """
+        reason = CostBuilder.reason_for(CostField.MONTHLY_TWENTY_YEARS)
+
+        assert EconomicsDocument.WHERE[CostField.MONTHLY_TWENTY_YEARS.value] == (
+            "plan.totals.equivalent_annual_cost_in_euro"
+        )
+        assert "divided by twelve" in reason
+
+    def test_the_ten_year_monthly_figure_names_no_key_and_says_why(self) -> None:
+        """One document is one horizon; a ten-year figure is a second evaluation, not a key."""
+        reason = CostBuilder.reason_for(CostField.MONTHLY_TEN_YEARS)
+
+        assert CostField.MONTHLY_TEN_YEARS.value not in EconomicsDocument.WHERE
+        assert "horizon_years: 10" in reason
 
     def test_the_payback_period_names_the_comparison_it_is_now_part_of(self) -> None:
         """It was absent for want of a second run; the staged plan always has its reference."""
@@ -66,12 +160,18 @@ class TestTheReasonsSayWhereTheMoneyIs:
         assert "A13" in reason
         assert EconomicsDocument.FILE_NAME not in reason
 
-    def test_every_field_but_that_one_has_a_key_in_the_document(self) -> None:
-        """A cost field added without deciding where its figure lives now is a failing build."""
-        addressed = set(EconomicsDocument.WHERE)
+    def test_every_cost_field_is_decided_one_way_or_the_other(self) -> None:
+        """A cost field added without deciding where its figure lives now is a failing build.
+
+        Three answers exist and every field has exactly one: a key of the staged document, a
+        statement that no key answers it (the ten-year monthly cost, which needs a second
+        evaluation), or the property-value field, which no model anywhere produces.
+        """
+        decided = set(EconomicsDocument.WHERE) | set(EconomicsDocument.NO_KEY)
         expected = {field.value for field in CostField} - {CostField.PROPERTY_VALUE.value}
 
-        assert addressed == expected
+        assert decided == expected
+        assert not set(EconomicsDocument.WHERE) & set(EconomicsDocument.NO_KEY)
 
 
 class TestTheSchemaRows:

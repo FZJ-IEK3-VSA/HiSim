@@ -34,6 +34,7 @@ from hisim.renovisor.constants import (
     FixedMaterials,
     LayerDefaults,
     OpeningUValues,
+    Placement,
 )
 from hisim.renovisor.envelope import LayerNote, UValueComposer
 from hisim.renovisor.request import CatalogueTable, Material, Measure
@@ -414,22 +415,42 @@ class MeasureRegistry:
 
     #: Where each insulation measure's layer goes (calculation-request.md §4.2).
     INSULATION: ClassVar[Dict[str, InsulationSpec]] = {
-        "external_insulation": InsulationSpec(ThermalElement.FACADE, "external_wall_external"),
-        "internal_dry_lining_insulation": InsulationSpec(ThermalElement.FACADE, "external_wall_internal"),
-        "cavity_wall_insulation": InsulationSpec(ThermalElement.FACADE, "external_wall_cavity"),
-        "basement_ceiling_insulation": InsulationSpec(ThermalElement.FLOOR, "basement_ceiling"),
+        "external_insulation": InsulationSpec(
+            ThermalElement.FACADE, Placement.EXTERNAL_WALL_EXTERNAL.value
+        ),
+        "internal_dry_lining_insulation": InsulationSpec(
+            ThermalElement.FACADE, Placement.EXTERNAL_WALL_INTERNAL.value
+        ),
+        "cavity_wall_insulation": InsulationSpec(
+            ThermalElement.FACADE, Placement.EXTERNAL_WALL_CAVITY.value
+        ),
+        "basement_ceiling_insulation": InsulationSpec(
+            ThermalElement.FLOOR, Placement.BASEMENT_CEILING.value
+        ),
         "basement_internal_insulation": InsulationSpec(
-            ThermalElement.FLOOR, "basement_floor_and_walls_inside"
+            ThermalElement.FLOOR, Placement.BASEMENT_FLOOR_AND_WALLS_INSIDE.value
         ),
         "basement_external_insulation": InsulationSpec(
-            ThermalElement.FLOOR, "basement_floor_and_walls_outside"
+            ThermalElement.FLOOR, Placement.BASEMENT_FLOOR_AND_WALLS_OUTSIDE.value
         ),
-        "solid_ground_floor_insulation": InsulationSpec(ThermalElement.FLOOR, "floor_and_ceiling"),
-        "suspended_ground_floor_insulation": InsulationSpec(ThermalElement.FLOOR, "floor_and_ceiling"),
-        "warm_roof_insulation": InsulationSpec(ThermalElement.ROOF, "roof_external_rafter"),
-        "rafter_insulation": InsulationSpec(ThermalElement.ROOF, "roof_between_rafter"),
-        "rolled_out_attic_insulation": InsulationSpec(ThermalElement.ROOF, "top_floor_ceiling"),
-        "top_floor_ceiling_insulation": InsulationSpec(ThermalElement.ROOF, "top_floor_ceiling"),
+        "solid_ground_floor_insulation": InsulationSpec(
+            ThermalElement.FLOOR, Placement.FLOOR_AND_CEILING.value
+        ),
+        "suspended_ground_floor_insulation": InsulationSpec(
+            ThermalElement.FLOOR, Placement.FLOOR_AND_CEILING.value
+        ),
+        "warm_roof_insulation": InsulationSpec(
+            ThermalElement.ROOF, Placement.ROOF_EXTERNAL_RAFTER.value
+        ),
+        "rafter_insulation": InsulationSpec(
+            ThermalElement.ROOF, Placement.ROOF_BETWEEN_RAFTER.value
+        ),
+        "rolled_out_attic_insulation": InsulationSpec(
+            ThermalElement.ROOF, Placement.TOP_FLOOR_CEILING.value
+        ),
+        "top_floor_ceiling_insulation": InsulationSpec(
+            ThermalElement.ROOF, Placement.TOP_FLOOR_CEILING.value
+        ),
     }
 
     #: The note every ``material`` option carries: the conductivity is physics, the rest is data.

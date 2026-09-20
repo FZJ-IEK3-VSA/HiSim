@@ -18,6 +18,45 @@ from enum import Enum
 from typing import ClassVar, Dict, Tuple
 
 
+class Placement(str, Enum):
+    """Where in a build-up an insulation layer goes, as ``materials.yaml`` spells it.
+
+    The ten ``building_components`` values of the material catalogue. They are the key three
+    different tables are read by — which element a measure insulates and with what layer
+    (``apply.MeasureRegistry.INSULATION``), what share of the measure the building would have paid
+    anyway (:class:`AnywayShareByPlacement`), and which cost-database asset class prices the new
+    layer (``economics.EnvelopeAssets.BY_PLACEMENT``) — so they live here once instead of as
+    literal strings in each. A placement added to the catalogue is then one member plus three
+    table rows, and a placement present in one table and missing from another is a failing test
+    rather than a silent fallback.
+
+    Example::
+
+        Placement.EXTERNAL_WALL_EXTERNAL.value   # 'external_wall_external', what a layer records
+
+    The member names are HiSim's ``UPPER_SNAKE`` spelling and the values are the catalogue's own,
+    exactly as :mod:`hisim.renovisor.vocabulary` does it for the request's vocabularies. This enum
+    is *not* one of those: a request never carries a placement, the translator derives it from the
+    measure, which is why it belongs here beside the tables that read it.
+    """
+
+    EXTERNAL_WALL_EXTERNAL = "external_wall_external"
+    EXTERNAL_WALL_INTERNAL = "external_wall_internal"
+    EXTERNAL_WALL_CAVITY = "external_wall_cavity"
+    BASEMENT_CEILING = "basement_ceiling"
+    BASEMENT_FLOOR_AND_WALLS_INSIDE = "basement_floor_and_walls_inside"
+    BASEMENT_FLOOR_AND_WALLS_OUTSIDE = "basement_floor_and_walls_outside"
+    FLOOR_AND_CEILING = "floor_and_ceiling"
+    ROOF_EXTERNAL_RAFTER = "roof_external_rafter"
+    ROOF_BETWEEN_RAFTER = "roof_between_rafter"
+    TOP_FLOOR_CEILING = "top_floor_ceiling"
+
+    @classmethod
+    def values(cls) -> Tuple[str, ...]:
+        """Every placement string, in declaration order, for an error message or a coverage test."""
+        return tuple(member.value for member in cls)
+
+
 class LayerDefaults:
     """How thick an insulation layer is when the request states no thickness.
 
@@ -325,16 +364,16 @@ class AnywayShareByPlacement:
     #: basement layer carries almost nothing, because nothing about the existing build-up had to
     #: be touched. TO BE REVIEWED, with the three shares above.
     BY_PLACEMENT: ClassVar[Dict[str, float]] = {
-        "external_wall_external": EXTERNAL_FIRST_TIME,
-        "external_wall_internal": INTERNAL_FIRST_TIME,
-        "external_wall_cavity": INTERNAL_FIRST_TIME,
-        "basement_ceiling": INTERNAL_FIRST_TIME,
-        "basement_floor_and_walls_inside": INTERNAL_FIRST_TIME,
-        "basement_floor_and_walls_outside": EXTERNAL_FIRST_TIME,
-        "floor_and_ceiling": INTERNAL_FIRST_TIME,
-        "roof_external_rafter": EXTERNAL_FIRST_TIME,
-        "roof_between_rafter": INTERNAL_FIRST_TIME,
-        "top_floor_ceiling": INTERNAL_FIRST_TIME,
+        Placement.EXTERNAL_WALL_EXTERNAL.value: EXTERNAL_FIRST_TIME,
+        Placement.EXTERNAL_WALL_INTERNAL.value: INTERNAL_FIRST_TIME,
+        Placement.EXTERNAL_WALL_CAVITY.value: INTERNAL_FIRST_TIME,
+        Placement.BASEMENT_CEILING.value: INTERNAL_FIRST_TIME,
+        Placement.BASEMENT_FLOOR_AND_WALLS_INSIDE.value: INTERNAL_FIRST_TIME,
+        Placement.BASEMENT_FLOOR_AND_WALLS_OUTSIDE.value: EXTERNAL_FIRST_TIME,
+        Placement.FLOOR_AND_CEILING.value: INTERNAL_FIRST_TIME,
+        Placement.ROOF_EXTERNAL_RAFTER.value: EXTERNAL_FIRST_TIME,
+        Placement.ROOF_BETWEEN_RAFTER.value: INTERNAL_FIRST_TIME,
+        Placement.TOP_FLOOR_CEILING.value: INTERNAL_FIRST_TIME,
     }
 
     @classmethod

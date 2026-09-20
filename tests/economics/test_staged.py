@@ -8,16 +8,21 @@ synthetic stages (``tests/economics/synthetic_stages.py``) priced against a synt
 a failure here is a statement about the splice and never about a shipped price.
 
 The second half of the module is the refusal set of step 10 §2: every plan the evaluator declines
-to price has a test that it declines it, and that the message names what is wrong.
+to price has a test that it declines it, and that the message names what is wrong. The last class
+is step 12 §2.1, where the expectations are hand-computed from the synthetic plan's declared
+inputs instead of being compared against another run of the same engine.
 """
 
 import pytest
 
 from hisim.economics.evaluator import EconomicEvaluator
+from hisim.economics.facts import ExistingAssetRegister
 from hisim.economics.parameters import EconomicParameters
+from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
 from hisim.economics.staged import Stage, StagedEvaluationError, StagedEvaluator
-from hisim.economics.timeline import Actor
+from hisim.economics.timeline import Actor, CostCategory
 from hisim.economics.uncertainty import UncertainValue
+from hisim.loadtypes import ComponentType
 
 from tests.economics.synthetic_stages import (
     SyntheticPlan,
@@ -173,10 +178,13 @@ class TestStagingSemantics:
         installation year that is off by the stage's own offset would show up only as a number
         somewhere else being slightly wrong.
         """
+        del parameters  # the merge reads only the stages themselves
         evaluator = StagedEvaluator(database)
         stages = (baseline_stage(), envelope_stage(2), heat_pump_stage(6))
         # pylint: disable=protected-access  # the merge has no public surface of its own
-        merged = evaluator._staged_inputs(stages, 2, [{}, {SyntheticPlan.ENVELOPE_SUBJECT: 1.0}], parameters)
+        charged = [evaluator._charged_subjects(stages, index) for index in (0, 1)]
+        assert charged[1] == {SyntheticPlan.ENVELOPE_SUBJECT: 1.0}
+        merged = evaluator._staged_inputs(stages, 2, charged)
         assert merged.existing_assets is not None
         installed = {asset.asset_class.value: asset.installation_year for asset in merged.existing_assets.assets}
         assert installed["WallExternalInsulation"] == SyntheticPlan.YEAR + 2
@@ -284,3 +292,250 @@ class TestRefusals:
         """A plan with no stages is a request for nothing, and says so."""
         with pytest.raises(StagedEvaluationError, match="at least one stage"):
             StagedEvaluator(database).evaluate([], parameters, brownfield_perspective())
+
+
+class TestAgeingFromTheStagesOwnYear:
+    """Step 12 §2.1: a stage's purchases wear out from the year the plan buys them.
+
+    A stage is evaluated alone with its investment in *its* year 0, so its replacement entries sit
+    at multiples of the service life counted from there and its residual value writes down an
+    asset as old as the whole horizon. Neither is the plan's answer for a stage that starts in year
+    ``f``: the unit is bought in year ``f``, is replaced ``f`` years later than the stage says, and
+    still has ``f`` years of life left at the horizon that the stage's own write-down never sees.
+
+    Every expectation below is computed from the declared inputs of
+    ``tests/economics/synthetic_stages.py`` — the purchase price ``I``, the service life ``L = 10``
+    years, the horizon ``T = 12`` years and the engine's default investment escalation rate
+    ``e = 2 %`` — and never from the evaluator. The arithmetic is written out in each docstring.
+    """
+
+    #: The investment escalation rate every synthetic subject is escalated at: no defaults file is
+    #: written for country XX, so the fallback chain ends at the general investment rate, which
+    #: `EconomicParameters` declares as 2 %.
+    ESCALATION_RATE = 0.02
+
+    @staticmethod
+    def _entries(result, subject, category):
+        """The ``(year, best estimate)`` pairs of one subject's entries in one category."""
+        return [
+            (entry.year, entry.amount_in_euro.best_estimate)
+            for entry in result.plan.timeline.entries
+            if entry.subject == subject and entry.category.value == category
+        ]
+
+    def test_a_purchase_that_outlives_the_horizon_earns_a_residual_at_its_own_age(
+        self, database, parameters
+    ):
+        """A heat pump bought in year 3 has one year of life left at year 12, and is never replaced.
+
+        f = 3, L = 10, T = 12, so f + L = 13 > T: nothing is re-bought inside the horizon, and the
+        write-down is of the year-3 purchase.
+
+            investment = I(1+e)^f     = 18000 x 1.02^3       = 19101.744
+            residual   = investment x (f + L - T) / L
+                       = 19101.744 x (3 + 10 - 12) / 10      =  1910.1744, booked as revenue at 12
+
+        The stage's own evaluation says the opposite of both halves: it buys in its year 0, would
+        replace in year 10 and would write nothing down at all, because a unit ten years into a
+        ten-year life is worth nothing at the horizon.
+        """
+        result = StagedEvaluator(database).evaluate(
+            [baseline_stage(), heat_pump_stage(3)], parameters, brownfield_perspective()
+        )
+        investment = SyntheticPlan.HEAT_PUMP_INVESTMENT_IN_EURO * (1 + self.ESCALATION_RATE) ** 3
+        assert self._entries(result, SyntheticPlan.HEAT_PUMP_SUBJECT, "INVESTMENT") == [
+            (3, pytest.approx(investment, abs=0.01))
+        ]
+        assert self._entries(result, SyntheticPlan.HEAT_PUMP_SUBJECT, "REPLACEMENT") == []
+        assert self._entries(result, SyntheticPlan.HEAT_PUMP_SUBJECT, "RESIDUAL_VALUE") == [
+            (
+                SyntheticPlan.HORIZON,
+                pytest.approx(-investment * (3 + SyntheticPlan.LIFETIME_IN_YEARS - 12) / 10, abs=0.01),
+            )
+        ]
+
+    def test_a_purchase_is_replaced_a_service_life_after_the_year_it_was_bought(
+        self, database, parameters
+    ):
+        """A heat pump bought in year 1 is replaced in year 11, not in year 10.
+
+        f = 1, L = 10, T = 12, so f + L = 11 < T and the unit is re-bought once, at the price level
+        of year 11; the second unit then has nine of its ten years left at the horizon.
+
+            replacement = I(1+e)^(f+L)  = 18000 x 1.02^11          = 22380.7376
+            residual    = replacement x (11 + 10 - 12) / 10        = 20142.6638, revenue at 12
+
+        Without the shift the stage's own year-10 replacement would be booked a year early and at
+        a year-10 price, which is the "a battery bought in year 5 is replaced five years too early"
+        case of step 12 §2.1.
+        """
+        result = StagedEvaluator(database).evaluate(
+            [baseline_stage(), heat_pump_stage(1)], parameters, brownfield_perspective()
+        )
+        replacement = SyntheticPlan.HEAT_PUMP_INVESTMENT_IN_EURO * (1 + self.ESCALATION_RATE) ** 11
+        assert self._entries(result, SyntheticPlan.HEAT_PUMP_SUBJECT, "REPLACEMENT") == [
+            (11, pytest.approx(replacement, abs=0.01))
+        ]
+        assert self._entries(result, SyntheticPlan.HEAT_PUMP_SUBJECT, "RESIDUAL_VALUE") == [
+            (SyntheticPlan.HORIZON, pytest.approx(-replacement * 0.9, abs=0.01))
+        ]
+
+    def test_both_stages_purchases_earn_their_residual(self, database, parameters):
+        """With a later stage in the plan, the earlier stage's purchase is still written down.
+
+        The envelope measure is bought in year 0 and re-bought in year 10 (its first ten years are
+        up and the heat-pump stage, active from year 4, schedules the re-purchase from its own
+        register); the heat pump is bought in year 4 and outlives the horizon. Both earn a residual:
+
+            envelope replacement = 24000 x 1.02^10                 = 29255.8661
+            envelope residual    = 29255.8661 x (10 + 10 - 12)/10  = 23404.6929, revenue at 12
+            heat pump investment = 18000 x 1.02^4                  = 19483.7789
+            heat pump residual   = 19483.7789 x (4 + 10 - 12)/10   =  3896.7558, revenue at 12
+
+        Before step 12 §2.1 the envelope earned nothing at all here: the stage holding it at the
+        horizon treats it as an asset that predates its own year 0, and §3.6 rule 3 credits such an
+        asset with nothing.
+        """
+        result = StagedEvaluator(database).evaluate(
+            [baseline_stage(), envelope_stage(0), heat_pump_stage(4)],
+            parameters,
+            brownfield_perspective(),
+        )
+        envelope_replacement = (
+            SyntheticPlan.ENVELOPE_INVESTMENT_IN_EURO * (1 + self.ESCALATION_RATE) ** 10
+        )
+        heat_pump_investment = (
+            SyntheticPlan.HEAT_PUMP_INVESTMENT_IN_EURO * (1 + self.ESCALATION_RATE) ** 4
+        )
+        assert self._entries(result, SyntheticPlan.ENVELOPE_SUBJECT, "REPLACEMENT") == [
+            (10, pytest.approx(envelope_replacement, abs=0.01))
+        ]
+        assert self._entries(result, SyntheticPlan.ENVELOPE_SUBJECT, "RESIDUAL_VALUE") == [
+            (SyntheticPlan.HORIZON, pytest.approx(-envelope_replacement * 0.8, abs=0.01))
+        ]
+        assert self._entries(result, SyntheticPlan.HEAT_PUMP_SUBJECT, "RESIDUAL_VALUE") == [
+            (SyntheticPlan.HORIZON, pytest.approx(-heat_pump_investment * 0.2, abs=0.01))
+        ]
+
+    def test_the_discounted_price_of_a_spliced_purchase_is_pinned_to_the_cent(
+        self, database, parameters
+    ):
+        """One absolute figure the splice cannot agree with itself about.
+
+        Every other staged test compares one code path against another, so a uniformly wrong
+        escalation or discount factor would satisfy both. This one states the number outright:
+        a heat pump of 18 000 EUR bought in year 3 is paid at the year-3 price level and
+        discounted back three years at the 3 % discount rate.
+
+            18000 x 1.02^3 / 1.03^3 = 19101.744 / 1.092727 = 17480.80 EUR
+        """
+        result = StagedEvaluator(database).evaluate(
+            [baseline_stage(), heat_pump_stage(3)], parameters, brownfield_perspective()
+        )
+        breakdown = result.plan.component_breakdowns[SyntheticPlan.HEAT_PUMP_SUBJECT]
+        investment = breakdown.npv_by_category[CostCategory.INVESTMENT]
+        assert investment.best_estimate == pytest.approx(17480.80, abs=0.01)
+
+    def test_the_replacement_reserve_follows_the_shifted_replacement_years(
+        self, database, parameters
+    ):
+        """The operating view's sinking fund pays for the plan's replacements, not a stage's.
+
+        Under OPERATING_ONLY no capital is charged at all; the replacements are levelized into an
+        annual reserve instead (``cost_spec.md`` §4.2). With the envelope and the heat pump bought
+        in year 1 their re-purchases fall in year 11, so that is the year the fund has to discount
+        from — a fund built on the stage's own year-10 schedule would be a year's interest too
+        large.
+
+            flows at 11 = (24000 + 18000) x 1.02^11 = 52221.7209
+            reserve     = 52221.7209 x 1.03^-11 x a(12, 3 %)
+                        = 52221.7209 x 0.7224213 x 0.10046209 = 3790.04 EUR a year
+        """
+        operating = Perspective(
+            id="operating",
+            installation_context=InstallationContext.OPERATING_ONLY,
+            subsidy_mode=SubsidyMode.none(),
+        )
+        result = StagedEvaluator(database).evaluate(
+            [baseline_stage(), heat_pump_stage(1)], parameters, operating
+        )
+        reserve = [
+            entry
+            for entry in result.plan.timeline.entries
+            if entry.category is CostCategory.REPLACEMENT_RESERVE
+        ]
+        assert len(reserve) == SyntheticPlan.HORIZON
+        assert reserve[0].amount_in_euro.best_estimate == pytest.approx(3790.04, abs=0.01)
+
+    def test_a_subject_that_grows_out_of_nothing_is_charged_in_full(self, database, parameters):
+        """A device declared at size 0 is absent, so the stage that sizes it pays for all of it.
+
+        ``ComponentCostFacts`` allows a size of exactly zero and means "not installed" by it, so
+        the increment rule — charge ``(new - old) / new`` for a device that grew — does not apply:
+        there was nothing to grow out of. Before step 12 §2.4 such a subject was charged nothing at
+        all and quietly counted as carried over.
+        """
+        # An empty inventory: the house has no boiler for the pump to replace, so the case is
+        # about the charge share alone and no like-for-like price is looked up.
+        absent = state_inputs(
+            [(SyntheticPlan.HEAT_PUMP_SUBJECT, ComponentType.HEAT_PUMP, 0.0, 0.0)],
+            SyntheticPlan.BASELINE_ELECTRICITY_IN_KWH,
+            register=ExistingAssetRegister(assets=[]),
+        )
+        installed = state_inputs(
+            [
+                (
+                    SyntheticPlan.HEAT_PUMP_SUBJECT,
+                    ComponentType.HEAT_PUMP,
+                    9.0,
+                    SyntheticPlan.HEAT_PUMP_INVESTMENT_IN_EURO,
+                )
+            ],
+            SyntheticPlan.RENOVATED_ELECTRICITY_IN_KWH,
+            register=ExistingAssetRegister(assets=[]),
+        )
+        stages = (
+            Stage(inputs=absent, from_year=0, label="baseline"),
+            Stage(inputs=installed, from_year=2, label="stage 1"),
+        )
+        # pylint: disable=protected-access  # the charge table has no public surface of its own
+        assert StagedEvaluator(database)._charged_subjects(stages, 1) == {
+            SyntheticPlan.HEAT_PUMP_SUBJECT: 1.0
+        }
+        result = StagedEvaluator(database).evaluate(list(stages), parameters, brownfield_perspective())
+        # Year 0 is the absent device's own 0 EUR purchase, which stage 0 books like any other.
+        assert self._entries(result, SyntheticPlan.HEAT_PUMP_SUBJECT, "INVESTMENT") == [
+            (0, 0.0),
+            (
+                2,
+                pytest.approx(
+                    SyntheticPlan.HEAT_PUMP_INVESTMENT_IN_EURO * (1 + self.ESCALATION_RATE) ** 2,
+                    abs=0.01,
+                ),
+            ),
+        ]
+
+    def test_a_charged_subject_of_size_zero_reaches_no_register(self, database, parameters):
+        """A stage that charges a device of size zero does not put one into the next register.
+
+        ``ExistingAsset`` refuses a size of zero, so a stage-0 subject declared at size 0 used to
+        raise a ``ValueError`` out of the middle of the next stage's pricing. Nothing was built, so
+        nothing ages: the merged register carries the house inventory and no entry for it.
+        """
+        absent = state_inputs(
+            [(SyntheticPlan.HEAT_PUMP_SUBJECT, ComponentType.HEAT_PUMP, 0.0, 0.0)],
+            SyntheticPlan.BASELINE_ELECTRICITY_IN_KWH,
+            register=ExistingAssetRegister(assets=[]),
+        )
+        stages = (
+            Stage(inputs=absent, from_year=0, label="baseline"),
+            envelope_stage(2),
+        )
+        evaluator = StagedEvaluator(database)
+        # pylint: disable=protected-access  # the merge has no public surface of its own
+        charged = [evaluator._charged_subjects(stages, 0)]
+        merged = evaluator._staged_inputs(stages, 1, charged)
+        assert merged.existing_assets is not None
+        classes = {asset.asset_class for asset in merged.existing_assets.assets}
+        assert ComponentType.HEAT_PUMP not in classes
+        evaluator.evaluate(list(stages), parameters, brownfield_perspective())

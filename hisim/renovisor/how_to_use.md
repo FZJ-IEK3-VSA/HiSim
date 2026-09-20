@@ -59,11 +59,19 @@ error message.
 ## The one rule worth knowing
 
 **Fail loudly, except for what is written down.** An unknown key, an unknown value, a value out
-of range, a measure named twice, a country with no TABULA typology: each is a refusal (exit 2)
-naming every problem at once. A feature the translator has not implemented is a **note** in the
-mapping report and the calculation runs — but only if it is an entry of
+of range, a measure named twice, a country with no TABULA typology, a `measures[i].cost` price
+band whose cheap end is above its expensive end or whose prices are negative: each is a refusal
+(exit 2) naming every problem at once. A feature the translator has not implemented is a **note**
+in the mapping report and the calculation runs — but only if it is an entry of
 `hisim/renovisor/not_implemented_yet.yaml`. Anything the translator cannot map that is not in
-that file fails the translator's own build (exit 3), never the user's request.
+that file fails the translator's own build (exit 3), never the user's request — an insulation
+build-up position with no cost-database asset class and a building whose archetype or design
+temperature the existing generator cannot be sized from are both of that kind.
+
+The same two codes hold for `python -m hisim.economics staged`, which prices a plan out of
+finished jobs: exit 2 with a `problems.json` for a plan the caller can fix — stage years that run
+backwards, a stage directory that carries `economic_inputs.json` but no `mapping_report.json` —
+and exit 3 for an engine failure they cannot.
 
 The list is kept honest in both directions by `T-NIY`, which runs the whole probe set and
 asserts that every `not_implemented_yet` line has an entry and that every entry is reached by at

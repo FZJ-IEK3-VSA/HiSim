@@ -22,11 +22,12 @@ from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.facts import ExistingAssetRegister
 from hisim.loadtypes import ComponentType, Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.renovisor.apply import apply
-from hisim.renovisor.constants import AnywayShareByPlacement
+from hisim.renovisor.apply import MeasureRegistry, apply
+from hisim.renovisor.constants import AnywayShareByPlacement, Placement
 from hisim.renovisor.contract import ContractFiles
 from hisim.economics.subsidies import DwellingType, SubsidyCatalog
 from hisim.renovisor.economics import (
+    DeviceAssets,
     DwellingTypes,
     EconomicContextBuilder,
     EnvelopeAssets,
@@ -35,7 +36,8 @@ from hisim.renovisor.economics import (
 from hisim.renovisor.request import Request
 from hisim.renovisor.simulation import EconomicSetup, SubsidyCatalogue
 from hisim.renovisor.vocabulary import BuildingType, HeatGenerator, ThermalElement
-from hisim.renovisor.whitelist import Whitelist
+from hisim.renovisor.translate import Targets
+from hisim.renovisor.whitelist import TranslatorError, Whitelist
 
 pytestmark = pytest.mark.base
 
@@ -45,25 +47,54 @@ def _mockup() -> Dict[str, Any]:
     return copy.deepcopy(ContractFiles.request_mockup())
 
 
+#: The TABULA archetype and the design temperature the mockup translates to. They are not free
+#: choices here: the builder computes the existing generator's size from the building's design
+#: heat load, so a configuration without them cannot be priced at all, and these are the values
+#: ``tests/renovisor/test_translate.py`` pins the translated mockup to.
+MOCKUP_BUILDING_CODE = "IE.N.SFH.06.Gen.ReEx.001.001"
+MOCKUP_DESIGN_TEMPERATURE_IN_CELSIUS = -3.0
+
+
+def _building(**overrides: Any) -> Dict[str, Any]:
+    """A ``Building`` configuration as the translator writes one, with its archetype.
+
+    Args:
+        overrides: Extra or replacement config fields, e.g. one element's area.
+
+    Returns:
+        The mapping ``translate._building_config`` would produce: the ``for_tabula_code``
+        constructor arguments merged with the component's own config block.
+    """
+    config: Dict[str, Any] = {
+        "building_code": MOCKUP_BUILDING_CODE,
+        "absolute_conditioned_floor_area_in_m2": 140.0,
+        "number_of_apartments": 1,
+    }
+    config.update(overrides)
+    return config
+
+
 def _built(document: Dict[str, Any], building_config: Optional[Dict[str, Any]] = None) -> Any:
     """Run the builder over one request document.
 
     Args:
         document: The request, which is validated here exactly as a run validates it.
         building_config: The ``Building`` config the translator would have written; the mockup's
-            own conditioned floor area and one facade area when omitted, which is enough to size
-            the facade measure and to leave the other elements unsized.
+            own archetype, conditioned floor area and one facade area when omitted, which is
+            enough to size the facade measure and to leave the other elements unsized.
 
     Returns:
         The :class:`~hisim.renovisor.economics.EconomicContextResult`.
     """
     request = Request.parse(document)
     applied = apply(request.document["house"], request.measures, Whitelist.load())
-    config = building_config if building_config is not None else {
-        "absolute_conditioned_floor_area_in_m2": 140.0,
-        "facade_area_in_m2": 173.0,
-    }
-    return EconomicContextBuilder(request, applied, config).build()
+    config = building_config if building_config is not None else _building(facade_area_in_m2=173.0)
+    return EconomicContextBuilder(
+        request,
+        applied,
+        config,
+        heating_reference_temperature_in_celsius=MOCKUP_DESIGN_TEMPERATURE_IN_CELSIUS,
+    ).build()
 
 
 def _builder(document: Dict[str, Any], with_cost_block: bool = False) -> EconomicContextBuilder:
@@ -93,7 +124,12 @@ def _builder(document: Dict[str, Any], with_cost_block: bool = False) -> Economi
         ]
         request = dataclasses.replace(request, document=raw)
     applied = apply(request.document["house"], request.measures, Whitelist.load())
-    return EconomicContextBuilder(request, applied, {"facade_area_in_m2": 173.0})
+    return EconomicContextBuilder(
+        request,
+        applied,
+        _building(facade_area_in_m2=173.0),
+        heating_reference_temperature_in_celsius=MOCKUP_DESIGN_TEMPERATURE_IN_CELSIUS,
+    )
 
 
 class TestTheRegister:
@@ -130,8 +166,10 @@ class TestTheRegister:
         """
         builder = _builder(_mockup())
         # pylint: disable=protected-access
-        assert builder._year_of({"installation_year": 2008}) == 2008
-        assert builder._year_of({}) == _mockup()["house"]["building"]["construction_year"]
+        assert builder._installation_year("pv_system", block={"installation_year": 2008}) == 2008
+        assert builder._installation_year("pv_system", block={}) == (
+            _mockup()["house"]["building"]["construction_year"]
+        )
 
     def test_the_heating_measure_declares_what_replaces_the_boiler(self) -> None:
         """Without it the engine would keep the boiler and install the heat pump beside it."""
@@ -141,9 +179,7 @@ class TestTheRegister:
 
     def test_the_five_envelope_elements_are_registered_where_an_area_is_known(self) -> None:
         """An element with no area anywhere is not in the register rather than in it at a guess."""
-        config = {
-            f"{element.value}_area_in_m2": 100.0 for element in ThermalElement
-        }
+        config = _building(**{f"{element.value}_area_in_m2": 100.0 for element in ThermalElement})
         register = _built(_mockup(), config).context.existing_assets
         classes = {asset.asset_class for asset in register.assets}
         for element in ThermalElement:
@@ -202,7 +238,7 @@ class TestTheEnvelopeCostSubjects:
 
     def test_the_subject_is_sized_in_square_metres_of_its_element(self) -> None:
         """A price per square metre without a square metre is a wrong answer, not a smaller one."""
-        built = _built(_mockup(), {"facade_area_in_m2": 173.0})
+        built = _built(_mockup(), _building(facade_area_in_m2=173.0))
         facts = {entry.subject: entry.facts for entry in built.context.extra_cost_facts}
         assert facts["external_insulation"].size == 173.0
         assert facts["external_insulation"].size_unit is Units.SQUARE_METER
@@ -263,7 +299,16 @@ class TestTheSubsidyContext:
         request = Request.parse(_mockup())
         request = dataclasses.replace(request, document=document)
         applied = apply(request.document["house"], request.measures, Whitelist.load())
-        context = EconomicContextBuilder(request, applied, {}).build().context.subsidy_context
+        context = (
+            EconomicContextBuilder(
+                request,
+                applied,
+                _building(),
+                heating_reference_temperature_in_celsius=MOCKUP_DESIGN_TEMPERATURE_IN_CELSIUS,
+            )
+            .build()
+            .context.subsidy_context
+        )
 
         assert context is not None
         assert context.applicant.receives_means_tested_benefit is True
@@ -297,9 +342,9 @@ class TestTheSubsidyContext:
         built = _built(document)
 
         assert built.context.subsidy_context.building.dwelling_type is DwellingType.MID_TERRACE
-        paths = {path for path, _value, _note in built.approximations}
+        paths = {path: note for path, _value, note in built.approximations}
         assert EconomicContextBuilder.DWELLING_TYPE_PATH in paths
-        assert all("approximated" in note for _path, _value, note in built.approximations)
+        assert "approximated" in paths[EconomicContextBuilder.DWELLING_TYPE_PATH]
 
 
 class TestTheTechnicalAttributes:
@@ -314,8 +359,7 @@ class TestTheTechnicalAttributes:
         """Unchanged by step 11: the U-value the run simulates with, not an assumed one."""
         attributes = _built(
             _mockup(),
-            {"absolute_conditioned_floor_area_in_m2": 140.0, "facade_area_in_m2": 173.0,
-             "facade_u_value_in_watt_per_m2_per_kelvin": 0.19},
+            _building(facade_area_in_m2=173.0, facade_u_value_in_watt_per_m2_per_kelvin=0.19),
         ).context.technical_attributes_by_subject
         assert attributes["external_insulation"][
             EconomicContextBuilder.U_VALUE_ATTRIBUTE
@@ -394,11 +438,114 @@ class TestTheTables:
         for element in ThermalElement:
             assert isinstance(EnvelopeAssets.of_element(element), ComponentType)
 
-    def test_an_unlisted_placement_is_priced_conservatively(self) -> None:
-        """A build-up nobody listed gets the most expensive wall row, never the cheapest."""
-        assert EnvelopeAssets.of_placement("a placement nobody wrote down") is (
-            ComponentType.WALL_EXTERNAL_INSULATION
+    def test_every_placement_of_the_vocabulary_has_an_asset_class(self) -> None:
+        """The three tables keyed by a build-up position cover the same ten placements.
+
+        ``apply`` decides where a measure's layer goes, ``AnywayShareByPlacement`` says what share
+        of it the building would have paid anyway and ``EnvelopeAssets`` says which cost-database
+        row prices it. A placement in one table and missing from another used to fall back --
+        silently, and to a different default in each -- so the three are pinned to
+        :class:`~hisim.renovisor.constants.Placement` here instead.
+        """
+        assert set(EnvelopeAssets.BY_PLACEMENT) == set(Placement.values())
+        assert set(AnywayShareByPlacement.BY_PLACEMENT) == set(Placement.values())
+        assert {spec.placement for spec in MeasureRegistry.INSULATION.values()} <= set(Placement.values())
+        for placement in Placement.values():
+            assert isinstance(EnvelopeAssets.of_placement(placement), ComponentType)
+
+    def test_an_unlisted_placement_is_refused_rather_than_priced(self) -> None:
+        """A build-up nobody listed is a translator bug, not a conservative guess.
+
+        The table used to answer with the external-wall class -- the most expensive wall row --
+        for any string it did not know, so a placement the catalogue added and nobody mapped was
+        published as a plausible price for a different build-up, with nothing in the mapping
+        report to say so. It is now the same kind of failure as an unmapped generator: exit 3.
+        """
+        with pytest.raises(TranslatorError, match="a placement nobody wrote down"):
+            EnvelopeAssets.of_placement("a placement nobody wrote down")
+
+    def test_the_device_table_spells_the_translators_own_identifiers(self) -> None:
+        """The register's component and field names are the ones the energy-system file carries.
+
+        ``translate`` imports ``economics`` and not the other way round, so the device table
+        cannot read ``Targets`` and repeats the strings. The engine names a cost subject after the
+        component name in the energy-system file, so a rename applied to ``Targets`` alone would
+        leave the subjects map pointing at names the engine never produces -- which this pins.
+        """
+        by_component = {device.component: device for device in DeviceAssets.ALL}
+        assert set(by_component) == {Targets.PV, Targets.BATTERY, Targets.SOLAR_THERMAL}
+        assert by_component[Targets.PV].size_key == Targets.POWER_IN_WATT
+        assert by_component[Targets.BATTERY].size_key == Targets.BATTERY_CAPACITY
+        assert by_component[Targets.SOLAR_THERMAL].size_key == Targets.COLLECTOR_AREA
+
+    def test_the_array_is_registered_in_kilowatts_not_in_watts(self) -> None:
+        """``power_in_watt`` is watts and the cost database prices photovoltaics per kilowatt.
+
+        The register used to store the request's watts under a kilowatt unit, so a 4 kWp array was
+        priced as a 4 000 kW one -- a thousandfold error in the sunk cost and the anyway credit of
+        every request with an existing array.
+        """
+        document = _mockup()
+        document["house"]["pv_system"] = {"power_in_watt": 4000}
+        register = _built(document).context.existing_assets
+        array = next(asset for asset in register.assets if asset.asset_class is ComponentType.PV)
+
+        assert array.size == pytest.approx(4.0)
+        assert array.size_unit is Units.KILOWATT
+
+    def test_the_existing_generator_is_sized_from_the_design_heat_load(self) -> None:
+        """The boiler's register size is the building's heat load, and the report says so.
+
+        It used to be a nominal one kilowatt, which priced a whole-house boiler at a fifteenth of
+        its cost wherever a ``heating_system`` measure replaced it. The figure asserted here is
+        not typed in: it is what the ``Building`` component itself computes for the translated
+        archetype and the country's design temperature, which is the definition the mapping report
+        publishes.
+        """
+        from hisim.components.building import BuildingConfig, BuildingInformation
+
+        built = _built(_mockup(), _building())
+        register = built.context.existing_assets
+        boiler = next(
+            asset for asset in register.assets if asset.asset_class is ComponentType.GAS_HEATER
         )
+        config = BuildingConfig.for_tabula_code(
+            name="Building",
+            building_code=MOCKUP_BUILDING_CODE,
+            number_of_apartments=1,
+            absolute_conditioned_floor_area_in_m2=140.0,
+        )
+        config.heating_reference_temperature_in_celsius = MOCKUP_DESIGN_TEMPERATURE_IN_CELSIUS
+        expected_in_kw = BuildingInformation(config).max_thermal_building_demand_in_watt / 1000.0
+
+        assert boiler.size == pytest.approx(expected_in_kw)
+        assert boiler.size > 1.0, "a whole house is not heated by one kilowatt"
+        assert boiler.size_unit is Units.KILOWATT
+        paths = {path: (value, note) for path, value, note in built.approximations}
+        assert "house.heating.nominal_power_in_kw" in paths
+        assert paths["house.heating.nominal_power_in_kw"][0] == pytest.approx(expected_in_kw)
+        assert "design heat load" in paths["house.heating.nominal_power_in_kw"][1]
+
+    def test_a_configuration_without_an_archetype_is_refused(self) -> None:
+        """No archetype, no heat load, no generator size -- and no nominal value in its place."""
+        with pytest.raises(TranslatorError, match="building_code"):
+            _built(_mockup(), building_config={"facade_area_in_m2": 173.0})
+
+    def test_a_configuration_without_a_design_temperature_is_refused(self) -> None:
+        """The design temperature belongs to the weather, and the load cannot be had without it."""
+        request = Request.parse(_mockup())
+        applied = apply(request.document["house"], request.measures, Whitelist.load())
+        with pytest.raises(TranslatorError, match="heating_reference_temperature_in_celsius"):
+            EconomicContextBuilder(request, applied, _building()).build()
+
+    def test_an_unlisted_placement_still_gets_the_cautious_anyway_share(self) -> None:
+        """The anyway share is the one table that keeps a default, and it is the cautious one.
+
+        A share decides how much of a measure the building is *credited* for having to pay anyway,
+        so the cautious answer is the small one: an unlisted build-up is credited the internal
+        first-time share, which flatters the retrofit least. It is not a price and cannot name a
+        wrong cost-database row, which is why this table defaults where the other two refuse.
+        """
         assert AnywayShareByPlacement.of("a placement nobody wrote down") == (
             AnywayShareByPlacement.INTERNAL_FIRST_TIME
         )

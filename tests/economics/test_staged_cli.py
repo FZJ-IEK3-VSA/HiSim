@@ -52,6 +52,12 @@ def fixture_workspace(tmp_path) -> Path:
         directory = tmp_path / name
         directory.mkdir()
         write_inputs(stage.inputs, str(directory))
+    # Every finished job writes a mapping report; the baseline's says that nothing in it came
+    # from a measure and that nothing in it is unpriced, which is a statement and not an absence.
+    (tmp_path / "base" / "mapping_report.json").write_text(
+        json.dumps({"subjects": {}, "unpriced_subjects": []}),
+        encoding="utf-8",
+    )
     (tmp_path / "envelope" / "mapping_report.json").write_text(
         json.dumps(
             {
@@ -292,3 +298,85 @@ class TestTheRefusals:
         )
         assert code == StagedCli.PLAN_REFUSED
         assert "--parameters" in self._problems(out)["problems"][0]["message"]
+
+
+class TestTheMappingReportIsRequired:
+    """A stage directory with stored inputs but no mapping report is a plan problem (step 12 §3.5).
+
+    The report is the only place that says which cost subjects the request carried no price for.
+    An unpriced subject reaches the engine with an investment of zero, so without the report every
+    row of the document claims a known price and the plan's total silently understates a measure
+    of unknown cost — with exit 0 and nothing anywhere to say so. Refusing is the same choice the
+    evaluator makes for every other unanswerable plan: exit 2 and a ``problems.json`` naming the
+    directory.
+    """
+
+    def test_a_stage_without_a_report_is_refused_by_name(self, workspace: Path) -> None:
+        """The refusal names the directory, the file it looked for and why it matters."""
+        (workspace / "envelope" / StagedCli.MAPPING_REPORT_FILE_NAME).unlink()
+        out = workspace / "economics_result.json"
+
+        assert (
+            main(
+                [
+                    "staged",
+                    "--stage",
+                    f"{workspace / 'base'}:0:baseline",
+                    "--stage",
+                    f"{workspace / 'envelope'}:0:stage 1",
+                    "--parameters",
+                    str(workspace / "parameters.json"),
+                    "--out",
+                    str(out),
+                ]
+            )
+            == StagedCli.PLAN_REFUSED
+        )
+        assert not out.exists(), "a refused plan writes no document"
+        problems = json.loads((workspace / "problems.json").read_text(encoding="utf-8"))
+        message = problems["problems"][0]["message"]
+        assert str(workspace / "envelope") in message
+        assert StagedCli.MAPPING_REPORT_FILE_NAME in message
+
+    def test_the_report_may_stand_beside_the_results_directory(self, workspace: Path) -> None:
+        """A caller naming ``<job>/results`` outright still finds the job's own report."""
+        results = workspace / "envelope" / "results"
+        results.mkdir()
+        (results / "economic_inputs.json").write_bytes(
+            (workspace / "envelope" / "economic_inputs.json").read_bytes()
+        )
+
+        assert StagedCli.mapping_report_path(str(results)) == str(
+            workspace / "envelope" / StagedCli.MAPPING_REPORT_FILE_NAME
+        )
+
+    def test_the_reader_takes_the_field_names_from_the_writer(self) -> None:
+        """Two processes, one spelling: a rename in the report drops no stamp silently."""
+        from hisim.renovisor.report import MappingReport
+
+        assert StagedCli.SUBJECTS_KEY == MappingReport.SUBJECTS_FIELD
+        assert StagedCli.UNPRICED_KEY == MappingReport.UNPRICED_SUBJECTS_FIELD
+        written = MappingReport().to_json()
+        assert StagedCli.SUBJECTS_KEY in written
+        assert StagedCli.UNPRICED_KEY in written
+
+
+class TestTheCatalogueIsNamedInTheDocument:
+    """``parameters.subsidy_catalog`` identifies a catalogue, not just a country (step 12 §4)."""
+
+    def test_a_priced_plan_names_the_country_and_the_snapshot_date(self) -> None:
+        """Ireland's schemes change every few months; a stored document says which it priced.
+
+        The field used to be the bare country code, which is enough to switch the subsidies view
+        on and not enough to reload the catalogue the figures came from.
+        """
+        from hisim.economics.subsidies import SubsidyCatalog
+
+        catalog = SubsidyCatalog.load("IE", str(Path("hisim") / "subsidy_catalog"))
+
+        assert catalog.snapshot_date is not None
+        assert StagedCli.catalog_id(catalog, "IE") == f"IE@{catalog.snapshot_date}"
+
+    def test_a_plan_priced_without_a_catalogue_names_none(self) -> None:
+        """No catalogue is a different statement from an undated one, and stays ``null``."""
+        assert StagedCli.catalog_id(None, "IE") is None

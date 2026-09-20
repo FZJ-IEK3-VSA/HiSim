@@ -88,8 +88,10 @@ class HiSimCommit:
 
     Three sources are tried, in the order of how much they are worth trusting:
 
-    1. ``hisim/COMMIT`` — a one-line file the image build writes (``RUN echo "$COMMIT" >
-       hisim/COMMIT``), which is the commit the image was *built from* and travels with it;
+    1. ``hisim/COMMIT`` — a one-line file the image build writes (``RUN printf '%s'
+       "$HISIM_COMMIT" > hisim/COMMIT``, from the Dockerfile's ``ARG HISIM_COMMIT``), which is the
+       commit the image was *built from* and travels with it. ``printf '%s'`` rather than ``echo``
+       on purpose: the file carries the hash and no trailing newline;
     2. the ``HISIM_COMMIT`` environment variable, for a container run whose orchestrator knows
        the revision but whose image was built without the file;
     3. ``git rev-parse --short HEAD`` in the checkout, which is the developer case and is
@@ -200,6 +202,13 @@ class MappingReport:
 
     #: The file this report is written to.
     FILE_NAME: ClassVar[str] = "mapping_report.json"
+
+    #: The two economics keys of the document, named here because a second process reads them:
+    #: ``python -m hisim.economics staged`` stamps ``measure_id`` and the ``unpriced`` flag on
+    #: every row of ``economics_result.json`` from them, and imports these constants rather than
+    #: repeating the spellings, so a rename cannot silently empty the document's two maps.
+    SUBJECTS_FIELD: ClassVar[str] = "subjects"
+    UNPRICED_SUBJECTS_FIELD: ClassVar[str] = "unpriced_subjects"
 
     #: What the header says about the legacy per-year fuel-price, emission-factor and device-cost
     #: tables of ``hisim/components/configuration.py``. ``reviewed`` is a country with sourced
@@ -327,8 +336,8 @@ class MappingReport:
             "energy_system_file": self.energy_system_file,
             "fields": [line.to_json() for line in self.lines()],
             "measures": list(self._measures),
-            "subjects": self.subjects(),
-            "unpriced_subjects": list(self._unpriced_subjects),
+            self.SUBJECTS_FIELD: self.subjects(),
+            self.UNPRICED_SUBJECTS_FIELD: list(self._unpriced_subjects),
         }
 
     def legacy_factors(self) -> str:

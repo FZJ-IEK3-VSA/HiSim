@@ -3,7 +3,7 @@
 name: "two_stages_envelope_then_heat_pump"
 group: "staged"
 spec_section: "4.1"
-computed_by: "the staged-evaluator harness (tests/worked_example_runners.py::_staged_values), 2026-09-19"
+computed_by: "the staged-evaluator harness (tests/worked_example_runners.py::_staged_values), 2026-09-20"
 description: "Two staged measures on an existing building: a 24,000 EUR envelope measure in year 0 and an 18,000 EUR heat pump in year 3, against a twelve-year-old gas boiler held as the reference. What it shows is E-spec §2(b): the boiler is kept and ages for three years, the heat pump's price is escalated to year 3 at the 2 % investment escalation rate, the boiler's removal falls in year 3 and not in year 0, and nothing at all is bought in years 1 and 2 -- asserted as explicit zeros. Country XX, every device figure overridden."
 inputs:
   horizon_in_years: 20
@@ -37,11 +37,11 @@ inputs:
   stage_two_keeps_the_previous_devices: true
 expected:
   plan_npv_in_euro:
-    value: 73699.47
+    value: 64019.37
     abs_tol: 0.01
     note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
   plan_eac_in_euro:
-    value: 4953.76
+    value: 4303.11
     abs_tol: 0.01
     note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
   reference_npv_in_euro:
@@ -49,11 +49,11 @@ expected:
     abs_tol: 0.01
     note: "the baseline held over the whole horizon: the gas boiler kept, replaced when its service life runs out, and its bill paid for twenty years"
   npv_delta_in_euro:
-    value: 28198.73
+    value: 18518.62
     abs_tol: 0.01
     note: "plan minus reference; negative means the plan is cheaper"
   eac_delta_in_euro:
-    value: 1895.40
+    value: 1244.74
     abs_tol: 0.01
     note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
   plan_nominal_investment_year_0_in_euro:
@@ -89,7 +89,7 @@ expected:
     abs_tol: 0.01
     note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
   plan_npv_residual_value_in_euro:
-    value: -12652.57
+    value: -7231.67
     abs_tol: 0.01
     note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
   plan_annual_cost_year_0_in_euro:

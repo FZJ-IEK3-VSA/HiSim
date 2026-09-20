@@ -4,6 +4,7 @@ Usage::
 
     python -m hisim.economics evaluate <results_dir> [--scenarios scenarios.json]
     python -m hisim.economics explain <results_dir> --value "<perspective>/<field-path>"
+    python -m hisim.economics staged --stage <dir>:<from_year>:<label>[:<job_id>] ... --out <file>
     python -m hisim.economics validate
 
 **Why a CLI exists at all.** Three of these four commands are only possible because the evaluator
@@ -73,7 +74,8 @@ import json
 import os
 import sys
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from pathlib import Path
+from typing import TYPE_CHECKING, ClassVar, Dict, List, Optional, Tuple
 
 from hisim.economics.database import CostDatabase, CostDataError
 from hisim.economics.evaluator import (
@@ -100,6 +102,9 @@ from hisim.economics.scenarios import (
     export_cube_json,
 )
 from hisim.economics.serialization import read_inputs, read_results, read_stored_parameters
+from hisim.economics.staged import Stage, StagedEvaluationError, StagedEvaluator
+from hisim.economics.staged_document import StagedDocument
+from hisim.renovisor.report import MappingReport
 from hisim.economics.subsidies import SubsidyCatalog
 from hisim.economics.validation import validate_all
 
@@ -620,6 +625,432 @@ def _print_plot_skips(plots: "PlotsWritten") -> None:
         print(f"Chart not drawn: {line}")
 
 
+class StagedCli:
+    """Everything the ``staged`` subcommand decides, in one place (E-spec §6, step 10 §5).
+
+    The subcommand prices a renovation plan spread over several years out of the stored
+    ``economic_inputs.json`` of the jobs that simulated each of its states, and writes
+    ``economics_result.json``. It runs no simulation, reads no network and finishes in well under
+    a second for three stages, which is what lets a backend call it synchronously once the jobs it
+    names have finished.
+
+    Its exit contract is the one the backend branches on, and it is deliberately narrower than the
+    other subcommands': **0** with the document, **2** with a ``problems.json`` beside it when the
+    *plan* is refused (a missing input file, years that run backwards, stages priced under
+    different conditions, an unknown perspective, a country with no data), and **3** with one line
+    on standard error when the *engine* refuses (an unresolvable cost subject, D7). The difference
+    matters because a 2 is something the caller can fix by sending a different plan and a 3 is not.
+
+    Example::
+
+        python -m hisim.economics staged \
+            --stage jobs/base:0:baseline --stage jobs/pkg:0:"stage 1":job-7 \
+            --perspective brownfield_net --out economics_result.json
+    """
+
+    #: How a ``--stage`` argument is spelled, for the help text and for the error messages.
+    ARGUMENT_FORM: ClassVar[str] = "<directory>:<from_year>:<label>[:<job_id>]"
+
+    #: The separator between a stage argument's fields. A label containing one is not supported;
+    #: the fourth field absorbs nothing, so ``a:0:my:label`` reads ``my`` as the label and
+    #: ``label`` as the job id.
+    SEPARATOR: ClassVar[str] = ":"
+
+    #: How many fields a stage argument has at least, and at most.
+    MINIMUM_FIELDS: ClassVar[int] = 3
+    MAXIMUM_FIELDS: ClassVar[int] = 4
+
+    #: The perspective a RenoVisor plan is priced under unless the caller names another: existing
+    #: assets in the register, subsidies applied where a catalogue says so, cash financing. The
+    #: E-spec calls it `brownfield_owner_subsidized_cash`; that id is an alias of this one and is
+    #: not in the shipped bundle (step 10 §1).
+    DEFAULT_PERSPECTIVE: ClassVar[str] = "brownfield_net"
+
+    #: What the problems document is called, beside the requested output.
+    PROBLEMS_FILE_NAME: ClassVar[str] = "problems.json"
+
+    #: Exit code for a plan the evaluator refuses.
+    PLAN_REFUSED: ClassVar[int] = 2
+
+    #: Exit code for an engine failure — a subject nothing can price, a data file that will not
+    #: load. A different code from the plan refusal because the caller cannot fix it by asking a
+    #: different question.
+    ENGINE_FAILED: ClassVar[int] = 3
+
+    #: The mapping report a stage directory may carry, for the subject -> measure map.
+    MAPPING_REPORT_FILE_NAME: ClassVar[str] = "mapping_report.json"
+
+    #: The stored inputs every stage must carry, under the directory or under its results.
+    INPUTS_FILE_NAME: ClassVar[str] = "economic_inputs.json"
+
+    #: Where a finished RenoVisor job puts the simulation's own outputs, the stored inputs among
+    #: them. A caller names the job directory and the CLI looks one level down, so the argument is
+    #: the directory the backend already has rather than a path into it.
+    RESULTS_SUBDIRECTORY: ClassVar[str] = "results"
+
+    #: Its two keys, taken from the class that writes the file so the two sides of the process
+    #: seam cannot drift: a rename in ``MappingReport.to_json`` would otherwise silently drop
+    #: every measure stamp and every unpriced flag from the document.
+    SUBJECTS_KEY: ClassVar[str] = MappingReport.SUBJECTS_FIELD
+
+    #: Its key holding the subjects the translator could not price.
+    UNPRICED_KEY: ClassVar[str] = MappingReport.UNPRICED_SUBJECTS_FIELD
+
+    #: What a stage directory with stored inputs but no mapping report is refused with.
+    MISSING_MAPPING_MESSAGE: ClassVar[str] = (
+        "--stage #{index} {argument!r}: {directory!r} carries {inputs} but no {report}, in it or "
+        "beside it. The report is what says which catalogue measure created which cost subject "
+        "and which subjects the request carried no price for; without it every row of the "
+        "document would claim a known price, and a measure of unknown cost would be published as "
+        "one that costs nothing."
+    )
+
+    @classmethod
+    def parse_stage(cls, argument: str, index: int) -> Tuple[str, int, str, Optional[str]]:
+        """Split one ``--stage`` argument into its directory, year, label and job id.
+
+        Args:
+            argument: The argument as typed.
+            index: Its position among the ``--stage`` flags, so an error names which one.
+
+        Returns:
+            ``(directory, from_year, label, job_id)``; the job id is None when the argument has
+            only three fields.
+
+        Raises:
+            StagedEvaluationError: If the argument has the wrong number of fields or its year is
+                not an integer. Both are exit 2: the caller typed the plan.
+        """
+        fields = argument.split(cls.SEPARATOR)
+        if not cls.MINIMUM_FIELDS <= len(fields) <= cls.MAXIMUM_FIELDS:
+            raise StagedEvaluationError(
+                f"--stage #{index} {argument!r} is not {cls.ARGUMENT_FORM}: it has "
+                f"{len(fields)} colon-separated fields, and a stage has "
+                f"{cls.MINIMUM_FIELDS} or {cls.MAXIMUM_FIELDS}."
+            )
+        directory, raw_year, label = fields[0], fields[1], fields[2]
+        try:
+            from_year = int(raw_year)
+        except ValueError:
+            raise StagedEvaluationError(
+                f"--stage #{index} {argument!r}: {raw_year!r} is not a year. A stage's second "
+                "field is the horizon year it starts in, counted from 0."
+            ) from None
+        job_id = fields[3] if len(fields) == cls.MAXIMUM_FIELDS else None
+        return directory, from_year, label, job_id
+
+    @classmethod
+    def read_stage(cls, argument: str, index: int) -> Tuple[Stage, str]:
+        """Read one stage's stored inputs out of its job directory.
+
+        Args:
+            argument: The ``--stage`` argument.
+            index: Its position, for the error messages.
+
+        Returns:
+            The stage and the job directory it was read from, the latter because the mapping
+            report and the provenance file live beside the run rather than beside the inputs.
+
+        Raises:
+            StagedEvaluationError: If neither the directory nor its ``results`` subdirectory
+                carries an ``economic_inputs.json``, which is a plan naming a job that has not
+                finished rather than an engine fault.
+        """
+        directory, from_year, label, job_id = cls.parse_stage(argument, index)
+        source = cls.inputs_directory(directory)
+        if source is None:
+            raise StagedEvaluationError(
+                f"--stage #{index} {argument!r}: no {cls.INPUTS_FILE_NAME} in {directory!r} or "
+                f"its {cls.RESULTS_SUBDIRECTORY!r} subdirectory. Every stage of a plan is a "
+                "finished job's output directory."
+            )
+        try:
+            inputs = read_inputs(source)
+        except (OSError, json.JSONDecodeError, ValueError) as error:
+            raise StagedEvaluationError(
+                f"--stage #{index} {argument!r}: {cls.INPUTS_FILE_NAME} in {source!r} does not "
+                f"read back ({error})."
+            ) from error
+        return Stage(inputs=inputs, from_year=from_year, label=label, job_id=job_id), directory
+
+    @classmethod
+    def inputs_directory(cls, directory: str) -> Optional[str]:
+        """Where one stage's stored inputs are: the directory itself, or its ``results``.
+
+        A RenoVisor job directory holds the records, the mapping report and the payload, and puts
+        the simulation's own outputs -- ``economic_inputs.json`` among them -- one level down in
+        ``results/``. Accepting either is what lets the backend pass the job directory it already
+        has instead of a path into it, while a bare directory holding only the stored inputs still
+        works for a hand-run plan.
+
+        Args:
+            directory: The ``--stage`` argument's first field.
+
+        Returns:
+            The directory holding the inputs, or ``None`` when neither candidate does.
+        """
+        for candidate in (directory, os.path.join(directory, cls.RESULTS_SUBDIRECTORY)):
+            if os.path.isfile(os.path.join(candidate, cls.INPUTS_FILE_NAME)):
+                return candidate
+        return None
+
+    @classmethod
+    def read_mapping(
+        cls, directories: List[str], arguments: Optional[List[str]] = None
+    ) -> Tuple[Dict[str, Optional[str]], List[str]]:
+        """The subject-to-measure map and the unpriced subjects, over every stage directory.
+
+        Every stage directory must carry the translator's ``mapping_report.json``, in itself or
+        beside it: its ``subjects`` map says which catalogue measure created which cost subject
+        and its ``unpriced_subjects`` list says which of them the request carried no price for.
+        Later stages win over earlier ones, because a subject a later stage re-declares is the
+        later stage's.
+
+        A directory without one is refused rather than read as "nothing is unpriced". An unpriced
+        subject reaches the engine with an investment of zero
+        (``hisim/renovisor/economics.py``), and the flag is the only thing that distinguishes that
+        zero from a price of nothing; defaulting it to ``False`` publishes a complete-looking
+        total that understates the plan, which a reader of the document cannot detect.
+
+        Args:
+            directories: The stage directories, in stage order.
+            arguments: The ``--stage`` arguments they came from, for the refusal message; the
+                directories themselves when the caller does not pass them.
+
+        Returns:
+            ``(measure ids by subject, unpriced subjects)``.
+
+        Raises:
+            StagedEvaluationError: Naming the first directory with no report, which the CLI turns
+                into exit 2 with a ``problems.json``.
+        """
+        spelled = arguments if arguments is not None else directories
+        measures: Dict[str, Optional[str]] = {}
+        unpriced: List[str] = []
+        for index, directory in enumerate(directories):
+            path = cls.mapping_report_path(directory)
+            if path is None:
+                raise StagedEvaluationError(
+                    cls.MISSING_MAPPING_MESSAGE.format(
+                        index=index,
+                        argument=spelled[index],
+                        directory=directory,
+                        inputs=cls.INPUTS_FILE_NAME,
+                        report=cls.MAPPING_REPORT_FILE_NAME,
+                    )
+                )
+            with open(path, encoding="utf-8") as handle:
+                report = json.load(handle)
+            subjects = report.get(cls.SUBJECTS_KEY)
+            if isinstance(subjects, dict):
+                measures.update(subjects)
+            for subject in report.get(cls.UNPRICED_KEY) or []:
+                if subject not in unpriced:
+                    unpriced.append(subject)
+        return measures, unpriced
+
+    @classmethod
+    def mapping_report_path(cls, directory: str) -> Optional[str]:
+        """Where one stage's mapping report is: in the directory, or in its parent.
+
+        A RenoVisor job writes the report beside its records and the simulation's own outputs one
+        level down, so a caller who named the ``results`` subdirectory outright still finds it.
+
+        Args:
+            directory: The ``--stage`` argument's first field.
+
+        Returns:
+            The path, or ``None`` when neither candidate carries one.
+        """
+        for candidate in (
+            os.path.join(directory, cls.MAPPING_REPORT_FILE_NAME),
+            os.path.join(os.path.dirname(os.path.abspath(directory)), cls.MAPPING_REPORT_FILE_NAME),
+        ):
+            if os.path.isfile(candidate):
+                return candidate
+        return None
+
+    @classmethod
+    def perspective(cls, requested: Optional[str]) -> Perspective:
+        """The perspective the plan is priced under, by id, from the shipped bundle.
+
+        Args:
+            requested: The ``--perspective`` id, or None for :attr:`DEFAULT_PERSPECTIVE`.
+
+        Returns:
+            The perspective.
+
+        Raises:
+            StagedEvaluationError: If the bundle has no row with that id, listing the ids it has.
+        """
+        wanted = requested or cls.DEFAULT_PERSPECTIVE
+        bundle = load_default_bundle()
+        for perspective in bundle:
+            if perspective.id == wanted:
+                return perspective
+        raise StagedEvaluationError(
+            f"unknown perspective {wanted!r}; the shipped bundle has "
+            f"{', '.join(perspective.id for perspective in bundle)}."
+        )
+
+    @classmethod
+    def parameters(cls, args: argparse.Namespace, directories: List[str]) -> EconomicParameters:
+        """The assumptions the whole plan is priced under, and the check that they are one set.
+
+        ``--parameters`` states them outright. Without it they are read back from the first
+        stage's own run, and every other stage's stored country is checked against it: a plan
+        whose stages were priced for different countries has no single set of price data behind
+        it, and pricing it anyway would put Irish and German euros on one axis.
+
+        Args:
+            args: The parsed namespace, for ``--parameters``.
+            directories: The stage directories, in stage order.
+
+        Returns:
+            The parameters.
+
+        Raises:
+            StagedEvaluationError: If no stage carries parameters and none were given, or if two
+                stages were priced for different countries.
+        """
+        sources = [cls.inputs_directory(directory) or directory for directory in directories]
+        countries = []
+        for directory in sources:
+            stored = read_stored_parameters(directory)
+            if stored is not None:
+                countries.append((directory, stored.country))
+        if len(set(country for _directory, country in countries)) > 1:
+            listed = ", ".join(f"{directory} -> {country}" for directory, country in countries)
+            raise StagedEvaluationError(
+                f"the stages of this plan were priced for different countries ({listed}); one "
+                "plan is one country's price data."
+            )
+        if args.parameters:
+            if not os.path.isfile(args.parameters):
+                raise StagedEvaluationError(f"--parameters file not found: {args.parameters!r}.")
+            with open(args.parameters, encoding="utf-8") as handle:
+                return EconomicParameters.from_dict(json.load(handle))
+        for directory in sources:
+            stored = read_stored_parameters(directory)
+            if stored is not None:
+                return stored
+        raise StagedEvaluationError(
+            "no economic parameters: no stage directory carries a lifecycle_costs.json stating "
+            "what its run was priced under, and pricing a plan with the engine defaults would "
+            "silently answer a different question. Pass --parameters <file>."
+        )
+
+    #: How a catalogue is named in the document: the country it applies to and the date the
+    #: catalogue was taken from the programmes' own pages, which is the pair that identifies one
+    #: version of one country's support landscape. The bare country would not: Ireland's schemes
+    #: change every few months and a stored document has to say which of them it priced.
+    CATALOG_ID_FORMAT: ClassVar[str] = "{country}@{snapshot}"
+
+    #: What stands in the date's place when the catalogue states no snapshot date.
+    UNDATED_CATALOG: ClassVar[str] = "undated"
+
+    @classmethod
+    def catalog_id(cls, catalog: Optional[SubsidyCatalog], country: str) -> Optional[str]:
+        """How the document names the subsidy catalogue a plan was priced under.
+
+        Args:
+            catalog: The catalogue in force, or ``None`` when the plan ran with none, in which
+                case every subsidy row of the document is undetermined.
+            country: The country the plan was priced for.
+
+        Returns:
+            ``"IE@2026-09-19"``-style id, or ``None`` for a plan priced with no catalogue.
+        """
+        if catalog is None:
+            return None
+        return cls.CATALOG_ID_FORMAT.format(
+            country=country, snapshot=catalog.snapshot_date or cls.UNDATED_CATALOG
+        )
+
+    @classmethod
+    def write_problems(cls, out_path: str, message: str) -> str:
+        """Write the ``problems.json`` a refused plan produces, beside the requested output.
+
+        Args:
+            out_path: The ``--out`` path the caller asked for, which is not written.
+            message: The refusal, as the evaluator or this class worded it.
+
+        Returns:
+            Where the problems document was written, so the message on stderr can name it.
+        """
+        directory = os.path.dirname(os.path.abspath(out_path))
+        os.makedirs(directory, exist_ok=True)
+        path = os.path.join(directory, cls.PROBLEMS_FILE_NAME)
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({"problems": [{"code": "STAGED_PLAN_INVALID", "message": message}]}, handle, indent=2)
+            handle.write("\n")
+        return path
+
+
+def _cmd_staged(args: argparse.Namespace) -> int:
+    """``staged``: price a multi-year plan out of finished jobs into ``economics_result.json``.
+
+    The whole subcommand, and the only place its three exit codes are decided. It reads each
+    ``--stage`` argument's directory, resolves the assumptions, the perspective and the optional
+    subsidy catalogue, prices the plan with :class:`~hisim.economics.staged.StagedEvaluator` and
+    writes the document of E-spec §3, validated against its schema before the first byte lands.
+
+    Returns:
+        0 on success, 2 for a refused plan (with a ``problems.json`` beside ``--out``), 3 for an
+        engine failure.
+    """
+    try:
+        stages_and_directories = [
+            StagedCli.read_stage(argument, index) for index, argument in enumerate(args.stage)
+        ]
+        directories = [directory for _stage, directory in stages_and_directories]
+        stages = [stage for stage, _directory in stages_and_directories]
+        parameters = StagedCli.parameters(args, directories)
+        perspective = StagedCli.perspective(args.perspective)
+    except StagedEvaluationError as error:
+        path = StagedCli.write_problems(args.out, str(error))
+        print(f"{error} (problems written to {path})", file=sys.stderr)
+        return StagedCli.PLAN_REFUSED
+
+    catalog_path = getattr(args, "subsidy_catalog", None)
+    try:
+        catalog = SubsidyCatalog.load_configured(
+            parameters.country, parameters.subsidy_catalog_path, catalog_path
+        )
+        database = CostDatabase(parameters.cost_database_path)
+    except CostDataError as error:
+        print(str(error), file=sys.stderr)
+        return StagedCli.ENGINE_FAILED
+
+    try:
+        result = StagedEvaluator(database).evaluate(stages, parameters, perspective, catalog)
+    except StagedEvaluationError as error:
+        path = StagedCli.write_problems(args.out, str(error))
+        print(f"{error} (problems written to {path})", file=sys.stderr)
+        return StagedCli.PLAN_REFUSED
+    except (UnresolvableSubjectsError, CostDataError) as error:
+        print(str(error), file=sys.stderr)
+        return StagedCli.ENGINE_FAILED
+
+    try:
+        measures, unpriced = StagedCli.read_mapping(directories, args.stage)
+    except StagedEvaluationError as error:
+        path = StagedCli.write_problems(args.out, str(error))
+        print(f"{error} (problems written to {path})", file=sys.stderr)
+        return StagedCli.PLAN_REFUSED
+    document = StagedDocument(
+        result=result,
+        parameters=parameters,
+        perspective=perspective,
+        measure_ids=measures,
+        unpriced_subjects=unpriced,
+        subsidy_catalog_id=StagedCli.catalog_id(catalog, parameters.country),
+    )
+    document.write(Path(args.out))
+    print(f"Wrote {args.out} for {len(stages)} stages under perspective {perspective.id}.")
+    return 0
+
+
 def _cmd_validate(_args: argparse.Namespace) -> int:
     """``validate``: run the §9.6 data-file CI checks over the shipped data, as a CI gate.
 
@@ -694,6 +1125,25 @@ def main(argv=None) -> int:
     )
     report_parser.add_argument("--scenarios", help="scenario-set JSON file for the report's scenario section")
     report_parser.set_defaults(func=_cmd_report)
+
+    staged_parser = subparsers.add_parser(
+        "staged", help="price a multi-year plan into economics_result.json (E-spec §6)"
+    )
+    staged_parser.add_argument(
+        "--stage",
+        action="append",
+        required=True,
+        metavar=StagedCli.ARGUMENT_FORM,
+        help="one stage of the plan; repeat once per stage, in ascending year order",
+    )
+    staged_parser.add_argument("--parameters", help="EconomicParameters JSON file")
+    staged_parser.add_argument(
+        "--perspective",
+        help=f"perspective id the plan is priced under (default {StagedCli.DEFAULT_PERSPECTIVE})",
+    )
+    staged_parser.add_argument("--subsidy-catalog", dest="subsidy_catalog", help="subsidy catalog directory")
+    staged_parser.add_argument("--out", required=True, help="where economics_result.json goes")
+    staged_parser.set_defaults(func=_cmd_staged)
 
     validate_parser = subparsers.add_parser("validate", help="data-file CI checks (§9.6)")
     validate_parser.set_defaults(func=_cmd_validate)

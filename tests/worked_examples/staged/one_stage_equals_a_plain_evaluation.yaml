@@ -1,0 +1,74 @@
+# GENERATED from one_stage_equals_a_plain_evaluation.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "one_stage_equals_a_plain_evaluation"
+group: "staged"
+spec_section: "3.7"
+computed_by: "the staged-evaluator harness (tests/worked_example_runners.py::_staged_values), 2026-09-20"
+description: "A single-stage plan: a 20,000 EUR heat pump bought in year 0 into a greenfield building, over a 20-year horizon at 3 % interest, with 1.5 % maintenance and 4,000 kWh of electricity a year at the synthetic country's zero price. What it pins is E-spec §2(a): a plan of one stage must equal the plain evaluator entry for entry, so the example asserts the staged NPV and the single-variant NPV as two numbers that have to agree. Every device figure is an override and the country is the synthetic XX, so no shipped price can reach a value here."
+inputs:
+  horizon_in_years: 20
+  interest_rate: 0.03
+  general_price_escalation_rate: 0
+  investment_price_escalation_rate: 0
+  energy_price_escalation_rate: 0
+  maintenance_rate: 0.015
+  baseline_asset_class: "HeatPump"
+  baseline_size: 10
+  baseline_investment_in_euro: 20000
+  baseline_lifetime_in_years: 18
+  electricity_price_in_euro_per_kwh: 0.3
+  baseline_energy_bought_in_kwh: 4000
+  register_the_baseline_device: false
+expected:
+  plan_npv_in_euro:
+    value: 44220.98
+    abs_tol: 0.01
+    note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
+  single_variant_npv_in_euro:
+    value: 44220.98
+    abs_tol: 0.01
+    note: "the same state priced by the plain EconomicEvaluator; E-spec §2(a) requires the two to be the same number, which is what makes this example a cross-check rather than a baseline"
+  plan_eac_in_euro:
+    value: 2972.34
+    abs_tol: 0.01
+    note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
+  single_variant_eac_in_euro:
+    value: 2972.34
+    abs_tol: 0.01
+    note: "the plain evaluator's annuity, for the same reason"
+  reference_npv_in_euro:
+    value: 44220.98
+    abs_tol: 0.01
+    note: "a plan of one stage is its own reference, so the two totals coincide"
+  npv_delta_in_euro:
+    value: 0.00
+    abs_tol: 0.01
+    note: "plan minus reference, which is zero for a plan of one stage"
+  annuity_factor:
+    value: 0.067216
+    abs_tol: 0.000001
+    note: "the capital recovery factor of the horizon and the interest rate"
+  plan_npv_investment_in_euro:
+    value: 20000.00
+    abs_tol: 0.01
+    note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
+  plan_npv_maintenance_in_euro:
+    value: 4463.24
+    abs_tol: 0.01
+    note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
+  plan_npv_energy_working_in_euro:
+    value: 17852.97
+    abs_tol: 0.01
+    note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
+  plan_npv_replacement_in_euro:
+    value: 11747.89
+    abs_tol: 0.01
+    note: "the heat pump outlives the horizon by two years, so nothing is replaced inside it"
+  plan_npv_residual_value_in_euro:
+    value: -9843.12
+    abs_tol: 0.01
+    note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
+  plan_nominal_investment_year_0_in_euro:
+    value: 20000.00
+    abs_tol: 0.01
+    note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"

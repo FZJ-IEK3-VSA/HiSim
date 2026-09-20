@@ -82,6 +82,7 @@ from tests.worked_example_runners import (
     _end_to_end_values,
     _financing_values,
     _modernization_levy_values,
+    _staged_values,
     _subsidy_values,
     _tariff_values,
 )
@@ -295,6 +296,7 @@ def test_worked_example(example: Dict[str, Any], synthetic_database: CostDatabas
         "subsidies": _subsidy_values,
         "modernization_levy": lambda inputs: _modernization_levy_values(inputs, synthetic_database),
         "end_to_end": lambda inputs: _end_to_end_values(inputs, synthetic_database),
+        "staged": lambda inputs: _staged_values(inputs, synthetic_database),
     }
     group = example["group"]
     assert group in runners, f"no entry point registered for worked-example group {group!r}"
@@ -399,7 +401,15 @@ def test_library_covers_every_group() -> None:
     """The library holds at least 20 examples and no group is empty (§3)."""
     assert len(EXAMPLES) >= 20, f"only {len(EXAMPLES)} worked examples found; the library needs at least 20."
     groups = {example["group"] for example in EXAMPLES}
-    expected_groups = {"financing", "discounting", "tariffs", "subsidies", "modernization_levy", "end_to_end"}
+    expected_groups = {
+        "financing",
+        "discounting",
+        "tariffs",
+        "subsidies",
+        "modernization_levy",
+        "end_to_end",
+        "staged",
+    }
     assert expected_groups <= groups, f"missing worked-example groups: {sorted(expected_groups - groups)}"
     for group in expected_groups:
         assert any(example["group"] == group for example in EXAMPLES), f"group {group!r} is empty."

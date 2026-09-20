@@ -55,6 +55,30 @@ class HeritageStatus(str, enum.Enum):
     PRESERVATION_WORTHY = "PRESERVATION_WORTHY"  # besonders erhaltenswerte Bausubstanz
 
 
+class DwellingType(str, enum.Enum):
+    """How the dwelling is attached to its neighbours, as fixed-amount grants band it (§5.3).
+
+    Several national programmes pay a *different fixed amount* for the same measure depending on
+    how much external surface the dwelling has: Ireland's SEAI grants quote four figures for every
+    insulation measure (a detached house gets EUR 2,000 for attic insulation, a mid-terrace house
+    EUR 1,400), and the British schemes band the same way. The German BEG has no such axis, which
+    is why the field is optional and why no shipped DE or AT scheme reads it.
+
+    The four members are the bands the programmes actually use, not a geometry taxonomy: a
+    semi-detached house and an end-of-terrace house are paid the same amount everywhere the band
+    appears and therefore share one member. As everywhere else in the eligibility context, ``None``
+    means *unanswered* and makes a condition touching it UNDETERMINED rather than false.
+
+    Example: the catalog leaf ``{"field": "building.dwelling_type", "op": "==", "value":
+    "DETACHED"}`` selects the detached-house variant of a banded grant.
+    """
+
+    DETACHED = "DETACHED"
+    SEMI_DETACHED_OR_END_TERRACE = "SEMI_DETACHED_OR_END_TERRACE"
+    MID_TERRACE = "MID_TERRACE"
+    APARTMENT = "APARTMENT"
+
+
 class ApplicantActor(str, enum.Enum):
     """Applicant roles for eligibility conditions.
 
@@ -93,6 +117,20 @@ class ApplicantProfile:
     household_size: Optional[int] = None  # persons; some income thresholds scale with it
     main_residence: Optional[bool] = True  # self-occupation, required by several bonuses
     region: Optional[str] = None  # NUTS-3 or municipality key for regional schemes
+    # Whether the applicant draws a means-tested social benefit. Country-neutral: Ireland's SEAI
+    # calls it a "qualifying welfare payment" and pays a higher fixed grant for attic and cavity
+    # insulation, the Warmer Homes Scheme funds the works outright; comparable social-tariff
+    # conditions exist in most member states. None = unanswered.
+    receives_means_tested_benefit: Optional[bool] = None
+    # Whether the applicant bought this home as their first home. SEAI pays a higher fixed attic
+    # grant to someone who bought a second-hand home on or after 2025-01-01 and had never owned
+    # one before. None = unanswered.
+    first_time_buyer: Optional[bool] = None
+    # Whether the works are delivered as one managed complete upgrade rather than measure by
+    # measure — Ireland's One Stop Shop route, a KfW-style full-refurbishment programme elsewhere.
+    # Several grants (floor and rafter insulation, mechanical ventilation, air tightness) exist
+    # only on that route. None = unanswered.
+    managed_full_retrofit: Optional[bool] = None
 
 
 @dataclass
@@ -109,6 +147,9 @@ class SubsidyBuildingContext:
 
     construction_year: Optional[int] = None
     dwelling_units: int = 1
+    # How the dwelling is attached to its neighbours, for programmes whose fixed amounts band on
+    # it (see :class:`DwellingType`). None = unanswered.
+    dwelling_type: Optional[DwellingType] = None
     heated_floor_area_in_m2: Optional[float] = None
     residential_floor_area_in_m2: Optional[float] = None
     commercial_floor_area_in_m2: float = 0.0

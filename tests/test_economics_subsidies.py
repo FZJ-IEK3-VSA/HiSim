@@ -541,8 +541,8 @@ class TestSchemeDisplayNames:
     """
 
     def test_every_shipped_scheme_has_a_unique_display_name(self):
-        """The shipped DE and AT catalogs are complete and unambiguous."""
-        for country in ("DE", "AT"):
+        """The shipped DE, AT and IE catalogs are complete and unambiguous."""
+        for country in ("DE", "AT", "IE"):
             catalog = SubsidyCatalog.load(country)
             names = [scheme.display_name for scheme in catalog.schemes]
             assert all(names), f"{country}: a scheme ships without a display name"
@@ -584,7 +584,7 @@ class TestSchemeDisplayNames:
         """No warning about a missing name, no error about a duplicate, on what ships."""
         from hisim.economics.validation import validate_subsidy_catalog
 
-        for country in ("DE", "AT"):
+        for country in ("DE", "AT", "IE"):
             report = validate_subsidy_catalog(country)
             assert not [item for item in report.errors if "display_name" in item], report.errors
             assert not [item for item in report.warnings if "display_name" in item], report.warnings

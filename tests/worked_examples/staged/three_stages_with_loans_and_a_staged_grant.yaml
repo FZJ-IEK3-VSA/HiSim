@@ -1,0 +1,99 @@
+# GENERATED from three_stages_with_loans_and_a_staged_grant.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "three_stages_with_loans_and_a_staged_grant"
+group: "staged"
+spec_section: "5.4"
+computed_by: "the staged-evaluator harness (tests/worked_example_runners.py::_staged_values), 2026-09-20"
+description: "The plan of the previous example, financed and subsidised: each stage takes its own ten-year annuity loan at 4 % for the whole of its net investment, and a synthetic upfront grant of 30 % is available for the heat pump's asset class only. E-spec §2(c) asks for a subsidy that only a later stage can claim; the engine's eligibility language keys a scheme on the asset classes it covers, so the grant here is scoped to the heat pump and is therefore awarded in year 3 and in no earlier year, which the example asserts against an explicit zero in year 0. The catalogue is built in memory by the test runner, so no shipped Irish or German scheme reaches it."
+inputs:
+  horizon_in_years: 20
+  interest_rate: 0.03
+  general_price_escalation_rate: 0
+  investment_price_escalation_rate: 0.02
+  energy_price_escalation_rate: 0
+  maintenance_rate: 0.015
+  electricity_price_in_euro_per_kwh: 0.3
+  register_the_baseline_device: true
+  baseline_asset_class: "GasHeater"
+  baseline_size: 15
+  baseline_investment_in_euro: 6000
+  baseline_lifetime_in_years: 20
+  baseline_age_in_years: 12
+  baseline_energy_bought_in_kwh: 9000
+  baseline_replaced_by_asset_class: "HeatPump"
+  stage_one_asset_class: "WallExternalInsulation"
+  stage_one_size: 120
+  stage_one_from_year: 0
+  stage_one_investment_in_euro: 24000
+  stage_one_lifetime_in_years: 40
+  stage_one_energy_bought_in_kwh: 7000
+  stage_one_keeps_the_previous_devices: true
+  stage_two_asset_class: "HeatPump"
+  stage_two_size: 9
+  stage_two_from_year: 3
+  stage_two_investment_in_euro: 18000
+  stage_two_lifetime_in_years: 18
+  stage_two_energy_bought_in_kwh: 4000
+  stage_two_keeps_the_previous_devices: true
+  loan_financed_share: 1
+  loan_interest_rate: 0.04
+  loan_term_in_years: 10
+  subsidy_share_of_investment: 0.3
+  subsidy_asset_class: "HeatPump"
+expected:
+  plan_npv_in_euro:
+    value: 64641.02
+    abs_tol: 0.01
+    note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
+  plan_eac_in_euro:
+    value: 4344.89
+    abs_tol: 0.01
+    note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
+  reference_npv_in_euro:
+    value: 45500.74
+    abs_tol: 0.01
+    note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
+  npv_delta_in_euro:
+    value: 19140.28
+    abs_tol: 0.01
+    note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
+  plan_npv_subsidy_in_euro:
+    value: -5244.24
+    abs_tol: 0.01
+    note: "the grant is scoped to the heat pump's asset class, so it is awarded by the stage that installs one and by no earlier stage"
+  plan_nominal_subsidy_year_3_in_euro:
+    value: -5730.52
+    abs_tol: 0.01
+    note: "the award lands in the year its stage starts, not in year 0"
+  plan_nominal_subsidy_year_0_in_euro:
+    value: 0.00
+    abs_tol: 0.01
+    note: "no stage before year 3 installs anything the scheme covers, which the example asserts as an explicit zero"
+  plan_npv_loan_interest_in_euro:
+    value: 7493.25
+    abs_tol: 0.01
+    note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
+  plan_npv_loan_principal_in_euro:
+    value: 30616.62
+    abs_tol: 0.01
+    note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
+  plan_npv_loan_disbursement_in_euro:
+    value: -36236.56
+    abs_tol: 0.01
+    note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
+  plan_nominal_loan_disbursement_year_0_in_euro:
+    value: -24000.00
+    abs_tol: 0.01
+    note: "the first stage borrows in the year it starts"
+  plan_nominal_loan_disbursement_year_3_in_euro:
+    value: -13371.22
+    abs_tol: 0.01
+    note: "and the second stage borrows in its own year, three years later"
+  plan_annual_cost_year_0_in_euro:
+    value: 0.00
+    abs_tol: 0.01
+    note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
+  plan_annual_cost_year_4_in_euro:
+    value: 6527.53
+    abs_tol: 0.01
+    note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"

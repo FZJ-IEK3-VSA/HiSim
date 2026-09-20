@@ -64,6 +64,7 @@ from hisim.economics.results import (
 from hisim.economics.subsidies import (
     ApplicantActor,
     ApplicantProfile,
+    DwellingType,
     HeritageStatus,
     PayoutKind,
     SubsidyAward,
@@ -281,10 +282,14 @@ def subsidy_context_to_json(context: SubsidyContext) -> dict:
             "household_size": context.applicant.household_size,
             "main_residence": context.applicant.main_residence,
             "region": context.applicant.region,
+            "receives_means_tested_benefit": context.applicant.receives_means_tested_benefit,
+            "first_time_buyer": context.applicant.first_time_buyer,
+            "managed_full_retrofit": context.applicant.managed_full_retrofit,
         },
         "building": {
             "construction_year": building.construction_year,
             "dwelling_units": building.dwelling_units,
+            "dwelling_type": building.dwelling_type.value if building.dwelling_type else None,
             "heated_floor_area_in_m2": building.heated_floor_area_in_m2,
             "residential_floor_area_in_m2": building.residential_floor_area_in_m2,
             "commercial_floor_area_in_m2": building.commercial_floor_area_in_m2,
@@ -315,10 +320,16 @@ def subsidy_context_from_json(raw: dict) -> SubsidyContext:
             household_size=applicant_raw.get("household_size"),
             main_residence=applicant_raw.get("main_residence"),
             region=applicant_raw.get("region"),
+            receives_means_tested_benefit=applicant_raw.get("receives_means_tested_benefit"),
+            first_time_buyer=applicant_raw.get("first_time_buyer"),
+            managed_full_retrofit=applicant_raw.get("managed_full_retrofit"),
         ),
         building=SubsidyBuildingContext(
             construction_year=building_raw.get("construction_year"),
             dwelling_units=building_raw.get("dwelling_units", 1),
+            dwelling_type=DwellingType(building_raw["dwelling_type"])
+            if building_raw.get("dwelling_type")
+            else None,
             heated_floor_area_in_m2=building_raw.get("heated_floor_area_in_m2"),
             residential_floor_area_in_m2=building_raw.get("residential_floor_area_in_m2"),
             commercial_floor_area_in_m2=building_raw.get("commercial_floor_area_in_m2", 0.0),

@@ -68,6 +68,7 @@ from hisim.economics.subsidies.context import _enumerate_context_fields  # noqa:
 from hisim.economics.subsidies.context import (
     ApplicantActor,
     ApplicantProfile,
+    DwellingType,
     HeritageStatus,
     SubsidyBuildingContext,
     SubsidyContextFields,
@@ -91,6 +92,7 @@ __all__ = [
     "CapRatios",
     "Condition",
     "CumulationLimits",
+    "DwellingType",
     "EligibilityStatus",
     "EligibleCostSpec",
     "HeritageStatus",

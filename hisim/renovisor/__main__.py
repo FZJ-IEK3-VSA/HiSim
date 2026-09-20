@@ -132,11 +132,6 @@ class CapabilitiesCommand:
             default=None,
             help="a measures.yaml to check the frozen table against (default: the vendored copy)",
         )
-        parser.add_argument(
-            "--generated-at",
-            default=None,
-            help="override the document's timestamp, so that a test can compare two runs",
-        )
         parser.set_defaults(handler=cls.run)
 
     @classmethod
@@ -146,7 +141,6 @@ class CapabilitiesCommand:
 
         document = CapabilityDocument.build(
             measures_path=Path(arguments.measures) if arguments.measures else None,
-            generated_at=arguments.generated_at,
         )
         return int(document.write(Path(arguments.out)))
 

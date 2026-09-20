@@ -18,6 +18,45 @@ from enum import Enum
 from typing import ClassVar, Dict, Tuple
 
 
+class Placement(str, Enum):
+    """Where in a build-up an insulation layer goes, as ``materials.yaml`` spells it.
+
+    The ten ``building_components`` values of the material catalogue. They are the key three
+    different tables are read by — which element a measure insulates and with what layer
+    (``apply.MeasureRegistry.INSULATION``), what share of the measure the building would have paid
+    anyway (:class:`AnywayShareByPlacement`), and which cost-database asset class prices the new
+    layer (``economics.EnvelopeAssets.BY_PLACEMENT``) — so they live here once instead of as
+    literal strings in each. A placement added to the catalogue is then one member plus three
+    table rows, and a placement present in one table and missing from another is a failing test
+    rather than a silent fallback.
+
+    Example::
+
+        Placement.EXTERNAL_WALL_EXTERNAL.value   # 'external_wall_external', what a layer records
+
+    The member names are HiSim's ``UPPER_SNAKE`` spelling and the values are the catalogue's own,
+    exactly as :mod:`hisim.renovisor.vocabulary` does it for the request's vocabularies. This enum
+    is *not* one of those: a request never carries a placement, the translator derives it from the
+    measure, which is why it belongs here beside the tables that read it.
+    """
+
+    EXTERNAL_WALL_EXTERNAL = "external_wall_external"
+    EXTERNAL_WALL_INTERNAL = "external_wall_internal"
+    EXTERNAL_WALL_CAVITY = "external_wall_cavity"
+    BASEMENT_CEILING = "basement_ceiling"
+    BASEMENT_FLOOR_AND_WALLS_INSIDE = "basement_floor_and_walls_inside"
+    BASEMENT_FLOOR_AND_WALLS_OUTSIDE = "basement_floor_and_walls_outside"
+    FLOOR_AND_CEILING = "floor_and_ceiling"
+    ROOF_EXTERNAL_RAFTER = "roof_external_rafter"
+    ROOF_BETWEEN_RAFTER = "roof_between_rafter"
+    TOP_FLOOR_CEILING = "top_floor_ceiling"
+
+    @classmethod
+    def values(cls) -> Tuple[str, ...]:
+        """Every placement string, in declaration order, for an error message or a coverage test."""
+        return tuple(member.value for member in cls)
+
+
 class LayerDefaults:
     """How thick an insulation layer is when the request states no thickness.
 
@@ -290,3 +329,63 @@ class PredefinedHousehold:
     def reference(cls) -> Dict[str, object]:
         """Return the household as the energy-system file's constructor-argument codec reads it."""
         return {"Name": cls.NAME, "Guid": {"StrVal": cls.GUID}}
+
+
+class AnywayShareByPlacement:
+    """How much of an envelope measure's price the building would have spent anyway (§4.1).
+
+    The lifecycle cost engine credits a renovation with the cost it *avoids*: money the building
+    would have had to spend regardless, on a like-for-like replacement, is not a cost of the
+    renovation. ``ExistingAsset.anyway_share`` is the fraction of the **new** measure's price that
+    counterfactual would truly have bought, and it is the number that decides how flattering a
+    retrofit's economics look. A first-time improvement must be well below 1: a facade that was
+    never insulated would have been *repaired*, not insulated, so only the repair share —
+    scaffolding, render, paint — was going to be paid. A genuine like-for-like replacement is 1.0:
+    dead windows are replaced by windows.
+
+    The table is keyed by the ``materials.yaml`` ``building_components`` placement, because that
+    is what distinguishes the three cases that matter: an external layer that comes with
+    scaffolding and a new render, an internal or cavity layer that comes with almost no shared
+    work, and a replacement of a whole unit.
+
+    Every share here is an estimate and none of them is measured.
+    """
+
+    # Source: cost_module_issues.md #12, which records that the anyway shares are rough and asks
+    # for a reviewed table. These three are the shares the RenoVisor translator writes; they are
+    # estimates of the like-for-like share of a first-time envelope improvement, not measurements
+    # and not taken from any price list. TO BE REVIEWED.
+    EXTERNAL_FIRST_TIME: ClassVar[float] = 0.3
+    INTERNAL_FIRST_TIME: ClassVar[float] = 0.15
+    LIKE_FOR_LIKE: ClassVar[float] = 1.0
+
+    #: Placement -> the share of the new measure's price the counterfactual would have spent.
+    #: An external layer carries the render-and-scaffolding share; an internal, cavity or
+    #: basement layer carries almost nothing, because nothing about the existing build-up had to
+    #: be touched. TO BE REVIEWED, with the three shares above.
+    BY_PLACEMENT: ClassVar[Dict[str, float]] = {
+        Placement.EXTERNAL_WALL_EXTERNAL.value: EXTERNAL_FIRST_TIME,
+        Placement.EXTERNAL_WALL_INTERNAL.value: INTERNAL_FIRST_TIME,
+        Placement.EXTERNAL_WALL_CAVITY.value: INTERNAL_FIRST_TIME,
+        Placement.BASEMENT_CEILING.value: INTERNAL_FIRST_TIME,
+        Placement.BASEMENT_FLOOR_AND_WALLS_INSIDE.value: INTERNAL_FIRST_TIME,
+        Placement.BASEMENT_FLOOR_AND_WALLS_OUTSIDE.value: EXTERNAL_FIRST_TIME,
+        Placement.FLOOR_AND_CEILING.value: INTERNAL_FIRST_TIME,
+        Placement.ROOF_EXTERNAL_RAFTER.value: EXTERNAL_FIRST_TIME,
+        Placement.ROOF_BETWEEN_RAFTER.value: INTERNAL_FIRST_TIME,
+        Placement.TOP_FLOOR_CEILING.value: INTERNAL_FIRST_TIME,
+    }
+
+    @classmethod
+    def of(cls, placement: str) -> float:
+        """Return the anyway share of one build-up position.
+
+        Args:
+            placement: The ``building_components`` value the insulation measure records.
+
+        Returns:
+            The share in ``(0, 1]``. A placement the table does not know falls back to
+            :attr:`INTERNAL_FIRST_TIME`, the smaller of the two first-time shares, so an unlisted
+            build-up is credited conservatively rather than generously.
+        """
+        return cls.BY_PLACEMENT.get(placement, cls.INTERNAL_FIRST_TIME)

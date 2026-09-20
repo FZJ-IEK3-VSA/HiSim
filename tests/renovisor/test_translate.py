@@ -193,10 +193,10 @@ class TestEveryTargetReceivesItsValue:
         system = translate(baseline())
 
         config = config_of(system, Targets.BUILDING)
-        assert config["facade_u_value_in_watt_per_m2_per_kelvin"] == 1.1
+        assert config["facade_u_value_in_watt_per_m2_per_kelvin"] == 1.78
         assert config["roof_u_value_in_watt_per_m2_per_kelvin"] == 0.4
         assert config["floor_u_value_in_watt_per_m2_per_kelvin"] == 0.7
-        assert config["window_u_value_in_watt_per_m2_per_kelvin"] == 2.8
+        assert config["window_u_value_in_watt_per_m2_per_kelvin"] == 3.7
         assert config["door_u_value_in_watt_per_m2_per_kelvin"] == 3.0
 
     def test_a_stated_area_pins_the_element_and_an_absent_one_does_not(self) -> None:

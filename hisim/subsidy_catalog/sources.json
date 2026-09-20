@@ -35,6 +35,96 @@
       "retrieved": "2026-07-07",
       "kind": "STATUTE",
       "notes": "Lump-sum grant for replacing fossil heating with a heat pump; regional top-ups not yet encoded."
+    },
+    {
+      "id": "src_seai_attic_2026",
+      "citation": "SEAI: Attic insulation grant (Better Energy Homes), page text read 2026-09-19",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/attic-insulation",
+      "publication_year": 2026,
+      "retrieved": "2026-09-19",
+      "kind": "STATUTE",
+      "notes": "AI-generated transcription of the page text, not legally verified; needs to be examined. Fixed amounts 2,000 / 1,500 / 1,400 / 1,100 EUR by dwelling type, 2,500 / 1,900 / 1,800 / 1,400 EUR for first-time buyers and homeowners on qualifying welfare payments; home built and occupied before 2011. Not transcribed: the MPRN rule that no attic grant was paid for this home before, the top-floor-only rule for apartments, the first-time-buyer purchase dates (bought on or after 2025-01-01, home built on or before 2010-12-31, which are collapsed into one applicant boolean), the approved-housing-body amounts, and the holiday-home and charity applicant types."
+    },
+    {
+      "id": "src_seai_walls_2026",
+      "citation": "SEAI: Wall insulation grants (cavity, internal dry lining, external wrap), page text read 2026-09-19",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/wall-insulation",
+      "publication_year": 2026,
+      "retrieved": "2026-09-19",
+      "kind": "STATUTE",
+      "notes": "AI-generated transcription of the page text, not legally verified; needs to be examined. Cavity 1,800 / 1,300 / 850 / 700 EUR (2,300 / 1,700 / 1,100 / 900 EUR on qualifying welfare payments), internal 4,500 / 3,500 / 2,000 / 1,500 EUR, external 8,000 / 6,000 / 3,500 / 3,000 EUR; built and occupied before 31 December 2010. Not transcribed: the whole-surface rule (partial insulation is ineligible), the second-wall-measure rules, the building regulations trigger above 25 % of the surface area, and the ESB Networks service alteration."
+    },
+    {
+      "id": "src_seai_windows_doors_2026",
+      "citation": "SEAI: Windows and doors grant, page text read 2026-09-19",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/windows-and-doors",
+      "publication_year": 2026,
+      "retrieved": "2026-09-19",
+      "kind": "STATUTE",
+      "notes": "AI-generated transcription of the page text, not legally verified; needs to be examined. Windows 4,000 / 3,000 / 1,800 / 1,500 EUR for a complete upgrade, doors 800 EUR per door up to two doors; built and occupied before 2011, new units at 1.4 W/(m2.K) or better. Not transcribed: the prerequisite that attic and walls are already 'Good' or that the heat loss indicator is 2.3 W/(K.m2) or less, the ventilation, fall-restrictor and escape-window requirements, and the post-works BER."
+    },
+    {
+      "id": "src_seai_heatpump_2026",
+      "citation": "SEAI: Heat pump system grant, page text read 2026-09-19",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/heat-pump-systems",
+      "publication_year": 2026,
+      "retrieved": "2026-09-19",
+      "kind": "STATUTE",
+      "notes": "AI-generated transcription of the page text, not legally verified; needs to be examined. Bundle of up to 12,500 EUR (9,500 EUR for apartments) made of a heat pump unit grant of up to 6,500 EUR (4,500 EUR for apartments), a central heating grant of up to 2,000 EUR and a 4,000 EUR Renewable Heat Bonus; technical assessment 200 EUR for homes built before 2007; built and occupied before 2021; increased on 3 February 2026. The page states the bundle totals and the apartment unit grant; the 1,000 EUR apartment central heating amount is derived as 9,500 - 4,500 - 4,000 and is confirmed by the One Stop Shop page. Not transcribed: air-to-air heat pumps (7,500 EUR, no hot water), the heat loss indicator requirement of 2.3 W/(K.m2) for pre-2007 homes, and the self-declaration form."
+    },
+    {
+      "id": "src_seai_pv_2026",
+      "citation": "SEAI: Solar electricity (solar PV) grant, page text read 2026-09-19",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/solar-electricity-grant",
+      "publication_year": 2026,
+      "retrieved": "2026-09-19",
+      "kind": "STATUTE",
+      "notes": "AI-generated transcription of the page text, not legally verified; needs to be examined. 700 EUR per kWp up to 2 kWp, 200 EUR per further kWp up to 4 kWp, capped at 1,800 EUR and paid pro rata (2.5 kWp gives 1,500 EUR); built and occupied before 2021. The catalogue encodes four fixed steps instead, because no benefit kind expresses a capped per-unit amount. Not transcribed: the MPRN rule that no PV grant was paid for this home before, and the eight-month completion window."
+    },
+    {
+      "id": "src_seai_thermal_2026",
+      "citation": "SEAI: Solar water heating grant, page text read 2026-09-19",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/solar-water-heating-grant",
+      "publication_year": 2026,
+      "retrieved": "2026-09-19",
+      "kind": "STATUTE",
+      "notes": "AI-generated transcription of the page text, not legally verified; needs to be examined. 1,200 EUR regardless of property type; built and occupied before 2021."
+    },
+    {
+      "id": "src_seai_oss_2026",
+      "citation": "SEAI: One Stop Shop, multiple energy upgrades (National Home Energy Upgrade Scheme), page text read 2026-09-19",
+      "url": "https://www.seai.ie/grants/home-energy-grants/one-stop-shop/multiple-energy-upgrades",
+      "publication_year": 2026,
+      "retrieved": "2026-09-19",
+      "kind": "STATUTE",
+      "notes": "AI-generated transcription of the page text, not legally verified; needs to be examined. The per-dwelling-type grant tables of the One Stop Shop route, which repeat the Better Energy Homes amounts and add rafter insulation (3,000 / 3,000 / 2,000 / 1,500 EUR), floor insulation (3,500 EUR), mechanical ventilation (1,500 EUR), air tightness (1,000 EUR), the home energy assessment (350 EUR) and project management (2,000 / 1,600 / 1,200 / 800 EUR). Not transcribed: the outcome condition (a post-works BER of B plus either a heat pump or a primary-energy uplift of 100 kWh/m2/yr), which no engine can evaluate before the works; the exclusion of homes that already received SEAI grants or EEOS energy credits for the same measures; the approved-housing-body amounts; the traditional-homes pilot; and the home energy assessment and project management grants, which have no asset class."
+    },
+    {
+      "id": "src_seai_warmer_homes_2026",
+      "citation": "SEAI: Fully funded energy upgrades for eligible homeowners (Warmer Homes Scheme), page text read 2026-09-19",
+      "url": "https://www.seai.ie/grants/home-energy-grants/fully-funded-upgrades-for-eligible-homes",
+      "publication_year": 2026,
+      "retrieved": "2026-09-19",
+      "kind": "STATUTE",
+      "notes": "AI-generated transcription of the page text, not legally verified; needs to be examined. Free upgrades for an owner-occupier on an eligible social welfare payment whose home was built before 2006 and is found suitable by a home survey. Encoded as a 100 % share of the eligible cost over the envelope and heating classes. Not transcribed: that SEAI's surveyor decides which measures are installed, so the measure list the catalogue offers is wider than the scheme's; and that being eligible does not guarantee any particular measure."
+    },
+    {
+      "id": "src_seai_loan_2026",
+      "citation": "SEAI: The Home Energy Upgrade Loan Scheme, page text read 2026-09-19",
+      "url": "https://www.seai.ie/grants/home-energy-grants/home-energy-upgrade-loan",
+      "publication_year": 2026,
+      "retrieved": "2026-09-19",
+      "kind": "STATUTE",
+      "notes": "AI-generated transcription of the page text, not legally verified; needs to be examined. 5,000 to 75,000 EUR over a term of up to 10 years, unsecured, government-backed through the SBCI; the works must be grant-aided by SEAI and carried out by a registered One Stop Shop or community project coordinator, at least 75 % of the loan must be spent on eligible measures and the home must be projected to gain at least a 20 % BER uplift. This page states NO interest rate: it says only that rates are lower than the market's and differ by provider. The 3 % the catalogue encodes comes from the landlord support page. Not transcribed: the 75 % rule, the 20 % uplift, the loan-amount band and the provider-specific rates."
+    },
+    {
+      "id": "src_seai_landlords_2026",
+      "citation": "SEAI: Supports for landlords, page text read 2026-09-19",
+      "url": "https://www.seai.ie/grants/home-energy-grants/supports-for-landlords",
+      "publication_year": 2026,
+      "retrieved": "2026-09-19",
+      "kind": "STATUTE",
+      "notes": "AI-generated transcription of the page text, not legally verified; needs to be examined. Which supports private and commercial landlords may use, and the loan terms quoted for them: 5,000 to 75,000 EUR per property over 1 to 10 years at rates 'starting from as low as 3%'. That 3 % is the only interest rate on any page read, and is what the catalogue's soft loan encodes. Not transcribed: the landlord tax deduction of up to 10,000 EUR per property for works carried out between 2023 and 2025, which has expired and is deliberately left out; the de minimis and GBER state-aid regimes landlords fall under; the three-property loan cap; and green mortgages."
     }
   ]
 }

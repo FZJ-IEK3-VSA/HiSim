@@ -27,6 +27,7 @@ about a material is that its conductivity is a positive number, which the schema
 """
 
 import json
+import math
 import re
 from dataclasses import dataclass
 from enum import Enum
@@ -77,6 +78,10 @@ class ProblemCode(str, Enum):
     LOCATION_COUNTRY_UNSUPPORTED = "location.country.unsupported"
     HOT_WATER_CONFLICTING_VOLUMES = "hot_water.conflicting_volumes"
     TABULA_UNRESOLVABLE = "tabula.unresolvable"
+    # Not in §7 of the contract: the `measures[i].cost` block it belongs to is the E-spec §7
+    # proposal the vendored schema has not adopted yet (findings F7/F10), so its code is minted
+    # here in the contract's own spelling and joins §7 when the block does.
+    MEASURE_COST_BAND_INVALID = "measure.cost.band_invalid"
 
 
 @dataclass(frozen=True)
@@ -1141,6 +1146,14 @@ class SemanticChecks:
     #: The measure whose option writes the number of vehicles, and the option's name.
     VEHICLE_MEASURE: ClassVar[Tuple[str, str]] = ("electric_vehicle", "number")
 
+    #: The per-measure price block of E-spec §7 and its two price fields. They are spelled here
+    #: as well as on the translator's :class:`~hisim.renovisor.economics.EconomicContextBuilder`
+    #: because the check has to run before anything is translated, and
+    #: ``tests/renovisor/test_request.py`` pins the two spellings to each other.
+    COST_KEY: ClassVar[str] = "cost"
+    COST_MINIMUM_KEY: ClassVar[str] = "min_in_euro_per_m2"
+    COST_MAXIMUM_KEY: ClassVar[str] = "max_in_euro_per_m2"
+
     @classmethod
     def of(cls, document: Mapping[str, Any]) -> Tuple[Problem, ...]:
         """Return every semantic problem of one structurally valid document.
@@ -1157,8 +1170,75 @@ class SemanticChecks:
         problems.extend(cls._added_insulation(house))
         problems.extend(cls._hot_water_volumes(house))
         problems.extend(cls._measures(document["measures"], house))
+        problems.extend(cls._cost_bands(document["measures"]))
         problems.extend(cls._tabula(document))
         return tuple(problems)
+
+    @classmethod
+    def _cost_bands(cls, measures: Sequence[Any]) -> List[Problem]:
+        """Refuse a ``measures[i].cost`` block whose price band is not a price band.
+
+        The frontend copies two euro-per-square-metre figures out of the contract's material table
+        into the measure (E-spec §7), and the translator multiplies them by the element's area to
+        get the subject's investment band. A minimum above the maximum, a negative price or a
+        value that is not finite is a request problem and not something to price around: an
+        inverted band is refused by :class:`~hisim.economics.uncertainty.UncertainValue` in the
+        middle of a build, and a negative one would publish a renovation that pays the owner.
+
+        Every measure is checked, so a request with two bad blocks reports two problems.
+
+        Args:
+            measures: The request's ``measures`` array, already known to be well shaped.
+
+        Returns:
+            One problem per measure whose block is present and unusable; an absent or incomplete
+            block is not a problem, because the measure is then simply unpriced.
+        """
+        problems: List[Problem] = []
+        for index, entry in enumerate(measures):
+            block = entry.get(cls.COST_KEY) if isinstance(entry, Mapping) else None
+            if not isinstance(block, Mapping):
+                continue
+            low = block.get(cls.COST_MINIMUM_KEY)
+            high = block.get(cls.COST_MAXIMUM_KEY)
+            if any(
+                not isinstance(value, (int, float)) or isinstance(value, bool) for value in (low, high)
+            ):
+                continue
+            minimum, maximum = float(low), float(high)  # type: ignore[arg-type]
+            fault = cls._band_fault(minimum, maximum)
+            if fault is None:
+                continue
+            problems.append(
+                Problem(
+                    path=f"measures[{index}].{cls.COST_KEY}",
+                    code=ProblemCode.MEASURE_COST_BAND_INVALID,
+                    message=(
+                        f"'{entry.get('id')}' states a price band of {minimum} to {maximum} "
+                        f"euro per square metre, and {fault}"
+                    ),
+                )
+            )
+        return problems
+
+    @classmethod
+    def _band_fault(cls, minimum: float, maximum: float) -> Optional[str]:
+        """What is wrong with one price band, or ``None`` when nothing is.
+
+        Args:
+            minimum: The cheap end, in euro per square metre.
+            maximum: The expensive end.
+
+        Returns:
+            The half-sentence the problem message ends with, or ``None``.
+        """
+        if not math.isfinite(minimum) or not math.isfinite(maximum):
+            return "a price has to be a finite number"
+        if minimum < 0 or maximum < 0:
+            return "a price cannot be negative"
+        if minimum > maximum:
+            return "the cheap end of a band cannot be above the expensive end"
+        return None
 
     @classmethod
     def _country(cls, location: Mapping[str, Any]) -> List[Problem]:

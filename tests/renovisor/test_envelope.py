@@ -16,7 +16,7 @@ class TestTheComposer:
     """``U_new = 1 / (1 / U_existing + sum of d/lambda)``, and nothing else."""
 
     def test_one_layer_on_a_known_wall(self) -> None:
-        """The mockup's own facade: 1.1 W/(m2K) plus 120 mm of EPS at lambda 0.0355."""
+        """A 1.1 W/(m2K) facade plus 120 mm of EPS at lambda 0.0355 (the mockup wall is 1.78 since 2026-09-19)."""
         resistance = UValueComposer.resistance(120, 0.0355)
 
         assert resistance == pytest.approx(0.12 / 0.0355)

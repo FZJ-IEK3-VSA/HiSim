@@ -99,7 +99,17 @@ class TestExitZero:
 
         report = json.loads((out / Outputs.MAPPING_REPORT).read_text(encoding="utf-8"))
 
-        assert set(report) == {"translator", "base_file", "energy_system_file", "fields", "measures"}
+        assert set(report) == {
+            "translator",
+            "base_file",
+            "energy_system_file",
+            "fields",
+            "measures",
+            # The economics half (step 10 §4.2): which measure created which cost subject, and
+            # which of those subjects the request carried no price for.
+            "subjects",
+            "unpriced_subjects",
+        }
         assert report["fields"] and all("status" in line for line in report["fields"])
 
 

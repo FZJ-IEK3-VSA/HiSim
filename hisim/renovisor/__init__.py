@@ -53,5 +53,6 @@ the translator's own build rather than a user's request.
 #: ``2.0.0`` the v2 request and outputs of the frontend spec; ``2.1.0`` every run writes the three
 #: economics artifacts (``economic_inputs.json``, ``lifecycle_costs.json``,
 #: ``cost_provenance.json``) also inside a container, because post-processing no longer strips
-#: options there (shared todo H2) -- the backend requires them from this version on.
+#: options there (shared todo H2). The backend reads no version and requires no artifact (owner
+#: decision of 2026-09-20); the step is a changelog marker, nothing keys off it.
 TRANSLATOR_VERSION: str = "2.1.0"

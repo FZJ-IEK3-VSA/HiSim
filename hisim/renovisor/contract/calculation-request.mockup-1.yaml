@@ -19,7 +19,11 @@ location:
 
 house:
   building:
-    building_type: detached_sfh # + construction_year → TABULA IE.N.SFH.05.Gen.ReEx.001.001
+    # + construction_year → TABULA IE.N.SFH.06.Gen.ReEx.001.001, reported `approximated`: band 05
+    # (1967-1977) covers 1975 but its TABULA row has no door or window area, which the Building
+    # component cannot run with, so the translator takes the nearest usable band (C4; the band-05
+    # row gaining its areas would make this band 05 again).
+    building_type: detached_sfh
     construction_year: 1975
     absolute_conditioned_floor_area_in_m2: 140 # Building field, verbatim
     set_heating_temperature_in_celsius: 21 # Building field, verbatim; the form's kept default
@@ -30,14 +34,14 @@ house:
     # the number and writes it to Building.<element>_u_value_… verbatim; areas
     # are absent, so they come from the TABULA archetype.
     roof:
-      u_value_in_watt_per_m2_per_kelvin: 0.4 # "100mm_ceiling"
+      u_value_in_watt_per_m2_per_kelvin: 0.4 # "100mm_ceiling" (illustrative; the country pack owns the real table)
       shape: pitched # → PV and solar-thermal tilt 30°
     facade:
-      u_value_in_watt_per_m2_per_kelvin: 1.1 # "300mm_cavity", uninsulated
+      u_value_in_watt_per_m2_per_kelvin: 1.78 # "300mm_cavity", uninsulated — TABULA IE uninsulated cavity wall (1.1 is the partially filled one)
     floor:
-      u_value_in_watt_per_m2_per_kelvin: 0.7 # "solid_ground", uninsulated
+      u_value_in_watt_per_m2_per_kelvin: 0.7 # "solid_ground", uninsulated (illustrative; TABULA IE floors run 0.42–1.96 — the physics owner settles the id → code mapping)
     window:
-      u_value_in_watt_per_m2_per_kelvin: 2.8 # "pvc_double_air"
+      u_value_in_watt_per_m2_per_kelvin: 3.7 # "pvc_double_air" — TABULA IE 6 mm air-filled double unit (2.8 is the argon-filled one)
       glazing_panes: 2
     door:
       u_value_in_watt_per_m2_per_kelvin: 3.0 # "solid_wood"

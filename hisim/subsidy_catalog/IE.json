@@ -1,0 +1,3678 @@
+{
+  "catalog_snapshot_date": "2026-09-19",
+  "review_status": "AI_GENERATED_NEEDS_EXAMINATION",
+  "overall_cap_share": null,
+  "schemes": [
+    {
+      "id": "IE_SEAI_ATTIC_DETACHED",
+      "display_name": "SEAI attic insulation grant, detached house (EUR 2,000) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, attic insulation grant, detached house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/attic-insulation",
+      "source_ids": [
+        "src_seai_attic_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "TOP_CEILING_UPPER_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "DETACHED"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 2000
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": [
+          "IE_SEAI_ATTIC_ENHANCED_DETACHED"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_ATTIC_ENHANCED_DETACHED",
+      "display_name": "SEAI attic insulation grant, detached house, first-time buyer or welfare payment (EUR 2,500) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, attic insulation grant for first-time buyers and homeowners on qualifying welfare payments, detached house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/attic-insulation",
+      "source_ids": [
+        "src_seai_attic_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "TOP_CEILING_UPPER_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "DETACHED"
+          },
+          {
+            "any": [
+              {
+                "field": "applicant.first_time_buyer",
+                "op": "==",
+                "value": true
+              },
+              {
+                "field": "applicant.receives_means_tested_benefit",
+                "op": "==",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 2500
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": [
+          "IE_SEAI_ATTIC_DETACHED"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_ATTIC_SEMI_DETACHED",
+      "display_name": "SEAI attic insulation grant, semi-detached or end-of-terrace house (EUR 1,500) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, attic insulation grant, semi-detached or end-of-terrace house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/attic-insulation",
+      "source_ids": [
+        "src_seai_attic_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "TOP_CEILING_UPPER_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "SEMI_DETACHED_OR_END_TERRACE"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1500
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": [
+          "IE_SEAI_ATTIC_ENHANCED_SEMI_DETACHED"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_ATTIC_ENHANCED_SEMI_DETACHED",
+      "display_name": "SEAI attic insulation grant, semi-detached or end-of-terrace house, first-time buyer or welfare payment (EUR 1,900) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, attic insulation grant for first-time buyers and homeowners on qualifying welfare payments, semi-detached or end-of-terrace house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/attic-insulation",
+      "source_ids": [
+        "src_seai_attic_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "TOP_CEILING_UPPER_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "SEMI_DETACHED_OR_END_TERRACE"
+          },
+          {
+            "any": [
+              {
+                "field": "applicant.first_time_buyer",
+                "op": "==",
+                "value": true
+              },
+              {
+                "field": "applicant.receives_means_tested_benefit",
+                "op": "==",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1900
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": [
+          "IE_SEAI_ATTIC_SEMI_DETACHED"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_ATTIC_MID_TERRACE",
+      "display_name": "SEAI attic insulation grant, mid-terrace house (EUR 1,400) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, attic insulation grant, mid-terrace house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/attic-insulation",
+      "source_ids": [
+        "src_seai_attic_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "TOP_CEILING_UPPER_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "MID_TERRACE"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1400
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": [
+          "IE_SEAI_ATTIC_ENHANCED_MID_TERRACE"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_ATTIC_ENHANCED_MID_TERRACE",
+      "display_name": "SEAI attic insulation grant, mid-terrace house, first-time buyer or welfare payment (EUR 1,800) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, attic insulation grant for first-time buyers and homeowners on qualifying welfare payments, mid-terrace house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/attic-insulation",
+      "source_ids": [
+        "src_seai_attic_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "TOP_CEILING_UPPER_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "MID_TERRACE"
+          },
+          {
+            "any": [
+              {
+                "field": "applicant.first_time_buyer",
+                "op": "==",
+                "value": true
+              },
+              {
+                "field": "applicant.receives_means_tested_benefit",
+                "op": "==",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1800
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": [
+          "IE_SEAI_ATTIC_MID_TERRACE"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_ATTIC_APARTMENT",
+      "display_name": "SEAI attic insulation grant, apartment (EUR 1,100) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, attic insulation grant, apartment",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/attic-insulation",
+      "source_ids": [
+        "src_seai_attic_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "TOP_CEILING_UPPER_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "APARTMENT"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1100
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": [
+          "IE_SEAI_ATTIC_ENHANCED_APARTMENT"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_ATTIC_ENHANCED_APARTMENT",
+      "display_name": "SEAI attic insulation grant, apartment, first-time buyer or welfare payment (EUR 1,400) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, attic insulation grant for first-time buyers and homeowners on qualifying welfare payments, apartment",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/attic-insulation",
+      "source_ids": [
+        "src_seai_attic_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "TOP_CEILING_UPPER_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "APARTMENT"
+          },
+          {
+            "any": [
+              {
+                "field": "applicant.first_time_buyer",
+                "op": "==",
+                "value": true
+              },
+              {
+                "field": "applicant.receives_means_tested_benefit",
+                "op": "==",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1400
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": [
+          "IE_SEAI_ATTIC_APARTMENT"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_OSS_RAFTER_HOUSE",
+      "display_name": "SEAI rafter insulation grant, One Stop Shop route, detached, semi-detached or end-of-terrace house (EUR 3,000) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI National Home Energy Upgrade Scheme, rafter insulation grant, detached, semi-detached or end-of-terrace house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/one-stop-shop/multiple-energy-upgrades",
+      "source_ids": [
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "ROOF_INSULATION_BETWEEN_JOISTS",
+          "ROOF_INSULATION_OVER_JOISTS",
+          "WARM_ROOF_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "applicant.managed_full_retrofit",
+            "op": "==",
+            "value": true
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "in",
+            "value": [
+              "DETACHED",
+              "SEMI_DETACHED_OR_END_TERRACE"
+            ]
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 3000
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_OSS_RAFTER_MID_TERRACE",
+      "display_name": "SEAI rafter insulation grant, One Stop Shop route, mid-terrace house (EUR 2,000) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI National Home Energy Upgrade Scheme, rafter insulation grant, mid-terrace house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/one-stop-shop/multiple-energy-upgrades",
+      "source_ids": [
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "ROOF_INSULATION_BETWEEN_JOISTS",
+          "ROOF_INSULATION_OVER_JOISTS",
+          "WARM_ROOF_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "applicant.managed_full_retrofit",
+            "op": "==",
+            "value": true
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "MID_TERRACE"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 2000
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_OSS_RAFTER_APARTMENT",
+      "display_name": "SEAI rafter insulation grant, One Stop Shop route, apartment (EUR 1,500) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI National Home Energy Upgrade Scheme, rafter insulation grant, apartment",
+      "url": "https://www.seai.ie/grants/home-energy-grants/one-stop-shop/multiple-energy-upgrades",
+      "source_ids": [
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "ROOF_INSULATION_BETWEEN_JOISTS",
+          "ROOF_INSULATION_OVER_JOISTS",
+          "WARM_ROOF_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "applicant.managed_full_retrofit",
+            "op": "==",
+            "value": true
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "APARTMENT"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1500
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_CAVITY_WALL_DETACHED",
+      "display_name": "SEAI cavity wall insulation grant, detached house (EUR 1,800) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, cavity wall insulation grant, detached house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/wall-insulation",
+      "source_ids": [
+        "src_seai_walls_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WALL_INTERNAL_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "DETACHED"
+          },
+          {
+            "field": "measure.technical_attributes.placement",
+            "op": "==",
+            "value": "external_wall_cavity"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1800
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": [
+          "IE_SEAI_CAVITY_WALL_WELFARE_DETACHED"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_CAVITY_WALL_WELFARE_DETACHED",
+      "display_name": "SEAI cavity wall insulation grant, detached house, welfare payment (EUR 2,300) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, cavity wall insulation grant for homeowners on qualifying welfare payments, detached house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/wall-insulation",
+      "source_ids": [
+        "src_seai_walls_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WALL_INTERNAL_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "DETACHED"
+          },
+          {
+            "field": "measure.technical_attributes.placement",
+            "op": "==",
+            "value": "external_wall_cavity"
+          },
+          {
+            "field": "applicant.receives_means_tested_benefit",
+            "op": "==",
+            "value": true
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 2300
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": [
+          "IE_SEAI_CAVITY_WALL_DETACHED"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_CAVITY_WALL_SEMI_DETACHED",
+      "display_name": "SEAI cavity wall insulation grant, semi-detached or end-of-terrace house (EUR 1,300) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, cavity wall insulation grant, semi-detached or end-of-terrace house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/wall-insulation",
+      "source_ids": [
+        "src_seai_walls_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WALL_INTERNAL_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "SEMI_DETACHED_OR_END_TERRACE"
+          },
+          {
+            "field": "measure.technical_attributes.placement",
+            "op": "==",
+            "value": "external_wall_cavity"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1300
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": [
+          "IE_SEAI_CAVITY_WALL_WELFARE_SEMI_DETACHED"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_CAVITY_WALL_WELFARE_SEMI_DETACHED",
+      "display_name": "SEAI cavity wall insulation grant, semi-detached or end-of-terrace house, welfare payment (EUR 1,700) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, cavity wall insulation grant for homeowners on qualifying welfare payments, semi-detached or end-of-terrace house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/wall-insulation",
+      "source_ids": [
+        "src_seai_walls_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WALL_INTERNAL_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "SEMI_DETACHED_OR_END_TERRACE"
+          },
+          {
+            "field": "measure.technical_attributes.placement",
+            "op": "==",
+            "value": "external_wall_cavity"
+          },
+          {
+            "field": "applicant.receives_means_tested_benefit",
+            "op": "==",
+            "value": true
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1700
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": [
+          "IE_SEAI_CAVITY_WALL_SEMI_DETACHED"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_CAVITY_WALL_MID_TERRACE",
+      "display_name": "SEAI cavity wall insulation grant, mid-terrace house (EUR 850) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, cavity wall insulation grant, mid-terrace house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/wall-insulation",
+      "source_ids": [
+        "src_seai_walls_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WALL_INTERNAL_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "MID_TERRACE"
+          },
+          {
+            "field": "measure.technical_attributes.placement",
+            "op": "==",
+            "value": "external_wall_cavity"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 850
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": [
+          "IE_SEAI_CAVITY_WALL_WELFARE_MID_TERRACE"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_CAVITY_WALL_WELFARE_MID_TERRACE",
+      "display_name": "SEAI cavity wall insulation grant, mid-terrace house, welfare payment (EUR 1,100) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, cavity wall insulation grant for homeowners on qualifying welfare payments, mid-terrace house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/wall-insulation",
+      "source_ids": [
+        "src_seai_walls_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WALL_INTERNAL_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "MID_TERRACE"
+          },
+          {
+            "field": "measure.technical_attributes.placement",
+            "op": "==",
+            "value": "external_wall_cavity"
+          },
+          {
+            "field": "applicant.receives_means_tested_benefit",
+            "op": "==",
+            "value": true
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1100
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": [
+          "IE_SEAI_CAVITY_WALL_MID_TERRACE"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_CAVITY_WALL_APARTMENT",
+      "display_name": "SEAI cavity wall insulation grant, apartment (EUR 700) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, cavity wall insulation grant, apartment",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/wall-insulation",
+      "source_ids": [
+        "src_seai_walls_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WALL_INTERNAL_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "APARTMENT"
+          },
+          {
+            "field": "measure.technical_attributes.placement",
+            "op": "==",
+            "value": "external_wall_cavity"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 700
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": [
+          "IE_SEAI_CAVITY_WALL_WELFARE_APARTMENT"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_CAVITY_WALL_WELFARE_APARTMENT",
+      "display_name": "SEAI cavity wall insulation grant, apartment, welfare payment (EUR 900) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, cavity wall insulation grant for homeowners on qualifying welfare payments, apartment",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/wall-insulation",
+      "source_ids": [
+        "src_seai_walls_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WALL_INTERNAL_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "APARTMENT"
+          },
+          {
+            "field": "measure.technical_attributes.placement",
+            "op": "==",
+            "value": "external_wall_cavity"
+          },
+          {
+            "field": "applicant.receives_means_tested_benefit",
+            "op": "==",
+            "value": true
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 900
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": [
+          "IE_SEAI_CAVITY_WALL_APARTMENT"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_INTERNAL_WALL_DETACHED",
+      "display_name": "SEAI internal wall insulation (dry lining) grant, detached house (EUR 4,500) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, internal wall insulation (dry lining) grant, detached house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/wall-insulation",
+      "source_ids": [
+        "src_seai_walls_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WALL_INTERNAL_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "DETACHED"
+          },
+          {
+            "field": "measure.technical_attributes.placement",
+            "op": "!=",
+            "value": "external_wall_cavity"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 4500
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_INTERNAL_WALL_SEMI_DETACHED",
+      "display_name": "SEAI internal wall insulation (dry lining) grant, semi-detached or end-of-terrace house (EUR 3,500) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, internal wall insulation (dry lining) grant, semi-detached or end-of-terrace house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/wall-insulation",
+      "source_ids": [
+        "src_seai_walls_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WALL_INTERNAL_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "SEMI_DETACHED_OR_END_TERRACE"
+          },
+          {
+            "field": "measure.technical_attributes.placement",
+            "op": "!=",
+            "value": "external_wall_cavity"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 3500
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_INTERNAL_WALL_MID_TERRACE",
+      "display_name": "SEAI internal wall insulation (dry lining) grant, mid-terrace house (EUR 2,000) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, internal wall insulation (dry lining) grant, mid-terrace house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/wall-insulation",
+      "source_ids": [
+        "src_seai_walls_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WALL_INTERNAL_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "MID_TERRACE"
+          },
+          {
+            "field": "measure.technical_attributes.placement",
+            "op": "!=",
+            "value": "external_wall_cavity"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 2000
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_INTERNAL_WALL_APARTMENT",
+      "display_name": "SEAI internal wall insulation (dry lining) grant, apartment (EUR 1,500) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, internal wall insulation (dry lining) grant, apartment",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/wall-insulation",
+      "source_ids": [
+        "src_seai_walls_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WALL_INTERNAL_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "APARTMENT"
+          },
+          {
+            "field": "measure.technical_attributes.placement",
+            "op": "!=",
+            "value": "external_wall_cavity"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1500
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_EXTERNAL_WALL_DETACHED",
+      "display_name": "SEAI external wall insulation (the wrap) grant, detached house (EUR 8,000) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, external wall insulation grant, detached house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/wall-insulation",
+      "source_ids": [
+        "src_seai_walls_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WALL_EXTERNAL_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "DETACHED"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 8000
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_EXTERNAL_WALL_SEMI_DETACHED",
+      "display_name": "SEAI external wall insulation (the wrap) grant, semi-detached or end-of-terrace house (EUR 6,000) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, external wall insulation grant, semi-detached or end-of-terrace house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/wall-insulation",
+      "source_ids": [
+        "src_seai_walls_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WALL_EXTERNAL_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "SEMI_DETACHED_OR_END_TERRACE"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 6000
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_EXTERNAL_WALL_MID_TERRACE",
+      "display_name": "SEAI external wall insulation (the wrap) grant, mid-terrace house (EUR 3,500) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, external wall insulation grant, mid-terrace house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/wall-insulation",
+      "source_ids": [
+        "src_seai_walls_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WALL_EXTERNAL_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "MID_TERRACE"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 3500
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_EXTERNAL_WALL_APARTMENT",
+      "display_name": "SEAI external wall insulation (the wrap) grant, apartment (EUR 3,000) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, external wall insulation grant, apartment",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/wall-insulation",
+      "source_ids": [
+        "src_seai_walls_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WALL_EXTERNAL_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "APARTMENT"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 3000
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_OSS_FLOOR",
+      "display_name": "SEAI floor insulation grant, One Stop Shop route (EUR 3,500) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI National Home Energy Upgrade Scheme, floor insulation grant",
+      "url": "https://www.seai.ie/grants/home-energy-grants/one-stop-shop/multiple-energy-upgrades",
+      "source_ids": [
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "BASEMENT_CEILING_BOTTOM_INSULATION",
+          "BASEMENT_WALLS_INTERNAL_INSULATION",
+          "GROUND_EXTERNAL_INSULATION"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "applicant.managed_full_retrofit",
+            "op": "==",
+            "value": true
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 3500
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_WINDOWS_DETACHED",
+      "display_name": "SEAI windows grant, complete upgrade, detached house (EUR 4,000) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, windows grant (complete upgrade), detached house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/windows-and-doors",
+      "source_ids": [
+        "src_seai_windows_doors_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WINDOWS_TRIPLE_GLAZED"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "DETACHED"
+          },
+          {
+            "field": "measure.technical_attributes.achieved_u_value_in_watt_per_m2_per_kelvin",
+            "op": "<=",
+            "value": 1.4
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 4000
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_WINDOWS_SEMI_DETACHED",
+      "display_name": "SEAI windows grant, complete upgrade, semi-detached or end-of-terrace house (EUR 3,000) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, windows grant (complete upgrade), semi-detached or end-of-terrace house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/windows-and-doors",
+      "source_ids": [
+        "src_seai_windows_doors_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WINDOWS_TRIPLE_GLAZED"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "SEMI_DETACHED_OR_END_TERRACE"
+          },
+          {
+            "field": "measure.technical_attributes.achieved_u_value_in_watt_per_m2_per_kelvin",
+            "op": "<=",
+            "value": 1.4
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 3000
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_WINDOWS_MID_TERRACE",
+      "display_name": "SEAI windows grant, complete upgrade, mid-terrace house (EUR 1,800) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, windows grant (complete upgrade), mid-terrace house",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/windows-and-doors",
+      "source_ids": [
+        "src_seai_windows_doors_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WINDOWS_TRIPLE_GLAZED"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "MID_TERRACE"
+          },
+          {
+            "field": "measure.technical_attributes.achieved_u_value_in_watt_per_m2_per_kelvin",
+            "op": "<=",
+            "value": 1.4
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1800
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_WINDOWS_APARTMENT",
+      "display_name": "SEAI windows grant, complete upgrade, apartment (EUR 1,500) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, windows grant (complete upgrade), apartment",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/windows-and-doors",
+      "source_ids": [
+        "src_seai_windows_doors_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WINDOWS_TRIPLE_GLAZED"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "APARTMENT"
+          },
+          {
+            "field": "measure.technical_attributes.achieved_u_value_in_watt_per_m2_per_kelvin",
+            "op": "<=",
+            "value": 1.4
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1500
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_EXTERNAL_DOORS",
+      "display_name": "SEAI external doors grant (EUR 800 per door, assumes 2 doors) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, external doors grant (EUR 800 per door, maximum two doors)",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/windows-and-doors",
+      "source_ids": [
+        "src_seai_windows_doors_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "EXTERIOR_DOOR"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1600
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_HEAT_PUMP_UNIT_HOUSE",
+      "display_name": "SEAI heat pump system grant, house (EUR 6,500) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, heat pump unit grant, detached, semi-detached, end-of-terrace and mid-terrace houses",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/heat-pump-systems",
+      "source_ids": [
+        "src_seai_heatpump_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "HEAT_PUMP"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2020
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "in",
+            "value": [
+              "DETACHED",
+              "SEMI_DETACHED_OR_END_TERRACE",
+              "MID_TERRACE"
+            ]
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 6500
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_HEAT_PUMP_UNIT_APARTMENT",
+      "display_name": "SEAI heat pump system grant, apartment (EUR 4,500) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, heat pump unit grant, apartments",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/heat-pump-systems",
+      "source_ids": [
+        "src_seai_heatpump_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "HEAT_PUMP"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2020
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "APARTMENT"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 4500
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_HEAT_PUMP_CENTRAL_HEATING_HOUSE",
+      "display_name": "SEAI central heating upgrade grant for a heat pump, house (EUR 2,000) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, central heating grant (radiators or underfloor heating) beside a heat pump, detached, semi-detached, end-of-terrace and mid-terrace houses",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/heat-pump-systems",
+      "source_ids": [
+        "src_seai_heatpump_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING",
+          "HEAT_DISTRIBUTION_SYSTEM_RADIATOR",
+          "HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2020
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "in",
+            "value": [
+              "DETACHED",
+              "SEMI_DETACHED_OR_END_TERRACE",
+              "MID_TERRACE"
+            ]
+          },
+          {
+            "field": "building.existing_heating.asset_class",
+            "op": "!=",
+            "value": "HeatPump"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 2000
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_HEAT_PUMP_CENTRAL_HEATING_APARTMENT",
+      "display_name": "SEAI central heating upgrade grant for a heat pump, apartment (EUR 1,000) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, central heating grant (radiators or underfloor heating) beside a heat pump, apartments",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/heat-pump-systems",
+      "source_ids": [
+        "src_seai_heatpump_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING",
+          "HEAT_DISTRIBUTION_SYSTEM_RADIATOR",
+          "HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2020
+          },
+          {
+            "field": "building.dwelling_type",
+            "op": "==",
+            "value": "APARTMENT"
+          },
+          {
+            "field": "building.existing_heating.asset_class",
+            "op": "!=",
+            "value": "HeatPump"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1000
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_RENEWABLE_HEAT_BONUS",
+      "display_name": "SEAI Renewable Heat Bonus for leaving fossil or electric heating (EUR 4,000) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-02-03",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, Renewable Heat Bonus grant for replacing an oil or gas boiler, a solid-fuel system or electric storage heating with a heat pump",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/heat-pump-systems",
+      "source_ids": [
+        "src_seai_heatpump_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "HEAT_PUMP"
+        ],
+        "measure_kinds": [
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2020
+          },
+          {
+            "field": "building.existing_heating.energy_carrier",
+            "op": "in",
+            "value": [
+              "NATURAL_GAS",
+              "HEATING_OIL",
+              "PELLETS",
+              "WOOD_CHIPS",
+              "ELECTRICITY"
+            ]
+          },
+          {
+            "field": "building.existing_heating.asset_class",
+            "op": "!=",
+            "value": "HeatPump"
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 4000
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_HEAT_PUMP_TECHNICAL_ASSESSMENT",
+      "display_name": "SEAI technical assessment (heat loss) for a heat pump (EUR 200) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, technical assessment grant, required for homes built before 2007 without a BER stating a heat loss indicator of 2.3 W/(K.m2) or less",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/heat-pump-systems",
+      "source_ids": [
+        "src_seai_heatpump_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "HEAT_PUMP"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<",
+            "value": 2007
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 200
+      },
+      "eligible_cost": {
+        "categories": [
+          "PLANNING"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_SOLAR_PV_FROM_4_KWP",
+      "display_name": "SEAI solar PV grant, 4 kWp or more (EUR 1,800, step approximation of a pro-rata grant) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Solar PV Scheme (Microgeneration Support Scheme), pro-rata grant of EUR 700 per kWp up to 2 kWp plus EUR 200 per further kWp up to 4 kWp, capped at EUR 1,800; encoded as the step for 4 kWp or more",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/solar-electricity-grant",
+      "source_ids": [
+        "src_seai_pv_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "PV"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2020
+          },
+          {
+            "field": "measure.technical_attributes.peak_power_in_kwp",
+            "op": ">=",
+            "value": 4.0
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1800
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_SOLAR_PV_3_TO_4_KWP",
+      "display_name": "SEAI solar PV grant, 3 kWp up to 4 kWp (EUR 1,600, step approximation of a pro-rata grant) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Solar PV Scheme (Microgeneration Support Scheme), pro-rata grant of EUR 700 per kWp up to 2 kWp plus EUR 200 per further kWp up to 4 kWp, capped at EUR 1,800; encoded as the step for 3 kWp up to 4 kWp",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/solar-electricity-grant",
+      "source_ids": [
+        "src_seai_pv_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "PV"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2020
+          },
+          {
+            "field": "measure.technical_attributes.peak_power_in_kwp",
+            "op": ">=",
+            "value": 3.0
+          },
+          {
+            "field": "measure.technical_attributes.peak_power_in_kwp",
+            "op": "<",
+            "value": 4.0
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1600
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_SOLAR_PV_2_TO_3_KWP",
+      "display_name": "SEAI solar PV grant, 2 kWp up to 3 kWp (EUR 1,400, step approximation of a pro-rata grant) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Solar PV Scheme (Microgeneration Support Scheme), pro-rata grant of EUR 700 per kWp up to 2 kWp plus EUR 200 per further kWp up to 4 kWp, capped at EUR 1,800; encoded as the step for 2 kWp up to 3 kWp",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/solar-electricity-grant",
+      "source_ids": [
+        "src_seai_pv_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "PV"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2020
+          },
+          {
+            "field": "measure.technical_attributes.peak_power_in_kwp",
+            "op": ">=",
+            "value": 2.0
+          },
+          {
+            "field": "measure.technical_attributes.peak_power_in_kwp",
+            "op": "<",
+            "value": 3.0
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1400
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_SOLAR_PV_1_TO_2_KWP",
+      "display_name": "SEAI solar PV grant, 1 kWp up to 2 kWp (EUR 700, step approximation of a pro-rata grant) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Solar PV Scheme (Microgeneration Support Scheme), pro-rata grant of EUR 700 per kWp up to 2 kWp plus EUR 200 per further kWp up to 4 kWp, capped at EUR 1,800; encoded as the step for 1 kWp up to 2 kWp",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/solar-electricity-grant",
+      "source_ids": [
+        "src_seai_pv_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "PV"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2020
+          },
+          {
+            "field": "measure.technical_attributes.peak_power_in_kwp",
+            "op": ">=",
+            "value": 1.0
+          },
+          {
+            "field": "measure.technical_attributes.peak_power_in_kwp",
+            "op": "<",
+            "value": 2.0
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 700
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_SOLAR_THERMAL",
+      "display_name": "SEAI solar water heating grant (EUR 1,200) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Better Energy Homes, solar water heating (solar thermal) grant",
+      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/solar-water-heating-grant",
+      "source_ids": [
+        "src_seai_thermal_2026",
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "SOLAR_THERMAL_SYSTEM"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2020
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1200
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_OSS_MECHANICAL_VENTILATION",
+      "display_name": "SEAI mechanical ventilation grant, One Stop Shop route (EUR 1,500) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI National Home Energy Upgrade Scheme, mechanical ventilation grant",
+      "url": "https://www.seai.ie/grants/home-energy-grants/one-stop-shop/multiple-energy-upgrades",
+      "source_ids": [
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "VENTILATION_SYSTEM"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "applicant.managed_full_retrofit",
+            "op": "==",
+            "value": true
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1500
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_OSS_AIR_TIGHTNESS",
+      "display_name": "SEAI air tightness grant, One Stop Shop route (EUR 1,000) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI National Home Energy Upgrade Scheme, air tightness grant",
+      "url": "https://www.seai.ie/grants/home-energy-grants/one-stop-shop/multiple-energy-upgrades",
+      "source_ids": [
+        "src_seai_oss_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "AIR_SEALING"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2010
+          },
+          {
+            "field": "applicant.managed_full_retrofit",
+            "op": "==",
+            "value": true
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "LUMP_SUM",
+        "amount": 1000
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_SEAI_WARMER_HOMES",
+      "display_name": "SEAI Warmer Homes Scheme, fully funded upgrade (100 % of the eligible cost) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Warmer Homes Scheme: fully funded energy upgrades for owner-occupiers on an eligible social welfare payment whose home was built before 2006; SEAI's surveyor chooses the measures",
+      "url": "https://www.seai.ie/grants/home-energy-grants/fully-funded-upgrades-for-eligible-homes",
+      "source_ids": [
+        "src_seai_warmer_homes_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "TOP_CEILING_UPPER_INSULATION",
+          "ROOF_INSULATION_BETWEEN_JOISTS",
+          "ROOF_INSULATION_OVER_JOISTS",
+          "WARM_ROOF_INSULATION",
+          "WALL_EXTERNAL_INSULATION",
+          "WALL_INTERNAL_INSULATION",
+          "BASEMENT_CEILING_BOTTOM_INSULATION",
+          "BASEMENT_WALLS_INTERNAL_INSULATION",
+          "GROUND_EXTERNAL_INSULATION",
+          "WINDOWS_TRIPLE_GLAZED",
+          "EXTERIOR_DOOR",
+          "AIR_SEALING",
+          "VENTILATION_SYSTEM",
+          "HEAT_PUMP",
+          "HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING",
+          "HEAT_DISTRIBUTION_SYSTEM_RADIATOR",
+          "HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "==",
+            "value": "OWNER_OCCUPIER"
+          },
+          {
+            "field": "applicant.receives_means_tested_benefit",
+            "op": "==",
+            "value": true
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<",
+            "value": 2006
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "SHARE_OF_ELIGIBLE_COST",
+        "rate": 1.0
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_SEAI_GRANTS",
+        "combined_rate_cap": null,
+        "excludes": [
+          "IE_HEULS_LOAN",
+          "IE_SEAI_ATTIC_APARTMENT",
+          "IE_SEAI_ATTIC_DETACHED",
+          "IE_SEAI_ATTIC_ENHANCED_APARTMENT",
+          "IE_SEAI_ATTIC_ENHANCED_DETACHED",
+          "IE_SEAI_ATTIC_ENHANCED_MID_TERRACE",
+          "IE_SEAI_ATTIC_ENHANCED_SEMI_DETACHED",
+          "IE_SEAI_ATTIC_MID_TERRACE",
+          "IE_SEAI_ATTIC_SEMI_DETACHED",
+          "IE_SEAI_CAVITY_WALL_APARTMENT",
+          "IE_SEAI_CAVITY_WALL_DETACHED",
+          "IE_SEAI_CAVITY_WALL_MID_TERRACE",
+          "IE_SEAI_CAVITY_WALL_SEMI_DETACHED",
+          "IE_SEAI_CAVITY_WALL_WELFARE_APARTMENT",
+          "IE_SEAI_CAVITY_WALL_WELFARE_DETACHED",
+          "IE_SEAI_CAVITY_WALL_WELFARE_MID_TERRACE",
+          "IE_SEAI_CAVITY_WALL_WELFARE_SEMI_DETACHED",
+          "IE_SEAI_EXTERNAL_DOORS",
+          "IE_SEAI_EXTERNAL_WALL_APARTMENT",
+          "IE_SEAI_EXTERNAL_WALL_DETACHED",
+          "IE_SEAI_EXTERNAL_WALL_MID_TERRACE",
+          "IE_SEAI_EXTERNAL_WALL_SEMI_DETACHED",
+          "IE_SEAI_HEAT_PUMP_CENTRAL_HEATING_APARTMENT",
+          "IE_SEAI_HEAT_PUMP_CENTRAL_HEATING_HOUSE",
+          "IE_SEAI_HEAT_PUMP_TECHNICAL_ASSESSMENT",
+          "IE_SEAI_HEAT_PUMP_UNIT_APARTMENT",
+          "IE_SEAI_HEAT_PUMP_UNIT_HOUSE",
+          "IE_SEAI_INTERNAL_WALL_APARTMENT",
+          "IE_SEAI_INTERNAL_WALL_DETACHED",
+          "IE_SEAI_INTERNAL_WALL_MID_TERRACE",
+          "IE_SEAI_INTERNAL_WALL_SEMI_DETACHED",
+          "IE_SEAI_OSS_AIR_TIGHTNESS",
+          "IE_SEAI_OSS_FLOOR",
+          "IE_SEAI_OSS_MECHANICAL_VENTILATION",
+          "IE_SEAI_OSS_RAFTER_APARTMENT",
+          "IE_SEAI_OSS_RAFTER_HOUSE",
+          "IE_SEAI_OSS_RAFTER_MID_TERRACE",
+          "IE_SEAI_RENEWABLE_HEAT_BONUS",
+          "IE_SEAI_SOLAR_PV_1_TO_2_KWP",
+          "IE_SEAI_SOLAR_PV_2_TO_3_KWP",
+          "IE_SEAI_SOLAR_PV_3_TO_4_KWP",
+          "IE_SEAI_SOLAR_PV_FROM_4_KWP",
+          "IE_SEAI_SOLAR_THERMAL",
+          "IE_SEAI_WINDOWS_APARTMENT",
+          "IE_SEAI_WINDOWS_DETACHED",
+          "IE_SEAI_WINDOWS_MID_TERRACE",
+          "IE_SEAI_WINDOWS_SEMI_DETACHED"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "IE_HEULS_LOAN",
+      "display_name": "Home Energy Upgrade Loan Scheme (3 % over up to 10 years) [AI draft — needs examination]",
+      "jurisdiction": {
+        "country": "IE",
+        "region": null
+      },
+      "valid_from": "2026-01-01",
+      "valid_to": null,
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — Home Energy Upgrade Loan Scheme (SBCI/SEAI): EUR 5,000 to EUR 75,000 over up to 10 years for grant-aided works carried out by a registered One Stop Shop or community coordinator; the 3 % rate is the 'starting from as low as 3%' the SEAI landlord support page quotes",
+      "url": "https://www.seai.ie/grants/home-energy-grants/home-energy-upgrade-loan",
+      "source_ids": [
+        "src_seai_loan_2026",
+        "src_seai_landlords_2026"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "TOP_CEILING_UPPER_INSULATION",
+          "ROOF_INSULATION_BETWEEN_JOISTS",
+          "ROOF_INSULATION_OVER_JOISTS",
+          "WARM_ROOF_INSULATION",
+          "WALL_EXTERNAL_INSULATION",
+          "WALL_INTERNAL_INSULATION",
+          "BASEMENT_CEILING_BOTTOM_INSULATION",
+          "BASEMENT_WALLS_INTERNAL_INSULATION",
+          "GROUND_EXTERNAL_INSULATION",
+          "WINDOWS_TRIPLE_GLAZED",
+          "EXTERIOR_DOOR",
+          "AIR_SEALING",
+          "VENTILATION_SYSTEM",
+          "HEAT_PUMP",
+          "HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING",
+          "HEAT_DISTRIBUTION_SYSTEM_RADIATOR",
+          "HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR",
+          "PV",
+          "SOLAR_THERMAL_SYSTEM"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "CONDOMINIUM_ASSOCIATION"
+            ]
+          },
+          {
+            "field": "applicant.managed_full_retrofit",
+            "op": "==",
+            "value": true
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "SOFT_LOAN",
+        "interest_rate": 0.03,
+        "term": 10,
+        "repayment_grant_rate": 0.0
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "IE_LOANS",
+        "combined_rate_cap": null,
+        "excludes": []
+      },
+      "payout": {
+        "kind": "LOAN_TERMS"
+      }
+    }
+  ]
+}

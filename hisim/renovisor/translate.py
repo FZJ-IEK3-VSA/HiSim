@@ -43,6 +43,7 @@ from hisim.energy_system.model import (
 )
 from hisim.renovisor import TRANSLATOR_VERSION
 from hisim.renovisor.apply import AppliedPackage
+from hisim.renovisor.economics import EconomicContextBuilder
 from hisim.renovisor.constants import (
     BatteryLaw,
     BoilerEfficiency,
@@ -767,6 +768,11 @@ class TranslatedSystem:
         yaml_text: The canonical text, byte-stable for one request.
         edits: Every change made, with its provenance.
         report: The mapping report, complete.
+        economic_context: What the lifecycle cost engine has to be told about the dwelling that
+            the simulation cannot tell it -- the existing-asset register, the envelope cost
+            subjects and the applicant. ``run`` attaches it to the simulation parameters beside
+            the economic parameters; ``None`` only for a translation built before the context
+            existed, which nothing in the package does.
     """
 
     model: EnergySystemFile
@@ -775,6 +781,7 @@ class TranslatedSystem:
     yaml_text: str
     edits: Tuple[Edit, ...]
     report: MappingReport
+    economic_context: Optional[Any] = None
 
     def assert_only_permitted_edits(self, base: EnergySystemFile) -> None:
         """Raise when the translation changed something the diff rule does not permit."""
@@ -948,6 +955,23 @@ class Translator:
         file_name = f"{name}{BaseFiles.SUFFIX}"
         report.energy_system_file = file_name
         report.set_measures([line.to_json() for line in applied.measures])
+        # The economic context is built from the *edited* model, because its envelope subjects are
+        # sized in square metres of the building the run will actually simulate.
+        built = EconomicContextBuilder(
+            request,
+            applied,
+            _building_config(model),
+            generator_component=BaseFiles.generator_component(base_file_name),
+            heating_reference_temperature_in_celsius=_design_temperature(model),
+        ).build()
+        report.set_subjects(built.subjects)
+        report.set_unpriced_subjects(built.unpriced_subjects)
+        for path, value, note in built.defaults:
+            if not report.has(path):
+                report.defaulted(path, value, note)
+        for path, value, note in built.approximations:
+            if not report.has(path):
+                report.approximated(path, note, value=value)
         translated = TranslatedSystem(
             model=model,
             base_file_name=base_file_name,
@@ -955,6 +979,7 @@ class Translator:
             yaml_text=text,
             edits=tuple(edits),
             report=report,
+            economic_context=built.context,
         )
         translated.assert_only_permitted_edits(base)
         self._self_check(text, file_name)
@@ -976,6 +1001,63 @@ class Translator:
                 f"the translated {file_name} does not load back: {type(error).__name__}: {error}",
                 "the self-check of §5.1 step 3 failed; the file was not written",
             ) from error
+
+
+def _building_config(model: EnergySystemFile) -> Mapping[str, Any]:
+    """Every ``Building`` configuration field of a translated model, however it is written.
+
+    Two things read this. The envelope cost subjects are sized in square metres of the element
+    they cover, and the areas live in the component's ``config`` block: the translator writes them
+    from the request, and where the request stated none the archetype derives them, in which case
+    the field is absent and the subject ends up unpriced rather than sized by a guess. The design
+    heat load the existing generator is sized from needs the archetype itself — the TABULA code,
+    the conditioned floor area and the apartment count — and those are *constructor arguments*
+    after the ``for_tabula_code`` swap rather than config keys.
+
+    Both halves are the same configuration seen through two spellings of the file format, so they
+    are merged into one mapping here; a constructor argument wins, because it is what the
+    constructor will put on the config the run is built with.
+
+    Args:
+        model: The edited energy-system document.
+
+    Returns:
+        The merged mapping, or ``{}`` when the model has no building.
+    """
+    entry = model.components.get(Targets.BUILDING) if isinstance(model.components, Mapping) else None
+    if entry is None:
+        return {}
+    config = getattr(entry, "config", None)
+    merged: Dict[str, Any] = dict(config) if isinstance(config, Mapping) else {}
+    constructor = getattr(entry, "constructor", None)
+    arguments = getattr(constructor, "arguments", None) if constructor is not None else None
+    if isinstance(arguments, Mapping):
+        merged.update(arguments)
+    return merged
+
+
+def _design_temperature(model: EnergySystemFile) -> Optional[float]:
+    """The outside design temperature the translated ``Weather`` carries, or ``None``.
+
+    The design condition belongs to the place the building stands in, so ``WeatherConfig`` states
+    it and the building reads it through the sizing engine (decision D-21). Nothing has run yet
+    when the economic context is built, so the value is taken from the weather's own constructor
+    argument, which is where the translator wrote the country's reviewed design temperature.
+
+    Args:
+        model: The edited energy-system document.
+
+    Returns:
+        The temperature in degrees Celsius, or ``None`` when the model has no weather or the
+        weather states none.
+    """
+    entry = model.components.get(Targets.WEATHER) if isinstance(model.components, Mapping) else None
+    constructor = getattr(entry, "constructor", None) if entry is not None else None
+    arguments = getattr(constructor, "arguments", None) if constructor is not None else None
+    if not isinstance(arguments, Mapping):
+        return None
+    value = arguments.get("heating_reference_temperature_in_celsius")
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
 @dataclass

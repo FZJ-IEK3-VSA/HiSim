@@ -18,9 +18,12 @@ instead of being loosened.
 
 import hashlib
 
+from pathlib import Path
+
 import pytest
 
 from hisim.renovisor.contract import ContractFiles
+from hisim.renovisor.contract.refresh import ContractSources
 
 
 @pytest.mark.base
@@ -106,3 +109,33 @@ class TestVendoredContract:
         """The catalogue and the materials dump parse and expose their top-level lists."""
         assert ContractFiles.measures()["measures"], "measures.yaml has no measures"
         assert ContractFiles.materials()["materials"], "materials.yaml has no materials"
+
+
+@pytest.mark.base
+class TestTheSharedFolder:
+    """The vendored copies equal the shared specifications wherever the shared folder exists.
+
+    ``/home/contract-proposals`` is the single home of every specification the three repositories
+    share; the copies under ``hisim/renovisor/contract/`` exist only because CI and the container
+    image cannot see that folder. On a machine that has it, a copy that differs from the shared
+    file is drift, and this test says so by name; elsewhere it skips.
+    """
+
+    def test_every_locally_vendored_file_equals_the_shared_one(self) -> None:
+        """Byte-for-byte equality with the shared folder, or a skip where the folder is absent."""
+        shared = Path(ContractSources.SHARED_DIRECTORY)
+        if not shared.is_dir():
+            pytest.skip(f"{shared} is not on this machine; CI and the image vendor the files instead")
+        pinned = ContractFiles.pinned()["files"]
+        compared = 0
+        for filename, entry in pinned.items():
+            if entry.get("source") != ContractSources.LOCAL_SOURCE:
+                continue
+            shared_file = shared / filename
+            assert shared_file.is_file(), f"{filename} is vendored from the shared folder but no longer there"
+            assert ContractFiles.path(filename).read_bytes() == shared_file.read_bytes(), (
+                f"{filename} differs from {shared_file}; run `python -m hisim.renovisor.contract.refresh "
+                "<contract checkout>` rather than editing either copy"
+            )
+            compared += 1
+        assert compared > 0, "no file is vendored from the shared folder any more; drop this test"

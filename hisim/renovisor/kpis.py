@@ -310,9 +310,11 @@ class LifecycleCo2:
     #: The engine's primary export, in the run's result directory.
     FILE_NAME: ClassVar[str] = "lifecycle_costs.json"
 
-    #: The perspective the payload reads: the whole system priced without subsidies, which is
-    #: the one the cost block reads too, so the two cannot describe different worlds.
-    PERSPECTIVE_ID: ClassVar[str] = "greenfield_gross"
+    #: The perspective the payload reads: the RenoVisor default of step 10 §1 -- the existing
+    #: building, subsidies applied where a catalogue says so, cash financing. It is the same
+    #: perspective ``economics_result.json`` is written under, so the KPI half and the money half
+    #: of a calculation cannot describe different worlds.
+    PERSPECTIVE_ID: ClassVar[str] = "brownfield_net"
 
     #: The keys inside it.
     BLOCK: ClassVar[str] = "lifecycle_co2"
@@ -347,11 +349,38 @@ class LifecycleCo2:
             document = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return None
-        perspective = document.get(cls.PERSPECTIVE_ID)
-        if not isinstance(perspective, Mapping):
+        perspective = cls._perspective(document)
+        if perspective is None:
             return None
         block = perspective.get(cls.BLOCK)
         return cls(block) if isinstance(block, Mapping) else None
+
+    @classmethod
+    def _perspective(cls, document: Mapping[str, Any]) -> Optional[Mapping[str, Any]]:
+        """The perspective the operational CO2 is read from: the default one, or any of them.
+
+        The engine evaluates the greenfield perspectives for a run with no existing-asset
+        register and the brownfield ones for a run that has one, so no single id is present in
+        every document. Falling back to the first perspective the document carries is safe for
+        *this* figure and only for this figure: operational CO2 per year is the emission factor
+        of a carrier times the kilowatt-hours that crossed the meter, and every perspective of
+        one run prices the same meter, so the by-year array is identical in all of them. Nothing
+        monetary is read here, and the embodied half of the payload's carbon comes from the
+        insulation layers rather than from this file.
+
+        Args:
+            document: The parsed ``lifecycle_costs.json``.
+
+        Returns:
+            The perspective object, or ``None`` when the document carries none at all.
+        """
+        preferred = document.get(cls.PERSPECTIVE_ID)
+        if isinstance(preferred, Mapping):
+            return preferred
+        for value in document.values():
+            if isinstance(value, Mapping) and isinstance(value.get(cls.BLOCK), Mapping):
+                return value
+        return None
 
     def annual_operational_in_kg(self) -> Optional[float]:
         """Return the operational CO2 of one year, in kilograms.

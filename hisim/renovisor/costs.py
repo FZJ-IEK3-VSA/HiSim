@@ -1,54 +1,43 @@
-"""The ``costs`` block of ``result.json``: the cost engine's figures plus the envelope materials.
+"""Why ``result.json`` carries no money, and where the money went instead.
 
-Decision Q23 made HiSim responsible for the whole ``Costs`` block of the contract, and split it in
-two along the line of who owns the numbers. Everything about the *devices* and the *bills* comes
-from HiSim's lifecycle cost engine, which prices an Irish run against ``devices_IE.json``,
-``energy_prices_IE.json`` and ``escalation_defaults_IE.json``; those files are AI estimates that
-nobody has reviewed yet, so every figure resting on them is ``PARTIAL`` and says so. Everything
-about the *envelope* comes from the insulation-material database and from nowhere else: decisions
-Q8/Q9 forbid HiSim from estimating envelope prices, and the engine's own thirteen envelope entries
-are AI estimates of exactly that kind. The material database gives euro per cubic metre and no
-labour, so the envelope figure is the material cost alone, published as ``PARTIAL`` with a source
-saying what it leaves out until the materials team's total-cost column exists.
+Step 6 gave ``result.json`` a ``costs`` block: one state of one dwelling, priced over one horizon
+with the whole investment in year 0, read out of the lifecycle cost engine's exports. Step 10
+replaced it. A renovation is a *plan* — several states of the house over several years, each
+stage's investment in its own year, each earlier stage's equipment ageing into the next — and one
+run of one state cannot say what that costs. The staged evaluator can, and it writes
+``economics_result.json`` (:mod:`hisim.economics.staged_document`), which carries the whole of the
+money: the totals, the eight-group stacks, the per-subject build-up, the annual series, the
+subsidies, the financing and the comparison against doing nothing.
 
-The two halves meet in one place, ``investment_costs_in_euro``, and the payload keeps the seam
-visible: ``investment_breakdown`` carries the device half and the envelope half as separate
-figures, so a reader can see which part of a retrofit's price tag is an engine estimate and which
-is a material list::
+The E-spec's rule — **one implementation of the money** — is therefore kept by removing the second
+one rather than by keeping two in step. ``result.json`` is now the KPI half of the answer, and
+every cost field of the contract appears in its ``missing`` list with the reason, because a field
+that has moved is a different statement from a field nobody could produce, and decision R8 says
+neither may be answered with a plausible zero.
 
-    "investment_costs_in_euro":  {"value": {"low": …, "best_estimate": …, "high": …}, …}
-    "investment_breakdown": {"devices": {…}, "envelope_material": {…}}
-
-Which perspective the figures are read under is :attr:`CostSources.PERSPECTIVE_ID`, and the choice
-matters: the bundle's greenfield rows are the ones a run with no existing-asset register
-evaluates, and of those, the *gross* one is the honest source here. Its sibling ``greenfield_net``
-applies the §10.1 flat subsidy shim whenever no country catalogue is configured, which for Ireland
-today would put a German-shaped support percentage into an Irish result. The grant is therefore
-its own field, read from the net view only when a real ``subsidy_catalog/IE.json`` is configured,
-and absent until that file exists (decision Q24; the file itself is step 6b).
+What remains here is exactly that bookkeeping: the names of the contract's cost fields
+(:class:`CostField`), the ``missing`` entries one calculation produces for them
+(:class:`CostBuilder`), and the published shape of the block that the capability document and the
+translation map show a caller before the first payload exists (:class:`CostSchema`). No figure is
+read, no engine export is opened, and no price is estimated.
 """
 
-import csv
-import dataclasses
-import json
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
+from typing import Any, ClassVar, Dict, Tuple
 
 from hisim.renovisor.kpis import PayloadFieldRow
-from hisim.renovisor.layers import EnvelopeLayers
-from hisim.renovisor.provenance import MissingField, ProvenancedValue, Range
-from hisim.renovisor.vocabulary import Provenance
+from hisim.renovisor.provenance import MissingField
 
 
 class CostField(str, Enum):
-    """The names the payload's ``costs`` block uses, in HiSim spelling (decision C3).
+    """The names the payload's ``costs`` block used, in HiSim spelling (decision C3).
 
-    The vendored contract still spells them ``investment_costs_euro`` and
-    ``monthly_net_cost_20y_euro``; C3 fixed HiSim's ``_in_euro`` convention as the contract's, and
-    the contract PR of step 7 adopts these names. ``investment_breakdown`` is the one member that
-    is not a contract field: it is the split decision Q23 asks HiSim to keep visible.
+    The block is gone; the names are not. They are what ``result.json["missing"]`` lists, what the
+    capability document's ``results`` section publishes, and what a frontend looks for before it
+    goes to ``economics_result.json`` instead. ``investment_breakdown`` is the one member that was
+    never a contract field — it was the device/envelope split of decision Q23, which the staged
+    document now carries as ``by_subject[]`` with a ``measure_id`` on every row.
     """
 
     INVESTMENT = "investment_costs_in_euro"
@@ -63,389 +52,96 @@ class CostField(str, Enum):
     INVESTMENT_BREAKDOWN = "investment_breakdown"
 
 
-class CostSources:
-    """Which engine figure each contract field reads, and under which perspective.
+class EconomicsDocument:
+    """Where the money is, named once, so every reason and every schema row says the same thing.
 
-    A table for the same reason :class:`hisim.renovisor.kpis.KpiSources` is one: the mapping from
-    a contract field to a cost-engine field is a claim a reviewer should be able to check in one
-    place, and a reader of ``result.json`` should be able to follow a number back to the export it
-    came from without reading the builder.
+    Three facts that would otherwise be spelled out at each of the places mentioning the split —
+    the payload's ``missing`` reasons, the capability document's ``results`` section and the
+    translation map's result pane. Naming them here is what sends a reader who follows any of the
+    three to the same file, the same key and the same command.
     """
 
-    #: The perspective every cost figure but the grant is read under. ``greenfield_gross`` is the
-    #: first row of the shipped bundle that a register-free RenoVisor run evaluates, and the right
-    #: one of the two: it applies no subsidy at all, so the payload's investment and net present
-    #: value are the price before support, and support is reported once, in its own field, from a
-    #: catalogue rather than from the flat shim.
-    PERSPECTIVE_ID: ClassVar[str] = "greenfield_gross"
+    #: The document the staged evaluator writes, and the whole of the money.
+    FILE_NAME: ClassVar[str] = "economics_result.json"
 
-    #: The perspective the grant is read under, when a country subsidy catalogue is configured:
-    #: the same greenfield situation with the subsidy engine switched on.
-    SUBSIDY_PERSPECTIVE_ID: ClassVar[str] = "greenfield_net"
-
-    #: The timeline year a system's own investment falls in.
-    INVESTMENT_YEAR: ClassVar[int] = 0
-
-    #: The first fully billed year, which is what "per year" means for an energy or maintenance
-    #: figure. Year 0 holds the investment and, under the engine's end-of-year convention, no full
-    #: year of operation.
-    FIRST_BILLED_YEAR: ClassVar[int] = 1
-
-    #: The timeline category holding the year-0 device investments.
-    INVESTMENT_CATEGORY: ClassVar[str] = "INVESTMENT"
-
-    #: The timeline category holding maintenance.
-    MAINTENANCE_CATEGORY: ClassVar[str] = "MAINTENANCE"
-
-    #: The timeline categories that together are an energy bill: the working price, the standing
-    #: charge, the carbon price and the capacity charge. Feed-in revenue is deliberately not among
-    #: them -- it is income, and netting it into a "cost per year" would make a large enough PV
-    #: array look like a negative energy bill.
-    ENERGY_CATEGORIES: ClassVar[Tuple[str, ...]] = (
-        "ENERGY_WORKING",
-        "ENERGY_STANDING",
-        "ENERGY_CO2_PRICE",
-        "ENERGY_CAPACITY_CHARGE",
+    #: How it is produced: one invocation over the finished jobs of a plan.
+    COMMAND: ClassVar[str] = (
+        "python -m hisim.economics staged --stage <dir>:<from_year>:<label> ... --out "
+        "economics_result.json"
     )
 
-    #: The engine field the net present value is read from.
-    NET_PRESENT_VALUE_FIELD: ClassVar[str] = "total_npv_in_euro"
+    #: Which key of it answers each cost field ``result.json`` no longer carries, and how to read
+    #: that key where it is not the figure itself. Two :class:`CostField` members have no entry:
+    #: ``property_value_increase_in_percent``, which moved nowhere because nothing anywhere
+    #: produces it (decision A13), and ``monthly_net_cost_10y_in_euro``, which no key of a
+    #: document evaluated over one horizon can answer (:attr:`NO_KEY`).
+    WHERE: ClassVar[Dict[str, str]] = {
+        CostField.INVESTMENT.value: "plan.totals.investment_year0_in_euro",
+        CostField.ENERGY.value: "plan.energy_year1[].cost_in_euro",
+        CostField.MAINTENANCE.value: "plan.by_subject[].maintenance_in_euro",
+        CostField.NET_PRESENT_VALUE.value: "plan.totals.npv_in_euro",
+        CostField.MONTHLY_TWENTY_YEARS.value: "plan.totals.equivalent_annual_cost_in_euro",
+        CostField.GRANT.value: "plan.subsidies[]",
+        CostField.PAYBACK.value: "comparison.discounted_payback_year",
+        CostField.INVESTMENT_BREAKDOWN.value: "plan.by_subject[]",
+    }
 
-    #: The engine field the monthly figures are derived from.
-    EQUIVALENT_ANNUAL_COST_FIELD: ClassVar[str] = "equivalent_annual_cost_in_euro"
+    #: The arithmetic between a key and the field it answers, for the fields where the two are
+    #: not the same number. The twenty-year monthly figure is the annuity the document publishes
+    #: per year: ``equivalent_annual_cost_in_euro`` is NPV times the capital recovery factor over
+    #: the plan's horizon, and the contract states it per month.
+    HOW: ClassVar[Dict[str, str]] = {
+        CostField.MONTHLY_TWENTY_YEARS.value: "divided by twelve",
+    }
 
-    #: The engine field naming the horizon a result was evaluated over.
-    HORIZON_FIELD: ClassVar[str] = "observation_period_in_years"
-
-    #: The shorter horizon the contract also asks for, evaluated a second time from the stored
-    #: inputs rather than by simulating again.
-    SHORT_HORIZON_IN_YEARS: ClassVar[int] = 10
-
-    #: Months in a year, the divisor behind both monthly figures.
-    MONTHS_PER_YEAR: ClassVar[float] = 12.0
-
-    #: The category whose NPV is the support the subsidy engine awarded. It is negative-signed on
-    #: the timeline (support reduces cost), so the published grant is its magnitude.
-    SUBSIDY_CATEGORY: ClassVar[str] = "SUBSIDY"
-
-    #: Why the price basis of every engine figure is only partly reviewed, quoted in each source.
-    PRICE_BASIS_NOTE: ClassVar[str] = (
-        "Irish device and energy prices are AI estimates (src_ai_estimates) and are not reviewed"
-    )
-
-
-class CostDocuments:
-    """The cost engine's exports of one run, read as files.
-
-    The engine writes its result as ``lifecycle_costs.json`` (the per-perspective KPIs and NPV
-    pivots), ``lifecycle_kpis.json`` (the same figures as a flat namespaced KPI list) and
-    ``cash_flow_timeline.csv`` (every cash flow, one row per entry). This class reads the first
-    and the third, which between them answer every question the payload asks: the JSON has the
-    discounted totals and the timeline has the per-year, per-category detail the annual figures
-    need.
-
-    Args:
-        perspectives: The parsed ``lifecycle_costs.json``, keyed by perspective id.
-        timeline: The parsed ``cash_flow_timeline.csv`` rows.
-    """
-
-    #: The engine's primary machine-readable export.
-    COSTS_FILE_NAME: ClassVar[str] = "lifecycle_costs.json"
-
-    #: The engine's flat KPI export, read for nothing the JSON does not carry but named here so a
-    #: reader of the payload knows both files are the engine's and not the translation layer's.
-    KPIS_FILE_NAME: ClassVar[str] = "lifecycle_kpis.json"
-
-    #: The unaggregated timeline every engine figure is a pivot of.
-    TIMELINE_FILE_NAME: ClassVar[str] = "cash_flow_timeline.csv"
-
-    #: The timeline CSV's delimiter, as ``exports.write_cash_flow_timeline`` writes it.
-    TIMELINE_DELIMITER: ClassVar[str] = ";"
-
-    #: The timeline columns this module reads.
-    PERSPECTIVE_COLUMN: ClassVar[str] = "perspective"
-    YEAR_COLUMN: ClassVar[str] = "year"
-    CATEGORY_COLUMN: ClassVar[str] = "category"
-    NOMINAL_LOW_COLUMN: ClassVar[str] = "nominal_min"
-    NOMINAL_BEST_COLUMN: ClassVar[str] = "nominal_best_estimate"
-    NOMINAL_HIGH_COLUMN: ClassVar[str] = "nominal_max"
-
-    def __init__(self, perspectives: Mapping[str, Any], timeline: Tuple[Mapping[str, str], ...]) -> None:
-        """Store the two parsed exports."""
-        self._perspectives = dict(perspectives)
-        self._timeline = timeline
+    #: The fields the document does not answer at all, and why. A ten-year monthly figure is a
+    #: different evaluation and not a different key: the staged document prices one plan over one
+    #: horizon, so the figure exists only for a plan evaluated with ``horizon_years: 10``.
+    NO_KEY: ClassVar[Dict[str, str]] = {
+        CostField.MONTHLY_TEN_YEARS.value: (
+            "the staged document is evaluated over one horizon; a ten-year figure needs a plan "
+            "evaluated with `horizon_years: 10`"
+        ),
+    }
 
     @classmethod
-    def load(cls, results_directory: Path) -> Optional["CostDocuments"]:
-        """Read the engine's exports out of a run's result directory.
+    def reason_for(cls, field_name: str) -> str:
+        """The sentence ``result.json`` gives for one cost field it does not carry.
 
         Args:
-            results_directory: The simulation's own output directory.
+            field_name: The :class:`CostField` value.
 
         Returns:
-            The documents, or ``None`` when ``lifecycle_costs.json`` is not there -- which is what
-            a run without ``COMPUTE_LIFECYCLE_COSTS`` leaves behind, and makes every cost field
-            absent rather than zero.
+            One sentence naming the document and either the key inside it — with the arithmetic
+            between the key and the field, where they differ — or why no key answers the field.
+
+        Raises:
+            KeyError: If the field is in neither :attr:`WHERE` nor :attr:`NO_KEY`, which means a
+                cost field was added without deciding where its figure lives now.
         """
-        costs_path = results_directory / cls.COSTS_FILE_NAME
-        if not costs_path.is_file():
-            return None
-        perspectives = json.loads(costs_path.read_text(encoding="utf-8"))
-        rows: List[Mapping[str, str]] = []
-        timeline_path = results_directory / cls.TIMELINE_FILE_NAME
-        if timeline_path.is_file():
-            with timeline_path.open(encoding="utf-8", newline="") as handle:
-                rows = list(csv.DictReader(handle, delimiter=cls.TIMELINE_DELIMITER))
-        return cls(perspectives=perspectives, timeline=tuple(rows))
-
-    def perspective_ids(self) -> Tuple[str, ...]:
-        """Return every perspective the run evaluated, in bundle order."""
-        return tuple(self._perspectives)
-
-    def result(self, perspective_id: str) -> Optional[Mapping[str, Any]]:
-        """Return one perspective's result object, or ``None`` when the run has no such row."""
-        result = self._perspectives.get(perspective_id)
-        return result if isinstance(result, Mapping) else None
-
-    def banded_field(self, perspective_id: str, field: str) -> Optional[Range]:
-        """Return one top-level banded figure of a perspective.
-
-        Args:
-            perspective_id: Which perspective to read.
-            field: The engine field name, e.g. ``"total_npv_in_euro"``.
-
-        Returns:
-            The range, or ``None`` when the perspective or the field is absent.
-        """
-        result = self.result(perspective_id)
-        if result is None:
-            return None
-        return Range.from_uncertain_value(result.get(field))
-
-    def category_npv(self, perspective_id: str, category: str) -> Optional[Range]:
-        """Return the net present value of one cost category of one perspective.
-
-        Args:
-            perspective_id: Which perspective to read.
-            category: The ``CostCategory`` value, e.g. ``"SUBSIDY"``.
-
-        Returns:
-            The range, or ``None`` when the perspective has no entry in that category.
-        """
-        result = self.result(perspective_id)
-        if result is None:
-            return None
-        by_category = result.get("npv_by_category")
-        if not isinstance(by_category, Mapping):
-            return None
-        return Range.from_uncertain_value(by_category.get(category))
-
-    def horizon_in_years(self, perspective_id: str) -> Optional[int]:
-        """Return the observation period one perspective was evaluated over, in years."""
-        result = self.result(perspective_id)
-        parameters = result.get("parameters") if result is not None else None
-        horizon = parameters.get(CostSources.HORIZON_FIELD) if isinstance(parameters, Mapping) else None
-        return int(horizon) if isinstance(horizon, int) else None
-
-    def nominal_total(
-        self, perspective_id: str, year: int, categories: Tuple[str, ...]
-    ) -> Optional[Range]:
-        """Sum the nominal cash flows of one year and a set of categories, slot by slot.
-
-        This is the one derivation this module performs on the timeline, and it is a filter and a
-        sum rather than a new economic step: the engine's own exports are pivots of exactly these
-        rows, so a figure computed here reconciles with the published totals by construction.
-
-        Args:
-            perspective_id: Which perspective's timeline to read.
-            year: The timeline year, 0 for the investment and 1 for the first billed year.
-            categories: The cost categories to include.
-
-        Returns:
-            The slot-wise sum, or ``None`` when the timeline holds no such row at all -- which is
-            a different statement from a total of zero and has to stay one.
-        """
-        wanted = set(categories)
-        total = Range.zero()
-        found = False
-        for row in self._timeline:
-            if row.get(self.PERSPECTIVE_COLUMN) != perspective_id:
-                continue
-            if row.get(self.CATEGORY_COLUMN) not in wanted:
-                continue
-            try:
-                if int(row[self.YEAR_COLUMN]) != year:
-                    continue
-                total = total.plus(
-                    Range(
-                        low=float(row[self.NOMINAL_LOW_COLUMN]),
-                        best_estimate=float(row[self.NOMINAL_BEST_COLUMN]),
-                        high=float(row[self.NOMINAL_HIGH_COLUMN]),
-                    )
-                )
-            except (KeyError, TypeError, ValueError):
-                continue
-            found = True
-        return total if found else None
-
-
-class EnvelopeMaterialCost:
-    """Why the envelope half of the investment is absent, and what would make it appear.
-
-    Decisions Q8/Q9 said an envelope measure is priced from the materials database and from
-    nothing else, and that the database gains a total-cost column owned by the materials team.
-    Rule 5 of the calculation request then moved the material into the request itself -- as its
-    physical properties, which carry no price. So there is no price anywhere in this
-    translator's inputs today, and the field is absent with the reason published rather than
-    filled with a number nobody owns.
-
-    The class is kept rather than deleted because the moment the request schema gains a price
-    per square metre, or the frontend sends the materials team's total, this is the one place
-    that has to change.
-
-    Args:
-        layers: The package's insulation layers.
-    """
-
-    #: What the payload's ``missing`` entry says, verbatim.
-    REASON: ClassVar[str] = (
-        "the request carries no material price (D-A); the materials team's total-cost column is "
-        "the source, and the request schema does not carry it yet"
-    )
-
-    def __init__(self, layers: EnvelopeLayers) -> None:
-        """Store the layers, which decide only whether there was anything to price."""
-        self._layers = layers
-
-    def total(self) -> Tuple[Optional[Range], str]:
-        """Return the material cost of every layer and the sentence describing it.
-
-        Returns:
-            ``(None, reason)`` always today: either the package insulates nothing, or it does
-            and the request carries no price for what it installed.
-        """
-        if self._layers.is_empty():
-            return None, "the package adds no insulation layer"
-        return None, self.REASON
-
-
-class ShortHorizonEvaluation:
-    """A second evaluation of the stored inputs over a shorter horizon.
-
-    The contract asks for a monthly net cost over ten years beside the one over twenty, and the
-    engine's horizon is a parameter of an *evaluation*, not of a simulation: ``economic_inputs.json``
-    is the faithful extract of the run, and re-pricing it against the same database with a
-    different ``observation_period_in_years`` is a matter of milliseconds and touches no
-    simulation, no post-processing and no file the run already wrote. That is what this class does,
-    and why the ten-year figure is a real evaluation rather than a twenty-year figure rescaled.
-
-    Nothing about it may break a calculation: the imports are local to :meth:`equivalent_annual_cost`
-    so that a HiSim without the cost engine's optional dependencies still produces a payload, and
-    any failure returns ``None`` with the reason, which makes the field absent.
-    """
-
-    #: The file the evaluation reads, written by the engine before anything economic happens.
-    INPUTS_FILE_NAME: ClassVar[str] = "economic_inputs.json"
-
-    @classmethod
-    def equivalent_annual_cost(
-        cls, results_directory: Path, perspective_id: str, horizon_in_years: int
-    ) -> Tuple[Optional[Range], str]:
-        """Re-evaluate one perspective over *horizon_in_years* and return its annual cost.
-
-        Args:
-            results_directory: The run's result directory, holding ``economic_inputs.json``.
-            perspective_id: The perspective to evaluate, one of the shipped bundle's.
-            horizon_in_years: The observation period to evaluate over.
-
-        Returns:
-            ``(range, source)`` on success, ``(None, reason)`` otherwise.
-        """
-        if not (results_directory / cls.INPUTS_FILE_NAME).is_file():
-            return None, f"the run wrote no {cls.INPUTS_FILE_NAME} to re-evaluate"
-        try:
-            from hisim.economics.database import CostDatabase
-            from hisim.economics.evaluator import EconomicEvaluator
-            from hisim.economics.parameters import EconomicParameters
-            from hisim.economics.perspectives import load_default_bundle, select_applicable
-            from hisim.economics.serialization import read_inputs, read_stored_parameters
-            from hisim.economics.subsidies import SubsidyCatalog
-
-            inputs = read_inputs(str(results_directory))
-            stored = read_stored_parameters(str(results_directory)) or EconomicParameters()
-            parameters = dataclasses.replace(stored, observation_period_in_years=horizon_in_years)
-            perspectives = select_applicable(
-                load_default_bundle(), has_register=inputs.existing_assets is not None
+        if field_name in cls.NO_KEY:
+            return (
+                f"the money is in {cls.FILE_NAME}, which does not carry this figure: "
+                f"{cls.NO_KEY[field_name]}. Write the document with `{cls.COMMAND}`"
             )
-            chosen = next((item for item in perspectives if item.id == perspective_id), None)
-            if chosen is None:
-                return None, f"the default perspective bundle has no applicable '{perspective_id}'"
-            catalog = SubsidyCatalog.load_configured(parameters.country, parameters.subsidy_catalog_path)
-            evaluator = EconomicEvaluator(CostDatabase(parameters.cost_database_path), parameters, catalog)
-            result = evaluator.evaluate(inputs, chosen)
-        except Exception as error:  # pylint: disable=broad-except  # an absent field, not a crash
-            return None, (
-                f"the {horizon_in_years}-year re-evaluation of {cls.INPUTS_FILE_NAME} failed "
-                f"({type(error).__name__}: {error})"
-            )
-        band = Range.from_uncertain_value(result.equivalent_annual_cost_in_euro.to_json())
-        if band is None:
-            return None, f"the {horizon_in_years}-year evaluation produced no equivalent annual cost"
-        return band, (
-            f"{cls.INPUTS_FILE_NAME} re-evaluated over {horizon_in_years} years under "
-            f"'{perspective_id}': equivalent_annual_cost_in_euro / 12"
+        how = cls.HOW.get(field_name)
+        key = cls.WHERE[field_name] + (f", {how}" if how else "")
+        return (
+            f"the money is in {cls.FILE_NAME} ({key}), which prices the whole "
+            f"staged plan rather than this one job; write it with `{cls.COMMAND}`"
         )
-
-
-class SubsidyCatalogue:
-    """Where the country subsidy catalogues live and whether this country has one.
-
-    Decision Q24 asks for an Irish catalogue and step 6b builds it; this class is the wiring that
-    picks it up the moment it appears, so that the day the file lands no code has to change for
-    ``grant_in_euro`` to start being published. Until then the directory holds ``DE.json`` and
-    ``AT.json`` only and an Irish calculation configures no catalogue at all -- which is a
-    deliberate choice and not an oversight: with no catalogue the engine falls back to a flat
-    shim whose support percentage comes from the device entries, and publishing that as an Irish
-    grant would be inventing a scheme.
-    """
-
-    #: The directory the shipped catalogues live in, relative to the repository root.
-    DIRECTORY_NAME: ClassVar[str] = "subsidy_catalog"
-
-    #: The package directory holding it.
-    PACKAGE_ROOT: ClassVar[Path] = Path(__file__).resolve().parents[1]
-
-    @classmethod
-    def directory(cls) -> Path:
-        """Return the directory the shipped country catalogues live in."""
-        return cls.PACKAGE_ROOT / cls.DIRECTORY_NAME
-
-    @classmethod
-    def path_for(cls, country: str, directory: Optional[Path] = None) -> Optional[Path]:
-        """Return the catalogue file of one country, or ``None`` when there is none.
-
-        Args:
-            country: The ISO country code, e.g. ``"IE"``.
-            directory: Where to look; :meth:`directory` when omitted. A test passes a temporary
-                directory holding a synthetic catalogue.
-
-        Returns:
-            The path of ``<COUNTRY>.json``, or ``None`` when the file does not exist.
-        """
-        base = cls.directory() if directory is None else directory
-        candidate = base / f"{country.upper()}.json"
-        return candidate if candidate.is_file() else None
 
 
 @dataclass(frozen=True)
 class CostBlock:
-    """The finished ``costs`` block and the fields that could not be filled.
+    """What the cost half of one calculation contributes to ``result.json``.
 
     Args:
-        values: The JSON-ready block, field name -> a provenance object, plus the nested
-            ``investment_breakdown`` whose two leaves are provenance objects of their own.
-        missing: One entry per contract field this run could not produce, already prefixed with
-            ``costs.``.
+        values: The ``costs`` block. Always empty since step 10: ``result.json`` carries the KPI
+            half of the answer and nothing monetary. The field is kept so the payload builder's
+            two halves stay the same shape.
+        missing: One entry per contract cost field, already prefixed with ``costs.``, each saying
+            where that figure is instead.
     """
 
     values: Dict[str, Any]
@@ -453,455 +149,116 @@ class CostBlock:
 
 
 class CostBuilder:
-    """Builds the ``costs`` block of one calculation's ``result.json``.
+    """Lists the cost fields ``result.json`` does not carry, and why.
 
-    Like the KPI builder, it reads only what it is handed, so a unit test can drive it with a
-    synthetic pair of engine exports and a two-layer package and never run a simulation.
+    It reads nothing and computes nothing: every cost field of the contract is absent from the
+    payload by decision, so the whole of the builder is the reason each of them gives. Keeping it
+    a class rather than a function keeps the payload builder's two halves symmetrical — one KPI
+    builder, one cost builder, each returning values and ``missing`` — and gives the reasons one
+    place to be reviewed.
 
-    Args:
-        documents: The run's cost-engine exports, or ``None`` when it produced none.
-        layers: The package's insulation layers, which decide whether the envelope half of the
-            investment has anything to price at all.
-        country: The country code whose price column is read and whose subsidy catalogue is
-            looked for.
-        results_directory: Where the run's exports are, for the second evaluation over the shorter
-            horizon; ``None`` disables that evaluation and makes the ten-year field absent.
-        subsidy_catalogue_path: The catalogue this run was configured with, or ``None`` when the
-            country has none yet.
+    Example::
+
+        block = CostBuilder().build()
+        [entry.field for entry in block.missing]  # 'costs.investment_costs_in_euro', ...
     """
 
     #: The prefix every missing cost field carries in ``result.json["missing"]``.
     MISSING_PREFIX: ClassVar[str] = "costs"
 
-    #: The key the device half of the investment sits under.
-    DEVICES_KEY: ClassVar[str] = "devices"
-
-    #: The key the envelope half sits under.
-    ENVELOPE_KEY: ClassVar[str] = "envelope_material"
-
-    #: Why there is no payback period: it is a difference between this calculation and the same
-    #: dwelling without the package, and nothing here has run the second one.
-    PAYBACK_REASON: ClassVar[str] = (
-        "needs the base calculation as well; a compare entry point is a later step"
-    )
-
-    #: Why there is no property-value figure: decision A13 records that no model exists.
+    #: Why there is no property-value figure: decision A13 records that no model exists. It is
+    #: the one cost field that did not move to ``economics_result.json``, because nothing
+    #: anywhere produces it.
     PROPERTY_VALUE_REASON: ClassVar[str] = "no model for the value a renovation adds to a property (A13)"
 
-    #: Why there is no grant until the Irish catalogue is written (decision Q24, step 6b).
-    GRANT_REASON_TEMPLATE: ClassVar[str] = (
-        "no subsidy catalogue for '{country}' (subsidy_catalog/{country}.json); the engine's flat "
-        "shim is not an Irish scheme and is not published as one (Q24, step 6b)"
-    )
-
-    def __init__(
-        self,
-        documents: Optional[CostDocuments],
-        layers: EnvelopeLayers,
-        country: str,
-        results_directory: Optional[Path] = None,
-        subsidy_catalogue_path: Optional[Path] = None,
-    ) -> None:
-        """Store the inputs; nothing is read until :meth:`build`."""
-        self._documents = documents
-        self._layers = layers
-        self._country = country
-        self._results_directory = results_directory
-        self._catalogue = subsidy_catalogue_path
-        self._missing: List[MissingField] = []
-
     def build(self) -> CostBlock:
-        """Return the ``costs`` block and the fields that could not be filled.
+        """Return the empty ``costs`` block and one ``missing`` entry per cost field.
 
         Returns:
-            The :class:`CostBlock`. Fields appear in the order of :class:`CostField`, so two runs
-            of one request produce the same bytes (requirement R10).
+            The :class:`CostBlock`. Entries appear in the order of :class:`CostField`, so two
+            runs of one request produce the same bytes (requirement R10).
         """
-        self._missing = []
-        values: Dict[str, Any] = {}
-        self._investment(values)
-        self._annual(values, CostField.ENERGY, CostSources.ENERGY_CATEGORIES, "energy")
-        self._annual(
-            values, CostField.MAINTENANCE, (CostSources.MAINTENANCE_CATEGORY,), "maintenance"
+        missing = tuple(
+            MissingField(field=f"{self.MISSING_PREFIX}.{field.value}", reason=self.reason_for(field))
+            for field in CostField
         )
-        self._net_present_value(values)
-        self._monthly_over_the_full_horizon(values)
-        self._monthly_over_the_short_horizon(values)
-        self._grant(values)
-        self._absent(CostField.PAYBACK, self.PAYBACK_REASON)
-        self._absent(CostField.PROPERTY_VALUE, self.PROPERTY_VALUE_REASON)
-        return CostBlock(values=values, missing=tuple(self._missing))
+        return CostBlock(values={}, missing=missing)
 
-    def _absent(self, field: CostField, reason: str) -> None:
-        """Record that one field is absent from the payload, with the reason."""
-        self._missing.append(MissingField(field=f"{self.MISSING_PREFIX}.{field.value}", reason=reason))
-
-    def _partial(self, value: Range, source: str) -> Dict[str, Any]:
-        """Return one ``PARTIAL`` provenance object; every engine figure is one.
+    @classmethod
+    def reason_for(cls, field: CostField) -> str:
+        """The reason one cost field is absent from ``result.json``.
 
         Args:
-            value: The band.
-            source: Where it came from.
+            field: The cost field.
 
         Returns:
-            The JSON-ready provenance object.
+            The sentence its ``missing`` entry carries.
         """
-        return ProvenancedValue(value=value, provenance=Provenance.PARTIAL, source=source).to_json()
-
-    def _investment(self, values: Dict[str, Any]) -> None:
-        """Fill the investment field and its two-part breakdown.
-
-        The devices come from the engine's year-0 investment entries. The envelope half has no
-        source today -- the request carries the material's physics and not its price (rule 5) --
-        so it is absent and listed under ``missing`` with the reason, rather than folded
-        silently into a total that would then understate a retrofit.
-
-        Args:
-            values: The block being assembled.
-        """
-        devices = (
-            self._documents.nominal_total(
-                CostSources.PERSPECTIVE_ID,
-                CostSources.INVESTMENT_YEAR,
-                (CostSources.INVESTMENT_CATEGORY,),
-            )
-            if self._documents is not None
-            else None
-        )
-        envelope, envelope_note = EnvelopeMaterialCost(self._layers).total()
-        breakdown: Dict[str, Any] = {}
-        if devices is not None:
-            breakdown[self.DEVICES_KEY] = self._partial(
-                devices,
-                f"{CostDocuments.TIMELINE_FILE_NAME}: year {CostSources.INVESTMENT_YEAR} "
-                f"{CostSources.INVESTMENT_CATEGORY} entries under '{CostSources.PERSPECTIVE_ID}'; "
-                f"{CostSources.PRICE_BASIS_NOTE}",
-            )
-        if envelope is not None:
-            breakdown[self.ENVELOPE_KEY] = self._partial(envelope, envelope_note)
-        else:
-            self._missing.append(
-                MissingField(
-                    field=f"{self.MISSING_PREFIX}.{CostField.INVESTMENT_BREAKDOWN.value}."
-                    f"{self.ENVELOPE_KEY}",
-                    reason=envelope_note,
-                )
-            )
-        if devices is None and envelope is None:
-            self._absent(
-                CostField.INVESTMENT,
-                f"no engine investment entries ({self._engine_absence()}) and no envelope material "
-                f"cost ({envelope_note})",
-            )
-        else:
-            total = (devices or Range.zero()).plus(envelope or Range.zero())
-            parts = []
-            if devices is not None:
-                parts.append(f"devices from the cost engine ({CostSources.PRICE_BASIS_NOTE})")
-            else:
-                parts.append(f"no device investment: {self._engine_absence()}")
-            if envelope is not None:
-                parts.append(f"envelope {envelope_note}")
-            else:
-                parts.append(f"no envelope material cost: {envelope_note}")
-            values[CostField.INVESTMENT.value] = self._partial(total, "; ".join(parts))
-        if breakdown:
-            values[CostField.INVESTMENT_BREAKDOWN.value] = breakdown
-
-    def _annual(
-        self, values: Dict[str, Any], field: CostField, categories: Tuple[str, ...], what: str
-    ) -> None:
-        """Fill one per-year cost field from the first billed year of the timeline.
-
-        Args:
-            values: The block being assembled.
-            field: The contract field.
-            categories: The timeline categories that make up the figure.
-            what: One word naming the figure, for the source sentence.
-        """
-        total = (
-            self._documents.nominal_total(
-                CostSources.PERSPECTIVE_ID, CostSources.FIRST_BILLED_YEAR, categories
-            )
-            if self._documents is not None
-            else None
-        )
-        if total is None:
-            self._absent(
-                field,
-                f"the run's timeline holds no year-{CostSources.FIRST_BILLED_YEAR} {what} entries "
-                f"({self._engine_absence()})",
-            )
-            return
-        values[field.value] = self._partial(
-            total,
-            f"{CostDocuments.TIMELINE_FILE_NAME}: year {CostSources.FIRST_BILLED_YEAR} nominal "
-            f"{', '.join(categories)} entries under '{CostSources.PERSPECTIVE_ID}'; "
-            f"{CostSources.PRICE_BASIS_NOTE}",
-        )
-
-    def _net_present_value(self, values: Dict[str, Any]) -> None:
-        """Fill the net present value, stating the horizon it was computed over."""
-        band = (
-            self._documents.banded_field(
-                CostSources.PERSPECTIVE_ID, CostSources.NET_PRESENT_VALUE_FIELD
-            )
-            if self._documents is not None
-            else None
-        )
-        if band is None:
-            self._absent(CostField.NET_PRESENT_VALUE, self._engine_absence())
-            return
-        values[CostField.NET_PRESENT_VALUE.value] = self._partial(
-            band,
-            f"{CostDocuments.COSTS_FILE_NAME}: {CostSources.PERSPECTIVE_ID}."
-            f"{CostSources.NET_PRESENT_VALUE_FIELD} over {self._horizon_phrase()}; "
-            f"{CostSources.PRICE_BASIS_NOTE}",
-        )
-
-    def _monthly_over_the_full_horizon(self, values: Dict[str, Any]) -> None:
-        """Fill the monthly net cost over the engine's own horizon."""
-        band = (
-            self._documents.banded_field(
-                CostSources.PERSPECTIVE_ID, CostSources.EQUIVALENT_ANNUAL_COST_FIELD
-            )
-            if self._documents is not None
-            else None
-        )
-        if band is None:
-            self._absent(CostField.MONTHLY_TWENTY_YEARS, self._engine_absence())
-            return
-        values[CostField.MONTHLY_TWENTY_YEARS.value] = self._partial(
-            band.scaled(1.0 / CostSources.MONTHS_PER_YEAR),
-            f"{CostDocuments.COSTS_FILE_NAME}: {CostSources.PERSPECTIVE_ID}."
-            f"{CostSources.EQUIVALENT_ANNUAL_COST_FIELD} / 12 over {self._horizon_phrase()}; "
-            f"{CostSources.PRICE_BASIS_NOTE}",
-        )
-
-    def _monthly_over_the_short_horizon(self, values: Dict[str, Any]) -> None:
-        """Fill the ten-year monthly net cost by re-evaluating the stored inputs."""
-        if self._results_directory is None:
-            self._absent(
-                CostField.MONTHLY_TEN_YEARS,
-                f"no result directory to re-evaluate over "
-                f"{CostSources.SHORT_HORIZON_IN_YEARS} years",
-            )
-            return
-        band, note = ShortHorizonEvaluation.equivalent_annual_cost(
-            self._results_directory, CostSources.PERSPECTIVE_ID, CostSources.SHORT_HORIZON_IN_YEARS
-        )
-        if band is None:
-            self._absent(CostField.MONTHLY_TEN_YEARS, note)
-            return
-        values[CostField.MONTHLY_TEN_YEARS.value] = self._partial(
-            band.scaled(1.0 / CostSources.MONTHS_PER_YEAR),
-            f"{note}; {CostSources.PRICE_BASIS_NOTE}",
-        )
-
-    def _grant(self, values: Dict[str, Any]) -> None:
-        """Fill the grant from the subsidy solver, or record why there is none.
-
-        The figure is published only when this calculation was configured with a real country
-        catalogue. Without one the engine still books a flat-shim support in its ``greenfield_net``
-        view, and that number is a percentage of device prices rather than a scheme anybody
-        administers, so it is not published as a grant.
-
-        Args:
-            values: The block being assembled.
-        """
-        if self._catalogue is None:
-            self._absent(CostField.GRANT, self.GRANT_REASON_TEMPLATE.format(country=self._country))
-            return
-        band = (
-            self._documents.category_npv(
-                CostSources.SUBSIDY_PERSPECTIVE_ID, CostSources.SUBSIDY_CATEGORY
-            )
-            if self._documents is not None
-            else None
-        )
-        if band is None:
-            self._absent(
-                CostField.GRANT,
-                f"the subsidy solver awarded nothing under '{CostSources.SUBSIDY_PERSPECTIVE_ID}' "
-                f"from {self._catalogue.name}",
-            )
-            return
-        magnitude = Range(low=-band.high, best_estimate=-band.best_estimate, high=-band.low)
-        values[CostField.GRANT.value] = self._partial(
-            magnitude,
-            f"{CostDocuments.COSTS_FILE_NAME}: {CostSources.SUBSIDY_PERSPECTIVE_ID}."
-            f"npv_by_category.{CostSources.SUBSIDY_CATEGORY}, sign-flipped to the support received, "
-            f"from the catalogue {self._catalogue}",
-        )
-
-    def _engine_absence(self) -> str:
-        """Return the sentence saying why an engine figure is missing.
-
-        Returns:
-            One of two sentences: the run produced no cost exports at all, or it produced them
-            without the perspective this module reads.
-        """
-        if self._documents is None:
-            return (
-                f"the run wrote no {CostDocuments.COSTS_FILE_NAME}; "
-                "COMPUTE_LIFECYCLE_COSTS produced no result"
-            )
-        available = ", ".join(self._documents.perspective_ids()) or "none"
-        return (
-            f"{CostDocuments.COSTS_FILE_NAME} carries no usable "
-            f"'{CostSources.PERSPECTIVE_ID}' figure (perspectives present: {available})"
-        )
-
-    def _horizon_phrase(self) -> str:
-        """Return the horizon a perspective was evaluated over, as a phrase for a source string."""
-        horizon = (
-            self._documents.horizon_in_years(CostSources.PERSPECTIVE_ID)
-            if self._documents is not None
-            else None
-        )
-        return "an unstated horizon" if horizon is None else f"{horizon} years"
+        if field is CostField.PROPERTY_VALUE:
+            return cls.PROPERTY_VALUE_REASON
+        return EconomicsDocument.reason_for(field.value)
 
 
 class CostSchema:
     """The published shape of the ``costs`` block, without running anything.
 
-    The counterpart of :class:`hisim.renovisor.kpis.KpiSchema` for the money half of the payload,
-    and the same contract: one row per :class:`CostField`, each saying where the figure comes
-    from and what provenance it carries, so the translation map and the capability document's
-    ``results`` section can show the frontend what will arrive before the first payload exists.
-    The four figures that are always absent carry the sentence ``result.json["missing"]`` states
-    in place of a provenance, because that is the honest answer to "what will I get here".
+    The counterpart of :class:`hisim.renovisor.kpis.KpiSchema` for the money half of the payload:
+    one row per :class:`CostField`, saying where the figure comes from and — since step 10 — that
+    it does not come in ``result.json`` at all. The capability document's ``results`` section and
+    the translation map both render these rows, so a frontend sees the split before the first
+    payload exists rather than by finding a key missing.
     """
 
     #: Which block of ``result.json`` these rows describe; the prefix their ``missing`` entries
     #: carry.
     BLOCK: ClassVar[str] = CostBuilder.MISSING_PREFIX
 
-    #: The country the shipped catalogue directory has no file for, which is what makes the
-    #: grant absent. Named here so the row's reason is the sentence the payload writes.
-    UNSUPPORTED_SUBSIDY_COUNTRY: ClassVar[str] = "IE"
+    #: When every moved field is absent from ``result.json``: from step 10 onwards, always.
+    MOVED_WHEN: ClassVar[str] = f"always absent; the money is in {EconomicsDocument.FILE_NAME}"
 
-    #: When the grant is absent: until the country's own subsidy catalogue is written.
-    GRANT_WHEN: ClassVar[str] = (
-        f"absent until subsidy_catalog/{UNSUPPORTED_SUBSIDY_COUNTRY}.json exists (Q24, step 6b)"
-    )
-
-    #: When the payback period is absent: until a second run of the same dwelling exists.
-    PAYBACK_WHEN: ClassVar[str] = "absent until a compare entry point runs the base calculation too"
+    #: When a field no document answers is absent: always, and no key will produce it.
+    NO_KEY_WHEN: ClassVar[str] = "always absent; no document carries this figure"
 
     #: When the property-value figure is absent: always; decision A13 records that no model exists.
     PROPERTY_VALUE_WHEN: ClassVar[str] = "always absent (A13)"
-
-    #: When the envelope half of the investment is absent: always, until the request carries a
-    #: material price.
-    ENVELOPE_WHEN: ClassVar[str] = (
-        "always absent until the request schema carries a material price (D-A)"
-    )
-
-    #: What the two banded investment figures say about their own basis.
-    PRICE_BASIS_CONDITION: ClassVar[str] = (
-        f"PARTIAL always: {CostSources.PRICE_BASIS_NOTE}"
-    )
-
-    #: What the whole investment figure is short of while the envelope half is absent.
-    INVESTMENT_CONDITION: ClassVar[str] = (
-        "the envelope material half is absent, so the figure is the devices alone"
-    )
 
     @classmethod
     def rows(cls) -> Tuple[PayloadFieldRow, ...]:
         """Return one row per field of the ``costs`` block, in payload order.
 
         Returns:
-            One row per :class:`CostField`, plus one for the ``envelope_material`` leaf of the
-            investment breakdown, which is a field of its own in ``result.json["missing"]``.
+            One row per :class:`CostField`. Every row is an absent one: it names what produces
+            the figure now and carries the sentence ``result.json["missing"]`` states, in place
+            of a provenance it no longer has.
         """
-        engine = f"lifecycle cost engine under '{CostSources.PERSPECTIVE_ID}'"
-        return (
+        return tuple(
             PayloadFieldRow(
                 cls.BLOCK,
-                CostField.INVESTMENT.value,
-                f"{engine}: year-{CostSources.INVESTMENT_YEAR} "
-                f"{CostSources.INVESTMENT_CATEGORY} entries, plus the envelope material cost",
-                Provenance.PARTIAL,
-                conditions=(cls.PRICE_BASIS_CONDITION, cls.INVESTMENT_CONDITION),
-            ),
-            PayloadFieldRow(
-                cls.BLOCK,
-                CostField.ENERGY.value,
-                f"{engine}: year-{CostSources.FIRST_BILLED_YEAR} nominal "
-                f"{', '.join(CostSources.ENERGY_CATEGORIES)}",
-                Provenance.PARTIAL,
-                conditions=(cls.PRICE_BASIS_CONDITION,),
-            ),
-            PayloadFieldRow(
-                cls.BLOCK,
-                CostField.MAINTENANCE.value,
-                f"{engine}: year-{CostSources.FIRST_BILLED_YEAR} nominal "
-                f"{CostSources.MAINTENANCE_CATEGORY}",
-                Provenance.PARTIAL,
-                conditions=(cls.PRICE_BASIS_CONDITION,),
-            ),
-            PayloadFieldRow(
-                cls.BLOCK,
-                CostField.NET_PRESENT_VALUE.value,
-                f"{engine}: {CostSources.NET_PRESENT_VALUE_FIELD} over the engine's horizon",
-                Provenance.PARTIAL,
-                conditions=(cls.PRICE_BASIS_CONDITION,),
-            ),
-            PayloadFieldRow(
-                cls.BLOCK,
-                CostField.MONTHLY_TWENTY_YEARS.value,
-                f"{engine}: {CostSources.EQUIVALENT_ANNUAL_COST_FIELD} / "
-                f"{CostSources.MONTHS_PER_YEAR:.0f}",
-                Provenance.PARTIAL,
-                conditions=(cls.PRICE_BASIS_CONDITION,),
-            ),
-            PayloadFieldRow(
-                cls.BLOCK,
-                CostField.MONTHLY_TEN_YEARS.value,
-                f"{CostDocuments.COSTS_FILE_NAME}'s stored inputs re-evaluated over "
-                f"{CostSources.SHORT_HORIZON_IN_YEARS} years, / "
-                f"{CostSources.MONTHS_PER_YEAR:.0f}",
-                Provenance.PARTIAL,
-                conditions=(cls.PRICE_BASIS_CONDITION,),
-            ),
-            PayloadFieldRow(
-                cls.BLOCK,
-                CostField.GRANT.value,
-                f"the subsidy solver under '{CostSources.SUBSIDY_PERSPECTIVE_ID}', once a country "
-                "catalogue exists",
-                reason=CostBuilder.GRANT_REASON_TEMPLATE.format(
-                    country=cls.UNSUPPORTED_SUBSIDY_COUNTRY
-                ),
-                when=cls.GRANT_WHEN,
-            ),
-            PayloadFieldRow(
-                cls.BLOCK,
-                CostField.PAYBACK.value,
-                "the difference against the same dwelling without the package",
-                reason=CostBuilder.PAYBACK_REASON,
-                when=cls.PAYBACK_WHEN,
-            ),
-            PayloadFieldRow(
-                cls.BLOCK,
-                CostField.PROPERTY_VALUE.value,
-                "",
-                reason=CostBuilder.PROPERTY_VALUE_REASON,
-                when=cls.PROPERTY_VALUE_WHEN,
-            ),
-            PayloadFieldRow(
-                cls.BLOCK,
-                CostField.INVESTMENT_BREAKDOWN.value,
-                "the two halves of the investment, separately: devices and envelope_material",
-                Provenance.PARTIAL,
-                conditions=(cls.PRICE_BASIS_CONDITION,),
-            ),
-            PayloadFieldRow(
-                cls.BLOCK,
-                f"{CostField.INVESTMENT_BREAKDOWN.value}.{CostBuilder.ENVELOPE_KEY}",
-                "the request material's price per cubic metre, which the request does not carry",
-                reason=EnvelopeMaterialCost.REASON,
-                when=cls.ENVELOPE_WHEN,
-            ),
+                field.value,
+                cls._produced_by(field),
+                reason=CostBuilder.reason_for(field),
+                when=cls._when(field),
+            )
+            for field in CostField
         )
+
+    @classmethod
+    def _when(cls, field: CostField) -> str:
+        """When one cost field is absent from ``result.json``, for the row's condition column."""
+        if field is CostField.PROPERTY_VALUE:
+            return cls.PROPERTY_VALUE_WHEN
+        if field.value in EconomicsDocument.NO_KEY:
+            return cls.NO_KEY_WHEN
+        return cls.MOVED_WHEN
+
+    @classmethod
+    def _produced_by(cls, field: CostField) -> str:
+        """What produces one cost figure now, for the row's source column.
+
+        Empty for the two fields nothing produces: the property-value increase, which no model
+        anywhere computes (A13), and the ten-year monthly cost, which needs a second evaluation
+        over a ten-year horizon rather than a key of this document.
+        """
+        if field is CostField.PROPERTY_VALUE or field.value in EconomicsDocument.NO_KEY:
+            return ""
+        return f"{EconomicsDocument.FILE_NAME}: {EconomicsDocument.WHERE[field.value]}"

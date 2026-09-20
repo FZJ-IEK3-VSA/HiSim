@@ -189,6 +189,26 @@ class TestStagingSemantics:
         installed = {asset.asset_class.value: asset.installation_year for asset in merged.existing_assets.assets}
         assert installed["WallExternalInsulation"] == SyntheticPlan.YEAR + 2
 
+    def test_the_baselines_own_equipment_keeps_its_inventory_age(self, database, parameters):
+        """The boiler the house already has is as old as the inventory says, not as the plan.
+
+        Stage 0 "charges" everything it carries at share 1.0, which is right for the reference's
+        own booking, but it must not put that equipment into later registers dated to the
+        simulation year: a 2010 boiler that suddenly counts as new would be written off almost in
+        full as sunk cost when the heat pump replaces it.
+        """
+        del parameters
+        evaluator = StagedEvaluator(database)
+        stages = (baseline_stage(), heat_pump_stage(3))
+        # pylint: disable=protected-access  # the merge has no public surface of its own
+        charged = [evaluator._charged_subjects(stages, 0)]
+        assert charged[0] == {SyntheticPlan.BOILER_SUBJECT: 1.0}
+        merged = evaluator._staged_inputs(stages, 1, charged)
+        assert merged.existing_assets is not None
+        boilers = [asset for asset in merged.existing_assets.assets if asset.asset_class is ComponentType.GAS_HEATER]
+        assert len(boilers) == 1
+        assert boilers[0].installation_year == SyntheticPlan.INVENTORY_INSTALLATION_YEAR
+
     def test_the_stage_a_subject_belongs_to_is_reported(self, database, parameters):
         """Every subject the plan pays for knows which stage paid, for the document's waterfall."""
         result = StagedEvaluator(database).evaluate(

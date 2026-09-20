@@ -620,7 +620,8 @@ class StagedEvaluator:
         then schedules the replacements, the residual values and the removal costs itself; this
         module adds no second mechanism.
 
-        Stage 0 is returned unchanged — it is the reference, and its register is the inventory as
+        Stage 0 is returned unchanged, and it contributes nothing to later registers either — it is
+        the reference, and its register is the inventory as
         the translator declared it.
 
         Args:
@@ -645,7 +646,12 @@ class StagedEvaluator:
         }
         installed_classes: Set[ComponentType] = set()
         aged: Dict[str, ExistingAsset] = {}
-        for earlier in range(index):
+        # Stage 0 is the house as it is: what it "charges" is the reference's own year-0 booking,
+        # not a purchase the plan makes, and its equipment is already in the inventory register
+        # with its real installation year. Letting it age in here would re-date a 2010 boiler to
+        # the simulation year, so the heat pump that replaces it would write off a nearly new
+        # asset as sunk cost. Only stages 1.. put anything into the building.
+        for earlier in range(1, index):
             earlier_facts = {facts.subject: facts.facts for facts in stages[earlier].inputs.cost_facts}
             for subject, share in charged_by_stage[earlier].items():
                 facts = earlier_facts.get(subject)

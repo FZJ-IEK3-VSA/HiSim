@@ -42,11 +42,11 @@ inputs:
   subsidy_asset_class: "HeatPump"
 expected:
   plan_npv_in_euro:
-    value: 60648.44
+    value: 64641.02
     abs_tol: 0.01
     note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
   plan_eac_in_euro:
-    value: 4076.53
+    value: 4344.89
     abs_tol: 0.01
     note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
   reference_npv_in_euro:
@@ -54,7 +54,7 @@ expected:
     abs_tol: 0.01
     note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
   npv_delta_in_euro:
-    value: 15147.70
+    value: 19140.28
     abs_tol: 0.01
     note: "computed by the staged evaluator over the inputs above; the plan's cash flows are a splice of per-stage evaluations, which no single spreadsheet formula reproduces"
   plan_npv_subsidy_in_euro:

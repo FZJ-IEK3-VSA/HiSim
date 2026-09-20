@@ -1046,6 +1046,15 @@ def _staged_plan(inputs: Dict[str, Any]) -> List[Any]:
                     installation_year=EXAMPLE_YEAR - int(inputs.get("baseline_age_in_years", 0)),
                     is_functional=True,
                     replaced_by_asset_classes=replaced,
+                    # The workbook's own `baseline_investment_in_euro`, as the like-for-like price
+                    # of the device being replaced. The synthetic database carries no device
+                    # prices at all, and the engine needs that price to write off the old unit's
+                    # remaining book value and to size the anyway-cost credit; without it the run
+                    # is refused rather than priced on a guess (issue #25c). The service life it
+                    # then assumes for the old unit is
+                    # `ContextResolutionConstants.FALLBACK_SERVICE_LIFE_IN_YEARS`, because an
+                    # override states a price and not a lifetime.
+                    replacement_cost_override_in_euro=baseline.investment_cost_override_in_euro,
                 )
             ]
         )

@@ -175,6 +175,16 @@ def inventory_register() -> ExistingAssetRegister:
     The register is what switches the engine into its brownfield accounting, and its
     ``replaced_by_asset_classes`` is what tells the engine that a heat pump supersedes the boiler
     rather than joining it. Both are the state of the world before any stage.
+
+    ``replacement_cost_override_in_euro`` is here for the same reason every other figure of this
+    fixture is an override: the synthetic database carries no device prices at all, and the engine
+    needs the boiler's *like-for-like* price to write off its remaining book value and to size the
+    anyway-cost credit when the heat pump replaces it (``calculators/context_resolution.py``
+    ``resolve_replaced_asset``). Without it the run is refused rather than priced on a guess, which
+    is the engine's own rule (issue #25c). The price is the boiler's own purchase price, and the
+    service life the engine then assumes is
+    :attr:`~hisim.economics.calculators.context_resolution.ContextResolutionConstants.FALLBACK_SERVICE_LIFE_IN_YEARS`,
+    because an override states a price and not a lifetime.
     """
     return ExistingAssetRegister(
         assets=[
@@ -186,6 +196,9 @@ def inventory_register() -> ExistingAssetRegister:
                 is_functional=True,
                 energy_carrier=EnergyCarrier.NATURAL_GAS,
                 replaced_by_asset_classes=[ComponentType.HEAT_PUMP],
+                replacement_cost_override_in_euro=UncertainValue.exact(
+                    SyntheticPlan.BOILER_INVESTMENT_IN_EURO
+                ),
             )
         ]
     )

@@ -70,8 +70,34 @@ temperature the existing generator cannot be sized from are both of that kind.
 
 The same two codes hold for `python -m hisim.economics staged`, which prices a plan out of
 finished jobs: exit 2 with a `problems.json` for a plan the caller can fix — stage years that run
-backwards, a stage directory that carries `economic_inputs.json` but no `mapping_report.json` —
-and exit 3 for an engine failure they cannot.
+backwards, a stage directory that carries `economic_inputs.json` but no `mapping_report.json`, any
+parameter key it does not accept — and exit 3 for an engine failure they cannot. There is no exit 2
+without the file.
+
+Its `--parameters` file is the document's own `parameters` block, so a reader can feed a
+document's assumptions back in unchanged:
+
+```json
+{
+  "horizon_years": 20,
+  "interest_rate": 0.03,
+  "perspective_id": "brownfield_net",
+  "financing": { "kind": "cash" },
+  "subsidy_mode": "full"
+}
+```
+
+Every key is optional: `horizon_years`, `interest_rate`, `country`, `price_basis_year`,
+`perspective_id`, `subsidy_mode` (`full` | `none`), `financing` (`{"kind": "cash"}` or
+`{"kind": "loan", "financed_share"?, "nominal_interest_rate"?, "term_in_years"?}`), `escalation`,
+and the two that are accepted and ignored because they describe the run rather than state an
+assumption, `simulation_year` and `subsidy_catalog`. **The country comes from the stages** — it is
+the one their jobs were priced under, read from a stage's stored evaluation (`lifecycle_costs.json`)
+or, for a stage directory that holds only the extract and the mapping report, from the `country`
+key `economic_inputs.json` carries — so `country` here is only checked against theirs and is
+refused when it differs; stages that state none anywhere over a file that states none is a refusal
+too, never a silently substituted `"DE"`. What the file does not name stays what the stages were priced
+under. A `--perspective` flag must agree with a `perspective_id` in the file.
 
 The list is kept honest in both directions by `T-NIY`, which runs the whole probe set and
 asserts that every `not_implemented_yet` line has an entry and that every entry is reached by at

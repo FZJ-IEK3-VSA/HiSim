@@ -90,6 +90,11 @@ class SerializationFileNames:
     ECONOMIC_INPUTS_FILE_NAME = "economic_inputs.json"
     PROVENANCE_FILE_NAME = "cost_provenance.json"
 
+    #: Top-level key of `economic_inputs.json` holding the country the run was priced for. The
+    #: one economic value in a file that otherwise carries only the simulation's extract, because
+    #: it is a fact of the house and the one thing a re-pricing consumer cannot derive or default.
+    COUNTRY_KEY = "country"
+
 
 def facts_to_json(facts: ComponentCostFacts) -> dict:
     """Serializes ComponentCostFacts.
@@ -375,10 +380,14 @@ def inputs_to_json(inputs: EvaluationInputs) -> dict:
     """Serializes EvaluationInputs to the economic_inputs.json structure.
 
     The seam-1 payload: every field of `EvaluationInputs` appears here, which is the property that
-    makes the evaluator a pure function of this file. Nothing economic is written — no prices, no
-    rates, no perspective, not even the price basis year, which is re-derived downstream from
-    `simulation_year` so the postprocessing bridge and the `evaluate` CLI cannot drift apart
-    (cost-spec-v2 W1.2).
+    makes the evaluator a pure function of this file. No economic *assumption* is written — no
+    prices, no rates, no perspective, not even the price basis year, which is re-derived
+    downstream from `simulation_year` so the postprocessing bridge and the `evaluate` CLI cannot
+    drift apart (cost-spec-v2 W1.2). The one exception is the country, which `write_inputs` adds
+    beside this payload: it is not an assumption at all but a fact of the house, and it is the one
+    fact a later re-pricing cannot do without, because it decides which price data and which
+    subsidy catalogue apply. It is written by `write_inputs` rather than here so that this
+    function stays exactly "every field of `EvaluationInputs`, and nothing else".
 
     Adding a field to `EvaluationInputs` without adding it here silently breaks re-pricing, since
     the reader would fall back to that field's default. The round-trip tests in
@@ -507,7 +516,7 @@ def inputs_from_json(raw: dict, tariffs_base_path: Optional[str] = None) -> Eval
     )
 
 
-def write_inputs(inputs: EvaluationInputs, result_directory: str) -> str:
+def write_inputs(inputs: EvaluationInputs, result_directory: str, country: Optional[str] = None) -> str:
     """Writes economic_inputs.json into the result directory.
 
     Called by `bridge.py` as the very first thing after extraction — before the cost database is
@@ -516,13 +525,64 @@ def write_inputs(inputs: EvaluationInputs, result_directory: str) -> str:
     written even for a run where nothing can be priced, which is precisely when someone wants to
     look at it. Indented JSON on purpose: the file is meant to be read and diffed by humans.
 
+    Beside the extract it writes one economic *fact*: the country the run was priced for, under
+    the top-level key `SerializationFileNames.COUNTRY_KEY`. It belongs here because it is a
+    property of the house rather than an assumption a later caller may change, and because a
+    consumer that holds only this file — a staged plan assembled by a backend out of finished
+    jobs — otherwise has no way of knowing which country's price data the run belongs to, and
+    would price an Irish house with whatever default it happened to have.
+
+    Args:
+        inputs: The extract to write.
+        result_directory: Where `economic_inputs.json` goes.
+        country: The ISO-3166 alpha-2 code the run was priced for (the `country` of its
+            `EconomicParameters`), or None when the writer does not know one — a hand-built
+            extract in a test. The key is written either way, so `null` and "written by an engine
+            that did not have the key yet" both read back as None, which is the same statement.
+
     Returns:
         The path written, for logging and for tests.
     """
     path = os.path.join(result_directory, SerializationFileNames.ECONOMIC_INPUTS_FILE_NAME)
+    payload = inputs_to_json(inputs)
+    payload[SerializationFileNames.COUNTRY_KEY] = country
     with open(path, "w", encoding="utf-8") as file:
-        json.dump(inputs_to_json(inputs), file, indent=2)
+        json.dump(payload, file, indent=2)
     return path
+
+
+def read_stored_country(result_directory: str) -> Optional[str]:
+    """The country a stored extract was priced for, or None when the file does not say.
+
+    The counterpart of `write_inputs`'s country key, and the reason a staged plan can be priced
+    without being told its country: the stage directories a backend assembles hold
+    `economic_inputs.json` and the mapping report and nothing else, so this file is where their
+    country has to come from. `read_stored_parameters` answers the same question from a stored
+    *evaluation* (`lifecycle_costs.json`), which a job directory only has once it has been priced.
+
+    Returns None rather than a default in every case that is not a country plainly written down:
+    no file, no key (an extract written before the key existed), an explicit `null`, or a value
+    that is not a string. There is no default country anywhere in this path — pricing an Irish
+    house with German data because a file said nothing is exactly the failure the key exists to
+    prevent.
+
+    Example::
+
+        read_stored_country("jobs/baseline/results")  # -> "IE"
+
+    Args:
+        result_directory: A directory holding `economic_inputs.json`.
+
+    Returns:
+        The ISO-3166 alpha-2 code, or None when the file states none.
+    """
+    path = os.path.join(result_directory, SerializationFileNames.ECONOMIC_INPUTS_FILE_NAME)
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as file:
+        raw = json.load(file)
+    country = raw.get(SerializationFileNames.COUNTRY_KEY)
+    return country if isinstance(country, str) else None
 
 
 def read_inputs(result_directory: str, tariffs_base_path: Optional[str] = None) -> EvaluationInputs:

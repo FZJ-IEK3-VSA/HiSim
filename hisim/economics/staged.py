@@ -39,7 +39,7 @@ decisions), which wins where the two disagree.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Dict, FrozenSet, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple
 
 from hisim.economics.calculators.aggregation import aggregate_timeline
 from hisim.economics.calculators.investment import InvestmentDating
@@ -76,7 +76,24 @@ class StagedEvaluationError(Exception):
     The CLI (``python -m hisim.economics staged``) turns it into exit code 2 with a
     ``problems.json`` beside the requested output; an *engine* error — an unresolvable cost
     subject, a missing data file — stays what it is and becomes exit code 3.
+
+    Most refusals are one sentence about one plan, which is what the message carries. A refused
+    ``--parameters`` file is the exception: it reports every offending key at once, so the rows
+    are carried alongside the message and become the ``problems.json`` rows verbatim. A raise
+    without them produces a one-row file worded from the message, which is what every existing
+    call site relies on.
+
+    Args:
+        message: The refusal, in one sentence.
+        problems: The rows ``problems.json`` should carry, each already in its published shape
+            (``path``, ``code``, ``message`` and optionally ``accepted``); empty for a refusal
+            that is one sentence about the plan as a whole.
     """
+
+    def __init__(self, message: str, problems: Sequence[Mapping[str, Any]] = ()) -> None:
+        """Store the message and, for a parameter refusal, the per-key problem rows."""
+        super().__init__(message)
+        self.problems: Tuple[Mapping[str, Any], ...] = tuple(problems)
 
 
 class StagedCategories:

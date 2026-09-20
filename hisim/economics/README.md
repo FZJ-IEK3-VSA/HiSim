@@ -111,7 +111,31 @@ python -m hisim.economics validate
 # Human-readable report for stored results; --compare adds the variant comparison
 # (delta waterfall by subject, discounted payback curve, warm-rent change):
 python -m hisim.economics report <results_dir> [--compare <reference_results_dir>]
+
+# Price a renovation plan spread over several years out of finished jobs (E-spec §6):
+python -m hisim.economics staged --stage <dir0>:0:baseline --stage <dir1>:3:"stage 2" \
+    --parameters economics.json --out economics_result.json
 ```
+
+`staged` is the exception to the paragraph below: its `--parameters` file is **not** an
+`EconomicParameters` record but the `economics_result.json` document's own `parameters` block, so
+a reader can feed a document's assumptions back in unchanged. Every key is optional —
+
+```json
+{"horizon_years": 20, "interest_rate": 0.03, "perspective_id": "brownfield_net",
+ "financing": {"kind": "cash"}, "subsidy_mode": "full"}
+```
+
+— plus `country`, `price_basis_year`, `escalation`, and `simulation_year` and `subsidy_catalog`,
+which are accepted and ignored. **The country comes from the stages.** Each stage job states it
+twice — in the parameters its evaluation was stored with (`lifecycle_costs.json`) and in its
+extract (`economic_inputs.json`, where `write_inputs` puts it because it is a fact of the house,
+not an assumption) — so a stage directory holding only the extract and the mapping report, which
+is what a backend's worker ships, still says which country it is. Both files of one stage must
+agree, and so must all the stages. A `country` in the parameters file is only checked against
+theirs, and a plan whose stages state none anywhere and whose file states none is refused rather
+than priced as German. Everything the file does not name stays what the stages were priced under, and
+every refused key is exit 2 with a `problems.json` naming all of them at once.
 
 `evaluate`, `explain` and `report` all accept `--parameters <file>` (an `EconomicParameters`
 JSON document) and `--subsidy-catalog <dir>`, and all three mean the same thing: price under

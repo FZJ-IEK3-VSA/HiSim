@@ -313,6 +313,45 @@ class TestSerializationRoundtrip:
             annual_heat_demand_in_kwh=15000.0,
         )
 
+    def test_the_country_travels_with_the_extract(self, tmp_path):
+        """`economic_inputs.json` states the country, so a consumer of it alone can price again.
+
+        A staged plan assembled by a backend holds each stage's extract and its mapping report and
+        nothing else — no stored evaluation, so no stored parameter record. Without this key such
+        a plan would have to be told its country or be priced with whatever default the reader
+        had, which is how an Irish house came to be priced with German data (shared todo H19).
+        """
+        from hisim.economics.serialization import read_stored_country, write_inputs
+
+        write_inputs(self._inputs(), str(tmp_path), country="IE")
+        assert read_stored_country(str(tmp_path)) == "IE"
+
+    def test_an_extract_that_names_no_country_reads_back_as_none(self, tmp_path):
+        """Never as a default: "the file does not say" is the statement, and it is honest."""
+        import json as json_module
+
+        from hisim.economics.serialization import (
+            SerializationFileNames,
+            read_stored_country,
+            write_inputs,
+        )
+
+        write_inputs(self._inputs(), str(tmp_path))
+        assert read_stored_country(str(tmp_path)) is None
+        # An extract written before the key existed has no key at all, which is the same
+        # statement and must read the same way.
+        path = tmp_path / SerializationFileNames.ECONOMIC_INPUTS_FILE_NAME
+        raw = json_module.loads(path.read_text(encoding="utf-8"))
+        del raw[SerializationFileNames.COUNTRY_KEY]
+        path.write_text(json_module.dumps(raw), encoding="utf-8")
+        assert read_stored_country(str(tmp_path)) is None
+
+    def test_the_country_is_not_a_field_of_the_extract_record(self):
+        """`inputs_to_json` stays exactly the fields of `EvaluationInputs`, and nothing more."""
+        from hisim.economics.serialization import inputs_to_json
+
+        assert "country" not in inputs_to_json(self._inputs())
+
     def test_roundtrip_preserves_evaluation(self, tmp_path):
         """Reloaded inputs evaluate to the same result."""
         from hisim.economics.serialization import read_inputs, write_inputs

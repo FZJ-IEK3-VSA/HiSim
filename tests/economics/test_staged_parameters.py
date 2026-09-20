@@ -149,13 +149,20 @@ class TestTheCountryHasNoDefault:
         assert parsed.parameters is None
 
     def test_stages_without_a_country_and_a_file_without_one_are_refused(self):
-        """No stored evaluation, no ``country`` key, and therefore no run."""
+        """No stored evaluation, no ``country`` key, and therefore no run.
+
+        The basis year is missing for the same reason and is reported beside it, which is the
+        point of collecting problems rather than raising on the first.
+        """
         parsed = StagedParameters.from_mapping({"horizon_years": 20}, None)
-        assert _codes(parsed) == ["parameters.country.missing"]
+        assert _codes(parsed) == ["parameters.country.missing", "parameters.price_basis_year.missing"]
 
     def test_stages_without_a_country_take_the_files(self):
-        """A file may supply what the stages do not state — that is what the key is for."""
-        parsed = StagedParameters.from_mapping({ParameterKeys.COUNTRY: "IE"}, None)
+        """A file may supply what the stages do not state — that is what the keys are for."""
+        parsed = StagedParameters.from_mapping(
+            {ParameterKeys.COUNTRY: "IE", ParameterKeys.PRICE_BASIS_YEAR: 2024}, None
+        )
+        assert not parsed.problems
         assert parsed.parameters is not None
         assert parsed.parameters.country == "IE"
 
@@ -166,19 +173,21 @@ class TestTheCountryHasNoDefault:
         leaving it out would let ``EconomicParameters.country``'s own default — ``"DE"`` — decide
         what an Irish plan is priced with.
         """
-        parsed = StagedParameters.from_mapping({}, None, stored_country="IE")
+        parsed = StagedParameters.from_mapping({}, None, stored_country="IE", stored_price_basis_year=2024)
         assert not parsed.problems
         assert parsed.parameters is not None
         assert parsed.parameters.country == "IE"
 
     def test_a_file_contradicting_the_stage_country_is_refused_without_a_stored_record(self):
         """The extract's country binds exactly as a stored evaluation's does."""
-        parsed = StagedParameters.from_mapping({ParameterKeys.COUNTRY: "DE"}, None, stored_country="IE")
+        parsed = StagedParameters.from_mapping(
+            {ParameterKeys.COUNTRY: "DE"}, None, stored_country="IE", stored_price_basis_year=2024
+        )
         assert _codes(parsed) == ["parameters.country.mismatch"]
 
     def test_something_that_is_not_a_country_code_is_refused(self):
         """An ISO-3166 alpha-2 code, upper case, because that is how the data files are named."""
-        parsed = StagedParameters.from_mapping({ParameterKeys.COUNTRY: "Ireland"}, None)
+        parsed = StagedParameters.from_mapping({ParameterKeys.COUNTRY: "Ireland"}, _stored())
         assert _codes(parsed) == ["parameters.country.invalid"]
 
 
@@ -198,6 +207,34 @@ class TestThePriceBasisYear:
     def test_a_null_says_nothing_and_keeps_the_stages(self):
         """The document writes ``null`` when there is none, so ``null`` has to round trip."""
         parsed = StagedParameters.from_mapping({ParameterKeys.PRICE_BASIS_YEAR: None}, _stored())
+        assert not parsed.problems
+        assert parsed.parameters is not None
+        assert parsed.parameters.price_basis_year == 2024
+
+    def test_a_stage_basis_year_without_a_stored_record_prices_the_plan(self):
+        """A backend's stage directory states its basis year in its extract, and that is enough."""
+        parsed = StagedParameters.from_mapping(
+            {}, None, stored_country="IE", stored_price_basis_year=2026
+        )
+        assert not parsed.problems
+        assert parsed.parameters is not None
+        assert parsed.parameters.price_basis_year == 2026
+
+    def test_stages_that_state_no_basis_year_are_refused_rather_than_re_derived(self):
+        """Re-deriving it from the simulation year is the DE default in another costume.
+
+        It would price the plan at a level none of its runs used, produce a complete-looking
+        document and leave nothing downstream able to tell. The caller names the year instead.
+        """
+        parsed = StagedParameters.from_mapping({}, None, stored_country="IE")
+        assert "parameters.price_basis_year.missing" in _codes(parsed)
+        assert parsed.parameters is None
+
+    def test_naming_it_is_how_a_plan_over_old_extracts_is_priced(self):
+        """Extracts written before the key existed state none, and the file supplies it."""
+        parsed = StagedParameters.from_mapping(
+            {ParameterKeys.PRICE_BASIS_YEAR: 2024}, None, stored_country="IE"
+        )
         assert not parsed.problems
         assert parsed.parameters is not None
         assert parsed.parameters.price_basis_year == 2024

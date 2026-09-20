@@ -18,6 +18,8 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from hisim.economics.__main__ import StagedCli, main
+from hisim.economics.database import CostDatabase
+from hisim.economics.evaluator import effective_price_basis_year
 from hisim.economics.exports import ExportFileNames
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.serialization import SerializationFileNames, write_inputs
@@ -142,26 +144,50 @@ def fixture_workspace(tmp_path) -> Path:
     return workspace
 
 
-def _as_a_backend_stage(directory: Path, country: Optional[str]) -> None:
+def _the_year_the_shipped_data_prices_at() -> int:
+    """The basis year the engine resolves for the stages' country against the shipped database.
+
+    A backend stage directory carries no cost-database path, so a plan assembled out of such
+    directories is priced against the database the image ships — and it has to name a basis year
+    that database covers. Reading the year off the database, through the very function the engine
+    resolves it with, is what keeps this case honest when the shipped data gains or loses a year;
+    writing a number here would be inventing one.
+
+    Returns:
+        The resolved basis year for :data:`STAGE_COUNTRY` in the shipped cost database.
+    """
+    return effective_price_basis_year(
+        EconomicParameters(country=STAGE_COUNTRY), CostDatabase(), SyntheticPlan.YEAR
+    )
+
+
+def _as_a_backend_stage(directory: Path, country: Optional[str], price_basis_year: Optional[int]) -> None:
     """Leave in one stage directory only what a backend's worker ships into it.
 
     ``economics-backend-spec.md`` §3: the worker writes each stage job's ``economic_inputs.json``
     and its ``mapping_report.json`` into ``<JobDir>/stages/<index>/`` and nothing else — no
     ``lifecycle_costs.json``, so no stored evaluation and no stored parameter record. What such a
-    stage still states is its country, which ``write_inputs`` puts into the extract.
+    stage still states is the two facts ``write_inputs`` puts into the extract: the country it
+    was priced for and the resolved price basis year it priced at.
 
     Args:
         directory: The job directory to rewrite in place.
         country: The country to write into the stored inputs, or None to remove the key — an
             extract written by an engine from before the key existed.
+        price_basis_year: The basis year to write, or None to remove that key, for the same
+            reason.
     """
     (directory / ExportFileNames.LIFECYCLE_COSTS_FILE_NAME).unlink()
     path = directory / StagedCli.INPUTS_FILE_NAME
     raw = json.loads(path.read_text(encoding="utf-8"))
-    if country is None:
-        raw.pop(SerializationFileNames.COUNTRY_KEY, None)
-    else:
-        raw[SerializationFileNames.COUNTRY_KEY] = country
+    for key, value in (
+        (SerializationFileNames.COUNTRY_KEY, country),
+        (SerializationFileNames.PRICE_BASIS_YEAR_KEY, price_basis_year),
+    ):
+        if value is None:
+            raw.pop(key, None)
+        else:
+            raw[key] = value
     path.write_text(json.dumps(raw), encoding="utf-8")
 
 
@@ -353,7 +379,12 @@ class TestTheRefusals:
         """A plan for a country the database cannot price is refused by name, not defaulted."""
         _forget_what_the_stages_were_priced_under(workspace)
         elsewhere = workspace / "elsewhere.json"
-        elsewhere.write_text(json.dumps({ParameterKeys.COUNTRY: "ZZ"}), encoding="utf-8")
+        elsewhere.write_text(
+            json.dumps(
+                {ParameterKeys.COUNTRY: "ZZ", ParameterKeys.PRICE_BASIS_YEAR: SyntheticPlan.YEAR}
+            ),
+            encoding="utf-8",
+        )
         out = workspace / "economics_result.json"
         code = main(
             [
@@ -383,9 +414,12 @@ class TestTheRefusals:
         code = main(["staged", "--stage", f"{workspace / 'base'}:0:baseline", "--out", str(out)])
         assert code == StagedCli.PLAN_REFUSED
         assert not out.exists()
-        problem = self._problems(out)["problems"][0]
-        assert problem["code"] == "parameters.country.missing"
-        assert "--parameters" in problem["message"]
+        problems = self._problems(out)["problems"]
+        assert {problem["code"] for problem in problems} == {
+            "parameters.country.missing",
+            "parameters.price_basis_year.missing",
+        }
+        assert all("--parameters" in problem["message"] for problem in problems)
 
     def test_a_parameters_file_that_is_not_there(self, workspace):
         """A missing file is a refusal with a problems document, never a bare exit 2 (B29)."""
@@ -837,7 +871,7 @@ class TestTheBackendsStageLayout:
     def test_the_country_of_the_stored_inputs_prices_the_plan(self, workspace):
         """No stored evaluation, no country in the block, and the plan is still priced as Irish."""
         for name in ("base", "heat_pump"):
-            _as_a_backend_stage(workspace / name, STAGE_COUNTRY)
+            _as_a_backend_stage(workspace / name, STAGE_COUNTRY, _the_year_the_shipped_data_prices_at())
         assert self._run(workspace, {ParameterKeys.HORIZON_YEARS: SyntheticPlan.HORIZON}) == 0, (
             workspace / StagedCli.PROBLEMS_FILE_NAME
         ).read_text(encoding="utf-8")
@@ -847,7 +881,7 @@ class TestTheBackendsStageLayout:
     def test_a_block_naming_another_country_is_still_refused(self, workspace):
         """The extract's country is as binding as a stored evaluation's."""
         for name in ("base", "heat_pump"):
-            _as_a_backend_stage(workspace / name, STAGE_COUNTRY)
+            _as_a_backend_stage(workspace / name, STAGE_COUNTRY, _the_year_the_shipped_data_prices_at())
         assert self._run(workspace, {ParameterKeys.COUNTRY: "DE"}) == StagedCli.PLAN_REFUSED
         problem = json.loads(
             (workspace / StagedCli.PROBLEMS_FILE_NAME).read_text(encoding="utf-8")
@@ -857,12 +891,98 @@ class TestTheBackendsStageLayout:
     def test_an_extract_from_before_the_key_existed_states_nothing(self, workspace):
         """Jobs run by an older image carry no country, and a plan over them has to be told one."""
         for name in ("base", "heat_pump"):
-            _as_a_backend_stage(workspace / name, None)
+            _as_a_backend_stage(workspace / name, None, None)
         assert self._run(workspace, {}) == StagedCli.PLAN_REFUSED
+        codes = {
+            problem["code"]
+            for problem in json.loads(
+                (workspace / StagedCli.PROBLEMS_FILE_NAME).read_text(encoding="utf-8")
+            )["problems"]
+        }
+        assert codes == {"parameters.country.missing", "parameters.price_basis_year.missing"}
+
+    def test_the_basis_year_of_the_stored_inputs_prices_the_plan(self, workspace):
+        """No stored evaluation, no year in the block, and the plan still prices at the stages'.
+
+        The extract carries the *resolved* year the run actually priced at, so a plan assembled
+        out of extracts prices at the same price level as the runs behind it — which is the whole
+        reason the key is there rather than re-derived from ``simulation_year``.
+        """
+        year = _the_year_the_shipped_data_prices_at()
+        for name in ("base", "heat_pump"):
+            _as_a_backend_stage(workspace / name, STAGE_COUNTRY, year)
+        assert self._run(workspace, {}) == 0, (
+            workspace / StagedCli.PROBLEMS_FILE_NAME
+        ).read_text(encoding="utf-8")
+        document = json.loads((workspace / "economics_result.json").read_text(encoding="utf-8"))
+        assert document["parameters"]["price_basis_year"] == year
+
+    def test_a_block_naming_another_basis_year_is_refused(self, workspace):
+        """The stored inputs were priced at theirs and cannot be re-based without re-running."""
+        year = _the_year_the_shipped_data_prices_at()
+        for name in ("base", "heat_pump"):
+            _as_a_backend_stage(workspace / name, STAGE_COUNTRY, year)
+        assert (
+            self._run(workspace, {ParameterKeys.PRICE_BASIS_YEAR: year + 1})
+            == StagedCli.PLAN_REFUSED
+        )
         problem = json.loads(
             (workspace / StagedCli.PROBLEMS_FILE_NAME).read_text(encoding="utf-8")
         )["problems"][0]
-        assert problem["code"] == "parameters.country.missing"
+        assert problem["code"] == "parameters.price_basis_year.mismatch"
+
+    def test_an_old_extract_is_priced_by_naming_the_year_in_the_block(self, workspace):
+        """Jobs from before the key existed are priceable, but only by saying at which level."""
+        for name in ("base", "heat_pump"):
+            _as_a_backend_stage(workspace / name, STAGE_COUNTRY, None)
+        assert (
+            self._run(
+                workspace,
+                {ParameterKeys.PRICE_BASIS_YEAR: _the_year_the_shipped_data_prices_at()},
+            )
+            == 0
+        ), (workspace / StagedCli.PROBLEMS_FILE_NAME).read_text(encoding="utf-8")
+
+    def test_a_stage_that_contradicts_itself_about_its_basis_year_is_refused(self, workspace):
+        """Its stored evaluation and its stored inputs must state the same price level."""
+        path = workspace / "base" / StagedCli.INPUTS_FILE_NAME
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw[SerializationFileNames.PRICE_BASIS_YEAR_KEY] = SyntheticPlan.YEAR + 1
+        path.write_text(json.dumps(raw), encoding="utf-8")
+        out = workspace / "economics_result.json"
+        assert (
+            main(["staged", "--stage", f"{workspace / 'base'}:0:baseline", "--out", str(out)])
+            == StagedCli.PLAN_REFUSED
+        )
+        problem = json.loads(
+            (out.parent / StagedCli.PROBLEMS_FILE_NAME).read_text(encoding="utf-8")
+        )["problems"][0]
+        assert problem["code"] == StagedCli.STAGE_PRICE_BASIS_YEAR_MISMATCH_CODE
+        assert problem["path"] == "stages[0]"
+
+    def test_two_stages_priced_at_different_basis_years_are_refused(self, workspace):
+        """One plan is one price level, whichever file each stage states it in."""
+        _as_a_backend_stage(workspace / "heat_pump", STAGE_COUNTRY, SyntheticPlan.YEAR + 1)
+        out = workspace / "economics_result.json"
+        assert (
+            main(
+                [
+                    "staged",
+                    "--stage",
+                    f"{workspace / 'base'}:0:baseline",
+                    "--stage",
+                    f"{workspace / 'heat_pump'}:4:stage 2",
+                    "--out",
+                    str(out),
+                ]
+            )
+            == StagedCli.PLAN_REFUSED
+        )
+        problem = json.loads(
+            (out.parent / StagedCli.PROBLEMS_FILE_NAME).read_text(encoding="utf-8")
+        )["problems"][0]
+        assert problem["code"] == StagedCli.STAGE_PRICE_BASIS_YEAR_MISMATCH_CODE
+        assert problem["path"] == "stages"
 
     def test_a_stage_that_contradicts_itself_is_refused(self, workspace):
         """Its stored evaluation and its stored inputs must say the same country."""
@@ -883,7 +1003,7 @@ class TestTheBackendsStageLayout:
 
     def test_two_stages_priced_for_different_countries_are_refused(self, workspace):
         """One plan is one country's price data, whichever file each stage states it in."""
-        _as_a_backend_stage(workspace / "heat_pump", "DE")
+        _as_a_backend_stage(workspace / "heat_pump", "DE", SyntheticPlan.YEAR)
         out = workspace / "economics_result.json"
         assert (
             main(
@@ -904,3 +1024,70 @@ class TestTheBackendsStageLayout:
         )["problems"][0]
         assert problem["code"] == StagedCli.STAGE_COUNTRY_MISMATCH_CODE
         assert problem["path"] == "stages"
+
+
+class TestTheShippedCatalogueIsTheDefault:
+    """A staged plan finds the shipped catalogue without being told where it is (step 11 §3).
+
+    The catalogue is the one input a stage directory does not carry: the extract holds the
+    country and the price basis year, both facts of the run, but not a path into the engine's own
+    data. So ``staged`` applies the rule the translator applies — the shipped
+    ``hisim/subsidy_catalog`` directory when it has ``<COUNTRY>.json`` — instead of pricing with
+    no catalogue, which published a plan whose every subsidy row was undetermined while the same
+    plan over a full job directory priced the grants.
+    """
+
+    @staticmethod
+    def _price_for(workspace: Path, country: str) -> Dict[str, Any]:
+        """Price the baseline alone with every stage priced for one country, and read it back."""
+        database = workspace / "cost_database"
+        for name in ("base",):
+            _write_stored_parameters(workspace / name, _stored_parameters(country, database))
+            path = workspace / name / StagedCli.INPUTS_FILE_NAME
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            raw[SerializationFileNames.COUNTRY_KEY] = country
+            path.write_text(json.dumps(raw), encoding="utf-8")
+        out = workspace / f"{country}.json"
+        assert (
+            main(
+                [
+                    "staged",
+                    "--stage",
+                    f"{workspace / 'base'}:0:baseline",
+                    "--perspective",
+                    "brownfield_gross",
+                    "--out",
+                    str(out),
+                ]
+            )
+            == 0
+        ), (out.parent / StagedCli.PROBLEMS_FILE_NAME).read_text(encoding="utf-8")
+        document: Dict[str, Any] = json.loads(out.read_text(encoding="utf-8"))
+        return document
+
+    def test_a_country_that_ships_one_is_priced_under_it(self, workspace):
+        """No ``--subsidy-catalog`` and no path in the stages, and the document names a catalogue."""
+        document = self._price_for(workspace, STAGE_COUNTRY)
+        assert document["parameters"]["subsidy_catalog"] is not None
+        assert document["parameters"]["subsidy_catalog"].startswith(f"{STAGE_COUNTRY}@")
+
+    def test_a_country_that_ships_none_runs_without_one(self, workspace):
+        """The synthetic country has no catalogue file, and the plan says so rather than failing.
+
+        ``null`` is a statement a reader can act on: every subsidy row of such a document is
+        undetermined, which is a different thing from a row worth nothing.
+        """
+        document = self._price_for(workspace, SyntheticPlan.COUNTRY)
+        assert document["parameters"]["subsidy_catalog"] is None
+
+    def test_the_translator_and_the_engine_answer_the_same_question(self):
+        """One rule, two callers: a run and a staged plan over its outputs cannot disagree."""
+        from hisim.economics.subsidies import SubsidyCatalog
+        from hisim.renovisor.simulation import SubsidyCatalogue
+
+        for country in (STAGE_COUNTRY, SyntheticPlan.COUNTRY):
+            from_translator = SubsidyCatalogue.path_for(country)
+            from_engine = SubsidyCatalog.shipped_catalog_file(country)
+            assert (from_translator is None) == (from_engine is None)
+            if from_engine is not None:
+                assert str(from_translator) == from_engine

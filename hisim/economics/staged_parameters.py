@@ -513,6 +513,7 @@ class StagedParameters:
         raw: Any,
         stored: Optional[EconomicParameters],
         stored_country: Optional[str] = None,
+        stored_price_basis_year: Optional[int] = None,
     ) -> "StagedParameters":
         """Read one parameter mapping in the document's shape onto the engine's record.
 
@@ -542,6 +543,8 @@ class StagedParameters:
                 which carry the country since step 13). None when no stage states one; when None
                 and ``stored`` is given, ``stored.country`` is used, since a stored evaluation is
                 itself a stage's statement of its country.
+            stored_price_basis_year: The one price basis year the stages were priced at, resolved
+                the same way over the same two sources, with the same fallback to ``stored``.
 
         Returns:
             The parsed result, carrying either the engine parameters or the problems.
@@ -563,7 +566,9 @@ class StagedParameters:
         overrides: Dict[str, Any] = {}
         cls._read_horizon_and_interest(reader, overrides)
         cls._read_country(reader, cls._stages_country(stored, stored_country), overrides)
-        cls._read_price_basis_year(reader, stored, overrides)
+        cls._read_price_basis_year(
+            reader, cls._stages_price_basis_year(stored, stored_price_basis_year), overrides
+        )
         cls._read_escalation(reader, problems, overrides)
         perspective_id = reader.text(ParameterKeys.PERSPECTIVE_ID)
         subsidy_mode = cls._read_subsidy_mode(reader)
@@ -676,28 +681,68 @@ class StagedParameters:
         overrides["country"] = country
 
     @classmethod
-    def _read_price_basis_year(
-        cls, reader: ParameterReader, stored: Optional[EconomicParameters], overrides: Dict[str, Any]
-    ) -> None:
-        """Resolve the price basis year against the stages, which win where they state one.
+    def _stages_price_basis_year(
+        cls, stored: Optional[EconomicParameters], stored_price_basis_year: Optional[int]
+    ) -> Optional[int]:
+        """The price basis year the stages were priced at, out of the caller's two ways of saying it.
 
-        A ``null`` is read as "say nothing", so a document whose stages state no basis year round
-        trips; a number that differs from the stages' is refused, because the stored inputs were
-        priced at theirs.
+        Args:
+            stored: The stage parameters, whose ``price_basis_year`` is itself a stage's statement
+                — the *resolved* one, since a stored evaluation records what it actually used.
+            stored_price_basis_year: The year the caller resolved over every stage source, if any.
+
+        Returns:
+            The resolved year, or None when no stage states one.
+        """
+        if stored_price_basis_year is not None:
+            return stored_price_basis_year
+        return stored.price_basis_year if stored is not None else None
+
+    @classmethod
+    def _read_price_basis_year(
+        cls, reader: ParameterReader, stored_year: Optional[int], overrides: Dict[str, Any]
+    ) -> None:
+        """Resolve the price basis year against the stages, with no re-derivation anywhere.
+
+        The stages were priced at one price level and a plan out of them is priced at that same
+        level: a file may repeat the year but not change it, because the stored inputs cannot be
+        re-based without being re-run. A ``null`` says nothing and takes the stages', so a
+        document whose block is fed back in round trips.
+
+        When no stage states a year, the run is **refused** rather than re-derived from the
+        simulation year. Re-deriving is the same class of silent difference as a defaulted
+        country: it produces a complete-looking plan priced at a year none of its runs used, and
+        nothing downstream can tell. A caller who has only such stages — extracts written before
+        the key existed — names ``price_basis_year`` in the file, or re-runs the jobs.
 
         Args:
             reader: The top-level block's reader.
-            stored: The parameters the stages were priced under, or None.
+            stored_year: The year the stages were priced at, or None when none states one.
             overrides: The engine-field overrides being assembled; written in place.
         """
-        if not reader.has(ParameterKeys.PRICE_BASIS_YEAR):
-            return
-        if reader.raw[ParameterKeys.PRICE_BASIS_YEAR] is None:
+        states_a_year = (
+            reader.has(ParameterKeys.PRICE_BASIS_YEAR)
+            and reader.raw[ParameterKeys.PRICE_BASIS_YEAR] is not None
+        )
+        if not states_a_year:
+            if stored_year is None:
+                reader.refuse(
+                    ParameterKeys.PRICE_BASIS_YEAR,
+                    ParameterProblemCodes.MISSING,
+                    "no stage says which price basis year it was priced at — neither its stored "
+                    "evaluation nor its stored inputs — and re-deriving one from the simulation "
+                    "year would price the plan at a level none of its runs used: name "
+                    "`price_basis_year` in the --parameters file, or re-run the jobs.",
+                )
+                return
+            # Written out for the same reason as the country: with no stored record the engine
+            # parameters are built from these overrides alone, and the field's own default is
+            # None, which is "re-derive it downstream" — exactly what this rule forbids.
+            overrides["price_basis_year"] = stored_year
             return
         year = reader.integer(ParameterKeys.PRICE_BASIS_YEAR)
         if year is None:
             return
-        stored_year = stored.price_basis_year if stored is not None else None
         if stored_year is not None and year != stored_year:
             reader.refuse(
                 ParameterKeys.PRICE_BASIS_YEAR,

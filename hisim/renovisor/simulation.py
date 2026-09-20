@@ -142,7 +142,7 @@ class SimulationSetup:
 
 
 class SubsidyCatalogue:
-    """Where the country subsidy catalogues live, and which of them exists.
+    """Which countries ship a subsidy catalogue, as the translator asks the question.
 
     A country whose ``<COUNTRY>.json`` is not in the shipped directory gets no catalogue at all,
     which makes the engine run ``subsidy_mode: NONE`` and the result document publish one
@@ -151,13 +151,13 @@ class SubsidyCatalogue:
     AI-generated placeholder every scheme of which is marked "needs examination" (see
     ``hisim/subsidy_catalog/README_IE.md``).
 
-    The directory is resolved from this file rather than from the working directory, so the path
-    the economic parameters carry is absolute — which is what the catalogue loader requires of it,
-    since it refuses a relative path that could name two different directories.
+    The rule itself is not here: it is
+    :meth:`hisim.economics.subsidies.SubsidyCatalog.shipped_catalog_file`, which the staged CLI
+    applies as well, so a translated run and a staged plan over its outputs can never disagree
+    about whether a country has a catalogue. This class is the translator's ``Path``-shaped view
+    of it. The directory the answer names is absolute, which is what the catalogue loader
+    requires: it refuses a relative path that could name two different directories.
     """
-
-    #: The shipped catalogue directory, resolved absolutely from this module's location.
-    DIRECTORY: ClassVar[Path] = Path(__file__).resolve().parents[1] / "subsidy_catalog"
 
     @classmethod
     def path_for(cls, country: str, directory: Optional[Path] = None) -> Optional[Path]:
@@ -170,8 +170,12 @@ class SubsidyCatalogue:
         Returns:
             The path of ``<COUNTRY>.json``, or ``None``.
         """
-        candidate = (directory if directory is not None else cls.DIRECTORY) / f"{country.upper()}.json"
-        return candidate if candidate.is_file() else None
+        from hisim.economics.subsidies import SubsidyCatalog
+
+        found = SubsidyCatalog.shipped_catalog_file(
+            country, str(directory) if directory is not None else None
+        )
+        return Path(found) if found is not None else None
 
 
 class EconomicSetup:

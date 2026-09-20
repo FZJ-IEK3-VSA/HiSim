@@ -313,44 +313,57 @@ class TestSerializationRoundtrip:
             annual_heat_demand_in_kwh=15000.0,
         )
 
-    def test_the_country_travels_with_the_extract(self, tmp_path):
-        """`economic_inputs.json` states the country, so a consumer of it alone can price again.
+    def test_the_country_and_the_basis_year_travel_with_the_extract(self, tmp_path):
+        """`economic_inputs.json` states both, so a consumer of it alone can price again.
 
         A staged plan assembled by a backend holds each stage's extract and its mapping report and
         nothing else — no stored evaluation, so no stored parameter record. Without this key such
-        a plan would have to be told its country or be priced with whatever default the reader
-        had, which is how an Irish house came to be priced with German data (shared todo H19).
+        a plan would have to be told its country and its price level, or be priced with whatever
+        default the reader had — which is how an Irish house came to be priced with German data
+        (shared todo H19), and how the same plan came out at two different price levels depending
+        on which files the caller happened to hold.
         """
-        from hisim.economics.serialization import read_stored_country, write_inputs
+        from hisim.economics.serialization import (
+            read_stored_country,
+            read_stored_price_basis_year,
+            write_inputs,
+        )
 
-        write_inputs(self._inputs(), str(tmp_path), country="IE")
+        write_inputs(self._inputs(), str(tmp_path), country="IE", price_basis_year=2026)
         assert read_stored_country(str(tmp_path)) == "IE"
+        assert read_stored_price_basis_year(str(tmp_path)) == 2026
 
-    def test_an_extract_that_names_no_country_reads_back_as_none(self, tmp_path):
+    def test_an_extract_that_names_neither_fact_reads_both_back_as_none(self, tmp_path):
         """Never as a default: "the file does not say" is the statement, and it is honest."""
         import json as json_module
 
         from hisim.economics.serialization import (
             SerializationFileNames,
             read_stored_country,
+            read_stored_price_basis_year,
             write_inputs,
         )
 
         write_inputs(self._inputs(), str(tmp_path))
         assert read_stored_country(str(tmp_path)) is None
-        # An extract written before the key existed has no key at all, which is the same
+        assert read_stored_price_basis_year(str(tmp_path)) is None
+        # An extract written before the keys existed has no keys at all, which is the same
         # statement and must read the same way.
         path = tmp_path / SerializationFileNames.ECONOMIC_INPUTS_FILE_NAME
         raw = json_module.loads(path.read_text(encoding="utf-8"))
         del raw[SerializationFileNames.COUNTRY_KEY]
+        del raw[SerializationFileNames.PRICE_BASIS_YEAR_KEY]
         path.write_text(json_module.dumps(raw), encoding="utf-8")
         assert read_stored_country(str(tmp_path)) is None
+        assert read_stored_price_basis_year(str(tmp_path)) is None
 
-    def test_the_country_is_not_a_field_of_the_extract_record(self):
+    def test_neither_fact_is_a_field_of_the_extract_record(self):
         """`inputs_to_json` stays exactly the fields of `EvaluationInputs`, and nothing more."""
         from hisim.economics.serialization import inputs_to_json
 
-        assert "country" not in inputs_to_json(self._inputs())
+        payload = inputs_to_json(self._inputs())
+        assert "country" not in payload
+        assert "price_basis_year" not in payload
 
     def test_roundtrip_preserves_evaluation(self, tmp_path):
         """Reloaded inputs evaluate to the same result."""

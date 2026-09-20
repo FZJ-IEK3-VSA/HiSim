@@ -21,6 +21,7 @@ import pytest
 
 from hisim.economics.__main__ import main as economics_main
 from hisim.economics.staged_document import StagedDocument
+from hisim.economics.subsidies import SubsidyCatalog
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.run import Calculation, ExitCode
 from hisim.renovisor.simulation import Period
@@ -137,8 +138,14 @@ def fixture_backend_document(runs, parameters_file) -> Dict[str, Any]:
 
     ``economics-backend-spec.md`` §3: the worker copies each stage job's ``economic_inputs.json``
     and ``mapping_report.json`` into ``<JobDir>/stages/<index>/`` and nothing else — no
-    ``lifecycle_costs.json``, so no stored parameter record to read a country out of. This is the
-    layout every real economics job runs in, and the one the synthetic cases cannot check.
+    ``lifecycle_costs.json``, so no stored parameter record to read a country, a price basis year
+    or a catalogue path out of. This is the layout every real economics job runs in, and the one
+    the synthetic cases cannot check.
+
+    The country and the basis year come out of the extracts, which carry them. The subsidy
+    catalogue does not and is not supposed to: no flag is passed here, and the plan still prices
+    Ireland's grants, because a staged run falls back to the shipped ``hisim/subsidy_catalog``
+    directory when it has the country's file (step 11 §3, item 12).
     """
     directory, baseline, package = runs
     root = directory / "backend_stages"
@@ -229,8 +236,6 @@ class TestTheEndToEndDocument:
         awarded row, so the marker is checked on the catalogue entry every row points at — which
         is the string a report renders — and, where the document carries it, on the note too.
         """
-        from hisim.economics.subsidies import SubsidyCatalog
-
         catalog = SubsidyCatalog.load("IE")
         marker = " [AI draft \u2014 needs examination]"
         for row in document["plan"]["subsidies"]:
@@ -270,16 +275,37 @@ class TestTheBackendsStageLayout:
         """The country comes out of the extract, which is the only file that still states it."""
         assert backend_document["parameters"]["country"] == "IE"
 
-    def test_it_is_the_same_plan_over_the_same_two_runs(self, backend_document, document) -> None:
-        """A valid document over the same stages, the same measures and the same subjects.
+    def test_it_prices_irelands_grants_without_being_told_where_they_are(
+        self, backend_document, document
+    ) -> None:
+        """No ``--subsidy-catalog`` flag, no catalogue path in the extract, and the grants apply.
 
-        The *money* is not asserted equal, and deliberately so: a job directory also carries its
-        ``lifecycle_costs.json``, whose stored record states the resolved ``price_basis_year``,
-        while a backend stage directory does not and the basis year is re-derived from
-        ``simulation_year`` instead (the deliberate W1.2 rule that keeps the bridge and the CLI
-        from drifting). The two layouts therefore price at different basis years — which is a
-        property of what the backend ships, not of this change, and is visible in the document's
-        own ``parameters.price_basis_year``.
+        The shipped directory is the default when it has the country's file, so the one input a
+        stage extract does not carry does not have to be supplied per run either.
+        """
+        assert backend_document["parameters"]["subsidy_catalog"] is not None
+        assert backend_document["parameters"]["subsidy_catalog"] == document["parameters"]["subsidy_catalog"]
+        assert {row["status"] for row in backend_document["plan"]["subsidies"]} - {"undetermined"}
+
+    def test_it_prices_at_the_basis_year_the_runs_used(self, backend_document, document) -> None:
+        """The extract carries the resolved basis year, so no layout re-derives a different one.
+
+        Before the key existed, a stage directory without ``lifecycle_costs.json`` lost the
+        resolved year and the basis year was re-derived from ``simulation_year`` — the same class
+        of silent difference as a defaulted country, and it showed up as two different plan NPVs
+        over one pair of runs.
+        """
+        assert backend_document["parameters"]["price_basis_year"] is not None
+        assert backend_document["parameters"]["price_basis_year"] == document["parameters"]["price_basis_year"]
+
+    def test_it_is_the_same_plan_and_the_same_money_as_the_job_directories(
+        self, backend_document, document
+    ) -> None:
+        """Two layouts of the same two runs are one plan, down to the euro.
+
+        This is what the country and the basis year travelling in the extract buy: a backend that
+        ships only ``economic_inputs.json`` and ``mapping_report.json`` per stage gets exactly the
+        document it would get from the full job directories.
         """
         StagedDocument.validate(backend_document)
         assert [stage["label"] for stage in backend_document["stages"]] == [
@@ -288,4 +314,5 @@ class TestTheBackendsStageLayout:
         assert {row["subject"] for row in backend_document["plan"]["by_subject"]} == {
             row["subject"] for row in document["plan"]["by_subject"]
         }
-        assert backend_document["plan"]["totals"]["npv_in_euro"]["best"] > 0
+        assert backend_document["plan"]["totals"]["npv_in_euro"] == document["plan"]["totals"]["npv_in_euro"]
+        assert backend_document["reference"]["totals"]["npv_in_euro"] == document["reference"]["totals"]["npv_in_euro"]

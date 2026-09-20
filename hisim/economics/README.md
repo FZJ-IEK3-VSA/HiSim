@@ -127,14 +127,26 @@ a reader can feed a document's assumptions back in unchanged. Every key is optio
 ```
 
 — plus `country`, `price_basis_year`, `escalation`, and `simulation_year` and `subsidy_catalog`,
-which are accepted and ignored. **The country comes from the stages.** Each stage job states it
-twice — in the parameters its evaluation was stored with (`lifecycle_costs.json`) and in its
-extract (`economic_inputs.json`, where `write_inputs` puts it because it is a fact of the house,
-not an assumption) — so a stage directory holding only the extract and the mapping report, which
-is what a backend's worker ships, still says which country it is. Both files of one stage must
-agree, and so must all the stages. A `country` in the parameters file is only checked against
-theirs, and a plan whose stages state none anywhere and whose file states none is refused rather
-than priced as German. Everything the file does not name stays what the stages were priced under, and
+which are accepted and ignored. **The country and the price basis year come from the stages.**
+Each stage job states both twice — in the parameters its evaluation was stored with
+(`lifecycle_costs.json`) and in its extract (`economic_inputs.json`, where `write_inputs` puts
+them because they are facts of the run, not assumptions: the country decides which price data
+applies and the *resolved* basis year decides at which price level the run was costed) — so a
+stage directory holding only the extract and the mapping report, which is what a backend's worker
+ships, still states both. The two files of one stage must agree, and so must all the stages
+(`stage.country.mismatch`, `stage.price_basis_year.mismatch`). A value in the parameters file is
+only checked against theirs, and a plan whose stages state neither anywhere and whose file states
+neither is refused — never priced as German, and never at a basis year re-derived from the
+simulation year. Naming `price_basis_year` in the file is how a plan over extracts written before
+the key existed is priced.
+
+The subsidy catalogue is the one input a stage does not carry, so `staged` resolves it the way
+the RenoVisor translator does: `--subsidy-catalog` wins, then a `subsidy_catalog_path` in the
+stages' stored record, and failing both the shipped `hisim/subsidy_catalog` directory when it
+holds `<COUNTRY>.json`. A country that ships none runs with no catalogue and the document says
+`subsidy_catalog: null` with every subsidy row undetermined. (`evaluate`, `explain` and `report`
+keep their own rule — no path named means no catalogue — so no archived study is re-priced by
+this.) Everything the file does not name stays what the stages were priced under, and
 every refused key is exit 2 with a `problems.json` naming all of them at once.
 
 `evaluate`, `explain` and `report` all accept `--parameters <file>` (an `EconomicParameters`

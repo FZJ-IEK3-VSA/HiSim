@@ -91,13 +91,18 @@ Every key is optional: `horizon_years`, `interest_rate`, `country`, `price_basis
 `perspective_id`, `subsidy_mode` (`full` | `none`), `financing` (`{"kind": "cash"}` or
 `{"kind": "loan", "financed_share"?, "nominal_interest_rate"?, "term_in_years"?}`), `escalation`,
 and the two that are accepted and ignored because they describe the run rather than state an
-assumption, `simulation_year` and `subsidy_catalog`. **The country comes from the stages** — it is
-the one their jobs were priced under, read from a stage's stored evaluation (`lifecycle_costs.json`)
-or, for a stage directory that holds only the extract and the mapping report, from the `country`
-key `economic_inputs.json` carries — so `country` here is only checked against theirs and is
-refused when it differs; stages that state none anywhere over a file that states none is a refusal
-too, never a silently substituted `"DE"`. What the file does not name stays what the stages were priced
-under. A `--perspective` flag must agree with a `perspective_id` in the file.
+assumption, `simulation_year` and `subsidy_catalog`. **The country and the price basis year come
+from the stages** — they are the ones their jobs were priced with, read from a stage's stored
+evaluation (`lifecycle_costs.json`) or, for a stage directory that holds only the extract and the
+mapping report, from the `country` and `price_basis_year` keys `economic_inputs.json` carries — so
+a value here is only checked against theirs and is refused when it differs; stages that state
+neither anywhere over a file that states neither is a refusal too, never a silently substituted
+`"DE"` and never a basis year re-derived from the simulation year. What the file does not name stays what the stages were priced
+under. A `--perspective` flag must agree with a `perspective_id` in the file. The subsidy
+catalogue needs no flag: `--subsidy-catalog` wins where it is given, and otherwise the shipped
+`hisim/subsidy_catalog` directory is used when it holds `<COUNTRY>.json`, exactly as a translated
+run resolves it; a country that ships none runs with no catalogue and the document says
+`subsidy_catalog: null` with every subsidy row undetermined.
 
 The list is kept honest in both directions by `T-NIY`, which runs the whole probe set and
 asserts that every `not_implemented_yet` line has an entry and that every entry is reached by at

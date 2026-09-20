@@ -164,7 +164,7 @@ class TestTheMaterialClassField:
 class TestTheSharedFolder:
     """The vendored copies equal the shared specifications wherever the shared folder exists.
 
-    ``/home/contract-proposals`` is the single home of every specification the three repositories
+    ``/home/renovisor-api-contract/specs`` (the contract checkout) is the single home of every specification the three repositories
     share; the copies under ``hisim/renovisor/contract/`` exist only because CI and the container
     image cannot see that folder. On a machine that has it, a copy that differs from the shared
     file is drift, and this test says so by name; elsewhere it skips.
@@ -180,7 +180,7 @@ class TestTheSharedFolder:
         for filename, entry in pinned.items():
             if entry.get("source") != ContractSources.LOCAL_SOURCE:
                 continue
-            shared_file = shared / filename
+            shared_file = shared / entry["path"]
             assert shared_file.is_file(), f"{filename} is vendored from the shared folder but no longer there"
             assert ContractFiles.path(filename).read_bytes() == shared_file.read_bytes(), (
                 f"{filename} differs from {shared_file}; run `python -m hisim.renovisor.contract.refresh "

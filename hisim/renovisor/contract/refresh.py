@@ -3,12 +3,12 @@
 Usage::
 
     python -m hisim.renovisor.contract.refresh /path/to/renovisor-api-contract \
-        [--proposals /home/contract-proposals]
+        [--proposals /home/renovisor-api-contract]
 
 A vendored file has one of two source kinds. A **git source** is a branch (or any git ref) of the
 contract repository and a path inside it; the script reads the file at that ref with ``git show``
 and records the commit the ref resolved to and its date. A **local source** is a file in a
-directory outside any repository -- the shared ``/home/contract-proposals``, the single home of
+working tree of the contract checkout -- ``/home/renovisor-api-contract``, whose ``specs/`` is the single home of
 every specification the three repositories share -- and is
 recorded with the phrase naming where it came from instead of a commit, because the proposal
 directory is not versioned. Both kinds record the SHA-256 of the content written, and
@@ -55,13 +55,15 @@ class ContractSources:
         ContractFiles.MEASURES_FILENAME: ("origin/main", "measures.yaml"),
     }
 
-    #: vendored file name -> file name inside the proposal directory, for the files that have no
-    #: home in the contract repository yet and for ``materials.yaml``, which has one but is taken
-    #: from the shared folder because the shared copy carries a local fix (see :attr:`NOTES`).
+    #: vendored file name -> path inside the contract checkout's working tree, for the files that
+    #: are taken from the working tree rather than from a git ref: the shared specifications under
+    #: ``specs/`` (moved there from ``/home/contract-proposals`` on 2026-09-20, on the branch
+    #: ``shared-specs`` until it merges) and ``materials.yaml``, whose working-tree copy carries the
+    #: local fix of :attr:`NOTES` that ``origin/main`` does not have yet.
     LOCAL_BY_FILENAME: ClassVar[Dict[str, str]] = {
-        ContractFiles.REQUEST_SCHEMA_FILENAME: "calculation-request.schema.json",
-        ContractFiles.REQUEST_MOCKUP_FILENAME: "calculation-request.mockup-1.yaml",
-        ContractFiles.CAPABILITIES_SCHEMA_FILENAME: "measure-capabilities.openapi.yaml",
+        ContractFiles.REQUEST_SCHEMA_FILENAME: "specs/calculation-request.schema.json",
+        ContractFiles.REQUEST_MOCKUP_FILENAME: "specs/calculation-request.mockup-1.yaml",
+        ContractFiles.CAPABILITIES_SCHEMA_FILENAME: "specs/measure-capabilities.openapi.yaml",
         ContractFiles.MATERIALS_FILENAME: "materials.yaml",
     }
 
@@ -79,11 +81,11 @@ class ContractSources:
     #: The phrase recorded as the ``source`` of every locally vendored file. It names the
     #: directory and the day the proposal was read, which is all the provenance an unversioned
     #: directory can carry.
-    LOCAL_SOURCE: ClassVar[str] = "/home/contract-proposals"
+    LOCAL_SOURCE: ClassVar[str] = "/home/renovisor-api-contract"
 
     #: Where the shared specifications live on the machines that have them. CI and the container
     #: image do not, which is why the files are vendored at all.
-    SHARED_DIRECTORY: ClassVar[str] = "/home/contract-proposals"
+    SHARED_DIRECTORY: ClassVar[str] = "/home/renovisor-api-contract"
 
     #: Vendored files that are kept for the record but must not be read as the truth about
     #: anything. ``openapi.yaml`` is the v0.3 draft the request schema supersedes.
@@ -231,7 +233,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--proposals",
         default=ContractSources.SHARED_DIRECTORY,
-        help="the shared specification directory (default: /home/contract-proposals)",
+        help="the contract checkout whose working tree holds specs/ and the fixed materials.yaml "
+        "(default: /home/renovisor-api-contract)",
     )
     arguments = parser.parse_args(argv)
     proposals = Path(arguments.proposals).expanduser().resolve() if arguments.proposals else None

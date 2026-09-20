@@ -7,7 +7,7 @@ teams. ``calculation-request.schema.json`` (the request the translator validates
 ``calculation-request.mockup-1.yaml`` (the worked example every probe set anchors on),
 ``measure-capabilities.openapi.yaml`` (the shape of the capability document the translator
 generates) and ``materials.yaml`` (the insulation-material database) come from the shared
-specification folder ``/home/contract-proposals`` and are vendored as local files. This package
+specification folder ``/home/renovisor-api-contract/specs`` (the contract checkout) and are vendored as local files. This package
 holds a copy of each, together with ``PINNED.yaml``, which records where every copy came from and
 the content hash it had at that moment.
 
@@ -49,7 +49,7 @@ Reading the copies::
 
 Refreshing them from a local checkout and the proposal directory::
 
-    python -m hisim.renovisor.contract.refresh ~/renovisor-api-contract --proposals ~/contract-proposals
+    python -m hisim.renovisor.contract.refresh ~/renovisor-api-contract --proposals /home/renovisor-api-contract
 """
 
 import json

@@ -3,12 +3,12 @@
 Usage::
 
     python -m hisim.renovisor.contract.refresh /path/to/renovisor-api-contract \
-        [--proposals /home/contract-proposals]
+        [--proposals /home/renovisor-api-contract]
 
 A vendored file has one of two source kinds. A **git source** is a branch (or any git ref) of the
 contract repository and a path inside it; the script reads the file at that ref with ``git show``
 and records the commit the ref resolved to and its date. A **local source** is a file in a
-directory outside any repository -- the shared ``/home/contract-proposals``, the single home of
+working tree of the contract checkout -- ``/home/renovisor-api-contract``, whose ``specs/`` is the single home of
 every specification the three repositories share -- and is
 recorded with the phrase naming where it came from instead of a commit, because the proposal
 directory is not versioned. Both kinds record the SHA-256 of the content written, and
@@ -16,8 +16,11 @@ directory is not versioned. Both kinds record the SHA-256 of the content written
 hand, or a refresh that did not run to completion, fails the build.
 
 The sources are class attributes of :class:`ContractSources` so that a file moving to another
-branch (``materials.yaml`` lives on the ``materials`` branch today), or a proposal file moving
-into the contract repository, is a one-line change here and nowhere else.
+branch, or a proposal file moving into the contract repository, is a one-line change here and
+nowhere else. A file dropped from those attributes is dropped from the pin as well: the pin is
+written from the sources every run, so a vendored copy stops being recorded the moment it stops
+being a source. That is what happened to ``materials.yaml`` on 2026-09-20, when HiSim stopped
+vendoring the material database it never reads.
 """
 
 import argparse
@@ -34,11 +37,13 @@ from hisim.renovisor.contract import ContractFiles
 
 
 class ContractSources:
-    """Where each vendored file comes from inside the contract repository.
+    """Where each vendored file comes from: the contract repository or the shared folder.
 
     ``BY_FILENAME`` maps the vendored file name to ``(git ref, path in the repository)``. The
     ref is resolved to a commit at refresh time and that commit is what ``PINNED.yaml`` records,
     so the pin names an immutable revision even when the ref is a moving branch.
+    ``LOCAL_BY_FILENAME`` maps the vendored file name to a file name in the shared folder, whose
+    pin entry records the folder instead of a commit because the folder is not versioned.
     """
 
     #: The repository the files are taken from, recorded verbatim in ``PINNED.yaml``.
@@ -48,25 +53,32 @@ class ContractSources:
     BY_FILENAME: ClassVar[Dict[str, Tuple[str, str]]] = {
         ContractFiles.OPENAPI_FILENAME: ("origin/main", "openapi.yaml"),
         ContractFiles.MEASURES_FILENAME: ("origin/main", "measures.yaml"),
-        ContractFiles.MATERIALS_FILENAME: ("origin/main", "materials.yaml"),
     }
 
-    #: vendored file name -> file name inside the proposal directory, for the files that have no
-    #: home in the contract repository yet.
+    #: vendored file name -> path inside the contract checkout's working tree, for the files that
+    #: are taken from the working tree rather than from a git ref: the shared specifications under
+    #: ``specs/`` (moved there from ``/home/contract-proposals`` on 2026-09-20, on the branch
+    #: ``shared-specs`` until it merges).
     LOCAL_BY_FILENAME: ClassVar[Dict[str, str]] = {
-        ContractFiles.REQUEST_SCHEMA_FILENAME: "calculation-request.schema.json",
-        ContractFiles.REQUEST_MOCKUP_FILENAME: "calculation-request.mockup-1.yaml",
-        ContractFiles.CAPABILITIES_SCHEMA_FILENAME: "measure-capabilities.openapi.yaml",
+        ContractFiles.REQUEST_SCHEMA_FILENAME: "specs/calculation-request.schema.json",
+        ContractFiles.REQUEST_MOCKUP_FILENAME: "specs/calculation-request.mockup-1.yaml",
+        ContractFiles.CAPABILITIES_SCHEMA_FILENAME: "specs/measure-capabilities.openapi.yaml",
     }
+
+    #: vendored file name -> the ``note`` its pin entry carries, for a copy that deliberately
+    #: differs from the contract repository's own file. The note names the revision it deviates
+    #: from and why, so the deviation is a recorded fact rather than unexplained drift. Empty
+    #: since 2026-09-20: every vendored copy is now the source's own bytes.
+    NOTES: ClassVar[Dict[str, str]] = {}
 
     #: The phrase recorded as the ``source`` of every locally vendored file. It names the
     #: directory and the day the proposal was read, which is all the provenance an unversioned
     #: directory can carry.
-    LOCAL_SOURCE: ClassVar[str] = "/home/contract-proposals"
+    LOCAL_SOURCE: ClassVar[str] = "/home/renovisor-api-contract"
 
     #: Where the shared specifications live on the machines that have them. CI and the container
     #: image do not, which is why the files are vendored at all.
-    SHARED_DIRECTORY: ClassVar[str] = "/home/contract-proposals"
+    SHARED_DIRECTORY: ClassVar[str] = "/home/renovisor-api-contract"
 
     #: Vendored files that are kept for the record but must not be read as the truth about
     #: anything. ``openapi.yaml`` is the v0.3 draft the request schema supersedes.
@@ -125,7 +137,8 @@ class ContractRefresher:
             The ``files`` mapping of the pin record: vendored file name to a dictionary with the
             source description and the ``sha256`` of the content written. A git-sourced file
             carries ``ref``, ``path``, ``commit`` and ``commit_date``; a locally sourced one
-            carries ``source`` and ``path``.
+            carries ``source`` and ``path``. Either kind additionally carries a ``note`` when
+            :attr:`ContractSources.NOTES` or :attr:`ContractSources.NOT_AUTHORITATIVE` names it.
         """
         previous = self._previous_entries()
         entries: Dict[str, Dict[str, Any]] = {}
@@ -158,6 +171,9 @@ class ContractRefresher:
         for filename, note in ContractSources.NOT_AUTHORITATIVE.items():
             if filename in entries:
                 entries[filename]["authoritative"] = False
+                entries[filename]["note"] = note
+        for filename, note in ContractSources.NOTES.items():
+            if filename in entries:
                 entries[filename]["note"] = note
         pin = {
             "repository": ContractSources.REPOSITORY,
@@ -210,7 +226,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--proposals",
         default=ContractSources.SHARED_DIRECTORY,
-        help="the shared specification directory (default: /home/contract-proposals)",
+        help="the contract checkout whose working tree holds the shared specs/ directory "
+        "(default: /home/renovisor-api-contract)",
     )
     arguments = parser.parse_args(argv)
     proposals = Path(arguments.proposals).expanduser().resolve() if arguments.proposals else None

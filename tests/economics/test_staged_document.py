@@ -270,6 +270,31 @@ class TestTheDocumentShape:
         assert commit is None or isinstance(commit, str) and commit.strip() == commit
 
 
+class TestTheParametersBlock:
+    """``parameters`` states the assumptions *and* is a legal ``--parameters`` file (step 13 §1.4).
+
+    Input and output were two vocabularies until step 13: the block echoed ``horizon_years`` and
+    ``perspective_id`` while the command read the engine's own field names, so the block a reader
+    copied out of a document was rejected key by key when they handed it back. It is one table of
+    keys now, which is why ``subsidy_mode`` and ``financing`` — the two inputs the block did not
+    echo — are in it.
+    """
+
+    def test_it_echoes_the_subsidy_mode_the_plan_ran_under(self, document):
+        """The synthetic perspective admits no scheme, and the document says so."""
+        assert document["parameters"]["subsidy_mode"] == "none"
+
+    def test_it_echoes_the_financing_the_plan_ran_under(self, document):
+        """A cash purchase is a statement, not an absent key."""
+        assert document["parameters"]["financing"] == {"kind": "cash"}
+
+    def test_every_key_of_it_is_a_key_the_command_accepts(self, document):
+        """Which is what makes a document's assumptions a runnable input file."""
+        from hisim.economics.staged_parameters import ParameterKeys
+
+        assert set(document["parameters"]) == set(ParameterKeys.ACCEPTED)
+
+
 class TestFinancing:
     """A plan with a loan publishes one loan per stage that borrowed, with its debt service."""
 

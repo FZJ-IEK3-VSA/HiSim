@@ -38,6 +38,8 @@
         "price_basis_year",
         "simulation_year",
         "perspective_id",
+        "subsidy_mode",
+        "financing",
         "escalation",
         "subsidy_catalog"
       ],
@@ -48,6 +50,22 @@
         "price_basis_year": {"type": ["integer", "null"]},
         "simulation_year": {"type": ["integer", "null"]},
         "perspective_id": {"type": "string"},
+        "subsidy_mode": {
+          "type": "string",
+          "enum": ["full", "none"],
+          "description": "Whether the subsidy catalogue was applied at all; also an input of `staged --parameters`."
+        },
+        "financing": {
+          "type": "object",
+          "required": ["kind"],
+          "description": "How the investment was paid for; also an input of `staged --parameters`.",
+          "properties": {
+            "kind": {"type": "string", "enum": ["cash", "loan"]},
+            "financed_share": {"type": "number", "minimum": 0, "maximum": 1},
+            "nominal_interest_rate": {"type": "number"},
+            "term_in_years": {"type": "integer", "minimum": 1}
+          }
+        },
         "escalation": {
           "type": "object",
           "required": ["general", "investment", "feed_in", "energy"],
@@ -60,7 +78,7 @@
         },
         "subsidy_catalog": {
           "type": ["string", "null"],
-          "description": "The catalogue in force, or null when the plan ran with subsidy_mode NONE."
+          "description": "The catalogue in force (country and snapshot date), or null when none was loaded. Documentation of what produced this document: it is accepted and ignored as an input of `staged --parameters`, where the catalogue comes from the shipped directory or `--subsidy-catalog`."
         }
       }
     },

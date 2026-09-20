@@ -41,6 +41,7 @@ from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import Perspective
 from hisim.economics.results import LifecycleCostResult, VariantComparison
 from hisim.economics.staged import StagedResult
+from hisim.economics.staged_parameters import StagedParameters
 from hisim.economics.subsidies import SubsidyDecision
 from hisim.economics.timeline import CashFlowEntry, CategoryRules, CostCategory
 from hisim.economics.uncertainty import UncertainValue
@@ -437,29 +438,19 @@ class StagedDocument:
         return {"hisim_commit": HiSimCommit.of(), "economics_version": self.ECONOMICS_VERSION}
 
     def _parameters_block(self) -> Dict[str, Any]:
-        """The assumptions the plan was priced under, as the document states them."""
-        parameters = self._parameters
-        simulation_year = self._result.plan.simulation_year
-        return {
-            "horizon_years": parameters.observation_period_in_years,
-            "interest_rate": parameters.interest_rate,
-            "country": parameters.country,
-            "price_basis_year": parameters.price_basis_year,
-            "simulation_year": simulation_year,
-            "perspective_id": self._perspective.id,
-            "escalation": {
-                "general": parameters.general_price_escalation_rate,
-                "investment": parameters.investment_price_escalation_rate,
-                "feed_in": parameters.feed_in_escalation_rate,
-                "energy": {
-                    carrier.value: rate
-                    for carrier, rate in sorted(
-                        parameters.energy_price_escalation_rates.items(), key=lambda item: item[0].value
-                    )
-                },
-            },
-            "subsidy_catalog": self._catalog_id,
-        }
+        """The assumptions the plan was priced under, as the document states them.
+
+        Built by :meth:`~hisim.economics.staged_parameters.StagedParameters.to_document_block`,
+        which is also the table of keys ``--parameters`` reads. One table for both directions is
+        what makes this block a legal input file: a reader can copy it out of a document, hand it
+        back over the same stages and get the same run.
+        """
+        return StagedParameters.to_document_block(
+            parameters=self._parameters,
+            perspective=self._perspective,
+            simulation_year=self._result.plan.simulation_year,
+            subsidy_catalog=self._catalog_id,
+        )
 
     def _stages(self) -> List[Dict[str, Any]]:
         """One row per stage: its index, label, year, job and the measures it added."""

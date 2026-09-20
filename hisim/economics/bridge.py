@@ -71,6 +71,7 @@ from hisim.economics.evaluator import (
     EvaluationInputs,
     SubjectCostFacts,
     UnresolvedSubject,
+    effective_price_basis_year,
     require_resolvable_subjects,
 )
 from hisim.economics.exports import (
@@ -1107,8 +1108,19 @@ def compute_lifecycle_costs(
     database = CostDatabase(parameters.cost_database_path)
     inputs = build_evaluation_inputs(wrapped_components, all_outputs, postprocessing_results, simulation_parameters)
     # The faithful extract goes to disk before anything economic touches it (W1.1): what the
-    # file contains must depend on the simulation only, never on cost-database state.
-    write_inputs(inputs, result_directory)
+    # payload contains depends on the simulation only, never on cost-database state. Two
+    # statements travel beside it, and both are facts about this run rather than assumptions a
+    # later caller may change: the country, and the price basis year the run actually priced at.
+    # A consumer of this file alone — the staged evaluator pricing a plan out of finished jobs —
+    # has no other way of learning either, and would answer both from a default. The basis year
+    # is resolved here, by the one function that owns the policy, because that resolution is what
+    # the run used; it is the only reason this line touches the database at all.
+    write_inputs(
+        inputs,
+        result_directory,
+        country=parameters.country,
+        price_basis_year=effective_price_basis_year(parameters, database, inputs.simulation_year),
+    )
     # A configured catalog that will not load — or whose path does not resolve — is not a
     # degradation, it is a different calculation: evaluation would silently fall back to the §10.1
     # flat shim and publish subsidy figures that have nothing to do with the catalog the run asked

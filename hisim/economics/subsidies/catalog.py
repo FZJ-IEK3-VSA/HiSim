@@ -908,6 +908,64 @@ class SubsidyCatalog:
         )
 
     @classmethod
+    def shipped_catalog_file(cls, country: str, directory: Optional[str] = None) -> Optional[str]:
+        """The ``<COUNTRY>.json`` a catalogue directory holds, or None when it holds none.
+
+        The one place "does this country have a catalogue?" is answered, so the RenoVisor
+        translator and the staged CLI cannot disagree about it (step 11 §3, item 12). A country
+        the shipped directory has no file for gets no catalogue at all, the run prices as
+        ``subsidy_mode NONE``, and the result document says so with undetermined rows rather than
+        with zeroes.
+
+        Example::
+
+            SubsidyCatalog.shipped_catalog_file("IE")  # -> ".../hisim/subsidy_catalog/IE.json"
+
+        Args:
+            country: The ISO-3166 alpha-2 code, in any case.
+            directory: Where to look; :attr:`DEFAULT_PATH`, the shipped directory, when omitted.
+
+        Returns:
+            The absolute path of the country's catalogue file, or None.
+        """
+        base = directory if directory is not None else cls.DEFAULT_PATH
+        candidate = os.path.join(base, f"{country.upper()}.json")
+        return candidate if os.path.isfile(candidate) else None
+
+    @classmethod
+    def configured_or_shipped_path(
+        cls, country: str, configured_path: Optional[str], override_path: Optional[str] = None
+    ) -> Optional[str]:
+        """Which directory a run loads its catalogue from when nobody named one.
+
+        The path resolution of :meth:`load_configured` with the step 11 §3 default in front of
+        it: a path the caller or the parameters name wins, and when neither does, the shipped
+        directory is used **if it has this country's file**. Without that last step a caller
+        holding only a stage extract — which carries no catalogue path, and is not meant to — ran
+        with no catalogue at all and published a plan with every subsidy undetermined, while the
+        same plan over a full job directory (whose stored record names the shipped directory)
+        priced the grants.
+
+        It is separate from :meth:`load_configured` on purpose: that method is what the
+        postprocessing bridge and the ``evaluate``/``explain``/``report`` subcommands call, where
+        "no path named" has always meant "no catalogue", and changing it would silently re-price
+        archived studies.
+
+        Args:
+            country: The country the run is priced for.
+            configured_path: ``EconomicParameters.subsidy_catalog_path``, possibly None.
+            override_path: A ``--subsidy-catalog`` flag, which wins over everything.
+
+        Returns:
+            The directory to load from, or None when nobody named one and the country ships none.
+        """
+        named = override_path or configured_path
+        if named:
+            return named
+        shipped = cls.shipped_catalog_file(country)
+        return os.path.dirname(shipped) if shipped is not None else None
+
+    @classmethod
     def load_configured(
         cls, country: str, configured_path: Optional[str], override_path: Optional[str] = None
     ) -> Optional["SubsidyCatalog"]:

@@ -111,7 +111,43 @@ python -m hisim.economics validate
 # Human-readable report for stored results; --compare adds the variant comparison
 # (delta waterfall by subject, discounted payback curve, warm-rent change):
 python -m hisim.economics report <results_dir> [--compare <reference_results_dir>]
+
+# Price a renovation plan spread over several years out of finished jobs (E-spec §6):
+python -m hisim.economics staged --stage <dir0>:0:baseline --stage <dir1>:3:"stage 2" \
+    --parameters economics.json --out economics_result.json
 ```
+
+`staged` is the exception to the paragraph below: its `--parameters` file is **not** an
+`EconomicParameters` record but the `economics_result.json` document's own `parameters` block, so
+a reader can feed a document's assumptions back in unchanged. Every key is optional —
+
+```json
+{"horizon_years": 20, "interest_rate": 0.03, "perspective_id": "brownfield_net",
+ "financing": {"kind": "cash"}, "subsidy_mode": "full"}
+```
+
+— plus `country`, `price_basis_year`, `escalation`, and `simulation_year` and `subsidy_catalog`,
+which are accepted and ignored. **The country and the price basis year come from the stages.**
+Each stage job states both twice — in the parameters its evaluation was stored with
+(`lifecycle_costs.json`) and in its extract (`economic_inputs.json`, where `write_inputs` puts
+them because they are facts of the run, not assumptions: the country decides which price data
+applies and the *resolved* basis year decides at which price level the run was costed) — so a
+stage directory holding only the extract and the mapping report, which is what a backend's worker
+ships, still states both. The two files of one stage must agree, and so must all the stages
+(`stage.country.mismatch`, `stage.price_basis_year.mismatch`). A value in the parameters file is
+only checked against theirs, and a plan whose stages state neither anywhere and whose file states
+neither is refused — never priced as German, and never at a basis year re-derived from the
+simulation year. Naming `price_basis_year` in the file is how a plan over extracts written before
+the key existed is priced.
+
+The subsidy catalogue is the one input a stage does not carry, so `staged` resolves it the way
+the RenoVisor translator does: `--subsidy-catalog` wins, then a `subsidy_catalog_path` in the
+stages' stored record, and failing both the shipped `hisim/subsidy_catalog` directory when it
+holds `<COUNTRY>.json`. A country that ships none runs with no catalogue and the document says
+`subsidy_catalog: null` with every subsidy row undetermined. (`evaluate`, `explain` and `report`
+keep their own rule — no path named means no catalogue — so no archived study is re-priced by
+this.) Everything the file does not name stays what the stages were priced under, and
+every refused key is exit 2 with a `problems.json` naming all of them at once.
 
 `evaluate`, `explain` and `report` all accept `--parameters <file>` (an `EconomicParameters`
 JSON document) and `--subsidy-catalog <dir>`, and all three mean the same thing: price under

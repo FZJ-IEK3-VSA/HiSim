@@ -116,6 +116,8 @@ venv.bak/
 hisimvenv_cluster/
 hisimvenv/
 local_python_env/
+localdevenv/
+local_dev_env/
 
 # Spyder project settings
 .spyderproject

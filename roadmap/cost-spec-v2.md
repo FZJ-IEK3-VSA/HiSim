@@ -941,7 +941,7 @@ For closed-form parts, tests compare against `numpy_financial`
 (`pmt`, `npv`) on randomized inputs — a third implementation for free.
 (New dev/test dependency.)
 
-## 6. Open questions for review
+## 6. Open questions for review → hisim-cyc.19
 
 1. **Package layout depth** (§2.5): sub-packages as proposed, or flat module
    with enforced import-lint layers only? The import audit shrinks this

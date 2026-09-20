@@ -26,7 +26,7 @@ between features.
 
 ## Step 0 — Measure before changing anything
 
-- [ ] **Profile a representative run and publish the breakdown.** Two or three setups (one minutely
+- [ ] **Profile a representative run and publish the breakdown.** Two or three setups (one minutely → hisim-9ks.1
   full year, one 15-min short run, one with MPC), broken into: timestep loop, third-party library
   calls (pvlib/hplib/bslib/windpowerlib), input parsing, postprocessing, external waiting
   (UTSP/LPG). This is a day of work and it is the gate on every performance argument in the
@@ -41,7 +41,7 @@ between features.
 These are the items that a port cannot route around, and each one improves the Python codebase on its
 own terms. If only one tier is ever done, it should be this one.
 
-- [ ] **A physics-library adapter layer.** Today `pvlib`, `hplib`, `bslib`, `windpowerlib`,
+- [ ] **A physics-library adapter layer.** Today `pvlib`, `hplib`, `bslib`, `windpowerlib`, → hisim-9ks.2
   `oemof.thermal` and `pygfunction` are called inline from the components that need them —
   `weather.py`, `generic_pv_system.py`, `building/window.py`, `solar_thermal_system.py`,
   `more_advanced_heat_pump_hplib.py`, `simple_heat_source.py` — and library objects cross the
@@ -53,7 +53,7 @@ own terms. If only one tier is ever done, it should be this one.
   reference inputs/outputs per library call. **Payoff for a port:** this boundary *is* the FFI seam,
   and it is the difference between a hybrid being designable and not.
 
-- [ ] **A typed simulation context, replacing `SingletonSimRepository` and the string-keyed
+- [ ] **A typed simulation context, replacing `SingletonSimRepository` and the string-keyed → hisim-9ks.3
   `SimRepository`.** 17 modules under `hisim/` still reach for the singleton, including the
   weather → building forecast handoff (11 yearly arrays), price signal → MPC (~20 forecast keys), the
   air-conditioner fit coefficients and the PID thermal coefficients; `generic_car.py:293` reads its
@@ -63,7 +63,7 @@ own terms. If only one tier is ever done, it should be this one.
   fixtures that reset a global disappear, and run isolation stops depending on discipline.
   **Payoff for a port:** removes the single largest piece of untyped shared mutable state.
 
-- [ ] **A typed results table, replacing `pd.DataFrame` in the component cost/KPI hooks.** 92
+- [ ] **A typed results table, replacing `pd.DataFrame` in the component cost/KPI hooks.** 92 → hisim-9ks.4
   signatures under `hisim/components/` take `postprocessing_results: pd.DataFrame`, so pandas is
   part of the component API and every cost/KPI implementation depends on column-name conventions.
   Introduce a narrow view type (per-output series accessor plus the reductions actually used) and
@@ -73,7 +73,7 @@ own terms. If only one tier is ever done, it should be this one.
   removes pandas from the component trait, which is otherwise a hard blocker for porting any
   component before porting all of postprocessing.
 
-- [ ] **A static component registry, replacing reflection-based instantiation.** 29 `importlib`
+- [ ] **A static component registry, replacing reflection-based instantiation.** 29 `importlib` → hisim-9ks.5
   call sites across 9 component modules exist purely to dodge circular imports in default
   connections; 22 `.scenario.json` files and 28 `.energy_system.yaml` files name components by
   fully-qualified Python path (`class: hisim.components.weather.Weather`). Add a name → constructor
@@ -88,7 +88,7 @@ own terms. If only one tier is ever done, it should be this one.
 
 ## Tier 2 — Interfaces a second implementation would have to honour
 
-- [ ] **Decide the numeric-parity policy, then make the goldens implement it.** Today the regression
+- [ ] **Decide the numeric-parity policy, then make the goldens implement it.** Today the regression → hisim-9ks.6
   corpus mixes byte comparison of CSV and markdown with `math.isclose` at rel_tol 1e-9 and
   `pytest.approx` at its implicit 1e-6 default. Byte comparison pins pandas' float formatting, which
   is why pandas is pinned to an exact version. Move comparisons to parsed-value numeric comparison at
@@ -98,34 +98,34 @@ own terms. If only one tier is ever done, it should be this one.
   library default nobody chose. **Payoff for a port:** this is the acceptance harness; see review item
   R6 in the companion document for why the current contradiction blocks the estimate itself.
 
-- [ ] **Retire the magic-string KPI keys.** The companion document counts ~100 KPI names matched by
+- [ ] **Retire the magic-string KPI keys.** The companion document counts ~100 KPI names matched by → hisim-b3b.1
   string equality across files, with a building-sizer lookup matching whole sentences. Work is
   already specified in `roadmap/kpi_address_spec.md` — align with it rather than forking a second
   scheme. **Payoff now:** a renamed KPI fails loudly instead of silently zeroing a downstream number.
 
-- [ ] **Kill the intra-run file feedback loop in postprocessing.** KPI preparation re-reads the cost
+- [ ] **Kill the intra-run file feedback loop in postprocessing.** KPI preparation re-reads the cost → hisim-9ks.7
   CSVs that the OPEX step wrote earlier *in the same run*, keyed by magic row names such as `"Total"`
   (`kpi_preparation.py:732–776`). Pass the values in memory. **Payoff now:** removes an ordering
   dependency between postprocessing options and a whole class of "works alone, fails in the full
   run" bugs.
 
-- [ ] **Replace the pickle result export with parquet or CSV+JSON.** `postprocessing_main.py`
+- [ ] **Replace the pickle result export with parquet or CSV+JSON.** `postprocessing_main.py` → hisim-9ks.8
   pickles a DataFrame; pickle has no cross-language reader and is a security and
   version-compatibility liability in Python too. This one has external consumers, so it needs an
   announcement and a deprecation window — start it early precisely because of that.
 
-- [ ] **Separate physics from reporting boilerplate in the large component modules.** §4.1 of the
+- [ ] **Separate physics from reporting boilerplate in the large component modules.** §4.1 of the → hisim-9ks.9
   companion document estimates 25–40% of the big files is cost/KPI/report code. Split per component,
   one PR each, no behaviour change. **Payoff now:** `building.py` at 2,099 lines and
   `more_advanced_heat_pump_hplib.py` at ~2,750 become reviewable, and the physics gets testable
   without the reporting stack.
 
-- [ ] **Stop the byte surgery in the connection log.** `component.py:447` seeks to
+- [ ] **Stop the byte surgery in the connection log.** `component.py:447` seeks to → hisim-9ks.10
   `st_size - 1` and overwrites the closing bracket of `component_connections.json` to append an
   entry. Buffer the connections and write the file once when wiring completes. **Payoff now:** an
   interrupted run stops leaving a syntactically broken JSON file behind.
 
-- [ ] **Make the convergence criterion explicit and unit-aware.** `component.py:194` compares every
+- [ ] **Make the convergence criterion explicit and unit-aware.** `component.py:194` compares every → hisim-9ks.11
   output against a hardcoded absolute `0.0001` — watts, joules, kelvin, euros and dimensionless
   ratios on one scale — and the forced-convergence thresholds (>10 iterations, >100 raises) are
   hardcoded next to it. At minimum make all three configurable and document the choice; ideally scale
@@ -136,48 +136,48 @@ own terms. If only one tier is ever done, it should be this one.
 
 ## Tier 3 — Removing Python-only crutches
 
-- [ ] **Explicit state structs for `i_save_state` / `i_restore_state`.** Five component modules
+- [ ] **Explicit state structs for `i_save_state` / `i_restore_state`.** Five component modules → hisim-9ks.12
   `deepcopy` themselves or their state each iteration. An explicit small state object is faster in
   Python and removes the "which attributes are state?" ambiguity. **Payoff now:** measurable — this
   runs once per component per convergence iteration per timestep.
 
-- [ ] **Inject the cache backend, the clock and the RNG instead of patching them in tests.** 22 test
+- [ ] **Inject the cache backend, the clock and the RNG instead of patching them in tests.** 22 test → hisim-9ks.13
   files use `monkeypatch`, 8 of them around `utils.get_cache_file`; without that patching, runs are
   order-dependent through the shared on-disk cache, and `conftest.py` scrubs `HISIM_CACHE_*` around
   every test. Turn these into constructor parameters. **Payoff now:** order-independent tests, less
   autouse machinery, and the stale-cache class of false failures loses its main route in.
 
-- [ ] **Make the cache key an explicit versioned serializer.** The key is
+- [ ] **Make the cache key an explicit versioned serializer.** The key is → hisim-9ks.14
   `sha256(dataclasses_json output + sim-params string)`, so field order, float repr and enum spelling
   from a third-party library are load-bearing for ~319 MB of committed cache and every cross-machine
   share. Write an owned key serializer with a stable field order, a schema version in the key, and a
   test that pins the exact string for a fixture config. **Payoff now:** upgrading `dataclasses_json`
   or `pyhumps` stops silently invalidating every cache entry in the fleet.
 
-- [ ] **Audit the exact float comparisons in control flow.** Roughly 60 `== 0`-style comparisons sit
+- [ ] **Audit the exact float comparisons in control flow.** Roughly 60 `== 0`-style comparisons sit → hisim-9ks.15
   in component control paths (`water_mass_flow_rate == 0`, `control_signal == 0.0`, `delta_t == 0`
   patched to `1e-8`). Replace with documented epsilons and re-bless the goldens once. Do this in
   Python, where re-blessing is cheap and reviewable, rather than discovering it during a port where
   the change is indistinguishable from a translation bug.
 
-- [ ] **Move executable code out of the data directory and stop reading data at import time.**
+- [ ] **Move executable code out of the data directory and stop reading data at import time.** → hisim-9ks.16
   `hisim/inputs/photovoltaic/module_selection.py` is Python inside `hisim/inputs/`, and it reads PV
   module databases at import. Relocate to `hisim/components/` and make the read lazy. **Payoff now:**
   import time, and the data directory becomes purely data.
 
-- [ ] **Separate tracked reference data from generated cache.** `hisim/inputs/` holds ~319 MB of
+- [ ] **Separate tracked reference data from generated cache.** `hisim/inputs/` holds ~319 MB of → hisim-hi1.8
   git-tracked reference data; on a working copy it reaches 1.7 GB because generated caches live in
   the same tree. Move the cache out of `hisim/inputs/`, and consider distributing the reference data
   as a versioned package or download. **Payoff now:** clone size, and cache from one branch stops
   masquerading as input data in another.
 
-- [ ] **Prune `requirements.txt`.** `seaborn`, `plotly` and `html2image` are declared but imported
+- [ ] **Prune `requirements.txt`.** `seaborn`, `plotly` and `html2image` are declared but imported → hisim-9ks.17
   nowhere under `hisim/`, `tests/`, `tools/`, `scripts/` or `system_setups/`; there are
   commented-out pins (`pvlib`, `windpowerlib`,
   `wetterdienst`) and a migration TODO. An accurate dependency list is a prerequisite for reasoning
   about the domain-library gap at all.
 
-- [ ] **Converge on one front end.** There are three ways to describe a system: 23 setup functions in
+- [ ] **Converge on one front end.** There are three ways to describe a system: 23 setup functions in → hisim-9ks.18
   `system_setups/*.py`, 22 `.scenario.json` twins, and 28 `.energy_system.yaml` files, with byte-
   identity freshness gates keeping the generated ones in sync. Per the declarative-energy-systems
   plan the YAML is the intended survivor; finish that migration and retire the others. **Payoff now:**
@@ -191,15 +191,15 @@ own terms. If only one tier is ever done, it should be this one.
 
 These need a human ruling. None of them is coding work; all of them block estimation.
 
-- [ ] **MPC and casadi.** Reformulate as a MILP (the companion document argues the dynamics are
+- [ ] **MPC and casadi.** Reformulate as a MILP (the companion document argues the dynamics are → hisim-9ks.19
   linear between disjunctions), accept a permanent Python island, or declare MPC out of core scope.
   This is the only 🔴 in the whole analysis; leaving it open leaves the total open.
-- [ ] **Charts and the PDF report.** Docker mode already runs with every chart and the PDF disabled,
+- [ ] **Charts and the PDF report.** Docker mode already runs with every chart and the PDF disabled, → hisim-9ks.20
   which proves they are optional. Decide whether they are in core scope; if not, formalize the JSON
   manifest that external tooling would render.
-- [ ] **The LPG/.NET dependency.** The forever-dependency is the closed-source .NET binary, not the
+- [ ] **The LPG/.NET dependency.** The forever-dependency is the closed-source .NET binary, not the → hisim-9ks.21
   Python wrapper. Decide whether the core simulator may depend on a subprocess at all.
-- [ ] **The parity policy** (Tier 2, first item) and **the FFI direction** (review item R5) — both are
+- [ ] **The parity policy** (Tier 2, first item) and **the FFI direction** (review item R5) — both are → hisim-9ks.6, hisim-9ks.22
   decisions masquerading as engineering tasks.
 
 ---

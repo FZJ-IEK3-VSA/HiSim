@@ -129,10 +129,10 @@ electric` has no component in HiSim at all (§4.2). It is counted once, in the P
 | Value | State | Note |
 |---|---|---|
 | `gas_heating`, `oil_heating`, `pellet_heating`, `woodchip_heating`, `hydrogen_heating` | works | `generic_boiler` has one preset per fuel |
-| `hvo_heating` | new preset | HVO burns in an oil boiler; needs a new fuel entry (emission factor, price) and a `generic_boiler` preset. Not blocked on P4. |
-| `biomass_heating` | decision needed | Pellets and wood chips are both biomass. Either alias it to one of them or ask the frontend what it means. |
+| `hvo_heating` | new preset | HVO burns in an oil boiler; needs a new fuel entry (emission factor, price) and a `generic_boiler` preset. Not blocked on P4. | → hisim-epc.19
+| `biomass_heating` | decision needed | Pellets and wood chips are both biomass. Either alias it to one of them or ask the frontend what it means. | → hisim-epc.19
 | `heat_pump`, `electric_heating`, `district_heating` | waits for P4 | `more_advanced_heat_pump_hplib`, `generic_electric_heating`, `generic_district_heating` are unconverted (B1) |
-| `hybrid_heat_pump` | no component | Heat pump plus boiler with a switching strategy. `generic_boiler.py:1035` has a hook for acting as the secondary generator; the heat pump and the strategy do not exist. |
+| `hybrid_heat_pump` | no component | Heat pump plus boiler with a switching strategy. `generic_boiler.py:1035` has a hook for acting as the secondary generator; the heat pump and the strategy do not exist. | → hisim-epc.20
 
 **Details on `electric vehicle`:** `generic_car.CarConfig.for_household` exists, so a car as a
 plain consumption profile may be buildable today. Its battery (`advanced_ev_battery_bslib`) and
@@ -620,7 +620,7 @@ Q3(b): the contract's names are a façade mapped onto HiSim's.
 Post-measure totals (per A6.3), or additions? For a house with one EV and a measure saying
 `number: 2`, the two readings differ by a car.
 
-## 9. Open questions
+## 9. Open questions → hisim-epc.22
 
 **Q-N1 — One calculation per invocation, or a base plus N variants?**
 

@@ -50,7 +50,7 @@ This sweep restores that historical checking level *explicitly* (a checking-only
 skip` for `dataclasses_json`, `override` in `disable_error_code`) — see item 6 for the
 follow-up that lifts the blindness for real.
 
-## 6. Mypy visibility for config classes (follow-up to sweep 1)
+## 6. Mypy visibility for config classes (follow-up to sweep 1) → hisim-o6a.2
 
 Removing the wizard's `Any` base revealed ~300 latent typing findings that sweep 1
 deliberately re-masked to stay reviewable: LSP-violating `get_cost_capex(config:
@@ -62,7 +62,7 @@ component, then: delete the checking-only escape hatches on `ConfigBase`, re-ena
 `override` error code, and drop `follow_imports = skip` for `dataclasses_json` (restoring
 the injected-API stubs problem — solve via a small typing shim or upstream stubs).
 
-## 2. Purge or repair the unbuildable components
+## 2. Purge or repair the unbuildable components → hisim-o6a.3
 
 The v2 contract test's `CONSTRUCTION_SKIPS` table (`tests/test_scenario_v2_contract.py`,
 branch `json_v2`) lists 14 components that cannot be built from their own default config.

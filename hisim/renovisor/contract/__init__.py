@@ -1,15 +1,23 @@
 """The vendored copies of the RenoVisor contract that this HiSim speaks.
 
-The contract lives in two places. ``measures.yaml`` (the catalogue of renovation measures),
-``materials.yaml`` (the insulation-material database) and ``openapi.yaml`` (the superseded v0.3
-draft) come from the separate repository ``climatemedia/renovisor-api-contract``, which is
-co-owned by the RenoVisor frontend and backend teams. ``calculation-request.schema.json`` (the
-request the translator validates against), ``calculation-request.mockup-1.yaml`` (the worked
-example every probe set anchors on) and ``measure-capabilities.openapi.yaml`` (the shape of the
-capability document the translator generates) come from the frontend side's proposal directory
-``/home/contract-proposals`` and are vendored as local files until they move into the contract
-repository. This package holds a copy of each, together with ``PINNED.yaml``, which records where
-every copy came from and the content hash it had at that moment.
+The contract lives in two places. ``measures.yaml`` (the catalogue of renovation measures) and
+``openapi.yaml`` (the superseded v0.3 draft) come from the separate repository
+``climatemedia/renovisor-api-contract``, which is co-owned by the RenoVisor frontend and backend
+teams. ``calculation-request.schema.json`` (the request the translator validates against),
+``calculation-request.mockup-1.yaml`` (the worked example every probe set anchors on),
+``measure-capabilities.openapi.yaml`` (the shape of the capability document the translator
+generates) and ``materials.yaml`` (the insulation-material database) come from the shared
+specification folder ``/home/contract-proposals`` and are vendored as local files. This package
+holds a copy of each, together with ``PINNED.yaml``, which records where every copy came from and
+the content hash it had at that moment.
+
+``materials.yaml`` is the one file taken from the shared folder although the contract repository
+has it too. The shared copy is that repository's ``origin/main`` file plus one field --
+``measure_material_values`` on every ``materials`` row -- through which each ``material`` option
+value of ``measures.yaml`` (``EPS``, ``EPS Foam``, ``Mineral wool``, ...) resolves to exactly one
+row; the owner's decision of 2026-09-20 was to keep the catalogue's names authoritative and fix
+the material database locally until the contract owner folds the spelling variants (todo C1).
+Its pin entry carries that as a ``note``.
 
 One file here is not a copy at all. ``measure-capabilities.results-extension.yaml`` is HiSim's
 own proposal back to the frontend team -- the shape of the capability document's ``results``

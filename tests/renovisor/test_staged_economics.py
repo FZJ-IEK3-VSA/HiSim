@@ -23,6 +23,7 @@ from hisim.economics.__main__ import main as economics_main
 from hisim.economics.staged_document import StagedDocument
 from hisim.economics.subsidies import SubsidyCatalog
 from hisim.renovisor.contract import ContractFiles
+from hisim.renovisor.request import CatalogueTable
 from hisim.renovisor.run import Calculation, ExitCode
 from hisim.renovisor.simulation import Period
 
@@ -185,6 +186,27 @@ class TestTheEndToEndDocument:
         """The ordinary baseline-versus-package plan: the package supersedes the baseline at once."""
         assert [stage["label"] for stage in document["stages"]] == ["baseline", "package"]
         assert [stage["from_year"] for stage in document["stages"]] == [0, 0]
+
+    def test_the_package_stage_names_the_measures_it_carried_out(self, document) -> None:
+        """hisim-cyc.4: the stage timeline labels itself from this list, so it must be filled.
+
+        The package's five measures, in catalogue order and with the not-implemented ones left
+        out -- the baseline names nothing, because it carries out nothing.
+        """
+        baseline, package = document["stages"]
+
+        assert baseline["measures"] == []
+        order = list(CatalogueTable.ids())
+        assert package["measures"] == sorted(
+            [
+                "heating_system",
+                "heating_installation",
+                "external_insulation",
+                "photovoltaic_system",
+                "hot_water_tank_and_pipe_insulation",
+            ],
+            key=order.index,
+        )
 
     def test_the_comparison_is_present_and_has_a_payback_verdict(self, document) -> None:
         """A plan is a difference question, so the comparison is not an optional extra."""

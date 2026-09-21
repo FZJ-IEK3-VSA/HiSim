@@ -519,6 +519,92 @@ class TestTheMappingReportIsRequired:
         assert StagedCli.UNPRICED_KEY in written
 
 
+class TestTheStageMeasuresComeFromTheReport:
+    """``stages[].measures`` is read from each stage's mapping report (hisim-cyc.4).
+
+    The end-to-end test on the mockup pair cannot show the filter at work, because every measure
+    of that package is ``used`` or ``approximated`` at measure level -- a value-level substitution
+    such as the low-temperature radiator never changes its measure's status. So the rules are
+    pinned here on a hand-written report: acted-on statuses only, catalogue order regardless of
+    package order, an id the catalogue does not know sorted last, an absent report yielding
+    nothing (the mapping read refuses it later, by name), and a report that does not parse
+    refused with the stage's position.
+    """
+
+    @staticmethod
+    def write_report(directory: Path, measures: List[Dict[str, Any]]) -> None:
+        """Write a mapping report carrying only the measure half under the writer's key."""
+        from hisim.renovisor.report import MappingReport
+
+        (directory / StagedCli.MAPPING_REPORT_FILE_NAME).write_text(
+            json.dumps({MappingReport.MEASURES_FIELD: measures}), encoding="utf-8"
+        )
+
+    def test_only_acted_on_measures_are_listed_in_catalogue_order(self, tmp_path: Path) -> None:
+        """A not-implemented measure changed nothing, so the timeline must not name it."""
+        from hisim.renovisor.request import CatalogueTable
+
+        order = list(CatalogueTable.ids())
+        self.write_report(
+            tmp_path,
+            [
+                {"id": "photovoltaic_system", "status": "used"},
+                {"id": "heating_system", "status": "approximated"},
+                {"id": "ventilation_system", "status": "not_implemented_yet"},
+                {"id": "external_insulation", "status": "used"},
+            ],
+        )
+
+        listed = StagedCli.read_stage_measures(str(tmp_path), 1, "stage 1")
+
+        assert set(listed) == {"photovoltaic_system", "heating_system", "external_insulation"}
+        assert list(listed) == sorted(listed, key=order.index), "catalogue order, not package order"
+        assert order.index("heating_system") < order.index("photovoltaic_system")
+
+    def test_an_unknown_id_sorts_after_the_catalogue(self, tmp_path: Path) -> None:
+        """A report from another catalogue revision is kept, behind everything the table knows."""
+        self.write_report(
+            tmp_path,
+            [
+                {"id": "zzz_not_in_the_catalogue", "status": "used"},
+                {"id": "aaa_not_in_the_catalogue", "status": "used"},
+                {"id": "photovoltaic_system", "status": "used"},
+            ],
+        )
+
+        assert StagedCli.read_stage_measures(str(tmp_path), 1, "stage 1") == (
+            "photovoltaic_system",
+            "aaa_not_in_the_catalogue",
+            "zzz_not_in_the_catalogue",
+        )
+
+    def test_a_directory_without_a_report_yields_nothing_here(self, tmp_path: Path) -> None:
+        """The refusal lives in the mapping read; this reader only has to tolerate the absence."""
+        listed = StagedCli.read_stage_measures(str(tmp_path), 0, "baseline")
+
+        assert isinstance(listed, tuple)
+        assert not listed
+
+    def test_a_report_that_does_not_parse_is_refused_with_the_stage_named(self, tmp_path: Path) -> None:
+        """Broken JSON is a plan problem naming the stage, not a stack trace."""
+        (tmp_path / StagedCli.MAPPING_REPORT_FILE_NAME).write_text("{not json", encoding="utf-8")
+
+        with pytest.raises(StagedEvaluationError) as caught:
+            StagedCli.read_stage_measures(str(tmp_path), 2, "stage 2")
+
+        message = str(caught.value)
+        assert "--stage #2" in message
+        assert "stage 2" in message
+        assert StagedCli.MAPPING_REPORT_FILE_NAME in message
+
+    def test_the_reader_takes_the_measures_key_from_the_writer(self) -> None:
+        """The same guard the subjects keys have: one spelling for both processes."""
+        from hisim.renovisor.report import MappingReport
+
+        assert StagedCli.MEASURES_KEY == MappingReport.MEASURES_FIELD
+        assert StagedCli.MEASURES_KEY in MappingReport().to_json()
+
+
 class TestTheCatalogueIsNamedInTheDocument:
     """``parameters.subsidy_catalog`` identifies a catalogue, not just a country (step 12 §4)."""
 

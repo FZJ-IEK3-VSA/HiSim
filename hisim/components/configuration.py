@@ -22,7 +22,7 @@ Sources for opex techno-economic parameters:
         [11]: https://www.bafa.de/SharedDocs/Downloads/DE/Energie/eew_infoblatt_co2_faktoren_2025.pdf?__blob=publicationFile&v=3
         [12]: https://de.statista.com/statistik/daten/studie/2633/umfrage/entwicklung-des-verbraucherpreises-fuer-leichtes-heizoel-seit-1960/
         [13]: https://de.statista.com/statistik/daten/studie/214738/umfrage/preisentwicklung-fuer-holzpellets-in-deutschland/
-        [14]: https://www.umweltbundesamt.de/sites/default/files/medien/479/publikationen/
+        [14]: https://www.umweltbundesamt.de/system/files/medien/479/publikationen/
               factsheet_ansatz_zur_neubewertung_von_co2-emissionen_aus_der_holzverbrennung_0.pdf
         [15]: https://mediathek.fnr.de/energiepreisentwicklung.html
         [16]: https://de.statista.com/statistik/daten/studie/250114/umfrage/preis-fuer-fernwaerme-nach-anschlusswert-in-deutschland/
@@ -867,15 +867,22 @@ class PhysicsConfig:
                 specific_heat_capacity_in_joule_per_kg_per_kelvin=2500,
             )
         if energy_carrier == LoadTypes.WOOD_CHIPS:
-            # density here = bulk density (Schüttdichte)
-            # source density and heating value: https://www.umweltbundesamt.de/sites/default/files/medien/479/publikationen/
+            # density here = bulk density (Schüttdichte), i.e. per Schüttraummeter of loose chips
+            # source density and heating value: Umweltbundesamt, "Ansatz zur Neubewertung von CO2-Emissionen aus der
+            # Holzverbrennung", factsheet of 30 Oct 2024, table 1: lower heating value 15.6 GJ per tonne of fresh mass
+            # at 15 % water content (softwood, hardwood and industrial residue chips alike), bulk density 0.295 t/m3
+            # (softwood) to 0.194 t/m3 (hardwood); 250 kg/m3 sits inside that range.
+            # https://www.umweltbundesamt.de/system/files/medien/479/publikationen/
             # factsheet_ansatz_zur_neubewertung_von_co2-emissionen_aus_der_holzverbrennung_0.pdf
+            # Cross-check: FNR "Basisdaten Bioenergie Deutschland", spruce chips at 15 % water: 15.6 MJ/kg, 194 kg/m3.
+            # The 15.6 is GJ per TONNE. Until hisim-l07.15 it was stored as GJ per m3, i.e. 17.3 kWh/kg instead of
+            # 4.33 kWh/kg, and every kWh figure derived from a mass of wood chips was four times too large.
             # source heat capacity: https://www.schweizer-fn.de/stoff/wkapazitaet/wkapazitaet_baustoff_erde.php
             # higher heating value of wood chips unknown -> set to lower heating value
             return PhysicsConfig(
                 density_in_kg_per_m3=250,  # approximate value based on different wood types
-                lower_heating_value_in_joule_per_m3=15.6 * 1e9,
-                higher_heating_value_in_joule_per_m3=15.6 * 1e9,
+                lower_heating_value_in_joule_per_m3=15.6 * 1e6 * 250,  # 15.6 MJ/kg times the bulk density = 3.9 GJ/m3
+                higher_heating_value_in_joule_per_m3=15.6 * 1e6 * 250,
                 specific_heat_capacity_in_joule_per_kg_per_kelvin=2000,  # estimated based on values for different woods
             )
         if energy_carrier == LoadTypes.WATER:

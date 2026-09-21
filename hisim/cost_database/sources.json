@@ -101,9 +101,9 @@
     },
     {
       "id": "src_opex_14",
-      "citation": "Umweltbundesamt: Factsheet Neubewertung von CO2-Emissionen aus der Holzverbrennung",
-      "url": "https://www.umweltbundesamt.de/sites/default/files/medien/479/publikationen/factsheet_ansatz_zur_neubewertung_von_co2-emissionen_aus_der_holzverbrennung_0.pdf",
-      "publication_year": 2022,
+      "citation": "Umweltbundesamt: Factsheet Ansatz zur Neubewertung von CO2-Emissionen aus der Holzverbrennung (Stand 30. Oktober 2024)",
+      "url": "https://www.umweltbundesamt.de/system/files/medien/479/publikationen/factsheet_ansatz_zur_neubewertung_von_co2-emissionen_aus_der_holzverbrennung_0.pdf",
+      "publication_year": 2024,
       "retrieved": "2026-07-07",
       "kind": "PROJECT_DATA",
       "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."

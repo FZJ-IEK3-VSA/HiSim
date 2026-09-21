@@ -126,20 +126,20 @@
       "carrier": "WOOD_CHIPS",
       "year": 2026,
       "working_price_in_euro_per_kwh": {
-        "min": 0.006923076923076923,
-        "best_estimate": 0.009230769230769232,
-        "max": 0.012115384615384616
+        "min": 0.027692307692307693,
+        "best_estimate": 0.036923076923076927,
+        "max": 0.048461538461538466
       },
       "standing_charge_in_euro_per_year": 0,
       "grid_exit_fee_in_euro": 0,
-      "emission_factor_in_kg_per_kwh": 0.004615384615384616,
+      "emission_factor_in_kg_per_kwh": 0.018461538461538463,
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.1,
       "quantity_unit": "kWh",
       "source_ids": [
         "src_ai_estimates"
       ],
-      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Converted to kWh basis from the as-published quote 120/160/210 (min/best_estimate/max) EUR/t and 80 kg CO2/t using 17333.3 kWh/t (PhysicsConfig WOOD_CHIPS)."
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Converted to kWh basis from the as-published quote 120/160/210 (min/best_estimate/max) EUR/t and 80 kg CO2/t using 4333.3 kWh/t (PhysicsConfig WOOD_CHIPS: 15.6 GJ per tonne of fresh mass at 15 % water content, UBA factsheet 2024 table 1; until hisim-l07.15 the figure had been read as GJ/m3 and the row was divided by 17333.3 kWh/t)."
     },
     {
       "carrier": "DISTRICT_HEATING",
@@ -313,20 +313,20 @@
       "carrier": "WOOD_CHIPS",
       "year": 2035,
       "working_price_in_euro_per_kwh": {
-        "min": 0.007500000000000001,
-        "best_estimate": 0.010096153846153847,
-        "max": 0.013269230769230771
+        "min": 0.030000000000000002,
+        "best_estimate": 0.04038461538461539,
+        "max": 0.053076923076923084
       },
       "standing_charge_in_euro_per_year": 0,
       "grid_exit_fee_in_euro": 0,
-      "emission_factor_in_kg_per_kwh": 0.004615384615384616,
+      "emission_factor_in_kg_per_kwh": 0.018461538461538463,
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.1,
       "quantity_unit": "kWh",
       "source_ids": [
         "src_ai_estimates"
       ],
-      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Converted to kWh basis from the as-published quote 130/175/230 (min/best_estimate/max) EUR/t and 80 kg CO2/t using 17333.3 kWh/t (PhysicsConfig WOOD_CHIPS)."
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Converted to kWh basis from the as-published quote 130/175/230 (min/best_estimate/max) EUR/t and 80 kg CO2/t using 4333.3 kWh/t (PhysicsConfig WOOD_CHIPS: 15.6 GJ per tonne of fresh mass at 15 % water content, UBA factsheet 2024 table 1; until hisim-l07.15 the figure had been read as GJ/m3 and the row was divided by 17333.3 kWh/t)."
     },
     {
       "carrier": "DISTRICT_HEATING",

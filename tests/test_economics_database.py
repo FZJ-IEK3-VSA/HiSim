@@ -24,6 +24,8 @@ from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.database import CostDatabase
 from hisim.economics.provenance import ParameterOrigin, ProvenanceLedger
 from hisim.economics.sources import SourceRegistry
+from hisim import loadtypes as lt
+from hisim.components.configuration import PhysicsConfig
 from hisim.loadtypes import ComponentType
 
 pytestmark = pytest.mark.base
@@ -465,8 +467,9 @@ class TestTheWoodFuelEmissionFactors:
     against hand arithmetic, per the issue's done-when.
     """
 
-    #: Lower heating values, from the same PhysicsConfig rows the migration notes name.
-    KWH_PER_TON = {"PELLETS": 5000.0, "WOOD_CHIPS": 17333.3}
+    #: Lower heating values, from the same PhysicsConfig rows the migration notes name: pellets 11.7 GJ/m3 at
+    #: 650 kg/m3, wood chips 15.6 GJ per tonne of fresh mass at 15 % water content (UBA factsheet 2024, table 1).
+    KWH_PER_TON = {"PELLETS": 5000.0, "WOOD_CHIPS": 4333.3}
 
     #: The as-published per-kWh factors, as the legacy dict stated them.
     AS_PUBLISHED = {("DE", "PELLETS"): 0.036, ("DE", "WOOD_CHIPS"): 0.0313,
@@ -495,6 +498,19 @@ class TestTheWoodFuelEmissionFactors:
         price = database.get_energy_price(EnergyCarrier.PELLETS, 2024, "DE")
 
         assert price.emission_factor_in_kg_per_kwh * self.KWH_PER_TON["PELLETS"] == pytest.approx(180.0, rel=0.01)
+
+    def test_the_wood_chip_heating_value_is_read_per_tonne(self):
+        """The UBA factsheet's 15.6 GJ is per tonne of fresh mass, so a kilogram of chips holds 15.6 MJ (hisim-l07.15).
+
+        Until hisim-l07.15 the figure was stored as GJ per bulk cubic metre, which made a kilogram hold
+        62.4 MJ and every wood-chip price per kWh four times too small.
+        """
+        physics = PhysicsConfig.get_properties_for_energy_carrier(lt.LoadTypes.WOOD_CHIPS)
+
+        assert physics.lower_heating_value_in_joule_per_kg == pytest.approx(15.6e6)
+        assert physics.lower_heating_value_in_joule_per_kg * 1000.0 / 3.6e6 == pytest.approx(
+            self.KWH_PER_TON["WOOD_CHIPS"], rel=1e-4
+        )
 
     def test_no_shipped_factor_sits_in_the_bug_band(self, database):
         """The bug's signature was a non-zero factor near 1e-6; nothing ships with one.

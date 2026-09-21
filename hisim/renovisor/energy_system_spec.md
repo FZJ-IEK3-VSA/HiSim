@@ -267,8 +267,9 @@ Unchanged from v1 (`tabula_ie.select_building_code`), now emitted as a construct
 - age band ← `construction_year` against the TABULA CSV.
 - refurbishment variant `.001`/`.002`/`.003` ← `retrofit_status` (`unrenovated`/`usual_refurb`/`advanced_refurb`), raised by envelope measures (§8).
 - country prefix ← `location.country_code`.
-- The unusable-TABULA-row workaround (rows without door/window geometry) stays until the
-  `Building` component is fixed; the nearest usable age band is chosen and flagged.
+- The unusable-TABULA-row workaround (rows without door/window geometry) is gone: the
+  `Building` component guards every zero envelope area (hisim-4g9.1), so every band is
+  selectable and the exact band is used.
 
 The result is `constructor: {for_tabula_code: {building_code: "IE.N.SFH.04.Gen.ReEx.001.001", …}}`
 on the `building` component, replacing v1's `ArcheTypeConfig.building_code`.

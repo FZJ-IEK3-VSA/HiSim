@@ -50,8 +50,10 @@ def _mockup() -> Dict[str, Any]:
 #: The TABULA archetype and the design temperature the mockup translates to. They are not free
 #: choices here: the builder computes the existing generator's size from the building's design
 #: heat load, so a configuration without them cannot be priced at all, and these are the values
-#: ``tests/renovisor/test_translate.py`` pins the translated mockup to.
-MOCKUP_BUILDING_CODE = "IE.N.SFH.06.Gen.ReEx.001.001"
+#: ``tests/renovisor/test_translate.py`` pins the translated mockup to. The mockup's 1975 house
+#: lands on its exact band since the Building guards zero envelope areas (hisim-4g9.1); before,
+#: the unusable-row workaround substituted band 06 here.
+MOCKUP_BUILDING_CODE = "IE.N.SFH.05.Gen.ReEx.001.001"
 MOCKUP_DESIGN_TEMPERATURE_IN_CELSIUS = -3.0
 
 

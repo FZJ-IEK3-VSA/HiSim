@@ -298,10 +298,10 @@ class TestTheSemanticChecks:
 
         assert codes_of(document) == []
 
-    def test_a_dwelling_the_index_cannot_place_is_refused(self) -> None:
-        """An apartment built in 1700 has no Irish typology row and no usable neighbour."""
+    def test_a_code_the_table_does_not_carry_is_refused(self) -> None:
+        """An override still has to name a row the index carries."""
         document = mockup()
-        document["house"]["building"]["tabula_building_code"] = "IE.N.SFH.05.Gen.ReEx.001.001"
+        document["house"]["building"]["tabula_building_code"] = "IE.N.SFH.99.Gen.ReEx.001.001"
 
         assert (
             "house.building.tabula_building_code",

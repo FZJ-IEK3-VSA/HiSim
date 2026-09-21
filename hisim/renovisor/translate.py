@@ -1190,12 +1190,10 @@ def _envelope(state: _TranslationState) -> None:
     ``weather_identity`` that would otherwise pin a Dublin building to Aachen's solar gains.
     """
     building = state.house.building
-    areas_given = building.door.area_in_m2 is not None and building.window.area_in_m2 is not None
     code = BuildingCodeSelector.select(
         country=state.request.country.value,
         building_type=building.building_type,
         construction_year=building.construction_year,
-        areas_given=areas_given,
         requested_code=building.tabula_building_code,
     )
     arguments: Dict[str, Any] = {

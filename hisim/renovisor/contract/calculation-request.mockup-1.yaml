@@ -19,10 +19,10 @@ location:
 
 house:
   building:
-    # + construction_year → TABULA IE.N.SFH.06.Gen.ReEx.001.001, reported `approximated`: band 05
-    # (1967-1977) covers 1975 but its TABULA row has no door or window area, which the Building
-    # component cannot run with, so the translator takes the nearest usable band (C4; the band-05
-    # row gaining its areas would make this band 05 again).
+    # + construction_year → TABULA IE.N.SFH.05.Gen.ReEx.001.001, the exact band: the Building
+    # guards every zero envelope area now (hisim-4g9.1), so band 05's row without door or window
+    # area is selectable again and the former nearest-band substitution is gone. The row's own
+    # geometry is the zero-area one until the row is patched (C4, hisim-epc.18).
     building_type: detached_sfh
     construction_year: 1975
     absolute_conditioned_floor_area_in_m2: 140 # Building field, verbatim

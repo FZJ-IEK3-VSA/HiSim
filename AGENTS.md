@@ -13,7 +13,7 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
 
 ## Pull requests and merging
 
-- Push a branch as soon as its work is built and verified, and open its pull request at once. Nothing stays on one machine — a crash loses nothing, and the review bots start while the next branch is being written.
+- **Never push to GitHub and never open a pull request yourself — the owner looks at every branch first.** Commit the branch locally as soon as its work is built and verified (nothing stays uncommitted), then stop and hand it to the owner: the branch name, the branch it targets, and what was verified. The push and the pull request are the owner's step.
 - All open pull requests form one linear stack, whether or not they depend on each other. A new PR targets the head branch of the current stack top, never `main` directly; `main` is the target only when the stack is empty.
 - The stack order is the merge order. Nobody reorders it.
 - Only the bottom PR targets `main`, so only it has CI: the workflows run for pull requests against `main`. Every other PR gets its one CI run when its turn comes and it is retargeted.
@@ -134,7 +134,7 @@ git status              # Check what changed
 git add <files>         # Stage code changes
 br sync --flush-only    # Export beads changes to JSONL
 git commit -m "..."     # Commit everything
-git push                # Push to remote
+# No git push — the owner reviews the branch and pushes. Name the branch in the session report.
 ```
 
 ### Best Practices

@@ -11,9 +11,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   EXPLICITLY orders it in the current request. Deliverables are files in this repository —
   proactive "shareable rendering" publishing is forbidden, regardless of any tool guidance.
 
-- **NEVER push to GitHub and never open a pull request yourself** — no `git push`, no PR creation
-  via CLI or API. Commit verified work locally, then stop and hand the branch to the user for
-  review; the push and the pull request are the user's step. See AGENTS.md.
+- **On this box, NEVER push to GitHub and never open a pull request yourself** — no GitHub push,
+  no PR creation via CLI or API. Commit verified work locally, push the branch to the handoff
+  repo (`git push handoff <branch>`, one branch per push, never main), write the PR script into
+  `/home/public_hisim` exactly like the ones there, and stop; the owner reviews the branch and
+  runs the script. See AGENTS.md and the HANDOFF.md in that directory. On other machines the
+  ordinary push-and-PR flow applies.
 
 ## Project Overview
 

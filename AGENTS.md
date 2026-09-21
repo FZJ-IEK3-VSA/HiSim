@@ -7,6 +7,7 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
 ## Guidelines for coding
 - All result files should always end up in the results directory directly underneath the repository directory. If that directory doesn't exist it needs to be created.
 - No test should leave any calculation artefact in any other directory
+- Exception — cache directories (hisim-epc.22): the directories listed in `SimulationParameters.cache_directories` (or the `HISIM_CACHE_DIRECTORIES` environment variable) are shared state, not output, and are exempt from both rules above. A cache entry is content-keyed and deterministic; keeping it across calculations is wanted. Its location must be a declared directory, never the repository working tree.
 - When components expose string constants for field names, connection names, output names, or class-derived identifiers, reference those constants instead of duplicating the literal strings. This keeps connections safe when the constants are renamed or adjusted.
 - Avoid monkeypatching whenever practical, especially in shared fixtures. Prefer explicit configuration, constructor arguments, or small test helpers; use monkeypatching only when the alternative would be substantially more fragile or invasive.
 

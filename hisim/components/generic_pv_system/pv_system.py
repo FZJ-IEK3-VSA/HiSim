@@ -669,7 +669,7 @@ class PVSystem(cp.Component):
             CacheEntry: where the entry is or will be, and whether it is there.
         """
         key = CacheKey.for_producer(ARTIFACT_KIND, calculation, calculation_inputs)
-        return CacheClient.from_environment().lookup_producer(key, self.my_simulation_parameters.cache_dir_path)
+        return CacheClient.from_environment().lookup_producer(key, self.my_simulation_parameters.cache_locations())
 
     def interpolate(self, pd_database: Any, year: Any) -> Any:
         """Interpolates."""

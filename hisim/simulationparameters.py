@@ -8,6 +8,7 @@ import datetime
 from dataclasses import dataclass
 
 from hisim import log
+from hisim.caching.locations import CacheLocations
 from hisim.postprocessingoptions import PostProcessingOptions
 
 
@@ -42,6 +43,7 @@ class SimulationParameters:
         cache_dir_path: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "inputs", "cache"),
         multiple_buildings: bool = False,
         log_connections: bool = False,
+        cache_directories: Optional[Sequence[str]] = None,
     ):
         """Initialize the SimulationParameters.
 
@@ -73,6 +75,10 @@ class SimulationParameters:
                 Defaults to False (single building).
             log_connections: If True, enable logging of component connections for
                 debugging and verification. Defaults to False.
+            cache_directories: Ordered cache directories, read in order and written to the
+                first writable one, for a container that maps a read-only seed directory and a writable
+                one in (hisim-epc.22). Empty (the default) means the single
+                ``cache_dir_path``, exactly as before.
         """
         self.start_date: datetime.datetime = start_date
         self.end_date: datetime.datetime = end_date
@@ -90,6 +96,7 @@ class SimulationParameters:
         self.skip_finished_results: bool = skip_finished_results
         self.surplus_control = surplus_control
         self.cache_dir_path = cache_dir_path
+        self.cache_directories: List[str] = list(cache_directories or [])
         self.multiple_buildings = multiple_buildings
         self.figure_format = FigureFormat.PNG
         self.log_connections = log_connections
@@ -354,6 +361,16 @@ class SimulationParameters:
             f"Total number of timesteps: {self.timesteps}",
             f"Country: {self.country}",
         ]
+
+    def cache_locations(self) -> "CacheLocations":
+        """The ordered cache directories this calculation reads, and the first writable one it writes.
+
+        Every cache reader and writer of a run goes through this, so a container that maps a
+        read-only seed directory and a writable one in (hisim-epc.22) redirects the whole cache
+        at once. Empty ``cache_directories`` means the single ``cache_dir_path``, exactly the
+        behaviour every caller had before the list existed.
+        """
+        return CacheLocations(self.cache_directories or [self.cache_dir_path])
 
 
 class FigureFormat(str, enum.Enum):

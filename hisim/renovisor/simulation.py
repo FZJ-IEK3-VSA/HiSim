@@ -76,6 +76,13 @@ class SimulationSetup:
     #: The logging verbosity of a container run: warnings and above.
     LOGGING_LEVEL: ClassVar[int] = 3
 
+    #: The environment variable holding the ordered cache directories a container maps in,
+    #: separated by :data:`os.pathsep` (hisim-epc.22). Every entry must be absolute: a relative
+    #: one would resolve against whatever the worker's working directory happens to be, and two
+    #: workers would then disagree about where the cache is. An explicit ``cache_directory``
+    #: argument to :meth:`parameters` outranks the variable, which is then not consulted.
+    CACHE_DIRECTORIES_VARIABLE: ClassVar[str] = "HISIM_CACHE_DIRECTORIES"
+
     #: The post-processing options the result payload cannot be assembled without.
     #: ``COMPUTE_KPIS`` produces the KPI collection, ``WRITE_KPIS_TO_JSON`` writes it as
     #: ``all_kpis.json``, and ``COMPUTE_LIFECYCLE_COSTS`` produces the cost engine's exports
@@ -105,9 +112,11 @@ class SimulationSetup:
             period: How long the run covers.
             output_directory: Where everything the calculation writes goes; the simulation's own
                 outputs land in its ``results/`` subdirectory.
-            cache_directory: Where the occupancy and weather caches live, when a container maps
-                one in. It is the one location outside the output directory a calculation writes
-                to, and it is shared state rather than output (decision Q25).
+            cache_directory: Where the occupancy and weather caches live, when the caller names
+                one. It is the one location outside the output directory a calculation writes
+                to, and it is shared state rather than output (decision Q25). Given, it is the
+                single cache directory and ``HISIM_CACHE_DIRECTORIES`` is not consulted; absent,
+                the variable fills the ordered directory list when it is set (hisim-epc.22).
             country: The dwelling's country, which selects the legacy fuel-price and emission
                 tables. For a country registered as a placeholder the numbers in them are the
                 sentinel; see the module docstring.
@@ -131,8 +140,25 @@ class SimulationSetup:
             logging_level=cls.LOGGING_LEVEL,
         )
         if cache_directory is not None:
+            # The explicit argument outranks the environment: a caller that names a directory
+            # gets exactly that one, and the variable is not consulted.
             cache_directory.mkdir(parents=True, exist_ok=True)
             parameters.cache_dir_path = str(cache_directory)
+            return parameters
+        env_directories = os.environ.get(cls.CACHE_DIRECTORIES_VARIABLE)
+        if env_directories:
+            directories = [entry for entry in env_directories.split(os.pathsep) if entry]
+            relative = [entry for entry in directories if not os.path.isabs(entry)]
+            if relative:
+                raise ValueError(
+                    f"{cls.CACHE_DIRECTORIES_VARIABLE} holds relative path(s) {relative!r}; "
+                    "every cache directory has to be absolute, so two workers agree on where "
+                    "the cache is whatever their working directory is"
+                )
+            parameters.cache_directories = directories
+            # Keep the recorded single path consistent with the list the run actually uses. The
+            # writes go to the first writable entry, which the locations resolve at lookup time.
+            parameters.cache_dir_path = directories[0]
         return parameters
 
     @classmethod

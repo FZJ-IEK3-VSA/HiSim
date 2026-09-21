@@ -423,7 +423,7 @@ class Weather(Component):
         Returns:
             CacheEntry: where the entry is or will be, and whether it is there.
         """
-        return CacheClient.from_environment().lookup_producer(key, self.my_simulation_parameters.cache_dir_path)
+        return CacheClient.from_environment().lookup_producer(key, self.my_simulation_parameters.cache_locations())
 
     def read_series(self, weather_series: pd.DataFrame, origin: str) -> None:
         """Take the component's per-timestep lists out of the produced frame.

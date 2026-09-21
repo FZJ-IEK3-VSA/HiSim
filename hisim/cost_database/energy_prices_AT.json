@@ -88,7 +88,7 @@
       "working_price_in_euro_per_kwh": 0.059596,
       "standing_charge_in_euro_per_year": 0,
       "grid_exit_fee_in_euro": 0,
-      "emission_factor_in_kg_per_kwh": 5.199999999999999e-06,
+      "emission_factor_in_kg_per_kwh": 0.026,
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
@@ -96,7 +96,7 @@
         "src_opex_29",
         "src_opex_24"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 297.98 EUR/t and 0.026 kg CO2/t using 5000 kWh/t (PhysicsConfig PELLETS)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 297.98 EUR/t using 5000 kWh/t (PhysicsConfig PELLETS). The as-published emission factor 0.026 is per kWh — the legacy dict quoted it per kWh against the per-ton price (cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-l07.5."
     },
     {
       "carrier": "WOOD_CHIPS",
@@ -104,7 +104,7 @@
       "working_price_in_euro_per_kwh": 0.017712692307692308,
       "standing_charge_in_euro_per_year": 0,
       "grid_exit_fee_in_euro": 0,
-      "emission_factor_in_kg_per_kwh": 1.0961538461538462e-06,
+      "emission_factor_in_kg_per_kwh": 0.019,
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
@@ -112,7 +112,7 @@
         "src_opex_30",
         "src_opex_24"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 307.02 EUR/t and 0.019 kg CO2/t using 17333.3 kWh/t (PhysicsConfig WOOD_CHIPS)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 307.02 EUR/t using 17333.3 kWh/t (PhysicsConfig WOOD_CHIPS). The as-published emission factor 0.019 is per kWh — the legacy dict quoted it per kWh against the per-ton price (cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-l07.5."
     },
     {
       "carrier": "DISTRICT_HEATING",
@@ -233,7 +233,7 @@
       "working_price_in_euro_per_kwh": 0.059596,
       "standing_charge_in_euro_per_year": 0,
       "grid_exit_fee_in_euro": 0,
-      "emission_factor_in_kg_per_kwh": 5.199999999999999e-06,
+      "emission_factor_in_kg_per_kwh": 0.026,
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
@@ -241,7 +241,7 @@
         "src_opex_29",
         "src_opex_24"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 297.98 EUR/t and 0.026 kg CO2/t using 5000 kWh/t (PhysicsConfig PELLETS)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 297.98 EUR/t using 5000 kWh/t (PhysicsConfig PELLETS). The as-published emission factor 0.026 is per kWh — the legacy dict quoted it per kWh against the per-ton price (cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-l07.5."
     },
     {
       "carrier": "WOOD_CHIPS",
@@ -249,7 +249,7 @@
       "working_price_in_euro_per_kwh": 0.017712692307692308,
       "standing_charge_in_euro_per_year": 0,
       "grid_exit_fee_in_euro": 0,
-      "emission_factor_in_kg_per_kwh": 1.0961538461538462e-06,
+      "emission_factor_in_kg_per_kwh": 0.019,
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
@@ -257,7 +257,7 @@
         "src_opex_30",
         "src_opex_24"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 307.02 EUR/t and 0.019 kg CO2/t using 17333.3 kWh/t (PhysicsConfig WOOD_CHIPS)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 307.02 EUR/t using 17333.3 kWh/t (PhysicsConfig WOOD_CHIPS). The as-published emission factor 0.019 is per kWh — the legacy dict quoted it per kWh against the per-ton price (cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-l07.5."
     },
     {
       "carrier": "DISTRICT_HEATING",

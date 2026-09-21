@@ -453,3 +453,58 @@ class TestSpotSeriesProvenance:
             seasonal = 0.2 * math.cos(hour / 8760.0 * 2.0 * math.pi)
             expected = max(0.0, mean_price + amplitude * (daily + seasonal))
             assert stored == pytest.approx(expected, abs=5e-7), f"hour {hour}"
+
+
+class TestTheWoodFuelEmissionFactors:
+    """hisim-l07.5: the legacy wood-fuel factors are per kWh and stay undivided.
+
+    The legacy dicts priced pellets and wood chips per ton but stated their emission
+    factors per kWh; the migration divided both columns by the heating value, so the
+    engine multiplied tons of fuel by a per-kWh factor and understated the CO2 of these
+    two carriers by a factor of a few thousand. These tests pin the restored figures
+    against hand arithmetic, per the issue's done-when.
+    """
+
+    #: Lower heating values, from the same PhysicsConfig rows the migration notes name.
+    KWH_PER_TON = {"PELLETS": 5000.0, "WOOD_CHIPS": 17333.3}
+
+    #: The as-published per-kWh factors, as the legacy dict stated them.
+    AS_PUBLISHED = {("DE", "PELLETS"): 0.036, ("DE", "WOOD_CHIPS"): 0.0313,
+                    ("AT", "PELLETS"): 0.026, ("AT", "WOOD_CHIPS"): 0.019}
+
+    #: The lookup year each series is valid at: DE 2024, AT 2025, IE has AI estimates only.
+    LOOKUP_YEARS = {"DE": 2024, "AT": 2025}
+
+    @pytest.mark.parametrize("country, carrier", sorted(AS_PUBLISHED))
+    def test_the_factor_is_the_as_published_per_kwh_figure(self, database, country, carrier):
+        """The shipped factor is the legacy dict's own number, in its own unit."""
+        price = database.get_energy_price(EnergyCarrier[carrier], self.LOOKUP_YEARS[country], country)
+
+        assert price.emission_factor_in_kg_per_kwh == pytest.approx(self.AS_PUBLISHED[(country, carrier)])
+
+    @pytest.mark.parametrize("country, carrier", sorted(AS_PUBLISHED))
+    def test_burning_one_ton_emits_the_hand_figure(self, database, country, carrier):
+        """A hand figure in tons: factor × heating value is the CO2 of one burned ton."""
+        price = database.get_energy_price(EnergyCarrier[carrier], self.LOOKUP_YEARS[country], country)
+        hand_figure = self.AS_PUBLISHED[(country, carrier)] * self.KWH_PER_TON[carrier]
+
+        assert price.emission_factor_in_kg_per_kwh * self.KWH_PER_TON[carrier] == pytest.approx(hand_figure)
+
+    def test_one_ton_of_pellets_is_about_180_kg_of_co2(self, database):
+        """The issue's own hand figure, cross-checked against the AI estimate's 175 kg/t."""
+        price = database.get_energy_price(EnergyCarrier.PELLETS, 2024, "DE")
+
+        assert price.emission_factor_in_kg_per_kwh * self.KWH_PER_TON["PELLETS"] == pytest.approx(180.0, rel=0.01)
+
+    def test_no_shipped_factor_sits_in_the_bug_band(self, database):
+        """The bug's signature was a non-zero factor near 1e-6; nothing ships with one.
+
+        Real combustion factors live at or above ~0.005 kg/kWh (the smallest shipped
+        figure is wood chips'); the zero rows are deliberate 2050 no-emission assumptions.
+        """
+        for country, entries in database.energy_prices.items():
+            for entry in entries:
+                factor = entry.emission_factor_in_kg_per_kwh
+                if factor == 0.0:
+                    continue
+                assert factor >= 0.004, (country, entry.carrier.value if hasattr(entry.carrier, "value") else entry.carrier, entry.year, factor)

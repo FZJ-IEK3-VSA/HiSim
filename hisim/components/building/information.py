@@ -10,9 +10,22 @@ from typing import ClassVar, Dict, Iterable, List, Optional, Tuple
 
 import pandas as pd
 
+
 from hisim import log, utils
 from hisim.config import concrete
 from hisim.components.building.config import BuildingConfig
+
+
+class ZeroReferenceWindowAreaError(ValueError):
+
+    """Raised when a window area is configured for a TABULA row that has no window distribution.
+
+    The per-direction window areas are the row's reference areas rescaled so their sum matches
+    the window area; a row whose reference window areas are both zero has no distribution to
+    rescale, so a configured window area would be lost in the orientations while it still
+    counted in the transmission losses. Refusing by name keeps the building consistent: a
+    caller who wants windows on such a row has to name a row that has them (hisim-4g9.1).
+    """
 
 
 class BuildingInformation:
@@ -88,7 +101,8 @@ class BuildingInformation:
         U-values and transmission adjustment factors, the two ``BuildingConfig`` fields
         that override area and U-value, and the two rules that vary between elements: the
         adjustment factor used when TABULA's b_Transmission columns are not consulted, and
-        the door-only guard against a zero reference area. The descriptors are consumed by
+        the zero-reference-area guard against dividing the U-value average by zero. The
+        descriptors are consumed by
         :py:meth:`BuildingInformation._scaled_element_area_in_m2` and
         :py:meth:`BuildingInformation._element_u_value_and_adjustment_factor`.
         """
@@ -120,9 +134,12 @@ class BuildingInformation:
         #: roof use 1).
         fixed_adjustment_factor: float
         #: Whether a zero total TABULA reference area keeps the first raw U-value instead
-        #: of dividing by zero. Only the door sets this: its single-column weighted
-        #: average is the pinned ``(u * area) / area`` float round trip (findings log
-        #: entries 7 and 17), and the guard skips it when ``A_Door_1`` is 0.
+        #: of dividing by zero. The door and the window set this. The door's single-column
+        #: weighted average is the pinned ``(u * area) / area`` float round trip (findings
+        #: log entries 7 and 17), which the guard skips when ``A_Door_1`` is 0; the window's
+        #: two-column average divides by zero for a row whose reference window areas are
+        #: both zero (hisim-4g9.1). A zero-area element has zero conductance either way,
+        #: so the kept raw U-value is the material's property, unused by the physics.
         keep_u_value_when_reference_area_is_zero: bool = False
 
     # The envelope-element table: one descriptor per element, consumed by the explicit
@@ -162,11 +179,12 @@ class BuildingInformation:
         configured_u_value_field="roof_u_value_in_watt_per_m2_per_kelvin",
         fixed_adjustment_factor=1,
     )
-    #: Window: no b_Transmission columns (factor is always 1). The per-direction area
-    #: scaling is the one legitimate special case the table does not cover; it lives as
-    #: an explicit window-specific step in get_building_area_parameters, including the
-    #: pinned ZeroDivisionError for codes whose reference window areas are both zero
-    #: (findings log entries 1 and 2).
+    #: Window: no b_Transmission columns (factor is always 1), and the door's zero-area
+    #: guard: a row whose reference window areas are both zero keeps the raw
+    #: U_Actual_Window_1 instead of dividing the weighted average by zero (hisim-4g9.1).
+    #: The per-direction area scaling remains the one legitimate special case the table
+    #: does not cover; it lives as an explicit window-specific step in
+    #: get_building_area_parameters, whose divisor is guarded the same way.
     WINDOW_ELEMENT: ClassVar[EnvelopeElement] = EnvelopeElement(
         element_name="window",
         area_columns=("A_Window_1", "A_Window_2"),
@@ -175,6 +193,7 @@ class BuildingInformation:
         configured_area_field="window_area_in_m2",
         configured_u_value_field="window_u_value_in_watt_per_m2_per_kelvin",
         fixed_adjustment_factor=1,
+        keep_u_value_when_reference_area_is_zero=True,
     )
     #: Door: a single TABULA sub-area, no b_Transmission columns, and the zero-area guard
     #: that keeps the raw U-value when A_Door_1 is 0 instead of dividing by it.
@@ -365,9 +384,10 @@ class BuildingInformation:
         ran. The window's per-direction scaling follows its area as the one element
         special case the table does not cover: the per-direction TABULA window areas are
         rescaled so their total matches the resulting window area, which divides by the
-        TABULA reference window area — zero for some codes, which therefore raise
-        (findings log entries 1 and 2, pinned behavior). The total envelope area closes
-        the pipeline.
+        TABULA reference window area — zero for some codes, for which the scaling factor
+        is 0 instead of a division by zero, or a ``ZeroReferenceWindowAreaError`` when a
+        window area is configured for such a code (findings log entries 1 and 2,
+        hisim-4g9.1). The total envelope area closes the pipeline.
         """
         # Reference area [m^2] (TABULA: Reference floor area A_C_Ref )Ref: ISO standard 7.2.2.2
         self.conditioned_floor_area_in_m2_tabula_ref = float((self.buildingdata_ref["A_C_Ref"].values[0]))
@@ -385,13 +405,26 @@ class BuildingInformation:
 
         # Window special case: rescale the per-direction TABULA window areas so their
         # total matches the window area derived above. The divisor is the *reference*
-        # window area, so a configured window area cannot rescue a code whose reference
-        # areas are both zero — those codes raise ZeroDivisionError here, exactly as
-        # pinned in the golden (findings log entries 1 and 2).
-        self.window_scaling_factor = self.window_area_in_m2 / (
+        # window area (findings log entries 1 and 2, hisim-4g9.1). A code whose reference
+        # areas are both zero has no distribution to rescale: without a configured window
+        # area the factor is 0, consistent with the window area of 0 derived from the same
+        # reference; with one, the configured area would count in the transmission losses
+        # but vanish from every orientation, so the combination is refused by name.
+        tabula_reference_window_area_in_m2 = (
             float(self.buildingdata_ref["A_Window_1"].values[0])
             + float(self.buildingdata_ref["A_Window_2"].values[0])
         )
+        if tabula_reference_window_area_in_m2 == 0:
+            if self.window_area_in_m2 != 0:
+                raise ZeroReferenceWindowAreaError(
+                    f"building code {self.buildingconfig.building_code}: a window area of "
+                    f"{self.window_area_in_m2} m2 is configured, but the TABULA row's reference window "
+                    "areas A_Window_1 and A_Window_2 are both zero, so there is no orientation to "
+                    "distribute it over; name a row with window areas or leave the window area unset"
+                )
+            self.window_scaling_factor = 0.0
+        else:
+            self.window_scaling_factor = self.window_area_in_m2 / tabula_reference_window_area_in_m2
         self.windows_directions: List[str] = list(self.WINDOWS_DIRECTIONS)
         self.scaled_window_areas_in_m2: List[float] = [
             float(self.buildingdata_ref["A_Window_" + windows_direction].iloc[0]) * self.window_scaling_factor
@@ -571,8 +604,9 @@ class BuildingInformation:
         methods are reproduced bit for bit. For the door (one column, zero-area guard
         set) that average IS the pinned ``(u * area) / area`` round trip, which is NOT a
         float no-op — it shifts the last mantissa bit for 164 TABULA codes (findings log
-        entries 7 and 17) — so it must not be simplified algebraically; the guard skips
-        the division only when the reference area is zero and keeps the raw U-value. The
+        entries 7 and 17) — so it must not be simplified algebraically. The guard skips
+        the division only when the reference area is zero (door and window, hisim-4g9.1
+        for the window's two columns) and keeps the raw first U-value. The
         adjustment factor is the largest of the ``b_Transmission`` columns when the
         descriptor names any, and the fixed factor otherwise (window and door).
         """

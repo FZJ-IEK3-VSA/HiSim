@@ -134,6 +134,7 @@ from hisim.economics.staged_parameters import (
     StagedParameters,
 )
 from hisim.renovisor.report import MappingReport
+from hisim.renovisor.request import CatalogueTable
 from hisim.economics.subsidies import SubsidyCatalog
 from hisim.economics.validation import validate_all
 
@@ -735,6 +736,15 @@ class StagedCli:
     #: Its key holding the subjects the translator could not price.
     UNPRICED_KEY: ClassVar[str] = MappingReport.UNPRICED_SUBJECTS_FIELD
 
+    #: Its key holding the measure lines, taken from the writer for the same reason.
+    MEASURES_KEY: ClassVar[str] = MappingReport.MEASURES_FIELD
+
+    #: The measure statuses a stage's ``measures`` list carries. A measure whose line reads
+    #: ``not_implemented_yet`` is accepted and acted on by nothing, so naming it would tell the
+    #: stage timeline the stage changed something it did not; ``defaulted`` is not a measure
+    #: status at all.
+    STAGE_MEASURE_STATUSES: ClassVar[Tuple[str, ...]] = ("used", "approximated")
+
     #: What a stage directory with stored inputs but no mapping report is refused with.
     MISSING_MAPPING_MESSAGE: ClassVar[str] = (
         "--stage #{index} {argument!r}: {directory!r} carries {inputs} but no {report}, in it or "
@@ -810,7 +820,56 @@ class StagedCli:
                 f"--stage #{index} {argument!r}: {cls.INPUTS_FILE_NAME} in {source!r} does not "
                 f"read back ({error})."
             ) from error
-        return Stage(inputs=inputs, from_year=from_year, label=label, job_id=job_id), directory
+        return Stage(
+            inputs=inputs,
+            from_year=from_year,
+            label=label,
+            measures=cls.read_stage_measures(directory, index, argument),
+            job_id=job_id,
+        ), directory
+
+    @classmethod
+    def read_stage_measures(cls, directory: str, index: int, argument: str) -> Tuple[str, ...]:
+        """The catalogue measure ids one stage acts on, from its mapping report.
+
+        The stage timeline a frontend draws from the document needs to say which measures a
+        stage carried out, and the only place that names them is the stage's own mapping report:
+        its ``measures[]`` entries, filtered to the ids the translation actually acted on --
+        ``used`` or ``approximated``, never ``not_implemented_yet`` -- and ordered by the
+        catalogue, so two plans of the same measures read the same regardless of the order the
+        requests happened to list them in. A stage without a report yields nothing here; the
+        mapping read below refuses it, so a report-less stage never reaches the document.
+
+        Args:
+            directory: The ``--stage`` argument's first field.
+            index: The stage's position, for the error message.
+            argument: The argument as typed, for the error message.
+
+        Returns:
+            The measure ids, in catalogue order.
+
+        Raises:
+            StagedEvaluationError: When the report that is there does not read back as JSON.
+        """
+        path = cls.mapping_report_path(directory)
+        if path is None:
+            return ()
+        try:
+            with open(path, encoding="utf-8") as handle:
+                report = json.load(handle)
+        except (OSError, json.JSONDecodeError) as error:
+            raise StagedEvaluationError(
+                f"--stage #{index} {argument!r}: {cls.MAPPING_REPORT_FILE_NAME} in {directory!r} "
+                f"does not read back ({error})."
+            ) from error
+        entries = report.get(cls.MEASURES_KEY)
+        acted_on = [
+            str(entry.get("id"))
+            for entry in entries or ()
+            if isinstance(entry, dict) and entry.get("status") in cls.STAGE_MEASURE_STATUSES
+        ]
+        order = {measure_id: position for position, measure_id in enumerate(CatalogueTable.ids())}
+        return tuple(sorted(acted_on, key=lambda measure_id: (order.get(measure_id, len(order)), measure_id)))
 
     @classmethod
     def inputs_directory(cls, directory: str) -> Optional[str]:

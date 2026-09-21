@@ -210,6 +210,9 @@ class MappingReport:
     SUBJECTS_FIELD: ClassVar[str] = "subjects"
     UNPRICED_SUBJECTS_FIELD: ClassVar[str] = "unpriced_subjects"
 
+    #: The key of the measure half, one entry per measure of the package in package order.
+    MEASURES_FIELD: ClassVar[str] = "measures"
+
     #: What the header says about the legacy per-year fuel-price, emission-factor and device-cost
     #: tables of ``hisim/components/configuration.py``. ``reviewed`` is a country with sourced
     #: rows; ``placeholder`` is one registered with the sentinel ``-1e9`` in every number, which
@@ -335,7 +338,7 @@ class MappingReport:
             "base_file": self.base_file,
             "energy_system_file": self.energy_system_file,
             "fields": [line.to_json() for line in self.lines()],
-            "measures": list(self._measures),
+            self.MEASURES_FIELD: list(self._measures),
             self.SUBJECTS_FIELD: self.subjects(),
             self.UNPRICED_SUBJECTS_FIELD: list(self._unpriced_subjects),
         }

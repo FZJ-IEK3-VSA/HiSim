@@ -13,7 +13,7 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
 
 ## Pull requests and merging
 
-- Push a branch as soon as its work is built and verified, and open its pull request at once. Nothing stays on one machine — a crash loses nothing, and the review bots start while the next branch is being written.
+- **On this box only** (the coding agent's machine — it holds no GitHub credentials): never push to GitHub and never open a pull request yourself; the owner looks at every branch first. Commit the branch locally as soon as its work is built and verified (nothing stays uncommitted), push it to the handoff bare repo (`git push handoff <branch>` — one branch per push, never `--all`/`--mirror`/force), and write the PR script into `/home/public_hisim` exactly like the ones there; `HANDOFF.md` in that directory documents the flow. The owner reviews the branch and runs the script — the GitHub push and the pull request are the owner's step. On any other machine, push and open the pull request directly, as the rest of this section describes.
 - All open pull requests form one linear stack, whether or not they depend on each other. A new PR targets the head branch of the current stack top, never `main` directly; `main` is the target only when the stack is empty.
 - The stack order is the merge order. Nobody reorders it.
 - Only the bottom PR targets `main`, so only it has CI: the workflows run for pull requests against `main`. Every other PR gets its one CI run when its turn comes and it is retargeted.
@@ -134,7 +134,9 @@ git status              # Check what changed
 git add <files>         # Stage code changes
 br sync --flush-only    # Export beads changes to JSONL
 git commit -m "..."     # Commit everything
-git push                # Push to remote
+git push handoff <branch>  # this box only: the handoff repo, one branch per push, never main;
+                           # then write the PR script into /home/public_hisim (see HANDOFF.md)
+                           # — the GitHub push and the pull request stay the owner's step
 ```
 
 ### Best Practices

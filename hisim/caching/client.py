@@ -19,12 +19,32 @@ This module imports the standard library, ``hisim.log`` and its own package only
 import os
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import ClassVar, Iterator
+from typing import ClassVar, Iterator, Sequence, Union
 
 from hisim import log
 from hisim.caching.keys import CacheKey
 from hisim.caching.local import CacheEntryMetadata, atomic_cache_write
+from hisim.caching.locations import CacheLocations
 from hisim.caching.settings import CacheSettings
+
+
+def _as_locations(default: Union[CacheLocations, str, Sequence[str]]) -> CacheLocations:
+    """Coerce a caller's cache-location argument into :class:`CacheLocations`.
+
+    Components hand in ``SimulationParameters.cache_locations()``; older callers and tests hand
+    in a bare directory, which is the same as a one-directory list.
+
+    Args:
+        default: The locations as the caller stated them.
+
+    Returns:
+        CacheLocations: at least one directory, in priority order.
+    """
+    if isinstance(default, CacheLocations):
+        return default
+    if isinstance(default, str):
+        return CacheLocations([default])
+    return CacheLocations(list(default))
 
 __authors__ = "Noah Pflugradt"
 __copyright__ = "Copyright 2021-2026, FZJ-IEK-3 "
@@ -140,7 +160,35 @@ class CacheClient:
         path = os.path.join(directory, self.entry_filename(component_key, CacheEntryMetadata.hash_of(key_material)))
         return CacheEntry(path=path, exists=self._validated_local_hit(path), key_material=key_material)
 
-    def lookup_producer(self, key: CacheKey, default_directory: str) -> CacheEntry:
+    def lookup_across(self, component_key: str, key_material: str, locations: "CacheLocations") -> CacheEntry:
+        """Look an entry up in the locations in order; a miss lands in the first directory.
+
+        The one walk both entry points (this client's :meth:`lookup_producer` and
+        :func:`hisim.utils.get_cache_file`) share, so the read order and the write target cannot
+        drift between them (hisim-epc.22). A hit in a later directory is returned at its own
+        path: the entry is content-keyed, so what the seed lacks the volume may hold, and what
+        the volume holds is the same artifact the first directory would have produced.
+
+        Args:
+            component_key: the filename prefix.
+            key_material: the string that identifies the entry's inputs.
+            locations: the ordered directories to read and the first to write.
+
+        Returns:
+            CacheEntry: with ``exists`` True for a validated hit anywhere in the list; a miss
+                carries the first directory as its write path.
+        """
+        for directory in locations.directories:
+            entry = self.lookup(component_key, key_material, directory)
+            if entry.exists:
+                return entry
+        return self.lookup(component_key, key_material, locations.write_directory())
+
+    def lookup_producer(
+        self,
+        key: CacheKey,
+        default_locations: Union["CacheLocations", str, Sequence[str]],
+    ) -> CacheEntry:
         """Look a producer's artifact up under the key scheme of spec §3.
 
         This is the entry point a migrated component uses instead of :func:`hisim.utils.get_cache_file`.
@@ -149,23 +197,28 @@ class CacheClient:
         DTO rather than over a configuration JSON. The entry therefore changes when the calculation
         changes, and it is the same on every machine that runs the same code on the same inputs.
 
-        The directory is resolved here, because a producer has no reason to know about the
-        ``HISIM_CACHE_DIR`` override: the caller passes the simulation's own cache directory and the
-        settings decide whether something else takes its place.
+        The locations are resolved here, because a producer has no reason to know about the
+        ``HISIM_CACHE_DIR`` override or the simulation's directory list: the caller passes the
+        simulation's own cache locations and this method decides whether something else takes
+        their place. A ``HISIM_CACHE_DIR`` override keeps its single-directory meaning and
+        replaces the whole list; otherwise the read walks the locations in order and a miss is
+        written to the first (hisim-epc.22).
 
         Args:
             key: the key, from :meth:`hisim.caching.keys.CacheKey.for_producer`.
-            default_directory: the directory to use unless the environment redirects it, normally
-                ``SimulationParameters.cache_dir_path``.
+            default_locations: the locations to use unless the environment redirects them, normally
+                ``SimulationParameters.cache_locations()``; a bare directory keeps working.
 
         Returns:
-            CacheEntry: where the entry is or will be, and whether a validated one is there. On a miss,
-                the caller computes the artifact and writes it through :meth:`CacheEntry.writing`.
+            CacheEntry: where the entry is or will be, and whether a validated one is there. On a hit
+                in a later directory the path is that hit; on a miss, the caller computes the artifact
+                and writes it through :meth:`CacheEntry.writing` into the first directory.
         """
-        directory = self.settings.resolve_local_directory(default_directory)
+        locations = _as_locations(default_locations)
         if self.settings.local_directory is not None:
-            self.announce_environment_override(directory)
-        return self.lookup(key.artifact_kind, key.material, directory)
+            locations = CacheLocations([self.settings.local_directory])
+            self.announce_environment_override(locations.write_directory())
+        return self.lookup_across(key.artifact_kind, key.material, locations)
 
     @staticmethod
     def _validated_local_hit(path: str) -> bool:

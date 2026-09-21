@@ -21,6 +21,7 @@ from hisim.caching.keys import (
     ProducerLayering,
     ProducerLayeringError,
 )
+from hisim.caching.locations import CacheLocations
 from hisim.caching.local import CacheEntryMetadata, atomic_cache_write
 from hisim.caching.settings import CacheNetworkMode, CacheSettings, CacheSettingsError
 
@@ -30,6 +31,7 @@ __all__ = [
     "CacheEntryMetadata",
     "CacheKey",
     "CacheKeyError",
+    "CacheLocations",
     "CacheNetworkMode",
     "CacheSettings",
     "CacheSettingsError",

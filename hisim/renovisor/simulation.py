@@ -76,6 +76,12 @@ class SimulationSetup:
     #: The logging verbosity of a container run: warnings and above.
     LOGGING_LEVEL: ClassVar[int] = 3
 
+    #: The environment variable holding the ordered cache directories a container maps in,
+    #: separated by :data:`os.pathsep` (hisim-epc.22). Every entry must be absolute: a relative
+    # one would resolve against whatever the worker's working directory happens to be, and two
+    # workers would then disagree about where the cache is.
+    CACHE_DIRECTORIES_VARIABLE: ClassVar[str] = "HISIM_CACHE_DIRECTORIES"
+
     #: The post-processing options the result payload cannot be assembled without.
     #: ``COMPUTE_KPIS`` produces the KPI collection, ``WRITE_KPIS_TO_JSON`` writes it as
     #: ``all_kpis.json``, and ``COMPUTE_LIFECYCLE_COSTS`` produces the cost engine's exports
@@ -133,6 +139,19 @@ class SimulationSetup:
         if cache_directory is not None:
             cache_directory.mkdir(parents=True, exist_ok=True)
             parameters.cache_dir_path = str(cache_directory)
+        env_directories = os.environ.get(cls.CACHE_DIRECTORIES_VARIABLE)
+        if env_directories:
+            directories = [entry for entry in env_directories.split(os.pathsep) if entry]
+            relative = [entry for entry in directories if not os.path.isabs(entry)]
+            if relative:
+                raise ValueError(
+                    f"{cls.CACHE_DIRECTORIES_VARIABLE} holds relative path(s) {relative!r}; "
+                    "every cache directory has to be absolute, so two workers agree on where "
+                    "the cache is whatever their working directory is"
+                )
+            parameters.cache_directories = directories
+            # Keep the recorded single path consistent with the list the run actually uses.
+            parameters.cache_dir_path = directories[0]
         return parameters
 
     @classmethod

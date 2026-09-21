@@ -17,6 +17,7 @@ rather than at a run, so the day a row is added it fails and the substitution ca
 
 import copy
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict
 
@@ -25,7 +26,7 @@ import pytest
 from hisim.renovisor.costs import CostField
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.run import Calculation, ExitCode, Outputs
-from hisim.renovisor.simulation import Period
+from hisim.renovisor.simulation import Period, SimulationSetup
 from hisim.renovisor.translate import EmitterSubstitution
 from hisim.renovisor.vocabulary import HeatDistributionType
 from hisim.renovisor.whitelist import Whitelist
@@ -294,3 +295,43 @@ def _emitter_config(emitter: Any) -> Any:
         absolute_conditioned_floor_area_in_m2 = 140.0
 
     return _Config()
+
+
+@pytest.mark.system_setups
+class TestTheCacheDirectories:
+    """hisim-epc.22: a container's seed-and-volume cache pair, end to end.
+
+    The first run populates the writable directory (and reads the seed, which starts empty),
+    the second finds every entry and recomputes nothing. The cache is content-keyed and
+    deterministic, so identical requests must reuse identical entries.
+    """
+
+    def test_the_second_run_finds_the_first_runs_entries(self, tmp_path: Path, monkeypatch: Any) -> None:
+        """Run twice over the same pair; the second run writes nothing new.
+
+        The writable directory comes first (writes land there), the read-only seed second
+        (its entries are read when the writable one lacks them).
+        """
+        writable, seed = tmp_path / "writable", tmp_path / "seed"
+        monkeypatch.setenv(
+            SimulationSetup.CACHE_DIRECTORIES_VARIABLE, os.pathsep.join([str(writable), str(seed)])
+        )
+
+        assert run(baseline_document(), tmp_path, "cached_first") == ExitCode.FINISHED
+        after_first = self._cache_state(writable)
+        assert after_first, "the first run populated the cache"
+
+        assert run(baseline_document(), tmp_path, "cached_second") == ExitCode.FINISHED
+        assert self._cache_state(writable) == after_first, "the second run recomputed a cached entry"
+
+        manifest = json.loads((tmp_path / "cached_second" / Outputs.CALCULATION).read_text(encoding="utf-8"))
+        assert manifest["cache_directories"] == [str(writable), str(seed)]
+
+    @staticmethod
+    def _cache_state(directory: Path) -> dict:
+        """Every cache entry under the writable directory with its mtime, as a comparable map."""
+        return {
+            entry.name: entry.stat().st_mtime_ns
+            for entry in sorted(directory.rglob("*"))
+            if entry.is_file()
+        }

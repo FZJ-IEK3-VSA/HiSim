@@ -20,7 +20,7 @@ import pytz
 
 from hisim import log
 from hisim.caching import CacheClient
-from hisim.simulationparameters import SimulationParameters
+from hisim.simulationparameters import CacheLocations, SimulationParameters
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021-2022, FZJ-IEK-3 "
@@ -371,13 +371,16 @@ def get_cache_file(
     key_material = build_cache_key_string(parameter_class, my_simulation_parameters)
     client = CacheClient.from_environment()
     if cache_dir_path is not None:
-        # The explicit argument outranks the environment; the override is simply not consulted.
-        directory = cache_dir_path
+        # The explicit argument outranks the environment and the parameter list; the override is
+        # simply not consulted. A test pointing at its own directory keeps working on a machine
+        # where an override or a directory list is set.
+        locations = CacheLocations([cache_dir_path])
     else:
-        directory = client.settings.resolve_local_directory(my_simulation_parameters.cache_dir_path)
+        locations = my_simulation_parameters.cache_locations()
         if client.settings.local_directory is not None:
-            client.announce_environment_override(directory)
-    entry = client.lookup(component_key, key_material, directory)
+            locations = CacheLocations([client.settings.local_directory])
+            client.announce_environment_override(locations.write_directory())
+    entry = client.lookup_across(component_key, key_material, locations)
     return entry.exists, entry.path
 
 

@@ -31,13 +31,12 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim.renovisor.constants import (
-    FixedMaterials,
     LayerDefaults,
     OpeningUValues,
     Placement,
 )
 from hisim.renovisor.envelope import LayerNote, UValueComposer
-from hisim.renovisor.request import CatalogueTable, Material, Measure
+from hisim.renovisor.request import CatalogueTable, Material, Measure, SemanticChecks
 from hisim.renovisor.vocabulary import ReportStatus, ThermalElement
 from hisim.renovisor.whitelist import Unmapped, Whitelist, WhitelistEntry
 
@@ -92,10 +91,11 @@ class AddedLayer:
         element: The element the layer sits on.
         placement: The ``building_components`` value naming where in the build-up it sits.
         thickness_in_mm: How thick it is, from the request or from the default table.
-        material: Its properties, from the request or from the fixed-material table.
+        material: Its properties, from the request: every insulation measure declares a
+            ``material`` option since contract PR #10, and it is an ``everyone`` option, so a
+            request that reaches the translator always carries one.
         measure_id: The measure that added it.
         thickness_defaulted: Whether the thickness came from the table rather than the request.
-        material_fixed: Whether the material came from the table rather than the request.
     """
 
     element: ThermalElement
@@ -104,7 +104,6 @@ class AddedLayer:
     material: Material
     measure_id: str
     thickness_defaulted: bool = False
-    material_fixed: bool = False
 
     def to_house(self) -> Dict[str, Any]:
         """Return the layer as the renovated house carries it under ``added_insulation``."""
@@ -508,7 +507,7 @@ class MeasureRegistry:
         """Add one insulation layer to its element, defaulting the thickness and the material."""
         measure_id = context.measure.id
         spec = cls.INSULATION[measure_id]
-        material, fixed = cls._material_of(context)
+        material = cls._material_of(context)
         thickness, defaulted = cls._thickness_of(context, measure_id)
         layer = AddedLayer(
             element=spec.element,
@@ -517,7 +516,6 @@ class MeasureRegistry:
             material=material,
             measure_id=measure_id,
             thickness_defaulted=defaulted,
-            material_fixed=fixed,
         )
         context.effects.add_layer(layer)
         context.target(f"Building.config.{spec.element.value}_u_value_in_watt_per_m2_per_kelvin")
@@ -525,20 +523,22 @@ class MeasureRegistry:
             context.defer(f"{measure_id}.air_barrier", context.option("air_barrier"), "air_barrier")
 
     @classmethod
-    def _material_of(cls, context: MeasureContext) -> Tuple[Material, bool]:
-        """Return the layer's material and whether it came from the fixed table."""
-        measure_id = context.measure.id
+    def _material_of(cls, context: MeasureContext) -> Material:
+        """Return the layer's material, which the request carries for every insulation measure.
+
+        Raises:
+            TypeError: When the option is not a material object, which the request's semantic
+                checks refuse (``measure.option.missing`` or an invalid material) before the
+                translator runs; reaching this is a bug, not a bad request.
+        """
         given = context.option(CatalogueTable.MATERIAL)
-        if isinstance(given, Material):
-            context.record(CatalogueTable.MATERIAL, ReportStatus.USED, cls.MATERIAL_NOTE)
-            return given, False
-        asp_id, conductivity = FixedMaterials.of(measure_id)
-        context.line.status = ReportStatus.worst_of(context.line.status, ReportStatus.APPROXIMATED)
-        context.line.note = (
-            f"the catalogue gives {measure_id} no material option, so the translator uses "
-            f"{asp_id} with lambda {conductivity:g} W/mK"
-        )
-        return Material(asp_id=asp_id, thermal_conductivity_w_mk=conductivity), True
+        if not isinstance(given, Material):
+            raise TypeError(
+                f"{context.measure.id} reached the translator without a material object "
+                f"(got {given!r}); the request checks should have refused it"
+            )
+        context.record(CatalogueTable.MATERIAL, ReportStatus.USED, cls.MATERIAL_NOTE)
+        return given
 
     @classmethod
     def _thickness_of(cls, context: MeasureContext, measure_id: str) -> Tuple[int, bool]:
@@ -760,8 +760,9 @@ class MeasureRegistry:
     @classmethod
     def change_room_temperature(cls, context: MeasureContext) -> None:
         """Change the room set point, which propagates to the heat distribution controller."""
-        context.effects.set(HousePaths.SET_HEATING_TEMPERATURE, context.option("new_room_temperature"))
-        context.record("new_room_temperature", ReportStatus.USED)
+        _measure_id, option = SemanticChecks.ROOM_TEMPERATURE_MEASURE
+        context.effects.set(HousePaths.SET_HEATING_TEMPERATURE, context.option(option))
+        context.record(option, ReportStatus.USED)
         context.target("Building.config.set_heating_temperature_in_celsius")
 
     @classmethod

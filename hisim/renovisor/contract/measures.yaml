@@ -18,18 +18,38 @@
 #   than an empty key: a bare `options:` parses as null, so two spellings meant one
 #   thing and a reader had to know that the loader coalesces them.
 # - access_level is lower-case — one of `everyone`, `experts` (yaml_types::ACCESS_LEVELS).
+# - A `material` option is declared here by hand — `- name: material` with its
+#   `access_level` — and that is all that is hand-written about it. Its `value_type` and
+#   `values` are GENERATED: `GoogleSheets/materials_sync.py` writes them from the rows of
+#   `materials.yaml` whose `measures` name the measure (the sheet's building positions,
+#   translated by `position_measures` in `GoogleSheets/material_fields.yaml`), under a
+#   comment saying so, in the order the collection lists the rows. Whether the block is
+#   written at all is the `material_values_in_measures` switch in the same file; with it
+#   off the option stands without values, a comment below `access_level` says the values
+#   are found in `materials.yaml` by reverse lookup, and consumers take the list from there
+#   (the engine among them: it loads `materials.yaml` beside this file and resolves the
+#   option from the rows either way, so its domain does not depend on the switch).
+#   After adding a `material` option or flipping the switch, run
+#   `materials_sync.py measures` (`pull` does it too). A comment about the option goes
+#   above its `- name:` line — the sync refuses one inside the option, which it would
+#   otherwise overwrite. The values are the rows' `asp_id`s, spelled exactly: the frontend
+#   copies a material's physical properties out of `materials.yaml` by id and does no
+#   matching of its own. `Rust/tests/material_catalogue.rs` reads the switch and holds the
+#   two files to whichever shape it names; a failure there means the sync was not re-run,
+#   never that either list is to be edited by hand.
 # - Comments mark places where information appears incomplete or ambiguous.
 
 measures:
 
+  # TODO Watch out with diffusion open vs. closed - should be multiple constraints on the used material
   - id: external_insulation
     category: building envelope measures
     subcategory: wall insulation
     options:
       - name: material
         access_level: everyone
-        value_type: enum
-        values: [EPS, XPS]
+        # Values found in materials.yaml by reverse lookup (the rows whose `measures` name this
+        # measure); written by GoogleSheets/materials_sync.py -- do not edit.
 
       - name: thickness_in_mm
         access_level: experts
@@ -51,16 +71,12 @@ measures:
     category: building envelope measures
     subcategory: wall insulation
     options:
+      # The rigid boards (pir, xps, eps) often as thermal laminate drylining board; stone
+      # wool as Staenderbauwerk.
       - name: material
         access_level: everyone
-        value_type: enum
-        values:
-          # Often as thermal laminate drylining board
-          - PIR
-          - XPS
-          - EPS
-          # As Staenderbauwerk
-          - Mineral wool
+        # Values found in materials.yaml by reverse lookup (the rows whose `measures` name this
+        # measure); written by GoogleSheets/materials_sync.py -- do not edit.
 
       - name: thickness_in_mm
         access_level: experts
@@ -70,6 +86,11 @@ measures:
     category: building envelope measures
     subcategory: wall insulation
     options:
+      - name: material
+        access_level: everyone
+        # Values found in materials.yaml by reverse lookup (the rows whose `measures` name this
+        # measure); written by GoogleSheets/materials_sync.py -- do not edit.
+
       - name: thickness_in_mm
         access_level: experts
         value_type: integer
@@ -170,8 +191,8 @@ measures:
     options:
       - name: material
         access_level: everyone
-        value_type: enum
-        values: [EPS Foam, Mineral Wool]
+        # Values found in materials.yaml by reverse lookup (the rows whose `measures` name this
+        # measure); written by GoogleSheets/materials_sync.py -- do not edit.
 
       - name: thickness_in_mm
         access_level: experts
@@ -180,7 +201,11 @@ measures:
   - id: basement_internal_insulation
     category: building envelope measures
     subcategory: floor insulation
-    options: []
+    options:
+      - name: material
+        access_level: everyone
+        # Values found in materials.yaml by reverse lookup (the rows whose `measures` name this
+        # measure); written by GoogleSheets/materials_sync.py -- do not edit.
 
   # Always might require damp proof course
   - id: basement_external_insulation
@@ -189,8 +214,8 @@ measures:
     options:
       - name: material
         access_level: everyone
-        value_type: enum
-        values: [EPS Foam, Mineral Wool]
+        # Values found in materials.yaml by reverse lookup (the rows whose `measures` name this
+        # measure); written by GoogleSheets/materials_sync.py -- do not edit.
 
       - name: thickness_in_mm
         access_level: experts
@@ -203,8 +228,8 @@ measures:
     options:
       - name: material
         access_level: everyone
-        value_type: enum
-        values: [Liquid Insulation, EPS Foam]
+        # Values found in materials.yaml by reverse lookup (the rows whose `measures` name this
+        # measure); written by GoogleSheets/materials_sync.py -- do not edit.
 
       - name: thickness_in_mm
         access_level: experts
@@ -217,8 +242,8 @@ measures:
     options:
       - name: material
         access_level: everyone
-        value_type: enum
-        values: [EPS Foam, Mineral Wool]
+        # Values found in materials.yaml by reverse lookup (the rows whose `measures` name this
+        # measure); written by GoogleSheets/materials_sync.py -- do not edit.
 
       - name: thickness_in_mm
         access_level: experts
@@ -238,8 +263,8 @@ measures:
     options:
       - name: material
         access_level: everyone
-        value_type: enum
-        values: [PIR, mineral wool, glass wool, wood fiber]
+        # Values found in materials.yaml by reverse lookup (the rows whose `measures` name this
+        # measure); written by GoogleSheets/materials_sync.py -- do not edit.
 
       - name: thickness_in_mm
         access_level: experts
@@ -251,8 +276,8 @@ measures:
     options:
       - name: material
         access_level: everyone
-        value_type: enum
-        values: [open cell spray foam, PIR, glass wool, wood fiber]
+        # Values found in materials.yaml by reverse lookup (the rows whose `measures` name this
+        # measure); written by GoogleSheets/materials_sync.py -- do not edit.
 
       - name: thickness_in_mm
         access_level: experts
@@ -264,8 +289,8 @@ measures:
     options:
       - name: material
         access_level: everyone
-        value_type: enum
-        values: [mineral wool, glass wool, wood fiber]
+        # Values found in materials.yaml by reverse lookup (the rows whose `measures` name this
+        # measure); written by GoogleSheets/materials_sync.py -- do not edit.
 
       - name: thickness_in_mm
         access_level: experts
@@ -274,19 +299,23 @@ measures:
   - id: top_floor_ceiling_insulation
     category: building envelope measures
     subcategory: roof insulation
-    options: []
+    options:
+      - name: material
+        access_level: everyone
+        # Values found in materials.yaml by reverse lookup (the rows whose `measures` name this
+        # measure); written by GoogleSheets/materials_sync.py -- do not edit.
 
   - id: ventilation_system
     category: ventilation system
     subcategory: ventilation
     options:
       # The unit the building ends up with — the same vocabulary as
-      # `energy_system_config.ventilation_system.system` in openapi.yaml, for the reason
+      # `energy_system_config.ventilation_system.system` in homeinventory.yaml, for the reason
       # given on `heating installation` above. The prose labels this list used to carry
       # ("Demand controlled ventilation with humidity sensors and central fan (DCD)") are
       # the descriptions in that schema field, not separate values.
       #
-      # These four were `MechanicalExtract` and friends until openapi.yaml was moved to
+      # These four were `MechanicalExtract` and friends until the schema was moved to
       # snake_case alongside them. PascalCase was the one casing the engine could not
       # carry: `asp_id` lowercases and splits on non-alphanumerics, so it had nothing to
       # split on and `MechanicalVentilationWithHeatRecovery` slugged to
@@ -303,7 +332,7 @@ measures:
           - mechanical_ventilation_with_heat_recovery
           # Passive slots in the window frame or head, driven by wind and stack
           # pressure — no fan, no heat recovery, no control. The one value in this
-          # list that is not a mechanical unit, which is why `openapi.yaml`'s field
+          # list that is not a mechanical unit, which is why `homeinventory.yaml`'s field
           # description was widened from "mechanical ventilation unit" to
           # "ventilation provision".
           - window_trickle_vent
@@ -339,7 +368,7 @@ measures:
     subcategory: heat generator
     options:
       # The heat generator the building ends up with — the same vocabulary as
-      # `energy_system_config.heating_system.system` in openapi.yaml, for the reason
+      # `energy_system_config.heating_system.system` in homeinventory.yaml, for the reason
       # given on `heating installation` above: an installed generator becomes a stage-0
       # `heating system` carrying its type here.
       #
@@ -381,11 +410,6 @@ measures:
       # about age ("a generator under 15 years is rarely worth replacing") reads the same
       # option for a unit that is already there as for one a pathway installs.
       #
-      # It replaces `existing_heating_installation_year`, a parameter that could only ever
-      # describe the existing generator — the retirement of which is what this option is
-      # for. Every system block in openapi.yaml carries an `installation_year`, so all
-      # five system measures take it.
-      #
       # Unset on a newly selected measure means "installed as part of this pathway"; the
       # engine reads it only where a rule asks, and `requires_*` fires on an absent option
       # while `forbids_*` stays silent, as everywhere else.
@@ -400,7 +424,7 @@ measures:
     options:
       # The emitter the building ends up with. These are exactly the values
       # `energy_system_config.heating_system.heat_distribution_system` may take in
-      # openapi.yaml, and that is not a coincidence: an installed distribution system
+      # homeinventory.yaml, and that is not a coincidence: an installed distribution system
       # becomes a stage-0 `heating installation` carrying its type as this option, so a
       # value the inventory cannot express would be an outcome no building could start
       # from. `surface_heating` covers underfloor, wall and ceiling circuits alike.
@@ -488,7 +512,7 @@ measures:
       # the common case and touches nothing about space heating, while one that also
       # feeds the heating circuit does.
       #
-      # Sized in openapi.yaml by `collector_area_in_m2` rather than here: unlike the PV
+      # Sized in homeinventory.yaml by `collector_area_in_m2` rather than here: unlike the PV
       # measure's roof-area percentage, collector area is set by the hot-water demand,
       # not by how much roof is free.
       #
@@ -497,7 +521,7 @@ measures:
       # collector is installed for space heating alone: such an array is sized well above
       # the summer counterpart of the winter heating demand, the cylinder is already
       # plumbed in, and the surplus has nowhere else to go — so it carries the hot water
-      # too. `openapi.yaml` still permits the combination, `used_for_dhw` and
+      # too. `homeinventory.yaml` still permits the combination, `used_for_dhw` and
       # `used_for_space_heating` being independent booleans, which is why the check lives
       # in the assembler and is a hard error naming both flags.
       - name: supplies
@@ -525,7 +549,7 @@ measures:
     category: behaviour measures
     subcategory: comfort changes
     options:
-      - name: new_room_temperature
+      - name: new_room_temperature_in_celsius
         access_level: everyone
         value_type: integer
 

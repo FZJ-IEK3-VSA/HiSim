@@ -228,7 +228,8 @@ class TestInsulationLayers:
         """A cavity cannot be filled deeper than it is wide; the cap is an approximation."""
         applied = apply(
             anchor_house(),
-            measures_of({"id": "cavity_wall_insulation", "options": {"thickness_in_mm": 400}}),
+            measures_of({"id": "cavity_wall_insulation", "options": {
+                "material": dict(ProbeSet.MATERIAL), "thickness_in_mm": 400}}),
             whitelist(),
         )
 
@@ -236,15 +237,25 @@ class TestInsulationLayers:
         line = next(option for option in applied.measures[0].options if option.name == "thickness_in_mm")
         assert line.status is ReportStatus.APPROXIMATED
 
-    def test_an_option_less_measure_uses_its_fixed_material_and_is_approximated(self) -> None:
-        """The catalogue gives three measures no material option, so the translator picks one."""
-        applied = apply(
-            anchor_house(), measures_of(ProbeSet.package("top_floor_ceiling_insulation")), whitelist()
-        )
+    @pytest.mark.parametrize(
+        "measure_id",
+        ["cavity_wall_insulation", "basement_internal_insulation", "top_floor_ceiling_insulation"],
+    )
+    def test_the_three_formerly_option_less_measures_use_the_requests_material(self, measure_id: str) -> None:
+        """Contract PR #10 gave them a ``material`` option; the translator no longer picks one.
 
-        assert applied.layers[0].material_fixed
-        assert applied.measures[0].status is ReportStatus.APPROXIMATED
-        assert "stone_wool" in (applied.measures[0].note or "")
+        Until then the catalogue wrote ``options: []`` for these three, and the translator used a
+        fixed material and reported the measure ``approximated``. The layer now carries the
+        request's own material, the option is ``used``, and nothing about it is approximated.
+        """
+        material = dict(ProbeSet.MATERIAL, asp_id="stone_wool", thermal_conductivity_w_mk=0.036)
+        applied = apply(anchor_house(), measures_of({"id": measure_id, "options": {"material": material}}), whitelist())
+
+        assert applied.layers[0].material.asp_id == "stone_wool"
+        assert applied.layers[0].material.thermal_conductivity_w_mk == 0.036
+        line = next(option for option in applied.measures[0].options if option.name == "material")
+        assert line.status is ReportStatus.USED
+        assert "translator uses" not in (applied.measures[0].note or "")
 
     def test_the_element_note_carries_the_arithmetic_with_its_numbers(self) -> None:
         """A reader has to be able to redo the division, which is what the note is for."""

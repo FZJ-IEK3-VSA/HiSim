@@ -54,6 +54,7 @@ from hisim.renovisor.request import (
     OptionSpec,
     Request,
     RequestError,
+    SemanticChecks,
     ValueType,
 )
 from hisim.renovisor.translate import Translator
@@ -280,7 +281,7 @@ class ProbeSet:
 
     #: The low and high value probed for each free numeric option, from the request schema's own
     #: bounds on the field the option writes into: ``thickness_in_mm`` from ``added_insulation``,
-    #: ``new_room_temperature`` from ``set_heating_temperature_in_celsius``, ``installation_year``
+    #: ``new_room_temperature_in_celsius`` from ``set_heating_temperature_in_celsius``, ``installation_year``
     #: from ``construction_year``, and the four device options from their own blocks.
     OPTION_BOUNDS: ClassVar[Dict[str, Tuple[Any, Any]]] = {
         "thickness_in_mm": (10, 500),
@@ -290,7 +291,7 @@ class ProbeSet:
         "size_in_percent_of_roof_area": (1, 100),
         "days_to_cover": (1, 14),
         "number": (1, 2),
-        "new_room_temperature": (12, 28),
+        SemanticChecks.ROOM_TEMPERATURE_MEASURE[1]: SemanticChecks.ROOM_TEMPERATURE_RANGE,
     }
 
     #: The two-change probes the conditional entries of the list need, as
@@ -1075,7 +1076,7 @@ def assert_catalogue_matches(measures_path: Optional[Path] = None) -> None:
             (
                 str(option["name"]),
                 str(option["access_level"]),
-                str(option["value_type"]),
+                _declared_value_type(option),
                 tuple(option["values"]) if option.get("values") is not None else None,
             )
             for option in (measure.get("options") or [])
@@ -1099,6 +1100,21 @@ def assert_catalogue_matches(measures_path: Optional[Path] = None) -> None:
             "the frozen catalogue table and measures.yaml disagree: "
             f"missing {missing}, extra {extra}, changed {changed}"
         )
+
+
+def _declared_value_type(option: Mapping[str, Any]) -> str:
+    """Return an option's value type as the catalogue declares it, for :func:`assert_catalogue_matches`.
+
+    The catalogue declares a ``material`` option by name and access level only, since contract
+    PR #10: its values are generated from ``materials.yaml``, and the request carries the material
+    object. Such an option compares as :attr:`ValueType.MATERIAL`. Any other option without a
+    ``value_type`` compares as ``"<missing>"``, so a catalogue that drops the key anywhere else
+    fails T-CAT by name instead of being read as a material.
+    """
+    declared = option.get("value_type")
+    if declared is None and option.get("name") == CatalogueTable.MATERIAL:
+        return ValueType.MATERIAL.value
+    return str(declared) if declared is not None else "<missing>"
 
 
 def unlisted_lines(results: Iterable[ProbeResult]) -> Tuple[str, ...]:

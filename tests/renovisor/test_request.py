@@ -313,16 +313,34 @@ class TestTheSemanticChecks:
         document = mockup()
         document["measures"] = [
             {"id": "electric_vehicle", "options": {"number": 5}},
-            {"id": "change_room_temperature", "options": {"new_room_temperature": 40}},
+            {"id": "change_room_temperature", "options": {"new_room_temperature_in_celsius": 40}},
         ]
 
         problems = codes_of(document)
 
         assert ("measures[0].options.number", ProblemCode.RANGE_EXCEEDED.value) in problems
         assert (
-            "measures[1].options.new_room_temperature",
+            "measures[1].options.new_room_temperature_in_celsius",
             ProblemCode.RANGE_EXCEEDED.value,
         ) in problems
+
+    @pytest.mark.parametrize(
+        "measure_id",
+        ["cavity_wall_insulation", "basement_internal_insulation", "top_floor_ceiling_insulation"],
+    )
+    def test_an_insulation_measure_without_its_material_is_refused(self, measure_id: str) -> None:
+        """Since contract PR #10 every insulation measure declares ``material`` for everyone.
+
+        These three carried no options before and the translator picked their material; a request
+        naming one of them without a material is now refused like any other missing option.
+        """
+        document = mockup()
+        document["measures"] = [{"id": measure_id, "options": {}}]
+
+        assert (
+            f"measures[0].options.{CatalogueTable.MATERIAL}",
+            ProblemCode.MEASURE_OPTION_MISSING.value,
+        ) in codes_of(document)
 
     def test_a_material_without_a_positive_conductivity_is_refused(self) -> None:
         """The one thing checked about a material is the one thing the physics needs."""
@@ -401,6 +419,25 @@ class TestTheFrozenCatalogue:
         with pytest.raises(AssertionError) as raised:
             assert_catalogue_matches(path)
         assert "a_new_measure" in str(raised.value)
+
+    def test_only_a_material_option_may_leave_its_value_type_out(self, tmp_path: Path) -> None:
+        """The catalogue writes no ``value_type`` for ``material``; anywhere else that is drift.
+
+        Reading an absent type as a material everywhere would let a catalogue that lost the key on
+        ``thickness_in_mm`` pass T-CAT, so the tolerance is tied to the option's name.
+        """
+        import yaml
+
+        catalogue = copy.deepcopy(ContractFiles.measures())
+        external = next(entry for entry in catalogue["measures"] if entry["id"] == "external_insulation")
+        thickness = next(option for option in external["options"] if option["name"] == "thickness_in_mm")
+        del thickness["value_type"]
+        path = tmp_path / "measures.yaml"
+        path.write_text(yaml.safe_dump(catalogue), encoding="utf-8")
+
+        with pytest.raises(AssertionError) as raised:
+            assert_catalogue_matches(path)
+        assert "external_insulation" in str(raised.value)
 
     def test_every_catalogue_id_has_options_of_the_two_access_levels_only(self) -> None:
         """``everyone`` and ``experts`` are the whole vocabulary; a third would be silent."""

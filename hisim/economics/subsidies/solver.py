@@ -39,6 +39,7 @@ from hisim.economics.subsidies.catalog import (
     SubsidyCatalog,
     SubsidyScheme,
     TaxCreditBenefit,
+    TieredPerUnitBenefit,
 )
 from hisim.economics.subsidies.context import SubsidyDataError
 
@@ -308,6 +309,20 @@ def _combination_awards(
             )
         elif isinstance(benefit, PerUnitBenefit):
             amount = UncertainValue.exact(benefit.amount * measure.facts.size)
+            awards.append(
+                SubsidyAward(
+                    scheme_id=scheme.id,
+                    payout_kind=scheme.payout_kind,
+                    upfront_amount=amount.clamp_upper(basis),
+                    caps_binding_per_slot=binding,
+                    eligible_basis_in_euro=basis,
+                    eligible_basis_cap_in_euro=basis_cap,
+                )
+            )
+        elif isinstance(benefit, TieredPerUnitBenefit):
+            # The same shape as PER_UNIT, with the band sum and the scheme's own cap in place of
+            # one rate times the size; clamped to the eligible basis like every fixed amount.
+            amount = UncertainValue.exact(benefit.amount_for(measure.facts.size))
             awards.append(
                 SubsidyAward(
                     scheme_id=scheme.id,

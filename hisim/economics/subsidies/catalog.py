@@ -128,8 +128,8 @@ class BenefitKind(str, enum.Enum):
 
     The *mechanism* a scheme uses to compute its support, surveyed from the schemes actually
     running in the EU (§5.1): a share of the eligible cost, a stackable bonus share, a fixed lump
-    sum, an amount per unit of size, a multi-year tax credit, a reduced VAT rate, soft-loan terms,
-    or a per-kWh operational payment. The tag selects the typed payload class
+    sum, an amount per unit of size, a tiered amount per unit of size with a cap, a multi-year tax
+    credit, a reduced VAT rate, soft-loan terms, or a per-kWh operational payment. The tag selects the typed payload class
     (:attr:`BenefitTypes.BY_KIND`) that carries the mechanism's parameters, so adding a mechanism
     means adding a payload type here — adding a *programme* means editing a catalog file only.
 
@@ -143,6 +143,7 @@ class BenefitKind(str, enum.Enum):
     BONUS_SHARE = "BONUS_SHARE"
     LUMP_SUM = "LUMP_SUM"
     PER_UNIT = "PER_UNIT"
+    TIERED_PER_UNIT = "TIERED_PER_UNIT"
     TAX_CREDIT = "TAX_CREDIT"
     REDUCED_VAT = "REDUCED_VAT"
     SOFT_LOAN = "SOFT_LOAN"
@@ -178,6 +179,44 @@ def _shares(raw: Any) -> Tuple[float, ...]:
     if isinstance(raw, (str, bytes)) or not isinstance(raw, Iterable):
         raise TypeError(f"expected a list of annual shares, got {raw!r}")
     return tuple(float(item) for item in raw)
+
+
+def _optional_float(raw: Any) -> Optional[float]:
+    """Converts a JSON number or ``null`` into an optional float; ``null`` means "not set"."""
+    return None if raw is None else float(raw)
+
+
+@dataclass(frozen=True)
+class Tier:
+    """One band of a :class:`TieredPerUnitBenefit`: an amount per unit, paid up to a size.
+
+    ``up_to`` is the size at which the band ends, in the unit of ``ComponentCostFacts.size``; the
+    band starts where the previous one ended (0 for the first). ``None`` is an open band that
+    runs to any size, and only the last band may be open.
+    """
+
+    up_to: Optional[float]
+    amount_per_unit: float
+
+    #: The two keys of a tier object in the catalogue, and nothing else.
+    KEYS: ClassVar[Tuple[str, str]] = ("up_to", "amount_per_unit")
+
+
+def _tiers(raw: Any) -> Tuple[Tier, ...]:
+    """Converts the catalogue's list of tier objects into :class:`Tier` values.
+
+    The converter for :class:`TieredPerUnitBenefit`. Like :func:`_shares` it rejects strings and
+    bytes, which are iterable, and it refuses a tier object with a missing or unknown key, so a
+    misspelled ``amount_per_unit`` fails the load instead of being read as nothing.
+    """
+    if isinstance(raw, (str, bytes)) or not isinstance(raw, Iterable):
+        raise TypeError(f"expected a list of tier objects, got {raw!r}")
+    tiers = []
+    for item in raw:
+        if not isinstance(item, dict) or set(item) != set(Tier.KEYS):
+            raise ValueError(f"a tier is an object with exactly the keys {list(Tier.KEYS)}, got {item!r}")
+        tiers.append(Tier(up_to=_optional_float(item["up_to"]), amount_per_unit=float(item["amount_per_unit"])))
+    return tuple(tiers)
 
 
 @dataclass(frozen=True)
@@ -319,6 +358,93 @@ class PerUnitBenefit(Benefit):
 
 
 @dataclass(frozen=True)
+class TieredPerUnitBenefit(Benefit):
+    """An amount per unit of measure size that changes by band, with an optional overall cap.
+
+    The pro-rata grants a flat :class:`PerUnitBenefit` cannot express: SEAI's solar PV grant pays
+    700 EUR per kWp up to 2 kWp, 200 EUR per further kWp up to 4 kWp, and at most 1,800 EUR, so a
+    2.5 kWp array receives 2 x 700 + 0.5 x 200 = 1,500 EUR. Each band pays its own rate on the part
+    of the size that falls inside it; the sum is then capped at ``cap_in_euro``. The unit is that of
+    ``ComponentCostFacts.size``, as for :class:`PerUnitBenefit` (kW, i.e. kWp, for PV). Like every
+    fixed-amount kind the result is exact in all slots and clamped to the eligible-cost basis by
+    the solver.
+    """
+
+    tiers: Tuple[Tier, ...]  # ascending by up_to; only the last may be open (up_to None)
+    cap_in_euro: Optional[float] = None  # the most the benefit pays, or None for no cap
+
+    SPEC: ClassVar[Tuple[BenefitField, ...]] = (
+        BenefitField("tiers", "tiers", _tiers),
+        BenefitField("cap_in_euro", "cap_in_euro", _optional_float, required=False, default=None),
+    )
+
+    def __post_init__(self) -> None:
+        """Validates the bands: present, positive and ascending bounds, open only at the end.
+
+        Also refuses a cap below the first band's full value, since no band after the first could
+        then ever pay; a negative amount or cap is refused as well.
+        """
+        if not self.tiers:
+            raise SubsidyDataError("Tiered per-unit benefit needs at least one tier.")
+        previous = 0.0
+        for index, tier in enumerate(self.tiers):
+            if tier.amount_per_unit < 0:
+                raise SubsidyDataError(
+                    f"Tiered per-unit benefit tier {index} pays {tier.amount_per_unit} per unit; "
+                    "an amount cannot be negative."
+                )
+            if tier.up_to is None:
+                if index != len(self.tiers) - 1:
+                    raise SubsidyDataError(
+                        f"Tiered per-unit benefit tier {index} is open (up_to null) but is not the "
+                        "last tier; only the last tier may run to any size."
+                    )
+                continue
+            if tier.up_to <= previous:
+                raise SubsidyDataError(
+                    f"Tiered per-unit benefit tiers must ascend: tier {index} ends at {tier.up_to}, "
+                    f"which is not above {previous}."
+                )
+            previous = tier.up_to
+        if self.cap_in_euro is not None:
+            if self.cap_in_euro < 0:
+                raise SubsidyDataError(f"Tiered per-unit benefit cap {self.cap_in_euro} is negative.")
+            first = self.tiers[0]
+            if first.up_to is not None and self.cap_in_euro < first.amount_per_unit * first.up_to:
+                raise SubsidyDataError(
+                    f"Tiered per-unit benefit cap {self.cap_in_euro} is below the first tier's full "
+                    f"value {first.amount_per_unit * first.up_to}, so no later tier could ever pay."
+                )
+
+    def amount_for(self, size: float) -> float:
+        """The benefit for a measure of this size: each band's rate on its share, then the cap.
+
+        Args:
+            size: The measure's size, in the unit of ``ComponentCostFacts.size``; a negative size
+                is read as zero.
+
+        Returns:
+            The amount in euro, never above ``cap_in_euro``.
+        """
+        remaining_from = 0.0
+        total = 0.0
+        size = max(size, 0.0)
+        for tier in self.tiers:
+            upper = size if tier.up_to is None else min(size, tier.up_to)
+            if upper > remaining_from:
+                total += tier.amount_per_unit * (upper - remaining_from)
+            if tier.up_to is None or size <= tier.up_to:
+                break
+            remaining_from = tier.up_to
+        return total if self.cap_in_euro is None else min(total, self.cap_in_euro)
+
+    def value_estimate(self, gross_cost_in_euro: float, measure_size: float) -> float:
+        """The tiered amount for the measure's size, capped."""
+        del gross_cost_in_euro
+        return self.amount_for(measure_size)
+
+
+@dataclass(frozen=True)
 class TaxCreditBenefit(Benefit):
     """A share of the eligible cost, paid out over `years` (optionally unevenly).
 
@@ -448,6 +574,7 @@ class BenefitTypes:
         BenefitKind.BONUS_SHARE: ShareBenefit,
         BenefitKind.LUMP_SUM: LumpSumBenefit,
         BenefitKind.PER_UNIT: PerUnitBenefit,
+        BenefitKind.TIERED_PER_UNIT: TieredPerUnitBenefit,
         BenefitKind.TAX_CREDIT: TaxCreditBenefit,
         BenefitKind.REDUCED_VAT: ReducedVatBenefit,
         BenefitKind.SOFT_LOAN: LoanTermsBenefit,

@@ -39,6 +39,8 @@ from hisim.economics.subsidies import (
     SubsidyDataError,
     SubsidyScheme,
     TaxCreditBenefit,
+    Tier,
+    TieredPerUnitBenefit,
     evaluate_condition,
     failed_condition_descriptions,
     ineligibility_reason,
@@ -324,6 +326,70 @@ class TestTypedBenefits:
         assert LumpSumBenefit(amount=7500.0).value_estimate(20000.0, 10.0) == pytest.approx(7500.0)
         assert TaxCreditBenefit(rate=0.2, years=3).value_estimate(20000.0, 10.0) == pytest.approx(4000.0)
         assert LoanTermsBenefit(interest_rate=0.02, term=20).value_estimate(20000.0, 10.0) == 0.0
+
+
+class TestTieredPerUnitBenefit:
+    """hisim-cyc.3: an amount per unit that changes by band, capped (SEAI's solar PV grant)."""
+
+    SEAI_PV = {
+        "kind": "TIERED_PER_UNIT",
+        "tiers": [{"up_to": 2, "amount_per_unit": 700}, {"up_to": 4, "amount_per_unit": 200}],
+        "cap_in_euro": 1800,
+    }
+
+    def test_it_parses_into_its_typed_payload(self):
+        """The JSON surface: a list of tier objects and an optional cap, through the loader's parser."""
+        kind, benefit = subsidies.parse_benefit(dict(self.SEAI_PV), "TEST_SCHEME")
+        assert kind is BenefitKind.TIERED_PER_UNIT
+        assert benefit == TieredPerUnitBenefit(tiers=(Tier(2.0, 700.0), Tier(4.0, 200.0)), cap_in_euro=1800.0)
+
+    def test_the_shipped_irish_catalogue_carries_it(self):
+        """The four SEAI PV steps are one tiered scheme now."""
+        by_id = {scheme.id: scheme for scheme in SubsidyCatalog.load("IE").schemes}
+        assert isinstance(by_id["IE_SEAI_SOLAR_PV"].benefit, TieredPerUnitBenefit)
+        assert not [scheme_id for scheme_id in by_id if scheme_id.startswith("IE_SEAI_SOLAR_PV_")]
+
+    @pytest.mark.parametrize(
+        "size, expected",
+        [(0.0, 0.0), (0.5, 350.0), (2.0, 1400.0), (2.5, 1500.0), (3.9, 1780.0), (4.0, 1800.0), (9.0, 1800.0)],
+    )
+    def test_each_band_pays_its_rate_on_its_share_of_the_size(self, size, expected):
+        """Band sums, the page's 2.5 kWp -> 1,500 EUR example, and nothing beyond a closed last band."""
+        benefit = TieredPerUnitBenefit(tiers=(Tier(2.0, 700.0), Tier(4.0, 200.0)), cap_in_euro=1800.0)
+        assert benefit.amount_for(size) == pytest.approx(expected)
+        assert benefit.value_estimate(123456.0, size) == pytest.approx(expected)
+
+    def test_an_open_last_band_runs_until_the_cap(self):
+        """``up_to: null`` on the last band pays on every further unit, and the cap stops it."""
+        benefit = TieredPerUnitBenefit(tiers=(Tier(2.0, 700.0), Tier(None, 200.0)), cap_in_euro=2000.0)
+        assert benefit.amount_for(4.0) == pytest.approx(1800.0)
+        assert benefit.amount_for(10.0) == pytest.approx(2000.0)
+        assert TieredPerUnitBenefit(tiers=(Tier(None, 100.0),)).amount_for(7.0) == pytest.approx(700.0)
+
+    @pytest.mark.parametrize(
+        "tiers, cap, message",
+        [
+            ([], None, "at least one tier"),
+            ([{"up_to": 4, "amount_per_unit": 200}, {"up_to": 2, "amount_per_unit": 700}], None, "must ascend"),
+            ([{"up_to": 2, "amount_per_unit": -700}], None, "cannot be negative"),
+            ([{"up_to": None, "amount_per_unit": 700}, {"up_to": 4, "amount_per_unit": 200}], None, "only the last"),
+            ([{"up_to": 2, "amount_per_unit": 700}], 1000, "below the first tier"),
+            ([{"up_to": 2, "amount_per_unit": 700}], -1, "negative"),
+        ],
+    )
+    def test_a_malformed_band_list_is_refused_at_load(self, tmp_path, tiers, cap, message):
+        """Unsorted bands, negative amounts, an open band before the end, a cap no later band can reach."""
+        base = write_catalog(tmp_path, {"kind": "TIERED_PER_UNIT", "tiers": tiers, "cap_in_euro": cap})
+        with pytest.raises(SubsidyDataError, match=message):
+            SubsidyCatalog.load("XX", base)
+
+    def test_a_tier_with_a_misspelled_key_is_refused_by_scheme_and_key(self, tmp_path):
+        """A typo inside a tier fails the load like a typo in the benefit itself."""
+        base = write_catalog(
+            tmp_path, {"kind": "TIERED_PER_UNIT", "tiers": [{"up_to": 2, "amount_per_units": 700}]}
+        )
+        with pytest.raises(SubsidyDataError, match="TEST_SCHEME: benefit key 'tiers'"):
+            SubsidyCatalog.load("XX", base)
 
 
 class TestConditionAstAndFieldVocabulary:

@@ -2963,15 +2963,15 @@
       }
     },
     {
-      "id": "IE_SEAI_SOLAR_PV_FROM_4_KWP",
-      "display_name": "SEAI solar PV grant, 4 kWp or more (EUR 1,800, step approximation of a pro-rata grant) [AI draft — needs examination]",
+      "id": "IE_SEAI_SOLAR_PV",
+      "display_name": "SEAI solar PV grant (EUR 700 per kWp up to 2 kWp, EUR 200 per further kWp up to 4 kWp, at most EUR 1,800) [AI draft — needs examination]",
       "jurisdiction": {
         "country": "IE",
         "region": null
       },
       "valid_from": "2026-01-01",
       "valid_to": null,
-      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Solar PV Scheme (Microgeneration Support Scheme), pro-rata grant of EUR 700 per kWp up to 2 kWp plus EUR 200 per further kWp up to 4 kWp, capped at EUR 1,800; encoded as the step for 4 kWp or more",
+      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Solar PV Scheme (Microgeneration Support Scheme), pro-rata grant of EUR 700 per kWp up to 2 kWp plus EUR 200 per further kWp up to 4 kWp, capped at EUR 1,800; encoded as one TIERED_PER_UNIT benefit on the array's peak power (2.5 kWp -> EUR 1,500, SEAI's own example)",
       "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/solar-electricity-grant",
       "source_ids": [
         "src_seai_pv_2026",
@@ -3001,242 +3001,22 @@
             "field": "building.construction_year",
             "op": "<=",
             "value": 2020
-          },
-          {
-            "field": "measure.technical_attributes.peak_power_in_kwp",
-            "op": ">=",
-            "value": 4.0
           }
         ]
       },
       "benefit": {
-        "kind": "LUMP_SUM",
-        "amount": 1800
-      },
-      "eligible_cost": {
-        "categories": [
-          "INVESTMENT",
-          "PLANNING",
-          "REMOVAL"
-        ],
-        "cap_per_dwelling_unit_in_euro": [],
-        "basis": "GROSS",
-        "proration": "NONE"
-      },
-      "cumulation": {
-        "group": "IE_SEAI_GRANTS",
-        "combined_rate_cap": null,
-        "excludes": []
-      },
-      "payout": {
-        "kind": "UPFRONT_GRANT"
-      }
-    },
-    {
-      "id": "IE_SEAI_SOLAR_PV_3_TO_4_KWP",
-      "display_name": "SEAI solar PV grant, 3 kWp up to 4 kWp (EUR 1,600, step approximation of a pro-rata grant) [AI draft — needs examination]",
-      "jurisdiction": {
-        "country": "IE",
-        "region": null
-      },
-      "valid_from": "2026-01-01",
-      "valid_to": null,
-      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Solar PV Scheme (Microgeneration Support Scheme), pro-rata grant of EUR 700 per kWp up to 2 kWp plus EUR 200 per further kWp up to 4 kWp, capped at EUR 1,800; encoded as the step for 3 kWp up to 4 kWp",
-      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/solar-electricity-grant",
-      "source_ids": [
-        "src_seai_pv_2026",
-        "src_seai_oss_2026"
-      ],
-      "applies_to": {
-        "asset_classes": [
-          "PV"
-        ],
-        "measure_kinds": [
-          "INSTALL",
-          "REPLACE"
-        ]
-      },
-      "eligibility": {
-        "all": [
+        "kind": "TIERED_PER_UNIT",
+        "tiers": [
           {
-            "field": "applicant.actor",
-            "op": "in",
-            "value": [
-              "OWNER_OCCUPIER",
-              "LANDLORD",
-              "CONDOMINIUM_ASSOCIATION"
-            ]
+            "up_to": 2.0,
+            "amount_per_unit": 700
           },
           {
-            "field": "building.construction_year",
-            "op": "<=",
-            "value": 2020
-          },
-          {
-            "field": "measure.technical_attributes.peak_power_in_kwp",
-            "op": ">=",
-            "value": 3.0
-          },
-          {
-            "field": "measure.technical_attributes.peak_power_in_kwp",
-            "op": "<",
-            "value": 4.0
+            "up_to": 4.0,
+            "amount_per_unit": 200
           }
-        ]
-      },
-      "benefit": {
-        "kind": "LUMP_SUM",
-        "amount": 1600
-      },
-      "eligible_cost": {
-        "categories": [
-          "INVESTMENT",
-          "PLANNING",
-          "REMOVAL"
         ],
-        "cap_per_dwelling_unit_in_euro": [],
-        "basis": "GROSS",
-        "proration": "NONE"
-      },
-      "cumulation": {
-        "group": "IE_SEAI_GRANTS",
-        "combined_rate_cap": null,
-        "excludes": []
-      },
-      "payout": {
-        "kind": "UPFRONT_GRANT"
-      }
-    },
-    {
-      "id": "IE_SEAI_SOLAR_PV_2_TO_3_KWP",
-      "display_name": "SEAI solar PV grant, 2 kWp up to 3 kWp (EUR 1,400, step approximation of a pro-rata grant) [AI draft — needs examination]",
-      "jurisdiction": {
-        "country": "IE",
-        "region": null
-      },
-      "valid_from": "2026-01-01",
-      "valid_to": null,
-      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Solar PV Scheme (Microgeneration Support Scheme), pro-rata grant of EUR 700 per kWp up to 2 kWp plus EUR 200 per further kWp up to 4 kWp, capped at EUR 1,800; encoded as the step for 2 kWp up to 3 kWp",
-      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/solar-electricity-grant",
-      "source_ids": [
-        "src_seai_pv_2026",
-        "src_seai_oss_2026"
-      ],
-      "applies_to": {
-        "asset_classes": [
-          "PV"
-        ],
-        "measure_kinds": [
-          "INSTALL",
-          "REPLACE"
-        ]
-      },
-      "eligibility": {
-        "all": [
-          {
-            "field": "applicant.actor",
-            "op": "in",
-            "value": [
-              "OWNER_OCCUPIER",
-              "LANDLORD",
-              "CONDOMINIUM_ASSOCIATION"
-            ]
-          },
-          {
-            "field": "building.construction_year",
-            "op": "<=",
-            "value": 2020
-          },
-          {
-            "field": "measure.technical_attributes.peak_power_in_kwp",
-            "op": ">=",
-            "value": 2.0
-          },
-          {
-            "field": "measure.technical_attributes.peak_power_in_kwp",
-            "op": "<",
-            "value": 3.0
-          }
-        ]
-      },
-      "benefit": {
-        "kind": "LUMP_SUM",
-        "amount": 1400
-      },
-      "eligible_cost": {
-        "categories": [
-          "INVESTMENT",
-          "PLANNING",
-          "REMOVAL"
-        ],
-        "cap_per_dwelling_unit_in_euro": [],
-        "basis": "GROSS",
-        "proration": "NONE"
-      },
-      "cumulation": {
-        "group": "IE_SEAI_GRANTS",
-        "combined_rate_cap": null,
-        "excludes": []
-      },
-      "payout": {
-        "kind": "UPFRONT_GRANT"
-      }
-    },
-    {
-      "id": "IE_SEAI_SOLAR_PV_1_TO_2_KWP",
-      "display_name": "SEAI solar PV grant, 1 kWp up to 2 kWp (EUR 700, step approximation of a pro-rata grant) [AI draft — needs examination]",
-      "jurisdiction": {
-        "country": "IE",
-        "region": null
-      },
-      "valid_from": "2026-01-01",
-      "valid_to": null,
-      "legal_basis": "AI-GENERATED PLACEHOLDER (2026-09-19), NEEDS TO BE EXAMINED — SEAI Solar PV Scheme (Microgeneration Support Scheme), pro-rata grant of EUR 700 per kWp up to 2 kWp plus EUR 200 per further kWp up to 4 kWp, capped at EUR 1,800; encoded as the step for 1 kWp up to 2 kWp",
-      "url": "https://www.seai.ie/grants/home-energy-grants/individual-grants/solar-electricity-grant",
-      "source_ids": [
-        "src_seai_pv_2026",
-        "src_seai_oss_2026"
-      ],
-      "applies_to": {
-        "asset_classes": [
-          "PV"
-        ],
-        "measure_kinds": [
-          "INSTALL",
-          "REPLACE"
-        ]
-      },
-      "eligibility": {
-        "all": [
-          {
-            "field": "applicant.actor",
-            "op": "in",
-            "value": [
-              "OWNER_OCCUPIER",
-              "LANDLORD",
-              "CONDOMINIUM_ASSOCIATION"
-            ]
-          },
-          {
-            "field": "building.construction_year",
-            "op": "<=",
-            "value": 2020
-          },
-          {
-            "field": "measure.technical_attributes.peak_power_in_kwp",
-            "op": ">=",
-            "value": 1.0
-          },
-          {
-            "field": "measure.technical_attributes.peak_power_in_kwp",
-            "op": "<",
-            "value": 2.0
-          }
-        ]
-      },
-      "benefit": {
-        "kind": "LUMP_SUM",
-        "amount": 700
+        "cap_in_euro": 1800
       },
       "eligible_cost": {
         "categories": [
@@ -3574,10 +3354,7 @@
           "IE_SEAI_OSS_RAFTER_HOUSE",
           "IE_SEAI_OSS_RAFTER_MID_TERRACE",
           "IE_SEAI_RENEWABLE_HEAT_BONUS",
-          "IE_SEAI_SOLAR_PV_1_TO_2_KWP",
-          "IE_SEAI_SOLAR_PV_2_TO_3_KWP",
-          "IE_SEAI_SOLAR_PV_3_TO_4_KWP",
-          "IE_SEAI_SOLAR_PV_FROM_4_KWP",
+          "IE_SEAI_SOLAR_PV",
           "IE_SEAI_SOLAR_THERMAL",
           "IE_SEAI_WINDOWS_APARTMENT",
           "IE_SEAI_WINDOWS_DETACHED",

@@ -446,10 +446,11 @@ class EconomicContextBuilder:
     #: a cavity-fill grant and a dry-lining grant, both of which are ``WALL_INTERNAL_INSULATION``.
     PLACEMENT_ATTRIBUTE: ClassVar[str] = "placement"
 
-    #: The technical attribute the peak power of the photovoltaic array is published under.
-    #: Grants that step with array size read it; it is only published when the request pins the
-    #: array's power, because an array sized as a share of the roof has no peak power until the
-    #: simulation has run.
+    #: The technical attribute the peak power of the photovoltaic array is published under, for
+    #: an eligibility condition on array size. No shipped scheme reads it since hisim-cyc.3: the
+    #: Irish PV grant is tiered on the cost facts' own size, which every array has. It is only
+    #: published when the request pins the array's power, because an array sized as a share of
+    #: the roof has no peak power until the simulation has run.
     PEAK_POWER_ATTRIBUTE: ClassVar[str] = "peak_power_in_kwp"
 
     #: Watt per kilowatt, for the conversion into that attribute's unit.

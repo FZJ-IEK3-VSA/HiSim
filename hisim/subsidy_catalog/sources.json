@@ -79,7 +79,7 @@
       "publication_year": 2026,
       "retrieved": "2026-09-19",
       "kind": "STATUTE",
-      "notes": "AI-generated transcription of the page text, not legally verified; needs to be examined. 700 EUR per kWp up to 2 kWp, 200 EUR per further kWp up to 4 kWp, capped at 1,800 EUR and paid pro rata (2.5 kWp gives 1,500 EUR); built and occupied before 2021. The catalogue encodes four fixed steps instead, because no benefit kind expresses a capped per-unit amount. Not transcribed: the MPRN rule that no PV grant was paid for this home before, and the eight-month completion window."
+      "notes": "AI-generated transcription of the page text, not legally verified; needs to be examined. 700 EUR per kWp up to 2 kWp, 200 EUR per further kWp up to 4 kWp, capped at 1,800 EUR and paid pro rata (2.5 kWp gives 1,500 EUR); built and occupied before 2021. The catalogue encodes exactly that as one TIERED_PER_UNIT benefit (IE_SEAI_SOLAR_PV). Not transcribed: the MPRN rule that no PV grant was paid for this home before, and the eight-month completion window."
     },
     {
       "id": "src_seai_thermal_2026",

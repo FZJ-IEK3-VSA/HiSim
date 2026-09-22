@@ -66,6 +66,7 @@ class IrishCatalogueCase:
         cost_in_euro: float = 20000.0,
         measure_kind: str = "INSTALL",
         attributes=None,
+        size: float = 1.0,
     ) -> MeasureForSubsidy:
         """One measure to fund, expensive enough that no lump sum is clamped by its cost.
 
@@ -75,6 +76,8 @@ class IrishCatalogueCase:
                 what the technical-assessment grant computes on.
             measure_kind: "INSTALL" or "REPLACE".
             attributes: The measure's technical attributes, which several conditions read.
+            size: ``ComponentCostFacts.size`` in kW, which per-unit benefits multiply; for PV the
+                array's peak power in kWp.
 
         Returns:
             The measure record the solver takes.
@@ -83,7 +86,7 @@ class IrishCatalogueCase:
             subject=asset_class.value,
             facts=ComponentCostFacts(
                 asset_class=asset_class,
-                size=1.0,
+                size=size,
                 size_unit=Units.KILOWATT,
                 technical_attributes=dict(attributes or {}),
             ),
@@ -284,27 +287,40 @@ class TestTheAmountsThePagesState:
 
     @pytest.mark.parametrize(
         "peak_power_in_kwp, expected_in_euro",
-        [(2.0, 1400.0), (3.0, 1600.0), (4.0, 1800.0)],
+        [(1.0, 700.0), (2.0, 1400.0), (2.5, 1500.0), (3.0, 1600.0), (4.0, 1800.0), (6.0, 1800.0)],
     )
-    def test_the_solar_pv_steps_hit_the_pages_own_examples(
-        self, peak_power_in_kwp: float, expected_in_euro: float
-    ) -> None:
-        """The PV page prints exactly these three numbers, and the step encoding reproduces them."""
-        awards = IrishCatalogueCase.awards(
-            IrishCatalogueCase.measure(
-                ComponentType.PV, 9000.0, attributes={"peak_power_in_kwp": peak_power_in_kwp}
-            ),
-            IrishCatalogueCase.context(construction_year=1990, dwelling_type=DwellingType.DETACHED),
-        )
-        assert sum(awards.values()) == expected_in_euro
+    def test_the_solar_pv_grant_is_paid_pro_rata(self, peak_power_in_kwp: float, expected_in_euro: float) -> None:
+        """700 EUR/kWp to 2 kWp, 200 EUR/kWp to 4 kWp, at most 1,800 EUR (hisim-cyc.3).
 
-    def test_a_tiny_array_gets_nothing(self) -> None:
-        """Below one kilowatt-peak the step encoding pays nothing, which the README states."""
+        2.5 kWp -> 1,500 EUR is the example SEAI's own page gives; the four steps this scheme
+        replaced paid 1,400 EUR there. The size is the cost facts' own, so the grant needs no
+        technical attribute and an array sized as a share of the roof is priced too.
+        """
         awards = IrishCatalogueCase.awards(
-            IrishCatalogueCase.measure(ComponentType.PV, 3000.0, attributes={"peak_power_in_kwp": 0.5}),
+            IrishCatalogueCase.measure(ComponentType.PV, 9000.0, size=peak_power_in_kwp),
             IrishCatalogueCase.context(construction_year=1990, dwelling_type=DwellingType.DETACHED),
         )
-        assert not awards
+        assert awards == {"IE_SEAI_SOLAR_PV": pytest.approx(expected_in_euro)}
+
+    def test_a_small_array_is_paid_its_share(self) -> None:
+        """Half a kilowatt-peak gets half of 700 EUR; the old steps paid nothing below 1 kWp."""
+        awards = IrishCatalogueCase.awards(
+            IrishCatalogueCase.measure(ComponentType.PV, 3000.0, size=0.5),
+            IrishCatalogueCase.context(construction_year=1990, dwelling_type=DwellingType.DETACHED),
+        )
+        assert awards == {"IE_SEAI_SOLAR_PV": pytest.approx(350.0)}
+
+    def test_the_grant_never_exceeds_what_the_array_cost(self) -> None:
+        """Clamped to the eligible basis like every fixed amount: a 900 EUR array gets 990 at most.
+
+        The basis is investment plus a tenth of it as planning cost (the helper's booking), so a
+        900 EUR, 4 kWp array has a 990 EUR basis against an uncapped 1,800 EUR grant.
+        """
+        awards = IrishCatalogueCase.awards(
+            IrishCatalogueCase.measure(ComponentType.PV, 900.0, size=4.0),
+            IrishCatalogueCase.context(construction_year=1990, dwelling_type=DwellingType.DETACHED),
+        )
+        assert awards == {"IE_SEAI_SOLAR_PV": pytest.approx(990.0)}
 
 
 class TestTheTwoWallGrantsThatShareAnAssetClass:

@@ -24,6 +24,7 @@ from hisim.economics.timeline import CostCategory
 
 from tests.economics.synthetic_stages import (
     SyntheticPlan,
+    always_eligible_catalog,
     baseline_stage,
     brownfield_perspective,
     envelope_stage,
@@ -396,6 +397,126 @@ class TestBandOrder:
                 {"plan": {"totals": {"npv_in_euro": {"min": 5.0, "best": 1.0, "max": 2.0}}}}
             )
         assert not list(Path(tmp_path).iterdir())
+
+
+class TestSupportIsStatedOnce:
+    """The ``Subsidies`` stack and the ``subsidies[]`` rows state the same support (hisim-cyc.5).
+
+    A plan priced with subsidies on and no catalogue used to run the engine's §10.1 flat shim,
+    which booked a grant into the year stacks and the NPV while the rows said nothing had been
+    awarded: V1 drew a credit that V8 said did not exist. Without a catalogue a plan is now priced
+    with ``subsidy_mode: NONE``, and :meth:`StagedDocument.write` refuses any document whose two
+    statements disagree.
+    """
+
+    #: Share of the eligible cost the synthetic grant pays.
+    GRANT_RATE = 0.3
+
+    @staticmethod
+    def _stages():
+        """The three-stage synthetic plan: baseline, envelope in year 0, heat pump in year 4."""
+        return [baseline_stage(), envelope_stage(0), heat_pump_stage(4)]
+
+    @pytest.fixture(name="shim_database", scope="class")
+    def fixture_shim_database(self, tmp_path_factory):
+        """The synthetic database plus a heat-pump entry carrying a 25 % legacy flat share."""
+        return write_database(
+            str(tmp_path_factory.mktemp("shim_cost_database")), heat_pump_legacy_flat_subsidy_share=0.25
+        )
+
+    def _write(self, database, parameters, catalog, path, catalog_id=None) -> Dict[str, Any]:
+        """Price the synthetic plan with subsidies on and write its document."""
+        perspective = brownfield_perspective(subsidies=True)
+        result = StagedEvaluator(database).evaluate(self._stages(), parameters, perspective, catalog)
+        written: Dict[str, Any] = StagedDocument(
+            result, parameters, perspective, subsidy_catalog_id=catalog_id
+        ).write(path)
+        return written
+
+    def test_without_a_catalogue_no_year_books_support(self, shim_database, parameters, tmp_path):
+        """No catalogue: every year's Subsidies stack is zero and the NPV carries no grant."""
+        document = self._write(shim_database, parameters, None, tmp_path / "no_catalogue.json")
+
+        for variant in ("reference", "plan"):
+            for year in document[variant]["annual"]:
+                assert year["by_group"][CostGroup.SUBSIDIES.value] == {"min": 0.0, "best": 0.0, "max": 0.0}
+                assert all(event["kind"] != "subsidy" for event in year["events"])
+            assert document[variant]["by_group"][CostGroup.SUBSIDIES.value] == {
+                "min": 0.0,
+                "best": 0.0,
+                "max": 0.0,
+            }
+            assert all(row["status"] == "undetermined" for row in document[variant]["subsidies"])
+
+    def test_without_a_catalogue_the_plan_equals_one_priced_with_subsidies_off(
+        self, shim_database, parameters
+    ):
+        """What "priced with subsidy_mode NONE" means, stated as an equality of NPVs."""
+        stages = self._stages()
+        with_mode_on = StagedEvaluator(shim_database).evaluate(
+            stages, parameters, brownfield_perspective(subsidies=True)
+        )
+        with_mode_off = StagedEvaluator(shim_database).evaluate(
+            stages, parameters, brownfield_perspective(subsidies=False)
+        )
+        assert with_mode_on.plan.total_npv_in_euro == with_mode_off.plan.total_npv_in_euro
+
+    def test_without_a_catalogue_the_parameters_block_says_none(self, shim_database, parameters, tmp_path):
+        """The echo is a statement about the run, even when the caller passed a FULL perspective."""
+        document = self._write(shim_database, parameters, None, tmp_path / "echo.json")
+        assert document["parameters"]["subsidy_mode"] == "none"
+        assert document["parameters"]["subsidy_catalog"] is None
+
+    def test_with_a_catalogue_each_grant_is_booked_in_its_stage_year(self, database, parameters, tmp_path):
+        """The awarded rows are the stack: the envelope's grant in year 0, the heat pump's in year 4.
+
+        One scheme funds both measures, so each row must carry its own subject's grant rather than
+        the scheme's total over the plan.
+        """
+        document = self._write(
+            database,
+            parameters,
+            always_eligible_catalog(self.GRANT_RATE),
+            tmp_path / "catalogue.json",
+            catalog_id=f"{SyntheticPlan.COUNTRY}@synthetic",
+        )
+        plan = document["plan"]
+        awarded = {row["stage"]: row for row in plan["subsidies"] if row["status"] == "awarded"}
+        assert set(awarded) == {1, 2}
+        assert {row["scheme"] for row in awarded.values()} == {SyntheticPlan.GRANT_SCHEME}
+        subsidies_by_year = {
+            year["year"]: year["by_group"][CostGroup.SUBSIDIES.value]["best"] for year in plan["annual"]
+        }
+        assert subsidies_by_year[0] == pytest.approx(awarded[1]["amount_in_euro"]["best"], abs=0.01)
+        assert subsidies_by_year[4] == pytest.approx(awarded[2]["amount_in_euro"]["best"], abs=0.01)
+        assert awarded[1]["amount_in_euro"]["best"] == pytest.approx(
+            -self.GRANT_RATE * SyntheticPlan.ENVELOPE_INVESTMENT_IN_EURO, abs=0.01
+        )
+        assert all(
+            amount == 0.0 for year, amount in subsidies_by_year.items() if year not in (0, 4)
+        ), "support booked outside the two stage years"
+
+    def test_a_stack_without_an_awarded_row_is_refused(self, document):
+        """The no-catalogue contradiction itself, put back into a document, is refused."""
+        from hisim.economics.staged_document import SubsidyReconciliationError
+
+        broken = json.loads(json.dumps(document))
+        broken["plan"]["annual"][4]["by_group"][CostGroup.SUBSIDIES.value] = {
+            "min": -6015.0,
+            "best": -6015.0,
+            "max": -6015.0,
+        }
+        with pytest.raises(SubsidyReconciliationError, match="plan: the Subsidies group"):
+            StagedDocument.assert_subsidies_reconciled(broken)
+
+    def test_an_event_from_a_scheme_nobody_awarded_is_refused(self, document):
+        """A year marked with a grant the table does not know is refused, whatever its amount."""
+        from hisim.economics.staged_document import SubsidyReconciliationError
+
+        broken = json.loads(json.dumps(document))
+        broken["reference"]["annual"][0]["events"].append({"kind": "subsidy", "scheme": "LEGACY_FLAT"})
+        with pytest.raises(SubsidyReconciliationError, match="LEGACY_FLAT"):
+            StagedDocument.assert_subsidies_reconciled(broken)
 
 
 class TestTheEmissionsAreOnePhysicalFact:

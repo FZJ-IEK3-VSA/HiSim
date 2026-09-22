@@ -40,7 +40,7 @@ from typing import Any, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Opti
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import Perspective
 from hisim.economics.results import LifecycleCostResult, VariantComparison
-from hisim.economics.staged import StagedResult
+from hisim.economics.staged import StagedEvaluator, StagedResult
 from hisim.economics.staged_parameters import StagedParameters
 from hisim.economics.subsidies import SubsidyDecision
 from hisim.economics.timeline import CashFlowEntry, CategoryRules, CostCategory
@@ -66,6 +66,17 @@ class BandOrderError(ValueError):
     instead. It is always a bug in this module: every band it publishes comes from an
     :class:`~hisim.economics.uncertainty.UncertainValue`, which cannot be unordered, unless the
     document builds one out of separate slot values and gets the ends wrong.
+    """
+
+
+class SubsidyReconciliationError(ValueError):
+    """An evaluation books a subsidy its own ``subsidies[]`` rows do not award.
+
+    Raised by :meth:`StagedDocument.assert_subsidies_reconciled` before the file is written. The
+    document states support twice — as the ``Subsidies`` group of every year's stack and as the
+    awarded rows of ``subsidies[]`` — and a frontend draws both, so a grant in one that is absent
+    from the other is a chart contradicting the table beside it (hisim-cyc.5). Like
+    :class:`BandOrderError` it is always a bug in the engine or in this module, never in the input.
     """
 
 
@@ -284,7 +295,15 @@ class StagedDocument:
         subsidy_catalog_id: Optional[str] = None,
         cost_provenance: str = "cost_provenance.json",
     ) -> None:
-        """Store the plan and its context; nothing is built until :meth:`to_json`."""
+        """Store the plan and its context; nothing is built until :meth:`to_json`.
+
+        A plan with no catalogue was priced with ``subsidy_mode: NONE``
+        (:meth:`~hisim.economics.staged.StagedEvaluator.priced_under`), so the parameters and the
+        perspective are resolved the same way here, and the ``parameters`` block says what ran
+        whichever perspective the caller passed.
+        """
+        if subsidy_catalog_id is None:
+            parameters, perspective = StagedEvaluator.priced_under(parameters, perspective, None)
         self._result = result
         self._parameters = parameters
         self._perspective = perspective
@@ -340,10 +359,13 @@ class StagedDocument:
             jsonschema.ValidationError: If the document does not match the schema, which is a bug
                 in this module rather than in its inputs.
             BandOrderError: If any band in the document is not ``min <= best <= max``.
+            SubsidyReconciliationError: If an evaluation books support that its ``subsidies[]``
+                rows do not award.
         """
         document = self.to_json()
         self.validate(document)
         self.assert_bands_ordered(document)
+        self.assert_subsidies_reconciled(document)
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -421,6 +443,59 @@ class StagedDocument:
         if isinstance(document, list):
             for index, value in enumerate(document):
                 cls.assert_bands_ordered(value, f"{path}[{index}]")
+
+    #: How far the two statements of support may drift apart, in euro, per band slot: the cent the
+    #: document's other sum checks are held to, for float sums over up to a horizon of years.
+    RECONCILIATION_TOLERANCE_IN_EURO: ClassVar[float] = 0.01
+
+    @classmethod
+    def assert_subsidies_reconciled(cls, document: Mapping[str, Any]) -> None:
+        """Raise unless each evaluation's ``Subsidies`` stack is exactly its awarded ``subsidies[]``.
+
+        Two statements are checked for the reference and for the plan. Every ``subsidy`` event of
+        the ``annual`` series names a scheme that ``subsidies[]`` reports as awarded, so no year
+        carries support from a scheme the table does not know. And the ``Subsidies`` group summed
+        over the years equals the awarded amounts summed over the rows, slot by slot, so the chart
+        and the table state one figure. An evaluation with no awarded row therefore books no
+        support in any year, which is the no-catalogue case hisim-cyc.5 was about. The rows carry
+        no year, so the per-year statement is the event check and the amount check is the total.
+
+        Args:
+            document: The finished document.
+
+        Raises:
+            SubsidyReconciliationError: Naming the evaluation and the first disagreement found.
+        """
+        tolerance = cls.RECONCILIATION_TOLERANCE_IN_EURO
+        for variant in ("reference", "plan"):
+            evaluation = document[variant]
+            awarded = [
+                row for row in evaluation["subsidies"] if row["status"] == SubsidyStatus.AWARDED.value
+            ]
+            awarded_schemes = {row["scheme"] for row in awarded}
+            booked = dict.fromkeys(cls.BAND_KEYS, 0.0)
+            for year in evaluation["annual"]:
+                for event in year["events"]:
+                    if event["kind"] == EventKind.SUBSIDY.value and event["scheme"] not in awarded_schemes:
+                        raise SubsidyReconciliationError(
+                            f"{variant}.annual[{year['year']}] books support from scheme "
+                            f"{event['scheme']!r}, which {variant}.subsidies does not award "
+                            f"(awarded: {sorted(map(str, awarded_schemes)) or 'none'})."
+                        )
+                for key in cls.BAND_KEYS:
+                    booked[key] += year["by_group"][CostGroup.SUBSIDIES.value][key]
+            stated = dict.fromkeys(cls.BAND_KEYS, 0.0)
+            for row in awarded:
+                if row["amount_in_euro"] is not None:
+                    for key in cls.BAND_KEYS:
+                        stated[key] += row["amount_in_euro"][key]
+            for key in cls.BAND_KEYS:
+                if abs(booked[key] - stated[key]) > tolerance:
+                    raise SubsidyReconciliationError(
+                        f"{variant}: the Subsidies group of the annual series sums to {booked[key]} "
+                        f"in slot {key!r}, but the awarded {variant}.subsidies rows sum to "
+                        f"{stated[key]}; the document would draw a credit its table does not grant."
+                    )
 
     # ------------------------------------------------------------------ header blocks
 
@@ -736,7 +811,10 @@ class StagedDocument:
         With no catalogue configured the engine runs ``subsidy_mode: NONE``, so nothing is awarded
         and nothing is refused; the honest statement is then one undetermined row per stage that
         buys something, saying that the country has no catalogue (step 10 §1). The engine's flat
-        shim is never published as a grant.
+        shim is never published as a grant, and never priced either:
+        :meth:`~hisim.economics.staged.StagedEvaluator.priced_under` runs such a plan with
+        ``subsidy_mode: NONE``, and :meth:`assert_subsidies_reconciled` refuses a document whose
+        stacks book support these rows do not award.
         """
         if self._catalog_id is None:
             return self._no_catalogue_rows(staged)
@@ -772,7 +850,7 @@ class StagedDocument:
         decision: SubsidyDecision,
         stage: Optional[int],
         measure_id: Optional[str],
-        awarded: Mapping[str, UncertainValue],
+        awarded: Mapping[Tuple[str, str], UncertainValue],
     ) -> List[Dict[str, Any]]:
         """The rows of one measure's subsidy decision: awarded, refused and undecided.
 
@@ -783,7 +861,7 @@ class StagedDocument:
         """
         rows: List[Dict[str, Any]] = []
         for award in decision.applied:
-            amount = awarded.get(award.scheme_id)
+            amount = awarded.get((award.scheme_id, decision.measure_subject))
             binding = sorted(slot for slot, bound in award.caps_binding_per_slot.items() if bound)
             rows.append(
                 {
@@ -826,14 +904,19 @@ class StagedDocument:
         return rows
 
     @staticmethod
-    def _awarded_amounts(result: LifecycleCostResult) -> Dict[str, UncertainValue]:
-        """What each scheme actually paid on this timeline, by scheme id, signed as a credit."""
-        amounts: Dict[str, UncertainValue] = {}
-        for entry in result.timeline.entries:
+    def _awarded_amounts(result: LifecycleCostResult) -> Dict[Tuple[str, str], UncertainValue]:
+        """What each scheme paid for each subject on this timeline, signed as a credit.
+
+        Keyed by ``(scheme id, subject)`` because one scheme routinely funds two measures of a
+        plan, and each measure's row states its own grant, not the scheme's total. Read off the
+        scoped timeline, the one every other figure of the evaluation is a pivot of.
+        """
+        amounts: Dict[Tuple[str, str], UncertainValue] = {}
+        for entry in result.scoped_timeline().entries:
             if entry.category != CostCategory.SUBSIDY or entry.subsidy_scheme_id is None:
                 continue
-            previous = amounts.get(entry.subsidy_scheme_id, UncertainValue.exact(0.0))
-            amounts[entry.subsidy_scheme_id] = previous + entry.amount_in_euro
+            key = (entry.subsidy_scheme_id, entry.subject)
+            amounts[key] = amounts.get(key, UncertainValue.exact(0.0)) + entry.amount_in_euro
         return amounts
 
     def _financing(

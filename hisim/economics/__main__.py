@@ -1330,6 +1330,9 @@ def _cmd_staged(args: argparse.Namespace) -> int:
     except CostDataError as error:
         print(str(error), file=sys.stderr)
         return StagedCli.ENGINE_FAILED
+    # A plan with no catalogue is priced with subsidy_mode NONE (hisim-cyc.5); resolving it here
+    # rather than only inside the evaluator is what makes the document's parameters block say so.
+    parameters, perspective = StagedEvaluator.priced_under(parameters, perspective, catalog)
 
     try:
         result = StagedEvaluator(database).evaluate(stages, parameters, perspective, catalog)

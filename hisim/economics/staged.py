@@ -49,7 +49,7 @@ from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs
 from hisim.economics.facts import ComponentCostFacts, ExistingAsset, ExistingAssetRegister
 from hisim.economics.parameters import EconomicParameters
-from hisim.economics.perspectives import Perspective
+from hisim.economics.perspectives import Perspective, SubsidyMode
 from hisim.economics.results import (
     LifecycleCo2Result,
     LifecycleCostResult,
@@ -416,7 +416,8 @@ class StagedEvaluator:
             perspective: The accounting frame (installation context, actor scope, subsidy mode,
                 financing, accounting) every stage is evaluated under.
             catalog: The subsidy catalogue in force, or ``None`` for a plan priced with no
-                catalogue at all, where every scheme stays undetermined.
+                catalogue at all, where every scheme stays undetermined and the plan is priced
+                under :meth:`priced_under`'s ``subsidy_mode: NONE``.
 
         Returns:
             The :class:`StagedResult`.
@@ -428,6 +429,7 @@ class StagedEvaluator:
                 subject nothing can price (D7). An engine error, deliberately not wrapped.
         """
         ordered = tuple(stages)
+        parameters, perspective = self.priced_under(parameters, perspective, catalog)
         self._validate(ordered, parameters)
         evaluator = EconomicEvaluator(self.database, parameters, catalog)
         active_by_year = self._active_by_year(ordered, parameters.observation_period_in_years)
@@ -456,6 +458,43 @@ class StagedEvaluator:
             charged_subjects_by_stage=tuple(charged_by_stage),
             active_stage_by_year=active_by_year,
             stage_by_entry=spliced.stage_by_entry,
+        )
+
+    @classmethod
+    def priced_under(
+        cls,
+        parameters: EconomicParameters,
+        perspective: Perspective,
+        catalog: Optional[SubsidyCatalog],
+    ) -> Tuple[EconomicParameters, Perspective]:
+        """The assumptions and the perspective a plan is actually priced under, given its catalogue.
+
+        A plan with no catalogue is priced with ``subsidy_mode: NONE``, whatever the perspective
+        asked for. The engine's answer to "subsidies on, no catalogue" is the §10.1 flat shim, a
+        share stored in the *device* data, and step 10 §1 decided a staged document never
+        publishes it: the document states every scheme of such a plan as undetermined. Pricing the
+        shim anyway put a grant into the plan's ``by_group`` and ``totals`` that its own
+        ``subsidies[]`` said did not exist (hisim-cyc.5). With a catalogue the arguments are
+        returned unchanged.
+
+        The CLI calls this before it builds the document, so the ``parameters`` block echoes the
+        mode the plan ran under rather than the one the file asked for; :meth:`evaluate` calls it
+        again, which changes nothing the second time.
+
+        Args:
+            parameters: The assumptions the caller resolved.
+            perspective: The perspective the caller resolved.
+            catalog: The subsidy catalogue in force, or ``None``.
+
+        Returns:
+            ``(parameters, perspective)``: unchanged with a catalogue; without one, the perspective
+            with ``SubsidyMode.none()`` and the record with ``apply_subsidies`` off.
+        """
+        if catalog is not None:
+            return parameters, perspective
+        return (
+            replace(parameters, apply_subsidies=False),
+            replace(perspective, subsidy_mode=SubsidyMode.none()),
         )
 
     # ------------------------------------------------------------------ validation

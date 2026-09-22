@@ -29,6 +29,15 @@ from hisim.economics.facts import (
 )
 from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
 from hisim.economics.staged import Stage
+from hisim.economics.subsidies import (
+    BenefitKind,
+    Condition,
+    EligibleCostSpec,
+    PayoutKind,
+    ShareBenefit,
+    SubsidyCatalog,
+    SubsidyScheme,
+)
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
 
@@ -89,20 +98,27 @@ class SyntheticPlan:
     #: Subject name of the envelope measure.
     ENVELOPE_SUBJECT = "facade_insulation"
 
+    #: Id of the one scheme of :func:`always_eligible_catalog`.
+    GRANT_SCHEME = "SYNTHETIC_GRANT"
+
     #: Installation year of the inventory generator, i.e. the house's own starting point.
     INVENTORY_INSTALLATION_YEAR = 2010
 
 
-def write_database(directory: str) -> CostDatabase:
+def write_database(directory: str, heat_pump_legacy_flat_subsidy_share: float = 0.0) -> CostDatabase:
     """Write a cost database that prices nothing but one electricity carrier.
 
     Args:
         directory: A directory the three JSON files are written into; normally a ``tmp_path``.
             It is created when it does not exist, so a caller can name a fresh path.
+        heat_pump_legacy_flat_subsidy_share: When above zero, one heat-pump device entry carrying
+            this §10.1 flat subsidy share is written too, so a test can show what the engine's
+            no-catalogue shim would book. Its prices are never read: every synthetic subject
+            overrides them.
 
     Returns:
         The loaded database, with one source, one electricity price entry for
-        :attr:`SyntheticPlan.COUNTRY` and no device entries at all.
+        :attr:`SyntheticPlan.COUNTRY` and no device entries unless a legacy share was asked for.
     """
     os.makedirs(directory, exist_ok=True)
     sources = {
@@ -137,7 +153,74 @@ def write_database(directory: str) -> CostDatabase:
         json.dump(sources, handle)
     with open(f"{directory}/energy_prices_{SyntheticPlan.COUNTRY}.json", "w", encoding="utf-8") as handle:
         json.dump(prices, handle)
+    if heat_pump_legacy_flat_subsidy_share > 0:
+        devices = {
+            "entries": [
+                {
+                    "component_type": "HEAT_PUMP",
+                    "valid_from_year": SyntheticPlan.YEAR,
+                    "specific_investment": {"value": 1.0, "per_unit": "kW"},
+                    "scaling_exponent": None,
+                    "fixed_installation_cost_in_euro": 0,
+                    "planning_cost_in_euro": 0,
+                    "removal_cost_in_euro": 0,
+                    "maintenance_rate_per_year": SyntheticPlan.MAINTENANCE_RATE,
+                    "fixed_operation_cost_in_euro_per_year": 0,
+                    "service_life_in_years": SyntheticPlan.LIFETIME_IN_YEARS,
+                    "embodied_co2": {"value": 0.0, "per_unit": "kW"},
+                    "vat_rate": 0.0,
+                    "price_basis": "AS_LEGACY",
+                    "legacy_flat_subsidy_share": heat_pump_legacy_flat_subsidy_share,
+                    "source_ids": ["src_staged_test"],
+                    "notes": "Carries only the legacy flat subsidy share the no-catalogue tests need.",
+                }
+            ]
+        }
+        with open(f"{directory}/devices_{SyntheticPlan.COUNTRY}.json", "w", encoding="utf-8") as handle:
+            json.dump(devices, handle)
     return CostDatabase(directory)
+
+
+def always_eligible_catalog(rate: float) -> SubsidyCatalog:
+    """A catalogue of one upfront grant every synthetic measure qualifies for.
+
+    One scheme covering both the heat pump and the envelope measure is the case a per-scheme
+    lookup gets wrong: the two measures' rows must each state their own grant.
+
+    Args:
+        rate: The share of the eligible cost the grant pays.
+
+    Returns:
+        The catalogue, for :attr:`SyntheticPlan.COUNTRY`, with the scheme id
+        :attr:`SyntheticPlan.GRANT_SCHEME`.
+    """
+    scheme = SubsidyScheme(
+        id=SyntheticPlan.GRANT_SCHEME,
+        country=SyntheticPlan.COUNTRY,
+        region=None,
+        valid_from="1900-01-01",
+        valid_to=None,
+        legal_basis="synthetic staged-evaluator test scheme",
+        url="https://example.invalid/staged",
+        asset_classes=[ComponentType.HEAT_PUMP, ComponentType.WALL_EXTERNAL_INSULATION],
+        measure_kinds=["INSTALL", "REPLACE"],
+        eligibility=Condition(kind="all"),
+        benefit_kind=BenefitKind.SHARE_OF_ELIGIBLE_COST,
+        benefit=ShareBenefit(rate=rate),
+        eligible_cost=EligibleCostSpec(),
+        cumulation_group=None,
+        combined_rate_cap=None,
+        excludes=[],
+        payout_kind=PayoutKind.UPFRONT_GRANT,
+    )
+    return SubsidyCatalog(
+        schemes=[scheme],
+        questions={},
+        snapshot_date=None,
+        overall_cap_share=None,
+        base_path="",
+        country=SyntheticPlan.COUNTRY,
+    )
 
 
 def device_facts(
@@ -330,7 +413,7 @@ def brownfield_perspective(subsidies: bool = False) -> Perspective:
     """The RenoVisor default frame: brownfield, system scope, cash, subsidies on or off.
 
     Args:
-        subsidies: Whether the perspective admits subsidy schemes at all. The synthetic tests run
+        subsidies: Whether the perspective admits subsidy schemes at all. Most synthetic tests run
             without a catalogue, so the default is off and no support flow is generated.
 
     Returns:

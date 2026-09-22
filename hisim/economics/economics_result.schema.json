@@ -122,6 +122,7 @@
       "required": [
         "npv_delta_in_euro",
         "equivalent_annual_cost_delta_in_euro",
+        "monthly_equivalent_cost_delta_in_euro",
         "monthly_cost_year1_delta_in_euro",
         "discounted_payback_year",
         "cumulative_delta",
@@ -131,6 +132,10 @@
       "properties": {
         "npv_delta_in_euro": {"$ref": "#/$defs/band"},
         "equivalent_annual_cost_delta_in_euro": {"$ref": "#/$defs/band"},
+        "monthly_equivalent_cost_delta_in_euro": {
+          "description": "equivalent_annual_cost_delta_in_euro divided by twelve: the headline monthly difference, plan minus reference.",
+          "$ref": "#/$defs/band"
+        },
         "monthly_cost_year1_delta_in_euro": {"$ref": "#/$defs/nullableBand"},
         "discounted_payback_year": {
           "description": "The first year the plan has paid back, per uncertainty slot; null means never within the horizon.",
@@ -240,6 +245,7 @@
           "required": [
             "npv_in_euro",
             "equivalent_annual_cost_in_euro",
+            "monthly_equivalent_cost_in_euro",
             "monthly_cost_year1_in_euro",
             "investment_year0_in_euro",
             "sunk_cost_written_off_in_euro",
@@ -248,7 +254,14 @@
           "properties": {
             "npv_in_euro": {"$ref": "#/$defs/band"},
             "equivalent_annual_cost_in_euro": {"$ref": "#/$defs/band"},
-            "monthly_cost_year1_in_euro": {"$ref": "#/$defs/nullableBand"},
+            "monthly_equivalent_cost_in_euro": {
+              "description": "equivalent_annual_cost_in_euro divided by twelve: the level monthly cost over the whole horizon, and the headline monthly figure.",
+              "$ref": "#/$defs/band"
+            },
+            "monthly_cost_year1_in_euro": {
+              "description": "Year 1's cash divided by twelve, replacements included: the first year's cost, not a running cost.",
+              "$ref": "#/$defs/nullableBand"
+            },
             "investment_year0_in_euro": {"$ref": "#/$defs/band"},
             "sunk_cost_written_off_in_euro": {"$ref": "#/$defs/band"},
             "levelized_cost_of_heat_in_euro_per_kwh": {"$ref": "#/$defs/nullableBand"}

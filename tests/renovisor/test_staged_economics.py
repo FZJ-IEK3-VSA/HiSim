@@ -279,6 +279,18 @@ class TestTheEndToEndDocument:
                 stack = sum(band[slot] for band in evaluation["by_group"].values())
                 assert stack == pytest.approx(evaluation["totals"]["npv_in_euro"][slot], abs=0.01)
 
+    def test_the_headline_monthly_figure_is_the_annuity_over_twelve(self, document) -> None:
+        """hisim-cyc.6 on a real run: both evaluations carry EAC / 12, and so does the comparison."""
+        for variant in ("reference", "plan"):
+            totals = document[variant]["totals"]
+            assert totals["monthly_equivalent_cost_in_euro"]["best"] == pytest.approx(
+                totals["equivalent_annual_cost_in_euro"]["best"] / 12.0
+            )
+        comparison = document["comparison"]
+        assert comparison["monthly_equivalent_cost_delta_in_euro"]["best"] == pytest.approx(
+            comparison["equivalent_annual_cost_delta_in_euro"]["best"] / 12.0
+        )
+
     def test_the_subsidy_stack_is_the_awarded_rows(self, document) -> None:
         """hisim-cyc.5 on a real run: the grant the stacks book is the grant the rows award."""
         StagedDocument.assert_subsidies_reconciled(document)

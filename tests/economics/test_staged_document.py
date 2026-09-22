@@ -275,6 +275,53 @@ class TestTheDocumentShape:
             assert row["amount_in_euro"] is None
             assert SyntheticPlan.COUNTRY in row["note"]
 
+    @pytest.mark.parametrize("variant", ["reference", "plan"])
+    def test_the_headline_monthly_figure_is_the_annuity_over_twelve(self, document, variant):
+        """hisim-cyc.6: ``monthly_equivalent_cost_in_euro`` is EAC / 12 in every slot.
+
+        Twelve is written as a literal on purpose: comparing with the constant the document used
+        would pass whatever that constant said.
+        """
+        totals = document[variant]["totals"]
+        for slot in ("min", "best", "max"):
+            assert totals["monthly_equivalent_cost_in_euro"][slot] == pytest.approx(
+                totals["equivalent_annual_cost_in_euro"][slot] / 12.0
+            )
+
+    def test_the_headline_monthly_figure_is_not_the_first_years_cash(self, document):
+        """The two monthly figures differ on the synthetic plan, which pays its envelope in year 0.
+
+        Year 1 carries no investment there but the annuity spreads year 0's purchase over the
+        horizon, so equality would mean the new key was wired to the old figure.
+        """
+        totals = document["plan"]["totals"]
+        assert totals["monthly_equivalent_cost_in_euro"]["best"] != pytest.approx(
+            totals["monthly_cost_year1_in_euro"]["best"]
+        )
+
+    def test_the_monthly_delta_is_the_annuity_delta_over_twelve(self, document):
+        """``comparison.monthly_equivalent_cost_delta_in_euro`` is the EAC delta per month."""
+        comparison = document["comparison"]
+        for slot in ("min", "best", "max"):
+            assert comparison["monthly_equivalent_cost_delta_in_euro"][slot] == pytest.approx(
+                comparison["equivalent_annual_cost_delta_in_euro"][slot] / 12.0
+            )
+
+    def test_the_schema_requires_the_headline_monthly_figure(self, document):
+        """A document without it does not validate, so a consumer can rely on its presence."""
+        import jsonschema
+
+        for path in (("plan", "totals"), ("comparison",)):
+            broken = json.loads(json.dumps(document))
+            block = broken
+            for key in path:
+                block = block[key]
+            block.pop(
+                "monthly_equivalent_cost_delta_in_euro" if path == ("comparison",) else "monthly_equivalent_cost_in_euro"
+            )
+            with pytest.raises(jsonschema.ValidationError):
+                StagedDocument.validate(broken)
+
     def test_a_cash_plan_carries_no_financing_block(self, document):
         """``financing`` is null for a cash purchase rather than an empty list of loans."""
         assert document["plan"]["financing"] is None

@@ -2,23 +2,32 @@
 # Records which contract revision each vendored file was copied from and the
 # SHA-256 it had; tests/renovisor/test_contract.py recomputes the hashes.
 repository: https://github.com/climatemedia/renovisor-api-contract
-refreshed_at: '2026-09-20T15:29:04+00:00'
+refreshed_at: '2026-09-22T19:52:09+00:00'
 files:
   openapi.yaml:
     ref: origin/main
     path: openapi.yaml
-    commit: 5181aa5452e5b273e69d5d7c6f9c2901ae7df632
-    commit_date: '2026-09-17T15:26:57+02:00'
-    sha256: bf8078752f583ab3f76d321fcb34b310eafe7e6e032bff6e7d27274ce30beacb
+    commit: ffe13041d33eb704947f778c7ddaed8491244096
+    commit_date: '2026-09-22T21:43:03+02:00'
+    sha256: 59572607cab37a23fd33e12534b136a7abbb66671a0bd138254d022da7d222d3
     authoritative: false
     note: v0.3 draft written before the energy-system redesign; superseded by calculation-request.schema.json,
       which the translator validates against
+  homeinventory.yaml:
+    ref: origin/main
+    path: homeinventory.yaml
+    commit: ffe13041d33eb704947f778c7ddaed8491244096
+    commit_date: '2026-09-22T21:43:03+02:00'
+    sha256: 17b78b23cf569eedd3e28b07bb24b6a644d54bcb82f78820cc40589a462ee14a
+    authoritative: false
+    note: HomeInventoryInput of the v0.3 draft, split out of openapi.yaml and referenced
+      from it; the house the translator reads is calculation-request.schema.json's
   measures.yaml:
     ref: origin/main
     path: measures.yaml
-    commit: 5181aa5452e5b273e69d5d7c6f9c2901ae7df632
-    commit_date: '2026-09-17T15:26:57+02:00'
-    sha256: d800e6ca16acab1619bf607c510bd5acad0efb313c56b9c72246854860a8ece2
+    commit: ffe13041d33eb704947f778c7ddaed8491244096
+    commit_date: '2026-09-22T21:43:03+02:00'
+    sha256: 243d666ca1cf8c1494cc65f27111423388de57605873b1c2a97d4b12723f0959
   calculation-request.schema.json:
     source: /home/renovisor-api-contract
     path: specs/calculation-request.schema.json

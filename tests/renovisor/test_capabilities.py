@@ -41,8 +41,11 @@ from hisim.renovisor.vocabulary import Provenance, ReportStatus
 #: The tally of §4.2 as decision D-D leaves it. The frontend side's spec counted 16 / 9 / 7;
 #: `air_conditioners`, `temperature_control_system` and
 #: `optimize_behaviour_for_self_consumption_of_pv` move to the list because the twins have no
-#: group for them, which is three measures off `supported` and one off `approximated`.
-EXPECTED_TALLY: Dict[str, int] = {"supported": 15, "approximated": 7, "not_implemented_yet": 10}
+#: group for them, which is three measures off `supported` and one off `approximated`. Contract
+#: PR #10 (2026-09-22) then gave `cavity_wall_insulation`, `basement_internal_insulation` and
+#: `top_floor_ceiling_insulation` a `material` option: the translator stopped picking their
+#: material itself, and the three move from `approximated` to `supported` (15 / 7 became 18 / 4).
+EXPECTED_TALLY: Dict[str, int] = {"supported": 18, "approximated": 4, "not_implemented_yet": 10}
 
 #: The ten measures the list carries at measure level, which is what the tally above counts.
 EXPECTED_NOT_IMPLEMENTED = {

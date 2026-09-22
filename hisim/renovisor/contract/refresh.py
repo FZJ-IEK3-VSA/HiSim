@@ -52,6 +52,7 @@ class ContractSources:
     #: vendored file name -> (git ref, path inside the repository)
     BY_FILENAME: ClassVar[Dict[str, Tuple[str, str]]] = {
         ContractFiles.OPENAPI_FILENAME: ("origin/main", "openapi.yaml"),
+        ContractFiles.HOMEINVENTORY_FILENAME: ("origin/main", "homeinventory.yaml"),
         ContractFiles.MEASURES_FILENAME: ("origin/main", "measures.yaml"),
     }
 
@@ -81,11 +82,16 @@ class ContractSources:
     SHARED_DIRECTORY: ClassVar[str] = "/home/renovisor-api-contract"
 
     #: Vendored files that are kept for the record but must not be read as the truth about
-    #: anything. ``openapi.yaml`` is the v0.3 draft the request schema supersedes.
+    #: anything. ``openapi.yaml`` is the v0.3 draft the request schema supersedes, and
+    #: ``homeinventory.yaml`` is the part of it contract PR #10 split into its own file.
     NOT_AUTHORITATIVE: ClassVar[Dict[str, str]] = {
         ContractFiles.OPENAPI_FILENAME: (
             "v0.3 draft written before the energy-system redesign; superseded by "
             "calculation-request.schema.json, which the translator validates against"
+        ),
+        ContractFiles.HOMEINVENTORY_FILENAME: (
+            "HomeInventoryInput of the v0.3 draft, split out of openapi.yaml and referenced from "
+            "it; the house the translator reads is calculation-request.schema.json's"
         ),
     }
 

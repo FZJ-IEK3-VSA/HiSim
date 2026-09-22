@@ -109,47 +109,6 @@ class LayerDefaults:
         return cls.BY_MEASURE[measure_id]
 
 
-class FixedMaterials:
-    """The materials of the three insulation measures the catalogue gives no material option.
-
-    ``cavity_wall_insulation``, ``basement_internal_insulation`` and
-    ``top_floor_ceiling_insulation`` carry ``options: []``, so no request can name a material for
-    them and the translator has to pick one. Every use is an ``approximated`` line naming the
-    material and its conductivity, because the homeowner did not choose it.
-    """
-
-    # Source: materials.yaml row `eps_beads_cavity`, thermal conductivity 0.0355 W/(m·K) as the
-    # 2026-09-17 dump gives it (the frontend side's spec quotes 0.037; the dump is the number
-    # used here, per the review's note). TO BE REVIEWED.
-    CAVITY_BEADS: ClassVar[Tuple[str, float]] = ("eps_beads_cavity", 0.0355)
-
-    # Source: materials.yaml row `stone_wool_flexible_insulation_blankets`, thermal conductivity
-    # 0.035 W/(m·K). TO BE REVIEWED.
-    STONE_WOOL: ClassVar[Tuple[str, float]] = ("stone_wool_flexible_insulation_blankets", 0.035)
-
-    #: measure id -> (materials database id, thermal conductivity in W/(m·K)).
-    BY_MEASURE: ClassVar[Dict[str, Tuple[str, float]]] = {
-        "cavity_wall_insulation": CAVITY_BEADS,
-        "basement_internal_insulation": STONE_WOOL,
-        "top_floor_ceiling_insulation": STONE_WOOL,
-    }
-
-    @classmethod
-    def of(cls, measure_id: str) -> Tuple[str, float]:
-        """Return the fixed material of one option-less insulation measure.
-
-        Args:
-            measure_id: One of the three ids above.
-
-        Returns:
-            ``(asp_id, thermal conductivity in W/(m·K))``.
-
-        Raises:
-            KeyError: When the measure has a material option and should have read the request's.
-        """
-        return cls.BY_MEASURE[measure_id]
-
-
 class OpeningUValues:
     """The U-value a replaced window or door gets when the request states no expert value.
 

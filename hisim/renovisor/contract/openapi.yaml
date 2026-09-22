@@ -50,6 +50,16 @@ info:
         package, ...) and the home inventory field set. Owned by the backend,
         will change as the models mature. Shapes here are placeholders.
 
+    ## Shared home-inventory schema
+
+    `HomeInventoryInput`, with the two enums it uses (`ComponentCondition`,
+    `GrantScheme`), is consumed by other projects on its own and therefore
+    lives in the sibling file `homeinventory.yaml`. This file does not copy
+    it; it refers to it by relative reference,
+    `homeinventory.yaml#/components/schemas/HomeInventoryInput`, so the two
+    files are always shipped together and are complete only side by side.
+    Until 0.3.0-draft the schema was declared inline here.
+
     ## Open decisions for this PR
       - Whether `refused`/`failed` stay 200-with-status (as drafted) or map to
         422 / 500.
@@ -113,7 +123,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/HomeInventoryInput' }
+            schema: { $ref: 'homeinventory.yaml#/components/schemas/HomeInventoryInput' }
       responses:
         '201':
           description: Created
@@ -519,7 +529,7 @@ components:
             id:
               type: string
               description: Content hash of the canonicalised input.
-        - $ref: '#/components/schemas/HomeInventoryInput'
+        - $ref: 'homeinventory.yaml#/components/schemas/HomeInventoryInput'
 
     LandingPage:
       x-contract-status: stable
@@ -581,359 +591,11 @@ components:
         </html>
 
 
-    # ---------- PROVISIONAL PAYLOAD (backend-owned, will change) ----------
-    HomeInventoryInput:
-      x-contract-status: provisional
-      description: Editable building data. Exact field set is an open item.
-      type: object
-
-      properties:
-
-        location:
-          type: object
-          description: |
-            Where the building is. Selects the climate/weather file, the
-            location-derived heating reference temperature, and the country
-            prefix of the TABULA building_code. (snake_cased from Noah's Fable RenoVisor
-            calc-contract's camelCase location block.)
-          properties:
-            country_code: { type: string, examples: [IE], description: "ISO 3166-1 alpha-2 country code. Drives climate/weather selection and the country prefix of the TABULA building_code." }
-            region: { type: string, examples: [Dublin], description: "Optional. Refines the weather file / climate zone within the country." }
-            eircode_or_postcode: { type: string, examples: ["D14 AB12"], description: "Optional. Finer localisation (future: address lookup)." }
-
-        building_config:
-          type: object
-          properties:
-
-            general:
-              type: object
-              properties:
-                tabula_building_type: { type: string, enum: [SFH, TH, MFH, AB], description: "TABULA building type: single-family house, terraced house, multi-family house, apartment block." }
-                building_heat_capacity_class: { type: string, enum: ["very light", light, medium, heavy, "very heavy"], description: "Thermal-mass class of the building fabric. Note the space in `very light` / `very heavy`: consumers that match these against rule vocabularies normalise them to `very_light` / `very_heavy`." }
-                construction_year: { type: integer, examples: [1988] }
-                conditioned_floor_area_m2: { type: number, examples: [157] }
-                number_of_apartments: { type: integer, examples: [1] }
-                set_heating_temperature_in_celsius: { type: number, examples: [20.0] }
-                set_cooling_temperature_in_celsius: { type: number, examples: [25.0] }
-                retrofit_status: { type: string, enum: [unrenovated, usual_refurb, advanced_refurb], description: "Envelope refurbishment level. Maps to the TABULA building_code variant suffix: unrenovated -> .001 (existing/unrefurbished), usual_refurb -> .002 (usual refurbishment), advanced_refurb -> .003 (advanced refurbishment)." }
-                max_thermal_building_demand_in_watt: { type: number, nullable: true }
-
-            envelope_details:
-              type: object
-              properties:
-                floor_u_value_in_watt_per_m2_per_kelvin: { type: number, nullable: true }
-                floor_area_in_m2: { type: number, nullable: true }
-                facade_u_value_in_watt_per_m2_per_kelvin: { type: number, nullable: true }
-                facade_area_in_m2: { type: number, nullable: true }
-                worst_facade_u_value_in_watt_per_m2_per_kelvin: { type: number, nullable: true, examples: [1.4], description: "The HIGHEST U-value of any external wall, where the field above is the area-weighted average of all of them. Same split as the windows below: simulation needs the average (it is a transmission term), while deciding whether a wall is worth insulating needs the worst, because an average over a well-insulated majority can hide a wall that is not. Omit when the walls are not broken down." }
-                roof_u_value_in_watt_per_m2_per_kelvin: { type: number, nullable: true }
-                roof_area_in_m2: { type: number, nullable: true }
-                worst_roof_u_value_in_watt_per_m2_per_kelvin: { type: number, nullable: true, examples: [1.1], description: "The HIGHEST U-value of any roof sub-element, where the field above is the area-weighted average of all of them. Same split as the facade above and the windows below. Omit when the roof is not broken down." }
-                window_u_value_in_watt_per_m2_per_kelvin: { type: number, nullable: true }
-                window_area_in_m2: { type: number, nullable: true }
-                worst_window_u_value_in_watt_per_m2_per_kelvin: { type: number, nullable: true, examples: [5.2], description: "The HIGHEST U-value of any window in the dwelling, where the field above is the area-weighted average of all of them. The two answer different questions and the average hides the answer to the second: a dwelling with 26 m² of single glazing beside 348 m² of double averages to 3.06, and the window actually worth replacing disappears into it. Simulation uses the average; deciding what to replace uses this. Omit when the windows are not broken down." }
-                door_u_value_in_watt_per_m2_per_kelvin: { type: number, nullable: true }
-                door_area_in_m2: { type: number, nullable: true }
-
-        occupancy_config:
-          type: object
-          properties:
-            residents_count: { type: integer, examples: [2] }
-            residents_type: {type: array, items: {type: string, enum: [adult, kid]}, examples: [["adult", "adult"]], description: "One entry per resident, parallel to `residents_employment_status`." }
-            residents_employment_status: { type: array, items: {type: string, enum: [full_time, half_time, unemployed, education, retired]}, examples: [["full_time", "full_time"]], description: "One entry per resident, parallel to `residents_type`." }
-            travel_route_set:
-              type: string
-              nullable: true
-              enum:
-                - Travel Route Set for 05km Commuting Distance
-                - Travel Route Set for 10km Commuting Distance
-                - Travel Route Set for 15km Commuting Distance
-                - Travel Route Set for 20km Commuting Distance
-                - Travel Route Set for 25km Commuting Distance
-                - Travel Route Set for 30km Commuting Distance
-              description: "Optional. Commuting-distance profile; resolved backend-side to a fixed HiSim travel-route-set reference (name + GUID)."
-
-
-        energy_system_config:
-          type: object
-          properties:
-
-            heating_system:
-              type: object
-              properties:
-                system:
-                  type: string
-                  enum:
-                    - heat_pump
-                    - hybrid_heat_pump
-                    - electric_heating
-                    - oil_heating
-                    - hvo_heating
-                    - gas_heating
-                    - pellet_heating
-                    - woodchip_heating
-                    - district_heating
-                    - hydrogen_heating
-                    - biomass_heating
-                  description: |
-                    The heat generator, and only the generator. A solar thermal
-                    contribution is NOT a value here: it is the separate
-                    `solar_thermal_system` block below, present alongside whichever
-                    generator the dwelling has.
-
-                    (`gas_solar_thermal` and `heat_pump_solar_thermal` were values here
-                    and were removed - each named one generator plus a collector, so the
-                    same collector was expressible two ways and only for two of the
-                    generators.)
-                heatpump_flow_temperature_in_celsius: { type: number, nullable: true, examples: [52], description: "Heat-pump design flow temperature. ONLY applicable when system is heat_pump or hybrid_heat_pump; leave null/omit for every other system. A solar thermal collector alongside the pump does not change this - it is a separate block and does not alter the pump's design flow temperature." }
-                power_in_watt: { type: number, nullable: true }
-                installation_year: { type: integer, nullable: true, examples: [2004], description: "Optional. Year the system was installed; lets the backend estimate age-based efficiency/condition." }
-                with_dhw_preparation: { type: boolean, examples: [true] }
-                heat_distribution_system:
-                  type: string
-                  enum: [conventional_radiator, surface_heating, low_temperature_radiator]
-                  description: |
-                    The emitter type heat is delivered through.
-
-                      - `conventional_radiator` - high flow temperature, typically
-                        55-75 C.
-                      - `surface_heating` - any large low-temperature emitting surface:
-                        underfloor circuits, wall heating, ceiling heating. One value
-                        because they share the flow temperature range and the heat-pump
-                        suitability that renovation rules turn on.
-                      - `low_temperature_radiator` - oversized or fan-assisted radiators
-                        sized for heat-pump flow temperatures.
-
-            air_conditioner:
-              type: object
-              description: |
-                Reversible air-to-air unit (split, multi-split, VRF). Omit when
-                the dwelling has no cooling system.
-
-                Performance is split by mode because the two are rated at
-                different outdoor temperatures and neither curve implies the
-                other; a cooling-only unit fills in `cooling` alone. Within a
-                mode the three arrays are parallel rating points — index *i* of
-                each belongs to the same outdoor temperature — so they MUST be
-                equal in length and ordered by rising temperature. Two points
-                are enough to interpolate between; three is what a datasheet
-                usually gives.
-              properties:
-                installation_year: { type: integer, nullable: true, examples: [2015], description: "Optional. Year the system was installed; lets the backend estimate age-based efficiency/condition." }
-
-                cooling:
-                  type: object
-                  description: Cooling-mode rating points. Omit for a heating-only unit.
-                  properties:
-                    outdoor_temperatures_in_celsius: { type: array, items: { type: number }, examples: [[23, 30, 35]], description: "Outdoor air temperatures the points below are rated at, ascending. 35 °C is the standard cooling rating point." }
-                    eer: { type: array, items: { type: number }, examples: [[4.1844, 3.6138, 3.17]], description: "Energy efficiency ratio (cooling output / electrical input) at each temperature. Falls as the outdoor air gets hotter." }
-                    capacities_in_watt: { type: array, items: { type: number }, examples: [[8520, 7668, 7100]], description: "Cooling capacity at each temperature. The value at the standard rating point is the unit's nameplate size, so there is no separate rated-power field." }
-
-                heating:
-                  type: object
-                  description: Heating-mode rating points. Omit for a cooling-only unit.
-                  properties:
-                    outdoor_temperatures_in_celsius: { type: array, items: { type: number }, examples: [[-8, 1, 7]], description: "Outdoor air temperatures the points below are rated at, ascending. 7 °C is the standard heating rating point; the coldest point should sit at or below the location's design temperature, or the backend has to extrapolate the curve." }
-                    cop: { type: array, items: { type: number }, examples: [[2.47, 2.85, 3.51]], description: "Coefficient of performance (heat output / electrical input) at each temperature. Falls as the outdoor air gets colder." }
-                    capacities_in_watt: { type: array, items: { type: number }, examples: [[6130, 7170, 8600]], description: "Heating capacity at each temperature." }
-
-            ventilation_system:
-              type: object
-              description: |
-                The dwelling's purpose-provided ventilation. Omit when the dwelling
-                relies on infiltration alone — that is the absence of provision, not
-                provision with zero performance.
-              properties:
-                system:
-                  type: string
-                  enum:
-                    - mechanical_extract
-                    - demand_controlled_extract
-                    - mechanical_ventilation_with_heat_recovery
-                    - window_trickle_vent
-                  description: |
-                    The ventilation provision installed. The first three are mechanical
-                    units; the last is passive.
-
-                      - `mechanical_extract` - extract fans in wet rooms, replacement air
-                        infiltrates.
-                      - `demand_controlled_extract` - humidity-sensing central extract fan.
-                      - `mechanical_ventilation_with_heat_recovery` - balanced supply and
-                        extract (MVHR).
-                      - `window_trickle_vent` - passive slots in the window frame or head,
-                        driven by wind and stack pressure. No fan, no heat recovery, and
-                        no control: `heat_recovery_efficiency_in_percent`,
-                        `air_flow_rate_in_m3_per_hour` and `electric_power_in_watt` do
-                        not apply.
-                heat_recovery_efficiency_in_percent: { type: number, nullable: true, examples: [80], description: "Share of the extract air's heat handed back to the supply air. ONLY applicable when system is mechanical_ventilation_with_heat_recovery; leave null/omit for extract-only systems, which recover nothing." }
-                air_flow_rate_in_m3_per_hour: { type: number, nullable: true, examples: [180], description: "Optional. Design volume flow of the unit. Omit to let the backend size it from the conditioned floor area and the required air change rate." }
-                electric_power_in_watt: { type: number, nullable: true, examples: [70], description: "Optional. Fan power drawn at the design flow rate — the unit's own electricity consumption, unrelated to the heat it recovers." }
-                installation_year: { type: integer, nullable: true, examples: [2015], description: "Optional. Year the system was installed; lets the backend estimate age-based efficiency/condition." }
-
-            water_storage:
-              type: object
-              properties:
-                hot_water_storage:
-                  type: object
-                  properties:
-                    volume_in_liters: {type: number, examples: [500]}
-                    installation_year: { type: integer, nullable: true, examples: [2004], description: "Optional. Year the storage was installed; lets the backend estimate age-based condition." }
-                domestic_hot_water_storage:
-                  type: object
-                  properties:
-                    volume_in_liters: {type: number, examples: [250]}
-                    installation_year: { type: integer, nullable: true, examples: [2004], description: "Optional. Year the storage was installed; lets the backend estimate age-based condition." }
-
-            photovoltaics:
-              type: object
-              properties:
-                power_in_watt: { type: number, examples: [5000] }
-                azimuth_in_degree: { type: number, examples: [180] }
-                tilt_in_degree: { type: number, examples: [35] }
-                installation_year: { type: integer, nullable: true, examples: [2015], description: "Optional. Year the array was installed; lets the backend estimate age-based degradation." }
-                remaining_performance_in_percent: { type: number, nullable: true, examples: [92], description: "Expert option. Current output as a percent of nameplate after degradation (100 = as-new); the PV equivalent of battery state-of-health. Overrides an age-based estimate when given." }
-
-            battery_storage:
-              type: object
-              properties:
-                capacity_in_kwh: { type: number, examples: [10] }
-                power_in_watt: { type: number, nullable: true }
-                installation_year: { type: integer, nullable: true, examples: [2020], description: "Optional. Year the battery was installed; lets the backend estimate age-based capacity fade." }
-                state_of_health_in_percent: { type: number, nullable: true, examples: [90], description: "Expert option. Current usable capacity as a percent of rated capacity (100 = as-new). Overrides an age-based estimate when given." }
-
-            solar_thermal_system:
-              type: object
-              description: |
-                Solar thermal collector. Omit when the dwelling has none.
-
-                This is the *only* way a solar thermal contribution is stated.
-                It sits alongside `heating_system`, never inside it: the
-                collector preheats for whatever generator is installed, and
-                which generator that is says nothing about whether a collector
-                is present. `used_for_space_heating` and `used_for_dhw` say
-                what it feeds - a collector doing only hot water is the common
-                case and is not a space-heating system at all.
-              properties:
-                collector_area_in_m2: { type: number, examples: [8] }
-                azimuth_in_degree: { type: number, examples: [180] }
-                tilt_in_degree: { type: number, examples: [35] }
-                used_for_space_heating: { type: boolean, examples: [true] }
-                used_for_dhw: { type: boolean, examples: [true] }
-                installation_year: { type: integer, nullable: true, examples: [2015], description: "Optional. Year the collector was installed; lets the backend estimate age-based condition." }
-
-            vehicles:
-              type: object
-              description: |
-                Household vehicles, split by drivetrain so the two never share a
-                field set. Each list holds 0..n cars, and an entry
-                only carries the fields that apply to its own drivetrain.
-              properties:
-
-                electric_vehicles:
-                  type: array
-                  description: Battery-electric cars (0..n).
-                  items:
-                    type: object
-                    properties:
-                      model: { type: string, examples: ["EV_1"] }
-                      consumption_in_kwh_per_km: { type: number, nullable: true, examples: [0.15] }
-                      battery_capacity_in_kwh: { type: number, nullable: true, examples: [60] }
-                      construction_year: { type: integer, nullable: true, examples: [2020], description: "Optional. Year the vehicle was manufactured; lets the backend estimate age-based condition." }
-                      charging_location: { type: string, nullable: true, examples: ["home", "work", "mixed"] }
-
-                fossil_vehicles:
-                  type: array
-                  description: Combustion cars (0..n).
-                  items:
-                    type: object
-                    properties:
-                      fuel_source: { type: string, enum: [gasoline, diesel], description: "What the vehicle runs on." }
-                      model: { type: string, examples: ["ICE_1"] }
-                      consumption_in_liter_per_km: { type: number, nullable: true, examples: [0.06] }
-                      construction_year: { type: integer, nullable: true, examples: [2014], description: "Optional. Year the vehicle was manufactured; lets the backend estimate age-based condition." }
-
-        condition_assessment:
-          type: object
-          description: |
-            Self-reported current condition of the individual building elements
-            and energy systems, collected on the scheduling page. Helps answer the
-            question: *does this component still have life
-            left in it, or is it due for replacement now?*
-
-            Every field is optional — an omitted component means "not assessed",
-            and the backend can fall back to an age-based estimate from the
-            matching `installation_year` / `construction_year`.
-          properties:
-
-            building_elements:
-              type: object
-              description: Condition of the envelope, one entry per element.
-              properties:
-                external_facade: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Outer skin: render, cladding, paintwork and any existing external wall insulation." }
-                exterior_walls: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "The load-bearing wall construction behind the facade (cracks, damp, masonry condition)." }
-                interior_walls: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Internal partition walls and surfaces." }
-                floors: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Floor construction against ground or unheated basement, including any existing insulation." }
-                attic_ceiling: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Ceiling of the top storey, if living space. Omit if attic is not livable." }
-                attic_roof: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Roof structure at rafter level: rafters, purlins, sarking." }
-                roof_covering: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "The roof surface itself: tiles/slates, underlay, flashings, gutters." }
-                windows: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Glazing and frames across the dwelling." }
-                house_door: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Main entrance door (and other external doors)." }
-
-            energy_systems:
-              type: object
-              description: |
-                Condition of the installed technical systems. Field names mirror
-                the blocks under `energy_system_config`; specify only what is
-                actually installed.
-              properties:
-                heating_system: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }] }
-                heat_distribution_system: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Radiators / underfloor circuit and pipework." }
-                hot_water_storage: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Heating buffer store." }
-                domestic_hot_water_storage: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Domestic hot-water cylinder." }
-                photovoltaics: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }] }
-                battery_storage: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }] }
-                solar_thermal_system: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }] }
-                ventilation_system: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Mechanical ventilation / MVHR unit. Omit when the dwelling is naturally ventilated." }
-                air_conditioning_system: { allOf: [{ $ref: '#/components/schemas/ComponentCondition' }], description: "Air conditioning system, omit if not available." }
-
-        selected_grant_schemes:
-          type: array
-          description: |
-            Opt-in grant calculation selections. Framed as user choices, not
-            personal attributes (e.g. "Select enhanced rate for first-time
-            buyers"). Part of the content hash.
-          items:
-            $ref: '#/components/schemas/GrantScheme'
-          examples:
-            - [enhanced_rate_first_time_buyer, warmer_homes_scheme]
-            
-
-    ComponentCondition:
-      x-contract-status: provisional
-      description: |
-        Current condition of one building element or energy system, as reported
-        by the user. Drives *when* a component needs replacing: `bad` means it
-        is at the end of its service life and should be scheduled now, `medium`
-        means it is serviceable but a candidate for bundling into a nearby
-        phase, `good` means no replacement is due on condition grounds.
-      type: string
-      enum:
-        - good
-        - medium
-        - bad
-      examples: [medium]
-
-    GrantScheme:
-      x-contract-status: provisional
-      description: |
-        Country-specific grant calculation selection. These are opt-in choices
-        presented in the frontend as selections, not stored as personal
-        attributes. Ireland-first; enum will grow per country.
-      type: string
-      enum:
-        - enhanced_rate_first_time_buyer
-        - enhanced_rate_social_welfare
-        - warmer_homes_scheme
+    # HomeInventoryInput, with the two enums it uses (ComponentCondition, GrantScheme),
+    # lives in the sibling file homeinventory.yaml, because other projects consume that
+    # schema on its own. It is reached from here by relative reference -
+    #   $ref: 'homeinventory.yaml#/components/schemas/HomeInventoryInput'
+    # - so this file is complete only next to it, which is how the two are always shipped.
 
     PackageDefinition:
       x-contract-status: provisional

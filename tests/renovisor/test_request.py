@@ -301,7 +301,7 @@ class TestTheSemanticChecks:
     def test_a_dwelling_the_index_cannot_place_is_refused(self) -> None:
         """An apartment built in 1700 has no Irish typology row and no usable neighbour."""
         document = mockup()
-        document["house"]["building"]["tabula_building_code"] = "IE.N.SFH.05.Gen.ReEx.001.001"
+        document["house"]["building"]["tabula_building_code"] = "IE.N.TH.04.Gen.ReEx.001.001"
 
         assert (
             "house.building.tabula_building_code",

@@ -133,19 +133,26 @@ class TestTheBand:
 class TestTheUsableRowRule:
     """A row with no door or window area crashes ``Building``; the request can make it usable."""
 
-    def test_the_mockups_house_lands_on_a_neighbouring_band_without_areas(self) -> None:
-        """``IE.N.SFH.05`` has no door area, so 1975 is simulated as band 04 or 06."""
+    def test_the_mockups_house_lands_on_its_own_band(self) -> None:
+        """``IE.N.SFH.05`` has a door since the patch of 2026-09-23 (hisim-epc.18), so 1975 is band 05."""
         selection = select(BuildingType.DETACHED_SFH, 1975)
 
-        assert selection.code.split(".")[3] in {"04", "06"}
+        assert selection.code == "IE.N.SFH.05.Gen.ReEx.001.001"
+        assert not selection.is_approximated()
+
+    def test_a_house_on_an_unusable_row_lands_on_a_neighbouring_band_without_areas(self) -> None:
+        """``IE.N.TH.04`` (terraced, 1950-1966) has no door area, so 1960 is band 03 or 05."""
+        selection = select(BuildingType.TERRACED_SFH, 1960)
+
+        assert selection.code.split(".")[3] in {"03", "05"}
         assert selection.is_approximated()
-        assert any("05 (1967-1977)" in note for note in selection.notes)
+        assert any("04 (1950-1966)" in note for note in selection.notes)
 
     def test_the_same_house_lands_on_its_own_band_when_both_areas_are_given(self) -> None:
         """With a door and a window area the Building cannot divide by zero, so every row is usable."""
-        selection = select(BuildingType.DETACHED_SFH, 1975, areas_given=True)
+        selection = select(BuildingType.TERRACED_SFH, 1960, areas_given=True)
 
-        assert selection.code == "IE.N.SFH.05.Gen.ReEx.001.001"
+        assert selection.code == "IE.N.TH.04.Gen.ReEx.001.001"
         assert not selection.is_approximated()
 
     def test_an_expert_code_skips_the_derivation_entirely(self) -> None:
@@ -160,17 +167,17 @@ class TestTheUsableRowRule:
     def test_an_unusable_expert_code_without_areas_is_refused(self) -> None:
         """An override cannot override physics: the Building would still divide by zero."""
         with pytest.raises(TabulaUnresolvable):
-            select(BuildingType.DETACHED_SFH, 1975, requested_code="IE.N.SFH.05.Gen.ReEx.001.001")
+            select(BuildingType.TERRACED_SFH, 1960, requested_code="IE.N.TH.04.Gen.ReEx.001.001")
 
     def test_the_same_code_is_accepted_when_the_request_supplies_the_areas(self) -> None:
         """The rule is about the crash, not about the row."""
         selection = select(
-            BuildingType.DETACHED_SFH,
-            1975,
+            BuildingType.TERRACED_SFH,
+            1960,
             areas_given=True,
-            requested_code="IE.N.SFH.05.Gen.ReEx.001.001",
+            requested_code="IE.N.TH.04.Gen.ReEx.001.001",
         )
-        assert selection.code == "IE.N.SFH.05.Gen.ReEx.001.001"
+        assert selection.code == "IE.N.TH.04.Gen.ReEx.001.001"
 
     def test_a_code_the_table_does_not_carry_is_refused(self) -> None:
         """An override still has to name a row that exists."""

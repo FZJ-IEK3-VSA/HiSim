@@ -18,7 +18,7 @@ layer and is named in the note.
 The note is not decoration: it is the only place a reader can check the number. It carries the
 starting U-value, every layer with its thickness and conductivity, and the result::
 
-    1.1 W/(m2K) + external_insulation 120 mm of polystyrene_eps_rigid_board (lambda 0.0355 W/mK,
+    1.1 W/(m2K) + external_insulation 120 mm of eps_rigid_board (lambda 0.0355 W/mK,
     +3.38 m2K/W): 1/(1/1.1 + 0.12/0.0355) = 0.229 W/(m2K)
 """
 

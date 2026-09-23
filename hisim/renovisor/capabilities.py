@@ -275,7 +275,7 @@ class ProbeSet:
     #: class names ("EPS", "Mineral wool") the frontend's business, and the translator only ever
     #: sees properties.
     MATERIAL: ClassVar[Dict[str, Any]] = {
-        "asp_id": "polystyrene_eps_rigid_board",
+        "asp_id": "eps_rigid_board",
         "thermal_conductivity_w_mk": 0.0355,
         "heat_capacity_j_kgk": 1400,
         "density_kg_m3": 20.5,

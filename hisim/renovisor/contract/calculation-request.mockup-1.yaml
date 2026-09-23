@@ -79,7 +79,7 @@ measures:
     options:
       thickness_in_mm: 120
       material: # the catalogue's value resolved to its materials.yaml row; field names verbatim from that file
-        asp_id: polystyrene_eps_rigid_board
+        asp_id: eps_rigid_board
         thermal_conductivity_w_mk: 0.0355
         heat_capacity_j_kgk: 1400
         density_kg_m3: 20.5 # midpoint of the file's range 11–30

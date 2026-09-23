@@ -142,7 +142,7 @@ class EnvelopeLayer:
         """Return one phrase naming the layer, for a ``source`` string.
 
         Returns:
-            E.g. ``"facade polystyrene_eps_rigid_board 120 mm x 173 m2 (external_insulation)"``.
+            E.g. ``"facade eps_rigid_board 120 mm x 173 m2 (external_insulation)"``.
         """
         area = "unknown area" if self.area_in_m2 is None else f"{self.area_in_m2:g} m2"
         return (

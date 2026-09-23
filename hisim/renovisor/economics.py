@@ -466,17 +466,6 @@ class EconomicContextBuilder:
     #: power until the simulation has run.
     PEAK_POWER_ATTRIBUTE: ClassVar[str] = "peak_power_in_kwp"
 
-    #: The technical attribute the seasonal performance factor of the heat pump is published
-    #: under, for the subsidy conditions that read one (`measure.technical_attributes.scop`).
-    SCOP_ATTRIBUTE: ClassVar[str] = "scop"
-
-    #: The request path of that factor and the note its mapping-report line carries.
-    SCOP_PATH: ClassVar[str] = "house.heating.scop"
-    SCOP_NOTE: ClassVar[str] = (
-        "the seasonal performance factor of the heat pump, published as a technical attribute "
-        "for the subsidy conditions that read one"
-    )
-
     #: Watt per kilowatt, for the conversion into that attribute's unit.
     WATT_PER_KILOWATT: ClassVar[float] = 1000.0
 
@@ -612,8 +601,9 @@ class EconomicContextBuilder:
     def stated_leaves(cls, document: Mapping[str, Any]) -> List[Tuple[str, Any, str]]:
         """The economics-only leaves one request states, with the value and the report note.
 
-        The installation years, the living area and the heat pump's seasonal performance factor
-        feed the economic context and no simulation component. The translator records them
+        The installation years and the living area feed the economic context and no simulation
+        component. The heat pump's rated SCOP is not one of them: it describes the pump in the
+        house, which no subsidy is ever decided for, and it is physics (renovisorissues #8). The translator records them
         *before* its stages run — the fail-loud stage that accounts for every leftover leaf runs
         inside the translation, while the builder, which needs the translated model for its
         subjects, runs after it — and both spellings live here so they cannot drift.
@@ -661,11 +651,6 @@ class EconomicContextBuilder:
                         cls.LIVING_AREA_USED_NOTE,
                     )
                 )
-        heating = house.get("heating")
-        if isinstance(heating, Mapping):
-            scop = cls._as_positive_float(heating.get(cls.SCOP_ATTRIBUTE))
-            if scop is not None:
-                leaves.append((cls.SCOP_PATH, scop, cls.SCOP_NOTE))
         return leaves
 
     # ------------------------------------------------------------------ the register
@@ -1004,10 +989,9 @@ class EconomicContextBuilder:
             :attr:`~hisim.economics.bridge.EconomicContext.technical_attributes_by_subject`.
             A subject with nothing to say about it is absent from the map.
         """
-        # The heat pump's seasonal performance factor is a stated request field now (the schema's
-        # ``house.heating.scop``); before it was, neither the request nor the recorded twins
-        # stated one, and a scheme keyed on it stayed *undetermined* rather than being decided on
-        # an invented figure. It is published for the generator subject exactly as stated.
+        # No SCOP is published: the request's rated SCOP describes the heat pump already in the
+        # house (renovisorissues #8), while a subsidy is only ever decided for a pump the plan
+        # buys, whose SCOP nobody states. A scheme keyed on SCOP therefore stays *undetermined*.
         attributes: Dict[str, Dict[str, Any]] = {}
         placements = {layer.measure_id: layer.placement for layer in self._applied.layers}
         for subject_facts in facts:
@@ -1026,24 +1010,7 @@ class EconomicContextBuilder:
         peak_power = self._peak_power_in_kwp()
         if peak_power is not None:
             attributes[self.PHOTOVOLTAIC_COMPONENT] = {self.PEAK_POWER_ATTRIBUTE: peak_power}
-        scop = self._stated_scop()
-        if scop is not None and self._generator_component:
-            attributes.setdefault(self._generator_component, {})[self.SCOP_ATTRIBUTE] = scop
         return attributes
-
-    def _stated_scop(self) -> Optional[float]:
-        """The seasonal performance factor the request states, or ``None`` when it states none.
-
-        Args:
-            (none — reads the raw request.)
-
-        Returns:
-            The factor as a float, when the request states one and it is a positive number.
-        """
-        heating = self._raw_original.get("heating")
-        if not isinstance(heating, Mapping):
-            return None
-        return self._as_positive_float(heating.get(self.SCOP_ATTRIBUTE))
 
     def _peak_power_in_kwp(self) -> Optional[float]:
         """The renovated array's peak power in kilowatt-peak, or ``None`` when it has none.

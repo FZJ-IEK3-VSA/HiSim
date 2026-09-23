@@ -727,22 +727,53 @@ class TestTheAdditiveRequestFields:
 
         assert ("applicant.construction_year", ProblemCode.KEY_UNKNOWN.value) in codes_of(document)
 
-    def test_a_scop_is_accepted_and_a_fictitious_one_is_refused(self) -> None:
-        """A positive seasonal performance factor, or the question stays open."""
+    def test_a_heat_pump_scop_pair_is_accepted(self) -> None:
+        """The two EN 14825 ratings of renovisorissues #8, on a heat pump, W55 at or below W35."""
         document = mockup()
-        self._at(document, "house.heating")["scop"] = 3.4
+        heating = self._at(document, "house.heating")
+        heating.update(
+            {"type_of_system": "air_source_heat_pump", "heatpump_scop_en14825_w35": 4.6, "heatpump_scop_en14825_w55": 3.4}
+        )
 
         assert not codes_of(document)
 
-        self._at(document, "house.heating")["scop"] = 0
-        assert ("house.heating.scop", ProblemCode.RANGE_EXCEEDED.value) in codes_of(document)
+    def test_a_scop_outside_its_range_is_refused(self) -> None:
+        """A SCOP is above 1 and at most 10; 1 and below is no heat pump at all."""
+        document = mockup()
+        heating = self._at(document, "house.heating")
+        heating.update({"type_of_system": "air_source_heat_pump", "heatpump_scop_en14825_w35": 1})
+
+        assert ("house.heating.heatpump_scop_en14825_w35", ProblemCode.RANGE_EXCEEDED.value) in codes_of(document)
+
+    def test_a_scop_on_a_boiler_is_refused_by_name(self) -> None:
+        """The mockup heats with gas: a SCOP there contradicts the request, and it says which field."""
+        document = mockup()
+        self._at(document, "house.heating")["heatpump_scop_en14825_w55"] = 3.4
+
+        assert (
+            "house.heating.heatpump_scop_en14825_w55",
+            ProblemCode.HEATING_SCOP_NOT_A_HEAT_PUMP.value,
+        ) in codes_of(document)
+
+    def test_a_w55_rating_above_w35_is_refused_by_name(self) -> None:
+        """A unit rated for 55 °C water cannot outperform its 35 °C rating; the pair is swapped."""
+        document = mockup()
+        heating = self._at(document, "house.heating")
+        heating.update(
+            {"type_of_system": "hybrid_heat_pump", "heatpump_scop_en14825_w35": 3.4, "heatpump_scop_en14825_w55": 4.6}
+        )
+
+        assert (
+            "house.heating.heatpump_scop_en14825_w55",
+            ProblemCode.HEATING_SCOP_W55_ABOVE_W35.value,
+        ) in codes_of(document)
 
     def test_every_new_leaf_is_refused_at_an_unknown_place(self) -> None:
         """The blocks are where the specification puts them; nowhere else accepts the names."""
         document = mockup()
-        self._at(document, "house.building")["scop"] = 3.4
+        self._at(document, "house.building")["heatpump_scop_en14825_w35"] = 3.4
         self._at(document, "house.occupancy")["installation_year"] = 2003
 
         problems = codes_of(document)
-        assert ("house.building.scop", ProblemCode.KEY_UNKNOWN.value) in problems
+        assert ("house.building.heatpump_scop_en14825_w35", ProblemCode.KEY_UNKNOWN.value) in problems
         assert ("house.occupancy.installation_year", ProblemCode.KEY_UNKNOWN.value) in problems

@@ -433,10 +433,17 @@
         "installation_year": {
           "$ref": "#/$defs/installation_year"
         },
-        "scop": {
+        "heatpump_scop_en14825_w35": {
           "type": "number",
-          "exclusiveMinimum": 0,
-          "description": "The seasonal coefficient of performance of the heat pump serving the house, published as a technical attribute (measure.technical_attributes.scop) for the subsidy conditions that read one. Absent: a scheme keyed on SCOP stays undetermined."
+          "exclusiveMinimum": 1,
+          "maximum": 10,
+          "description": "Seasonal coefficient of performance of the heat pump in the house, as rated under EN 14825 for the low-temperature application (35 °C water outlet, W35), average climate: the datasheet or ErP fiche's 'low temperature' column. The SCOP itself, not the seasonal space-heating efficiency ηs and not a metered seasonal performance factor (JAZ). Only for a heat-pump type_of_system (else refused, heating.scop.not_a_heat_pump); give both ratings where the fiche has both. Omit when unknown."
+        },
+        "heatpump_scop_en14825_w55": {
+          "type": "number",
+          "exclusiveMinimum": 1,
+          "maximum": 10,
+          "description": "The same rating for the medium-temperature application (55 °C water outlet, W55): the fiche's 'medium temperature' column, on every fiche of a heat pump not sold as a low-temperature unit. Everything said for heatpump_scop_en14825_w35 applies; with both given, W55 must not exceed W35 (else refused, heating.scop.w55_above_w35)."
         }
       }
     },

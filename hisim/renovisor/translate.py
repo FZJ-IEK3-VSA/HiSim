@@ -553,11 +553,7 @@ class BaseFiles:
     }
 
     #: The generators whose twin is a heat pump, which alone has a flow temperature to write.
-    HEAT_PUMPS: ClassVar[Tuple[HeatGenerator, ...]] = (
-        HeatGenerator.AIR_SOURCE_HEAT_PUMP,
-        HeatGenerator.GROUND_SOURCE_HEAT_PUMP,
-        HeatGenerator.HYBRID_HEAT_PUMP,
-    )
+    HEAT_PUMPS: ClassVar[Tuple[HeatGenerator, ...]] = HeatGenerator.heat_pumps()
 
     #: The generators whose twin is a ``GenericBoiler``, which alone has efficiency bounds.
     BOILERS: ClassVar[Tuple[HeatGenerator, ...]] = (

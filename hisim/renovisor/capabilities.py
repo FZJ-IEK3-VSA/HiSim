@@ -274,6 +274,13 @@ class ProbeSet:
     #: (:meth:`material`).
     MATERIAL_MEASURE: ClassVar[str] = "external_insulation"
 
+    #: What a field probe has to change first so that the field is legal at all: a rated SCOP is
+    #: only accepted on a heat pump (``heating.scop.not_a_heat_pump``), and the anchor heats with gas.
+    FIELD_PRELUDE: ClassVar[Dict[str, Dict[str, Any]]] = {
+        "heating.heatpump_scop_en14825_w35": {"heating.type_of_system": "air_source_heat_pump"},
+        "heating.heatpump_scop_en14825_w55": {"heating.type_of_system": "air_source_heat_pump"},
+    }
+
     #: The prefix a probe's subject carries in front of an inventory path.
     HOUSE_PREFIX: ClassVar[str] = "house."
 
@@ -374,6 +381,9 @@ class ProbeSet:
         "building.window.installation_year": (1900, 2100),
         "building.door.installation_year": (1900, 2100),
         "heating.installation_year": (1900, 2100),
+        # The schema's lower bound is exclusive (a SCOP above 1), so the low end is probed just inside it.
+        "heating.heatpump_scop_en14825_w35": (1.1, 10),
+        "heating.heatpump_scop_en14825_w55": (1.1, 10),
         "battery.days_to_cover": (1, 14),
         "battery.installation_year": (1900, 2100),
         "solar_thermal_system.area_m2": (0.1, 100),
@@ -569,6 +579,7 @@ class ProbeSet:
             prelude: Dict[str, Any] = (
                 {block: dict(cls.BLOCKS[block])} if block in cls.FIELD_BLOCK else {}
             )
+            prelude.update(cls.FIELD_PRELUDE.get(path, {}))
             for value in values:
                 probes.append(
                     Probe(

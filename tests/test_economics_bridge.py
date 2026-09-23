@@ -44,7 +44,7 @@ import pytest
 import hisim.simulator as sim
 from hisim import loadtypes, utils
 from hisim.config import SizingContext
-from hisim.economics import bridge
+from hisim.economics import bridge, serialization
 from hisim.economics.bridge import EconomicContext
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDataError, CostDatabase
@@ -655,3 +655,99 @@ class TestSharedHelpers:
         assert series.tolist() == [7.0, 8.0]
         assert bridge._sum_output_column("Meter", "C", outputs, frame, 900) is None
         assert bridge._power_series("Meter", "C", outputs, frame) is None
+
+
+class Building:
+    """Stands in for the building by class name, as `UsefulHeatSources` looks it up."""
+
+    def __init__(self, component_name: str) -> None:
+        """Names the component."""
+        self.component_name = component_name
+
+
+class SimpleDHWStorage(Building):
+    """Stands in for the hot-water tank by class name."""
+
+
+class _Wrapper:
+    """The one attribute the extraction reads off a `ComponentWrapper`."""
+
+    def __init__(self, component) -> None:
+        """Wraps one component."""
+        self.my_component = component
+
+
+class _Output:
+    """A declared output: the attributes the positional lookup and the unit conversion read."""
+
+    def __init__(self, component_name: str, field_name: str, unit) -> None:
+        """Names one declared output and the unit it is declared in."""
+        self.component_name = component_name
+        self.field_name = field_name
+        self.unit = unit
+
+
+class TestUsefulHeat:
+    """hisim-4p86: the levelized cost of heat divides by the rooms' heat plus the hot water drawn."""
+
+    OUTPUTS = [
+        _Output("Building", "TheoreticalHeatingEnergyDemand", loadtypes.Units.WATT_HOUR),
+        _Output("DHWStorage", "ThermalEnergyConsumptionDHW", loadtypes.Units.WATT_HOUR),
+    ]
+    # Two timesteps: 3 kWh of room heat, and 1 kWh of hot water signed as heat leaving the tank.
+    FRAME = pd.DataFrame({0: [1000.0, 2000.0], 1: [-400.0, -600.0]})
+
+    def test_the_rooms_and_the_hot_water_are_added_as_magnitudes(self):
+        """3 kWh of rooms plus 1 kWh drawn at the tap, whatever sign the tank gives its outflow."""
+        wrappers = [_Wrapper(Building("Building")), _Wrapper(SimpleDHWStorage("DHWStorage"))]
+
+        heat = bridge._useful_heat_in_kwh(wrappers, self.OUTPUTS, self.FRAME, 900)  # pylint: disable=protected-access
+
+        assert heat == pytest.approx(4.0)
+
+    def test_a_run_without_a_building_states_no_heat(self):
+        """None, not zero: the KPI is omitted rather than divided by nothing."""
+        heat = bridge._useful_heat_in_kwh([], self.OUTPUTS, self.FRAME, 900)  # pylint: disable=protected-access
+
+        assert heat is None
+
+    def test_a_source_without_its_column_makes_the_heat_unknown(self, capsys):
+        """A partial sum would publish a cost per kWh that is too high, so it is dropped with a word."""
+        wrappers = [_Wrapper(Building("Building")), _Wrapper(SimpleDHWStorage("OtherTank"))]
+
+        heat = bridge._useful_heat_in_kwh(wrappers, self.OUTPUTS, self.FRAME, 900)  # pylint: disable=protected-access
+
+        assert heat is None
+        assert "OtherTank publishes no ThermalEnergyConsumptionDHW" in capsys.readouterr().out
+
+    @staticmethod
+    def _inputs(declared: Optional[float], measured: Optional[float], fraction: float = 0.25) -> EvaluationInputs:
+        """Inputs of a quarter-year run with a declared and a measured heat."""
+        return EvaluationInputs(
+            simulation_year=2024,
+            simulated_period_fraction=fraction,
+            annual_heat_demand_in_kwh=declared,
+            useful_heat_of_simulated_period_in_kwh=measured,
+        )
+
+    def test_the_measured_heat_is_annualized_like_the_bills(self):
+        """A quarter of a year's 3000 kWh is a year's 12000."""
+        assert self._inputs(None, 3000.0).annual_heat_demand() == pytest.approx(12000.0)
+
+    def test_a_declared_demand_wins_even_when_it_is_zero(self):
+        """The setup's figure overrides the model's, and a declared zero is a declaration."""
+        assert self._inputs(15000.0, 3000.0).annual_heat_demand() == pytest.approx(15000.0)
+        assert self._inputs(0.0, 3000.0).annual_heat_demand() == 0.0
+
+    def test_neither_leaves_the_kpi_out(self):
+        """No declaration and no building: nothing to divide by."""
+        assert self._inputs(None, None).annual_heat_demand() is None
+
+    def test_the_measured_heat_survives_the_inputs_file(self):
+        """economic_inputs.json records it, so re-pricing a stored run divides by the same figure."""
+        inputs = self._inputs(None, 3000.0)
+
+        reloaded = serialization.inputs_from_json(serialization.inputs_to_json(inputs))
+
+        assert reloaded.useful_heat_of_simulated_period_in_kwh == pytest.approx(3000.0)
+        assert reloaded.annual_heat_demand() == pytest.approx(12000.0)

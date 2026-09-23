@@ -1317,7 +1317,7 @@ class StagedEvaluator:
             facts_by_subject=facts_by_subject,
             co2_result=co2,
             parameters=parameters,
-            annual_heat_demand_in_kwh=stages[active[horizon]].inputs.annual_heat_demand_in_kwh,
+            annual_heat_demand_in_kwh=stages[active[horizon]].inputs.annual_heat_demand(),
         )
         shares: Dict[str, float] = {}
         bases: Dict[str, float] = {}

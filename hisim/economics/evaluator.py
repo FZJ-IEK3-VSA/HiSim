@@ -233,12 +233,31 @@ class EvaluationInputs:
     tariff_contracts: Dict[EnergyCarrier, TariffContract] = field(default_factory=dict)
     # Tariff ids whose price signal a controller consumed during the run (§4.6 boundary):
     consumed_tariff_ids: List[str] = field(default_factory=list)
-    annual_heat_demand_in_kwh: Optional[float] = None  # for the system cost per unit of heat
+    # For the system cost per unit of heat: a figure the setup declared for a whole year, and the
+    # useful heat the simulation measured over its own period (the building's room-heating demand
+    # plus the hot water drawn, `bridge.UsefulHeatSources`). `annual_heat_demand()` picks one.
+    annual_heat_demand_in_kwh: Optional[float] = None
+    useful_heat_of_simulated_period_in_kwh: Optional[float] = None
     # Building context for the actor model (§6.3, §6.4):
     building_specific_emissions_in_kg_per_m2_a: Optional[float] = None
     heated_floor_area_in_m2: Optional[float] = None
     living_area_in_m2: Optional[float] = None
     current_cold_rent_in_euro_per_m2_month: Optional[float] = None
+
+    def annual_heat_demand(self) -> Optional[float]:
+        """The kWh a year the levelized cost of heat divides by, or None when nothing states it.
+
+        A figure the setup declared wins: the author may know the demand better than the model,
+        and `EconomicContext` has always carried it. Otherwise the useful heat the simulation
+        measured is annualized with `simulated_period_fraction`, exactly as its energy bills are
+        (decision on hisim-4p86, 2026-09-23). The measured heat is rooms plus hot water because the
+        costs above the line pay for both.
+        """
+        if self.annual_heat_demand_in_kwh is not None:
+            return self.annual_heat_demand_in_kwh
+        if self.useful_heat_of_simulated_period_in_kwh is None or self.simulated_period_fraction <= 0:
+            return None
+        return self.useful_heat_of_simulated_period_in_kwh / self.simulated_period_fraction
 
 
 @dataclass(frozen=True)
@@ -1001,7 +1020,7 @@ class EconomicEvaluator:
             },
             co2_result=co2_result,
             parameters=params,
-            annual_heat_demand_in_kwh=inputs.annual_heat_demand_in_kwh,
+            annual_heat_demand_in_kwh=inputs.annual_heat_demand(),
         )
 
         return LifecycleCostResult(
@@ -1110,7 +1129,7 @@ class EconomicEvaluator:
         return EconomicAssumptions(
             escalation_rates=rates,
             tariffs=tariffs,
-            annual_heat_demand_in_kwh=inputs.annual_heat_demand_in_kwh,
+            annual_heat_demand_in_kwh=inputs.annual_heat_demand(),
         )
 
     def _source_resolver(self) -> Dict[str, ResolvedSource]:

@@ -316,6 +316,22 @@ class TestTheEndToEndDocument:
             comparison["equivalent_annual_cost_delta_in_euro"]["best"] / 12.0
         )
 
+    def test_both_evaluations_publish_a_cost_per_kwh_of_heat(self, document, runs) -> None:
+        """hisim-4p86: the denominator is the useful heat each stage's run measured.
+
+        Both job directories record the rooms' heat plus the hot water, and the package's
+        insulation leaves the house needing less of it.
+        """
+        for variant in ("reference", "plan"):
+            heat_cost = document[variant]["totals"]["levelized_cost_of_heat_in_euro_per_kwh"]
+            assert heat_cost is not None and heat_cost["best"] > 0, variant
+        _directory, baseline, package = runs
+        heat = {}
+        for name, job in (("baseline", baseline), ("package", package)):
+            (inputs_file,) = job.rglob("economic_inputs.json")
+            heat[name] = json.loads(inputs_file.read_text(encoding="utf-8"))["useful_heat_of_simulated_period_in_kwh"]
+        assert 0 < heat["package"] < heat["baseline"]
+
     def test_the_subsidy_stack_is_the_awarded_rows(self, document) -> None:
         """hisim-cyc.5 on a real run: the grant the stacks book is the grant the rows award."""
         StagedDocument.assert_subsidies_reconciled(document)

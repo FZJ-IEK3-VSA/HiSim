@@ -146,7 +146,8 @@ class EconomicContext:
       `current_cold_rent_in_euro_per_m2_month`, `building_specific_emissions_in_kg_per_m2_a`), which
       the §6.3/§6.4 CO2 split and modernization levy need to allocate costs between landlord and
       tenant;
-    - `annual_heat_demand_in_kwh`, the denominator of the system-cost-per-unit-of-heat KPI;
+    - `annual_heat_demand_in_kwh`, the denominator of the system-cost-per-unit-of-heat KPI, which
+      overrides the useful heat the simulation measured (`UsefulHeatSources`);
     - `scenario_set`, which additionally triggers the §4.6 cube evaluation into
       scenario_cube.csv/json and the report's scenario section.
 
@@ -154,7 +155,8 @@ class EconomicContext:
     lifecycle costs, but only the greenfield perspectives are evaluated — every device is charged as
     a new purchase into an empty building, nothing is credited as already existing, no sunk cost or
     anyway-cost applies. No subsidy is booked without a catalog, actor splits have no
-    allocation basis, and the LCOH KPI is omitted for want of a heat demand. That is the correct
+    allocation basis, and the LCOH KPI divides by the useful heat the simulation measured
+    (`UsefulHeatSources`), or is omitted when the run has no building. That is the correct
     answer to a question nobody asked in more detail — not a degraded one — but it is a *greenfield*
     answer, which is the thing to check first when brownfield figures are missing from a result set.
     """
@@ -451,6 +453,71 @@ def _sum_output_column(
     return EnergyUnitConversion.to_kwh(
         float(series.sum()), unit, seconds_per_timestep, f"{component_name}.{field_name}"
     )
+
+
+class UsefulHeatSources:
+    """Where the simulation states the useful heat the levelized cost of heat divides by.
+
+    Decision on hisim-4p86 (2026-09-23): the denominator is the heat the house *uses* — the rooms'
+    heating demand plus the hot water drawn — not the heat a generator produces, so the reference
+    and the plan divide by the same house's need however well either system converts it. Hot water
+    counts because the costs above the line pay for heating it.
+
+    The table is keyed by class name, like `adapter.DeviceEnergySpecs`, and names one energy column
+    per class. The hot-water column is signed as heat leaving the tank, so magnitudes are summed.
+    """
+
+    #: Class name -> the output column holding that component's useful heat.
+    BY_CLASS_NAME: ClassVar[Dict[str, str]] = {
+        # The ideal heating demand of the rooms, cooling excluded (split by sign in the building).
+        "Building": "TheoreticalHeatingEnergyDemand",
+        # The heat in the hot water drawn off, from the fresh-water to the tap temperature.
+        "SimpleDHWStorage": "ThermalEnergyConsumptionDHW",
+    }
+
+
+def _useful_heat_in_kwh(
+    wrapped_components: List[Any],
+    all_outputs: List[Any],
+    results: pd.DataFrame,
+    seconds_per_timestep: int,
+) -> Optional[float]:
+    """The useful heat of the simulated period in kWh, or None when the run states none.
+
+    None, not zero, when no component of `UsefulHeatSources` is in the run: a system without a
+    building has no heat demand the model knows of, and dividing by zero is what the KPI's
+    omission exists to avoid. None as well when a listed component lacks its column, with a
+    warning: a sum missing a source would publish a cost per kWh that is too high.
+
+    Args:
+        wrapped_components: The simulator's `ComponentWrapper` list.
+        all_outputs: The run's output declarations, in the frame's column order.
+        results: The per-timestep results frame.
+        seconds_per_timestep: Needed to integrate a column declared in W.
+
+    Returns:
+        The heat of the simulated period, not yet annualized (`EvaluationInputs.annual_heat_demand`
+        does that), or None.
+    """
+    total: Optional[float] = None
+    for wrapper in wrapped_components:
+        component = wrapper.my_component
+        field_name = UsefulHeatSources.BY_CLASS_NAME.get(type(component).__name__)
+        if field_name is None:
+            continue
+        found = _output_column_and_unit(component.component_name, field_name, all_outputs, results)
+        if found is None:
+            log.warning(
+                f"Lifecycle cost engine: {component.component_name} publishes no {field_name}, so "
+                "the useful heat is unknown and the levelized cost of heat is omitted."
+            )
+            return None
+        series, unit = found
+        heat = EnergyUnitConversion.to_kwh(
+            float(series.abs().sum()), unit, seconds_per_timestep, f"{component.component_name}.{field_name}"
+        )
+        total = heat if total is None else total + heat
+    return total
 
 
 def _power_series(
@@ -882,6 +949,9 @@ def build_evaluation_inputs(
         billing=billing,
         energy_attribution_by_subject_in_kwh=attribution,
         unresolved_subjects=unresolved,
+        useful_heat_of_simulated_period_in_kwh=_useful_heat_in_kwh(
+            wrapped_components, all_outputs, postprocessing_results, simulation_parameters.seconds_per_timestep
+        ),
     )
     context: Optional[EconomicContext] = getattr(simulation_parameters, "economic_context", None)
     if context is not None:

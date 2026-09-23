@@ -219,6 +219,36 @@ class TestEveryTargetReceivesItsValue:
 
         assert config_of(system, Targets.BUILDING)[Targets.SET_HEATING_TEMPERATURE] == 23
 
+    def test_a_kept_heat_pumps_rated_scop_reaches_hplib(self) -> None:
+        """hisim-4g9.15: both ratings land on the hplib config, which calibrates its fit to them."""
+        system = translate(
+            baseline(
+                heating={
+                    "type_of_system": "air_source_heat_pump",
+                    "heatpump_scop_en14825_w35": 4.6,
+                    "heatpump_scop_en14825_w55": 3.4,
+                }
+            )
+        )
+        component = BaseFiles.generator_component(system.base_file_name)
+        config = config_of(system, component)
+
+        assert config[Targets.STANDARDIZED_SCOP_W35] == 4.6
+        assert config[Targets.STANDARDIZED_SCOP_W55] == 3.4
+        line = system.report.line("house.heating.heatpump_scop_en14825_w55")
+        assert line is not None and line.status is ReportStatus.USED
+
+    def test_a_replaced_heat_pumps_rating_does_not_reach_the_new_one(self) -> None:
+        """The SCOP rated the old unit; the heating_system measure's new pump keeps hplib's fit."""
+        document = baseline(heating={"type_of_system": "air_source_heat_pump", "heatpump_scop_en14825_w55": 3.4})
+        document["measures"] = [{"id": "heating_system", "options": {"type_of_system": "air_source_heat_pump"}}]
+        system = translate(document)
+        component = BaseFiles.generator_component(system.base_file_name)
+
+        assert config_of(system, component).get(Targets.STANDARDIZED_SCOP_W55) is None
+        line = system.report.line("house.heating.heatpump_scop_en14825_w55")
+        assert line is not None and line.status is ReportStatus.APPROXIMATED
+
     def test_a_tank_insulation_measure_halves_the_storages_loss(self) -> None:
         """Half the class default, which is an approximation standing in for the pipes too."""
         document = copy.deepcopy(ContractFiles.request_mockup())

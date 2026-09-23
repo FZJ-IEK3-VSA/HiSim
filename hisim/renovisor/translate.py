@@ -825,6 +825,8 @@ class Targets:
     BATTERY_INVERTER: ClassVar[str] = "custom_pv_inverter_power_generic_in_watt"
     COLLECTOR_AREA: ClassVar[str] = "area_m2"
     FLOW_TEMPERATURE: ClassVar[str] = "flow_temperature_in_celsius"
+    STANDARDIZED_SCOP_W35: ClassVar[str] = "standardized_scop_en14825_w35"
+    STANDARDIZED_SCOP_W55: ClassVar[str] = "standardized_scop_en14825_w55"
     EFFICIENCY_MAXIMUM: ClassVar[str] = "eff_th_max"
     EFFICIENCY_MINIMUM: ClassVar[str] = "eff_th_min"
     BOILER_TYPE: ClassVar[str] = "boiler_type"
@@ -1462,6 +1464,7 @@ def _heating(state: _TranslationState) -> None:
         )
     _heat_distribution(state, generator)
     _flow_temperature(state, generator, heating)
+    _standardized_scop(state, generator, heating)
     _efficiency(state, generator, heating)
     for name in ("cooking_range", "secondary"):
         path = f"house.heating.{name}"
@@ -1578,6 +1581,32 @@ def _flow_temperature(state: _TranslationState, generator: HeatGenerator, heatin
         )
         return
     state.listed(path, heating.flow_temperature_in_celsius)
+
+
+def _standardized_scop(state: _TranslationState, generator: HeatGenerator, heating: Any) -> None:
+    """Write the heat pump's rated SCOP onto hplib, which calibrates its fit to it (hisim-4g9.15).
+
+    The request's checks guarantee a stated SCOP sits on a heat pump; a ``heating_system`` measure
+    removes it with the rest of the old generator's description, and the new pump keeps the fit.
+    """
+    for request_key, target in (
+        ("heatpump_scop_en14825_w35", Targets.STANDARDIZED_SCOP_W35),
+        ("heatpump_scop_en14825_w55", Targets.STANDARDIZED_SCOP_W55),
+    ):
+        path = f"house.heating.{request_key}"
+        if not state.present(path):
+            continue
+        value = getattr(heating, request_key)
+        if value is None or generator not in BaseFiles.HEAT_PUMPS:
+            state.report.approximated(
+                path,
+                "the heating_system measure replaced the heat pump this rating described; the new "
+                "heat pump keeps hplib's generic fit",
+            )
+            continue
+        component = BaseFiles.generator_component(state.base_file_name)
+        state.write(component, target, value, source=path, note="calibrates hplib's fit to the stated SCOP")
+        state.report.used(path, Targets.describe(component, target), value=value)
 
 
 def _efficiency(state: _TranslationState, generator: HeatGenerator, heating: Any) -> None:

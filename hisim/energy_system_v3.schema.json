@@ -4552,6 +4552,26 @@
                   "flow_temperature_in_celsius": {
                     "type": "number"
                   },
+                  "standardized_scop_en14825_w35": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "standardized_scop_en14825_w55": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "cycling_mode": {
                     "type": "boolean"
                   },

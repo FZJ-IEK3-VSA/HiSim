@@ -361,11 +361,18 @@ class TranslationMap:
             rows.append(
                 f"<tr><td><code>{html.escape(str(entry['path']))}</code></td>"
                 f"<td>{cls._badge(str(entry['status']), bool(entry.get('substitution')))}</td>"
-                f"<td>{cls._values(entry.get('values')) or '&middot;'}</td>"
+                f"<td>{cls._values(entry.get('values')) or cls._bounds(entry) or '&middot;'}</td>"
                 f"<td>{html.escape(str(entry.get('note') or ''))}</td></tr>"
             )
         rows.append("</table>")
         return "".join(rows)
+
+    @classmethod
+    def _bounds(cls, entry: Mapping[str, Any]) -> str:
+        """Return a numeric field's range as ``minimum – maximum``, or ``""`` for any other field."""
+        if "minimum" not in entry:
+            return ""
+        return f"{html.escape(str(entry['minimum']))} &ndash; {html.escape(str(entry['maximum']))}"
 
     @classmethod
     def _results(cls, results: Mapping[str, Sequence[Mapping[str, Any]]]) -> str:

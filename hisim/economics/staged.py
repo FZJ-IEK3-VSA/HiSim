@@ -31,7 +31,7 @@ Example::
     result = StagedEvaluator(database).evaluate(stages, parameters, perspective, catalog)
     result.plan.total_npv_in_euro.best_estimate
 
-Specification: ``/home/contract-proposals/economics-hisim-spec.md`` §1 (the requirements) read
+Specification: ``specs/economics-hisim-spec.md`` of the renovisorissues project §1 (the requirements) read
 together with ``roadmap/renovisor/implementation/step10_staged_economics.md`` §2 (the engine-side
 decisions), which wins where the two disagree.
 """

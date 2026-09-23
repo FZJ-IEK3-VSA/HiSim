@@ -97,6 +97,14 @@
   when: heating.type_of_system == air_source_heat_pump
   note: The heat pump follows its hplib model curve.
 
+- path: house.heating.heatpump_scop_en14825_w35
+  note: The heat pump follows hplib's generic curve; calibrating it to the stated SCOP is not implemented yet.
+  tracked: hisim-4g9.15
+
+- path: house.heating.heatpump_scop_en14825_w55
+  note: The heat pump follows hplib's generic curve; calibrating it to the stated SCOP is not implemented yet.
+  tracked: hisim-4g9.15
+
 - path: house.heat_distribution.type_of_system
   when: heating.type_of_system == electric_heating
   note: Electric heating has no heat distribution system.

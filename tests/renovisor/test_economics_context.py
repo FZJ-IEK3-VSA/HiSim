@@ -445,15 +445,20 @@ class TestTheTechnicalAttributes:
             EconomicContextBuilder.PEAK_POWER_ATTRIBUTE: pytest.approx(3.5)
         }
 
-    def test_a_stated_scop_is_published_for_the_generator_subject(self) -> None:
-        """hisim-epc.14: a scheme keyed on SCOP is decided on the stated figure, not undetermined."""
+    def test_a_stated_scop_pair_is_published_for_no_subject(self) -> None:
+        """The rated SCOP rates the pump in the house, and no grant is for it (renovisorissues #8).
+
+        A subsidy is only decided for a pump the plan buys, whose SCOP nobody states, so the pair
+        is physics only and a scheme keyed on SCOP stays undetermined.
+        """
         document = _mockup()
         document["house"]["heating"]["type_of_system"] = "air_source_heat_pump"
-        document["house"]["heating"]["scop"] = 3.2
+        document["house"]["heating"]["heatpump_scop_en14825_w35"] = 4.6
+        document["house"]["heating"]["heatpump_scop_en14825_w55"] = 3.4
         document["measures"] = []
         request = Request.parse(document)
         applied = apply(request.document["house"], request.measures, Whitelist.load())
-        context = EconomicContextBuilder(
+        attributes = EconomicContextBuilder(
             request,
             applied,
             _building(),
@@ -461,15 +466,10 @@ class TestTheTechnicalAttributes:
             heating_reference_temperature_in_celsius=MOCKUP_DESIGN_TEMPERATURE_IN_CELSIUS,
         ).build().context.technical_attributes_by_subject
 
-        assert context["MoreAdvancedHeatPumpHPLib"][
-            EconomicContextBuilder.SCOP_ATTRIBUTE
-        ] == pytest.approx(3.2)
-
-    def test_no_scop_is_published_when_the_request_states_none(self) -> None:
-        """The absence keeps the schemes keyed on it undetermined rather than denied."""
-        attributes = _built(_mockup()).context.technical_attributes_by_subject
-
-        assert all(EconomicContextBuilder.SCOP_ATTRIBUTE not in entry for entry in attributes.values())
+        assert all("scop" not in key for entry in attributes.values() for key in entry)
+        assert all(
+            "scop" not in path for path, _value, _note in EconomicContextBuilder.stated_leaves(document)
+        )
 
 
 class TestTheCatalogueTheRunIsPointedAt:

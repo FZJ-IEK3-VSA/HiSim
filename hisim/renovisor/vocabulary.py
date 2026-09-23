@@ -24,6 +24,7 @@ drift.
 """
 
 from enum import Enum
+from typing import Tuple
 
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
 
@@ -58,6 +59,15 @@ class HeatGenerator(str, Enum):
     CONDENSING_OIL_HEATING = "condensing_oil_heating"
     CONDENSING_LPG_HEATING = "condensing_lpg_heating"
     SOLID_FUEL_HEATING = "solid_fuel_heating"
+
+    @classmethod
+    def heat_pumps(cls) -> Tuple["HeatGenerator", ...]:
+        """Return the three generators that are heat pumps.
+
+        The translator writes a flow temperature only for them, and a request may state a rated
+        SCOP only for them (renovisorissues #8).
+        """
+        return (cls.AIR_SOURCE_HEAT_PUMP, cls.GROUND_SOURCE_HEAT_PUMP, cls.HYBRID_HEAT_PUMP)
 
 
 class HeatDistributionType(str, Enum):

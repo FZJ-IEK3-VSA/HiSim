@@ -32,7 +32,7 @@ house:
     # U-values: the wizard's country-pack ids ("300mm_cavity" + "cavity_beads")
     # are turned into W/(m²·K) by the frontend's country pack. The backend takes
     # the number and writes it to Building.<element>_u_value_… verbatim; areas
-    # are absent, so they come from the TABULA archetype.
+    # are absent except the facade's, so they come from the TABULA archetype.
     roof:
       u_value_in_watt_per_m2_per_kelvin: 0.4 # "100mm_ceiling" (illustrative; the country pack owns the real table)
       shape: pitched # → PV and solar-thermal tilt 30°
@@ -88,9 +88,9 @@ measures:
         co2_footprint_a1_a3_c3_c4_kg_m2: 21.207108
         lifespan_years: 57.5 # midpoint of the file's range 40–75
     cost: # the band the frontend copies out of materials.yaml measure_costs; prices the facade subject
-      min_in_euro_per_m2: 90
-      max_in_euro_per_m2: 120
-      source: materials.yaml measure_costs, IE, External Wall Insulation
+      min_in_euro_per_m2: 50
+      max_in_euro_per_m2: 70
+      source: materials.yaml measure_costs, IE, External Wall Insulation, EPS boards
   - id: photovoltaic_system
     options:
       size_in_percent_of_roof_area: 60

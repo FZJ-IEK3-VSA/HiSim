@@ -15,7 +15,7 @@ uses rather than from a table (decision D-C).
 """
 
 from enum import Enum
-from typing import ClassVar, Dict, Tuple
+from typing import Any, ClassVar, Dict, Tuple
 
 
 class Placement(str, Enum):
@@ -350,3 +350,63 @@ class AnywayShareByPlacement:
             build-up is credited conservatively rather than generously.
         """
         return cls.BY_PLACEMENT.get(placement, cls.INTERNAL_FIRST_TIME)
+
+
+class ComfortGrades:
+    """Where the comfort grades of ``result.json`` cut the simulated degree-hours (hisim-sska).
+
+    Decision of 2026-09-23 (renovisorissues #29): the grades are computed from a full year of the
+    simulated indoor air temperature, not copied from the contract's examples.
+
+    * ``comfort.heating`` grades the degree-hours the room spent more than 1 K below the house's
+      own heating setpoint. The tolerance keeps an on/off controller's ripple out: on the mockup
+      it leaves a working gas boiler at 3 and a working heat pump at 57 K·h/a, where the ripple
+      alone made 331 and 729 (decision of 2026-09-23, after the controller fix hisim-q1rm).
+    * ``comfort.cooling`` and ``summer_heat_protection`` grade the same quantity, the degree-hours
+      above 26 °C (DIN 4108-2, summer climate region B). No RenoVisor house has active cooling, so
+      this is summer overheating of the free-floating building. The two scales share the limit of
+      1200 K·h/a, DIN 4108-2's requirement for homes: ``low`` and ``1`` both mean "would fail it".
+
+    A value on a limit takes the better grade. Every limit here is HiSim's proposal, chosen with
+    the owner and not taken from a rating procedure except where named. TO BE REVIEWED.
+    """
+
+    #: Degree-hours per year more than 1 K below the heating setpoint -> grade, best first; above
+    #: the last: low.
+    HEATING: ClassVar[Tuple[Tuple[float, str], ...]] = ((100.0, "high"), (500.0, "medium"))
+    HEATING_WORST: ClassVar[str] = "low"
+
+    #: Degree-hours per year above 26 °C -> grade, best first; above the last: low.
+    SUMMER: ClassVar[Tuple[Tuple[float, str], ...]] = ((500.0, "high"), (1200.0, "medium"))
+    SUMMER_WORST: ClassVar[str] = "low"
+
+    #: Degree-hours per year above 26 °C -> the contract's 1..5 scale (5 = high), best first.
+    SUMMER_HEAT_PROTECTION: ClassVar[Tuple[Tuple[float, int], ...]] = (
+        (250.0, 5),
+        (500.0, 4),
+        (900.0, 3),
+        (1200.0, 2),
+    )
+    SUMMER_HEAT_PROTECTION_WORST: ClassVar[int] = 1
+
+    @staticmethod
+    def grade(degree_hours: float, bands: Tuple[Tuple[float, Any], ...], worst: Any) -> Any:
+        """Return the grade of the first band whose limit the degree-hours do not exceed.
+
+        Args:
+            degree_hours: The annual degree-hours, never negative.
+            bands: ``(limit, grade)`` pairs, best grade first.
+            worst: The grade above the last limit.
+
+        Returns:
+            The grade.
+        """
+        for limit, grade in bands:
+            if degree_hours <= limit:
+                return grade
+        return worst
+
+    @staticmethod
+    def describe(bands: Tuple[Tuple[float, Any], ...], worst: Any) -> str:
+        """Return the bands as one phrase, e.g. ``high <= 100, medium <= 500, else low``."""
+        return ", ".join(f"{grade} <= {limit:g}" for limit, grade in bands) + f", else {worst}"

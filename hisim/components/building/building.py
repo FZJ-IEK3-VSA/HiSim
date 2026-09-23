@@ -130,6 +130,18 @@ class Building(cp.Component):
     TotalThermalMassHeatFlux = "TotalThermalMassHeatFlux"
     OpenWindow = "OpenWindow"
 
+    #: The indoor air temperature above which a summer hour counts as overheating: the limit of
+    #: DIN 4108-2's summer climate region B, independent of any cooling setpoint.
+    OVERHEATING_THRESHOLD_IN_CELSIUS = 26.0
+    #: How far below its heating setpoint the room has to be before an hour counts as cold. It
+    #: keeps the ripple of an on/off controller, a few tenths of a kelvin, out of the sum.
+    UNDERHEATING_TOLERANCE_IN_KELVIN = 1.0
+    #: KPI names that stay the same whatever the setpoints are, for readers outside HiSim.
+    UNDERHEATING_DEGREE_HOURS_KPI = (
+        "Degree-hours of building indoor air temperature more than 1.0 K below its heating set temperature"
+    )
+    OVERHEATING_DEGREE_HOURS_KPI = "Degree-hours of building indoor air temperature above 26.0 Celsius"
+
     @utils.measure_execution_time
     def __init__(
         self,
@@ -1324,6 +1336,43 @@ class Building(cp.Component):
                 description=self.component_name,
             )
             list_of_kpi_entries.append(max_temperature_reached_in_celsius_entry)
+            # Two sums under names that do not change with the configuration, which is what a
+            # reader outside HiSim can look up (the RenoVisor comfort grades, hisim-sska): the
+            # heating one beyond a 1 K tolerance, so controller ripple is not counted as cold, and
+            # the summer one against the fixed DIN 4108-2 limit rather than the cooling setpoint
+            # of an air conditioner the house may not have.
+            underheating_degree_hours = float(
+                (
+                    self.set_heating_temperature_in_celsius
+                    - self.UNDERHEATING_TOLERANCE_IN_KELVIN
+                    - indoor_temperatures_in_celsius
+                ).clip(lower=0.0).sum()
+                * self.seconds_per_timestep
+                / 3600
+            )
+            overheating_degree_hours = float(
+                (indoor_temperatures_in_celsius - self.OVERHEATING_THRESHOLD_IN_CELSIUS).clip(lower=0.0).sum()
+                * self.seconds_per_timestep
+                / 3600
+            )
+            list_of_kpi_entries.append(
+                KpiEntry(
+                    name=self.UNDERHEATING_DEGREE_HOURS_KPI,
+                    unit="°C*h",
+                    value=underheating_degree_hours,
+                    tag=KpiTagEnumClass.BUILDING,
+                    description=self.component_name,
+                )
+            )
+            list_of_kpi_entries.append(
+                KpiEntry(
+                    name=self.OVERHEATING_DEGREE_HOURS_KPI,
+                    unit="°C*h",
+                    value=overheating_degree_hours,
+                    tag=KpiTagEnumClass.BUILDING,
+                    description=self.component_name,
+                )
+            )
         return list_of_kpi_entries
 
     def get_building_kpis_from_outputs(

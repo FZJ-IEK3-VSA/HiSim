@@ -32,6 +32,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 
+from hisim.renovisor.constants import ComfortGrades
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.layers import EnvelopeLayers
 from hisim.renovisor.provenance import MissingField, Period, ProvenancedValue
@@ -208,6 +209,29 @@ class KpiSources:
         names = set(cls.annual_names().values()) | set(cls.rate_names().values())
         names |= set(cls.ENERGY_DEMAND_CARRIER_NAMES)
         return tuple(sorted(names))
+
+
+class ComfortSources:
+    """The two Building KPIs the comfort grades read (decision of 2026-09-23, hisim-sska).
+
+    Both are degree-hours of the simulated indoor air temperature, published by the Building
+    under names that do not change with its setpoints (``Building.UNDERHEATING_DEGREE_HOURS_KPI``
+    and ``OVERHEATING_DEGREE_HOURS_KPI``; a unit test pins the two strings to those constants).
+    They are graded by :class:`~hisim.renovisor.constants.ComfortGrades`, and only from a full
+    year: a short run has no summer, and a winter day graded as "high" in summer is not a result.
+    """
+
+    #: Degree-hours more than 1 K below the house's own heating setpoint, over the simulated period.
+    UNDERHEATING_NAME: ClassVar[str] = (
+        "Degree-hours of building indoor air temperature more than 1.0 K below its heating set temperature"
+    )
+    #: Degree-hours above 26 °C (DIN 4108-2, region B), over the simulated period.
+    OVERHEATING_NAME: ClassVar[str] = "Degree-hours of building indoor air temperature above 26.0 Celsius"
+
+    #: Why a grade is absent from a run shorter than a year.
+    SHORT_RUN_REASON: ClassVar[str] = (
+        "comfort is graded over a full simulated year; a shorter run has no summer to grade"
+    )
 
 
 class ContractExamples:
@@ -462,15 +486,11 @@ class KpiBuilder:
     #: to report rather than none of it.
     EMBODIED_CO2_ABSENT_REASON: ClassVar[str] = "the package adds no insulation layer (R8)"
 
-    #: The two leaves of the contract's nested ``comfort`` object.
-    COMFORT_LEAVES: ClassVar[Tuple[str, ...]] = ("heating", "cooling")
-
     #: The mocked scalar fields, each read from its own property's examples.
     MOCKED_SCALAR_FIELDS: ClassVar[Tuple[KpiField, ...]] = (
         KpiField.DISRUPTION_DAYS,
         KpiField.INDOOR_AIR_QUALITY,
         KpiField.THERMAL_INSULATION_EFFECT,
-        KpiField.SUMMER_HEAT_PROTECTION,
     )
 
     def __init__(
@@ -510,6 +530,16 @@ class KpiBuilder:
         ).to_json()
         for field in self.MOCKED_SCALAR_FIELDS:
             self._put(values, field, self._mocked(field.value))
+        self._put(
+            values,
+            KpiField.SUMMER_HEAT_PROTECTION,
+            self._graded(
+                KpiField.SUMMER_HEAT_PROTECTION.value,
+                ComfortSources.OVERHEATING_NAME,
+                ComfortGrades.SUMMER_HEAT_PROTECTION,
+                ComfortGrades.SUMMER_HEAT_PROTECTION_WORST,
+            ),
+        )
         self._put(values, KpiField.COMFORT, self._comfort())
         return KpiBlock(values=values, missing=tuple(self._missing))
 
@@ -703,25 +733,60 @@ class KpiBuilder:
             return None
         return ProvenancedValue(value=value, provenance=Provenance.MOCKED, source=source).to_json()
 
-    def _comfort(self) -> Optional[Dict[str, Any]]:
-        """Return the nested ``comfort`` object, each of whose two leaves is a mocked value.
+    def _graded(
+        self, path: str, name: str, bands: Tuple[Tuple[float, Any], ...], worst: Any
+    ) -> Optional[Dict[str, Any]]:
+        """Return one comfort grade of a full simulated year, or record why there is none.
+
+        Args:
+            path: The field's path inside ``kpis``, e.g. ``comfort.heating``, for the absence
+                record.
+            name: The Building KPI of degree-hours to grade (:class:`ComfortSources`).
+            bands: The grade's ``(limit, grade)`` pairs from :class:`ComfortGrades`, best first.
+            worst: The grade above the last limit.
 
         Returns:
-            ``{"heating": {...}, "cooling": {...}}``, or ``None`` when neither leaf has an example.
+            The provenance object, or ``None`` when the run is shorter than a year or lacks the KPI.
+        """
+        if not self._period.is_full_year():
+            self._missing.append(
+                MissingField(field=f"{self.MISSING_PREFIX}.{path}", reason=ComfortSources.SHORT_RUN_REASON)
+            )
+            return None
+        degree_hours = self._document.number(name) if self._document is not None else None
+        if degree_hours is None:
+            self._missing.append(
+                MissingField(
+                    field=f"{self.MISSING_PREFIX}.{path}",
+                    reason=f"the run's {KpiDocument.FILE_NAME} has no KPI '{name}'",
+                )
+            )
+            return None
+        return ProvenancedValue(
+            value=ComfortGrades.grade(degree_hours, bands, worst),
+            provenance=Provenance.SIMULATED,
+            source=(
+                f"{KpiDocument.FILE_NAME}: '{name}' = {degree_hours:.0f} K*h over the year; "
+                f"{ComfortGrades.describe(bands, worst)} (hisim-sska, TO BE REVIEWED)"
+            ),
+            period=self._period,
+        ).to_json()
+
+    def _comfort(self) -> Optional[Dict[str, Any]]:
+        """Return the nested ``comfort`` object: a heating and a summer grade of the simulated year.
+
+        Returns:
+            ``{"heating": {...}, "cooling": {...}}`` with the leaves that could be graded, or
+            ``None`` when neither could.
         """
         leaves: Dict[str, Any] = {}
-        for leaf in self.COMFORT_LEAVES:
-            value, source = ContractExamples.of(KpiField.COMFORT.value, leaf)
-            if value is None:
-                self._missing.append(
-                    MissingField(
-                        field=f"{self.MISSING_PREFIX}.{KpiField.COMFORT.value}.{leaf}", reason=source
-                    )
-                )
-                continue
-            leaves[leaf] = ProvenancedValue(
-                value=value, provenance=Provenance.MOCKED, source=source
-            ).to_json()
+        for leaf, name, bands, worst in (
+            ("heating", ComfortSources.UNDERHEATING_NAME, ComfortGrades.HEATING, ComfortGrades.HEATING_WORST),
+            ("cooling", ComfortSources.OVERHEATING_NAME, ComfortGrades.SUMMER, ComfortGrades.SUMMER_WORST),
+        ):
+            value = self._graded(f"{KpiField.COMFORT.value}.{leaf}", name, bands, worst)
+            if value is not None:
+                leaves[leaf] = value
         return leaves or None
 
 
@@ -837,6 +902,9 @@ class KpiSchema:
         "material's CO2 footprint is unknown"
     )
 
+    #: When the comfort grades are absent: they need a whole year, summer included.
+    COMFORT_WHEN: ClassVar[str] = "absent when the period is shorter than a full year"
+
     #: The energy label's one condition: the field exists and its value is always null.
     ENERGY_LABEL_CONDITION: ClassVar[str] = "the value is always null; no letter is invented"
 
@@ -902,13 +970,23 @@ class KpiSchema:
             PayloadFieldRow(
                 cls.BLOCK,
                 KpiField.SUMMER_HEAT_PROTECTION.value,
-                mocked.format(KpiField.SUMMER_HEAT_PROTECTION.value),
-                Provenance.MOCKED,
+                f"all_kpis.json '{ComfortSources.OVERHEATING_NAME}' graded 5..1: "
+                + ComfortGrades.describe(
+                    ComfortGrades.SUMMER_HEAT_PROTECTION, ComfortGrades.SUMMER_HEAT_PROTECTION_WORST
+                ),
+                Provenance.SIMULATED,
+                reason=ComfortSources.SHORT_RUN_REASON,
+                when=cls.COMFORT_WHEN,
             ),
             PayloadFieldRow(
                 cls.BLOCK,
                 KpiField.COMFORT.value,
-                mocked.format("comfort.heating") + " and comfort.cooling",
-                Provenance.MOCKED,
+                f"heating: all_kpis.json '{ComfortSources.UNDERHEATING_NAME}', "
+                + ComfortGrades.describe(ComfortGrades.HEATING, ComfortGrades.HEATING_WORST)
+                + f"; cooling: '{ComfortSources.OVERHEATING_NAME}', "
+                + ComfortGrades.describe(ComfortGrades.SUMMER, ComfortGrades.SUMMER_WORST),
+                Provenance.SIMULATED,
+                reason=ComfortSources.SHORT_RUN_REASON,
+                when=cls.COMFORT_WHEN,
             ),
         )

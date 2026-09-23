@@ -21,9 +21,12 @@ import pytest
 
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.apply import AddedLayer
+from hisim.components.building.building import Building
 from hisim.renovisor.capabilities import ProbeSet
+from hisim.renovisor.constants import ComfortGrades
 from hisim.renovisor.kpis import (
     LifecycleCo2,
+    ComfortSources,
     ContractExamples,
     KpiBuilder,
     KpiDocument,
@@ -182,15 +185,10 @@ def test_the_mocked_values_are_the_contracts_own_examples() -> None:
         block.values[KpiField.INDOOR_AIR_QUALITY.value]["value"]
         == schema["indoor_air_quality"]["examples"][0]
     )
-    assert (
-        block.values[KpiField.COMFORT.value]["heating"]["value"]
-        == schema["comfort"]["properties"]["heating"]["examples"][0]
-    )
     for field in (
         KpiField.DISRUPTION_DAYS,
         KpiField.INDOOR_AIR_QUALITY,
         KpiField.THERMAL_INSULATION_EFFECT,
-        KpiField.SUMMER_HEAT_PROTECTION,
     ):
         assert block.values[field.value]["provenance"] == Provenance.MOCKED.value
 
@@ -357,3 +355,65 @@ def test_emissions_are_partial_over_a_part_year_and_absent_without_the_engine() 
     assert KpiField.EMISSIONS.value not in absent.values
     reasons = {entry.field: entry.reason for entry in absent.missing}
     assert "lifecycle_costs.json" in reasons[f"kpis.{KpiField.EMISSIONS.value}"]
+
+
+def comfort_document(below: float, above: float) -> KpiDocument:
+    """A year's KPI document with the two degree-hour sums the comfort grades read."""
+    return document_of({ComfortSources.UNDERHEATING_NAME: below, ComfortSources.OVERHEATING_NAME: above})
+
+
+class TestComfortGrades:
+    """hisim-sska (renovisorissues #29): the grades are computed from the simulated year."""
+
+    def test_the_names_are_the_building_s_own(self) -> None:
+        """A rename in the Building would otherwise turn every grade into a missing field."""
+        assert ComfortSources.UNDERHEATING_NAME == Building.UNDERHEATING_DEGREE_HOURS_KPI
+        assert ComfortSources.OVERHEATING_NAME == Building.OVERHEATING_DEGREE_HOURS_KPI
+
+    @pytest.mark.parametrize(
+        "below, heating", [(0.0, "high"), (100.0, "high"), (100.1, "medium"), (500.0, "medium"), (501.0, "low")]
+    )
+    def test_the_heating_grade_cuts_at_100_and_500(self, below: float, heating: str) -> None:
+        """Degree-hours below the house's own setpoint; a value on a limit takes the better grade."""
+        block = build(comfort_document(below, 0.0), a_full_year(), layers_of())
+
+        leaf = block.values[KpiField.COMFORT.value]["heating"]
+        assert leaf["value"] == heating
+        assert leaf["provenance"] == Provenance.SIMULATED.value
+        assert ComfortSources.UNDERHEATING_NAME in leaf["source"]
+
+    @pytest.mark.parametrize(
+        "above, cooling, protection",
+        [(0.0, "high", 5), (250.0, "high", 5), (400.0, "high", 4), (700.0, "medium", 3),
+         (1200.0, "medium", 2), (1500.0, "low", 1)],
+    )
+    def test_the_summer_grades_share_one_axis(self, above: float, cooling: str, protection: int) -> None:
+        """comfort.cooling and summer_heat_protection grade the same degree-hours above 26 °C."""
+        block = build(comfort_document(0.0, above), a_full_year(), layers_of())
+
+        assert block.values[KpiField.COMFORT.value]["cooling"]["value"] == cooling
+        summer = block.values[KpiField.SUMMER_HEAT_PROTECTION.value]
+        assert summer["value"] == protection
+        assert summer["provenance"] == Provenance.SIMULATED.value
+
+    def test_the_two_scales_fail_together_at_din_s_limit(self) -> None:
+        """'low' and 1 both start above 1200 K*h/a, DIN 4108-2's requirement for homes."""
+        assert ComfortGrades.SUMMER[-1][0] == ComfortGrades.SUMMER_HEAT_PROTECTION[-1][0] == 1200.0
+
+    def test_a_short_run_publishes_no_grade(self) -> None:
+        """A winter day has no summer: the three grades are missing with the reason."""
+        block = build(comfort_document(10.0, 0.0), one_day(), layers_of())
+
+        assert KpiField.COMFORT.value not in block.values
+        assert KpiField.SUMMER_HEAT_PROTECTION.value not in block.values
+        missing = {entry.field: entry.reason for entry in block.missing}
+        for path in ("comfort.heating", "comfort.cooling", KpiField.SUMMER_HEAT_PROTECTION.value):
+            assert missing[f"kpis.{path}"] == ComfortSources.SHORT_RUN_REASON
+
+    def test_a_year_without_the_kpis_names_what_is_missing(self) -> None:
+        """No invented grade when the Building did not report its degree-hours."""
+        block = build(document_of({}), a_full_year(), layers_of())
+
+        assert KpiField.COMFORT.value not in block.values
+        reasons = [entry.reason for entry in block.missing if entry.field == "kpis.comfort.heating"]
+        assert reasons and ComfortSources.UNDERHEATING_NAME in reasons[0]

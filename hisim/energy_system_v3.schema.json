@@ -4838,6 +4838,16 @@
                         "const": "AUTO"
                       }
                     ]
+                  },
+                  "set_heating_temperature_for_building_in_celsius": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
                   }
                 }
               },
@@ -4846,6 +4856,7 @@
                 "propertyNames": {
                   "enum": [
                     "heat_distribution_system_type",
+                    "set_heating_temperature_in_celsius",
                     "set_heating_threshold_outside_temperature_in_celsius"
                   ]
                 }

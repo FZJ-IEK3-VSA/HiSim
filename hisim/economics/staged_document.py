@@ -24,7 +24,7 @@ Example::
     document = StagedDocument(result, parameters, perspective, measure_ids={"HeatPump": "heating_system"})
     document.write(Path("economics_result.json"))
 
-Specification: ``/home/contract-proposals/economics-hisim-spec.md`` §3 (the document) and §5 (what
+Specification: ``specs/economics-hisim-spec.md`` of the renovisorissues project §3 (the document) and §5 (what
 the charts need from it), with the engine-side decisions of
 ``roadmap/renovisor/implementation/step10_staged_economics.md`` §3.
 """

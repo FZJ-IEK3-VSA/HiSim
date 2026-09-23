@@ -70,11 +70,11 @@ class TestTheNote:
         composed = UValueComposer.compose(1.1, [UValueComposer.resistance(120, 0.0355)])
 
         note = LayerNote.of(
-            1.1, [("external_insulation", 120.0, "polystyrene_eps_rigid_board", 0.0355)], composed
+            1.1, [("external_insulation", 120.0, "eps_rigid_board", 0.0355)], composed
         )
 
         assert "1.1 W/(m2K)" in note
-        assert "external_insulation 120 mm of polystyrene_eps_rigid_board" in note
+        assert "external_insulation 120 mm of eps_rigid_board" in note
         assert "lambda 0.0355 W/mK" in note
         assert "1/(1/1.1 + 0.12/0.0355)" in note
         assert f"{composed:.4g}" in note
@@ -87,7 +87,7 @@ class TestTheNote:
         note = LayerNote.of(
             2.4,
             [
-                ("external_insulation", 100.0, "polystyrene_eps_rigid_board", 0.035),
+                ("external_insulation", 100.0, "eps_rigid_board", 0.035),
                 ("internal_dry_lining_insulation", 60.0, "pir", 0.022),
             ],
             composed,

@@ -96,7 +96,7 @@ def layers_of(*additions: AddedLayer) -> EnvelopeLayers:
 def a_material(footprint: float = 21.207108) -> Material:
     """Return the mockup's own material, which is what a request carries under rule 5."""
     return Material(
-        asp_id="polystyrene_eps_rigid_board",
+        asp_id="eps_rigid_board",
         thermal_conductivity_w_mk=0.0355,
         heat_capacity_j_kgk=1400.0,
         density_kg_m3=20.5,

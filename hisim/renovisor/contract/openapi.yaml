@@ -13,9 +13,10 @@ info:
     is PUBLIC by default: home-inventory lookups and creation, package
     registration, package sets, and all calculation reads need no token, which
     is what lets anonymous users explore. A JWT MAY still be sent and used where
-    useful (e.g. logging), but it is only REQUIRED on user-scoped account
-    endpoints such as DELETE /users/me. Changed from v0.2, where bearerAuth was
-    required globally.
+    useful (e.g. logging); no operation of this draft requires one. The
+    bearerAuth scheme stays declared for user-scoped endpoints a later revision
+    may add. Changed from v0.2, where bearerAuth was required globally; the
+    account-deletion endpoint of v0.3 was removed on 2026-09-20.
 
     ## Async model (v0.2)
 
@@ -91,8 +92,7 @@ servers:
     description: Placeholder. Replace with the real base URL (and add /v1 later).
 
 # Public by default (see "Auth" in the description above). Individual
-# operations opt INTO auth with their own `security` block; currently only
-# DELETE /users/me does.
+# operations opt INTO auth with their own `security` block; currently none does.
 security: []
 
 tags:
@@ -101,7 +101,6 @@ tags:
   - name: packages
   - name: calculations
   - name: materials
-  - name: account
 
 paths:
   /:
@@ -354,34 +353,6 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Material' }
-
-  /materials/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema: { type: string }
-    get:
-      tags: [materials]
-      summary: Single material detail
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Material' }
-        '404': { $ref: '#/components/responses/NotFound' }
-
-  /users/me:
-    delete:
-      tags: [account]
-      summary: Delete all backend data for the current user (GDPR cascade)
-      description: Called by the frontend after deleting the Supabase user record.
-      security:
-        - bearerAuth: []
-      responses:
-        '204': { description: Deleted }
-        '401': { $ref: '#/components/responses/Unauthorized' }
 
 components:
   securitySchemes:

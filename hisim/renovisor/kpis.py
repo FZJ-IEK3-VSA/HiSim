@@ -796,7 +796,7 @@ class PayloadFieldRow:
         Returns:
             ``{"field", "provenance"}`` always, plus ``"source"``, ``"conditions"``, ``"reason"``
             and ``"when"`` where this row has them. The shape is the one
-            ``measure-capabilities.results-extension.yaml`` declares.
+            shared ``measure-capabilities.openapi.yaml`` declares as ``ResultField``.
         """
         entry: Dict[str, Any] = {"field": self.path(), "provenance": self.published()}
         if self.source:

@@ -17,6 +17,7 @@ battery.
 from pathlib import Path
 from typing import Dict
 
+import copy
 import pytest
 
 from hisim.renovisor.apply import MeasureRegistry
@@ -486,18 +487,68 @@ class TestTheResultsSection:
         assert "no insulation layer" in embodied["reason"]
         assert "element area" in embodied["when"]
 
-    def test_the_section_validates_against_the_hisim_side_extension_schema(
-        self, document: CapabilityDocument
-    ) -> None:
-        """A section nobody has agreed to yet is still a shape somebody wrote down."""
-        ResultsSection.validate(document.body["results"])
+    def test_the_section_is_what_the_shared_schema_declares(self, document: CapabilityDocument) -> None:
+        """``results`` is validated with the rest of the document against the shared schema."""
+        document.validate()
+        assert document.body["results"] == ResultsSection.build()
 
-    def test_a_section_with_an_unknown_key_is_refused(self) -> None:
-        """``additionalProperties: false`` on the entry is what keeps the proposal a proposal."""
+
+class TestTheSchemaIsStrict:
+    """The shared schema admits exactly what the document carries (decision of 2026-09-23).
+
+    A key the translator starts to emit fails validation until the spec declares it, so the spec
+    cannot fall behind the served document again.
+    """
+
+    @pytest.mark.parametrize(
+        "where",
+        ["top", "translator", "measure", "option", "value", "field", "result"],
+    )
+    def test_an_undeclared_key_anywhere_is_refused(self, document: CapabilityDocument, where: str) -> None:
+        """One invented key at each level of the document fails validation."""
         from jsonschema import ValidationError
 
-        section = ResultsSection.build()
-        section["kpis"] = [{**section["kpis"][0], "invented": 1}]
-
+        body = copy.deepcopy(document.body)
+        valued = next(option for measure in body["measures"] for option in measure["options"] if option.get("values"))
+        targets = {
+            "top": body,
+            "translator": body["translator"],
+            "measure": body["measures"][0],
+            "option": valued,
+            "value": valued["values"][0],
+            "field": body["fields"][0],
+            "result": body["results"]["kpis"][0],
+        }
+        targets[where]["invented"] = 1
         with pytest.raises(ValidationError):
-            ResultsSection.validate(section)
+            CapabilityDocument(body=body, results=document.results, whitelist=document.whitelist).validate()
+
+    @pytest.mark.parametrize("key", ["fields", "results", "translator"])
+    def test_a_missing_section_is_refused(self, document: CapabilityDocument, key: str) -> None:
+        """What the document always carries is required, so a consumer can rely on it."""
+        from jsonschema import ValidationError
+
+        body = copy.deepcopy(document.body)
+        del body[key]
+        with pytest.raises(ValidationError):
+            CapabilityDocument(body=body, results=document.results, whitelist=document.whitelist).validate()
+
+
+class TestNumericFields:
+    """A numeric inventory field carries its bounds, not its probe values (decision of 2026-09-23)."""
+
+    def test_a_numeric_field_has_minimum_and_maximum_and_no_values(self, document: CapabilityDocument) -> None:
+        """``values[]`` read like an allowed list on a number; the bounds are what it means."""
+        fields = {entry["path"]: entry for entry in document.body["fields"]}
+        for path, (low, high) in ProbeSet.FIELD_BOUNDS.items():
+            entry = fields[f"{ProbeSet.HOUSE_PREFIX}{path}"]
+            assert (entry["minimum"], entry["maximum"]) == (low, high), path
+            assert "values" not in entry, path
+
+    def test_an_enumerated_field_keeps_one_entry_per_value(self, document: CapabilityDocument) -> None:
+        """Enumerations, booleans and the glazing-pane counts still list their values."""
+        fields = {entry["path"]: entry for entry in document.body["fields"]}
+        for path, values in ProbeSet.FIELD_VALUES.items():
+            entry = fields[f"{ProbeSet.HOUSE_PREFIX}{path}"]
+            assert [value["value"] for value in entry["values"]] == list(values), path
+            assert "minimum" not in entry, path

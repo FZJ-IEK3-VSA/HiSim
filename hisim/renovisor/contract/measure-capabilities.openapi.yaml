@@ -18,7 +18,7 @@
 openapi: 3.1.0
 info:
   title: RenoVisor simulation backend — implemented measures (proposal)
-  version: 0.2.0-proposal
+  version: 0.3.0
   description: |
     The measure capabilities of one registered engine version.
 
@@ -37,6 +37,13 @@ info:
     something the translator does not do. It is produced once per engine
     version, at registration, by running the translator in the image, and is
     served verbatim for the life of that version.
+
+    STRICT SINCE 0.3.0 (2026-09-23). Every key the translator always writes is
+    `required`, and no object admits a key this schema does not declare. The
+    translator validates its own output against this schema before writing it,
+    so a key it starts to emit fails its build until this file declares it: the
+    schema cannot fall behind the served document again, as it had with
+    `fields`, `substitution`, `results` and `translator.version`.
 servers:
   - url: https://host.example/renosfh-backend/api/v1/hisim
     description: The backend; {version} below is resolved from GET /versions → channels.<track>.
@@ -95,7 +102,8 @@ components:
   schemas:
     ImplementedMeasures:
       type: object
-      required: [engine, engine_version, translator, measures]
+      required: [engine, engine_version, translator, measures, fields, results]
+      additionalProperties: false
       properties:
         engine: { type: string, examples: [hisim] }
         engine_version:
@@ -108,14 +116,19 @@ components:
         translator:
           type: object
           description: The translation layer that produced this document.
-          required: [commit]
+          required: [version, commit, hisim_commit, request_schema_version, catalogue_revision, probes]
+          additionalProperties: false
           properties:
-            commit: { type: string, description: Commit of the translator in this image. }
-            probes:
-              type: integer
-              description: How many probe requests the document was aggregated from.
+            version:
+              type: string
+              pattern: '^\d+\.\d+\.\d+$'
+              description: The translator's semantic version (`TRANSLATOR_VERSION`), e.g. `2.1.0`.
+            commit:
+              type: string
+              description: Commit of the translator in this image; `unknown` when the image does not say.
             hisim_commit:
-              { type: string, description: The HiSim commit the translator was built against. }
+              type: string
+              description: The HiSim commit the translator was built against; `unknown` when the image does not say.
             request_schema_version:
               type: integer
               description: The calculation-request schema version this build accepts.
@@ -124,13 +137,26 @@ components:
               description: |
                 Identification only (never compared): the contract-repo revision the
                 probe set read measures.yaml from, e.g. `renovisor-api-contract@c3d9e1f`.
+            probes:
+              type: integer
+              description: How many probe requests the document was aggregated from.
         measures:
           type: array
           description: One entry per catalogue measure — all of them, implemented or not.
           items: { $ref: '#/components/schemas/ImplementedMeasure' }
+        fields:
+          type: array
+          description: |
+            One entry per leaf of the calculation request's `house` that the probes
+            varied or carried, in path order: the same aggregation as for measure
+            options, over the home inventory instead of the catalogue.
+          items: { $ref: '#/components/schemas/ImplementedField' }
+        results:
+          $ref: '#/components/schemas/ResultFields'
     ImplementedMeasure:
       type: object
-      required: [measure_id, status, options]
+      required: [measure_id, status, options, hisim_targets, substitution]
+      additionalProperties: false
       properties:
         measure_id:
           type: string
@@ -159,6 +185,7 @@ components:
             measure (component and parameter names). For debugging and review;
             consumers must not build logic on it.
           items: { type: string }
+        substitution: { $ref: '#/components/schemas/Substitution' }
         note:
           type: string
           description: |
@@ -167,6 +194,7 @@ components:
     ImplementedOption:
       type: object
       required: [name, status]
+      additionalProperties: false
       properties:
         name: { type: string, examples: [thickness_in_mm] }
         status:
@@ -180,20 +208,137 @@ components:
           description: |
             For enums — every catalogue value (all of them are accepted; a value not
             in the catalogue is refused as unknown). Kept for consumers that only
-            need the list; `values` carries the status per value.
+            need the list; `values` carries the status per value. Absent for a
+            `material` option, whose values are materials.yaml rows found by reverse
+            lookup and whose request value is the material object.
           items: {}
         values:
           type: array
           description: For enums — one entry per catalogue value with its own status and note.
-          items:
-            type: object
-            required: [value, status]
-            properties:
-              value: {}
-              status:
-                type: string
-                enum: [used, approximated, not_implemented_yet]
-              note: { type: string }
-        minimum: { type: number, description: Lowest probed value the translator accepted. }
-        maximum: { type: number, description: Highest probed value the translator accepted. }
+          items: { $ref: '#/components/schemas/ImplementedValue' }
+        minimum: { type: number, description: For numbers — the lowest value probed, from the request schema's bounds. }
+        maximum: { type: number, description: For numbers — the highest value probed, from the request schema's bounds. }
         note: { type: string }
+    ImplementedField:
+      type: object
+      description: |
+        One leaf of the calculation request's `house`, as ImplementedOption is one
+        option of a measure. An enumerated field (including booleans and the
+        glazing-pane counts) carries `values`, one per value with its own status; a
+        numeric field carries `minimum`/`maximum` and no `values`, and the probes at
+        both ends count towards its own status.
+      required: [path, status, substitution]
+      additionalProperties: false
+      properties:
+        path:
+          type: string
+          description: The dotted request path, `house.` included.
+          examples: [house.hot_water.supply]
+        status:
+          type: string
+          enum: [used, approximated, defaulted, not_implemented_yet]
+          description: The field's own status; its values' statuses do not change it.
+        values:
+          type: array
+          description: For enumerated fields — one entry per value with its own status.
+          items: { $ref: '#/components/schemas/ImplementedValue' }
+        minimum: { type: number, description: For numeric fields — the request schema's lower bound, probed. }
+        maximum: { type: number, description: For numeric fields — the request schema's upper bound, probed. }
+        substitution: { $ref: '#/components/schemas/Substitution' }
+        note: { type: string }
+    ImplementedValue:
+      type: object
+      description: One value of an enumerated option or field, with its own status.
+      required: [value, status, substitution]
+      additionalProperties: false
+      properties:
+        value: {}
+        status:
+          type: string
+          enum: [used, approximated, not_implemented_yet]
+        substitution: { $ref: '#/components/schemas/Substitution' }
+        note: { type: string }
+    Substitution:
+      type: boolean
+      description: |
+        Whether the note describes a stand-in: `true` means the run simulates
+        something else in place of what was asked (e.g. `hybrid_heat_pump` → an
+        air-source heat pump), so the result differs; `false` means either no
+        stand-in or no effect at all. The frontend offers a substituted value with
+        its "would be simulated as …" wording (greyed, owner decision 2026-09-19).
+    ResultFields:
+      type: object
+      description: |
+        What `result.json` can carry, one entry per field, in payload order. The
+        two arrays are the two blocks of the payload and are addressed by the same
+        dotted paths its `missing` entries use, so a consumer can join the two.
+        Since translator 2.1.0 `result.json` carries no money: every `costs` entry
+        is `absent` and names where the figure lives in `economics_result.json`.
+      required: [kpis, costs]
+      additionalProperties: false
+      properties:
+        kpis:
+          type: array
+          description: One entry per field of the payload's `kpis` block.
+          items: { $ref: '#/components/schemas/ResultField' }
+        costs:
+          type: array
+          description: |
+            One entry per former field of the payload's `costs` block (and per leaf
+            of a nested field that could be absent on its own).
+          items: { $ref: '#/components/schemas/ResultField' }
+    ResultField:
+      type: object
+      description: |
+        One field of `result.json`. An entry says one of two things, and a field
+        that is published *sometimes* says both:
+
+        - published: `provenance` is one of the three payload provenances and
+          `source` names where the number is read from. `conditions` lists what
+          changes that provenance — an annual figure scaled from a one-day run is
+          PARTIAL rather than SIMULATED, and says so here rather than surprising
+          the consumer at read time.
+        - absent: `provenance` is `absent`, `reason` is the sentence the payload's
+          `missing` entry carries verbatim, and `when` says under which
+          circumstances the field is missing (`always …` for a field no run fills
+          in yet).
+      required: [field, provenance]
+      additionalProperties: false
+      properties:
+        field:
+          type: string
+          description: |
+            The field's dotted path in `result.json`, block included — the same
+            path `result.json["missing"]` uses for it.
+          examples: ['kpis.energy_demand_in_kilowatt_hour_per_year', 'costs.grant_in_euro']
+        provenance:
+          type: string
+          enum: [SIMULATED, PARTIAL, MOCKED, absent]
+          description: |
+            What the published value is: computed from the run (SIMULATED),
+            computed but with at least one estimated or extrapolated input
+            (PARTIAL), a constant standing in for a missing model (MOCKED), or not
+            published at all (absent).
+        source:
+          type: string
+          description: |
+            Where the number comes from, in enough detail to find it: the HiSim KPI
+            name, the cost engine field, the economics document key, or the contract
+            schema path a mocked constant is read from. Absent only for a field that
+            has no source at all because nothing computes it.
+        conditions:
+          type: array
+          description: |
+            What changes the published provenance, one sentence each. Absent when
+            the provenance never changes.
+          items: { type: string }
+        reason:
+          type: string
+          description: |
+            The sentence `result.json["missing"]` carries for this field, verbatim.
+            Present for every field that can be absent, published or not.
+        when:
+          type: string
+          description: |
+            Under which circumstances the field is absent, in one phrase. Present
+            for every field that can be absent, published or not.

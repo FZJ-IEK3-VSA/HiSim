@@ -752,6 +752,8 @@ class Heating:
         secondary: A second heat source; no HiSim component.
         flow_temperature_in_celsius: The heating circuit's design flow temperature.
         seasonal_efficiency_in_percent: The generator's seasonal efficiency.
+        heatpump_scop_en14825_w35: The heat pump's rated SCOP for the low-temperature application.
+        heatpump_scop_en14825_w55: The same for the medium-temperature application.
     """
 
     type_of_system: HeatGenerator
@@ -759,6 +761,8 @@ class Heating:
     secondary: Optional[str] = None
     flow_temperature_in_celsius: Optional[float] = None
     seasonal_efficiency_in_percent: Optional[float] = None
+    heatpump_scop_en14825_w35: Optional[float] = None
+    heatpump_scop_en14825_w55: Optional[float] = None
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "Heating":
@@ -772,6 +776,8 @@ class Heating:
             secondary=None if secondary is None else str(secondary),
             flow_temperature_in_celsius=None if flow is None else float(flow),
             seasonal_efficiency_in_percent=None if efficiency is None else float(efficiency),
+            heatpump_scop_en14825_w35=_optional_float(raw.get("heatpump_scop_en14825_w35")),
+            heatpump_scop_en14825_w55=_optional_float(raw.get("heatpump_scop_en14825_w55")),
         )
 
 
@@ -1099,6 +1105,11 @@ class Request:
 def _member(vocabulary: Any, raw: Any) -> Any:
     """Return the member of *vocabulary* whose value is *raw*, or ``None`` when *raw* is absent."""
     return None if raw is None else vocabulary(raw)
+
+
+def _optional_float(raw: Any) -> Optional[float]:
+    """Return a stated number as a float, or ``None`` when the request leaves it out."""
+    return None if raw is None else float(raw)
 
 
 def _boolean(raw: Any) -> Optional[bool]:

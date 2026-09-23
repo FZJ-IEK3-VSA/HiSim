@@ -457,13 +457,16 @@ class MeasureRegistry:
         "conductivity used; heat capacity, density, CO2 footprint and lifespan recorded only"
     )
 
-    #: The five heating facts that described the generator a heating_system measure replaces.
+    #: The heating facts that described the generator a heating_system measure replaces. The rated
+    #: SCOP is among them: it rates the unit in the house, and a new pump keeps hplib's fit.
     SUPERSEDED_BY_NEW_GENERATOR: ClassVar[Tuple[str, ...]] = (
         "heating.flow_temperature_in_celsius",
         "heating.seasonal_efficiency_in_percent",
         "heating.secondary",
         "heating.cooking_range",
         "heating.installation_year",
+        "heating.heatpump_scop_en14825_w35",
+        "heating.heatpump_scop_en14825_w55",
     )
 
     @classmethod

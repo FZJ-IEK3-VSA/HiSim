@@ -2,8 +2,13 @@
 
 Usage::
 
-    python -m hisim.renovisor.contract.refresh /path/to/renovisor-api-contract \
-        [--specs /home/renovisorissues/repo]
+    python -m hisim.renovisor.contract.refresh /path/to/renovisor-api-contract --specs /path/to/renovisorissues
+    python -m hisim.renovisor.contract.refresh /path/to/renovisor-api-contract --specs ''
+
+``--specs`` is required and has no default: a clone refreshes the three spec copies with the
+contract files, and ``--specs ''`` keeps them and their pin entries exactly as they are, so the
+contract repository can be refreshed alone. Which of the two a run does is therefore always
+written on its command line (owner decision 2026-09-24).
 
 Every vendored file comes from a git repository at a ref, and the script reads it there with
 ``git show``, recording the commit the ref resolved to and its date. Since 2026-09-23 there are two
@@ -21,6 +26,12 @@ a vendored copy that was edited by hand, or a refresh that did not run to comple
 build. The script does not fetch: run ``git fetch`` in both checkouts first when the latest
 revision is wanted.
 
+A refresh reads everything before it writes anything. Every ref is resolved and every file read
+before the first copy is written, so a ref that does not resolve, a path missing at the resolved
+commit, a checkout that is not a git clone, a git call that hangs past its timeout or a pin entry
+``--specs ''`` cannot keep ends the run with a message naming it and leaves the vendored
+directory untouched.
+
 The sources are class attributes of :class:`ContractSources` so that a file moving to another
 path, branch or repository is a one-line change here and nowhere else. A file dropped from those
 attributes is dropped from the pin as well: the pin is written from the sources every run, so a
@@ -32,6 +43,7 @@ reads.
 import argparse
 import datetime
 import hashlib
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -57,8 +69,10 @@ class ContractSources:
     #: The repository the shared specifications live in since 2026-09-23, with the packages' issues.
     SPECS_REPOSITORY: ClassVar[str] = "https://jugit.fz-juelich.de/iek-3/groups/urbanmodels/renovisorissues"
 
-    #: Where the specs repository is cloned on the machine the agents share; the ``--specs``
-    #: default. CI and the container image have no clone, which is why the files are vendored.
+    #: Where the specs repository is cloned on the machine the agents share. It is not a
+    #: ``--specs`` default -- the refresh names its clone explicitly -- but the place
+    #: ``tests/renovisor/test_contract.py`` compares the spec copies with. CI and the container
+    #: image have no clone, which is why the files are vendored.
     SPECS_CHECKOUT: ClassVar[str] = "/home/renovisorissues/repo"
 
     #: vendored file name -> (git ref, path inside the contract repository)
@@ -108,6 +122,12 @@ class ContractRefresher:
             :mod:`hisim.renovisor.contract`.
     """
 
+    #: Seconds any one git call may take before the refresh gives up on it by name.
+    GIT_TIMEOUT_SECONDS: ClassVar[int] = 60
+
+    #: The keys a kept pin entry must carry to be reused verbatim by a run with ``--specs ''``.
+    KEPT_ENTRY_KEYS: ClassVar[Tuple[str, ...]] = ("repository", "ref", "path", "commit", "commit_date", "sha256")
+
     def __init__(
         self,
         checkout: Path,
@@ -119,26 +139,65 @@ class ContractRefresher:
         self.specs_checkout = specs_checkout
         self.target_directory = target_directory if target_directory is not None else ContractFiles.DIRECTORY
 
-    @staticmethod
-    def _git(checkout: Path, *arguments: str) -> str:
-        """Run one git command inside a checkout and return its stdout as text."""
-        completed = subprocess.run(
-            ["git", *arguments], cwd=checkout, check=True, capture_output=True, text=True
-        )
+    @classmethod
+    def _git(cls, checkout: Path, *arguments: str) -> str:
+        """Run one git command inside a checkout and return its stdout as text.
+
+        Raises:
+            subprocess.CalledProcessError: When git exits non-zero; the caller names what failed.
+            SystemExit: When git runs longer than :attr:`GIT_TIMEOUT_SECONDS`.
+        """
+        try:
+            completed = subprocess.run(
+                ["git", *arguments],
+                cwd=checkout,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=cls.GIT_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise SystemExit(
+                f"`git {' '.join(arguments)}` in {checkout} did not finish within {cls.GIT_TIMEOUT_SECONDS} s."
+            ) from error
         return completed.stdout
 
     @classmethod
+    def _require_clone(cls, checkout: Path, argument: str) -> None:
+        """Stop with a message naming *argument* unless *checkout* is a git clone.
+
+        ``git rev-parse --git-dir`` is the probe rather than a look for a ``.git`` directory,
+        because in a git worktree ``.git`` is a file.
+
+        Raises:
+            SystemExit: When the path is not a directory or git does not recognise it as a clone.
+        """
+        if not checkout.is_dir():
+            raise SystemExit(f"{argument} {checkout} is not a directory, let alone a git clone.")
+        try:
+            cls._git(checkout, "rev-parse", "--git-dir")
+        except subprocess.CalledProcessError as error:
+            raise SystemExit(f"{argument} {checkout} is not a git clone: {error.stderr.strip()}") from error
+
+    @classmethod
     def _resolve(cls, checkout: Path, ref: str) -> str:
-        """Resolve a ref to its full commit hash, trying ``origin/<ref>`` when the local ref is absent."""
-        for candidate in (ref, f"origin/{ref}"):
-            try:
-                return cls._git(checkout, "rev-parse", "--verify", f"{candidate}^{{commit}}").strip()
-            except subprocess.CalledProcessError:
-                continue
-        raise SystemExit(f"Ref '{ref}' does not exist in {checkout} (tried '{ref}' and 'origin/{ref}').")
+        """Resolve a ref to its full commit hash.
+
+        Raises:
+            SystemExit: When the ref names no commit in the checkout.
+        """
+        try:
+            return cls._git(checkout, "rev-parse", "--verify", f"{ref}^{{commit}}").strip()
+        except subprocess.CalledProcessError as error:
+            raise SystemExit(
+                f"Ref '{ref}' does not resolve to a commit in {checkout}; run `git fetch` there first."
+            ) from error
 
     def run(self) -> Dict[str, Dict[str, Any]]:
         """Copy every source file, write ``PINNED.yaml`` and return the pin entries written.
+
+        Everything is read first and written after: a failure anywhere in the read phase leaves
+        the vendored directory exactly as it was.
 
         Returns:
             The ``files`` mapping of the pin record: vendored file name to a dictionary with
@@ -147,11 +206,17 @@ class ContractRefresher:
             :attr:`ContractSources.NOT_AUTHORITATIVE` or :attr:`ContractSources.NOTES` names it.
 
         Raises:
-            SystemExit: When a ref does not resolve, or when no specs checkout is given for a
-                file that has never been vendored from it.
+            SystemExit: When a checkout is not a git clone, a ref does not resolve, a path is
+                missing at the resolved commit, a git call times out, or no specs checkout is
+                given while a file vendored from it has no complete pin entry to keep.
         """
         previous = self._previous_entries()
+        self._require_clone(self.checkout, "CONTRACT_CHECKOUT")
+        if self.specs_checkout is not None:
+            self._require_clone(self.specs_checkout, "--specs")
         entries: Dict[str, Dict[str, Any]] = {}
+        contents: Dict[str, str] = {}
+        commits: Dict[Tuple[Path, str], Tuple[str, str]] = {}
         sources = (
             (self.checkout, ContractSources.CONTRACT_REPOSITORY, ContractSources.CONTRACT_BY_FILENAME),
             (self.specs_checkout, ContractSources.SPECS_REPOSITORY, ContractSources.SPECS_BY_FILENAME),
@@ -159,15 +224,23 @@ class ContractRefresher:
         for checkout, repository, table in sources:
             for filename, (ref, path_in_repository) in table.items():
                 if checkout is None:
-                    kept = previous.get(filename)
-                    if kept is None or kept.get("repository") != repository:
-                        raise SystemExit(
-                            f"'{filename}' has never been vendored from {repository}; pass --specs "
-                            "with a clone of it."
-                        )
-                    entries[filename] = kept
+                    entries[filename] = self._kept(previous, filename, repository, ref, path_in_repository)
                     continue
-                entries[filename] = self._vendor(checkout, repository, filename, ref, path_in_repository)
+                if (checkout, ref) not in commits:
+                    commit = self._resolve(checkout, ref)
+                    commit_date = self._git(checkout, "log", "-1", "--format=%cI", commit).strip()
+                    commits[(checkout, ref)] = (commit, commit_date)
+                commit, commit_date = commits[(checkout, ref)]
+                content = self._show(checkout, repository, filename, commit, path_in_repository)
+                contents[filename] = content
+                entries[filename] = {
+                    "repository": repository,
+                    "ref": ref,
+                    "path": path_in_repository,
+                    "commit": commit,
+                    "commit_date": commit_date,
+                    "sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+                }
         for filename, note in ContractSources.NOT_AUTHORITATIVE.items():
             if filename in entries:
                 entries[filename]["authoritative"] = False
@@ -184,38 +257,72 @@ class ContractRefresher:
             "# Records which repository revision each vendored file was copied from and the\n"
             "# SHA-256 it had; tests/renovisor/test_contract.py recomputes the hashes.\n"
         )
+        for filename, content in contents.items():
+            self._write(filename, content)
         (self.target_directory / ContractFiles.PINNED_FILENAME).write_text(
             header + yaml.safe_dump(pin, sort_keys=False), encoding="utf-8"
         )
         return entries
 
-    def _vendor(
-        self, checkout: Path, repository: str, filename: str, ref: str, path_in_repository: str
-    ) -> Dict[str, Any]:
-        """Copy one file out of a checkout at a ref and return its pin entry."""
-        commit = self._resolve(checkout, ref)
-        content = self._git(checkout, "show", f"{commit}:{path_in_repository}")
-        return {
-            "repository": repository,
-            "ref": ref,
-            "path": path_in_repository,
-            "commit": commit,
-            "commit_date": self._git(checkout, "log", "-1", "--format=%cI", commit).strip(),
-            "sha256": self._write(filename, content),
-        }
+    def _show(self, checkout: Path, repository: str, filename: str, commit: str, path_in_repository: str) -> str:
+        """Return one file's text at a commit, or stop naming the vendored file and where it was sought.
 
-    def _write(self, filename: str, content: str) -> str:
-        """Write one vendored copy and return the SHA-256 of what was written.
+        Raises:
+            SystemExit: When the path does not exist at that commit.
+        """
+        try:
+            return self._git(checkout, "show", f"{commit}:{path_in_repository}")
+        except subprocess.CalledProcessError as error:
+            raise SystemExit(
+                f"'{filename}' is vendored from {repository}, but {commit}:{path_in_repository} does not exist "
+                f"in {checkout}: {error.stderr.strip()}"
+            ) from error
+
+    @classmethod
+    def _kept(
+        cls, previous: Dict[str, Dict[str, Any]], filename: str, repository: str, ref: str, path_in_repository: str
+    ) -> Dict[str, Any]:
+        """Return the pin entry a run with ``--specs ''`` keeps for one file, after checking its shape.
+
+        Only the keys of :attr:`KEPT_ENTRY_KEYS` are kept; ``authoritative`` and ``note`` are
+        applied afresh from :class:`ContractSources`, like for every other entry.
+
+        Raises:
+            SystemExit: When the entry is missing, of an older format or incomplete, or records a
+                repository, ref or path other than the source table's.
+        """
+
+        def refuse(problem: str) -> SystemExit:
+            return SystemExit(
+                f"'{filename}' {problem}, so --specs '' has nothing to keep; run once with "
+                "--specs <clone of renovisorissues>."
+            )
+
+        kept = previous.get(filename)
+        if not isinstance(kept, dict):
+            raise refuse("has no pin entry")
+        missing = [key for key in cls.KEPT_ENTRY_KEYS if kept.get(key) in (None, "")]
+        if missing:
+            raise refuse(f"has a pin entry without {', '.join(missing)}")
+        if (kept["repository"], kept["ref"], kept["path"]) != (repository, ref, path_in_repository):
+            raise refuse(
+                f"is pinned to {kept['repository']} {kept['ref']}:{kept['path']}, not to its source "
+                f"{repository} {ref}:{path_in_repository}"
+            )
+        if not re.fullmatch(r"[0-9a-f]{40}", str(kept["commit"])):
+            raise refuse(f"has a pin entry whose commit {kept['commit']!r} is not a full hexadecimal hash")
+        if not re.fullmatch(r"[0-9a-f]{64}", str(kept["sha256"])):
+            raise refuse(f"has a pin entry whose sha256 {kept['sha256']!r} is not a hexadecimal SHA-256")
+        return {key: kept[key] for key in cls.KEPT_ENTRY_KEYS}
+
+    def _write(self, filename: str, content: str) -> None:
+        """Write one vendored copy.
 
         Args:
             filename: The vendored file name inside the contract directory.
             content: The file's text, exactly as the source had it.
-
-        Returns:
-            The hexadecimal SHA-256 of the UTF-8 encoding of *content*.
         """
         (self.target_directory / filename).write_text(content, encoding="utf-8")
-        return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
     def _previous_entries(self) -> Dict[str, Dict[str, Any]]:
         """Return the pin entries of the record as it stands, or an empty mapping when it has none.
@@ -228,21 +335,31 @@ class ContractRefresher:
             return {}
         with path.open(encoding="utf-8") as handle:
             record = yaml.safe_load(handle) or {}
-        files = record.get("files")
+        files = record.get("files") if isinstance(record, dict) else None
         return dict(files) if isinstance(files, dict) else {}
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     """Command-line entry point: refresh the vendored files from the given checkouts."""
-    parser = argparse.ArgumentParser(description="Refresh the vendored RenoVisor contract files.")
-    parser.add_argument("checkout", help="local clone of renovisor-api-contract")
+    parser = argparse.ArgumentParser(
+        prog="python -m hisim.renovisor.contract.refresh",
+        usage="%(prog)s CONTRACT_CHECKOUT --specs {RENOVISORISSUES_CLONE | ''}",
+        description="Refresh the vendored RenoVisor contract files.",
+    )
+    parser.add_argument("checkout", metavar="CONTRACT_CHECKOUT", help="local clone of renovisor-api-contract")
     parser.add_argument(
         "--specs",
-        default=ContractSources.SPECS_CHECKOUT,
-        help=f"local clone of renovisorissues, whose specs/ holds the shared specifications "
-        f"(default: {ContractSources.SPECS_CHECKOUT}); pass '' to keep the files vendored from it",
+        metavar="CLONE",
+        default=None,
+        help="required: a local clone of renovisorissues, whose specs/ holds the shared specifications, "
+        "to refresh the three spec copies too; or '' to keep them and their pins as they are",
     )
     arguments = parser.parse_args(argv)
+    if arguments.specs is None:
+        parser.error(
+            "--specs is required: pass --specs <clone of renovisorissues> to refresh the spec copies, "
+            "or --specs '' to keep them and their pins"
+        )
     specs = Path(arguments.specs).expanduser().resolve() if arguments.specs else None
     entries = ContractRefresher(Path(arguments.checkout).expanduser().resolve(), specs_checkout=specs).run()
     for filename, entry in entries.items():

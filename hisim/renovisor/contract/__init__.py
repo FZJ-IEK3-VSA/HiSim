@@ -47,10 +47,13 @@ Reading the copies::
     results = ContractFiles.results_extension_schema()  # HiSim's own results-section proposal
     pin = ContractFiles.pinned()                  # parsed PINNED.yaml
 
-Refreshing them from local clones of the two repositories (``--specs`` defaults to the clone the
-agents share, ``/home/renovisorissues/repo``)::
+Refreshing them from local clones of the two repositories. ``--specs`` is required and has no
+default: it names the ``renovisorissues`` clone to refresh the three spec copies from (on the
+machine the agents share, ``/home/renovisorissues/repo``), or is ``''`` to keep them and their
+pins while only the contract repository is refreshed::
 
     python -m hisim.renovisor.contract.refresh ~/renovisor-api-contract --specs /home/renovisorissues/repo
+    python -m hisim.renovisor.contract.refresh ~/renovisor-api-contract --specs ''
 """
 
 import json
@@ -122,7 +125,13 @@ class ContractFiles:
 
     @classmethod
     def pinned(cls) -> Dict[str, Any]:
-        """Return the parsed ``PINNED.yaml``: repository, and per file the source ref, commit and hash."""
+        """Return the parsed ``PINNED.yaml``: ``refreshed_at`` and the ``files`` mapping.
+
+        ``files`` maps each vendored file name to its entry: ``repository``, ``ref``, ``path``,
+        ``commit``, ``commit_date`` and ``sha256``, plus ``authoritative`` and ``note`` where
+        :mod:`hisim.renovisor.contract.refresh` sets them. There is no top-level repository;
+        each file records its own, since the copies come from two.
+        """
         return cast(Dict[str, Any], cls._load(cls.PINNED_FILENAME))
 
     @classmethod

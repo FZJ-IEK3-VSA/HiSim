@@ -26,7 +26,7 @@ from typing import ClassVar
 import pytest
 
 from hisim.renovisor.contract import ContractFiles
-from hisim.renovisor.contract.refresh import ContractSources
+from hisim.renovisor.contract.refresh import ContractRefresher, ContractSources
 
 
 @pytest.mark.base
@@ -44,7 +44,8 @@ class TestVendoredContract:
             origin = f"{entry.get('repository', '?')}@{entry.get('commit', '?')}"
             assert actual == entry["sha256"], (
                 f"{filename} differs from the pinned revision {origin}; run "
-                "`python -m hisim.renovisor.contract.refresh <checkout>` instead of editing the copy"
+                "`python -m hisim.renovisor.contract.refresh <contract checkout> --specs <renovisorissues clone>` "
+                "instead of editing the copy"
             )
 
     def test_every_file_records_its_repository_and_a_full_commit(self) -> None:
@@ -57,15 +58,28 @@ class TestVendoredContract:
             assert entry["path"], f"{filename}: no path inside the repository"
 
     def test_each_file_comes_from_the_repository_its_source_table_names(self) -> None:
-        """The pin and :class:`ContractSources` agree on where every file lives."""
+        """The pin and :class:`ContractSources` agree on where every file lives, in both directions.
+
+        Every pin entry has a source in ``CONTRACT_BY_FILENAME`` or ``SPECS_BY_FILENAME`` with the
+        same repository, ref and path, and every source has a pin entry.
+        """
         pinned = ContractFiles.pinned()["files"]
-        for table, repository in (
-            (ContractSources.CONTRACT_BY_FILENAME, ContractSources.CONTRACT_REPOSITORY),
-            (ContractSources.SPECS_BY_FILENAME, ContractSources.SPECS_REPOSITORY),
-        ):
-            for filename, (_ref, path) in table.items():
-                assert pinned[filename]["repository"] == repository, filename
-                assert pinned[filename]["path"] == path, filename
+        sources = {
+            filename: (repository, ref, path)
+            for table, repository in (
+                (ContractSources.CONTRACT_BY_FILENAME, ContractSources.CONTRACT_REPOSITORY),
+                (ContractSources.SPECS_BY_FILENAME, ContractSources.SPECS_REPOSITORY),
+            )
+            for filename, (ref, path) in table.items()
+        }
+        assert set(pinned) == set(sources), (
+            f"pinned without a source: {sorted(set(pinned) - set(sources))}; "
+            f"a source without a pin: {sorted(set(sources) - set(pinned))}"
+        )
+        for filename, source in sources.items():
+            entry = pinned[filename]
+            recorded = (entry.get("repository"), entry.get("ref"), entry.get("path"))
+            assert recorded == source, f"{filename} is pinned to {recorded}, but its source is {source}"
 
     def test_every_vendored_file_is_pinned(self) -> None:
         """No *copied* contract file lies beside PINNED.yaml without being recorded in it.
@@ -132,9 +146,9 @@ class TestTheMaterialDatabaseIsNotVendored:
     vendored copy of the material database would therefore be a file nothing reads, kept in step
     with the contract for nothing. The one thing worth checking about it -- that every ``material``
     option value of ``measures.yaml`` resolves to exactly one material row -- is a fact about two
-    files of the contract repository, so the owner's decision of 2026-09-20 put that check in that
-    repository's CI (``specs/check_material_values.py``) and dropped the copy from HiSim. This test
-    is what would notice a refresh quietly bringing it back.
+    files of the contract repository, so the owner's decision of 2026-09-20 put that check with
+    both files in the contract repository and dropped the copy from HiSim. This test is what would
+    notice a refresh quietly bringing it back.
     """
 
     #: The file name this package deliberately does not hold, spelled out because there is no
@@ -160,24 +174,43 @@ class TestTheSpecsCheckout:
     ``specs/`` of the specs repository is the single home of every specification the packages
     share; the copies under ``hisim/renovisor/contract/`` exist only because CI and the container
     image have no clone. On the machine that has one (:attr:`ContractSources.SPECS_CHECKOUT`), a
-    copy that differs from the fetched ``origin/main`` is drift, and this test says so by name;
-    elsewhere it skips. It reads what the clone last fetched and fetches nothing itself.
+    copy that differs from the fetched ``origin/main`` is drift, and this test says so by name --
+    a failure by design, since the copies are to follow the specs repository (owner decision
+    2026-09-24); elsewhere it skips. It reads what the clone last fetched and fetches nothing itself.
     """
 
-    def test_every_spec_copy_equals_the_specs_repository(self) -> None:
-        """Byte-for-byte equality with ``origin/main:specs/…``, or a skip where there is no clone."""
-        checkout = Path(ContractSources.SPECS_CHECKOUT)
-        if not (checkout / ".git").is_dir():
-            pytest.skip(f"{checkout} is not on this machine; CI and the image vendor the files instead")
-        for filename, (ref, path) in ContractSources.SPECS_BY_FILENAME.items():
-            shown = subprocess.run(
-                ["git", "-c", "safe.directory=*", "show", f"{ref}:{path}"],
+    @staticmethod
+    def _git(checkout: Path, *arguments: str) -> "subprocess.CompletedProcess[bytes]":
+        """Run one git command in the clone, failing the test by name when it hangs."""
+        try:
+            completed = subprocess.run(
+                ["git", "-c", "safe.directory=*", *arguments],
                 cwd=checkout,
                 capture_output=True,
                 check=False,
+                timeout=ContractRefresher.GIT_TIMEOUT_SECONDS,
             )
+        except subprocess.TimeoutExpired:
+            pytest.fail(
+                f"`git {' '.join(arguments)}` in {checkout} did not finish within "
+                f"{ContractRefresher.GIT_TIMEOUT_SECONDS} s"
+            )
+        return completed
+
+    def test_every_spec_copy_equals_the_specs_repository(self) -> None:
+        """Byte-for-byte equality with ``origin/main:specs/…``, or a skip where there is no clone."""
+        assert ContractSources.SPECS_BY_FILENAME, (
+            "nothing is vendored from the specs repository any more; drop this test rather than let it pass vacuously"
+        )
+        checkout = Path(ContractSources.SPECS_CHECKOUT)
+        # ``git rev-parse --git-dir`` rather than a look for a ``.git`` directory: in a worktree it is a file.
+        if not checkout.is_dir() or self._git(checkout, "rev-parse", "--git-dir").returncode != 0:
+            pytest.skip(f"{checkout} is not a git clone on this machine; CI and the image vendor the files instead")
+        for filename, (ref, path) in ContractSources.SPECS_BY_FILENAME.items():
+            shown = self._git(checkout, "show", f"{ref}:{path}")
             assert shown.returncode == 0, f"{filename} is vendored from {ref}:{path}, which the clone does not have"
             assert ContractFiles.path(filename).read_bytes() == shown.stdout, (
                 f"{filename} differs from {ref}:{path} in {checkout}; run "
-                "`python -m hisim.renovisor.contract.refresh <contract checkout>` rather than editing the copy"
+                "`python -m hisim.renovisor.contract.refresh <contract checkout> --specs <renovisorissues clone>` "
+                "rather than editing the copy"
             )

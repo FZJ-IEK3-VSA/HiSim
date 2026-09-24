@@ -140,7 +140,8 @@ Commands: `python -m hisim.renovisor {run|translate|validate|capabilities|map}`.
 
 Layers: `contract/` (vendored measure catalogue, superseded OpenAPI draft with its home inventory, request
 schema, worked mockup and capability-document schema, each pinned to a commit in `PINNED.yaml`; refresh with
-`python -m hisim.renovisor.contract.refresh <contract checkout> --specs <renovisorissues clone>`; the shared
+`python -m hisim.renovisor.contract.refresh <contract checkout> --specs <renovisorissues clone>` (`--specs` is
+required; `--specs ''` keeps the spec copies and their pins); the shared
 specs live in `specs/` of https://jugit.fz-juelich.de/iek-3/groups/urbanmodels/renovisorissues), `vocabulary.py` (closed enums
 whose *values* are the catalogue's lowercase strings and whose *names* are HiSim's), `request.py` (the
 JSON Schema itself plus the frozen catalogue table and every semantic check), `apply.py` (one function per

@@ -1,10 +1,10 @@
 # Written by `python -m hisim.renovisor.contract.refresh`; do not edit by hand.
-# Records which contract revision each vendored file was copied from and the
+# Records which repository revision each vendored file was copied from and the
 # SHA-256 it had; tests/renovisor/test_contract.py recomputes the hashes.
-repository: https://github.com/climatemedia/renovisor-api-contract
-refreshed_at: '2026-09-22T19:52:09+00:00'
+refreshed_at: '2026-09-23T07:02:07+00:00'
 files:
   openapi.yaml:
+    repository: https://github.com/climatemedia/renovisor-api-contract
     ref: origin/main
     path: openapi.yaml
     commit: ffe13041d33eb704947f778c7ddaed8491244096
@@ -14,6 +14,7 @@ files:
     note: v0.3 draft written before the energy-system redesign; superseded by calculation-request.schema.json,
       which the translator validates against
   homeinventory.yaml:
+    repository: https://github.com/climatemedia/renovisor-api-contract
     ref: origin/main
     path: homeinventory.yaml
     commit: ffe13041d33eb704947f778c7ddaed8491244096
@@ -23,20 +24,30 @@ files:
     note: HomeInventoryInput of the v0.3 draft, split out of openapi.yaml and referenced
       from it; the house the translator reads is calculation-request.schema.json's
   measures.yaml:
+    repository: https://github.com/climatemedia/renovisor-api-contract
     ref: origin/main
     path: measures.yaml
     commit: ffe13041d33eb704947f778c7ddaed8491244096
     commit_date: '2026-09-22T21:43:03+02:00'
     sha256: 243d666ca1cf8c1494cc65f27111423388de57605873b1c2a97d4b12723f0959
   calculation-request.schema.json:
-    source: /home/renovisor-api-contract
+    repository: https://jugit.fz-juelich.de/iek-3/groups/urbanmodels/renovisorissues
+    ref: origin/main
     path: specs/calculation-request.schema.json
+    commit: 72e0b92363ebdee9fbd9f3a7219a83e726512533
+    commit_date: '2026-09-23T07:00:39Z'
     sha256: a405d7a983b9391dd053a88cc8c8dc8f88ee04287737d89cf026122d0a38f928
   calculation-request.mockup-1.yaml:
-    source: /home/renovisor-api-contract
+    repository: https://jugit.fz-juelich.de/iek-3/groups/urbanmodels/renovisorissues
+    ref: origin/main
     path: specs/calculation-request.mockup-1.yaml
+    commit: 72e0b92363ebdee9fbd9f3a7219a83e726512533
+    commit_date: '2026-09-23T07:00:39Z'
     sha256: 3dfe3ec51e0a53327f65639233a666b779993d38a4b547ecf28fa03e5d255685
   measure-capabilities.openapi.yaml:
-    source: /home/renovisor-api-contract
+    repository: https://jugit.fz-juelich.de/iek-3/groups/urbanmodels/renovisorissues
+    ref: origin/main
     path: specs/measure-capabilities.openapi.yaml
+    commit: 72e0b92363ebdee9fbd9f3a7219a83e726512533
+    commit_date: '2026-09-23T07:00:39Z'
     sha256: 79d29faed57c3e5079186b89b8888a24741bde52d4b5d571ae34cd0718824cf0

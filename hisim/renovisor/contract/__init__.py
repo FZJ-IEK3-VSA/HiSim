@@ -1,22 +1,22 @@
 """The vendored copies of the RenoVisor contract that this HiSim speaks.
 
-The contract lives in two places. ``measures.yaml`` (the catalogue of renovation measures) and
-``openapi.yaml`` (the superseded v0.3 draft) come from the separate repository
-``climatemedia/renovisor-api-contract``, which is co-owned by the RenoVisor frontend and backend
-teams. ``calculation-request.schema.json`` (the request the translator validates against),
-``calculation-request.mockup-1.yaml`` (the worked example every probe set anchors on) and
-``measure-capabilities.openapi.yaml`` (the shape of the capability document the translator
-generates) come from the shared specification folder ``/home/renovisor-api-contract/specs`` (the
-contract checkout) and are vendored as local files. This package holds a copy of each, together
-with ``PINNED.yaml``, which records where every copy came from and the content hash it had at
-that moment.
+The contract lives in two repositories. ``measures.yaml`` (the catalogue of renovation measures),
+``openapi.yaml`` (the superseded v0.3 draft) and ``homeinventory.yaml`` (the part of that draft it
+references) come from ``climatemedia/renovisor-api-contract``, which is co-owned by the RenoVisor
+teams and holds only contract files at its root. ``calculation-request.schema.json`` (the request
+the translator validates against), ``calculation-request.mockup-1.yaml`` (the worked example every
+probe set anchors on) and ``measure-capabilities.openapi.yaml`` (the shape of the capability
+document the translator generates) come from ``specs/`` of the ``renovisorissues`` project on
+jugit, where the shared specifications live since 2026-09-23 beside the packages' issues. This
+package holds a copy of each, together with ``PINNED.yaml``, which records the repository, the
+commit and the content hash every copy had when it was taken.
 
 The contract's material database, ``materials.yaml``, is deliberately not among them. The
 translator reads no material data at run time: rule 5 of the contract has the request carry a
 material's physical properties and its ``asp_id`` as provenance only. The check that every
 ``material`` option value of ``measures.yaml`` resolves to exactly one material row therefore
-runs in the contract repository's own CI (``specs/check_material_values.py``), where both files
-live, rather than in a HiSim copy of a file nothing here reads (owner decision 2026-09-20).
+belongs with both files in the contract repository, rather than in a HiSim copy of a file nothing
+here reads (owner decision 2026-09-20).
 
 One file here is not a copy at all. ``measure-capabilities.results-extension.yaml`` is HiSim's
 own proposal back to the frontend team -- the shape of the capability document's ``results``
@@ -32,9 +32,10 @@ to change these files, and by ``tests/renovisor/test_contract.py``, which fails 
 longer matches the hash ``PINNED.yaml`` records -- so a hand edit of a vendored copy, or a refresh
 that forgot to update the pin, is a failing build rather than silent drift.
 
-``openapi.yaml`` is pinned with ``authoritative: false``: it is the v0.3 draft written before the
-energy-system redesign and is superseded by ``calculation-request.schema.json``. It stays vendored
-only so that the revision the branch once aligned against remains a committed fact.
+``openapi.yaml`` and ``homeinventory.yaml`` are pinned with ``authoritative: false``: they are the
+v0.3 draft written before the energy-system redesign, superseded by
+``calculation-request.schema.json``. They stay vendored only so that the revision the branch once
+aligned against remains a committed fact.
 
 Reading the copies::
 
@@ -46,9 +47,13 @@ Reading the copies::
     results = ContractFiles.results_extension_schema()  # HiSim's own results-section proposal
     pin = ContractFiles.pinned()                  # parsed PINNED.yaml
 
-Refreshing them from a local checkout and the proposal directory::
+Refreshing them from local clones of the two repositories. ``--specs`` is required and has no
+default: it names the ``renovisorissues`` clone to refresh the three spec copies from (on the
+machine the agents share, ``/home/renovisorissues/repo``), or is ``''`` to keep them and their
+pins while only the contract repository is refreshed::
 
-    python -m hisim.renovisor.contract.refresh ~/renovisor-api-contract --proposals /home/renovisor-api-contract
+    python -m hisim.renovisor.contract.refresh ~/renovisor-api-contract --specs /home/renovisorissues/repo
+    python -m hisim.renovisor.contract.refresh ~/renovisor-api-contract --specs ''
 """
 
 import json
@@ -120,7 +125,13 @@ class ContractFiles:
 
     @classmethod
     def pinned(cls) -> Dict[str, Any]:
-        """Return the parsed ``PINNED.yaml``: repository, and per file the source ref, commit and hash."""
+        """Return the parsed ``PINNED.yaml``: ``refreshed_at`` and the ``files`` mapping.
+
+        ``files`` maps each vendored file name to its entry: ``repository``, ``ref``, ``path``,
+        ``commit``, ``commit_date`` and ``sha256``, plus ``authoritative`` and ``note`` where
+        :mod:`hisim.renovisor.contract.refresh` sets them. There is no top-level repository;
+        each file records its own, since the copies come from two.
+        """
         return cast(Dict[str, Any], cls._load(cls.PINNED_FILENAME))
 
     @classmethod

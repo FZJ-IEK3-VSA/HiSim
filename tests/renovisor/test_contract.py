@@ -6,17 +6,19 @@ pin, so a hand edit or a half-done refresh fails the build. They also parse each
 that is not valid YAML or JSON -- or a request schema that lost the definitions the validator
 resolves -- is caught before any translation code reads it.
 
-Two of the five pinned files come from the contract repository at a named commit and three from
-the shared specification folder with only the phrase naming where they were read. One file --
-``openapi.yaml`` -- is pinned with ``authoritative: false`` because the request schema supersedes
-it and it is kept only so that the revision the branch once aligned against stays a committed
-fact. A sixth file, ``measure-capabilities.results-extension.yaml``, is HiSim's own proposal back
-to the frontend team and is deliberately unpinned; it is listed in
+Three of the six pinned files come from the contract repository and three from the specs
+repository (``renovisorissues``, where the shared specifications live since 2026-09-23), each at a
+named commit. Two files -- ``openapi.yaml`` and the ``homeinventory.yaml`` it references -- are
+pinned with ``authoritative: false`` because the request schema supersedes them; they are kept
+only so that the revision the branch once aligned against stays a committed fact. A seventh
+file, ``measure-capabilities.results-extension.yaml``, is HiSim's own proposal back to the
+frontend team and is deliberately unpinned; it is listed in
 ``ContractFiles.HISIM_AUTHORED`` so that the "everything here is pinned" test stays exact
 instead of being loosened.
 """
 
 import hashlib
+import subprocess
 
 from pathlib import Path
 from typing import ClassVar
@@ -24,7 +26,7 @@ from typing import ClassVar
 import pytest
 
 from hisim.renovisor.contract import ContractFiles
-from hisim.renovisor.contract.refresh import ContractSources
+from hisim.renovisor.contract.refresh import ContractRefresher, ContractSources
 
 
 @pytest.mark.base
@@ -39,21 +41,45 @@ class TestVendoredContract:
             path = ContractFiles.path(filename)
             assert path.is_file(), f"{filename} is pinned but missing"
             actual = hashlib.sha256(path.read_bytes()).hexdigest()
-            origin = entry.get("commit", entry.get("source", "?"))
+            origin = f"{entry.get('repository', '?')}@{entry.get('commit', '?')}"
             assert actual == entry["sha256"], (
                 f"{filename} differs from the pinned revision {origin}; run "
-                "`python -m hisim.renovisor.contract.refresh <checkout>` instead of editing the copy"
+                "`python -m hisim.renovisor.contract.refresh <contract checkout> --specs <renovisorissues clone>` "
+                "instead of editing the copy"
             )
 
-    def test_a_git_sourced_file_records_a_full_commit_and_a_local_one_its_directory(self) -> None:
-        """The two source kinds carry the provenance each of them can carry, and no less."""
+    def test_every_file_records_its_repository_and_a_full_commit(self) -> None:
+        """Both repositories are read at a git revision, so every pin names an immutable one."""
+        repositories = {ContractSources.CONTRACT_REPOSITORY, ContractSources.SPECS_REPOSITORY}
         for filename, entry in ContractFiles.pinned()["files"].items():
-            if "commit" in entry:
-                assert len(entry["commit"]) == 40, f"{filename}: no full commit hash"
-                assert entry["commit_date"], f"{filename}: no commit date"
-            else:
-                assert entry["source"], f"{filename}: neither a commit nor a source phrase"
-                assert entry["path"], f"{filename}: no path inside the source directory"
+            assert entry["repository"] in repositories, f"{filename}: unknown repository {entry.get('repository')}"
+            assert len(entry["commit"]) == 40, f"{filename}: no full commit hash"
+            assert entry["commit_date"], f"{filename}: no commit date"
+            assert entry["path"], f"{filename}: no path inside the repository"
+
+    def test_each_file_comes_from_the_repository_its_source_table_names(self) -> None:
+        """The pin and :class:`ContractSources` agree on where every file lives, in both directions.
+
+        Every pin entry has a source in ``CONTRACT_BY_FILENAME`` or ``SPECS_BY_FILENAME`` with the
+        same repository, ref and path, and every source has a pin entry.
+        """
+        pinned = ContractFiles.pinned()["files"]
+        sources = {
+            filename: (repository, ref, path)
+            for table, repository in (
+                (ContractSources.CONTRACT_BY_FILENAME, ContractSources.CONTRACT_REPOSITORY),
+                (ContractSources.SPECS_BY_FILENAME, ContractSources.SPECS_REPOSITORY),
+            )
+            for filename, (ref, path) in table.items()
+        }
+        assert set(pinned) == set(sources), (
+            f"pinned without a source: {sorted(set(pinned) - set(sources))}; "
+            f"a source without a pin: {sorted(set(sources) - set(pinned))}"
+        )
+        for filename, source in sources.items():
+            entry = pinned[filename]
+            recorded = (entry.get("repository"), entry.get("ref"), entry.get("path"))
+            assert recorded == source, f"{filename} is pinned to {recorded}, but its source is {source}"
 
     def test_every_vendored_file_is_pinned(self) -> None:
         """No *copied* contract file lies beside PINNED.yaml without being recorded in it.
@@ -120,9 +146,9 @@ class TestTheMaterialDatabaseIsNotVendored:
     vendored copy of the material database would therefore be a file nothing reads, kept in step
     with the contract for nothing. The one thing worth checking about it -- that every ``material``
     option value of ``measures.yaml`` resolves to exactly one material row -- is a fact about two
-    files of the contract repository, so the owner's decision of 2026-09-20 put that check in that
-    repository's CI (``specs/check_material_values.py``) and dropped the copy from HiSim. This test
-    is what would notice a refresh quietly bringing it back.
+    files of the contract repository, so the owner's decision of 2026-09-20 put that check with
+    both files in the contract repository and dropped the copy from HiSim. This test is what would
+    notice a refresh quietly bringing it back.
     """
 
     #: The file name this package deliberately does not hold, spelled out because there is no
@@ -142,31 +168,49 @@ class TestTheMaterialDatabaseIsNotVendored:
 
 
 @pytest.mark.base
-class TestTheSharedFolder:
-    """The vendored copies equal the shared specifications wherever the shared folder exists.
+class TestTheSpecsCheckout:
+    """The spec copies equal the specs repository's ``origin/main`` wherever its clone exists.
 
-    ``/home/renovisor-api-contract/specs`` (the contract checkout) is the single home of every
-    specification the three repositories share; the copies under ``hisim/renovisor/contract/``
-    exist only because CI and the container image cannot see that folder. On a machine that has
-    it, a copy that differs from the shared file is drift, and this test says so by name;
-    elsewhere it skips.
+    ``specs/`` of the specs repository is the single home of every specification the packages
+    share; the copies under ``hisim/renovisor/contract/`` exist only because CI and the container
+    image have no clone. On the machine that has one (:attr:`ContractSources.SPECS_CHECKOUT`), a
+    copy that differs from the fetched ``origin/main`` is drift, and this test says so by name --
+    a failure by design, since the copies are to follow the specs repository (owner decision
+    2026-09-24); elsewhere it skips. It reads what the clone last fetched and fetches nothing itself.
     """
 
-    def test_every_locally_vendored_file_equals_the_shared_one(self) -> None:
-        """Byte-for-byte equality with the shared folder, or a skip where the folder is absent."""
-        shared = Path(ContractSources.SHARED_DIRECTORY)
-        if not shared.is_dir():
-            pytest.skip(f"{shared} is not on this machine; CI and the image vendor the files instead")
-        pinned = ContractFiles.pinned()["files"]
-        compared = 0
-        for filename, entry in pinned.items():
-            if entry.get("source") != ContractSources.LOCAL_SOURCE:
-                continue
-            shared_file = shared / entry["path"]
-            assert shared_file.is_file(), f"{filename} is vendored from the shared folder but no longer there"
-            assert ContractFiles.path(filename).read_bytes() == shared_file.read_bytes(), (
-                f"{filename} differs from {shared_file}; run `python -m hisim.renovisor.contract.refresh "
-                "<contract checkout>` rather than editing either copy"
+    @staticmethod
+    def _git(checkout: Path, *arguments: str) -> "subprocess.CompletedProcess[bytes]":
+        """Run one git command in the clone, failing the test by name when it hangs."""
+        try:
+            completed = subprocess.run(
+                ["git", "-c", "safe.directory=*", *arguments],
+                cwd=checkout,
+                capture_output=True,
+                check=False,
+                timeout=ContractRefresher.GIT_TIMEOUT_SECONDS,
             )
-            compared += 1
-        assert compared > 0, "no file is vendored from the shared folder any more; drop this test"
+        except subprocess.TimeoutExpired:
+            pytest.fail(
+                f"`git {' '.join(arguments)}` in {checkout} did not finish within "
+                f"{ContractRefresher.GIT_TIMEOUT_SECONDS} s"
+            )
+        return completed
+
+    def test_every_spec_copy_equals_the_specs_repository(self) -> None:
+        """Byte-for-byte equality with ``origin/main:specs/…``, or a skip where there is no clone."""
+        assert ContractSources.SPECS_BY_FILENAME, (
+            "nothing is vendored from the specs repository any more; drop this test rather than let it pass vacuously"
+        )
+        checkout = Path(ContractSources.SPECS_CHECKOUT)
+        # ``git rev-parse --git-dir`` rather than a look for a ``.git`` directory: in a worktree it is a file.
+        if not checkout.is_dir() or self._git(checkout, "rev-parse", "--git-dir").returncode != 0:
+            pytest.skip(f"{checkout} is not a git clone on this machine; CI and the image vendor the files instead")
+        for filename, (ref, path) in ContractSources.SPECS_BY_FILENAME.items():
+            shown = self._git(checkout, "show", f"{ref}:{path}")
+            assert shown.returncode == 0, f"{filename} is vendored from {ref}:{path}, which the clone does not have"
+            assert ContractFiles.path(filename).read_bytes() == shown.stdout, (
+                f"{filename} differs from {ref}:{path} in {checkout}; run "
+                "`python -m hisim.renovisor.contract.refresh <contract checkout> --specs <renovisorissues clone>` "
+                "rather than editing the copy"
+            )

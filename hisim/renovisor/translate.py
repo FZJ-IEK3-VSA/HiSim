@@ -604,7 +604,7 @@ class BaseFiles:
 
     @classmethod
     def file_names(cls) -> Tuple[str, ...]:
-        """Return every twin the table names, sorted, for the test that checks they all exist."""
+        """Return the file name of every twin `select` can return, sorted, with or without solar thermal."""
         names = {stem + cls.SUFFIX for stem in cls.BY_GENERATOR.values()}
         names |= {stem + cls.SUFFIX for stem in cls.WITH_SOLAR_THERMAL.values()}
         return tuple(sorted(names))

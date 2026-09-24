@@ -19,12 +19,13 @@ from typing import Any, Dict, Iterator, List, Tuple
 
 import pytest
 
-from hisim.renovisor.capabilities import assert_catalogue_matches
+from hisim.renovisor.capabilities import _declared_value_type, assert_catalogue_matches
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.economics import EconomicContextBuilder
 from hisim.renovisor.request import (
     AccessLevel,
     CatalogueTable,
+    OptionSpec,
     ProblemCode,
     Request,
     RequestError,
@@ -331,8 +332,9 @@ class TestTheSemanticChecks:
     def test_an_insulation_measure_without_its_material_is_refused(self, measure_id: str) -> None:
         """Since contract PR #10 every insulation measure declares ``material`` for everyone.
 
-        These three carried no options before and the translator picked their material; a request
-        naming one of them without a material is now refused like any other missing option.
+        These three had no ``material`` option before (``cavity_wall_insulation`` had only
+        ``thickness_in_mm``) and the translator picked their material; a request naming one of
+        them without a material is now refused like any other missing option.
         """
         document = mockup()
         document["measures"] = [{"id": measure_id, "options": {}}]
@@ -424,11 +426,25 @@ class TestTheFrozenCatalogue:
         """The catalogue writes no ``value_type`` for ``material``; anywhere else that is drift.
 
         Reading an absent type as a material everywhere would let a catalogue that lost the key on
-        ``thickness_in_mm`` pass T-CAT, so the tolerance is tied to the option's name.
+        ``thickness_in_mm`` pass T-CAT, so the tolerance is tied to the option's name. Both halves
+        are asserted: a ``material`` option without a type reads as a material (and the vendored
+        file, whose material options all lack the key, matches), and any other option without a
+        type reads as missing -- which an implementation ignoring the name would get wrong.
         """
         import yaml
 
         catalogue = copy.deepcopy(ContractFiles.measures())
+        materials = [
+            option
+            for entry in catalogue["measures"]
+            for option in entry.get("options") or []
+            if option["name"] == CatalogueTable.MATERIAL
+        ]
+        assert materials and all("value_type" not in option for option in materials)
+        assert_catalogue_matches()
+        assert _declared_value_type({"name": CatalogueTable.MATERIAL}) == ValueType.MATERIAL.value
+        assert _declared_value_type({"name": "thickness_in_mm"}) == "<missing>"
+
         external = next(entry for entry in catalogue["measures"] if entry["id"] == "external_insulation")
         thickness = next(option for option in external["options"] if option["name"] == "thickness_in_mm")
         del thickness["value_type"]
@@ -438,6 +454,30 @@ class TestTheFrozenCatalogue:
         with pytest.raises(AssertionError) as raised:
             assert_catalogue_matches(path)
         assert "external_insulation" in str(raised.value)
+
+    def test_a_material_typed_option_must_be_named_material(self) -> None:
+        """The code tells a material option by its type and the catalogue by its name.
+
+        T-CAT therefore refuses a frozen table that types an option of any other name as a
+        material, so the two ways of telling cannot drift apart.
+        """
+        table = dict(CatalogueTable.BY_ID)
+        table["external_insulation"] = (
+            OptionSpec("insulant", AccessLevel.EVERYONE, ValueType.MATERIAL, None),
+            *table["external_insulation"][1:],
+        )
+
+        with pytest.raises(AssertionError) as raised:
+            assert_catalogue_matches(frozen_table=table)
+        assert "external_insulation.insulant" in str(raised.value)
+
+    @pytest.mark.parametrize(
+        "pair",
+        [SemanticChecks.ROOM_TEMPERATURE_MEASURE, SemanticChecks.VEHICLE_MEASURE],
+    )
+    def test_the_measure_option_pairs_the_checks_name_are_in_the_table(self, pair: Tuple[str, str]) -> None:
+        """A renamed option, like ``new_room_temperature_in_celsius`` in contract PR #10, fails here."""
+        assert CatalogueTable.option(*pair) is not None
 
     def test_every_catalogue_id_has_options_of_the_two_access_levels_only(self) -> None:
         """``everyone`` and ``experts`` are the whole vocabulary; a third would be silent."""

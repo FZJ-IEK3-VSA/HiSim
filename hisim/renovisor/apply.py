@@ -38,7 +38,7 @@ from hisim.renovisor.constants import (
 from hisim.renovisor.envelope import LayerNote, UValueComposer
 from hisim.renovisor.request import CatalogueTable, Material, Measure, SemanticChecks
 from hisim.renovisor.vocabulary import ReportStatus, ThermalElement
-from hisim.renovisor.whitelist import Unmapped, Whitelist, WhitelistEntry
+from hisim.renovisor.whitelist import TranslatorError, Unmapped, Whitelist, WhitelistEntry
 
 
 class HousePaths:
@@ -526,23 +526,37 @@ class MeasureRegistry:
     def _material_of(cls, context: MeasureContext) -> Material:
         """Return the layer's material, which the request carries for every insulation measure.
 
+        The option is found by its type, :attr:`ValueType.MATERIAL`, like everywhere else in the
+        package, and never by its name.
+
         Raises:
-            TypeError: When the option is not a material object, which the request's semantic
-                checks refuse (``measure.option.missing`` or an invalid material) before the
-                translator runs; reaching this is a bug, not a bad request.
+            TranslatorError: When the measure declares no material option or the request's value
+                is not a material object, which the request's semantic checks refuse
+                (``measure.option.missing`` or an invalid material) before the translator runs;
+                reaching this is a bug, not a bad request, so it is exit 3.
         """
-        given = context.option(CatalogueTable.MATERIAL)
-        if not isinstance(given, Material):
-            raise TypeError(
+        spec = CatalogueTable.material_option(context.measure.id)
+        given = context.option(spec.name) if spec is not None else None
+        if spec is None or not isinstance(given, Material):
+            raise TranslatorError(
                 f"{context.measure.id} reached the translator without a material object "
                 f"(got {given!r}); the request checks should have refused it"
             )
-        context.record(CatalogueTable.MATERIAL, ReportStatus.USED, cls.MATERIAL_NOTE)
+        context.record(spec.name, ReportStatus.USED, cls.MATERIAL_NOTE)
         return given
 
     @classmethod
     def _thickness_of(cls, context: MeasureContext, measure_id: str) -> Tuple[int, bool]:
-        """Return the layer's thickness and whether the translator supplied it."""
+        """Return the layer's thickness and whether the translator supplied it.
+
+        A supplied thickness is always a ``defaulted`` line naming the value, including for the
+        two measures whose catalogue entry offers no ``thickness_in_mm`` option at all
+        (``basement_internal_insulation`` and ``top_floor_ceiling_insulation``): their layer is
+        as thick as the translator's default, and rule 6 forbids using that number silently. The
+        line names an option the catalogue does not declare, so :class:`MeasureStatusRules`
+        passes over it -- the measure stays ``used`` -- and the capability document, which lists
+        the catalogue's options only, never shows it; only the mapping report carries it.
+        """
         given = context.option("thickness_in_mm")
         capped = measure_id == "cavity_wall_insulation"
         if isinstance(given, int) and not isinstance(given, bool):
@@ -559,11 +573,14 @@ class MeasureRegistry:
             return thickness, False
         default = LayerDefaults.thickness_of(measure_id)
         if CatalogueTable.option(measure_id, "thickness_in_mm") is not None:
-            context.record(
-                "thickness_in_mm",
-                ReportStatus.DEFAULTED,
-                f"absent from the request; the translator's default for {measure_id} is {default} mm",
+            note = f"absent from the request; the translator's default for {measure_id} is {default} mm"
+        else:
+            # renovisorissues #38 asks the contract owner to give these measures the option.
+            note = (
+                f"the catalogue offers no thickness_in_mm option for {measure_id}; "
+                f"the translator's default is {default} mm"
             )
+        context.record("thickness_in_mm", ReportStatus.DEFAULTED, note)
         return default, True
 
     # ------------------------------------------------------------------ envelope: openings
@@ -958,8 +975,6 @@ def _resolve_values(context: MeasureContext, house: Mapping[str, Any], whitelist
 
 def _no_entry(measure_id: str) -> Exception:
     """Return the translator error for a measure that wrote nothing and is not on the list."""
-    from hisim.renovisor.whitelist import TranslatorError
-
     return TranslatorError(
         f"the measure '{measure_id}' writes no HiSim target and not_implemented_yet.yaml does not list it",
         "Either give the measure a target, or add an entry with the sentence a user should read.",

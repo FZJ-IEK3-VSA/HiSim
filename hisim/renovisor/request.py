@@ -399,6 +399,19 @@ class CatalogueTable:
                 return option
         return None
 
+    @classmethod
+    def material_option(cls, measure_id: str) -> Optional[OptionSpec]:
+        """Return the option of one measure whose request value is a material object, or ``None``.
+
+        "Is this the material option" is decided in one way everywhere in the package:
+        ``spec.value_type is ValueType.MATERIAL``, never by the option's name. T-CAT asserts that
+        every such option is named :attr:`MATERIAL`, so the type and the name cannot drift apart.
+        """
+        for option in cls.BY_ID.get(measure_id, ()):
+            if option.value_type is ValueType.MATERIAL:
+                return option
+        return None
+
 
 class SchemaProblems:
     """Turns the JSON Schema validator's errors into the contract's problem codes.
@@ -1018,13 +1031,13 @@ class Measure:
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "Measure":
         """Build one measure from its request object, expanding a material option."""
+        measure_id = str(raw["id"])
         options: Dict[str, Any] = {}
         for name, value in (raw.get("options") or {}).items():
-            options[str(name)] = (
-                Material.from_dict(value) if name == CatalogueTable.MATERIAL and isinstance(value, Mapping)
-                else value
-            )
-        return cls(id=str(raw["id"]), options=options)
+            spec = CatalogueTable.option(measure_id, str(name))
+            is_material = spec is not None and spec.value_type is ValueType.MATERIAL
+            options[str(name)] = Material.from_dict(value) if is_material and isinstance(value, Mapping) else value
+        return cls(id=measure_id, options=options)
 
 
 @dataclass(frozen=True)
@@ -1128,12 +1141,14 @@ class SemanticChecks:
     ROOM_TEMPERATURE_RANGE: ClassVar[Tuple[int, int]] = (12, 28)
 
     #: The measure whose option writes the room set point, and the option's name.
+    #: ``tests/renovisor/test_request.py`` asserts that :class:`CatalogueTable` declares the pair.
     ROOM_TEMPERATURE_MEASURE: ClassVar[Tuple[str, str]] = (
         "change_room_temperature",
         "new_room_temperature_in_celsius",
     )
 
-    #: The measure whose option writes the number of vehicles, and the option's name.
+    #: The measure whose option writes the number of vehicles, and the option's name; pinned to
+    #: :class:`CatalogueTable` by the same test.
     VEHICLE_MEASURE: ClassVar[Tuple[str, str]] = ("electric_vehicle", "number")
 
     #: The per-measure price block of E-spec §7 and its two price fields. They are spelled here
@@ -1361,7 +1376,7 @@ class SemanticChecks:
     @classmethod
     def _value(cls, measure_id: str, spec: OptionSpec, value: Any, path: str) -> List[Problem]:
         """Check one option value against its declared type and, where it has one, its value list."""
-        if spec.name == CatalogueTable.MATERIAL:
+        if spec.value_type is ValueType.MATERIAL:
             return cls._material(value, path)
         if spec.value_type is ValueType.BOOLEAN:
             return cls._of_type(measure_id, spec, value, path, bool, "a boolean")

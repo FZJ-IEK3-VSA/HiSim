@@ -19,6 +19,7 @@ from typing import Dict
 
 import pytest
 
+from hisim.renovisor.apply import MeasureRegistry
 from hisim.renovisor.capabilities import (
     Aggregation,
     CapabilityDocument,
@@ -35,7 +36,7 @@ from hisim.renovisor.capabilities import (
 )
 from hisim.renovisor.costs import CostField, CostSchema
 from hisim.renovisor.kpis import KpiField, KpiSchema
-from hisim.renovisor.request import CatalogueTable
+from hisim.renovisor.request import CatalogueTable, ValueType
 from hisim.renovisor.vocabulary import Provenance, ReportStatus
 
 #: The tally of §4.2 as decision D-D leaves it. The frontend side's spec counted 16 / 9 / 7;
@@ -95,7 +96,7 @@ class TestTheProbeSet:
         for measure_id in CatalogueTable.ids():
             assert f"measure:{measure_id}" in names
             for option in CatalogueTable.options_of(measure_id):
-                if option.name == CatalogueTable.MATERIAL:
+                if option.value_type is ValueType.MATERIAL:
                     continue  # a material travels as an object, so its probe is named after it
                 for value in option.values or ():
                     assert f"option:{measure_id}.{option.name}={value}" in names
@@ -163,6 +164,26 @@ class TestTheDocument:
                 if spec.values is not None:
                     assert option["accepted_values"] == list(spec.values)
                     assert [value["value"] for value in option["values"]] == list(spec.values)
+
+    def test_a_material_option_entry_has_exactly_its_name_status_and_note(
+        self, document: CapabilityDocument
+    ) -> None:
+        """A material travels as an object, so its entry lists no values and no bounds.
+
+        Pinned for every insulation measure: a frontend reads the material list from
+        ``materials.yaml``, and an ``accepted_values`` or a ``minimum`` appearing here would be a
+        second, disagreeing source for it.
+        """
+        entries = {str(entry["measure_id"]): entry for entry in document.body["measures"]}
+        for measure_id in MeasureRegistry.INSULATION:
+            spec = CatalogueTable.material_option(measure_id)
+            assert spec is not None, measure_id
+            option = next(option for option in entries[measure_id]["options"] if option["name"] == spec.name)
+            assert option == {
+                "name": CatalogueTable.MATERIAL,
+                "status": ReportStatus.USED.value,
+                "note": MeasureRegistry.MATERIAL_NOTE,
+            }, measure_id
 
     def test_the_measure_tally_is_the_contracts_table_as_decision_dd_leaves_it(
         self, document: CapabilityDocument

@@ -60,10 +60,12 @@ class Placement(str, Enum):
 class LayerDefaults:
     """How thick an insulation layer is when the request states no thickness.
 
-    ``thickness_in_mm`` is an ``experts`` option of every insulation measure, so most requests
-    leave it out and the translator supplies one. Each number is the typical installed thickness
-    of that build-up as the frontend side's specification §4.2 tabulates it; every use is a
-    ``defaulted`` line in the mapping report naming the value.
+    ``thickness_in_mm`` is an ``experts`` option of ten of the twelve insulation measures, so most
+    requests leave it out and the translator supplies one; ``basement_internal_insulation`` and
+    ``top_floor_ceiling_insulation`` have no such option in the catalogue and always get theirs.
+    Each number is the typical installed thickness of that build-up as the frontend side's
+    specification §4.2 tabulates it; every use is a ``defaulted`` line in the mapping report
+    naming the value.
     """
 
     # Source: calculation-request.md §4.2, "thickness_in_mm default" column. Typical installed

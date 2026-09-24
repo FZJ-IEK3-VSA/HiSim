@@ -1069,6 +1069,7 @@ class Building(cp.Component):
         )
 
         lines.append(f"Total Window Area [m2]: {self.total_scaled_windows_area:.2f}")
+        lines.extend(self.my_building_information.door_report_lines)
 
         lines.append("-------------------------------------------------------------------------------------------")
         lines.append("Building Thermal Capacitances:")

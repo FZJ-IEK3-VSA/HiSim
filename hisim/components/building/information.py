@@ -5,6 +5,7 @@ names and derives every quantity the rest of a scenario is sized against. The de
 those facts is on the configuration, in ``config.py``; this module is the physics behind them.
 """
 
+import re
 from dataclasses import dataclass
 from typing import ClassVar, Dict, Iterable, List, Optional, Tuple
 
@@ -18,13 +19,22 @@ from hisim.components.building.config import BuildingConfig
 
 class ZeroReferenceWindowAreaError(ValueError):
 
-    """Raised when a window area is configured for a TABULA row that has no window distribution.
+    """Raised for a TABULA row whose reference window areas are both zero, when windows are asked of it.
 
-    The per-direction window areas are the row's reference areas rescaled so their sum matches
-    the window area; a row whose reference window areas are both zero has no distribution to
-    rescale, so a configured window area would be lost in the orientations while it still
-    counted in the transmission losses. Refusing by name keeps the building consistent: a
-    caller who wants windows on such a row has to name a row that has them (hisim-4g9.1).
+    The window area, its U-value and its transmission losses come from the row's reference
+    window areas (``A_Window_1`` and ``A_Window_2``); the per-direction window areas that carry
+    the solar gains are the row's ``A_Window_<direction>`` columns rescaled so their sum matches
+    that window area. A row whose reference window areas are both zero has no distribution to
+    rescale, which makes two cases inconsistent, and both are refused by name (hisim-4g9.1):
+
+    * A window area configured for such a row would count in the transmission losses while it
+      vanished from every orientation.
+    * A row that states its windows only per direction -- zero reference areas but a non-zero
+      per-direction total, as ``ES.ME.MFH.05.Gen.ReEx.001.001/.002/.003`` do -- would silently
+      lose every window it has, whether or not a window area is configured.
+
+    A row with no window data anywhere keeps a window area and scaling factor of 0. A caller
+    who wants windows has to name a row whose reference window areas carry them.
     """
 
 
@@ -179,12 +189,16 @@ class BuildingInformation:
         configured_u_value_field="roof_u_value_in_watt_per_m2_per_kelvin",
         fixed_adjustment_factor=1,
     )
-    #: Window: no b_Transmission columns (factor is always 1), and the door's zero-area
-    #: guard: a row whose reference window areas are both zero keeps the raw
-    #: U_Actual_Window_1 instead of dividing the weighted average by zero (hisim-4g9.1).
-    #: The per-direction area scaling remains the one legitimate special case the table
-    #: does not cover; it lives as an explicit window-specific step in
-    #: get_building_area_parameters, whose divisor is guarded the same way.
+    #: Window: no b_Transmission columns (factor is always 1), and its own zero-area guard,
+    #: the same rule the door's descriptor declares: a row whose reference window areas
+    #: are both zero keeps the raw U_Actual_Window_1 instead of dividing the weighted
+    #: average by zero (hisim-4g9.1). The per-direction area scaling remains the one
+    #: legitimate special case the table does not cover; it lives as an explicit
+    #: window-specific step in get_building_area_parameters, which scales by 0 for a row
+    #: with no window data anywhere and refuses a zero-reference row that states its windows
+    #: per direction only, or that is given a configured window area
+    #: (``ZeroReferenceWindowAreaError``). A row that reaches the U-value guard therefore
+    #: has a window area of 0.
     WINDOW_ELEMENT: ClassVar[EnvelopeElement] = EnvelopeElement(
         element_name="window",
         area_columns=("A_Window_1", "A_Window_2"),
@@ -196,7 +210,11 @@ class BuildingInformation:
         keep_u_value_when_reference_area_is_zero=True,
     )
     #: Door: a single TABULA sub-area, no b_Transmission columns, and the zero-area guard
-    #: that keeps the raw U-value when A_Door_1 is 0 instead of dividing by it.
+    #: that keeps the raw U-value when A_Door_1 is 0 instead of dividing by it. A row
+    #: whose A_Door_1 is 0 is not left doorless when TABULA estimates a door for it: the
+    #: door-specific steps :py:meth:`_door_area_in_m2_and_origin` and
+    #: :py:meth:`_door_u_value_adjustment_factor_and_origin` substitute the row's
+    #: A_Estim_Door and a door U-value for the missing reference door.
     DOOR_ELEMENT: ClassVar[EnvelopeElement] = EnvelopeElement(
         element_name="door",
         area_columns=("A_Door_1",),
@@ -212,6 +230,28 @@ class BuildingInformation:
     #: ``A_Window_<direction>`` columns), in the order the per-direction scaling reads
     #: them and in which ``scaled_window_areas_in_m2`` is laid out.
     WINDOWS_DIRECTIONS: ClassVar[Tuple[str, ...]] = ("South", "East", "North", "West", "Horizontal")
+
+    #: TABULA column holding the typology's own estimate of the door area [m2]. It is
+    #: filled in on every row whose ``A_Door_1`` is 0, and it stands in for the reference
+    #: door area of such a row (see :py:meth:`_door_area_in_m2_and_origin`).
+    ESTIMATED_DOOR_AREA_COLUMN: ClassVar[str] = "A_Estim_Door"
+    #: Door U-value [W/(m2 K)] of an estimated door when neither its own row nor any
+    #: national row of its country states a door U-value (Denmark lists no door at all).
+    #: The value is the U-value of TABULA's existing Irish door construction
+    #: ``IE.Door.ReEx.01.01``, the construction chosen for patching the doorless Irish
+    #: band-05 rows. TO BE REVIEWED: it is a plausible old-door value, not a
+    #: country-specific one.
+    DEFAULT_ESTIMATED_DOOR_U_VALUE_IN_WATT_PER_M2_PER_KELVIN: float = 3.0
+    #: Process-wide cache of the national mean door U-values, keyed by (country, variant)
+    #: and by (country, ``None``) for the mean over all variants; built on first use from
+    #: the cached TABULA frame (see :py:meth:`national_mean_door_u_values`).
+    _national_mean_door_u_values: ClassVar[Optional[Dict[Tuple[str, Optional[str]], float]]] = None
+    #: A TABULA code's country prefix; a national row's code continues with ``.N.``.
+    COUNTRY_CODE_PATTERN: ClassVar["re.Pattern[str]"] = re.compile(r"^(?P<country>[A-Z]{2})\.")
+    NATIONAL_CODE_PATTERN: ClassVar["re.Pattern[str]"] = re.compile(r"^(?P<country>[A-Z]{2})\.N\.")
+    #: A TABULA code's refurbishment variant, its final three digits: ``001`` is the existing
+    #: state, ``002``/``003`` and e.g. Ireland's ``011``/``013`` are refurbished states.
+    VARIANT_CODE_PATTERN: ClassVar["re.Pattern[str]"] = re.compile(r"\.(?P<variant>\d{3})$")
 
     def __init__(
         self,
@@ -275,6 +315,20 @@ class BuildingInformation:
         """Actual U-value of the roof element from the TABULA reference data [W/(m2 K)]."""
         return float(self.buildingdata_ref["U_Actual_Roof_1"].values[0])
 
+    @property
+    def door_report_lines(self) -> List[str]:
+        """The door's area and U-value, each with where it came from, for the Building's report.
+
+        A row without a reference door area gets TABULA's estimated door and a U-value from
+        the row, its country's national rows or a default (see
+        :py:meth:`_door_area_in_m2_and_origin` and
+        :py:meth:`_door_u_value_adjustment_factor_and_origin`); the report says which.
+        """
+        return [
+            f"Door Area [m2]: {self.door_area_in_m2:.2f} ({self._door_area_origin})",
+            f"Door U-Value [W/m2K]: {self.door_u_value_in_watt_per_m2_per_kelvin:.2f} ({self._door_u_value_origin})",
+        ]
+
     @classmethod
     def read_housing_reference_dataframe(cls) -> pd.DataFrame:
         """Return the TABULA housing CSV as a DataFrame, reading the file at most once per process.
@@ -296,6 +350,47 @@ class BuildingInformation:
             )
             cls._housing_reference_dataframe = housing_reference_dataframe
         return housing_reference_dataframe
+
+    @classmethod
+    def national_mean_door_u_values(cls) -> Dict[Tuple[str, Optional[str]], float]:
+        """Return the national mean TABULA door U-values [W/(m2 K)], computed at most once per process.
+
+        A mean runs over a country's national rows (codes ``<CC>.N.…``) that state a door,
+        i.e. whose ``A_Door_1`` and ``U_Actual_Door_1`` are both positive. The key
+        ``(country, variant)`` holds the mean over the rows of one refurbishment variant
+        (the code's final three digits), so an unrefurbished doorless house is not given a
+        partly refurbished door; the key ``(country, None)`` holds the mean over every
+        variant. The U-values are summed left to right in the file's row order, so the value
+        does not depend on a library's summation algorithm. A key without such a row is
+        absent from the mapping. The means are the door U-value of an estimated door whose
+        own row states none (see :py:meth:`_door_u_value_adjustment_factor_and_origin`).
+        """
+        national_mean_door_u_values = cls._national_mean_door_u_values
+        if national_mean_door_u_values is None:
+            frame = cls.read_housing_reference_dataframe()
+            # The door descriptor names exactly one TABULA sub-area and one U-value column.
+            door_u_values_by_key: Dict[Tuple[str, Optional[str]], List[float]] = {}
+            for code, door_area_in_m2, door_u_value in zip(
+                frame["Code_BuildingVariant"],
+                frame[cls.DOOR_ELEMENT.area_columns[0]],
+                frame[cls.DOOR_ELEMENT.u_value_columns[0]],
+            ):
+                match = cls.NATIONAL_CODE_PATTERN.match(code) if isinstance(code, str) else None
+                if match is None or not (door_area_in_m2 > 0 and door_u_value > 0):
+                    continue
+                country = match.group("country")
+                door_u_values_by_key.setdefault((country, None), []).append(float(door_u_value))
+                variant_match = cls.VARIANT_CODE_PATTERN.search(code)
+                if variant_match is not None:
+                    door_u_values_by_key.setdefault((country, variant_match.group("variant")), []).append(
+                        float(door_u_value)
+                    )
+            national_mean_door_u_values = {
+                key: cls._left_associated_float_sum(door_u_values) / len(door_u_values)
+                for key, door_u_values in door_u_values_by_key.items()
+            }
+            cls._national_mean_door_u_values = national_mean_door_u_values
+        return national_mean_door_u_values
 
     def get_building_from_tabula(
         self,
@@ -385,9 +480,11 @@ class BuildingInformation:
         special case the table does not cover: the per-direction TABULA window areas are
         rescaled so their total matches the resulting window area, which divides by the
         TABULA reference window area — zero for some codes, for which the scaling factor
-        is 0 instead of a division by zero, or a ``ZeroReferenceWindowAreaError`` when a
-        window area is configured for such a code (findings log entries 1 and 2,
-        hisim-4g9.1). The total envelope area closes the pipeline.
+        is 0 instead of a division by zero when the row has no window data anywhere, and a
+        ``ZeroReferenceWindowAreaError`` when the row states its windows per direction only
+        or a window area is configured for it (findings log entries 1 and 2, hisim-4g9.1).
+        The door follows as the second special case: a row without a reference door area
+        gets TABULA's estimated door area. The total envelope area closes the pipeline.
         """
         # Reference area [m^2] (TABULA: Reference floor area A_C_Ref )Ref: ISO standard 7.2.2.2
         self.conditioned_floor_area_in_m2_tabula_ref = float((self.buildingdata_ref["A_C_Ref"].values[0]))
@@ -406,22 +503,14 @@ class BuildingInformation:
         # Window special case: rescale the per-direction TABULA window areas so their
         # total matches the window area derived above. The divisor is the *reference*
         # window area (findings log entries 1 and 2, hisim-4g9.1). A code whose reference
-        # areas are both zero has no distribution to rescale: without a configured window
-        # area the factor is 0, consistent with the window area of 0 derived from the same
-        # reference; with one, the configured area would count in the transmission losses
-        # but vanish from every orientation, so the combination is refused by name.
-        tabula_reference_window_area_in_m2 = (
-            float(self.buildingdata_ref["A_Window_1"].values[0])
-            + float(self.buildingdata_ref["A_Window_2"].values[0])
-        )
+        # areas are both zero has no distribution to rescale. When the row has no window
+        # data anywhere the factor is 0, consistent with the window area of 0 derived from
+        # the same reference. When it states its windows per direction only, those windows
+        # would vanish silently, and a configured window area would count in the
+        # transmission losses but vanish from every orientation: both are refused by name.
+        tabula_reference_window_area_in_m2 = self._tabula_reference_area_in_m2(self.WINDOW_ELEMENT)
         if tabula_reference_window_area_in_m2 == 0:
-            if self.window_area_in_m2 != 0:
-                raise ZeroReferenceWindowAreaError(
-                    f"building code {self.buildingconfig.building_code}: a window area of "
-                    f"{self.window_area_in_m2} m2 is configured, but the TABULA row's reference window "
-                    "areas A_Window_1 and A_Window_2 are both zero, so there is no orientation to "
-                    "distribute it over; name a row with window areas or leave the window area unset"
-                )
+            self._refuse_windows_without_a_reference_window_area()
             self.window_scaling_factor = 0.0
         else:
             self.window_scaling_factor = self.window_area_in_m2 / tabula_reference_window_area_in_m2
@@ -431,7 +520,9 @@ class BuildingInformation:
             for windows_direction in self.windows_directions
         ]
 
-        self.door_area_in_m2 = self._scaled_element_area_in_m2(self.DOOR_ELEMENT)
+        # Door special case: a row without a reference door area gets TABULA's estimated
+        # door instead of none (see _door_area_in_m2_and_origin).
+        self.door_area_in_m2, self._door_area_origin = self._door_area_in_m2_and_origin()
 
         self.building_total_area_in_m2 = (
             self.window_area_in_m2
@@ -472,7 +563,7 @@ class BuildingInformation:
         self.window_adjustment_factor_from_tabula = b_factor
         self.heat_conductance_window_in_watt_per_kelvin = u_value * self.window_area_in_m2 * b_factor
 
-        u_value, b_factor = self._element_u_value_and_adjustment_factor(self.DOOR_ELEMENT)
+        u_value, b_factor, self._door_u_value_origin = self._door_u_value_adjustment_factor_and_origin()
         self.door_u_value_in_watt_per_m2_per_kelvin = u_value
         self.door_adjustment_factor_from_tabula = b_factor
         self.heat_conductance_door_in_watt_per_kelvin = u_value * self.door_area_in_m2 * b_factor
@@ -588,10 +679,134 @@ class BuildingInformation:
         configured_area_in_m2: Optional[float] = getattr(self.buildingconfig, element.configured_area_field)
         if configured_area_in_m2 is not None:
             return configured_area_in_m2
-        tabula_reference_area_in_m2 = self._left_associated_float_sum(
+        return self._tabula_reference_area_in_m2(element) * self.scaling_factor_according_to_conditioned_living_area
+
+    def _tabula_reference_area_in_m2(self, element: EnvelopeElement) -> float:
+        """Return the unscaled TABULA reference area [m2] of one element: its sub-areas summed left to right."""
+        return self._left_associated_float_sum(
             float(self.buildingdata_ref[area_column].values[0]) for area_column in element.area_columns
         )
-        return tabula_reference_area_in_m2 * self.scaling_factor_according_to_conditioned_living_area
+
+    def _refuse_windows_without_a_reference_window_area(self) -> None:
+        """Refuse a zero-reference-window row that states windows per direction or is given a window area.
+
+        Called only for a row whose reference window areas are both zero, where the
+        per-direction window scaling has no distribution to rescale (hisim-4g9.1). A row
+        that lists windows per direction all the same would lose every one of them, and a
+        configured window area would count in the transmission losses while it vanished
+        from every orientation; either way the building would be inconsistent, so it raises
+        ``ZeroReferenceWindowAreaError``. A row with no window data anywhere passes.
+
+        Raises:
+            ZeroReferenceWindowAreaError: For a positive per-direction window total, or a
+                non-zero configured window area.
+        """
+        building_code = self.buildingconfig.building_code
+        per_direction_window_area_in_m2 = self._left_associated_float_sum(
+            float(self.buildingdata_ref["A_Window_" + windows_direction].iloc[0])
+            for windows_direction in self.WINDOWS_DIRECTIONS
+        )
+        reference_columns = " and ".join(self.WINDOW_ELEMENT.area_columns)
+        if per_direction_window_area_in_m2 > 0:
+            raise ZeroReferenceWindowAreaError(
+                f"building code {building_code}: the TABULA row's reference window areas "
+                f"{reference_columns} are both zero, but its per-direction window areas add up to "
+                f"{per_direction_window_area_in_m2} m2. TABULA states this row's windows only per "
+                "direction, so the row cannot be simulated consistently: the window area, U-value and "
+                "transmission losses come from the reference areas, which have no windows to give"
+            )
+        if self.window_area_in_m2 != 0:
+            raise ZeroReferenceWindowAreaError(
+                f"building code {building_code}: a window area of {self.window_area_in_m2} m2 is "
+                f"configured, but the TABULA row's reference window areas {reference_columns} are both "
+                "zero, so there is no orientation to distribute it over; name a row with window areas "
+                "or leave the window area unset"
+            )
+
+    def _door_area_in_m2_and_origin(self) -> Tuple[float, str]:
+        """Return the door area [m2] and, for the report, where it came from.
+
+        A configured door area and a row's own reference door area (``A_Door_1``) are used
+        as for every other element. A row whose reference door area is 0 does not make the
+        building doorless when TABULA estimates a door for it: its ``A_Estim_Door`` stands
+        in for the reference door area, scaled with the conditioned-living-area scaling
+        factor exactly like every other element area. Only a row without an estimate either
+        keeps the door area of 0.
+        """
+        if self.buildingconfig.door_area_in_m2 is not None:
+            return self._scaled_element_area_in_m2(self.DOOR_ELEMENT), "configured"
+        reference_door_columns = " + ".join(self.DOOR_ELEMENT.area_columns)
+        if self._tabula_reference_area_in_m2(self.DOOR_ELEMENT) == 0:
+            estimated_door_area_in_m2 = float(self.buildingdata_ref[self.ESTIMATED_DOOR_AREA_COLUMN].values[0])
+            if estimated_door_area_in_m2 > 0:
+                return estimated_door_area_in_m2 * self.scaling_factor_according_to_conditioned_living_area, (
+                    f"TABULA's estimated door area {self.ESTIMATED_DOOR_AREA_COLUMN}, because the row's "
+                    f"reference door area {reference_door_columns} is zero"
+                )
+            return self._scaled_element_area_in_m2(self.DOOR_ELEMENT), (
+                f"the TABULA row states neither a door area {reference_door_columns} nor an estimated one "
+                f"{self.ESTIMATED_DOOR_AREA_COLUMN}"
+            )
+        return (
+            self._scaled_element_area_in_m2(self.DOOR_ELEMENT),
+            f"TABULA reference door area {reference_door_columns}",
+        )
+
+    def _door_u_value_adjustment_factor_and_origin(self) -> Tuple[float, float, str]:
+        """Return the door's U-value [W/(m2 K)], its adjustment factor and, for the report, the U-value's origin.
+
+        A configured door U-value and a row with a reference door area go through
+        :py:meth:`_element_u_value_and_adjustment_factor` unchanged, so the pinned
+        ``(u * area) / area`` round trip of every row with a door stays bit-identical. A row
+        whose reference door area is 0 but whose door has an area -- TABULA's estimated
+        door, or a configured area -- needs a U-value the weighted average cannot give: the
+        row's own ``U_Actual_Door_1`` when it is positive, else the mean door U-value of
+        its country's national rows of the same refurbishment variant, else that of all
+        their variants (:py:meth:`national_mean_door_u_values`), else the
+        reviewed-later default
+        :py:attr:`DEFAULT_ESTIMATED_DOOR_U_VALUE_IN_WATT_PER_M2_PER_KELVIN`. A door
+        without an area keeps the zero-area guard's raw value, which carries no heat loss.
+        """
+        u_value, adjustment_factor = self._element_u_value_and_adjustment_factor(self.DOOR_ELEMENT)
+        u_value_column = " / ".join(self.DOOR_ELEMENT.u_value_columns)
+        if self.buildingconfig.door_u_value_in_watt_per_m2_per_kelvin is not None:
+            return u_value, adjustment_factor, "configured"
+        if self._tabula_reference_area_in_m2(self.DOOR_ELEMENT) != 0:
+            return u_value, adjustment_factor, f"TABULA row, {u_value_column}"
+        if self.door_area_in_m2 == 0:
+            return u_value, adjustment_factor, f"TABULA row, {u_value_column}; unused, the door has no area"
+        if u_value > 0:
+            return u_value, adjustment_factor, f"TABULA row, {u_value_column}, although the row states no door area"
+        fallback_u_value, fallback_origin = self._door_u_value_and_origin_the_row_does_not_state(u_value_column)
+        return fallback_u_value, adjustment_factor, fallback_origin
+
+    def _door_u_value_and_origin_the_row_does_not_state(self, u_value_column: str) -> Tuple[float, str]:
+        """Return a door U-value [W/(m2 K)] for a door whose row states none, and its origin.
+
+        The mean of the country's national rows of the row's own refurbishment variant comes
+        first, then the mean of all their variants, then
+        :py:attr:`DEFAULT_ESTIMATED_DOOR_U_VALUE_IN_WATT_PER_M2_PER_KELVIN`.
+        """
+        building_code = self.buildingconfig.building_code
+        country_match = self.COUNTRY_CODE_PATTERN.match(building_code)
+        country = country_match.group("country") if country_match is not None else None
+        variant_match = self.VARIANT_CODE_PATTERN.search(building_code)
+        variant = variant_match.group("variant") if variant_match is not None else None
+        national_means = self.national_mean_door_u_values()
+        if country is not None and variant is not None and (country, variant) in national_means:
+            return national_means[(country, variant)], (
+                f"mean {u_value_column} of the {country} national TABULA rows of variant {variant} that "
+                "state a door, because the row states none"
+            )
+        if country is not None and (country, None) in national_means:
+            return national_means[(country, None)], (
+                f"mean {u_value_column} of the {country} national TABULA rows of all variants that state a "
+                f"door, because the row states none and none of variant {variant} states one"
+            )
+        return self.DEFAULT_ESTIMATED_DOOR_U_VALUE_IN_WATT_PER_M2_PER_KELVIN, (
+            f"default, to be reviewed: neither the row nor any {country} national TABULA row states a door "
+            "U-value, so the U-value of TABULA's Irish door construction IE.Door.ReEx.01.01 is used"
+        )
 
     def _element_u_value_and_adjustment_factor(self, element: EnvelopeElement) -> Tuple[float, float]:
         """Return the U-value [W/(m2 K)] and transmission adjustment factor of one element.

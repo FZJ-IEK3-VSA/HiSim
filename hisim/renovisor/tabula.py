@@ -22,7 +22,11 @@ today -- is a data gap and is refused with ``location.country.unsupported``. A c
 outside every band of its typology is clamped to the nearest band, and the note says which band
 was wanted. The former third answer -- rows whose door or window area is zero crash the
 ``Building`` component and are skipped for a neighbouring band -- is gone: the ``Building``
-guards every zero envelope area now (hisim-4g9.1), so every generic-example row is selectable.
+guards a zero door or window area now (hisim-4g9.1) and gives a row without a door area
+TABULA's estimated door, so every generic-example row is selectable. Only the door and the
+window are guarded: a zero floor, wall or roof reference area still divides by zero
+(hisim-4g9.16), and no generic-example row has one. A missing door area is the only zero area
+those rows have.
 """
 
 import csv
@@ -39,7 +43,7 @@ class TabulaUnresolvable(Exception):
     """No TABULA row can be chosen for a dwelling, so the request cannot be simulated.
 
     Raised for a country and typology the table does not carry, and for a requested code that is
-    not in the table or is not usable. The caller turns it into a ``tabula.unresolvable`` or
+    not in the table. The caller turns it into a ``tabula.unresolvable`` or
     ``location.country.unsupported`` problem; it never reaches an exit code of its own.
     """
 
@@ -139,9 +143,8 @@ class TabulaIndex:
     #: How the processed table is encoded, as ``building/information.py`` reads it.
     ENCODING: ClassVar[str] = "cp1252"
 
-    #: Its column separator and decimal mark.
+    #: Its column separator.
     DELIMITER: ClassVar[str] = ";"
-    DECIMAL: ClassVar[str] = ","
 
     #: The columns the selection reads.
     CODE_COLUMN: ClassVar[str] = "Code_BuildingVariant"
@@ -173,6 +176,16 @@ class TabulaIndex:
         }
 
     @classmethod
+    @lru_cache(maxsize=1)
+    def codes(cls) -> FrozenSet[str]:
+        """Return every generic-example code of the table, in every refurbishment variant.
+
+        The bands index only the ``001`` variant, so a code whose band exists can still be missing
+        from the table; an expert override is checked against this set, whole code by whole code.
+        """
+        return frozenset(match.group(0) for match, _ in cls._rows())
+
+    @classmethod
     def countries(cls) -> FrozenSet[str]:
         """Return every country code that has generic-example rows in the table."""
         return frozenset(country for country, _ in cls.bands())
@@ -198,8 +211,9 @@ class BuildingCodeSelector:
     """Picks the TABULA code one dwelling is simulated as, and says what it approximated.
 
     Three inputs decide it -- the country, the kind of dwelling and the construction year. Every
-    generic-example row of the table is selectable: the ``Building`` component guards every zero
-    envelope area (hisim-4g9.1), so no row can crash it any more and no row is skipped.
+    generic-example row of the table is selectable: the one zero envelope area those rows have, a
+    missing door area, no longer crashes the ``Building`` component (hisim-4g9.1), so no row is
+    skipped.
     """
 
     @classmethod
@@ -263,7 +277,7 @@ class BuildingCodeSelector:
             (entry for entry in TabulaIndex.bands().get((country, typology), ()) if entry.band == wanted),
             None,
         )
-        if band is None:
+        if band is None or code not in TabulaIndex.codes():
             raise TabulaUnresolvable(
                 f"'{code}' is not a generic-example row of the processed TABULA table"
             )

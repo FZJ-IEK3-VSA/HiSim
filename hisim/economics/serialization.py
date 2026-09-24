@@ -318,9 +318,9 @@ def subsidy_context_from_json(raw: dict) -> SubsidyContext:
     """Deserializes the subsidy context.
 
     Tolerant by construction: an empty dict yields a default owner-occupier context with everything
-    unanswered, which is what a run without an `EconomicContext` produces and what the flat shim
-    path needs. Only `heritage_status` is defaulted to a concrete value (NONE) rather than left
-    None, mirroring `SubsidyBuildingContext`'s own default.
+    unanswered, which is what a run without an `EconomicContext` produces. Only `heritage_status`
+    is defaulted to a concrete value (NONE) rather than left None, mirroring
+    `SubsidyBuildingContext`'s own default.
     """
     applicant_raw = raw.get("applicant", {})
     building_raw = raw.get("building", {})

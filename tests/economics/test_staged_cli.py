@@ -23,7 +23,7 @@ from hisim.economics.evaluator import effective_price_basis_year
 from hisim.economics.exports import ExportFileNames
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.serialization import SerializationFileNames, write_inputs
-from hisim.economics.staged import StagedEvaluationError
+from hisim.economics.staged import StagedEvaluationError, StagedEvaluator
 from hisim.economics.staged_document import StagedDocument
 from hisim.economics.staged_parameters import ParameterKeys
 
@@ -222,6 +222,33 @@ def _arguments(workspace: Path, out: Path) -> List[str]:
         "--out",
         str(out),
     ]
+
+
+class TestADocumentTheEngineGotWrong:
+    """A document that fails its own consistency checks is an engine failure, exit 3 (not 2).
+
+    :class:`~hisim.economics.staged_document.SubsidyReconciliationError` and
+    :class:`~hisim.economics.staged_document.BandOrderError` are ValueErrors, which ``main`` would
+    otherwise report as a mistyped invocation. The engine produces neither on purpose, so the check
+    is replaced by one that refuses: monkeypatching is the only way to reach the branch.
+    """
+
+    @pytest.mark.parametrize("error_name", ["SubsidyReconciliationError", "BandOrderError"])
+    def test_it_exits_3_and_writes_nothing(self, workspace, monkeypatch, capsys, error_name):
+        """The message reaches stderr, and ``--out`` is never written."""
+        from hisim.economics import staged_document
+
+        error = getattr(staged_document, error_name)
+
+        def refuse(_document) -> None:
+            raise error("the engine contradicted itself")
+
+        check = "assert_subsidies_reconciled" if error_name == "SubsidyReconciliationError" else "assert_bands_ordered"
+        monkeypatch.setattr(StagedDocument, check, staticmethod(refuse))
+        out = workspace / "economics_result.json"
+        assert main(_arguments(workspace, out)) == StagedCli.ENGINE_FAILED
+        assert "the engine contradicted itself" in capsys.readouterr().err
+        assert not out.exists()
 
 
 class TestTheStageArgument:
@@ -621,11 +648,11 @@ class TestTheCatalogueIsNamedInTheDocument:
         catalog = SubsidyCatalog.load("IE", SubsidyCatalog.DEFAULT_PATH)
 
         assert catalog.snapshot_date is not None
-        assert StagedCli.catalog_id(catalog, "IE") == f"IE@{catalog.snapshot_date}"
+        assert StagedEvaluator.catalog_id(catalog, "IE") == f"IE@{catalog.snapshot_date}"
 
     def test_a_plan_priced_without_a_catalogue_names_none(self) -> None:
         """No catalogue is a different statement from an undated one, and stays ``null``."""
-        assert StagedCli.catalog_id(None, "IE") is None
+        assert StagedEvaluator.catalog_id(None, "IE") is None
 
 
 class TestTheParameterBlockTheBackendSends:

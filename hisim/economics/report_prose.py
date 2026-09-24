@@ -905,8 +905,8 @@ class ReportProse:
             shows=(
                 "Per measure, the support programs that were applied, with their amounts and — for non-cash "
                 "forms — their terms; and for measures where a program was checked but not applied, the failed "
-                "condition by name. Where the country has no subsidy catalog, a flat legacy share from the "
-                "device data is used instead, and this section says so."
+                "condition by name. Where the country has no subsidy catalog, no support is booked and the "
+                "section is omitted."
             ),
             adds=(
                 "The audit trail for the least transparent numbers in the evaluation. Subsidy amounts are "
@@ -940,8 +940,8 @@ class ReportProse:
                  )),
                 ("Subsidy catalog",
                  (
-                     "the data file describing a country's programs and rules; without one, a flat percentage "
-                     "from the device data is used as a stand-in (\"legacy share\")."
+                     "the data file describing a country's programs and rules; without one, no support is "
+                     "booked."
                  )),
             ),
             calculation=(

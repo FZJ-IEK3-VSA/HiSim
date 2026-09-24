@@ -30,9 +30,11 @@ from hisim.economics.facts import (
 from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
 from hisim.economics.staged import Stage
 from hisim.economics.subsidies import (
+    Benefit,
     BenefitKind,
     Condition,
     EligibleCostSpec,
+    LoanTermsBenefit,
     PayoutKind,
     ShareBenefit,
     SubsidyCatalog,
@@ -101,6 +103,15 @@ class SyntheticPlan:
     #: Id of the one scheme of :func:`always_eligible_catalog`.
     GRANT_SCHEME = "SYNTHETIC_GRANT"
 
+    #: Id of the soft-loan scheme of :func:`grant_and_soft_loan_catalog`.
+    SOFT_LOAN_SCHEME = "SYNTHETIC_SOFT_LOAN"
+
+    #: Nominal interest rate of the synthetic soft loan.
+    SOFT_LOAN_INTEREST_RATE = 0.01
+
+    #: Term of the synthetic soft loan, in years.
+    SOFT_LOAN_TERM_IN_YEARS = 10
+
     #: Installation year of the inventory generator, i.e. the house's own starting point.
     INVENTORY_INSTALLATION_YEAR = 2010
 
@@ -112,9 +123,9 @@ def write_database(directory: str, heat_pump_legacy_flat_subsidy_share: float = 
         directory: A directory the three JSON files are written into; normally a ``tmp_path``.
             It is created when it does not exist, so a caller can name a fresh path.
         heat_pump_legacy_flat_subsidy_share: When above zero, one heat-pump device entry carrying
-            this §10.1 flat subsidy share is written too, so a test can show what the engine's
-            no-catalogue shim would book. Its prices are never read: every synthetic subject
-            overrides them.
+            this §10.1 flat subsidy share is written too, so a test can show that the retired
+            no-catalogue shim's share books nothing. Its prices are never read: every synthetic
+            subject overrides them.
 
     Returns:
         The loaded database, with one source, one electricity price entry for
@@ -181,6 +192,54 @@ def write_database(directory: str, heat_pump_legacy_flat_subsidy_share: float = 
     return CostDatabase(directory)
 
 
+def always_eligible_scheme(
+    scheme_id: str, benefit_kind: BenefitKind, benefit: Benefit, payout_kind: PayoutKind
+) -> SubsidyScheme:
+    """One scheme every synthetic measure qualifies for, paying ``benefit`` as ``payout_kind``.
+
+    Args:
+        scheme_id: The scheme's id.
+        benefit_kind: The mechanism tag, matching ``benefit``'s type.
+        benefit: The typed benefit payload.
+        payout_kind: How the benefit reaches the timeline.
+
+    Returns:
+        The scheme, for :attr:`SyntheticPlan.COUNTRY`, covering the heat pump and the envelope
+        measure, installed or replacing, with no condition.
+    """
+    return SubsidyScheme(
+        id=scheme_id,
+        country=SyntheticPlan.COUNTRY,
+        region=None,
+        valid_from="1900-01-01",
+        valid_to=None,
+        legal_basis="synthetic staged-evaluator test scheme",
+        url="https://example.invalid/staged",
+        asset_classes=[ComponentType.HEAT_PUMP, ComponentType.WALL_EXTERNAL_INSULATION],
+        measure_kinds=["INSTALL", "REPLACE"],
+        eligibility=Condition(kind="all"),
+        benefit_kind=benefit_kind,
+        benefit=benefit,
+        eligible_cost=EligibleCostSpec(),
+        cumulation_group=None,
+        combined_rate_cap=None,
+        excludes=[],
+        payout_kind=payout_kind,
+    )
+
+
+def synthetic_catalog(schemes: List[SubsidyScheme]) -> SubsidyCatalog:
+    """A catalogue of the given schemes for :attr:`SyntheticPlan.COUNTRY`, undated."""
+    return SubsidyCatalog(
+        schemes=schemes,
+        questions={},
+        snapshot_date=None,
+        overall_cap_share=None,
+        base_path="",
+        country=SyntheticPlan.COUNTRY,
+    )
+
+
 def always_eligible_catalog(rate: float) -> SubsidyCatalog:
     """A catalogue of one upfront grant every synthetic measure qualifies for.
 
@@ -194,32 +253,52 @@ def always_eligible_catalog(rate: float) -> SubsidyCatalog:
         The catalogue, for :attr:`SyntheticPlan.COUNTRY`, with the scheme id
         :attr:`SyntheticPlan.GRANT_SCHEME`.
     """
-    scheme = SubsidyScheme(
-        id=SyntheticPlan.GRANT_SCHEME,
-        country=SyntheticPlan.COUNTRY,
-        region=None,
-        valid_from="1900-01-01",
-        valid_to=None,
-        legal_basis="synthetic staged-evaluator test scheme",
-        url="https://example.invalid/staged",
-        asset_classes=[ComponentType.HEAT_PUMP, ComponentType.WALL_EXTERNAL_INSULATION],
-        measure_kinds=["INSTALL", "REPLACE"],
-        eligibility=Condition(kind="all"),
-        benefit_kind=BenefitKind.SHARE_OF_ELIGIBLE_COST,
-        benefit=ShareBenefit(rate=rate),
-        eligible_cost=EligibleCostSpec(),
-        cumulation_group=None,
-        combined_rate_cap=None,
-        excludes=[],
-        payout_kind=PayoutKind.UPFRONT_GRANT,
+    return synthetic_catalog(
+        [
+            always_eligible_scheme(
+                SyntheticPlan.GRANT_SCHEME,
+                BenefitKind.SHARE_OF_ELIGIBLE_COST,
+                ShareBenefit(rate=rate),
+                PayoutKind.UPFRONT_GRANT,
+            )
+        ]
     )
-    return SubsidyCatalog(
-        schemes=[scheme],
-        questions={},
-        snapshot_date=None,
-        overall_cap_share=None,
-        base_path="",
-        country=SyntheticPlan.COUNTRY,
+
+
+def grant_and_soft_loan_catalog(rate: float, repayment_grant_rate: float) -> SubsidyCatalog:
+    """The upfront grant of :func:`always_eligible_catalog` plus a soft loan with a repayment grant.
+
+    The soft loan pays no cash of its own: its award overrides the financing plan of a perspective
+    whose ``subsidized_by_scheme_id`` names it, and the repayment grant it carries is booked by
+    financing under the ``financing`` subject rather than under any measure.
+
+    Args:
+        rate: The share of the eligible cost the grant pays.
+        repayment_grant_rate: The share of the loan principal written off.
+
+    Returns:
+        The catalogue, with the scheme ids :attr:`SyntheticPlan.GRANT_SCHEME` and
+        :attr:`SyntheticPlan.SOFT_LOAN_SCHEME`.
+    """
+    return synthetic_catalog(
+        [
+            always_eligible_scheme(
+                SyntheticPlan.GRANT_SCHEME,
+                BenefitKind.SHARE_OF_ELIGIBLE_COST,
+                ShareBenefit(rate=rate),
+                PayoutKind.UPFRONT_GRANT,
+            ),
+            always_eligible_scheme(
+                SyntheticPlan.SOFT_LOAN_SCHEME,
+                BenefitKind.SOFT_LOAN,
+                LoanTermsBenefit(
+                    interest_rate=SyntheticPlan.SOFT_LOAN_INTEREST_RATE,
+                    term=SyntheticPlan.SOFT_LOAN_TERM_IN_YEARS,
+                    repayment_grant_rate=repayment_grant_rate,
+                ),
+                PayoutKind.LOAN_TERMS,
+            ),
+        ]
     )
 
 

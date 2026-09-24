@@ -598,7 +598,7 @@ class TestYearZeroAndSubsidies:
     def test_total_subsidies_received_includes_support_without_an_award(self, result):
         """The old award-based KPI omitted every euro that reaches the timeline otherwise.
 
-        Scheduled payouts (a tax credit in instalments), the §10.1 flat shim and operational
+        Scheduled payouts (a tax credit in instalments), the retired §10.1 flat shim and operational
         support all carry `upfront_amount == 0` or no `SubsidyDecision` at all; the timeline
         figure counts them. This pins the direction of D2: dropping the decisions does not
         change the KPI, dropping the entries does.

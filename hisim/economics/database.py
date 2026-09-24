@@ -931,9 +931,9 @@ class CostDatabase:
         # subsidy level is a *subsidy* axis — it belongs to the catalog and the perspective's
         # subsidy mode (§5.5), where the sweep is reported as a scheme decision rather than as a
         # device price change. Keeping it here would also have made the §10.1 shim look like a
-        # supported modeling knob at exactly the moment it is being retired. The overlay surface
-        # is the outward-facing half of the device catalog, so what is not device data stays out
-        # of it; scenarios that need "no subsidies" use SubsidyMode.none().
+        # supported modeling knob while it was being retired (it is, since 2026-09-24). The
+        # overlay surface is the outward-facing half of the device catalog, so what is not device
+        # data stays out of it; scenarios that need "no subsidies" use SubsidyMode.none().
         for entry in entries:
             if not hasattr(entry, field_name):
                 raise CostDataError(f"Overlay {path!r}: entry has no field {field_name!r}.")

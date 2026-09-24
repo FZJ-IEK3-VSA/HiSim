@@ -71,7 +71,7 @@ nor a `lifecycle_costs.json` carrying its parameters is an error naming that fil
 supplies them instead, because re-pricing an archived study at default assumptions answers a
 question nobody asked. The subsidy catalog those parameters name is loaded for every subcommand,
 `explain` included, through `SubsidyCatalog.load_configured` — a named catalog that cannot be
-resolved is an error (D25), never a quiet fall-through to the §10.1 legacy flat shim.
+resolved is an error (D25), never a quiet fall-through to a run priced without subsidies.
 
 Across all commands, an `UnresolvableSubjectsError` — the fail-fast of decision D7 — is caught in
 `main` and turned into exit code 2 with the same message the postprocessing bridge logs. There are
@@ -126,7 +126,7 @@ from hisim.economics.serialization import (
     read_stored_price_basis_year,
 )
 from hisim.economics.staged import Stage, StagedEvaluationError, StagedEvaluator
-from hisim.economics.staged_document import StagedDocument
+from hisim.economics.staged_document import BandOrderError, StagedDocument, SubsidyReconciliationError
 from hisim.economics.staged_parameters import (
     ParameterKeys,
     ParameterProblem,
@@ -438,7 +438,7 @@ def _cmd_explain(args: argparse.Namespace) -> int:
     It re-evaluates rather than reading stored results because the provenance ledger is what is being
     queried, and it is built during evaluation. It builds its context exactly like `evaluate`,
     subsidy catalog included: while it did not, a catalog-configured run was explained through the
-    flat shim path, so the trace described numbers the run had never published.
+    since-retired flat shim path, so the trace described numbers the run had never published.
 
     Returns:
         0 on success; 2 with a message on stderr when ``--value`` is malformed (no ``/``) or names a
@@ -1225,33 +1225,6 @@ class StagedCli:
             )
         return parsed, perspective_id
 
-    #: How a catalogue is named in the document: the country it applies to and the date the
-    #: catalogue was taken from the programmes' own pages, which is the pair that identifies one
-    #: version of one country's support landscape. The bare country would not: Ireland's schemes
-    #: change every few months and a stored document has to say which of them it priced.
-    CATALOG_ID_FORMAT: ClassVar[str] = "{country}@{snapshot}"
-
-    #: What stands in the date's place when the catalogue states no snapshot date.
-    UNDATED_CATALOG: ClassVar[str] = "undated"
-
-    @classmethod
-    def catalog_id(cls, catalog: Optional[SubsidyCatalog], country: str) -> Optional[str]:
-        """How the document names the subsidy catalogue a plan was priced under.
-
-        Args:
-            catalog: The catalogue in force, or ``None`` when the plan ran with none, in which
-                case every subsidy row of the document is undetermined.
-            country: The country the plan was priced for.
-
-        Returns:
-            ``"IE@2026-09-19"``-style id, or ``None`` for a plan priced with no catalogue.
-        """
-        if catalog is None:
-            return None
-        return cls.CATALOG_ID_FORMAT.format(
-            country=country, snapshot=catalog.snapshot_date or cls.UNDATED_CATALOG
-        )
-
     #: The code a refusal about the plan as a whole is published under — a missing input file,
     #: years that run backwards, a stage with no mapping report. A refused *parameter* block
     #: carries its own per-key codes instead (``parameters.<key>.invalid`` and the rest).
@@ -1330,12 +1303,10 @@ def _cmd_staged(args: argparse.Namespace) -> int:
     except CostDataError as error:
         print(str(error), file=sys.stderr)
         return StagedCli.ENGINE_FAILED
-    # A plan with no catalogue is priced with subsidy_mode NONE (hisim-cyc.5); resolving it here
-    # rather than only inside the evaluator is what makes the document's parameters block say so.
-    parameters, perspective = StagedEvaluator.priced_under(parameters, perspective, catalog)
 
     try:
         result = StagedEvaluator(database).evaluate(stages, parameters, perspective, catalog)
+        measures, unpriced = StagedCli.read_mapping(directories, args.stage)
     except StagedEvaluationError as error:
         path = StagedCli.write_problems(args.out, error)
         print(f"{error} (problems written to {path})", file=sys.stderr)
@@ -1343,22 +1314,20 @@ def _cmd_staged(args: argparse.Namespace) -> int:
     except (UnresolvableSubjectsError, CostDataError) as error:
         print(str(error), file=sys.stderr)
         return StagedCli.ENGINE_FAILED
-
-    try:
-        measures, unpriced = StagedCli.read_mapping(directories, args.stage)
-    except StagedEvaluationError as error:
-        path = StagedCli.write_problems(args.out, error)
-        print(f"{error} (problems written to {path})", file=sys.stderr)
-        return StagedCli.PLAN_REFUSED
     document = StagedDocument(
         result=result,
         parameters=parameters,
         perspective=perspective,
         measure_ids=measures,
         unpriced_subjects=unpriced,
-        subsidy_catalog_id=StagedCli.catalog_id(catalog, parameters.country),
     )
-    document.write(Path(args.out))
+    try:
+        document.write(Path(args.out))
+    except (SubsidyReconciliationError, BandOrderError) as error:
+        # Both are ValueErrors, which `main` would report as a mistyped invocation (exit 2). They
+        # are engine bugs by their own definition, and write() refuses before the file exists.
+        print(str(error), file=sys.stderr)
+        return StagedCli.ENGINE_FAILED
     print(f"Wrote {args.out} for {len(stages)} stages under perspective {perspective.id}.")
     return 0
 

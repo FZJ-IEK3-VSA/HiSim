@@ -271,6 +271,11 @@ class StagedResult:
             timeline order. The document needs it for one thing the entry itself cannot say: a
             debt-service payment belongs to the loan of the stage that *borrowed*, which is not
             in general the stage active in the payment year (step 12 §2.2).
+        subsidy_catalog_id: The catalogue the plan was priced under, as
+            :meth:`StagedEvaluator.catalog_id` names it, or ``None`` for a plan priced with none —
+            and therefore with ``subsidy_mode: NONE``. Recorded by :meth:`StagedEvaluator.evaluate`
+            rather than supplied beside the result, so a document cannot name a catalogue the
+            figures were not priced with.
     """
 
     reference: LifecycleCostResult
@@ -281,6 +286,7 @@ class StagedResult:
     charged_subjects_by_stage: Tuple[Dict[str, float], ...] = field(default_factory=tuple)
     active_stage_by_year: Tuple[int, ...] = field(default_factory=tuple)
     stage_by_entry: Tuple[int, ...] = field(default_factory=tuple)
+    subsidy_catalog_id: Optional[str] = None
 
     def stage_of_year(self, year: int) -> int:
         """Index of the stage the house is in during one horizon year.
@@ -420,7 +426,7 @@ class StagedEvaluator:
                 under :meth:`priced_under`'s ``subsidy_mode: NONE``.
 
         Returns:
-            The :class:`StagedResult`.
+            The :class:`StagedResult`, carrying the id of ``catalog`` (:meth:`catalog_id`).
 
         Raises:
             StagedEvaluationError: For any condition of the class docstring's list — a plan this
@@ -458,6 +464,34 @@ class StagedEvaluator:
             charged_subjects_by_stage=tuple(charged_by_stage),
             active_stage_by_year=active_by_year,
             stage_by_entry=spliced.stage_by_entry,
+            subsidy_catalog_id=self.catalog_id(catalog, parameters.country),
+        )
+
+    #: How a catalogue is named in the document: the country it applies to and the date the
+    #: catalogue was taken from the programmes' own pages, which is the pair that identifies one
+    #: version of one country's support landscape. The bare country would not: Ireland's schemes
+    #: change every few months and a stored document has to say which of them it priced.
+    CATALOG_ID_FORMAT = "{country}@{snapshot}"
+
+    #: What stands in the date's place when the catalogue states no snapshot date.
+    UNDATED_CATALOG = "undated"
+
+    @classmethod
+    def catalog_id(cls, catalog: Optional[SubsidyCatalog], country: str) -> Optional[str]:
+        """How a priced plan names the subsidy catalogue it was priced under.
+
+        Args:
+            catalog: The catalogue in force, or ``None`` when the plan ran with none, in which
+                case every subsidy row of the document is undetermined.
+            country: The country the plan was priced for.
+
+        Returns:
+            ``"IE@2026-09-19"``-style id, or ``None`` for a plan priced with no catalogue.
+        """
+        if catalog is None:
+            return None
+        return cls.CATALOG_ID_FORMAT.format(
+            country=country, snapshot=catalog.snapshot_date or cls.UNDATED_CATALOG
         )
 
     @classmethod
@@ -470,16 +504,18 @@ class StagedEvaluator:
         """The assumptions and the perspective a plan is actually priced under, given its catalogue.
 
         A plan with no catalogue is priced with ``subsidy_mode: NONE``, whatever the perspective
-        asked for. The engine's answer to "subsidies on, no catalogue" is the §10.1 flat shim, a
-        share stored in the *device* data, and step 10 §1 decided a staged document never
-        publishes it: the document states every scheme of such a plan as undetermined. Pricing the
-        shim anyway put a grant into the plan's ``by_group`` and ``totals`` that its own
-        ``subsidies[]`` said did not exist (hisim-cyc.5). With a catalogue the arguments are
-        returned unchanged.
+        asked for, and the document states every scheme of such a plan as undetermined (step 10
+        §1). The lever is ``perspective.subsidy_mode``, which is what the engine reads;
+        ``apply_subsidies`` is only the document's echo of that mode
+        (:meth:`~hisim.economics.staged_parameters.StagedParameters.applied_to`) and is turned off
+        so the echo says what ran. The engine itself books nothing without a catalogue since the
+        §10.1 flat shim was retired, so the rewrite changes no figure; it keeps the ``parameters``
+        block from echoing a mode the plan did not run under (hisim-cyc.5). With a catalogue the
+        arguments are returned unchanged.
 
-        The CLI calls this before it builds the document, so the ``parameters`` block echoes the
-        mode the plan ran under rather than the one the file asked for; :meth:`evaluate` calls it
-        again, which changes nothing the second time.
+        :meth:`evaluate` calls this, and so does
+        :class:`~hisim.economics.staged_document.StagedDocument` when the result it is given was
+        priced with no catalogue; the second call changes nothing.
 
         Args:
             parameters: The assumptions the caller resolved.

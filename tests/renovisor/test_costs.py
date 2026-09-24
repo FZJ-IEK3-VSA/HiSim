@@ -127,19 +127,35 @@ class TestTheReasonsSayWhereTheMoneyIs:
         assert StagedCli.DEFAULT_PERSPECTIVE
         assert EconomicsDocument.COMMAND in reason
 
-    def test_the_twenty_year_monthly_figure_says_the_annuity_and_the_division(self) -> None:
-        """It is the annual annuity divided by twelve, not the year-1 cash flow.
+    def test_the_twenty_year_monthly_figure_is_the_monthly_equivalent_cost(self) -> None:
+        """It is the annuity per month, published as its own key, not the year-1 cash flow.
 
-        The map used to point it at ``monthly_cost_year1_in_euro``, which is what the plan
-        actually pays in its first year and equals the annuity only when the cost is flat. A
-        caller following the reason then read a different concept with the same unit.
+        The map once pointed it at ``monthly_cost_year1_in_euro``, which is what the plan pays in
+        its first year and equals the annuity only when the cost is flat; then at the annual
+        annuity with a "divided by twelve" note. Since hisim-cyc.6 the document publishes the
+        monthly figure itself, so the reason names a key a caller can read without arithmetic.
         """
         reason = CostBuilder.reason_for(CostField.MONTHLY_TWENTY_YEARS)
 
         assert EconomicsDocument.WHERE[CostField.MONTHLY_TWENTY_YEARS.value] == (
-            "plan.totals.equivalent_annual_cost_in_euro"
+            "plan.totals.monthly_equivalent_cost_in_euro"
         )
-        assert "divided by twelve" in reason
+        assert "plan.totals.monthly_equivalent_cost_in_euro" in reason
+        assert "divided by" not in reason
+
+    def test_the_twenty_year_monthly_reason_names_the_horizon_it_is_over(self) -> None:
+        """The annuity is over the document's horizon, so the reason says the answer is 20 years only there.
+
+        A plan evaluated over 15 years publishes the same key with a fifteen-year annuity in it; the
+        key alone cannot tell a caller that, so the sentence has to. No other field carries the caveat.
+        """
+        reason = CostBuilder.reason_for(CostField.MONTHLY_TWENTY_YEARS)
+
+        assert "`parameters.horizon_years` (20 in the backend's block)" in reason
+        assert "another horizon answers another question" in reason
+        for field in CostField:
+            if field is not CostField.MONTHLY_TWENTY_YEARS:
+                assert "horizon_years` (20" not in CostBuilder.reason_for(field)
 
     def test_the_ten_year_monthly_figure_names_no_key_and_says_why(self) -> None:
         """One document is one horizon; a ten-year figure is a second evaluation, not a key."""

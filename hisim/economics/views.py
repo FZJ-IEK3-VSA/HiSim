@@ -60,6 +60,7 @@ from typing import (
     Union,
 )
 
+from hisim.economics.calculators.aggregation import TimelineAggregation
 from hisim.economics.calculators.financing_application import FinancingConstants
 from hisim.economics.calculators.subsidy_application import nominal_support_from_entries
 from hisim.economics.carriers import EnergyCarrier, EnergyFlowRole
@@ -4225,10 +4226,6 @@ class BurdenCategories:
     #: grouping to decide what a number *is*.
     REPLACEMENT = frozenset({CostCategory.REPLACEMENT, CostCategory.REPLACEMENT_RESERVE})
 
-    #: Months a year, as the divisor it is: the engine has no intra-year resolution, so this is a
-    #: unit conversion of an annual figure and never a statement about seasonal profiles.
-    MONTHS_PER_YEAR = 12.0
-
 
 @dataclass(frozen=True)
 class MonthlyBurden:
@@ -4279,9 +4276,9 @@ def monthly_burden_series(result: LifecycleCostResult) -> MonthlyBurden:
         for category, value in result.npv_by_category.items()
         if category in BurdenCategories.REPLACEMENT
     )
-    reserve = replacement_npv * result.parameters.annuity_factor() / BurdenCategories.MONTHS_PER_YEAR
+    reserve = replacement_npv * result.parameters.annuity_factor() / TimelineAggregation.MONTHS_PER_YEAR
     return MonthlyBurden(
-        series=[value.scale(1.0 / BurdenCategories.MONTHS_PER_YEAR) for value in per_year],
+        series=[value.scale(1.0 / TimelineAggregation.MONTHS_PER_YEAR) for value in per_year],
         replacement_reserve_per_month=reserve,
     )
 
@@ -4294,7 +4291,7 @@ def _recurring_entries_by_year(result: LifecycleCostResult) -> List[List[CashFlo
     they are drawn on top of each other: the stacked bars are the whiskered totals split by
     colour, and a split that filtered one category differently, or ran one year further, would
     produce a stack that does not add up to the bar it fills. The two callers each divide by
-    `BurdenCategories.MONTHS_PER_YEAR` themselves, since one sums bands and the other sums
+    `TimelineAggregation.MONTHS_PER_YEAR` themselves, since one sums bands and the other sums
     best-estimate floats per category, but they select the same entries by construction.
 
     Args:
@@ -4332,7 +4329,7 @@ def monthly_burden_by_group(
         for item in entries:
             row[item.category] = (
                 row.get(item.category, 0.0)
-                + item.amount_in_euro.best_estimate / BurdenCategories.MONTHS_PER_YEAR
+                + item.amount_in_euro.best_estimate / TimelineAggregation.MONTHS_PER_YEAR
             )
         rows.append(row)
     return fold_category_matrix(rows, mapping)

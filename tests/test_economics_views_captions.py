@@ -106,6 +106,7 @@ def make_result(
         parameters=parameters,
         total_npv_in_euro=aggregation.total_npv_in_euro,
         equivalent_annual_cost_in_euro=aggregation.equivalent_annual_cost_in_euro,
+        monthly_equivalent_cost_in_euro=aggregation.monthly_equivalent_cost_in_euro,
         npv_by_category=aggregation.npv_by_category,
         npv_by_component=aggregation.npv_by_component,
         npv_by_payer=aggregation.npv_by_payer,

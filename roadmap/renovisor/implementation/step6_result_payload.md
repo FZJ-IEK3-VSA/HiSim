@@ -84,6 +84,10 @@ bundle has no single obvious choice, take the first and say so in the report).
 | `payback_period_in_years` | absent; `missing` reason "needs the base calculation (compare step)" | — |
 | `property_value_increase_in_percent` | absent; `missing` reason "no model (A13)" | — |
 
+> **Note (2026-09-24, hisim-cyc.6).** Since step 10 the cost fields live in `economics_result.json`;
+> `monthly_net_cost_20y_in_euro` is now `plan.totals.monthly_equivalent_cost_in_euro` there, the
+> equivalent annual cost over twelve computed by the engine, rather than a division by the reader.
+
 Envelope measures as engine subjects: the bridge accepts `extra_cost_facts` (`SubjectCostFacts`)
 for non-component subjects. **Do not** feed the envelope through the engine's own `devices_IE.json`
 envelope entries (Q9 forbids HiSim price estimates for envelope work); compute the envelope

@@ -39,6 +39,7 @@ import json
 import os
 from typing import Any, Dict, Optional
 
+from hisim.economics.calculators.aggregation import TimelineAggregation
 from hisim.economics.carriers import EnergyCarrier, validate_energy_attribution
 from hisim.economics.evaluator import EvaluationInputs, SubjectCostFacts, UnresolvedSubject
 from hisim.economics.exports import ExportFileNames
@@ -813,11 +814,18 @@ def result_from_json(
         The reconstructed result, equivalent to what the evaluator produced for the same run.
     """
     co2 = raw.get("lifecycle_co2", {})
+    equivalent_annual_cost = UncertainValue.from_json(raw["equivalent_annual_cost_in_euro"])
+    # A file written before hisim-cyc.6 has no monthly equivalent; it is the annuity over the
+    # months the aggregation divides by, so it is derived rather than missing.
+    monthly_equivalent_cost = UncertainValue.optional_from_json(raw.get("monthly_equivalent_cost_in_euro"))
+    if monthly_equivalent_cost is None:
+        monthly_equivalent_cost = equivalent_annual_cost.scale(1.0 / TimelineAggregation.MONTHS_PER_YEAR)
     return LifecycleCostResult(
         perspective_id=raw["perspective"],
         parameters=EconomicParameters.from_dict(raw["parameters"]),
         total_npv_in_euro=UncertainValue.from_json(raw["total_npv_in_euro"]),
-        equivalent_annual_cost_in_euro=UncertainValue.from_json(raw["equivalent_annual_cost_in_euro"]),
+        equivalent_annual_cost_in_euro=equivalent_annual_cost,
+        monthly_equivalent_cost_in_euro=monthly_equivalent_cost,
         npv_by_category={
             CostCategory(key): UncertainValue.from_json(value)
             for key, value in raw["npv_by_category"].items()

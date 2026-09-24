@@ -762,6 +762,10 @@ class LifecycleCostResult:
     parameters: EconomicParameters
     total_npv_in_euro: UncertainValue  # net present cost over the horizon
     equivalent_annual_cost_in_euro: UncertainValue  # NPV x annuity factor — the headline KPI
+    #: The equivalent annual cost over `TimelineAggregation.MONTHS_PER_YEAR`: the level monthly
+    #: payment worth the whole horizon, and the headline monthly figure (hisim-cyc.6). Not
+    #: `monthly_cost_year1_in_euro`, which is year 1's cash and carries whatever that year replaces.
+    monthly_equivalent_cost_in_euro: UncertainValue
     npv_by_category: Dict[CostCategory, UncertainValue]
     npv_by_component: Dict[str, UncertainValue]
     npv_by_payer: Dict[Actor, UncertainValue]
@@ -1023,6 +1027,7 @@ class LifecycleCostResult:
             "parameters": self.parameters.to_dict(),
             "total_npv_in_euro": self.total_npv_in_euro.to_json(),
             "equivalent_annual_cost_in_euro": self.equivalent_annual_cost_in_euro.to_json(),
+            "monthly_equivalent_cost_in_euro": self.monthly_equivalent_cost_in_euro.to_json(),
             "npv_by_category": {category.value: value.to_json() for category, value in self.npv_by_category.items()},
             "npv_by_component": {subject: value.to_json() for subject, value in self.npv_by_component.items()},
             "npv_by_payer": {actor.value: value.to_json() for actor, value in self.npv_by_payer.items()},
@@ -1118,6 +1123,8 @@ class VariantComparison:
     perspective_id: str
     npv_delta_in_euro: UncertainValue  # variant - reference, slot-wise
     equivalent_annual_cost_delta_in_euro: UncertainValue
+    #: The equivalent annual cost delta over `TimelineAggregation.MONTHS_PER_YEAR` (hisim-cyc.6).
+    monthly_equivalent_cost_delta_in_euro: UncertainValue
     npv_delta_by_subject: Dict[str, UncertainValue]
     # Discounted payback per slot; each independently None-able ("never within horizon"):
     discounted_payback_years: Dict[str, Optional[int]] = field(default_factory=dict)
@@ -1136,6 +1143,7 @@ class VariantComparison:
             "perspective": self.perspective_id,
             "npv_delta_in_euro": self.npv_delta_in_euro.to_json(),
             "equivalent_annual_cost_delta_in_euro": self.equivalent_annual_cost_delta_in_euro.to_json(),
+            "monthly_equivalent_cost_delta_in_euro": self.monthly_equivalent_cost_delta_in_euro.to_json(),
             "npv_delta_by_subject": {subject: value.to_json() for subject, value in self.npv_delta_by_subject.items()},
             "discounted_payback_years": self.discounted_payback_years,
             "warm_rent_change_per_month_in_euro": self.warm_rent_change_per_month_in_euro.to_json()
@@ -1267,6 +1275,12 @@ def compare(
         A `VariantComparison`. The warm-rent fields stay None unless *both* results carry a TENANT
         payer NPV, i.e. unless the perspective is one of the rented ones (§6.5).
     """
+    # Imported here because the aggregation calculator imports this module for its record types.
+    from hisim.economics.calculators.aggregation import (  # pylint: disable=import-outside-toplevel
+        TimelineAggregation,
+    )
+
+    months_per_year = TimelineAggregation.MONTHS_PER_YEAR
     npv_delta = variant.total_npv_in_euro - reference.total_npv_in_euro
     eac_delta = variant.equivalent_annual_cost_in_euro - reference.equivalent_annual_cost_in_euro
 
@@ -1291,6 +1305,7 @@ def compare(
         perspective_id=variant.perspective_id,
         npv_delta_in_euro=npv_delta,
         equivalent_annual_cost_delta_in_euro=eac_delta,
+        monthly_equivalent_cost_delta_in_euro=eac_delta.scale(1.0 / months_per_year),
         npv_delta_by_subject=npv_delta_by_subject,
         discounted_payback_years=payback,
         cumulative_discounted_savings_in_euro=savings,
@@ -1303,7 +1318,7 @@ def compare(
     tenant_variant = variant.npv_by_payer.get(Actor.TENANT)
     if tenant_reference is not None and tenant_variant is not None:
         annuity_factor = variant.parameters.annuity_factor()
-        delta_per_month = (tenant_variant - tenant_reference).scale(annuity_factor / 12.0)
+        delta_per_month = (tenant_variant - tenant_reference).scale(annuity_factor / months_per_year)
         comparison.warm_rent_change_per_month_in_euro = delta_per_month
         comparison.warm_rent_neutral_per_slot = {
             "low": delta_per_month.minimum <= 0,

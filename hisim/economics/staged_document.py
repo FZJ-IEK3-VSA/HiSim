@@ -258,7 +258,7 @@ class StagedDocument:
     """
 
     #: Version of this document format. Bumped when a consumer would have to change.
-    SCHEMA_VERSION: ClassVar[int] = 1
+    SCHEMA_VERSION: ClassVar[int] = 2
 
     #: The one currency the engine prices in.
     CURRENCY: ClassVar[str] = "EUR"
@@ -607,7 +607,16 @@ class StagedDocument:
         }
 
     def _totals(self, result: LifecycleCostResult) -> Dict[str, Any]:
-        """The six headline figures of an evaluation."""
+        """The seven headline figures of an evaluation.
+
+        Two of them are monthly, and they answer different questions.
+        ``monthly_equivalent_cost_in_euro`` is the equivalent annual cost over twelve: the level
+        monthly payment worth the whole horizon, and the headline (hisim-cyc.6). The result
+        carries it, from :class:`~hisim.economics.calculators.aggregation.TimelineAggregation`,
+        so the document divides nothing itself. ``monthly_cost_year1_in_euro`` is year 1's cash
+        over twelve, replacements included: true for that year, and misleading as a running cost
+        when the reference replaces its boiler in year 1.
+        """
         investment = UncertainValue.exact(0.0)
         for entry in result.timeline.entries:
             if entry.year == 0 and entry.category in self.INVESTMENT_TOTAL_CATEGORIES:
@@ -617,6 +626,7 @@ class StagedDocument:
         return {
             "npv_in_euro": self._band(result.total_npv_in_euro),
             "equivalent_annual_cost_in_euro": self._band(result.equivalent_annual_cost_in_euro),
+            "monthly_equivalent_cost_in_euro": self._band(result.monthly_equivalent_cost_in_euro),
             "monthly_cost_year1_in_euro": self._band(monthly) if monthly is not None else None,
             "investment_year0_in_euro": self._band(investment),
             "sunk_cost_written_off_in_euro": self._band(result.sunk_cost_written_off_in_euro),
@@ -1165,6 +1175,9 @@ class StagedDocument:
             "npv_delta_in_euro": self._band(comparison.npv_delta_in_euro),
             "equivalent_annual_cost_delta_in_euro": self._band(
                 comparison.equivalent_annual_cost_delta_in_euro
+            ),
+            "monthly_equivalent_cost_delta_in_euro": self._band(
+                comparison.monthly_equivalent_cost_delta_in_euro
             ),
             "monthly_cost_year1_delta_in_euro": monthly_delta,
             "discounted_payback_year": {

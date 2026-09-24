@@ -315,7 +315,7 @@ def test_house(
     [
         (lt.LoadTypes.OIL, 9.821666666666667, 830.0),
         (lt.LoadTypes.PELLETS, 3.25, 650),
-        (lt.LoadTypes.WOOD_CHIPS, 3.9e9 / 3.6e9, 250),  # 15.6 MJ/kg at 250 kg/m3 (hisim-l07.15)
+        (lt.LoadTypes.WOOD_CHIPS, 15.6e6 * 268 / 3.6e9, 268),  # 15.6 MJ/kg at 268 kg/m3 (hisim-l07.15)
     ],
 )
 def test_the_preset_copies_carrier_and_fuel_constants_from_the_generator_beside_it(

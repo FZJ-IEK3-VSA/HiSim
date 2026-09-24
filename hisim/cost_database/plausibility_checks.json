@@ -10,7 +10,7 @@
     "DIESEL": [0.0816, 0.3062],
     "comment_PELLETS": "was 150 - 700 EUR/t; / 5000 kWh/t (PhysicsConfig PELLETS: 11.7 GJ/m3 at 650 kg/m3) = 0.030 - 0.140 EUR/kWh",
     "PELLETS": [0.030, 0.140],
-    "comment_WOOD_CHIPS": "was 50 - 400 EUR/t; / 4333 kWh/t (PhysicsConfig WOOD_CHIPS: 15.6 GJ/t fresh mass at 15 % water content per UBA factsheet 2024, i.e. 3.9 GJ per bulk m3 at 250 kg/m3) = 0.01154 - 0.09231 EUR/kWh. Until hisim-l07.15 the heating value had been read as 15.6 GJ/m3 (17333 kWh/t) and the band was 0.00288 - 0.02308.",
+    "comment_WOOD_CHIPS": "was 50 - 400 EUR/t; / 4333 kWh/t (PhysicsConfig WOOD_CHIPS: 15.6 GJ/t fresh mass at 15 % water content per UBA factsheet 2024, i.e. 4.18 GJ per bulk m3 at 268 kg/m3) = 0.01154 - 0.09231 EUR/kWh. Until hisim-l07.15 the heating value had been read as 15.6 GJ/m3 (17333 kWh/t) and the band was 0.00288 - 0.02308.",
     "WOOD_CHIPS": [0.01154, 0.09231],
     "DISTRICT_HEATING": [0.04, 0.35],
     "HYDROGEN": [0.05, 0.60]

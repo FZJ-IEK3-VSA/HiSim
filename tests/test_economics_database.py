@@ -10,6 +10,7 @@ source registry, ``database`` the loader that ties them together. Row types are 
 their canonical module here; ``TestReExportSurface`` pins the deliberate ``database`` re-exports.
 """
 
+import dataclasses
 import json
 import os
 import shutil
@@ -487,11 +488,19 @@ class TestTheWoodFuelEmissionFactors:
 
     @pytest.mark.parametrize("country, carrier", sorted(AS_PUBLISHED))
     def test_burning_one_ton_emits_the_hand_figure(self, database, country, carrier):
-        """A hand figure in tons: factor × heating value is the CO2 of one burned ton."""
+        """A hand figure in tons: factor × heating value is the CO2 of one burned ton.
+
+        The engine's side takes its kWh per ton from `CostDatabase.energy_content_of`, the PhysicsConfig
+        heating value a per-ton quote is divided by, so a regressed heating value fails here against the hand
+        kWh per ton (4333.3 is rounded, hence the tolerance).
+        """
         price = database.get_energy_price(EnergyCarrier[carrier], self.LOOKUP_YEARS[country], country)
+        content = database.energy_content_of(dataclasses.replace(price, quantity_unit="ton"))
+        assert content is not None
         hand_figure = self.AS_PUBLISHED[(country, carrier)] * self.KWH_PER_TON[carrier]
 
-        assert price.emission_factor_in_kg_per_kwh * self.KWH_PER_TON[carrier] == pytest.approx(hand_figure)
+        engine_figure = price.emission_factor_in_kg_per_kwh * content.kwh_per_quantity_unit
+        assert engine_figure == pytest.approx(hand_figure, rel=1e-4)
 
     def test_one_ton_of_pellets_is_about_180_kg_of_co2(self, database):
         """The issue's own hand figure, cross-checked against the AI estimate's 175 kg/t."""

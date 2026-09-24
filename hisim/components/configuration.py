@@ -804,6 +804,34 @@ class PhysicsConfig:
     Brennwert: Higher heating value gross caloric value, Heizwert: Lower heating value or net caloric value.
     """
 
+    # Solid fuels: each figure as its source states it, once; the per-m3 heating value is their product.
+    # density here = bulk density (Schüttdichte), i.e. per Schüttraummeter of the loose fuel.
+
+    # Pellets. Source: https://www.chemie.de/lexikon/Holzpellet.html, "Heizwert Hi größer als 18 MJ/kg = 5 kWh/kg
+    # = 3,25 kWh/l" and "Schüttdichte 650 kg/m³"; 18 MJ/kg at 650 kg/m3 is 11.7 GJ/m3.
+    PELLETS_LOWER_HEATING_VALUE_IN_JOULE_PER_KG: ClassVar[float] = 18e6
+    PELLETS_BULK_DENSITY_IN_KG_PER_M3: ClassVar[float] = 650
+    PELLETS_LOWER_HEATING_VALUE_IN_JOULE_PER_M3: ClassVar[float] = (
+        PELLETS_LOWER_HEATING_VALUE_IN_JOULE_PER_KG * PELLETS_BULK_DENSITY_IN_KG_PER_M3
+    )
+
+    # Wood chips. Source: [14] in the source list at the top of this module (UBA factsheet of 30 Oct 2024), table 1,
+    # "Holzhackschnitzel": lower heating value 15.6 GJ per tonne of fresh mass at 15 % water content for forest
+    # softwood, forest hardwood and industrial residue chips (landscape-care wood: 14.3 GJ/t).
+    # The 15.6 is GJ per TONNE; until hisim-l07.15 it was read per m3, 17.3 instead of 4.33 kWh/kg, four times too much.
+    # Cross-check: FNR "Basisdaten Bioenergie Deutschland", spruce chips at 15 % water: 15.6 MJ/kg, 194 kg/m3.
+    WOOD_CHIPS_LOWER_HEATING_VALUE_IN_JOULE_PER_KG: ClassVar[float] = 15.6e6
+    # Bulk density: the same table's typical German mix, each row's share times its bulk density:
+    # forest softwood 59.0 % at 0.295 t/m3, forest hardwood 24.6 % at 0.194, landscape-care wood 13.6 % at 0.295,
+    # industrial residue 2.9 % at 0.194: 0.59 * 0.295 + 0.246 * 0.194 + 0.136 * 0.295 + 0.029 * 0.194 = 0.2675 t/m3
+    # (the shares, rounded by UBA, add up to 100.1 %), rounded to the table's three decimals: 0.268 t/m3 = 268 kg/m3.
+    # UBA labels softwood 0.295 and hardwood 0.194, which the FNR cross-check (spruce, a softwood, at 194 kg/m3)
+    # contradicts.
+    WOOD_CHIPS_BULK_DENSITY_IN_KG_PER_M3: ClassVar[float] = 268
+    WOOD_CHIPS_LOWER_HEATING_VALUE_IN_JOULE_PER_M3: ClassVar[float] = (
+        WOOD_CHIPS_LOWER_HEATING_VALUE_IN_JOULE_PER_KG * WOOD_CHIPS_BULK_DENSITY_IN_KG_PER_M3
+    )  # 15.6 MJ/kg times 268 kg/m3 = 4.1808 GJ/m3
+
     # Init
     density_in_kg_per_m3: float
     lower_heating_value_in_joule_per_m3: float
@@ -857,32 +885,22 @@ class PhysicsConfig:
                 specific_heat_capacity_in_joule_per_kg_per_kelvin=1970,
             )
         if energy_carrier == LoadTypes.PELLETS:
-            # density here = bulk density (Schüttdichte)
-            # source: https://www.chemie.de/lexikon/Holzpellet.html
+            # density and heating value: see the PELLETS_* class constants
             # higher heating value of pellets unknown -> set to lower heating value
             return PhysicsConfig(
-                density_in_kg_per_m3=650,
-                lower_heating_value_in_joule_per_m3=11.7 * 1e9,
-                higher_heating_value_in_joule_per_m3=11.7 * 1e9,
+                density_in_kg_per_m3=cls.PELLETS_BULK_DENSITY_IN_KG_PER_M3,
+                lower_heating_value_in_joule_per_m3=cls.PELLETS_LOWER_HEATING_VALUE_IN_JOULE_PER_M3,
+                higher_heating_value_in_joule_per_m3=cls.PELLETS_LOWER_HEATING_VALUE_IN_JOULE_PER_M3,
                 specific_heat_capacity_in_joule_per_kg_per_kelvin=2500,
             )
         if energy_carrier == LoadTypes.WOOD_CHIPS:
-            # density here = bulk density (Schüttdichte), i.e. per Schüttraummeter of loose chips
-            # source density and heating value: Umweltbundesamt, "Ansatz zur Neubewertung von CO2-Emissionen aus der
-            # Holzverbrennung", factsheet of 30 Oct 2024, table 1: lower heating value 15.6 GJ per tonne of fresh mass
-            # at 15 % water content (softwood, hardwood and industrial residue chips alike), bulk density 0.295 t/m3
-            # (softwood) to 0.194 t/m3 (hardwood); 250 kg/m3 sits inside that range.
-            # https://www.umweltbundesamt.de/system/files/medien/479/publikationen/
-            # factsheet_ansatz_zur_neubewertung_von_co2-emissionen_aus_der_holzverbrennung_0.pdf
-            # Cross-check: FNR "Basisdaten Bioenergie Deutschland", spruce chips at 15 % water: 15.6 MJ/kg, 194 kg/m3.
-            # The 15.6 is GJ per TONNE. Until hisim-l07.15 it was stored as GJ per m3, i.e. 17.3 kWh/kg instead of
-            # 4.33 kWh/kg, and every kWh figure derived from a mass of wood chips was four times too large.
+            # density and heating value: see the WOOD_CHIPS_* class constants
             # source heat capacity: https://www.schweizer-fn.de/stoff/wkapazitaet/wkapazitaet_baustoff_erde.php
             # higher heating value of wood chips unknown -> set to lower heating value
             return PhysicsConfig(
-                density_in_kg_per_m3=250,  # approximate value based on different wood types
-                lower_heating_value_in_joule_per_m3=15.6 * 1e6 * 250,  # 15.6 MJ/kg times the bulk density = 3.9 GJ/m3
-                higher_heating_value_in_joule_per_m3=15.6 * 1e6 * 250,
+                density_in_kg_per_m3=cls.WOOD_CHIPS_BULK_DENSITY_IN_KG_PER_M3,
+                lower_heating_value_in_joule_per_m3=cls.WOOD_CHIPS_LOWER_HEATING_VALUE_IN_JOULE_PER_M3,
+                higher_heating_value_in_joule_per_m3=cls.WOOD_CHIPS_LOWER_HEATING_VALUE_IN_JOULE_PER_M3,
                 specific_heat_capacity_in_joule_per_kg_per_kelvin=2000,  # estimated based on values for different woods
             )
         if energy_carrier == LoadTypes.WATER:

@@ -139,7 +139,7 @@
       "source_ids": [
         "src_ai_estimates"
       ],
-      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Converted to kWh basis from the as-published quote 120/160/210 (min/best_estimate/max) EUR/t and 80 kg CO2/t using 4333.3 kWh/t (PhysicsConfig WOOD_CHIPS: 15.6 GJ per tonne of fresh mass at 15 % water content, UBA factsheet 2024 table 1; until hisim-l07.15 the figure had been read as GJ/m3 and the row was divided by 17333.3 kWh/t)."
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Converted to kWh basis from the as-published quote 120/160/210 (min/best_estimate/max) EUR/t and 80 kg CO2/t using 4333.3 kWh/t (PhysicsConfig WOOD_CHIPS: 15.6 GJ per tonne of fresh mass at 15 % water content, UBA factsheet 2024 table 1; until hisim-l07.15 the figure had been read as GJ/m3 and the row was divided by 17333.3 kWh/t). The emission factor derives from the as-published 80 kg CO2 per tonne, a different source from the legacy per-kWh series (DE 0.0313, AT 0.019 kg/kWh), and is to be reviewed."
     },
     {
       "carrier": "DISTRICT_HEATING",
@@ -326,7 +326,7 @@
       "source_ids": [
         "src_ai_estimates"
       ],
-      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Converted to kWh basis from the as-published quote 130/175/230 (min/best_estimate/max) EUR/t and 80 kg CO2/t using 4333.3 kWh/t (PhysicsConfig WOOD_CHIPS: 15.6 GJ per tonne of fresh mass at 15 % water content, UBA factsheet 2024 table 1; until hisim-l07.15 the figure had been read as GJ/m3 and the row was divided by 17333.3 kWh/t)."
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Converted to kWh basis from the as-published quote 130/175/230 (min/best_estimate/max) EUR/t and 80 kg CO2/t using 4333.3 kWh/t (PhysicsConfig WOOD_CHIPS: 15.6 GJ per tonne of fresh mass at 15 % water content, UBA factsheet 2024 table 1; until hisim-l07.15 the figure had been read as GJ/m3 and the row was divided by 17333.3 kWh/t). The emission factor derives from the as-published 80 kg CO2 per tonne, a different source from the legacy per-kWh series (DE 0.0313, AT 0.019 kg/kWh), and is to be reviewed."
     },
     {
       "carrier": "DISTRICT_HEATING",

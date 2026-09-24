@@ -97,6 +97,19 @@ class TestWhatThePageShows:
         assert "house.building.facade.u_value_in_watt_per_m2_per_kelvin" in page
         assert "house.occupancy.number_of_residents" in page
 
+    @pytest.mark.parametrize(
+        "entry, shown",
+        [
+            ({"minimum": 1, "maximum": 12}, "1 &ndash; 12"),
+            ({"minimum": 0}, "&ge; 0"),
+            ({"maximum": 10}, "&le; 10"),
+            ({}, ""),
+        ],
+    )
+    def test_a_range_open_at_one_end_is_shown_as_such(self, entry: dict, shown: str) -> None:
+        """A field publishes only the schema's inclusive bounds, so either end can be missing."""
+        assert TranslationMap._bounds(entry) == shown  # pylint: disable=protected-access
+
 
 @pytest.mark.base
 class TestTheResultPane:

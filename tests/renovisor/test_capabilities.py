@@ -15,7 +15,7 @@ battery.
 """
 
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict, Iterator, Mapping, Optional
 
 import copy
 import pytest
@@ -32,9 +32,11 @@ from hisim.renovisor.capabilities import (
     ProbeResult,
     ProbeRunner,
     ProbeSet,
+    RequestSchemaBounds,
     ResultsSection,
     unlisted_lines,
 )
+from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.costs import CostField, CostSchema
 from hisim.renovisor.kpis import KpiField, KpiSchema
 from hisim.renovisor.request import CatalogueTable, ValueType
@@ -490,9 +492,9 @@ class TestTheResultsSection:
     def test_the_section_is_what_the_shared_schema_declares(self, document: CapabilityDocument) -> None:
         """``results`` is validated with the rest of the document against the shared schema."""
         document.validate()
-        assert document.body["results"] == ResultsSection.build()
 
 
+@pytest.mark.base
 class TestTheSchemaIsStrict:
     """The shared schema admits exactly what the document carries (decision of 2026-09-23).
 
@@ -509,7 +511,11 @@ class TestTheSchemaIsStrict:
         from jsonschema import ValidationError
 
         body = copy.deepcopy(document.body)
-        valued = next(option for measure in body["measures"] for option in measure["options"] if option.get("values"))
+        valued_options = [
+            option for measure in body["measures"] for option in measure["options"] if option.get("values")
+        ]
+        assert valued_options, "no option of the document carries values"
+        valued = valued_options[0]
         targets = {
             "top": body,
             "translator": body["translator"],
@@ -534,16 +540,128 @@ class TestTheSchemaIsStrict:
             CapabilityDocument(body=body, results=document.results, whitelist=document.whitelist).validate()
 
 
-class TestNumericFields:
-    """A numeric inventory field carries its bounds, not its probe values (decision of 2026-09-23)."""
+#: The keywords the request schema bounds or enumerates a leaf with.
+BOUND_KEYWORDS = ("minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "enum")
 
-    def test_a_numeric_field_has_minimum_and_maximum_and_no_values(self, document: CapabilityDocument) -> None:
-        """``values[]`` read like an allowed list on a number; the bounds are what it means."""
+
+def _request_schema_leaf(path: str) -> Optional[Dict[str, Any]]:
+    """Return what the request schema declares about one dotted path, over refs and alternatives.
+
+    Deliberately a second, smaller walk than the translator's own
+    :class:`hisim.renovisor.capabilities.RequestSchemaBounds`, so the test does not grade the
+    production walker with itself. Every reference in the vendored schema is ``#/$defs/<name>``.
+    ``None`` when the schema has no such path: the document also lists fields the translator
+    derives (``house.heating.installation_year``) that a request cannot carry.
+    """
+    schema = ContractFiles.request_schema()
+
+    def expand(node: Mapping[str, Any]) -> Iterator[Mapping[str, Any]]:
+        yield node
+        if "$ref" in node:
+            prefix, name = str(node["$ref"]).rsplit("/", 1)
+            assert prefix == "#/$defs", node["$ref"]
+            yield from expand(schema["$defs"][name])
+        for keyword in ("oneOf", "anyOf", "allOf"):
+            for alternative in node.get(keyword, []):
+                yield from expand(alternative)
+        if isinstance(node.get("items"), Mapping):
+            yield from expand(node["items"])
+
+    node: Mapping[str, Any] = schema
+    for part in path.split("."):
+        child = next(
+            (candidate["properties"][part] for candidate in expand(node) if part in candidate.get("properties", {})),
+            None,
+        )
+        if child is None:
+            return None
+        node = child
+    return {key: value for candidate in expand(node) for key, value in candidate.items() if key in BOUND_KEYWORDS}
+
+
+@pytest.mark.base
+class TestNumericFields:
+    """A numeric field publishes the request schema's bounds, never its probe points (PR #807)."""
+
+    def test_a_numeric_field_publishes_exactly_the_schemas_inclusive_bounds(
+        self, document: CapabilityDocument
+    ) -> None:
+        """No invented maximum, no probe point in place of an exclusive minimum, no ``values``."""
         fields = {entry["path"]: entry for entry in document.body["fields"]}
-        for path, (low, high) in ProbeSet.FIELD_BOUNDS.items():
-            entry = fields[f"{ProbeSet.HOUSE_PREFIX}{path}"]
-            assert (entry["minimum"], entry["maximum"]) == (low, high), path
+        for path in ProbeSet.FIELD_PROBE_POINTS:
+            full = f"{ProbeSet.HOUSE_PREFIX}{path}"
+            entry, declared = fields[full], _request_schema_leaf(full)
+            assert declared is not None, path
             assert "values" not in entry, path
+            assert "enum" not in declared, path
+            for key, exclusive in (("minimum", "exclusiveMinimum"), ("maximum", "exclusiveMaximum")):
+                if key in declared and exclusive not in declared:
+                    assert entry[key] == declared[key], (path, key)
+                else:
+                    assert key not in entry, (path, key)
+
+    def test_only_a_probed_numeric_field_carries_bounds(self, document: CapabilityDocument) -> None:
+        """A bound on any other entry would be one nobody derived from the schema."""
+        numeric = {f"{ProbeSet.HOUSE_PREFIX}{path}" for path in ProbeSet.FIELD_PROBE_POINTS}
+        for entry in document.body["fields"]:
+            if "minimum" in entry or "maximum" in entry:
+                assert entry["path"] in numeric, entry["path"]
+
+    def test_an_enum_declared_field_publishes_the_schemas_enum(self, document: CapabilityDocument) -> None:
+        """The three ``electric_vehicles`` fields are enums, not ranges, and read as such."""
+        fields = {entry["path"]: entry for entry in document.body["fields"]}
+        for path in ProbeSet.FIELD_VALUES:
+            full = f"{ProbeSet.HOUSE_PREFIX}{path}"
+            declared = _request_schema_leaf(full)
+            assert declared is not None, path
+            if "enum" not in declared:
+                continue  # a boolean, which lists (True, False) without the schema enumerating them
+            assert [value["value"] for value in fields[full]["values"]] == declared["enum"], path
+            assert "minimum" not in fields[full] and "maximum" not in fields[full], path
+
+    def test_every_enum_declared_inventory_field_is_probed_per_value(self, document: CapabilityDocument) -> None:
+        """An inventory enum the document lists without ``values`` would hide which values run."""
+        for entry in document.body["fields"]:
+            path = entry["path"]
+            declared = _request_schema_leaf(path) if path.startswith(ProbeSet.HOUSE_PREFIX) else None
+            if declared is not None and "enum" in declared:
+                assert path.removeprefix(ProbeSet.HOUSE_PREFIX) in ProbeSet.FIELD_VALUES, path
+
+    def test_every_probe_point_lies_inside_the_schema(self) -> None:
+        """A probe the schema refuses would report a refusal rather than a capability."""
+        for path, points in ProbeSet.FIELD_PROBE_POINTS.items():
+            declared = _request_schema_leaf(f"{ProbeSet.HOUSE_PREFIX}{path}")
+            assert declared is not None, path
+            for point in points:
+                assert point >= declared.get("minimum", point), (path, point)
+                assert point <= declared.get("maximum", point), (path, point)
+                assert point > declared.get("exclusiveMinimum", point - 1), (path, point)
+                assert point < declared.get("exclusiveMaximum", point + 1), (path, point)
+
+    def test_the_walker_reads_through_references_and_nullable_alternatives(self) -> None:
+        """A bound behind ``$ref`` and a nullable ``oneOf`` is found; an exclusive one is not published."""
+        schema = {
+            "properties": {"house": {"$ref": "#/$defs/house"}},
+            "$defs": {
+                "house": {"properties": {"block": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/block"}]}}},
+                "block": {
+                    "properties": {
+                        "closed": {"oneOf": [{"type": "null"}, {"type": "number", "minimum": 2, "maximum": 9}]},
+                        "open": {"type": "number", "exclusiveMinimum": 0},
+                    }
+                },
+            },
+        }
+
+        assert RequestSchemaBounds.of("house.block.closed", schema) == {"minimum": 2, "maximum": 9}
+        assert RequestSchemaBounds.of("house.block.open", schema) == {}
+        with pytest.raises(KeyError):
+            RequestSchemaBounds.of("house.block.missing", schema)
+
+    def test_a_path_is_either_enumerated_or_numeric(self) -> None:
+        """The two tables are disjoint, so neither silently shadows the other in the probe set."""
+        assert not set(ProbeSet.FIELD_VALUES) & set(ProbeSet.FIELD_PROBE_POINTS)
+        assert len(ProbeSet.varied_fields()) == len(ProbeSet.FIELD_VALUES) + len(ProbeSet.FIELD_PROBE_POINTS)
 
     def test_an_enumerated_field_keeps_one_entry_per_value(self, document: CapabilityDocument) -> None:
         """Enumerations, booleans and the glazing-pane counts still list their values."""

@@ -37,7 +37,7 @@ import json
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, ClassVar, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, cast
 
 import yaml
 from jsonschema import Draft202012Validator
@@ -162,14 +162,112 @@ def _write(house: Dict[str, Any], path: str, value: Any) -> None:
         current[parts[-1]] = value
 
 
+class RequestSchemaBounds:
+    """The bounds a numeric inventory field publishes, read from the request schema itself.
+
+    The shared ``measure-capabilities.openapi.yaml`` describes a field's ``minimum``/``maximum`` as
+    the request schema's own bounds, so they are looked up there when the document is built rather
+    than copied into a table beside it (decision of 2026-09-24, PR #807). Only an *inclusive*
+    bound is published: a field without a declared ``maximum`` publishes none, and one whose lower
+    bound is ``exclusiveMinimum`` publishes no ``minimum``, since the shared schema has no key for
+    an exclusive bound yet and a probe point standing in for it would claim a limit nobody set.
+    """
+
+    #: The two inclusive bound keywords of JSON Schema, which are also the document's keys.
+    INCLUSIVE: ClassVar[Tuple[str, str]] = ("minimum", "maximum")
+
+    #: The exclusive keyword that suppresses each inclusive one.
+    EXCLUSIVE: ClassVar[Dict[str, str]] = {"minimum": "exclusiveMinimum", "maximum": "exclusiveMaximum"}
+
+    #: The keywords whose alternatives are searched, e.g. a nullable ``oneOf``.
+    ALTERNATIVES: ClassVar[Tuple[str, ...]] = ("oneOf", "anyOf", "allOf")
+
+    @classmethod
+    def of(cls, path: str, schema: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+        """Return the bounds one request path publishes.
+
+        Args:
+            path: The dotted request path, ``house.`` included, e.g. ``house.building.construction_year``.
+            schema: The request schema; the vendored ``calculation-request.schema.json`` when omitted.
+
+        Returns:
+            ``{"minimum": ..., "maximum": ...}`` with each key present only when the schema
+            declares that bound and declares it inclusive.
+
+        Raises:
+            KeyError: When the schema has no such path, which means the probe table names a
+                field the request cannot carry.
+            ValueError: When two alternatives of the leaf declare the same bound differently.
+        """
+        root = schema if schema is not None else ContractFiles.request_schema()
+        node: Mapping[str, Any] = root
+        for part in path.split("."):
+            child = next(
+                (
+                    candidate["properties"][part]
+                    for candidate in cls._candidates(node, root)
+                    if part in candidate.get("properties", {})
+                ),
+                None,
+            )
+            if child is None:
+                raise KeyError(f"the request schema has no field {path!r} (stuck at {part!r})")
+            node = child
+        declared: Dict[str, Any] = {}
+        for candidate in cls._candidates(node, root):
+            for keyword in (*cls.INCLUSIVE, *cls.EXCLUSIVE.values()):
+                if keyword not in candidate:
+                    continue
+                if keyword in declared and declared[keyword] != candidate[keyword]:
+                    raise ValueError(f"{path}: the schema declares {keyword} both {declared[keyword]} and "
+                                     f"{candidate[keyword]}")
+                declared[keyword] = candidate[keyword]
+        return {
+            keyword: declared[keyword]
+            for keyword in cls.INCLUSIVE
+            if keyword in declared and cls.EXCLUSIVE[keyword] not in declared
+        }
+
+    @classmethod
+    def _candidates(cls, node: Mapping[str, Any], root: Mapping[str, Any]) -> List[Mapping[str, Any]]:
+        """Return *node* and every subschema it stands for: ``$ref`` targets, alternatives, ``items``."""
+        found: List[Mapping[str, Any]] = []
+        pending: List[Mapping[str, Any]] = [node]
+        while pending:
+            current = pending.pop(0)
+            if any(current is seen for seen in found):
+                continue
+            found.append(current)
+            if "$ref" in current:
+                pending.append(cls._resolve(str(current["$ref"]), root))
+            for keyword in cls.ALTERNATIVES:
+                pending.extend(current.get(keyword, []))
+            if isinstance(current.get("items"), Mapping):
+                pending.append(current["items"])
+        return found
+
+    @staticmethod
+    def _resolve(reference: str, root: Mapping[str, Any]) -> Mapping[str, Any]:
+        """Return the subschema a local ``$ref`` (``#/$defs/...``) points at."""
+        if not reference.startswith("#"):
+            raise ValueError(f"only local references are resolved, not {reference!r}")
+        target: Any = root
+        for token in reference.lstrip("#").strip("/").split("/"):
+            if token:
+                target = target[token.replace("~1", "/").replace("~0", "~")]
+        return cast(Mapping[str, Any], target)
+
+
 class ProbeSet:
     """The probes the capability document is aggregated from, as data.
 
     Everything here is generated from three tables and the frozen catalogue, so a catalogue value
     added tomorrow is probed tomorrow without anybody writing a probe. The tables are the
-    enumerated inventory fields worth varying (:attr:`FIELD_VALUES`), the bounds of the numeric
-    ones (:attr:`FIELD_BOUNDS`) and the bounds of the free numeric options (:attr:`OPTION_BOUNDS`);
-    all are the *request schema's* own values, so nothing is invented here either.
+    enumerated inventory fields worth varying (:attr:`FIELD_VALUES`, the request schema's own
+    enums), the values the numeric ones are probed at (:attr:`FIELD_PROBE_POINTS`, HiSim's own
+    choice and never published) and the bounds of the free numeric options
+    (:attr:`OPTION_BOUNDS`). The bounds a numeric field publishes are not in any of them: they are
+    read from the request schema when the document is built (:class:`RequestSchemaBounds`).
     """
 
     #: The material object every probe of a ``material`` option sends. It is the mockup's own
@@ -201,10 +299,11 @@ class ProbeSet:
         "electric_vehicles": {"number": 1},
     }
 
-    #: Inventory paths worth varying, each with the values to probe. Enum lists are the request
-    #: schema's; numeric pairs are its ``minimum``/``maximum``. ``ES`` is left out of the
-    #: country list because it is refused for want of a TABULA typology, which is a data gap the
-    #: document reports as an unsupported country rather than as a capability.
+    #: Enumerated inventory paths worth varying -- enums, booleans and the numeric enums such as
+    #: the glazing-pane counts and the three ``electric_vehicles`` fields -- each with the
+    #: request schema's own list. Every value is probed, and the document publishes one
+    #: ``values`` entry per value. A numeric field with a range is in :attr:`FIELD_PROBE_POINTS`
+    #: instead, and a path is in exactly one of the two (:meth:`varied_fields`).
     FIELD_VALUES: ClassVar[Dict[str, Tuple[Any, ...]]] = {
         "building.building_type": (
             "detached_sfh", "semi_detached_sfh", "terraced_sfh", "bungalow", "apartment", "other",
@@ -243,18 +342,25 @@ class ProbeSet:
         "appliances.white_appliances": ("existing", "new_efficient"),
         "solar_thermal_system.supplies": ("dhw_only", "dhw_and_space_heating"),
         "solar_thermal_system.collector_type": ("flat_plate", "evacuated_tube"),
+        "electric_vehicles.number": (1, 2),
+        "electric_vehicles.commuting_distance_in_km": (5, 10, 15, 20, 25, 30),
+        "electric_vehicles.charging_power_in_watt": (3700, 11000, 22000),
     }
 
-    #: Numeric inventory paths worth varying, each with the request schema's ``minimum`` and
-    #: ``maximum``. Both ends are probed; the document publishes them as ``minimum``/``maximum`` on
-    #: the field, the way a numeric option carries its bounds, and folds the two probes' statuses
-    #: into the field's own (decision of 2026-09-23: ``values[]`` is for enumerations only).
-    FIELD_BOUNDS: ClassVar[Dict[str, Tuple[float, float]]] = {
+    #: Numeric inventory paths worth varying, each with the low and the high value HiSim probes
+    #: it at. Where the request schema's bound is inclusive the point is the bound itself; where
+    #: it is exclusive (``exclusiveMinimum: 0``) the point lies inside it; where the schema has no
+    #: maximum it is a representative large value. These are probe points and nothing else: the
+    #: document never publishes them. A field publishes the schema's own inclusive bounds
+    #: (:class:`RequestSchemaBounds`) and folds the probes' statuses into its own (decision of
+    #: 2026-09-23: ``values[]`` is for enumerations only; of 2026-09-24: bounds come from the
+    #: schema). ``tests/renovisor/test_capabilities.py`` keeps every point inside the schema.
+    FIELD_PROBE_POINTS: ClassVar[Dict[str, Tuple[float, float]]] = {
         "building.construction_year": (1700, 2100),
-        "building.absolute_conditioned_floor_area_in_m2": (30, 400),
+        "building.absolute_conditioned_floor_area_in_m2": (1, 400),
         "building.number_of_storeys": (1, 6),
         "building.set_heating_temperature_in_celsius": (12, 28),
-        "building.roof.u_value_in_watt_per_m2_per_kelvin": (0.1, 10),
+        "building.roof.u_value_in_watt_per_m2_per_kelvin": (0.01, 10),
         "building.roof.area_in_m2": (0, 500),
         "building.facade.area_in_m2": (0, 500),
         "building.floor.area_in_m2": (0, 500),
@@ -270,10 +376,7 @@ class ProbeSet:
         "pv_system.azimuth": (0, 360),
         "pv_system.tilt": (0, 90),
         "battery.days_to_cover": (1, 14),
-        "solar_thermal_system.area_m2": (1, 100),
-        "electric_vehicles.number": (1, 2),
-        "electric_vehicles.commuting_distance_in_km": (5, 30),
-        "electric_vehicles.charging_power_in_watt": (3700, 22000),
+        "solar_thermal_system.area_m2": (0.1, 100),
     }
 
     #: Which block each inventory path needs present before it can be set at all.
@@ -410,11 +513,24 @@ class ProbeSet:
         return probes
 
     @classmethod
+    def varied_fields(cls) -> Dict[str, Tuple[Any, ...]]:
+        """Return every inventory path worth varying with the values it is probed at.
+
+        Raises:
+            ValueError: When a path is both enumerated and numeric. Merging the two tables would
+                let one silently shadow the other, and the document would publish the path as
+                whichever won -- a list of values or a pair of bounds -- without anybody deciding.
+        """
+        shared = sorted(set(cls.FIELD_VALUES) & set(cls.FIELD_PROBE_POINTS))
+        if shared:
+            raise ValueError(f"FIELD_VALUES and FIELD_PROBE_POINTS both list {shared}")
+        return {**cls.FIELD_VALUES, **cls.FIELD_PROBE_POINTS}
+
+    @classmethod
     def _field_probes(cls) -> List[Probe]:
         """Return one probe per inventory value worth varying, with its block switched on first."""
         probes: List[Probe] = []
-        varied: Dict[str, Tuple[Any, ...]] = {**cls.FIELD_VALUES, **cls.FIELD_BOUNDS}
-        for path, values in varied.items():
+        for path, values in cls.varied_fields().items():
             block = path.split(".")[0]
             prelude: Dict[str, Any] = (
                 {block: dict(cls.BLOCKS[block])} if block in cls.FIELD_BLOCK else {}
@@ -819,9 +935,10 @@ class Aggregation:
 
         As for a measure's options, a probe that varies an enumerated field's value contributes that
         value's own status to ``values`` and not to the field's, and a ``PAIR`` probe contributes
-        to neither. A numeric field (:attr:`ProbeSet.FIELD_BOUNDS`) carries no ``values``: like a
-        numeric option it publishes its ``minimum``/``maximum``, and the probes at both ends count
-        towards its own status. What is left for the field's own status is every probe that carried the field
+        to neither. A numeric field (:attr:`ProbeSet.FIELD_PROBE_POINTS`) carries no ``values``: it
+        publishes the request schema's inclusive ``minimum``/``maximum`` where the schema declares
+        them (:class:`RequestSchemaBounds`) -- never its probe points -- and the probes at both ends
+        count towards its own status. What is left for the field's own status is every probe that carried the field
         without being about it -- the anchor, the block probes and the measure probes -- and,
         when nothing did, the worst of its values. The note follows the status out of the same
         observations, which is what makes ``house.hot_water.supply`` explain itself with the two
@@ -829,7 +946,11 @@ class Aggregation:
         """
         observed: Dict[str, List[Observation]] = {}
         per_value: Dict[str, Dict[Any, Tuple[ReportStatus, Optional[str]]]] = {}
-        bounds = {f"{ProbeSet.HOUSE_PREFIX}{path}": ends for path, ends in ProbeSet.FIELD_BOUNDS.items()}
+        schema = ContractFiles.request_schema()
+        bounds = {
+            f"{ProbeSet.HOUSE_PREFIX}{path}": RequestSchemaBounds.of(f"{ProbeSet.HOUSE_PREFIX}{path}", schema)
+            for path in ProbeSet.FIELD_PROBE_POINTS
+        }
         for result in results:
             probe = result.probe
             own = probe.subject if probe.kind is ProbeKind.FIELD and probe.subject else ""
@@ -846,8 +967,7 @@ class Aggregation:
             status = NoteAggregation.status_of(observations)
             note = NoteAggregation.note_of(observations, status)
             entry: Dict[str, Any] = {"path": path, "status": status.value}
-            if path in bounds:
-                entry["minimum"], entry["maximum"] = bounds[path]
+            entry.update(bounds.get(path, {}))
             if per_value.get(path):
                 entry["values"] = [
                     {
@@ -895,10 +1015,10 @@ class ResultsSection:
 
     It is generated from the two tables ``result.json`` is itself built out of --
     :class:`hisim.renovisor.kpis.KpiSchema`, written in terms of ``KpiSources``, and
-    :class:`hisim.renovisor.costs.CostSchema`, whose rows name no source at all since step 10
-    because the money left the payload: each of them says instead which key of
-    ``economics_result.json`` answers the field (:class:`hisim.renovisor.costs.EconomicsDocument`)
-    or why no key does. Neither is a second list beside the builders, so the section cannot
+    :class:`hisim.renovisor.costs.CostSchema`, whose rows read nothing from the simulation since
+    step 10 because the money left the payload: each of them names instead the key of
+    ``economics_result.json`` that answers the field (:class:`hisim.renovisor.costs.EconomicsDocument`),
+    or says why no key does. Neither is a second list beside the builders, so the section cannot
     announce a field the payload does not carry or a source the builder does not read. Its shape is
     the shared schema's ``ResultFields``, which :meth:`CapabilityDocument.validate` checks with
     the rest of the document.
@@ -1014,9 +1134,6 @@ class CapabilityDocument:
 
     #: The document path of the whole document's schema inside the vendored capabilities file.
     SCHEMA_REF: ClassVar[str] = "#/components/schemas/ImplementedMeasures"
-
-    #: The key the results section sits under.
-    RESULTS_KEY: ClassVar[str] = "results"
 
     def validate(self) -> None:
         """Check the document against the vendored ``measure-capabilities.openapi.yaml``.

@@ -355,6 +355,11 @@ document still validates; additionally write the `results` schema as a HiSim-sid
 for the frontend team to merge; not pinned, HiSim-authored) and validate `results` against it too.
 Render the section in `map.py` (the trace tab's result pane already lists these; reuse).
 
+*Note (2026-09-24, PR #807):* `ResultFields` has been part of the strict shared
+`measure-capabilities.openapi.yaml` since 0.3.0, and the document is validated against that file
+alone; the results-extension file and its accessors have been removed. The record above is kept as
+it was decided.
+
 **C. `low_temperature_radiator` is `not_implemented_yet`.** The cost engine's adapter returns no
 cost facts for that emitter on purpose and the evaluation aborts (exit 5). Decision: whitelist it
 as a *substitution*: entries `measure: heating_installation.type_of_system=low_temperature_radiator`

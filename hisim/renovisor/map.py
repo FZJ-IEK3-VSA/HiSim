@@ -369,10 +369,20 @@ class TranslationMap:
 
     @classmethod
     def _bounds(cls, entry: Mapping[str, Any]) -> str:
-        """Return a numeric field's range as ``minimum – maximum``, or ``""`` for any other field."""
-        if "minimum" not in entry:
-            return ""
-        return f"{html.escape(str(entry['minimum']))} &ndash; {html.escape(str(entry['maximum']))}"
+        """Return a numeric field's range as ``minimum – maximum``, or ``""`` for any other field.
+
+        Either end can be missing: a field publishes only the bounds the request schema declares
+        inclusive, so an envelope area has a ``minimum`` and no ``maximum``, and is shown ``≥ 0``.
+        """
+        low = html.escape(str(entry["minimum"])) if "minimum" in entry else None
+        high = html.escape(str(entry["maximum"])) if "maximum" in entry else None
+        if low is not None and high is not None:
+            return f"{low} &ndash; {high}"
+        if low is not None:
+            return f"&ge; {low}"
+        if high is not None:
+            return f"&le; {high}"
+        return ""
 
     @classmethod
     def _results(cls, results: Mapping[str, Sequence[Mapping[str, Any]]]) -> str:

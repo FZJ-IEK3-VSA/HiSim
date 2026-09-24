@@ -277,8 +277,12 @@ were resolved with a documented default to keep the implementation moving; they 
 
 33. **Wood chips / pellets per-ton prices**: energy prices for pellets/wood chips are stored per
     ton in the legacy dicts; converted to €/kWh at migration using the heating values from
-    `PhysicsConfig` (pellets 4.9 kWh/kg — LHV 11.7 GJ/m3 at 650 kg/m3; wood chips 17.3 GJ/m3 at
-    250 kg/m3). The conversion factors are recorded in the entry notes and the provenance ledger.
+    `PhysicsConfig` (pellets 5.0 kWh/kg — LHV 11.7 GJ/m3 at 650 kg/m3; wood chips 4.33 kWh/kg — LHV
+    15.6 GJ/t fresh mass at 15 % water content per the UBA factsheet, 4.18 GJ per bulk m3 at 268 kg/m3, the
+    share-weighted bulk density of the factsheet's typical German mix).
+    The conversion factors are recorded in the entry notes and the provenance ledger. Until
+    hisim-l07.15 the wood chip figure had been read as 15.6 GJ/m3 (17.3 kWh/kg), and every wood
+    chip row was divided by 17333 kWh/t instead of 4333 kWh/t.
 
 34. **PRICED components with no facts source (2026-09-08, stack part 8/8 review)**: fourteen → hisim-l07.12
     component classes declare `cost_relevance = CostRelevance.PRICED` while nothing can produce

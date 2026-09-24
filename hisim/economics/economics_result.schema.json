@@ -17,7 +17,10 @@
     "provenance"
   ],
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {
+      "const": 2,
+      "description": "2 since 2026-09-24: a subsidies[] row the plan awarded states amount_by_year_in_euro and an amount (hisim-cyc.5), and totals and comparison carry the headline monthly_equivalent_cost_in_euro / monthly_equivalent_cost_delta_in_euro (hisim-cyc.6)."
+    },
     "engine": {
       "type": "object",
       "required": ["hisim_commit", "economics_version"],

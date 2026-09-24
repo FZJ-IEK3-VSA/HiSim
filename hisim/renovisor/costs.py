@@ -70,14 +70,18 @@ class EconomicsDocument:
         "economics_result.json"
     )
 
-    #: Which key of it answers each cost field ``result.json`` no longer carries; every key is the
-    #: figure itself. The twenty-year monthly figure is ``monthly_equivalent_cost_in_euro``, the
-    #: equivalent annual cost over twelve — not ``monthly_cost_year1_in_euro``, which is year 1's
-    #: cash and equals it only when the cost is flat (hisim-cyc.6). Two :class:`CostField` members
-    #: have no entry:
-    #: ``property_value_increase_in_percent``, which moved nowhere because nothing anywhere
-    #: produces it (decision A13), and ``monthly_net_cost_10y_in_euro``, which no key of a
-    #: document evaluated over one horizon can answer (:attr:`NO_KEY`).
+    #: Which key of it answers each cost field ``result.json`` no longer carries. Four keys are the
+    #: figure itself; the other four point into a list whose rows carry it: ``plan.energy_year1[]``
+    #: (one carrier's cost per row), ``plan.by_subject[]`` twice (one subject's maintenance, and
+    #: one subject's investment for the breakdown, per row) and ``plan.subsidies[]`` (one scheme's
+    #: award per row), so a reader sums or picks rows rather than reading one number. The
+    #: twenty-year monthly figure is ``monthly_equivalent_cost_in_euro``, the equivalent annual
+    #: cost over twelve — not ``monthly_cost_year1_in_euro``, which is year 1's cash and equals it
+    #: only when the cost is flat (hisim-cyc.6); its horizon is stated in :attr:`CAVEATS`. Two
+    #: :class:`CostField` members have no entry: ``property_value_increase_in_percent``, which
+    #: moved nowhere because nothing anywhere produces it (decision A13), and
+    #: ``monthly_net_cost_10y_in_euro``, which no key of a document evaluated over one horizon can
+    #: answer (:attr:`NO_KEY`).
     WHERE: ClassVar[Dict[str, str]] = {
         CostField.INVESTMENT.value: "plan.totals.investment_year0_in_euro",
         CostField.ENERGY.value: "plan.energy_year1[].cost_in_euro",
@@ -99,6 +103,16 @@ class EconomicsDocument:
         ),
     }
 
+    #: What a key's figure depends on beyond the key itself, appended to its reason. The monthly
+    #: figure is an annuity over the plan's horizon, so it answers the twenty-year question only
+    #: for a plan evaluated over twenty years.
+    CAVEATS: ClassVar[Dict[str, str]] = {
+        CostField.MONTHLY_TWENTY_YEARS.value: (
+            "the figure is over the document's `parameters.horizon_years` (20 in the backend's "
+            "block); a plan evaluated over another horizon answers another question"
+        ),
+    }
+
     @classmethod
     def reason_for(cls, field_name: str) -> str:
         """The sentence ``result.json`` gives for one cost field it does not carry.
@@ -108,7 +122,7 @@ class EconomicsDocument:
 
         Returns:
             One sentence naming the document and either the key inside it or why no key answers
-            the field.
+            the field, with the key's :attr:`CAVEATS` entry where it has one.
 
         Raises:
             KeyError: If the field is in neither :attr:`WHERE` nor :attr:`NO_KEY`, which means a
@@ -119,9 +133,10 @@ class EconomicsDocument:
                 f"the money is in {cls.FILE_NAME}, which does not carry this figure: "
                 f"{cls.NO_KEY[field_name]}. Write the document with `{cls.COMMAND}`"
             )
+        caveat = f"; {cls.CAVEATS[field_name]}" if field_name in cls.CAVEATS else ""
         return (
             f"the money is in {cls.FILE_NAME} ({cls.WHERE[field_name]}), which prices the whole "
-            f"staged plan rather than this one job; write it with `{cls.COMMAND}`"
+            f"staged plan rather than this one job{caveat}; write it with `{cls.COMMAND}`"
         )
 
 

@@ -288,6 +288,30 @@ class TestTheDocumentShape:
                 totals["equivalent_annual_cost_in_euro"][slot] / 12.0
             )
 
+    @pytest.mark.parametrize("variant", ["reference", "plan"])
+    def test_the_headline_monthly_figure_is_the_npv_as_a_level_payment(self, document, variant):
+        """The monthly figure is the NPV times a hand-derived annuity factor, over twelve.
+
+        The test above compares the figure with the document's own EAC, so a wrong annuity would
+        pass it on both sides. Here the factor is worked out by hand at the synthetic plan's
+        parameters, 3 % over 12 years, with the VDI 2067-1 capital recovery factor
+        ``a = i (1 + i)^T / ((1 + i)^T - 1)``:
+
+        - ``1.03^12 = 1.4257608868``
+        - ``a = 0.03 x 1.4257608868 / 0.4257608868 = 0.1004620855``
+
+        and the monthly figure is ``NPV x 0.1004620855 / 12``. The NPV is the document's own: it
+        is a sum of discounted flows that involves no annuity, so the product checks the annuity
+        and the months, and nothing else.
+        """
+        assert (SyntheticPlan.INTEREST_RATE, SyntheticPlan.HORIZON) == (0.03, 12)
+        annuity_factor = 0.1004620855
+        totals = document[variant]["totals"]
+        for slot in ("min", "best", "max"):
+            assert totals["monthly_equivalent_cost_in_euro"][slot] == pytest.approx(
+                totals["npv_in_euro"][slot] * annuity_factor / 12.0, rel=1e-9
+            )
+
     def test_the_headline_monthly_figure_is_not_the_first_years_cash(self, document):
         """The two monthly figures differ on the synthetic plan, which pays its envelope in year 0.
 
@@ -317,7 +341,9 @@ class TestTheDocumentShape:
             for key in path:
                 block = block[key]
             block.pop(
-                "monthly_equivalent_cost_delta_in_euro" if path == ("comparison",) else "monthly_equivalent_cost_in_euro"
+                "monthly_equivalent_cost_delta_in_euro"
+                if path == ("comparison",)
+                else "monthly_equivalent_cost_in_euro"
             )
             with pytest.raises(jsonschema.ValidationError):
                 StagedDocument.validate(broken)
@@ -344,6 +370,20 @@ class TestTheDocumentShape:
         assert document["engine"]["economics_version"] == "cost-spec-v2"
         commit = document["engine"]["hisim_commit"]
         assert commit is None or isinstance(commit, str) and commit.strip() == commit
+
+    def test_the_document_states_schema_version_two(self, document):
+        """Version 2: awarded subsidy rows state their amount by year, and the monthly headline.
+
+        A literal for the same reason as the economics version above. Version 2 is the format
+        with hisim-cyc.5's awarded-row rules and hisim-cyc.6's required monthly keys, and a
+        document of that shape stating 1 would tell a consumer it could skip both.
+        """
+        import jsonschema
+
+        assert document["schema_version"] == 2
+        StagedDocument.validate(document)
+        with pytest.raises(jsonschema.ValidationError):
+            StagedDocument.validate({**document, "schema_version": 1})
 
 
 class TestTheParametersBlock:

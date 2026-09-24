@@ -50,18 +50,24 @@ class TimelineAggregation:
     `npv_by_*` value are euro bands **discounted to year 0** at the run's interest rate, cost
     positive (lower is better; a negative NPV means the variant nets money);
     `equivalent_annual_cost_in_euro` is that NPV times the VDI 2067-1 annuity factor, in euro per
-    year; `annual_cost_series_nominal_in_euro` is **undiscounted** nominal euro indexed by year
-    0..T (the liquidity view, §4.3), and `monthly_cost_year1_in_euro` is its year-1 element over
-    twelve. All are scoped to `scope_payer` except `npv_by_payer`, which deliberately covers every
-    payer so the §6.5 zero-sum check has both sides.
+    year, and `monthly_equivalent_cost_in_euro` is that annuity over twelve — the level monthly
+    payment worth the whole horizon (hisim-cyc.6); `annual_cost_series_nominal_in_euro` is
+    **undiscounted** nominal euro indexed by year 0..T (the liquidity view, §4.3), and
+    `monthly_cost_year1_in_euro` is its year-1 element over twelve. All are scoped to `scope_payer`
+    except `npv_by_payer`, which deliberately covers every payer so the §6.5 zero-sum check has
+    both sides.
     """
 
-    #: Months per year, for the "monthly cost" display figure of §4.3.
+    #: Months per year: the one divisor behind every monthly figure the engine publishes — the
+    #: "monthly cost" display figures of §4.3, the monthly burden view and the warm-rent change.
+    #: The engine has no intra-year resolution, so this is a unit conversion of an annual figure
+    #: and never a statement about seasonal profiles.
     MONTHS_PER_YEAR: ClassVar[float] = 12.0
 
     scope_payer: Actor
     total_npv_in_euro: UncertainValue
     equivalent_annual_cost_in_euro: UncertainValue
+    monthly_equivalent_cost_in_euro: UncertainValue
     npv_by_category: Dict[CostCategory, UncertainValue]
     npv_by_component: Dict[str, UncertainValue]
     npv_by_payer: Dict[Actor, UncertainValue]
@@ -287,6 +293,8 @@ def aggregate_timeline(
         annual_series[1].scale(1.0 / TimelineAggregation.MONTHS_PER_YEAR) if len(annual_series) > 1 else None
     )
 
+    equivalent_annual_cost = total_npv.scale(annuity)
+
     levelized = None
     if annual_heat_demand_in_kwh:
         levelized = total_npv.scale(annuity / annual_heat_demand_in_kwh)
@@ -294,7 +302,8 @@ def aggregate_timeline(
     return TimelineAggregation(
         scope_payer=scope_actor,
         total_npv_in_euro=total_npv,
-        equivalent_annual_cost_in_euro=total_npv.scale(annuity),
+        equivalent_annual_cost_in_euro=equivalent_annual_cost,
+        monthly_equivalent_cost_in_euro=equivalent_annual_cost.scale(1.0 / TimelineAggregation.MONTHS_PER_YEAR),
         npv_by_category=npv_by_category,
         npv_by_component=npv_by_component,
         npv_by_payer=npv_by_payer,

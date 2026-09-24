@@ -37,7 +37,6 @@ import os
 from pathlib import Path
 from typing import Any, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Set, Tuple
 
-from hisim.economics.calculators.aggregation import TimelineAggregation
 from hisim.economics.calculators.financing_application import FinancingConstants
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import Perspective
@@ -259,7 +258,7 @@ class StagedDocument:
     """
 
     #: Version of this document format. Bumped when a consumer would have to change.
-    SCHEMA_VERSION: ClassVar[int] = 1
+    SCHEMA_VERSION: ClassVar[int] = 2
 
     #: The one currency the engine prices in.
     CURRENCY: ClassVar[str] = "EUR"
@@ -610,11 +609,13 @@ class StagedDocument:
     def _totals(self, result: LifecycleCostResult) -> Dict[str, Any]:
         """The seven headline figures of an evaluation.
 
-        Two of them are monthly, and they answer different questions. ``monthly_equivalent_cost``
-        is the equivalent annual cost over twelve: the level monthly payment worth the whole
-        horizon, and the headline (hisim-cyc.6). ``monthly_cost_year1`` is year 1's cash over
-        twelve, replacements included: true for that year, and misleading as a running cost when
-        the reference replaces its boiler in year 1.
+        Two of them are monthly, and they answer different questions.
+        ``monthly_equivalent_cost_in_euro`` is the equivalent annual cost over twelve: the level
+        monthly payment worth the whole horizon, and the headline (hisim-cyc.6). The result
+        carries it, from :class:`~hisim.economics.calculators.aggregation.TimelineAggregation`,
+        so the document divides nothing itself. ``monthly_cost_year1_in_euro`` is year 1's cash
+        over twelve, replacements included: true for that year, and misleading as a running cost
+        when the reference replaces its boiler in year 1.
         """
         investment = UncertainValue.exact(0.0)
         for entry in result.timeline.entries:
@@ -625,7 +626,7 @@ class StagedDocument:
         return {
             "npv_in_euro": self._band(result.total_npv_in_euro),
             "equivalent_annual_cost_in_euro": self._band(result.equivalent_annual_cost_in_euro),
-            "monthly_equivalent_cost_in_euro": self._band(self._per_month(result.equivalent_annual_cost_in_euro)),
+            "monthly_equivalent_cost_in_euro": self._band(result.monthly_equivalent_cost_in_euro),
             "monthly_cost_year1_in_euro": self._band(monthly) if monthly is not None else None,
             "investment_year0_in_euro": self._band(investment),
             "sunk_cost_written_off_in_euro": self._band(result.sunk_cost_written_off_in_euro),
@@ -1176,7 +1177,7 @@ class StagedDocument:
                 comparison.equivalent_annual_cost_delta_in_euro
             ),
             "monthly_equivalent_cost_delta_in_euro": self._band(
-                self._per_month(comparison.equivalent_annual_cost_delta_in_euro)
+                comparison.monthly_equivalent_cost_delta_in_euro
             ),
             "monthly_cost_year1_delta_in_euro": monthly_delta,
             "discounted_payback_year": {
@@ -1205,16 +1206,6 @@ class StagedDocument:
         if change is None or not area:
             return None
         return self._band(change.scale(1.0 / area))
-
-    @staticmethod
-    def _per_month(annual: UncertainValue) -> UncertainValue:
-        """An annual figure as twelve equal months, slot by slot.
-
-        The months are those of :class:`~hisim.economics.calculators.aggregation.TimelineAggregation`,
-        which already turns year 1's cash into ``monthly_cost_year1_in_euro``, so the document's two
-        monthly figures use one number of months.
-        """
-        return annual.scale(1.0 / TimelineAggregation.MONTHS_PER_YEAR)
 
     # ------------------------------------------------------------------ bands
 

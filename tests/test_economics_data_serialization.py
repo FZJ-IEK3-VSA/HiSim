@@ -382,6 +382,30 @@ class TestSerializationRoundtrip:
         assert restored.total_npv_in_euro.best_estimate == pytest.approx(original.total_npv_in_euro.best_estimate)
         assert restored.total_npv_in_euro.minimum == pytest.approx(original.total_npv_in_euro.minimum)
 
+    def test_a_stored_result_reads_back_its_monthly_equivalent_or_derives_it(self):
+        """`monthly_equivalent_cost_in_euro` round-trips, and a pre-hisim-cyc.6 file gets EAC / 12.
+
+        Twelve is a literal on purpose, for the reason the staged document's test gives: comparing
+        with the constant the loader used would pass whatever that constant said.
+        """
+        from hisim.economics.serialization import result_from_json
+
+        perspective = Perspective(
+            id="gross", installation_context=InstallationContext.GREENFIELD, subsidy_mode=SubsidyMode.none()
+        )
+        original = EconomicEvaluator(CostDatabase(), EconomicParameters(price_basis_year=2024)).evaluate(
+            self._inputs(), perspective
+        )
+        stored = original.to_json()
+        restored = result_from_json(stored)
+        assert restored.monthly_equivalent_cost_in_euro == original.monthly_equivalent_cost_in_euro
+
+        stored.pop("monthly_equivalent_cost_in_euro")
+        archived = result_from_json(stored)
+        eac = original.equivalent_annual_cost_in_euro
+        for slot in (Slot.LOW, Slot.BEST_ESTIMATE, Slot.HIGH):
+            assert archived.monthly_equivalent_cost_in_euro.slot(slot) == pytest.approx(eac.slot(slot) / 12.0)
+
     def _inputs_with_existing_heating(self) -> EvaluationInputs:
         """Inputs whose subsidy context carries a functioning gas boiler (BEG speed bonus).
 

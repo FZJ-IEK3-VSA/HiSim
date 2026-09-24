@@ -116,6 +116,11 @@ Tests: schema validity; every stack sums to its total per slot on the written fi
 order fixed; ids only (no label strings from HiSim); `measure_id` stamped from the mapping
 report's `subjects` map (§4).
 
+> **Note (2026-09-24, hisim-cyc.6).** The document is at `schema_version: 2` since: awarded
+> `subsidies[]` rows state `amount_by_year_in_euro` and an amount (hisim-cyc.5), and `totals` /
+> `comparison` carry the required `monthly_equivalent_cost_in_euro` /
+> `monthly_equivalent_cost_delta_in_euro` (hisim-cyc.6).
+
 ## 4. Translator integration (`hisim/renovisor/`, E-spec §4)
 
 1. `translate` builds an `EconomicContext` and `run` attaches it with

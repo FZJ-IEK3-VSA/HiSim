@@ -151,6 +151,11 @@ with the reason saying "divided by twelve"; `monthly_net_cost_10y_in_euro` → n
 staged document is evaluated over one horizon; a ten-year figure needs a plan evaluated with
 `horizon_years: 10`". Adjust `reason_for`, the capability results section and the tests.
 
+> **Note (2026-09-24, hisim-cyc.6).** `monthly_net_cost_20y_in_euro` now points at
+> `plan.totals.monthly_equivalent_cost_in_euro`, a key of its own that carries the equivalent annual
+> cost over twelve (the division is done by the engine, `TimelineAggregation`, not by the reader).
+> The reason also states that the figure is over the document's `parameters.horizon_years`.
+
 ## 4. Minor, all in one commit
 
 - Docstrings: `staged_document._evaluation` (reference rows carry `stage: null`, the annual

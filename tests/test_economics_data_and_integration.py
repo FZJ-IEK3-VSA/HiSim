@@ -383,7 +383,7 @@ class TestEuroPerKilowattHourBasis:
         assert sorted(entry.year for entry in rows if entry.year in years) == sorted(years)
         for entry in (entry for entry in rows if entry.year in years):
             assert entry.quantity_unit == "kWh"
-            assert f"as-published quote {quote_words}" in entry.notes, (country, entry.year)
+            assert entry.notes is not None and f"as-published quote {quote_words}" in entry.notes, (country, entry.year)
             for slot, slot_quote in zip(("minimum", "best_estimate", "maximum"), quote):
                 stored = getattr(entry.working_price_in_euro_per_kwh, slot)
                 assert stored == pytest.approx(slot_quote / kwh_per_ton, rel=1e-9), (country, entry.year, slot)

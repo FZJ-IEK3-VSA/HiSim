@@ -356,7 +356,7 @@ def build_lifecycle_kpi_entries(
         # The total is a view of the result, not a running sum kept while emitting KPIs (W4.1),
         # and since D2 it is the timeline-based nominal figure — so it is *not* the sum of the
         # per-scheme "Subsidy <id>" KPIs above wherever support reaches the timeline without an
-        # upfront catalog award (flat shim, operational support, scheduled payouts).
+        # upfront catalog award (operational support, scheduled payouts, a loan's repayment grant).
         add(
             f"Total subsidies received [EUR] ({perspective})",
             "EUR",

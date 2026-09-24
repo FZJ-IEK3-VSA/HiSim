@@ -279,6 +279,14 @@ class TestTheEndToEndDocument:
                 stack = sum(band[slot] for band in evaluation["by_group"].values())
                 assert stack == pytest.approx(evaluation["totals"]["npv_in_euro"][slot], abs=0.01)
 
+    def test_the_subsidy_stack_is_the_awarded_rows(self, document) -> None:
+        """hisim-cyc.5 on a real run: the grant the stacks book is the grant the rows award."""
+        StagedDocument.assert_subsidies_reconciled(document)
+        awarded = [row for row in document["plan"]["subsidies"] if row["status"] == "awarded"]
+        booked = sum(year["by_group"]["Subsidies"]["best"] for year in document["plan"]["annual"])
+        assert booked < 0, "the mockup's heat pump grant must reach the stack"
+        assert booked == pytest.approx(sum(row["amount_in_euro"]["best"] for row in awarded), abs=0.01)
+
     def test_the_run_still_leaves_no_costs_block_in_the_payload(self, document) -> None:
         """The other half of the split: one implementation of the money, and this is it."""
         assert document["plan"]["totals"]["npv_in_euro"]["best"] != 0.0

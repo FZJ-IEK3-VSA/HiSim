@@ -161,7 +161,7 @@ under: they are stored on each result in `lifecycle_costs.json` and read back au
 subsidy catalog included. A directory carrying neither a `--parameters` file nor a stored
 evaluation is an error, never a run at the engine defaults. A `subsidy_catalog_path` that cannot
 be resolved is an error too, in the CLI and in the postprocessing bridge alike — a named catalog
-is never silently replaced by the §10.1 legacy flat shim.
+is never silently replaced by a run priced without subsidies.
 
 The report layer follows the money along the calculation chain — every spec feature has at
 least one visualization plus a result table. Sections carry **names**, not numbers
@@ -198,8 +198,8 @@ basis named by the branch that produced it), **Energy bill**
 annotation on the two grid nodes), **CO2** (§3.8: embodied vs. operational bars, cumulative
 curve, the factors table in which every mass is one visible multiplication, and the totals
 table), **Subsidies**
-(composition bars + decision cards + awards table, flat-shim note when no catalog ships for
-the country), **Uncertainty drivers** (which subjects make the band as wide as it is),
+(composition bars + decision cards + awards table; omitted when no catalog ships for the
+country, since nothing is booked then), **Uncertainty drivers** (which subjects make the band as wide as it is),
 **Component breakdown** (per-subject stacks + subject table), **Cost structure** (the
 composition as a treemap, gross and net of credits side by side), **Cost shapes** (which
 subject causes which kind of cost, credits kept apart), **Scenarios** (tornado +
@@ -356,7 +356,7 @@ rather than editing an old one — old basis years keep reproducing their publis
   "embodied_co2": {"value": 165.0, "per_unit": "kW"},
   "vat_rate": 0.19,
   "price_basis": "AS_LEGACY",                // see assumptions below
-  "legacy_flat_subsidy_share": 0.30,         // LEGACY SHIM, not device data — see below
+  "legacy_flat_subsidy_share": 0.30,         // RETIRED SHIM, read by no pricing — see below
   "energy_related_cost_share": 1.0,          // coupled-cost share for envelope measures, see §3.2b
   "anyway_threshold_years_override": null,   // per-class anyway threshold; envelope ships 5.0
   "source_ids": ["src_ai_estimates"],        // mandatory
@@ -365,22 +365,24 @@ rather than editing an old one — old basis years keep reproducing their publis
 }
 ```
 
-#### 3.2a Legacy shim field: `legacy_flat_subsidy_share` (§10.1, W2.6)
+#### 3.2a Retired shim field: `legacy_flat_subsidy_share` (§10.1, W2.6)
 
-**This is the one field of the device schema that is not device data.** It carries the flat
-percentage subsidy the pre-catalog implementation applied to a device's investment, and exists
-only so countries without a subsidy catalog (Ireland today, issue #25) keep reproducing their
-previous numbers. Properties a reviewer should know:
+**This is the one field of the device schema that is not device data, and nothing that prices
+reads it any more.** It carries the flat percentage subsidy the pre-catalog implementation applied
+to a device's investment. Until 2026-09-24 a flat shim in `calculators/subsidy_application.py`
+booked it as a grant whenever no subsidy catalog was loaded; that shim is **retired** (owner
+decision on the PR #799 review): with no catalog, no subsidy is booked on any path — the
+evaluator, the postprocessing bridge, `python -m hisim.economics evaluate`, the reports and the
+scenario cube alike. Properties a reviewer should know:
 
-- read *only* by the legacy flat shim in `calculators/subsidy_application.py`, and ignored
-  entirely whenever a subsidy catalog is active — a catalog country's value is dead weight;
+- still loaded into `DeviceEntry` and validated, and kept in the `devices_*.json` files until its
+  removal, but read by no calculation;
 - **not scenario-overlayable** (§3.10): sweeping a subsidy level is a subsidy axis, expressed
   through the catalog and the perspective's subsidy mode, not through a device price;
-- provenance is recorded as `LEGACY_MIGRATION_SHIM`, citing no source unless the entry declares
-  `field_sources: {"legacy_flat_subsidy_share": [...]}` — the entry's own `source_ids` document
-  the device *price*, not any subsidy programme;
-- it disappears when §10.1 Phase 4 has a catalog for every shipped country. Do not add it to new
-  entries; add a scheme to `subsidy_catalog/<COUNTRY>.json` instead.
+- results archived before the retirement may still carry its `LEGACY_FLAT` support entries and
+  `LEGACY_MIGRATION_SHIM` provenance records; both still load and render, and nothing new emits
+  them;
+- do not add it to new entries; add a scheme to `subsidy_catalog/<COUNTRY>.json` instead.
 
 #### 3.2b Building envelope measures (spec Q7)
 
@@ -508,14 +510,14 @@ Schemes (§5.2) with mandatory `legal_basis` and `url`, an eligibility condition
 OPERATIONAL), eligible-cost caps per dwelling unit, residential-share proration, and cumulation
 rules (group + combined rate cap + excludes). The shipped `DE.json` encodes BEG EM (base 30 % +
 speed/income/efficiency bonuses, 70 % cap), §35c EStG (mutually exclusive with BEG) and the
-KfW supplementary loan; `AT.json` a lump-sum boiler-replacement grant. **Ireland has no catalog
-yet** — the device entries carry rough SEAI-like flat shares in `legacy_flat_subsidy_share`
-instead (issue #25).
+KfW supplementary loan; `AT.json` a lump-sum boiler-replacement grant. The rough SEAI-like flat
+shares the Irish device entries carry in `legacy_flat_subsidy_share` are no longer priced (the
+§10.1 shim is retired, §3.2a); support is priced from `subsidy_catalog/<COUNTRY>.json` only.
 
 Every context field a scheme's conditions reference must have a localized (de + en) entry in
 `questions_<COUNTRY>.json`, or validation fails — that's what keeps the user questionnaire
 (§5.7) complete by construction. The catalog itself is only used when
-`EconomicParameters.subsidy_catalog_path` is set; otherwise the flat shim applies.
+`EconomicParameters.subsidy_catalog_path` is set; otherwise no subsidy is booked.
 
 ### 3.10 Scenario overlays — tweaking values without editing files
 
@@ -529,7 +531,7 @@ can overlay individual datapoints by dotted path:
 
 Overlaid values enter the provenance ledger as `SCENARIO_OVERLAY`, so an explained result names
 exactly which numbers were counterfactual. `country` and the dataset paths are deliberately not
-sweepable, and neither is the `legacy_flat_subsidy_share` shim (§3.2a).
+sweepable, and neither is the retired `legacy_flat_subsidy_share` shim field (§3.2a).
 
 ---
 

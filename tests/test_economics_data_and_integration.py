@@ -22,7 +22,7 @@ from hisim.economics.database import CostDatabase
 from hisim.economics.facts import ComponentCostFacts, CostRelevance
 from hisim.economics.uncertainty import UncertainValue
 from hisim.economics.validation import validate_all, validate_cost_database
-from hisim.loadtypes import ComponentType, Units
+from hisim.loadtypes import ComponentType, LoadTypes, Units
 
 pytestmark = pytest.mark.base
 
@@ -345,6 +345,58 @@ class TestEuroPerKilowattHourBasis:
         )
         resolved = database.get_energy_price(EnergyCarrier.PELLETS, 2026, "DE")
         assert resolved is shipped  # already kWh: handed out unconverted, the very object
+
+    #: The as-published wood-chip quotes in EUR/t (min, best estimate, max), with the words each shipped row's
+    #: notes state them in, per (country, years). The legacy rows are degenerate bands.
+    WOOD_CHIP_QUOTES_IN_EUR_PER_TON = (
+        ("DE", (2018, 2019, 2020, 2021, 2022, 2023, 2024, 2050), "96 EUR/t", (96.0, 96.0, 96.0)),
+        ("AT", (2025, 2040), "307.02 EUR/t", (307.02, 307.02, 307.02)),
+        ("DE", (2026,), "90/120/160 (min/best_estimate/max) EUR/t", (90.0, 120.0, 160.0)),
+        ("DE", (2035,), "100/140/190 (min/best_estimate/max) EUR/t", (100.0, 140.0, 190.0)),
+        ("IE", (2026,), "120/160/210 (min/best_estimate/max) EUR/t", (120.0, 160.0, 210.0)),
+        ("IE", (2035,), "130/175/230 (min/best_estimate/max) EUR/t", (130.0, 175.0, 230.0)),
+    )
+    #: The AI-estimate rows' as-published emission factor, per tonne of chips.
+    WOOD_CHIP_AI_EMISSION_IN_KG_PER_TON = 80.0
+
+    @pytest.mark.parametrize(
+        "country, years, quote_words, quote",
+        WOOD_CHIP_QUOTES_IN_EUR_PER_TON,
+        ids=[f"{country}-{years[0]}" for country, years, _words, _quote in WOOD_CHIP_QUOTES_IN_EUR_PER_TON],
+    )
+    def test_shipped_wood_chip_price_is_the_published_quote_over_the_heating_value(
+        self, country, years, quote_words, quote
+    ):
+        """Every shipped wood-chip EUR/kWh value is its notes' EUR/t quote over the PhysicsConfig kWh per tonne.
+
+        The pellet pin's analogue for the rows hisim-l07.15 re-quoted (96 EUR/t is 0.02215 EUR/kWh at 4333.3
+        kWh/t). The divisor is read from PhysicsConfig rather than written down, so a heating value that drifts
+        from the one the rows were converted with fails here; the AI rows' 80 kg CO2/t is pinned the same way.
+        """
+        from hisim.components.configuration import PhysicsConfig  # deferred: no top-level component imports here
+
+        physics = PhysicsConfig.get_properties_for_energy_carrier(LoadTypes.WOOD_CHIPS)
+        kwh_per_ton = physics.lower_heating_value_in_joule_per_kg * 1000.0 / 3.6e6
+        rows = [
+            entry for entry in CostDatabase().energy_prices[country] if entry.carrier == EnergyCarrier.WOOD_CHIPS
+        ]
+        assert sorted(entry.year for entry in rows if entry.year in years) == sorted(years)
+        for entry in (entry for entry in rows if entry.year in years):
+            assert entry.quantity_unit == "kWh"
+            assert entry.notes is not None and f"as-published quote {quote_words}" in entry.notes, (country, entry.year)
+            for slot, slot_quote in zip(("minimum", "best_estimate", "maximum"), quote):
+                stored = getattr(entry.working_price_in_euro_per_kwh, slot)
+                assert stored == pytest.approx(slot_quote / kwh_per_ton, rel=1e-9), (country, entry.year, slot)
+            if "min/best_estimate/max" in quote_words:
+                assert entry.emission_factor_in_kg_per_kwh == pytest.approx(
+                    self.WOOD_CHIP_AI_EMISSION_IN_KG_PER_TON / kwh_per_ton, rel=1e-9
+                )
+
+    def test_the_legacy_german_wood_chip_price_is_about_two_cents_per_kwh(self):
+        """96 EUR/t over 15.6 GJ/t is 0.02215 EUR/kWh, not the 0.00554 the per-m3 reading gave (hisim-l07.15)."""
+        price = CostDatabase().get_energy_price(EnergyCarrier.WOOD_CHIPS, 2024, "DE")
+
+        assert price.working_price_in_euro_per_kwh.best_estimate == pytest.approx(0.02215, abs=5e-6)
 
     def test_native_quote_conversion_reproduces_the_shipped_values(self):
         """A user-supplied per-ton row converts to exactly what the shipped file stores.

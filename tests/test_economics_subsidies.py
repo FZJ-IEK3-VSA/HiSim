@@ -617,7 +617,8 @@ class TestConfiguredCatalogPathResolution:
     command whose working directory is unrelated, so a relative path resolved against the cwd alone
     silently missed — and the evaluation then priced the whole run with the §10.1 legacy flat
     percentages from the device catalog, which no legal text backs. Naming a catalog that cannot be
-    read is now a fail-fast error (D25); naming none at all still legitimately reaches the shim.
+    read is now a fail-fast error (D25); naming none at all is still legitimate and, since the shim
+    was retired, books no subsidy.
     """
 
     def test_a_relative_path_resolves_against_the_installation_root(self, monkeypatch, tmp_path):
@@ -640,7 +641,7 @@ class TestConfiguredCatalogPathResolution:
         monkeypatch.chdir(tmp_path)
         with pytest.raises(CostDataError, match="does not resolve to a directory"):
             SubsidyCatalog.resolve_base_path("catalogs/that/never/existed")
-        with pytest.raises(CostDataError, match="legacy flat-shim"):
+        with pytest.raises(CostDataError, match="priced without subsidies"):
             SubsidyCatalog.load_configured("DE", "catalogs/that/never/existed")
 
     def test_a_shadowing_directory_in_the_cwd_is_refused_rather_than_preferred(self, monkeypatch, tmp_path):
@@ -674,8 +675,8 @@ class TestConfiguredCatalogPathResolution:
         resolved = SubsidyCatalog.resolve_base_path(os.path.join("hisim", "subsidy_catalog"))
         assert os.path.isfile(os.path.join(resolved, "DE.json"))
 
-    def test_no_configured_catalog_still_reaches_the_shim(self):
-        """A parameter set that names no catalog gets None — the §10.1 shim's legitimate case."""
+    def test_no_configured_catalog_is_none(self):
+        """A parameter set that names no catalog gets None, and is priced without subsidies."""
         assert SubsidyCatalog.load_configured("IE", None) is None
         assert SubsidyCatalog.load_configured("IE", "") is None
 

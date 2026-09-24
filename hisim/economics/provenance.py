@@ -68,10 +68,10 @@ class ParameterOrigin(str, enum.Enum):
     #: legitimate for shipped catalog data: catalog loaders resolve real registry ids instead.
     IN_MEMORY_DEFINITION = "IN_MEMORY_DEFINITION"
     #: A value carried over from the pre-catalog implementation and kept alive by a migration
-    #: shim (§10.1) — today only `DeviceEntry.legacy_flat_subsidy_share`, subsidy data stranded
-    #: in the device catalog. It ships in a data file but its file's sources document the *device
-    #: price*, not the subsidy, so it carries none unless a `field_sources` entry supplies one:
-    #: the record is explicit that the number is a leftover awaiting the country's catalog (W2.6).
+    #: shim (§10.1) — only ever `DeviceEntry.legacy_flat_subsidy_share`, subsidy data stranded
+    #: in the device catalog, whose file's sources document the *device price* and not the
+    #: subsidy (W2.6). The shim was retired on 2026-09-24 and no longer records anything; the
+    #: origin stays so that the ledgers of results archived before then still load.
     LEGACY_MIGRATION_SHIM = "LEGACY_MIGRATION_SHIM"
 
     # Origins that legitimately carry no source ids:
@@ -83,8 +83,8 @@ class ParameterOrigin(str, enum.Enum):
         §3.10 rule that an unsourced datapoint cannot enter a calculation. The four exemptions are
         each principled rather than convenient: a simulated kWh is provenanced by the simulation
         itself, an engine default is documented in the spec, in-memory test data has no registry
-        behind it, and the legacy shim's file cites the device price rather than the subsidy it
-        carries — all four say so in `detail` or in their own comments instead.
+        behind it, and the retired legacy shim's file cited the device price rather than the
+        subsidy it carried — all four say so in `detail` or in their own comments instead.
         """
         return self not in (
             ParameterOrigin.SIMULATION_OUTPUT,

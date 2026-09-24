@@ -554,12 +554,14 @@ class TestPngsAndCli:
                           "cost_treemap", "monthly_burden", "swimlane", "liquidity_fan")
         }
         # Two charts of the set are drawn only where they have something to say: the operating
-        # perspective books no year-0 investment, so it has no build-up to split, and only the
-        # subsidised perspective has a funding statement worth a Sankey.
+        # perspective books no year-0 investment, so it has no build-up to split, and only a
+        # subsidised perspective has a funding statement worth a Sankey. This matrix is priced with
+        # no subsidy catalog, which since the §10.1 flat shim's retirement books no support at
+        # all, so no perspective draws one (test_economics_report_plots.py draws it from a
+        # catalog-priced run).
         per_perspective -= {"lifecycle_investment_waterfall_operating.png"}
         assert {os.path.basename(path) for path in written.paths} == (
-            per_perspective
-            | {"lifecycle_perspective_costs.png", "lifecycle_sources_and_uses_greenfield_net.png"}
+            per_perspective | {"lifecycle_perspective_costs.png"}
         )
         for path in written.paths:
             assert os.path.getsize(path) > 5000

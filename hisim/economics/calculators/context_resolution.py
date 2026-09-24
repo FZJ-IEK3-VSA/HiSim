@@ -89,8 +89,8 @@ class DeviceCosting:
     and `removal_cost_of_replaced` are euro bands, cost-positive, at price-basis-year prices;
     `maintenance_rate` is a dimensionless *share of gross investment per year*;
     `fixed_operation_cost` is euro per year; `service_life_years` is years; `embodied_co2_kg` is
-    kilograms for the whole installation (size and count already applied); `vat_rate` and
-    `legacy_flat_subsidy_share` are fractions; `energy_related_cost_share` is the dimensionless
+    kilograms for the whole installation (size and count already applied); `vat_rate` is a
+    fraction; `energy_related_cost_share` is the dimensionless
     Q7 coupled-cost share (1.0 = fully energy-related). `first_replacement_year` is a *relative*
     year index — years from the investment date, already shortened by a kept asset's age.
     """
@@ -107,7 +107,6 @@ class DeviceCosting:
     service_life_years: float
     embodied_co2_kg: float
     vat_rate: float
-    legacy_flat_subsidy_share: float
     provenance_ids: Tuple[int, ...]
     is_new_investment: bool  # charged at year 0 in this installation context
     first_replacement_year: int  # relative year of the first replacement
@@ -362,7 +361,6 @@ def resolve_device(
         service_life_years=service_life,
         embodied_co2_kg=embodied_co2,
         vat_rate=entry.vat_rate if entry is not None else 0.0,
-        legacy_flat_subsidy_share=entry.legacy_flat_subsidy_share if entry is not None else 0.0,
         provenance_ids=tuple(provenance_ids),
         is_new_investment=is_new_investment,
         first_replacement_year=first_replacement_year,

@@ -10,6 +10,7 @@ source registry, ``database`` the loader that ties them together. Row types are 
 their canonical module here; ``TestReExportSurface`` pins the deliberate ``database`` re-exports.
 """
 
+import dataclasses
 import json
 import os
 import shutil
@@ -24,6 +25,8 @@ from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.database import CostDatabase
 from hisim.economics.provenance import ParameterOrigin, ProvenanceLedger
 from hisim.economics.sources import SourceRegistry
+from hisim import loadtypes as lt
+from hisim.components.configuration import PhysicsConfig
 from hisim.loadtypes import ComponentType
 
 pytestmark = pytest.mark.base
@@ -465,8 +468,9 @@ class TestTheWoodFuelEmissionFactors:
     against hand arithmetic, per the issue's done-when.
     """
 
-    #: Lower heating values, from the same PhysicsConfig rows the migration notes name.
-    KWH_PER_TON = {"PELLETS": 5000.0, "WOOD_CHIPS": 17333.3}
+    #: Lower heating values, from the same PhysicsConfig rows the migration notes name: pellets 11.7 GJ/m3 at
+    #: 650 kg/m3, wood chips 15.6 GJ per tonne of fresh mass at 15 % water content (UBA factsheet 2024, table 1).
+    KWH_PER_TON = {"PELLETS": 5000.0, "WOOD_CHIPS": 4333.3}
 
     #: The as-published per-kWh factors, as the legacy dict stated them.
     AS_PUBLISHED = {("DE", "PELLETS"): 0.036, ("DE", "WOOD_CHIPS"): 0.0313,
@@ -484,17 +488,38 @@ class TestTheWoodFuelEmissionFactors:
 
     @pytest.mark.parametrize("country, carrier", sorted(AS_PUBLISHED))
     def test_burning_one_ton_emits_the_hand_figure(self, database, country, carrier):
-        """A hand figure in tons: factor × heating value is the CO2 of one burned ton."""
+        """A hand figure in tons: factor × heating value is the CO2 of one burned ton.
+
+        The engine's side takes its kWh per ton from `CostDatabase.energy_content_of`, the PhysicsConfig
+        heating value a per-ton quote is divided by, so a regressed heating value fails here against the hand
+        kWh per ton (4333.3 is rounded, hence the tolerance).
+        """
         price = database.get_energy_price(EnergyCarrier[carrier], self.LOOKUP_YEARS[country], country)
+        content = database.energy_content_of(dataclasses.replace(price, quantity_unit="ton"))
+        assert content is not None
         hand_figure = self.AS_PUBLISHED[(country, carrier)] * self.KWH_PER_TON[carrier]
 
-        assert price.emission_factor_in_kg_per_kwh * self.KWH_PER_TON[carrier] == pytest.approx(hand_figure)
+        engine_figure = price.emission_factor_in_kg_per_kwh * content.kwh_per_quantity_unit
+        assert engine_figure == pytest.approx(hand_figure, rel=1e-4)
 
     def test_one_ton_of_pellets_is_about_180_kg_of_co2(self, database):
         """The issue's own hand figure, cross-checked against the AI estimate's 175 kg/t."""
         price = database.get_energy_price(EnergyCarrier.PELLETS, 2024, "DE")
 
         assert price.emission_factor_in_kg_per_kwh * self.KWH_PER_TON["PELLETS"] == pytest.approx(180.0, rel=0.01)
+
+    def test_the_wood_chip_heating_value_is_read_per_tonne(self):
+        """The UBA factsheet's 15.6 GJ is per tonne of fresh mass, so a kilogram of chips holds 15.6 MJ (hisim-l07.15).
+
+        Until hisim-l07.15 the figure was stored as GJ per bulk cubic metre, which made a kilogram hold
+        62.4 MJ and every wood-chip price per kWh four times too small.
+        """
+        physics = PhysicsConfig.get_properties_for_energy_carrier(lt.LoadTypes.WOOD_CHIPS)
+
+        assert physics.lower_heating_value_in_joule_per_kg == pytest.approx(15.6e6)
+        assert physics.lower_heating_value_in_joule_per_kg * 1000.0 / 3.6e6 == pytest.approx(
+            self.KWH_PER_TON["WOOD_CHIPS"], rel=1e-4
+        )
 
     def test_no_shipped_factor_sits_in_the_bug_band(self, database):
         """The bug's signature was a non-zero factor near 1e-6; nothing ships with one.

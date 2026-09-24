@@ -409,17 +409,16 @@ class SubsidySchemeLabels:
     """The names of the support sources a timeline can carry that no catalog scheme covers (Q20).
 
     Two ids reach the report without ever having been a `SubsidyScheme`: the §10.1 legacy flat
-    share, which is subsidy data carried in the *device* catalog for countries that have no
-    subsidy catalog yet, and the fallback for a support entry that names no scheme at all. Both
+    share, which was subsidy data carried in the *device* catalog for countries that had no
+    subsidy catalog, and the fallback for a support entry that names no scheme at all. Both
     used to be printed raw — a reader of the Irish report saw a node called `LEGACY_FLAT` — and
     both deserve an honest label rather than an invented programme name: what the legacy shim
-    models is a flat percentage with no scheme behind it, and the label says exactly that.
+    modelled is a flat percentage with no scheme behind it, and the label says exactly that.
 
-    It sits beside :class:`SubsidyAward` rather than in `views.py` because both ends of the
-    convention have to agree on it: `calculators/subsidy_application.py` *writes*
-    ``LEGACY_FLAT_ID`` onto the shim's timeline entry, and the views read it back to name the
-    node. While the id was a literal at the writer and a constant at the reader, nothing tied the
-    two together. `views` re-exports nothing; both import it from here.
+    The shim that wrote ``LEGACY_FLAT_ID`` onto a timeline entry was retired on 2026-09-24, so a
+    new evaluation never carries it; the id and its label stay because a result archived before
+    then still does, and the views name its node when such a result is re-read. `views`
+    re-exports nothing; it imports the names from here.
     """
 
     LEGACY_FLAT_ID = "LEGACY_FLAT"

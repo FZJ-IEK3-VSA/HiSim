@@ -825,8 +825,9 @@ def _subsidy_composition_svg(matrix: EvaluationMatrix) -> str:
 
     Perspective selection is the fiddly part: it prefers a perspective that carries catalog
     decisions, and falls back to any perspective with subsidy flows, which is what makes the
-    chart appear for the §10.1 legacy flat shim (support with no award trail behind it). Renders
-    empty when no perspective has support at all.
+    chart appear for support with no award trail behind it — a result archived while the §10.1
+    legacy flat shim still priced runs without a catalog (retired 2026-09-24). Renders empty when
+    no perspective has support at all, which is every run without a catalog today.
 
     Which perspective won that selection is printed above the chart. A run's perspectives do not
     have to agree about support — a gross view applies nothing a net view applies — so an unlabelled
@@ -837,7 +838,8 @@ def _subsidy_composition_svg(matrix: EvaluationMatrix) -> str:
         (res for res in matrix.results.values() if any(res.subsidy_decisions)), None
     )
     if result is None:
-        # No catalog decisions (e.g. the flat shim): use any perspective with subsidy flows.
+        # No catalog decisions (a result archived under the retired flat shim): use any
+        # perspective with subsidy flows.
         result = next(
             (
                 res
@@ -972,10 +974,11 @@ def _subsidy_section_html(matrix: EvaluationMatrix, context: _ChapterContext) ->
     were dropped without a trace, so the section was silently incomplete precisely on the measures
     whose support depends on the view taken.
 
-    When no catalog ships for the run's country there are no decisions to show, and the section
-    substitutes a note that the §10.1 legacy flat shim is doing the work instead — an audit trail
-    requires a catalog. The section is omitted entirely only when there is neither a decision nor
-    any support to draw.
+    When no catalog ships for the run's country there are no decisions to show and, since the
+    §10.1 legacy flat shim was retired (2026-09-24), no support either, so the section is omitted.
+    Support with no decision behind it — a result archived before the retirement — is drawn with a
+    note that it has no audit trail. The section is omitted entirely only when there is neither a
+    decision nor any support to draw.
 
     An award is worth `views.describe_award`'s total here, exactly as in the awards table below
     and in `cost_summary.md`. The card used to print the *upfront* amount instead, unlabelled,
@@ -1037,12 +1040,14 @@ def _subsidy_section_html(matrix: EvaluationMatrix, context: _ChapterContext) ->
     if not cards and not composition:
         return ""
     # The two states of this section: with a catalog the cards below are the audit trail the
-    # authored prose describes, without one the flat legacy shim applies and this note says which
-    # of the two the reader is looking at.
+    # authored prose describes; support drawn without any card has no decision behind it, which
+    # since the §10.1 shim's retirement only a result archived before it carries, and this note
+    # says which of the two the reader is looking at.
     caption = "" if cards else (
-        '<p class="sub">No subsidy catalog is active for this country — the flat legacy shim '
-        "shares from the device entries apply (cost_spec.md §10.1; an audit trail requires a "
-        "catalog, see subsidy_catalog/).</p>"
+        '<p class="sub">No subsidy catalog decision backs the support shown here. It comes from '
+        "the retired flat legacy shim (cost_spec.md §10.1, retired 2026-09-24), which a run "
+        "without a catalog no longer applies; an audit trail requires a catalog, see "
+        "subsidy_catalog/.</p>"
     )
     return (
         _section_open(ReportSections.SUBSIDIES, context)

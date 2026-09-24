@@ -362,6 +362,7 @@
               "stage",
               "status",
               "amount_in_euro",
+              "amount_by_year_in_euro",
               "binding_cap",
               "open_questions",
               "note"
@@ -372,12 +373,43 @@
               "stage": {"type": ["integer", "null"]},
               "status": {"enum": ["awarded", "ineligible", "undetermined"]},
               "amount_in_euro": {
-                "description": "The support this scheme pays on this timeline, negative like every credit. Null for a scheme that was refused or could not be decided: an unanswered question is never published as a zero.",
+                "description": "The support this scheme pays on this timeline, negative like every credit. Always a band for an awarded scheme: a benefit that pays no cash (loan terms, a VAT reduction) states a zero band and says in `note` where its money is, except that a soft loan's repayment grant is stated on the first loan-terms row of its scheme. Null only for a scheme that was refused or could not be decided: an unanswered question is never published as a zero.",
                 "oneOf": [{"$ref": "#/$defs/band"}, {"type": "null"}]
+              },
+              "amount_by_year_in_euro": {
+                "description": "The years `amount_in_euro` is booked in, relative 0..T like `annual[].year`, one entry per year with a booking, ascending; the entries sum to `amount_in_euro` slot by slot. In every year the awarded rows' entries sum to that year's `annual[].by_group.Subsidies`. Null exactly when `amount_in_euro` is.",
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["year", "amount_in_euro"],
+                      "properties": {
+                        "year": {"type": "integer", "minimum": 0},
+                        "amount_in_euro": {"$ref": "#/$defs/band"}
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  {"type": "null"}
+                ]
               },
               "binding_cap": {"type": ["string", "null"]},
               "open_questions": {"type": "array", "items": {"type": "string"}},
               "note": {"type": ["string", "null"]}
+            },
+            "if": {"properties": {"status": {"const": "awarded"}}},
+            "then": {
+              "properties": {
+                "amount_in_euro": {"$ref": "#/$defs/band"},
+                "amount_by_year_in_euro": {"type": "array"}
+              }
+            },
+            "else": {
+              "properties": {
+                "amount_in_euro": {"type": "null"},
+                "amount_by_year_in_euro": {"type": "null"}
+              }
             }
           }
         },

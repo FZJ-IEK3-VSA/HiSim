@@ -1770,7 +1770,10 @@ the core from day one; retrofitting bands later would touch every type and expor
 dicts themselves stay untouched; all entries start as degenerate bands, min = best_estimate = max, so every
 slot reproduces the legacy numbers), `EconomicEvaluator` with the canonical timeline, GREENFIELD
 context, SYSTEM actor, flat-percentage subsidy shim (reproducing today's behavior), and the
-compatibility adapter of §10.0 rule 4. The provenance ledger, `explain` API and `sources.json`
+compatibility adapter of §10.0 rule 4. **The flat-percentage shim is retired (2026-09-24, owner
+decision on the PR #799 review):** with no subsidy catalogue nothing is booked, on every path —
+evaluator, postprocessing bridge, CLI, reports and scenarios. `legacy_flat_subsidy_share` is kept in
+the device data and still loaded, but read by no calculation, until its removal. The provenance ledger, `explain` API and `sources.json`
 registry (§3.10) also ship in this phase: the citation lists currently in `configuration.py`
 docstrings ([20], [22], …) are migrated 1:1 into registry entries during the data migration, so the
 mandatory-source CI check is green from the first commit. Real min/max ranges are then filled in per

@@ -49,7 +49,7 @@ from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs
 from hisim.economics.facts import ComponentCostFacts, ExistingAsset, ExistingAssetRegister
 from hisim.economics.parameters import EconomicParameters
-from hisim.economics.perspectives import Perspective
+from hisim.economics.perspectives import Perspective, SubsidyMode
 from hisim.economics.results import (
     LifecycleCo2Result,
     LifecycleCostResult,
@@ -271,6 +271,11 @@ class StagedResult:
             timeline order. The document needs it for one thing the entry itself cannot say: a
             debt-service payment belongs to the loan of the stage that *borrowed*, which is not
             in general the stage active in the payment year (step 12 §2.2).
+        subsidy_catalog_id: The catalogue the plan was priced under, as
+            :meth:`StagedEvaluator.catalog_id` names it, or ``None`` for a plan priced with none —
+            and therefore with ``subsidy_mode: NONE``. Recorded by :meth:`StagedEvaluator.evaluate`
+            rather than supplied beside the result, so a document cannot name a catalogue the
+            figures were not priced with.
     """
 
     reference: LifecycleCostResult
@@ -281,6 +286,7 @@ class StagedResult:
     charged_subjects_by_stage: Tuple[Dict[str, float], ...] = field(default_factory=tuple)
     active_stage_by_year: Tuple[int, ...] = field(default_factory=tuple)
     stage_by_entry: Tuple[int, ...] = field(default_factory=tuple)
+    subsidy_catalog_id: Optional[str] = None
 
     def stage_of_year(self, year: int) -> int:
         """Index of the stage the house is in during one horizon year.
@@ -416,10 +422,11 @@ class StagedEvaluator:
             perspective: The accounting frame (installation context, actor scope, subsidy mode,
                 financing, accounting) every stage is evaluated under.
             catalog: The subsidy catalogue in force, or ``None`` for a plan priced with no
-                catalogue at all, where every scheme stays undetermined.
+                catalogue at all, where every scheme stays undetermined and the plan is priced
+                under :meth:`priced_under`'s ``subsidy_mode: NONE``.
 
         Returns:
-            The :class:`StagedResult`.
+            The :class:`StagedResult`, carrying the id of ``catalog`` (:meth:`catalog_id`).
 
         Raises:
             StagedEvaluationError: For any condition of the class docstring's list — a plan this
@@ -428,6 +435,7 @@ class StagedEvaluator:
                 subject nothing can price (D7). An engine error, deliberately not wrapped.
         """
         ordered = tuple(stages)
+        parameters, perspective = self.priced_under(parameters, perspective, catalog)
         self._validate(ordered, parameters)
         evaluator = EconomicEvaluator(self.database, parameters, catalog)
         active_by_year = self._active_by_year(ordered, parameters.observation_period_in_years)
@@ -456,6 +464,73 @@ class StagedEvaluator:
             charged_subjects_by_stage=tuple(charged_by_stage),
             active_stage_by_year=active_by_year,
             stage_by_entry=spliced.stage_by_entry,
+            subsidy_catalog_id=self.catalog_id(catalog, parameters.country),
+        )
+
+    #: How a catalogue is named in the document: the country it applies to and the date the
+    #: catalogue was taken from the programmes' own pages, which is the pair that identifies one
+    #: version of one country's support landscape. The bare country would not: Ireland's schemes
+    #: change every few months and a stored document has to say which of them it priced.
+    CATALOG_ID_FORMAT = "{country}@{snapshot}"
+
+    #: What stands in the date's place when the catalogue states no snapshot date.
+    UNDATED_CATALOG = "undated"
+
+    @classmethod
+    def catalog_id(cls, catalog: Optional[SubsidyCatalog], country: str) -> Optional[str]:
+        """How a priced plan names the subsidy catalogue it was priced under.
+
+        Args:
+            catalog: The catalogue in force, or ``None`` when the plan ran with none, in which
+                case every subsidy row of the document is undetermined.
+            country: The country the plan was priced for.
+
+        Returns:
+            ``"IE@2026-09-19"``-style id, or ``None`` for a plan priced with no catalogue.
+        """
+        if catalog is None:
+            return None
+        return cls.CATALOG_ID_FORMAT.format(
+            country=country, snapshot=catalog.snapshot_date or cls.UNDATED_CATALOG
+        )
+
+    @classmethod
+    def priced_under(
+        cls,
+        parameters: EconomicParameters,
+        perspective: Perspective,
+        catalog: Optional[SubsidyCatalog],
+    ) -> Tuple[EconomicParameters, Perspective]:
+        """The assumptions and the perspective a plan is actually priced under, given its catalogue.
+
+        A plan with no catalogue is priced with ``subsidy_mode: NONE``, whatever the perspective
+        asked for, and the document states every scheme of such a plan as undetermined (step 10
+        §1). The lever is ``perspective.subsidy_mode``, which is what the engine reads;
+        ``apply_subsidies`` is only the document's echo of that mode
+        (:meth:`~hisim.economics.staged_parameters.StagedParameters.applied_to`) and is turned off
+        so the echo says what ran. The engine itself books nothing without a catalogue since the
+        §10.1 flat shim was retired, so the rewrite changes no figure; it keeps the ``parameters``
+        block from echoing a mode the plan did not run under (hisim-cyc.5). With a catalogue the
+        arguments are returned unchanged.
+
+        :meth:`evaluate` calls this, and so does
+        :class:`~hisim.economics.staged_document.StagedDocument` when the result it is given was
+        priced with no catalogue; the second call changes nothing.
+
+        Args:
+            parameters: The assumptions the caller resolved.
+            perspective: The perspective the caller resolved.
+            catalog: The subsidy catalogue in force, or ``None``.
+
+        Returns:
+            ``(parameters, perspective)``: unchanged with a catalogue; without one, the perspective
+            with ``SubsidyMode.none()`` and the record with ``apply_subsidies`` off.
+        """
+        if catalog is not None:
+            return parameters, perspective
+        return (
+            replace(parameters, apply_subsidies=False),
+            replace(perspective, subsidy_mode=SubsidyMode.none()),
         )
 
     # ------------------------------------------------------------------ validation

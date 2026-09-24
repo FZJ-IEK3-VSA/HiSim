@@ -10,8 +10,10 @@ resulting support out on the timeline according to its payout kind (§5.3):
 * ``TAX_CREDIT_SCHEDULE`` — one entry per scheduled year within the observation period;
 * ``OPERATIONAL`` — a per-kWh payment on the energy *sold*, for the award's duration.
 
-Without a catalog the phase-1 shim applies instead: the legacy flat percentage carried on the
-device entry (§10.1).
+Without a catalog nothing is booked. The phase-1 shim that used to apply instead — the legacy
+flat percentage carried on the device entry (§10.1) — was retired on 2026-09-24 (owner decision on
+the PR #799 review): support with no scheme behind it is support no document can award, so a run
+without a catalog is priced gross on every path.
 
 **W3.4 — how the support total is obtained (fixed 2026-08-12).** This calculator no longer
 returns a running "total upfront support": that figure was incomplete (OPERATIONAL payouts were
@@ -28,8 +30,7 @@ does not admit — a non-optimal, and with `excludes` in play even an empty, rem
 is now a predicate handed to the solver, so eligibility, cumulation, the undetermined bound and
 the question set all see the same admitted candidate set.
 
-Realizes: cost_spec.md §5 (subsidies), §5.5 (subsidy modes), §6.4 (levy basis),
-§10.1 (legacy flat shim).
+Realizes: cost_spec.md §5 (subsidies), §5.5 (subsidy modes), §6.4 (levy basis).
 """
 
 from __future__ import annotations
@@ -43,14 +44,13 @@ from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.facts import BillingDeterminants
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import SubsidyMode
-from hisim.economics.provenance import ParameterOrigin, ParameterProvenance, ProvenanceLedger
+from hisim.economics.provenance import ProvenanceLedger
 from hisim.economics.subsidies import (
     MeasureForSubsidy,
     PayoutKind,
     SubsidyCatalog,
     SubsidyContext,
     SubsidyDecision,
-    SubsidySchemeLabels,
     solve_cumulation,
 )
 from hisim.economics.timeline import CashFlowEntry, CostCategory
@@ -67,7 +67,7 @@ class SubsidyApplicationResult:
     """
 
     entries: List[CashFlowEntry] = field(default_factory=list)
-    #: The solver's record, present only when a catalog was used (never for the legacy shim).
+    #: The solver's record, present only when a catalog was used.
     decision: Optional[SubsidyDecision] = None
 
 
@@ -87,56 +87,6 @@ def nominal_support_from_entries(entries: Iterable[CashFlowEntry]) -> UncertainV
         entry.amount_in_euro for entry in entries if entry.category == CostCategory.SUBSIDY
     )
     return signed.as_revenue()
-
-
-def _legacy_flat_shim(costing: DeviceCosting, ledger: ProvenanceLedger) -> SubsidyApplicationResult:
-    """Phase-1 shim: the legacy flat percentage from the database entry (§10.1).
-
-    Kept until §10.1 Phase 4 has a catalog for every shipped country (Ireland has none yet), but
-    no longer anonymous: the support it emits carries its own ledger record with
-    :attr:`ParameterOrigin.LEGACY_MIGRATION_SHIM`, so a reader of `cost_provenance.json` sees
-    that this euro came from a migration leftover in the *device* catalog and not from a scheme
-    anyone can point at (W2.6). The device entry's `source_ids` are deliberately not cited —
-    they source the device price — unless the data file declares a `field_sources` entry for the
-    share itself.
-    """
-    result = SubsidyApplicationResult()
-    share = costing.legacy_flat_subsidy_share
-    if share > 0:
-        amount = (costing.device_cost + costing.installation_cost).scale(share)
-        entry = costing.entry
-        shim_provenance = ledger.record(
-            ParameterProvenance(
-                parameter=(
-                    f"{entry.entry_key}.legacy_flat_subsidy_share"
-                    if entry is not None
-                    else f"{costing.subject}.legacy_flat_subsidy_share"
-                ),
-                value=share,
-                origin=ParameterOrigin.LEGACY_MIGRATION_SHIM,
-                data_file=f"{entry.data_file}#{entry.entry_key}" if entry is not None else None,
-                source_ids=(
-                    entry.field_sources.get("legacy_flat_subsidy_share", ()) if entry is not None else ()
-                ),
-                detail=(
-                    "§10.1 Phase-1 flat subsidy shim: subsidy data carried in the device catalog "
-                    "for countries without a subsidy catalog; superseded by any active catalog."
-                ),
-            )
-        )
-        result.entries.append(
-            CashFlowEntry(
-                year=0,
-                amount_in_euro=amount.as_revenue(),
-                category=CostCategory.SUBSIDY,
-                subject=costing.subject,
-                # The reader of this id is `views.scheme_display_names`, which turns it into an
-                # honest label; the constant is what ties the two ends together (Q20).
-                subsidy_scheme_id=SubsidySchemeLabels.LEGACY_FLAT_ID,
-                provenance_ids=costing.provenance_ids + (shim_provenance,),
-            )
-        )
-    return result
 
 
 def build_subsidy_flows(
@@ -167,9 +117,10 @@ def build_subsidy_flows(
 
     Args:
         costing: The measure's resolved costing (§3.5, §4.1). Supplies the cost blocks, the facts
-            the eligibility conditions are evaluated against, the VAT rate, whether an asset is
-            being replaced, and — without a catalog — the legacy flat share.
-        subsidy_catalog: The country catalog, or `None` to fall back to the phase-1 flat shim.
+            the eligibility conditions are evaluated against, the VAT rate and whether an asset is
+            being replaced.
+        subsidy_catalog: The country catalog, or `None`, in which case nothing is booked and no
+            decision is made (the §10.1 flat shim is retired).
         subsidy_context: The applicant/building questionnaire answers the conditions read (§5.7).
         subsidy_mode: The perspective's mode (NONE / FULL / ONLY / EXCLUDE). Its `admits`
             predicate is handed to the solver, so filtering happens *before* the optimization
@@ -186,13 +137,13 @@ def build_subsidy_flows(
         A `SubsidyApplicationResult` whose `entries` are revenue-mirrored (negative) SUBSIDY
         entries in nominal euros of their year, at year 0 for upfront grants, at years 1..N for
         tax-credit schedules, and for the award's duration for operational payouts — and whose
-        `decision` carries the solver's full audit trail (applied, rejected, undetermined) unless
-        the legacy shim ran. Deliberately no support total: see the module docstring (W3.4).
+        `decision` carries the solver's full audit trail (applied, rejected, undetermined); both are
+        empty without a catalog. Deliberately no support total: see the module docstring (W3.4).
     """
     params = parameters
-    if subsidy_catalog is None:
-        return _legacy_flat_shim(costing, ledger)
     result = SubsidyApplicationResult()
+    if subsidy_catalog is None:
+        return result
     measure = MeasureForSubsidy(
         subject=costing.subject,
         facts=costing.facts,

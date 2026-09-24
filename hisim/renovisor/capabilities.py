@@ -450,6 +450,13 @@ class ProbeSet:
             [{"id": "hot_water_system", "options": {"supply": "separate_heat_pump"}}],
         ),
         "pair:postcode": ({}, None),  # the location half is added in :meth:`build`
+        # A cost block on a measure HiSim prices from its own cost database, which is read on an
+        # envelope measure only; the band is the mockup's own.
+        "pair:cost_on_heating_system": (
+            {},
+            [{"id": "heating_system", "options": {"type_of_system": "air_source_heat_pump"},
+              "cost": {"min_in_euro_per_m2": 50, "max_in_euro_per_m2": 70, "source": "the capability probe set"}}],
+        ),
     }
 
     #: The postcode the one probe that carries one sends; a Dublin postal district.

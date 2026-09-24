@@ -680,7 +680,7 @@ class MeasureRegistry:
 
     @classmethod
     def heating_system(cls, context: MeasureContext) -> None:
-        """Replace the heat generator, and drop the four facts that described the old one."""
+        """Replace the heat generator, and drop the facts that described the old one."""
         generator = context.option("type_of_system")
         context.effects.set("heating.type_of_system", generator)
         context.record("type_of_system", ReportStatus.USED)

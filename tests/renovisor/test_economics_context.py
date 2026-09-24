@@ -12,7 +12,6 @@ milliseconds, and nothing else.
 """
 
 import copy
-import dataclasses
 import os
 from typing import Any, Dict, Optional
 
@@ -25,7 +24,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.renovisor.apply import MeasureRegistry, apply
 from hisim.renovisor.constants import AnywayShareByPlacement, Placement
 from hisim.renovisor.contract import ContractFiles
-from hisim.economics.subsidies import ApplicantActor, DwellingType, SubsidyCatalog
+from hisim.economics.subsidies import ApplicantActor, ApplicantProfile, DwellingType, SubsidyCatalog
 from hisim.renovisor.economics import (
     DeviceAssets,
     DwellingTypes,
@@ -100,31 +99,23 @@ def _built(document: Dict[str, Any], building_config: Optional[Dict[str, Any]] =
 
 
 def _builder(document: Dict[str, Any], with_cost_block: bool = False) -> EconomicContextBuilder:
-    """The builder over one request, optionally with a ``cost`` block the schema does not allow.
+    """The builder over one request, optionally with a ``cost`` block on the facade measure.
 
-    Two fields of E-spec §7 -- ``installation_year`` and ``measures[i].cost`` -- are additive
-    proposals the vendored request schema has not adopted yet (findings F7/F10), so a request
-    carrying either is refused by the validator. The builder is supposed to read them the moment
-    they arrive, and this is how that behaviour is exercised in the meantime: validate the request
-    as it stands, then hand the builder the document the frontend will send.
+    The builder is returned unbuilt, so a test can ask one of its readers directly.
 
     Args:
         document: The request.
-        with_cost_block: Whether to add a price band to the first envelope measure.
+        with_cost_block: Whether to replace the ``external_insulation`` measure's price band with
+            one of 100 to 200 euro per square metre.
 
     Returns:
         The builder.
     """
-    request = Request.parse(document)
-    raw = dict(request.document)
     if with_cost_block:
-        raw["measures"] = [
-            dict(measure, cost={"min_in_euro_per_m2": 100.0, "max_in_euro_per_m2": 200.0})
-            if measure.get("id") == "external_insulation"
-            else measure
-            for measure in raw["measures"]
-        ]
-        request = dataclasses.replace(request, document=raw)
+        for measure in document["measures"]:
+            if measure.get("id") == "external_insulation":
+                measure["cost"] = {"min_in_euro_per_m2": 100.0, "max_in_euro_per_m2": 200.0, "source": "a test"}
+    request = Request.parse(document)
     applied = apply(request.document["house"], request.measures, Whitelist.load())
     return EconomicContextBuilder(
         request,
@@ -173,10 +164,7 @@ class TestTheRegister:
     def test_a_stated_installation_year_wins_over_the_construction_year(self) -> None:
         """E-spec §7's additive field: read when present, defaulted to the construction year.
 
-        The field is not in the vendored request schema yet (findings F7/F10), so a request
-        carrying it does not validate and the case is driven through the builder the translator
-        holds rather than through a request the validator would reject. The moment the schema
-        grows the field, this is the behaviour it gets.
+        Asked of the reader directly, so a block the mockup does not date is covered too.
         """
         builder = _builder(_mockup())
         # pylint: disable=protected-access
@@ -184,6 +172,25 @@ class TestTheRegister:
         assert builder._installation_year("pv_system", block={}) == (
             _mockup()["house"]["building"]["construction_year"]
         )
+
+    def test_an_integral_float_year_is_the_same_year(self) -> None:
+        """The schema's ``integer`` accepts ``2008.0``; it dates the boiler, not the building."""
+        document = _mockup()
+        document["house"]["heating"]["installation_year"] = 2008.0
+        built = _built(document)
+
+        boiler = built.context.existing_assets.find(ComponentType.GAS_HEATER)
+        assert boiler.installation_year == 2008 and isinstance(boiler.installation_year, int)
+        assert all(path != "house.heating.installation_year" for path, _value, _note in built.defaults)
+        leaves = {path: value for path, value, _note in EconomicContextBuilder.stated_leaves(document)}
+        assert leaves["house.heating.installation_year"] == 2008
+        assert isinstance(leaves["house.heating.installation_year"], int)
+
+    @pytest.mark.parametrize("value", [2008.5, True, "2008", None])
+    def test_a_value_that_is_no_year_states_none(self, value: Any) -> None:
+        """A fraction, a boolean or a string is not a year, whatever Python thinks of ``True``."""
+        # pylint: disable=protected-access
+        assert EconomicContextBuilder._stated_year({"installation_year": value}) is None
 
     def test_the_heating_measure_declares_what_replaces_the_boiler(self) -> None:
         """Without it the engine would keep the boiler and install the heat pump beside it."""
@@ -242,15 +249,41 @@ class TestTheEnvelopeCostSubjects:
         assert facts["external_insulation"].investment_cost_override_in_euro.best_estimate == 0.0
 
     def test_a_cost_block_on_the_measure_prices_the_subject_per_square_metre(self) -> None:
-        """The frontend copies the price out of the contract; the translator reads no catalogue.
-
-        Like the installation year, the ``cost`` block is not in the vendored schema yet, so the
-        document the builder reads is edited after validation rather than before it.
-        """
+        """The frontend copies the price out of the contract; the translator reads no catalogue."""
         builder = _builder(_mockup(), with_cost_block=True)
         # pylint: disable=protected-access
         assert builder._measure_price("external_insulation") == (100.0, 200.0)
         assert builder._measure_price("window_replacement") is None
+
+    def test_the_request_cost_block_prices_the_envelope_subject(self) -> None:
+        """The mockup's facade band times the facade's area is the subject's investment."""
+        document = _mockup()
+        band = next(measure for measure in document["measures"] if measure["id"] == "external_insulation")["cost"]
+        built = _builder(document).build()
+
+        assert "external_insulation" not in built.unpriced_subjects
+        facts = {entry.subject: entry.facts for entry in built.context.extra_cost_facts}
+        investment = facts["external_insulation"].investment_cost_override_in_euro
+        assert investment is not None
+        assert investment.best_estimate > 0.0
+        assert investment.minimum == pytest.approx(band["min_in_euro_per_m2"] * 173.0)
+        assert investment.maximum == pytest.approx(band["max_in_euro_per_m2"] * 173.0)
+
+    def test_only_envelope_measures_are_priced_from_the_request(self) -> None:
+        """A block on any other measure is reported unread, not priced (not_implemented_yet.yaml)."""
+        assert set(EconomicContextBuilder.PRICED_FROM_REQUEST) == set(MeasureRegistry.INSULATION) | set(
+            EnvelopeAssets.UNIT_REPLACEMENTS
+        )
+        document = _mockup()
+        for measure in document["measures"]:
+            measure.setdefault("cost", {"min_in_euro_per_m2": 1, "max_in_euro_per_m2": 2, "source": "a test"})
+
+        read = {path: flag for path, _block, flag in EconomicContextBuilder.cost_blocks(document)}
+
+        assert read == {
+            f"measures[{index}].cost": measure["id"] == "external_insulation"
+            for index, measure in enumerate(document["measures"])
+        }
 
     def test_the_subject_is_sized_in_square_metres_of_its_element(self) -> None:
         """A price per square metre without a square metre is a wrong answer, not a smaller one."""
@@ -363,13 +396,54 @@ class TestTheSubsidyContext:
         assert context.applicant.first_time_buyer is False
         assert context.applicant.managed_full_retrofit is True
 
-    def test_the_applicant_role_becomes_the_profiles_actor(self) -> None:
+    @pytest.mark.parametrize(
+        "role, actor",
+        [
+            ("owner_occupier", ApplicantActor.OWNER_OCCUPIER),
+            ("landlord", ApplicantActor.LANDLORD),
+            ("tenant", ApplicantActor.TENANT),
+            ("condominium_association", ApplicantActor.CONDOMINIUM_ASSOCIATION),
+        ],
+    )
+    def test_the_applicant_role_becomes_the_profiles_actor(self, role: str, actor: ApplicantActor) -> None:
         """hisim-epc.14: a landlord applies to landlord programmes, not to owner-occupier ones."""
         document = _mockup()
-        document["applicant"] = {"role": "landlord"}
+        document["applicant"] = {"role": role}
         context = _built(document).context.subsidy_context
 
-        assert context.applicant.actor is ApplicantActor.LANDLORD
+        assert context.applicant.actor is actor
+
+    def test_every_role_of_the_schema_is_one_of_the_four_above(self) -> None:
+        """A fifth role in the shared schema has to be given an actor here, not a KeyError at run time."""
+        roles = ContractFiles.request_schema()["$defs"]["applicant"]["properties"][
+            EconomicContextBuilder.APPLICANT_ROLE_KEY
+        ]["enum"]
+
+        assert sorted(roles) == sorted(["owner_occupier", "landlord", "tenant", "condominium_association"])
+        assert {ApplicantActor(role.upper()) for role in roles} == set(ApplicantActor)
+
+    def test_the_reader_copies_exactly_the_schemas_applicant_fields(self) -> None:
+        """Every property of the block besides the role reaches the profile, and nothing else is read."""
+        properties = ContractFiles.request_schema()["$defs"]["applicant"]["properties"]
+
+        assert set(EconomicContextBuilder.APPLICANT_FIELDS) == set(properties) - {
+            EconomicContextBuilder.APPLICANT_ROLE_KEY
+        }
+        for name in EconomicContextBuilder.APPLICANT_FIELDS:
+            assert hasattr(ApplicantProfile(), name), name
+
+    def test_every_stated_applicant_leaf_is_an_economics_leaf(self) -> None:
+        """The translator records these before its fail-loud stage, which now walks the block too."""
+        document = _mockup()
+        document["applicant"] = {"role": "tenant", "household_size": 3, "main_residence": False}
+
+        leaves = {path: value for path, value, _note in EconomicContextBuilder.stated_leaves(document)}
+
+        assert {path: value for path, value in leaves.items() if path.startswith("applicant.")} == {
+            "applicant.role": "tenant",
+            "applicant.household_size": 3,
+            "applicant.main_residence": False,
+        }
 
     def test_an_applicant_block_without_a_role_keeps_the_default_actor(self) -> None:
         """The profile's own assertion stands: the archetype is an owner-occupied dwelling."""
@@ -461,7 +535,8 @@ class TestTheTechnicalAttributes:
         document["house"]["heating"]["type_of_system"] = "air_source_heat_pump"
         document["house"]["heating"]["heatpump_scop_en14825_w35"] = 4.6
         document["house"]["heating"]["heatpump_scop_en14825_w55"] = 3.4
-        document["measures"] = []
+        # One envelope measure is kept, so the attributes below have a subject to be empty of SCOP.
+        document["measures"] = [measure for measure in document["measures"] if measure["id"] == "external_insulation"]
         request = Request.parse(document)
         applied = apply(request.document["house"], request.measures, Whitelist.load())
         attributes = EconomicContextBuilder(
@@ -471,11 +546,11 @@ class TestTheTechnicalAttributes:
             generator_component="MoreAdvancedHeatPumpHPLib",
             heating_reference_temperature_in_celsius=MOCKUP_DESIGN_TEMPERATURE_IN_CELSIUS,
         ).build().context.technical_attributes_by_subject
+        leaves = EconomicContextBuilder.stated_leaves(document)
 
+        assert attributes["external_insulation"] and leaves
         assert all("scop" not in key for entry in attributes.values() for key in entry)
-        assert all(
-            "scop" not in path for path, _value, _note in EconomicContextBuilder.stated_leaves(document)
-        )
+        assert all("scop" not in path for path, _value, _note in leaves)
 
 
 class TestTheCatalogueTheRunIsPointedAt:

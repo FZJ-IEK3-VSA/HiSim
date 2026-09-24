@@ -918,6 +918,7 @@ class Translator:
         # translated model, which only exists after it.
         for path, value, note in EconomicContextBuilder.stated_leaves(request.document):
             report.used(path, self.ECONOMICS_TARGET, value=value, note=note)
+        self._cost_blocks(request, raw, report)
         edits: List[Edit] = []
         state = _TranslationState(
             request=request,
@@ -990,6 +991,30 @@ class Translator:
         self._self_check(text, file_name)
         report.assert_complete(request.document)
         return translated
+
+    def _cost_blocks(self, request: Request, house: Mapping[str, Any], report: MappingReport) -> None:
+        """Report every ``measures[i].cost`` block: used on an envelope measure, listed on any other.
+
+        The fail-loud stage walks the house, not the package, so a block nobody reads would pass
+        it silently. An envelope measure's block prices its cost subject; any other measure is
+        priced from HiSim's cost database, and its block is asked of ``not_implemented_yet.yaml``
+        like every other leaf the translator does not act on.
+
+        Args:
+            request: The validated request.
+            house: The renovated house, which the list's conditions are evaluated on.
+            report: The report being written.
+
+        Raises:
+            TranslatorError: When the list does not carry
+                :attr:`~hisim.renovisor.economics.EconomicContextBuilder.UNREAD_COST_ITEM`.
+        """
+        for path, block, read in EconomicContextBuilder.cost_blocks(request.document):
+            if read:
+                report.used(path, self.ECONOMICS_TARGET, value=dict(block), note=EconomicContextBuilder.COST_USED_NOTE)
+                continue
+            entry = self._whitelist.require(Unmapped(EconomicContextBuilder.UNREAD_COST_ITEM), house)
+            report.not_implemented_yet(path, entry.note, value=dict(block))
 
     @classmethod
     def _self_check(cls, text: str, file_name: str) -> None:

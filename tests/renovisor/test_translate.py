@@ -329,6 +329,79 @@ class TestTheReportAccountsForTheRequest:
 
 
 @pytest.mark.base
+class TestTheEconomicsOnlyLeaves:
+    """The request leaves that feed the economic context and no simulation component."""
+
+    @pytest.mark.parametrize("stated", [None, 2008.0])
+    def test_the_dated_boiler_is_reported_used_with_its_year(self, stated: Optional[float]) -> None:
+        """The mockup dates its boiler; an integral float is the same year, reported as an int."""
+        document = copy.deepcopy(ContractFiles.request_mockup())
+        if stated is not None:
+            document["house"]["heating"]["installation_year"] = stated
+        expected = int(document["house"]["heating"]["installation_year"])
+
+        line = translate(document).report.line("house.heating.installation_year")
+
+        assert line is not None
+        assert line.status is ReportStatus.USED
+        assert line.target == Translator.ECONOMICS_TARGET
+        assert line.value == expected and isinstance(line.value, int)
+
+    def test_every_leaf_of_an_applicant_block_is_reported_used(self) -> None:
+        """The completeness check covers the block, so each of its leaves has a line of its own."""
+        document = copy.deepcopy(ContractFiles.request_mockup())
+        document["applicant"] = {
+            "role": "landlord",
+            "receives_means_tested_benefit": True,
+            "first_time_buyer": False,
+            "managed_full_retrofit": True,
+            "taxable_household_income_in_euro": 61000.0,
+            "household_size": 4,
+            "main_residence": True,
+        }
+
+        system = translate(document)
+
+        assert {leaf for leaf in MappingReport.request_leaves(document) if leaf.startswith("applicant.")} == {
+            f"applicant.{key}" for key in document["applicant"]
+        }
+        for key, value in document["applicant"].items():
+            line = system.report.line(f"applicant.{key}")
+            assert line is not None, key
+            assert line.status is ReportStatus.USED
+            assert line.target == Translator.ECONOMICS_TARGET
+            assert line.value == value
+
+    def test_an_envelope_measures_cost_block_is_used(self) -> None:
+        """The mockup prices its facade layer: the band is read into the economic context."""
+        document = copy.deepcopy(ContractFiles.request_mockup())
+        index = next(i for i, measure in enumerate(document["measures"]) if measure["id"] == "external_insulation")
+
+        line = translate(document).report.line(f"measures[{index}].cost")
+
+        assert line is not None
+        assert line.status is ReportStatus.USED
+        assert line.target == Translator.ECONOMICS_TARGET
+        assert line.value == document["measures"][index]["cost"]
+
+    def test_a_cost_block_on_a_heating_system_measure_is_not_implemented_yet(self) -> None:
+        """The heat pump is priced from HiSim's cost database, and the report says the block is unread."""
+        document = copy.deepcopy(ContractFiles.request_mockup())
+        heating = next(measure for measure in document["measures"] if measure["id"] == "heating_system")
+        heating["cost"] = {"min_in_euro_per_m2": 80, "max_in_euro_per_m2": 120, "source": "a test"}
+        index = document["measures"].index(heating)
+
+        line = translate(document).report.line(f"measures[{index}].cost")
+
+        assert line is not None
+        assert line.status is ReportStatus.NOT_IMPLEMENTED_YET
+        assert line.note == (
+            "HiSim prices this measure from its cost database; a request's cost block is used for "
+            "envelope measures only so far."
+        )
+
+
+@pytest.mark.base
 class TestDeterminism:
     """T-DET: the same request is the same bytes and the same file name."""
 

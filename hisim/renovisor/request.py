@@ -81,6 +81,7 @@ class ProblemCode(str, Enum):
     MEASURE_COST_BAND_INVALID = "measure.cost.band_invalid"
     HEATING_SCOP_NOT_A_HEAT_PUMP = "heating.scop.not_a_heat_pump"
     HEATING_SCOP_W55_ABOVE_W35 = "heating.scop.w55_above_w35"
+    HEATING_SCOP_NOT_FINITE = "heating.scop.not_finite"
 
 
 @dataclass(frozen=True)
@@ -1311,19 +1312,33 @@ class SemanticChecks:
 
     @classmethod
     def _heat_pump_scop(cls, house: Mapping[str, Any]) -> List[Problem]:
-        """Refuse a rated SCOP on a heating that is not a heat pump, and a W55 rating above W35.
+        """Refuse a SCOP that is not a finite number, one on a heating that is not a heat pump, and a W55 above W35.
 
-        Both are contradictions inside the request (renovisorissues #8): a SCOP rates a heat pump,
-        and a unit rated for 55 °C water cannot outperform its own 35 °C rating.
+        The first is a hole in the schema: its bounds cannot refuse ``NaN``, because every
+        comparison with ``NaN`` is false, so it passes ``exclusiveMinimum`` and ``maximum`` alike.
+        ``Infinity`` is above the ``maximum`` today and is refused here as well, so the check does
+        not lean on that bound. The other two are contradictions inside the request
+        (renovisorissues #8): a SCOP rates a heat pump, and a unit rated for 55 °C water cannot
+        outperform its own 35 °C rating. A value that is not finite takes no part in that
+        comparison.
         """
         heating = house.get("heating") or {}
         w35_key, w55_key = cls.SCOP_KEYS
         stated = [key for key in cls.SCOP_KEYS if heating.get(key) is not None]
         if not stated:
             return []
+        problems = [
+            Problem(
+                path=f"house.heating.{key}",
+                code=ProblemCode.HEATING_SCOP_NOT_FINITE,
+                message=f"a rated SCOP is a finite number, and house.heating.{key} is {heating[key]!r}",
+            )
+            for key in stated
+            if not math.isfinite(float(heating[key]))
+        ]
         generator = heating.get("type_of_system")
         if generator not in {member.value for member in HeatGenerator.heat_pumps()}:
-            return [
+            return problems + [
                 Problem(
                     path=f"house.heating.{key}",
                     code=ProblemCode.HEATING_SCOP_NOT_A_HEAT_PUMP,
@@ -1335,7 +1350,9 @@ class SemanticChecks:
                 for key in stated
             ]
         w35, w55 = heating.get(w35_key), heating.get(w55_key)
-        if w35 is not None and w55 is not None and float(w55) > float(w35):
+        if problems or w35 is None or w55 is None:
+            return problems
+        if float(w55) > float(w35):
             return [
                 Problem(
                     path=f"house.heating.{w55_key}",

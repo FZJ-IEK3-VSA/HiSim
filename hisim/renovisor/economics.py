@@ -35,7 +35,7 @@ a reviewed constant of :mod:`hisim.renovisor.constants`.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
+from typing import Any, ClassVar, Dict, FrozenSet, List, Mapping, Optional, Tuple
 
 from hisim.economics.bridge import EconomicContext
 from hisim.economics.carriers import EnergyCarrier
@@ -50,6 +50,7 @@ from hisim.economics.subsidies import (
 )
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
+from hisim.renovisor.apply import MeasureRegistry
 from hisim.renovisor.constants import AnywayShareByPlacement, Placement
 from hisim.renovisor.request import House, Measure, Request
 from hisim.renovisor.vocabulary import BuildingType, HeatGenerator, ThermalElement
@@ -392,46 +393,56 @@ class EconomicContextBuilder:
             of the result document without a measure, exactly as a baseline component has none.
     """
 
-    #: The request field naming when a device or an element was installed (E-spec §7). Absent
-    #: from the vendored schema today; read when present, defaulted to the construction year.
+    #: The request field naming when a device or an element was installed (E-spec §7), on the
+    #: dated ``house`` blocks of the vendored schema; read when stated, defaulted to the
+    #: construction year when not.
     INSTALLATION_YEAR_KEY: ClassVar[str] = "installation_year"
 
-    #: The request block naming who is applying (E-spec §7). Absent from the vendored schema
-    #: today; read when present, and every field it does not answer stays undetermined.
+    #: The top-level request block naming who is applying (E-spec §7, the vendored schema's
+    #: ``applicant``); read when stated, and every field it does not answer stays undetermined.
     APPLICANT_KEY: ClassVar[str] = "applicant"
 
-    #: The key of that block naming who signs the funding application, and the request values it
-    #: may carry, mapped onto the engine's own vocabulary. The schema refuses every other value,
-    #: so the lookup below cannot miss.
+    #: The key of that block naming who signs the funding application. Its values are the
+    #: schema's lowercase spellings of :class:`~hisim.economics.subsidies.ApplicantActor`'s own
+    #: values, so ``ApplicantActor(role.upper())`` is the whole mapping; the schema refuses every
+    #: other value, so the lookup cannot miss.
     APPLICANT_ROLE_KEY: ClassVar[str] = "role"
-    APPLICANT_ROLES: ClassVar[Mapping[str, ApplicantActor]] = {
-        "owner_occupier": ApplicantActor.OWNER_OCCUPIER,
-        "landlord": ApplicantActor.LANDLORD,
-        "tenant": ApplicantActor.TENANT,
-        "condominium_association": ApplicantActor.CONDOMINIUM_ASSOCIATION,
-    }
 
-    #: The fields of that block the builder copies onto the applicant profile, by their name on
-    #: :class:`~hisim.economics.subsidies.ApplicantProfile`. The last three are the ones the
-    #: Irish catalogue reads (step 11 §3.2/§3.3); a field the block omits stays undetermined.
+    #: The other fields of that block, which the builder copies onto the applicant profile under
+    #: the same name on :class:`~hisim.economics.subsidies.ApplicantProfile`. They are exactly the
+    #: schema's ``applicant`` properties besides ``role``, which
+    #: ``tests/renovisor/test_economics_context.py`` pins. The last three are the ones the Irish
+    #: catalogue reads (step 11 §3.2/§3.3); a field the block omits stays undetermined.
     APPLICANT_FIELDS: ClassVar[Tuple[str, ...]] = (
         "taxable_household_income_in_euro",
         "household_size",
         "main_residence",
-        "region",
         "receives_means_tested_benefit",
         "first_time_buyer",
         "managed_full_retrofit",
     )
 
     #: The per-measure price block the frontend writes out of the contract's material table
-    #: (E-spec §7). Absent from the vendored schema today (findings F7/F10).
+    #: (E-spec §7, the vendored schema's ``measures[i].cost``). Only an envelope measure is
+    #: priced from it so far (:attr:`PRICED_FROM_REQUEST`).
     COST_KEY: ClassVar[str] = "cost"
 
     #: Its two price fields and the provenance string beside them.
     COST_MINIMUM_KEY: ClassVar[str] = "min_in_euro_per_m2"
     COST_MAXIMUM_KEY: ClassVar[str] = "max_in_euro_per_m2"
     COST_SOURCE_KEY: ClassVar[str] = "source"
+
+    #: The measures whose envelope cost subject that block prices: the insulation measures, which
+    #: add a layer, and the two unit replacements. A block on any other measure is accepted and
+    #: not read -- HiSim prices those measures from its cost database -- and the translator
+    #: reports it under :attr:`UNREAD_COST_ITEM` of ``not_implemented_yet.yaml``.
+    PRICED_FROM_REQUEST: ClassVar[FrozenSet[str]] = frozenset(
+        (*MeasureRegistry.INSULATION, *EnvelopeAssets.UNIT_REPLACEMENTS)
+    )
+
+    #: The ``not_implemented_yet.yaml`` item for a cost block on a measure outside that set. It is
+    #: one entry for every measure of the package, which the ``[]`` stands for.
+    UNREAD_COST_ITEM: ClassVar[str] = "measures[].cost"
 
     #: The request field holding the dwelling's living area (E-spec §7).
     LIVING_AREA_KEY: ClassVar[str] = "living_area_in_m2"
@@ -496,6 +507,23 @@ class EconomicContextBuilder:
     #: The note a stated living area carries.
     LIVING_AREA_USED_NOTE: ClassVar[str] = (
         "the living area the cost lines that scale with it are taken over, as the request states it"
+    )
+
+    #: The note a cost block on an envelope measure carries.
+    COST_USED_NOTE: ClassVar[str] = (
+        "the price band of the envelope subject this measure creates, in euro per square metre of "
+        "its element; a subject whose element has no area stays unpriced"
+    )
+
+    #: The note a stated applicant role carries.
+    APPLICANT_ROLE_USED_NOTE: ClassVar[str] = (
+        "who signs the funding application, which decides the programmes open to the applicant"
+    )
+
+    #: The note every other stated applicant field carries.
+    APPLICANT_USED_NOTE: ClassVar[str] = (
+        "an answer the eligibility conditions of the country's subsidy catalogue read, as the "
+        "request states it"
     )
 
     #: The catalogue measure that installs a new heat generator.
@@ -601,44 +629,54 @@ class EconomicContextBuilder:
     def stated_leaves(cls, document: Mapping[str, Any]) -> List[Tuple[str, Any, str]]:
         """The economics-only leaves one request states, with the value and the report note.
 
-        The installation years and the living area feed the economic context and no simulation
-        component. The heat pump's rated SCOP is not one of them: it describes the pump in the
-        house, which no subsidy is ever decided for, and it is physics (renovisorissues #8). The translator records them
-        *before* its stages run — the fail-loud stage that accounts for every leftover leaf runs
-        inside the translation, while the builder, which needs the translated model for its
-        subjects, runs after it — and both spellings live here so they cannot drift.
+        The installation years, the living area and the ``applicant`` block feed the economic
+        context and no simulation component. The heat pump's rated SCOP is not one of them: it
+        describes the pump in the house, which no subsidy is ever decided for, and it is physics
+        (renovisorissues #8). The translator records them *before* its stages run — the fail-loud
+        stage that accounts for every leftover leaf runs inside the translation, while the builder,
+        which needs the translated model for its subjects, runs after it — and both spellings live
+        here so they cannot drift.
 
         Args:
             document: The validated request.
 
         Returns:
-            One ``(request path, value, sentence)`` per stated leaf, in path order.
+            One ``(request path, value, sentence)`` per stated leaf: the house's in path order,
+            then the applicant's in :attr:`APPLICANT_ROLE_KEY`, :attr:`APPLICANT_FIELDS` order.
         """
         leaves: List[Tuple[str, Any, str]] = []
         house = document.get("house", {})
-        if not isinstance(house, Mapping):
-            return leaves
-        for block in cls.DATED_HOUSE_BLOCKS:
-            raw = house.get(block)
-            if isinstance(raw, Mapping) and isinstance(raw.get(cls.INSTALLATION_YEAR_KEY), int):
-                leaves.append(
-                    (
-                        f"house.{block}.{cls.INSTALLATION_YEAR_KEY}",
-                        int(raw[cls.INSTALLATION_YEAR_KEY]),
-                        cls.INSTALLATION_YEAR_USED_NOTE,
+        if isinstance(house, Mapping):
+            leaves.extend(cls._stated_house_leaves(house))
+        applicant = document.get(cls.APPLICANT_KEY)
+        if isinstance(applicant, Mapping):
+            for name in (cls.APPLICANT_ROLE_KEY, *cls.APPLICANT_FIELDS):
+                if name in applicant:
+                    note = (
+                        cls.APPLICANT_ROLE_USED_NOTE if name == cls.APPLICANT_ROLE_KEY else cls.APPLICANT_USED_NOTE
                     )
+                    leaves.append((f"{cls.APPLICANT_KEY}.{name}", applicant[name], note))
+        return leaves
+
+    @classmethod
+    def _stated_house_leaves(cls, house: Mapping[str, Any]) -> List[Tuple[str, Any, str]]:
+        """The installation years and the living area one ``house`` block states, in path order."""
+        leaves: List[Tuple[str, Any, str]] = []
+        for block in cls.DATED_HOUSE_BLOCKS:
+            year = cls._stated_year(house.get(block))
+            if year is not None:
+                leaves.append(
+                    (f"house.{block}.{cls.INSTALLATION_YEAR_KEY}", year, cls.INSTALLATION_YEAR_USED_NOTE)
                 )
         building = house.get("building")
         if isinstance(building, Mapping):
             for element in ThermalElement:
-                raw = building.get(element.value)
-                if isinstance(raw, Mapping) and isinstance(
-                    raw.get(cls.INSTALLATION_YEAR_KEY), int
-                ):
+                year = cls._stated_year(building.get(element.value))
+                if year is not None:
                     leaves.append(
                         (
                             f"house.building.{element.value}.{cls.INSTALLATION_YEAR_KEY}",
-                            int(raw[cls.INSTALLATION_YEAR_KEY]),
+                            year,
                             cls.INSTALLATION_YEAR_USED_NOTE,
                         )
                     )
@@ -652,6 +690,30 @@ class EconomicContextBuilder:
                     )
                 )
         return leaves
+
+    @classmethod
+    def cost_blocks(cls, document: Mapping[str, Any]) -> List[Tuple[str, Mapping[str, Any], bool]]:
+        """Every ``measures[i].cost`` block one request carries, and whether the builder reads it.
+
+        The translator reports each: a block on a measure of :attr:`PRICED_FROM_REQUEST` as used
+        by the economic context, any other as ``not_implemented_yet`` under
+        :attr:`UNREAD_COST_ITEM`, because HiSim prices those measures from its own cost database.
+
+        Args:
+            document: The validated request.
+
+        Returns:
+            One ``(request path, block, read)`` per measure that carries a block, in package
+            order.
+        """
+        blocks: List[Tuple[str, Mapping[str, Any], bool]] = []
+        for index, raw in enumerate(document.get("measures") or []):
+            if not isinstance(raw, Mapping) or not isinstance(raw.get(cls.COST_KEY), Mapping):
+                continue
+            blocks.append(
+                (f"measures[{index}].{cls.COST_KEY}", raw[cls.COST_KEY], raw.get("id") in cls.PRICED_FROM_REQUEST)
+            )
+        return blocks
 
     # ------------------------------------------------------------------ the register
 
@@ -955,9 +1017,8 @@ class EconomicContextBuilder:
     def _measure_cost_block(self, measure: Measure) -> Any:
         """The raw ``cost`` block of one measure as the request carried it, or ``None``.
 
-        The block is not in the vendored request schema yet (findings F7/F10), so it never
-        survives into :class:`~hisim.renovisor.request.Measure`; it is looked for on the raw
-        document instead, which is what "read when present" means here.
+        :class:`~hisim.renovisor.request.Measure` carries a measure's id and options only, so the
+        block is looked for on the raw document, which is what "read when present" means here.
         """
         for raw in self._request.document.get("measures", []):
             if isinstance(raw, Mapping) and raw.get("id") == measure.id:
@@ -1068,7 +1129,7 @@ class EconomicContextBuilder:
         if isinstance(raw, Mapping):
             role = raw.get(self.APPLICANT_ROLE_KEY)
             if role is not None:
-                profile.actor = self.APPLICANT_ROLES[role]
+                profile.actor = ApplicantActor(str(role).upper())
             for name in self.APPLICANT_FIELDS:
                 if name in raw:
                     setattr(profile, name, raw[name])
@@ -1112,10 +1173,11 @@ class EconomicContextBuilder:
     ) -> int:
         """The installation year of one part of the house, defaulting to the construction year.
 
-        A year the request states is read as it stands; one it omits is recorded on the result's
-        ``defaults`` list with the construction year that stood in, so the mapping report says
-        which figure the asset's age is. A stated year's ``used`` line is the translator's own
-        early recording (:meth:`stated_leaves`), which runs before the fail-loud stage.
+        A year the request states (:meth:`_stated_year`) is read as it stands; one it omits is
+        recorded on the result's ``defaults`` list with the construction year that stood in, so
+        the mapping report says which figure the asset's age is. A stated year's ``used`` line is
+        the translator's own early recording (:meth:`stated_leaves`), which runs before the
+        fail-loud stage.
 
         Args:
             block_name: The ``house`` key the part lives under, for the mapping-report path.
@@ -1128,12 +1190,41 @@ class EconomicContextBuilder:
         """
         raw = self._raw_original.get(block_name) if block is None else block
         path = f"house.{block_name}.{self.INSTALLATION_YEAR_KEY}"
-        if isinstance(raw, Mapping) and isinstance(raw.get(self.INSTALLATION_YEAR_KEY), int):
-            return int(raw[self.INSTALLATION_YEAR_KEY])
+        stated = self._stated_year(raw)
+        if stated is not None:
+            return stated
         year = self._original.building.construction_year
         if result is not None:
             result.defaults.append((path, year, self.INSTALLATION_YEAR_NOTE))
         return year
+
+    @classmethod
+    def _stated_year(cls, block: Any) -> Optional[int]:
+        """The installation year one raw ``house`` block states, or ``None`` when it states none.
+
+        The one place that decides whether a year is stated, for the register and for the
+        translator's early ``used`` line alike, so the two cannot disagree about one request. The
+        schema's ``integer`` accepts an integral float such as ``2008.0``, so that is a stated
+        year too, and read as the ``int`` it is; a boolean is not a year, although ``True`` is an
+        ``int`` in Python.
+
+        Args:
+            block: The raw block, e.g. ``house["heating"]``; anything that is not a mapping states
+                no year.
+
+        Returns:
+            The stated year, or ``None``.
+        """
+        if not isinstance(block, Mapping):
+            return None
+        value = block.get(cls.INSTALLATION_YEAR_KEY)
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float) and value.is_integer():
+            return int(value)
+        return None
 
     def _raw_element(self, element: ThermalElement) -> Mapping[str, Any]:
         """The request's raw block for one envelope element, or an empty mapping."""

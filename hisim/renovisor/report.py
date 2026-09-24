@@ -377,15 +377,18 @@ class MappingReport:
                 "the mapping report does not account for " + ", ".join(sorted(missing))
             )
 
+    #: The top-level request keys whose leaves the report accounts for one line each.
+    LEAF_BLOCKS: ClassVar[Tuple[str, ...]] = ("schema_version", "location", "house", "applicant")
+
     @classmethod
     def request_leaves(cls, document: Mapping[str, Any]) -> Tuple[str, ...]:
-        """Return the dotted path of every leaf of ``schema_version``, ``location`` and ``house``.
+        """Return the dotted path of every leaf of ``schema_version``, ``location``, ``house`` and ``applicant``.
 
         The measures are not leaves here: they are accounted for one entry each under
         ``measures``, which is a different invariant and a different test.
         """
         leaves: List[str] = []
-        for key in ("schema_version", "location", "house"):
+        for key in cls.LEAF_BLOCKS:
             if key in document:
                 leaves.extend(cls._leaves(document[key], key))
         return tuple(leaves)

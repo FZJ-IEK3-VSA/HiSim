@@ -640,7 +640,7 @@ class TestTheAdditiveRequestFields:
         )
 
     def test_an_installation_year_is_accepted_on_every_dated_block(self) -> None:
-        """Five house blocks and five envelope elements; the register reads all ten."""
+        """Four house blocks and five envelope elements; the register reads all nine."""
         places = [
             "house.heating",
             "house.building.roof",
@@ -732,7 +732,11 @@ class TestTheAdditiveRequestFields:
         document = mockup()
         heating = self._at(document, "house.heating")
         heating.update(
-            {"type_of_system": "air_source_heat_pump", "heatpump_scop_en14825_w35": 4.6, "heatpump_scop_en14825_w55": 3.4}
+            {
+                "type_of_system": "air_source_heat_pump",
+                "heatpump_scop_en14825_w35": 4.6,
+                "heatpump_scop_en14825_w55": 3.4,
+            }
         )
 
         assert not codes_of(document)
@@ -767,6 +771,33 @@ class TestTheAdditiveRequestFields:
             "house.heating.heatpump_scop_en14825_w55",
             ProblemCode.HEATING_SCOP_W55_ABOVE_W35.value,
         ) in codes_of(document)
+
+    @pytest.mark.parametrize("key", ["heatpump_scop_en14825_w35", "heatpump_scop_en14825_w55"])
+    def test_a_nan_scop_is_refused_by_name(self, key: str) -> None:
+        """The schema's bounds let NaN through, because every comparison with NaN is false."""
+        document = mockup()
+        heating = self._at(document, "house.heating")
+        heating.update({"type_of_system": "air_source_heat_pump", key: float("nan")})
+
+        assert codes_of(document) == [(f"house.heating.{key}", ProblemCode.HEATING_SCOP_NOT_FINITE.value)]
+
+    @pytest.mark.parametrize("key", ["heatpump_scop_en14825_w35", "heatpump_scop_en14825_w55"])
+    def test_an_infinite_scop_is_refused_by_the_schema_and_by_name(self, key: str) -> None:
+        """Infinity is above the schema's maximum; the semantic check refuses it on its own as well.
+
+        The check does not lean on the bound: both halves are asserted, so a schema that loses its
+        maximum still refuses the value by name.
+        """
+        document = mockup()
+        heating = self._at(document, "house.heating")
+        heating.update({"type_of_system": "air_source_heat_pump", key: float("inf")})
+
+        assert (f"house.heating.{key}", ProblemCode.RANGE_EXCEEDED.value) in codes_of(document)
+        # pylint: disable=protected-access
+        problems = SemanticChecks._heat_pump_scop(document["house"])
+        assert [(problem.path, problem.code) for problem in problems] == [
+            (f"house.heating.{key}", ProblemCode.HEATING_SCOP_NOT_FINITE)
+        ]
 
     def test_every_new_leaf_is_refused_at_an_unknown_place(self) -> None:
         """The blocks are where the specification puts them; nowhere else accepts the names."""

@@ -8,7 +8,7 @@ are in `test_economics_invariants.py`; allocation and money conservation are in
 """
 
 import random
-from typing import Tuple
+from typing import List, Optional, Tuple
 import pytest
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.facts import BillingDeterminants, ComponentCostFacts
@@ -29,6 +29,8 @@ from hisim.economics.subsidies import (
     SubsidyContext,
     SubsidyScheme,
     TaxCreditBenefit,
+    Tier,
+    TieredPerUnitBenefit,
     _eligible_cost_basis,
     solve_cumulation,
 )
@@ -138,10 +140,38 @@ GENERATED_BENEFIT_KINDS = [
     BenefitKind.BONUS_SHARE,
     BenefitKind.LUMP_SUM,
     BenefitKind.PER_UNIT,
+    BenefitKind.TIERED_PER_UNIT,
     BenefitKind.TAX_CREDIT,
 ]
 
 ELIGIBLE_COST_CATEGORIES = [CostCategory.INVESTMENT, CostCategory.PLANNING, CostCategory.REMOVAL]
+
+
+def random_tiered_benefit(rng: random.Random) -> TieredPerUnitBenefit:
+    """A valid tiered benefit: one to three ascending bands, the last closed with a cap or open.
+
+    A closed last band always carries a cap; an open one sometimes does. With more than one band
+    the cap lies above the first band's full value, as the benefit's own validation demands.
+    """
+    bounds: List[float] = []
+    bound = 0.0
+    for _ in range(rng.randint(1, 3)):
+        bound += rng.uniform(1.0, 8.0)
+        bounds.append(bound)
+    open_last = rng.random() < 0.5
+    tiers = tuple(
+        Tier(
+            up_to=None if open_last and position == len(bounds) - 1 else up_to,
+            amount_per_unit=rng.uniform(20.0, 900.0),
+        )
+        for position, up_to in enumerate(bounds)
+    )
+    first_full_value = tiers[0].amount_per_unit * bounds[0]
+    cap: Optional[float] = None
+    if not open_last or rng.random() < 0.5:
+        # A single band may be capped below its full value; with later bands the cap must leave them room.
+        cap = first_full_value * (rng.uniform(1.05, 3.0) if len(tiers) > 1 else rng.uniform(0.3, 2.0))
+    return TieredPerUnitBenefit(tiers=tiers, size_unit=Units.KILOWATT, cap_in_euro=cap)
 
 
 def random_scheme(rng: random.Random, index: int, group: str) -> SubsidyScheme:
@@ -154,7 +184,9 @@ def random_scheme(rng: random.Random, index: int, group: str) -> SubsidyScheme:
     elif kind == BenefitKind.LUMP_SUM:
         benefit = LumpSumBenefit(amount=rng.uniform(500.0, 15000.0))
     elif kind == BenefitKind.PER_UNIT:
-        benefit = PerUnitBenefit(amount=rng.uniform(50.0, 800.0))
+        benefit = PerUnitBenefit(amount=rng.uniform(50.0, 800.0), size_unit=Units.KILOWATT)
+    elif kind == BenefitKind.TIERED_PER_UNIT:
+        benefit = random_tiered_benefit(rng)
     else:
         benefit = TaxCreditBenefit(rate=rng.uniform(0.05, 0.3), years=rng.randint(1, 5))
         payout = PayoutKind.TAX_CREDIT_SCHEDULE

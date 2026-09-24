@@ -446,10 +446,12 @@ class EconomicContextBuilder:
     #: a cavity-fill grant and a dry-lining grant, both of which are ``WALL_INTERNAL_INSULATION``.
     PLACEMENT_ATTRIBUTE: ClassVar[str] = "placement"
 
-    #: The technical attribute the peak power of the photovoltaic array is published under.
-    #: Grants that step with array size read it; it is only published when the request pins the
-    #: array's power, because an array sized as a share of the roof has no peak power until the
-    #: simulation has run.
+    #: The technical attribute the peak power of the photovoltaic array is published under. It is
+    #: published as information for condition authors — a scheme that conditions on array size
+    #: can read it — and no shipped scheme reads it: since hisim-cyc.3 the Irish PV grant is
+    #: tiered on the cost facts' own size, which every array has. It is only published when the
+    #: request pins the array's power, because an array sized as a share of the roof has no peak
+    #: power until the simulation has run.
     PEAK_POWER_ATTRIBUTE: ClassVar[str] = "peak_power_in_kwp"
 
     #: Watt per kilowatt, for the conversion into that attribute's unit.
@@ -920,10 +922,11 @@ class EconomicContextBuilder:
         """The renovated array's peak power in kilowatt-peak, or ``None`` when it has none.
 
         Reads the house the package produced rather than the request, so an array a measure
-        installed or enlarged is the one reported. A request that sizes the array as a share of
-        the roof states no power at all, and a house with no array states zero; both give
-        ``None``, because a grant that steps with array size must then stay undetermined rather
-        than be denied on a zero nobody wrote.
+        installed or enlarged is the one reported. The value is information for condition authors
+        (:attr:`PEAK_POWER_ATTRIBUTE`); no shipped scheme reads it. A request that sizes the array
+        as a share of the roof states no power at all, and a house with no array states zero; both
+        give ``None``, because a condition on array size must then stay undetermined rather than
+        be denied on a zero nobody wrote.
 
         Returns:
             The peak power in kWp, or ``None``.

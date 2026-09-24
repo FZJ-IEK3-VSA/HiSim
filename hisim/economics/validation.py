@@ -37,9 +37,11 @@ from typing import Dict, List, Optional, Set
 
 from hisim.economics.database import CostDatabase, SourceRegistry
 from hisim.economics.subsidies import (
+    PerUnitBenefit,
     SubsidyCatalog,
     SubsidyScheme,
     TaxCreditBenefit,
+    TieredPerUnitBenefit,
     question_targets,
     scheme_context_fields,
 )
@@ -237,7 +239,9 @@ def validate_tariff_contracts(
     return report
 
 
-def validate_subsidy_catalog(country: str, base_path: Optional[str] = None) -> ValidationReport:
+def validate_subsidy_catalog(
+    country: str, base_path: Optional[str] = None, cost_database: Optional[CostDatabase] = None
+) -> ValidationReport:
     """Schema, condition grammar, question coverage and staleness for one country catalog.
 
     Validates one `subsidy_catalog/<COUNTRY>.json` and its question file. As with the cost database,
@@ -246,7 +250,9 @@ def validate_subsidy_catalog(country: str, base_path: Optional[str] = None) -> V
     `excludes` pointing at schemes that actually exist (an exclusion naming a typo can never fire,
     which silently over-grants), tax-credit instalment shares summing to 1, and cumulation groups
     whose members agree on their combined rate cap — they must, because the solver applies the
-    minimum cap declared in a group to every member.
+    minimum cap declared in a group to every member. Given the cost database, it also checks that a
+    per-unit scheme's ``size_unit`` is the unit the country's device entries price its asset classes
+    in — the unit a measure of that class is sized in — since the solver refuses to price any other.
 
     **Question coverage (§5.7) is the check that makes the questionnaire complete by construction.**
     Every context field a shipped scheme's conditions reference must have a question-catalog entry
@@ -258,6 +264,8 @@ def validate_subsidy_catalog(country: str, base_path: Optional[str] = None) -> V
     Args:
         country: Catalog country code, i.e. the file stem (`DE`, `AT`).
         base_path: Catalog directory; the shipped one by default.
+        cost_database: The cost database the per-unit schemes' size units are checked against;
+            ``None`` skips that check.
 
     Returns:
         The report. A catalog that fails to load yields exactly one error and no further checks.
@@ -329,6 +337,22 @@ def validate_subsidy_catalog(country: str, base_path: Optional[str] = None) -> V
                     f"{excluded!r} — the exclusion can never fire."
                 )
         benefit = scheme.benefit
+        if cost_database is not None and isinstance(benefit, (PerUnitBenefit, TieredPerUnitBenefit)):
+            for asset_class in scheme.asset_classes:
+                priced_in = sorted(
+                    {
+                        entry.size_unit.value
+                        for entry in cost_database.devices.get(country, [])
+                        if entry.component_type == asset_class
+                    }
+                    - {benefit.size_unit.value}
+                )
+                if priced_in:
+                    report.errors.append(
+                        f"Subsidy catalog {country}: scheme {scheme.id!r} pays per "
+                        f"{benefit.size_unit.value!r}, but {asset_class.value} is priced and sized in "
+                        f"{priced_in} — the solver would refuse to price the measure."
+                    )
         if isinstance(benefit, TaxCreditBenefit) and benefit.annual_shares:
             total_share = sum(benefit.annual_shares)
             if abs(total_share - 1.0) > 1e-9:
@@ -402,6 +426,10 @@ def validate_all(cost_database_path: Optional[str] = None, subsidy_base_path: Op
         The merged report over everything checked.
     """
     report = validate_cost_database(cost_database_path)
+    try:
+        cost_database: Optional[CostDatabase] = CostDatabase(cost_database_path)
+    except Exception:  # pylint: disable=broad-except
+        cost_database = None  # already reported by validate_cost_database; skip the unit cross-check
     base = subsidy_base_path or SubsidyCatalog.DEFAULT_PATH
     if os.path.isdir(base):
         for file_name in sorted(os.listdir(base)):
@@ -410,5 +438,5 @@ def validate_all(cost_database_path: Optional[str] = None, subsidy_base_path: Op
                 and not file_name.startswith("questions_")
                 and file_name != "sources.json"
             ):
-                report.merge(validate_subsidy_catalog(file_name[:-len(".json")], base))
+                report.merge(validate_subsidy_catalog(file_name[:-len(".json")], base, cost_database))
     return report

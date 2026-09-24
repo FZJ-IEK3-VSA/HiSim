@@ -13,6 +13,7 @@ any module above the rule engines belongs in the integration file.
 import dataclasses
 import json
 import os
+import shutil
 from typing import Any, Dict, Optional
 
 import pytest
@@ -31,6 +32,7 @@ from hisim.economics.subsidies import (
     LumpSumBenefit,
     MeasureForSubsidy,
     PayoutKind,
+    PerUnitBenefit,
     ShareBenefit,
     SubsidyBuildingContext,
     SubsidyCatalog,
@@ -39,6 +41,8 @@ from hisim.economics.subsidies import (
     SubsidyDataError,
     SubsidyScheme,
     TaxCreditBenefit,
+    Tier,
+    TieredPerUnitBenefit,
     evaluate_condition,
     failed_condition_descriptions,
     ineligibility_reason,
@@ -324,6 +328,269 @@ class TestTypedBenefits:
         assert LumpSumBenefit(amount=7500.0).value_estimate(20000.0, 10.0) == pytest.approx(7500.0)
         assert TaxCreditBenefit(rate=0.2, years=3).value_estimate(20000.0, 10.0) == pytest.approx(4000.0)
         assert LoanTermsBenefit(interest_rate=0.02, term=20).value_estimate(20000.0, 10.0) == 0.0
+
+
+class TestTieredPerUnitBenefit:
+    """hisim-cyc.3: an amount per unit that changes by band, capped (SEAI's solar PV grant)."""
+
+    SEAI_PV = {
+        "kind": "TIERED_PER_UNIT",
+        "tiers": [{"up_to": 2, "amount_per_unit": 700}, {"up_to": 4, "amount_per_unit": 200}],
+        "size_unit": "kW",
+        "cap_in_euro": 1800,
+    }
+
+    @staticmethod
+    def seai_pv() -> TieredPerUnitBenefit:
+        """The SEAI grant, built in Python: 700/kW to 2 kW, 200/kW to 4 kW, at most 1,800 EUR."""
+        return TieredPerUnitBenefit(
+            tiers=(Tier(2.0, 700.0), Tier(4.0, 200.0)), size_unit=Units.KILOWATT, cap_in_euro=1800.0
+        )
+
+    def test_it_parses_into_its_typed_payload(self):
+        """The JSON surface: a list of tier objects, a size unit and an optional cap, through the parser."""
+        kind, benefit = subsidies.parse_benefit(dict(self.SEAI_PV), "TEST_SCHEME")
+        assert kind is BenefitKind.TIERED_PER_UNIT
+        assert benefit == self.seai_pv()
+
+    def test_the_shipped_irish_catalogue_carries_it(self):
+        """The four SEAI PV steps are one tiered scheme now, paid per kW of array size."""
+        by_id = {scheme.id: scheme for scheme in SubsidyCatalog.load("IE").schemes}
+        assert by_id["IE_SEAI_SOLAR_PV"].benefit == self.seai_pv()
+        assert not [scheme_id for scheme_id in by_id if scheme_id.startswith("IE_SEAI_SOLAR_PV_")]
+
+    @pytest.mark.parametrize(
+        "size, expected",
+        [(0.0, 0.0), (0.5, 350.0), (2.0, 1400.0), (2.5, 1500.0), (3.9, 1780.0), (4.0, 1800.0), (9.0, 1800.0)],
+    )
+    def test_each_band_pays_its_rate_on_its_share_of_the_size(self, size, expected):
+        """Band sums, the page's 2.5 kWp -> 1,500 EUR example, and nothing beyond a closed last band."""
+        benefit = self.seai_pv()
+        assert benefit.amount_for(size) == pytest.approx(expected)
+        assert benefit.value_estimate(123456.0, size) == pytest.approx(expected)
+
+    def test_an_open_last_band_runs_until_the_cap(self):
+        """``up_to: null`` on the last band pays on every further unit, and the cap stops it."""
+        benefit = TieredPerUnitBenefit(
+            tiers=(Tier(2.0, 700.0), Tier(None, 200.0)), size_unit=Units.KILOWATT, cap_in_euro=2000.0
+        )
+        assert benefit.amount_for(4.0) == pytest.approx(1800.0)
+        assert benefit.amount_for(10.0) == pytest.approx(2000.0)
+        uncapped = TieredPerUnitBenefit(tiers=(Tier(None, 100.0),), size_unit=Units.KILOWATT)
+        assert uncapped.amount_for(7.0) == pytest.approx(700.0)
+
+    def test_a_single_closed_band_with_a_binding_cap_is_a_flat_rate_with_a_ceiling(self):
+        """No later band exists for the cap to starve, so a cap below the band's full value is fine."""
+        _kind, benefit = subsidies.parse_benefit(
+            {
+                "kind": "TIERED_PER_UNIT",
+                "tiers": [{"up_to": 4, "amount_per_unit": 700}],
+                "size_unit": "kW",
+                "cap_in_euro": 1800,
+            },
+            "TEST_SCHEME",
+        )
+        assert isinstance(benefit, TieredPerUnitBenefit)
+        assert benefit.amount_for(2.0) == pytest.approx(1400.0)
+        assert benefit.amount_for(4.0) == pytest.approx(1800.0)
+
+    @pytest.mark.parametrize(
+        "tiers, cap, message",
+        [
+            ([], None, "at least one tier"),
+            ([{"up_to": 4, "amount_per_unit": 200}, {"up_to": 2, "amount_per_unit": 700}], 1800, "must ascend"),
+            ([{"up_to": 2, "amount_per_unit": -700}], 1000, "cannot be negative"),
+            ([{"up_to": None, "amount_per_unit": 700}, {"up_to": 4, "amount_per_unit": 200}], None, "only the last"),
+            (
+                [{"up_to": 2, "amount_per_unit": 700}, {"up_to": 4, "amount_per_unit": 200}],
+                1000,
+                "not above the first tier's full value 1400",
+            ),
+            (
+                [{"up_to": 2, "amount_per_unit": 700}, {"up_to": 4, "amount_per_unit": 200}],
+                1400,
+                "not above the first tier's full value 1400",
+            ),
+            ([{"up_to": 2, "amount_per_unit": 700}], -1, "not a finite amount above 0"),
+            ([{"up_to": 2, "amount_per_unit": 700}], 0, "not a finite amount above 0"),
+            ([{"up_to": 2, "amount_per_unit": 700}], float("nan"), "not a finite amount above 0"),
+            ([{"up_to": None, "amount_per_unit": 700}], float("inf"), "not a finite amount above 0"),
+            (
+                [{"up_to": 2, "amount_per_unit": 700}, {"up_to": 4, "amount_per_unit": 200}],
+                None,
+                "tier 1 is the last tier and ends at 4.0, but no cap_in_euro is set",
+            ),
+            ([{"up_to": 2, "amount_per_unit": float("nan")}], 1000, "must be finite"),
+            ([{"up_to": 2, "amount_per_unit": float("inf")}], 1000, "must be finite"),
+            ([{"up_to": float("inf"), "amount_per_unit": 700}], 1000, "a bound is a finite size above 0"),
+            ([{"up_to": float("nan"), "amount_per_unit": 700}], 1000, "a bound is a finite size above 0"),
+            ([{"up_to": 0, "amount_per_unit": 700}], 1000, "a bound is a finite size above 0"),
+        ],
+    )
+    def test_a_malformed_band_list_is_refused_at_load_naming_the_scheme(self, tmp_path, tiers, cap, message):
+        """Every refusal, read from a file as ``json.load`` reads it (NaN and Infinity included)."""
+        base = write_catalog(
+            tmp_path, {"kind": "TIERED_PER_UNIT", "tiers": tiers, "size_unit": "kW", "cap_in_euro": cap}
+        )
+        with pytest.raises(SubsidyDataError, match="TEST_SCHEME") as refusal:
+            SubsidyCatalog.load("XX", base)
+        assert message in str(refusal.value)
+
+    def test_a_tier_with_a_misspelled_key_is_refused_by_scheme_and_key(self, tmp_path):
+        """A typo inside a tier fails the load like a typo in the benefit itself."""
+        base = write_catalog(
+            tmp_path,
+            {"kind": "TIERED_PER_UNIT", "tiers": [{"up_to": 2, "amount_per_units": 700}], "size_unit": "kW"},
+        )
+        with pytest.raises(SubsidyDataError, match="TEST_SCHEME: benefit key 'tiers'"):
+            SubsidyCatalog.load("XX", base)
+
+    @pytest.mark.parametrize(
+        "up_to, amount_per_unit, message",
+        [
+            (2.0, -1.0, "cannot be negative"),
+            (2.0, float("nan"), "must be finite"),
+            (2.0, float("inf"), "must be finite"),
+            (0.0, 700.0, "a bound is a finite size above 0"),
+            (-2.0, 700.0, "a bound is a finite size above 0"),
+            (float("nan"), 700.0, "a bound is a finite size above 0"),
+            (float("inf"), 700.0, "a bound is a finite size above 0"),
+        ],
+    )
+    def test_a_tier_refuses_values_outside_its_own_domain(self, up_to, amount_per_unit, message):
+        """A band is checked where it is built, not only as part of a benefit."""
+        with pytest.raises(SubsidyDataError, match=message):
+            Tier(up_to, amount_per_unit)
+
+    def test_tiers_passed_as_a_list_are_frozen_into_a_tuple(self):
+        """A caller's list cannot change the benefit after construction."""
+        bands = [Tier(2.0, 700.0), Tier(4.0, 200.0)]
+        benefit = TieredPerUnitBenefit(
+            tiers=bands, size_unit=Units.KILOWATT, cap_in_euro=1800.0  # type: ignore[arg-type]
+        )
+        bands.append(Tier(8.0, 100.0))
+        assert benefit.tiers == (Tier(2.0, 700.0), Tier(4.0, 200.0))
+        assert benefit == self.seai_pv()
+
+    def test_a_nan_size_is_refused_and_a_negative_one_pays_nothing(self):
+        """A NaN size would fall through every band comparison and price as zero; it is an error instead."""
+        with pytest.raises(SubsidyDataError, match="cannot price a measure size of nan"):
+            self.seai_pv().amount_for(float("nan"))
+        with pytest.raises(SubsidyDataError, match="cannot price a measure size of nan"):
+            PerUnitBenefit(amount=100.0, size_unit=Units.KILOWATT).amount_for(float("nan"))
+        assert self.seai_pv().amount_for(-3.0) == 0.0
+
+
+class TestPerUnitSizeUnit:
+    """The per-unit kinds state the unit their amount is per, and the solver holds a measure to it."""
+
+    @pytest.mark.parametrize(
+        "benefit",
+        [
+            {"kind": "PER_UNIT", "amount": 100},
+            {"kind": "TIERED_PER_UNIT", "tiers": [{"up_to": None, "amount_per_unit": 100}]},
+        ],
+    )
+    def test_a_catalogue_without_the_size_unit_fails_to_load(self, tmp_path, benefit):
+        """The unit is mandatory: an amount per nothing-in-particular is not loaded."""
+        base = write_catalog(tmp_path, benefit)
+        with pytest.raises(SubsidyDataError, match="TEST_SCHEME: .*misses the mandatory key 'size_unit'"):
+            SubsidyCatalog.load("XX", base)
+
+    @pytest.mark.parametrize("unit", ["kWp", "W", "", 5])
+    def test_a_unit_no_measure_is_sized_in_fails_to_load(self, tmp_path, unit):
+        """The vocabulary is ``ComponentCostFacts.size_unit``'s, restricted to the priceable units."""
+        base = write_catalog(tmp_path, {"kind": "PER_UNIT", "amount": 100, "size_unit": unit})
+        with pytest.raises(SubsidyDataError, match="TEST_SCHEME: benefit key 'size_unit'"):
+            SubsidyCatalog.load("XX", base)
+
+    def test_the_per_unit_kind_parses_its_unit(self):
+        """``"m2"`` is the ``Units`` value ``ComponentCostFacts`` uses for areas."""
+        kind, benefit = subsidies.parse_benefit({"kind": "PER_UNIT", "amount": 40, "size_unit": "m2"}, "TEST")
+        assert kind is BenefitKind.PER_UNIT
+        assert benefit == PerUnitBenefit(amount=40.0, size_unit=Units.SQUARE_METER)
+
+    @pytest.mark.parametrize(
+        "kind, benefit",
+        [
+            (BenefitKind.PER_UNIT, PerUnitBenefit(amount=40.0, size_unit=Units.SQUARE_METER)),
+            (
+                BenefitKind.TIERED_PER_UNIT,
+                TieredPerUnitBenefit(tiers=(Tier(None, 40.0),), size_unit=Units.SQUARE_METER),
+            ),
+        ],
+    )
+    def test_a_measure_sized_in_another_unit_is_refused_by_name(self, kind, benefit):
+        """An amount per m² is never multiplied by a heat pump's kilowatts."""
+        from hisim.economics.subsidies import _combination_awards  # noqa: PLC2701 — targeted unit test
+
+        scheme = make_scheme("PER_M2_SCHEME", ALWAYS_ELIGIBLE, kind, benefit)
+        with pytest.raises(SubsidyDataError) as refusal:
+            _combination_awards([scheme], make_measure(), full_context(), None)
+        message = str(refusal.value)
+        assert "PER_M2_SCHEME" in message and "'m2'" in message and "'kW'" in message
+
+    def test_validate_checks_the_unit_against_the_cost_database(self, tmp_path):
+        """The shipped kW passes; an amount per m² on PV, which the database prices per kW, is an error."""
+        from hisim.economics.validation import validate_subsidy_catalog  # noqa: PLC0415 — one test needs it
+
+        database = CostDatabase()
+        assert validate_subsidy_catalog("IE", cost_database=database).errors == []
+        base = tmp_path / "catalogue"
+        shutil.copytree(SubsidyCatalog.DEFAULT_PATH, base)
+        irish = base / "IE.json"
+        text = irish.read_text(encoding="utf-8")
+        assert text.count('"size_unit": "kW"') == 1
+        irish.write_text(text.replace('"size_unit": "kW"', '"size_unit": "m2"'), encoding="utf-8")
+        errors = validate_subsidy_catalog("IE", str(base), database).errors
+        assert len(errors) == 1 and "IE_SEAI_SOLAR_PV" in errors[0] and "['kW']" in errors[0], errors
+
+
+class TestOnePerUnitSolverPath:
+    """PER_UNIT and TIERED_PER_UNIT share one solver branch: the benefit prices the size."""
+
+    @pytest.mark.parametrize(
+        "kind, benefit, expected",
+        [
+            (BenefitKind.PER_UNIT, PerUnitBenefit(amount=150.0, size_unit=Units.KILOWATT), 1500.0),
+            (
+                BenefitKind.TIERED_PER_UNIT,
+                TieredPerUnitBenefit(
+                    tiers=(Tier(2.0, 700.0), Tier(4.0, 200.0), Tier(None, 50.0)), size_unit=Units.KILOWATT
+                ),
+                2100.0,
+            ),
+        ],
+    )
+    def test_the_amounts_are_the_benefits_own_and_clamped_to_the_basis(self, kind, benefit, expected):
+        """10 kW: 150 x 10 = 1,500; 2 x 700 + 2 x 200 + 6 x 50 = 2,100. A 1,000 EUR measure caps both."""
+        from hisim.economics.subsidies import _combination_awards  # noqa: PLC2701 — targeted unit test
+
+        scheme = make_scheme("PER_KW_SCHEME", ALWAYS_ELIGIBLE, kind, benefit)
+        award = _combination_awards([scheme], make_measure(cost=30000.0), full_context(), None)[0]
+        assert award.upfront_amount.best_estimate == pytest.approx(expected)
+        assert award.upfront_amount.minimum == award.upfront_amount.maximum == award.upfront_amount.best_estimate
+        assert award.eligible_basis_in_euro is not None
+        cheap = _combination_awards([scheme], make_measure(cost=1000.0), full_context(), None)[0]
+        assert cheap.upfront_amount.best_estimate == pytest.approx(1000.0)
+
+    @pytest.mark.parametrize(
+        "kind, benefit",
+        [
+            (BenefitKind.PER_UNIT, PerUnitBenefit(amount=150.0, size_unit=Units.KILOWATT)),
+            (BenefitKind.TIERED_PER_UNIT, TieredPerUnitBenefit(tiers=(Tier(None, 150.0),), size_unit=Units.KILOWATT)),
+        ],
+    )
+    def test_a_scheme_with_no_eligible_cost_categories_is_not_clamped(self, kind, benefit):
+        """The lump sum's rule: no categories means the amount is unconditional, and no basis is stated."""
+        from hisim.economics.subsidies import _combination_awards  # noqa: PLC2701 — targeted unit test
+
+        scheme = make_scheme(
+            "UNCONDITIONAL", ALWAYS_ELIGIBLE, kind, benefit, eligible_cost=EligibleCostSpec(categories=[])
+        )
+        award = _combination_awards([scheme], make_measure(cost=1000.0), full_context(), None)[0]
+        assert award.upfront_amount.best_estimate == pytest.approx(1500.0)
+        assert award.eligible_basis_in_euro is None
 
 
 class TestConditionAstAndFieldVocabulary:

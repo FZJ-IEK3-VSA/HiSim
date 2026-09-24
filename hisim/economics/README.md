@@ -506,9 +506,15 @@ can strip them. Without an explicit contract, a default flat contract is generat
 
 Schemes (§5.2) with mandatory `legal_basis` and `url`, an eligibility condition tree
 (`all`/`any`/`not` over `{field, op, value}` leaves — no Python eval), a benefit
-(SHARE_OF_ELIGIBLE_COST, BONUS_SHARE, LUMP_SUM, PER_UNIT, TAX_CREDIT, REDUCED_VAT, SOFT_LOAN,
-OPERATIONAL), eligible-cost caps per dwelling unit, residential-share proration, and cumulation
-rules (group + combined rate cap + excludes). The shipped `DE.json` encodes BEG EM (base 30 % +
+(SHARE_OF_ELIGIBLE_COST, BONUS_SHARE, LUMP_SUM, PER_UNIT, TIERED_PER_UNIT, TAX_CREDIT, REDUCED_VAT,
+SOFT_LOAN, OPERATIONAL), eligible-cost caps per dwelling unit, residential-share proration, and cumulation
+rules (group + combined rate cap + excludes). The two per-unit kinds multiply the measure's
+`ComponentCostFacts.size` and must name its unit: `PER_UNIT` is `{amount, size_unit}`,
+`TIERED_PER_UNIT` is `{tiers: [{up_to, amount_per_unit}, ...], size_unit, cap_in_euro?}` — ascending
+bands, only the last open (`up_to: null`), a closed last band only with a cap. `size_unit` is spelled
+as `ComponentCostFacts.size_unit` spells it (`"kW"`, `"kWh"`, `"L"`, `"m2"`, `"-"`); the solver refuses
+a measure sized in another unit, and `validate` checks it against the cost database's unit for the
+scheme's asset classes. The shipped `DE.json` encodes BEG EM (base 30 % +
 speed/income/efficiency bonuses, 70 % cap), §35c EStG (mutually exclusive with BEG) and the
 KfW supplementary loan; `AT.json` a lump-sum boiler-replacement grant. The rough SEAI-like flat
 shares the Irish device entries carry in `legacy_flat_subsidy_share` are no longer priced (the

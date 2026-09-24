@@ -88,6 +88,7 @@ class CheckIds:
     CHECK_BAND_WIDTH = "band_width"
     CHECK_FLEXIBILITY_VALUE = "flexibility_value_sign"
     CHECK_SIMULATED_PERIOD = "simulated_period_extrapolated"
+    CHECK_USEFUL_HEAT_WITHOUT_HOT_WATER = "useful_heat_without_hot_water"
 
 
 class PlausibilityCategories:
@@ -573,10 +574,41 @@ def _extrapolation_findings(simulated_period_fraction: Optional[float]) -> List[
     ]
 
 
+def _heat_without_hot_water_findings(heat_without_hot_water_in_kwh: Optional[float]) -> List[PlausibilityFinding]:
+    """A WARN when the heat-cost figure divides by the rooms' heat and no hot water (hisim-4wlu).
+
+    The system cost per unit of heat divides by the useful heat the run measured, rooms plus hot
+    water (`adapter.UsefulHeatSources`). A run whose building has no hot-water source the table
+    lists — a combi boiler, an electric water heater — measures the rooms alone while its costs
+    still pay for the hot water, so the figure reads too high by the hot water's share. It is the
+    same kind of statement as the extrapolation warning: a legitimate run whose figure is not what
+    it appears to be, so a WARN in the panel rather than a log line the report's reader never sees.
+
+    Args:
+        heat_without_hot_water_in_kwh: The annual rooms-only heat the figure divides by, or None
+            when the denominator is whole (or declared, or absent, or unknown to the caller).
+
+    Returns:
+        One WARN finding carrying the heat as its value, or nothing.
+    """
+    if heat_without_hot_water_in_kwh is None:
+        return []
+    return [
+        PlausibilityFinding(
+            check_id=CheckIds.CHECK_USEFUL_HEAT_WITHOUT_HOT_WATER,
+            name="heat-cost denominator includes hot water",
+            status=CheckStatus.WARN,
+            value=heat_without_hot_water_in_kwh,
+            unit="kWh/a",
+        )
+    ]
+
+
 def run_plausibility_checks(
     matrix: EvaluationMatrix,
     config: Optional[PlausibilityConfig] = None,
     simulated_period_fraction: Optional[float] = None,
+    heat_without_hot_water_in_kwh: Optional[float] = None,
 ) -> PlausibilityReport:
     """The automated panel: structural invariants (FAIL) and magnitude ranges (WARN).
 
@@ -600,6 +632,9 @@ def run_plausibility_checks(
         simulated_period_fraction: The share of a year the run covered, when the caller knows it.
             Only the postprocessing bridge does; passing it adds the §8.5 extrapolation warning to
             the panel, and omitting it leaves the panel exactly as it was.
+        heat_without_hot_water_in_kwh: The annual heat the heat-cost figure divides by when it
+            covers the rooms and no hot water (`EvaluationInputs.heat_cost_omits_hot_water`), which
+            only the postprocessing bridge knows; passing it adds a WARN row saying so.
 
     Returns:
         A `PlausibilityReport` whose findings are ordered structural-first, then magnitude.
@@ -622,6 +657,7 @@ def run_plausibility_checks(
         )
     reference = next(iter(matrix.results.values()))
     findings = _extrapolation_findings(simulated_period_fraction)
+    findings.extend(_heat_without_hot_water_findings(heat_without_hot_water_in_kwh))
     findings.extend(_structural_findings(matrix, config))
     findings.extend(_magnitude_findings(reference, config))
     return PlausibilityReport(findings)

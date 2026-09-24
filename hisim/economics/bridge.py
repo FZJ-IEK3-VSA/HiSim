@@ -55,6 +55,7 @@ independent of cost-database state (cost-spec-v2 W1.1).
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, List, Optional, Tuple
 
@@ -147,7 +148,9 @@ class EconomicContext:
       the §6.3/§6.4 CO2 split and modernization levy need to allocate costs between landlord and
       tenant;
     - `annual_heat_demand_in_kwh`, the denominator of the system-cost-per-unit-of-heat KPI, which
-      overrides the useful heat the simulation measured (`UsefulHeatSources`);
+      overrides the useful heat the simulation measured (`adapter.UsefulHeatSources`) and must be
+      positive: a house with no heat demand has no cost per unit of heat, and the way to say so
+      is to leave the field unset;
     - `scenario_set`, which additionally triggers the §4.6 cube evaluation into
       scenario_cube.csv/json and the report's scenario section.
 
@@ -156,7 +159,8 @@ class EconomicContext:
     a new purchase into an empty building, nothing is credited as already existing, no sunk cost or
     anyway-cost applies. No subsidy is booked without a catalog, actor splits have no
     allocation basis, and the LCOH KPI divides by the useful heat the simulation measured
-    (`UsefulHeatSources`), or is omitted when the run has no building. That is the correct
+    (`adapter.UsefulHeatSources`), or is omitted when the run contains no component that table
+    lists, or when the heat it measured sums to zero. That is the correct
     answer to a question nobody asked in more detail — not a degraded one — but it is a *greenfield*
     answer, which is the thing to check first when brownfield figures are missing from a result set.
     """
@@ -200,8 +204,14 @@ class EconomicContext:
         the refusal names the field while the system setup that declared it is on screen, rather
         than in a KPI table hours later.
 
+        The heat demand is held to more than that: it is a denominator, so a declared zero would
+        divide by zero and a NaN or an infinity would publish a KPI of NaN or of zero. A house with
+        no heat demand is stated by leaving the field unset (the KPI is then omitted, or divides by
+        the heat the simulation measured), not by declaring zero.
+
         Raises:
-            ValueError: If any of `NON_NEGATIVE_FIELDS` is set to a negative number.
+            ValueError: If any of `NON_NEGATIVE_FIELDS` is set to a negative number, or
+                `annual_heat_demand_in_kwh` to zero or to a non-finite number.
         """
         negative = [
             name
@@ -212,6 +222,13 @@ class EconomicContext:
             raise ValueError(
                 "EconomicContext fields describe quantities and cannot be negative: "
                 + ", ".join(f"{name}={getattr(self, name)!r}" for name in negative)
+            )
+        heat = self.annual_heat_demand_in_kwh
+        if heat is not None and not (math.isfinite(heat) and heat > 0):
+            raise ValueError(
+                f"EconomicContext.annual_heat_demand_in_kwh={heat!r}: a declared heat demand is the "
+                "denominator of the system cost per unit of heat and must be a positive, finite "
+                "number of kWh a year. Leave it unset to divide by the heat the simulation measured."
             )
 
 
@@ -455,69 +472,118 @@ def _sum_output_column(
     )
 
 
-class UsefulHeatSources:
-    """Where the simulation states the useful heat the levelized cost of heat divides by.
+class UsefulHeatExtraction:
+    """The numerical tolerance of reading useful heat off the columns `adapter.UsefulHeatSources` names.
 
-    Decision on hisim-4p86 (2026-09-23): the denominator is the heat the house *uses* — the rooms'
-    heating demand plus the hot water drawn — not the heat a generator produces, so the reference
-    and the plan divide by the same house's need however well either system converts it. Hot water
-    counts because the costs above the line pay for heating it.
-
-    The table is keyed by class name, like `adapter.DeviceEnergySpecs`, and names one energy column
-    per class. The hot-water column is signed as heat leaving the tank, so magnitudes are summed.
+    Each source states its heat with a sign convention, and a timestep of the other sign is refused
+    rather than folded in: heat flowing the wrong way is not heat the house used. The tolerance
+    keeps that refusal from firing on rounding noise, and only on it.
     """
 
-    #: Class name -> the output column holding that component's useful heat.
-    BY_CLASS_NAME: ClassVar[Dict[str, str]] = {
-        # The ideal heating demand of the rooms, cooling excluded (split by sign in the building).
-        "Building": "TheoreticalHeatingEnergyDemand",
-        # The heat in the hot water drawn off, from the fresh-water to the tap temperature.
-        "SimpleDHWStorage": "ThermalEnergyConsumptionDHW",
-    }
+    #: Largest wrong-signed energy one timestep may carry and still count as zero, in kWh (1 mWh).
+    #: The building clips its heating half at exactly zero, so its only wrong-signed values are
+    #: float noise, of the order of 1e-12 of a timestep's Wh. The smallest physical hot-water draw
+    #: is some Wh (one litre warmed by 1 K is 1.16 Wh), three orders of magnitude above this bound,
+    #: so a genuine reverse flow still exceeds it while rounding never does.
+    SIGN_TOLERANCE_IN_KWH: ClassVar[float] = 1e-6
 
 
-def _useful_heat_in_kwh(
+def _useful_heat_of_component(
+    component: Any,
+    all_outputs: List[Any],
+    results: pd.DataFrame,
+    seconds_per_timestep: int,
+) -> Optional[Tuple[str, float]]:
+    """One component's useful heat over the simulated period, as (`UsefulHeatKind` value, kWh).
+
+    Args:
+        component: The finished simulation's component; its class name and `component_name` are
+            read.
+        all_outputs: The run's output declarations, in the frame's column order.
+        results: The per-timestep results frame.
+        seconds_per_timestep: Passed to the unit conversion, which needs it for a power column.
+
+    Returns:
+        The kind and the heat in kWh (positive by the source's sign convention), or None for a
+        class `adapter.UsefulHeatSources` does not list.
+
+    Raises:
+        CostDataError: For a row naming a constant the class does not declare, for a listed column
+            this run did not produce, for a column in a unit the conversion table does not know,
+            and for a timestep whose heat runs against the source's sign convention beyond
+            `UsefulHeatExtraction.SIGN_TOLERANCE_IN_KWH`, or is not a finite number.
+    """
+    source = adapter.resolve_useful_heat_source(component)
+    if source is None:
+        return None
+    column = f"{component.component_name}.{source.field_name}"
+    found = _output_column_and_unit(component.component_name, source.field_name, all_outputs, results)
+    if found is None:
+        raise CostDataError(
+            f"Useful heat: component {component.component_name} is listed in "
+            f"adapter.UsefulHeatSources with output {source.field_name!r}, which this run did not "
+            "produce. The levelized cost of heat would divide by a sum missing that source and "
+            "publish a cost per kWh that is too high."
+        )
+    series, unit = found
+    kwh_per_unit = EnergyUnitConversion.to_kwh(1.0, unit, seconds_per_timestep, column)
+    heat = series.astype(float) * (source.sign * kwh_per_unit)
+    # Written as the valid set and negated, so a NaN (which compares false both ways) is refused too.
+    wrong = heat[~((heat >= -UsefulHeatExtraction.SIGN_TOLERANCE_IN_KWH) & (heat < float("inf")))]
+    if not wrong.empty:
+        position = wrong.index[0]
+        direction = "into the house" if source.sign > 0 else "leaving the component"
+        raise CostDataError(
+            f"Useful heat: output {column} states heat {direction}, so its sign is "
+            f"{'+' if source.sign > 0 else '-'} or zero, but {len(wrong)} timestep(s) are not: the "
+            f"first is {series[position]!r} {unit} at row {position!r}. Heat flowing the wrong way "
+            "is not heat the house used, and neither its magnitude nor a netted sum is a "
+            "denominator the levelized cost of heat can stand behind."
+        )
+    return source.kind.value, float(heat.sum())
+
+
+def _useful_heat_by_kind(
     wrapped_components: List[Any],
     all_outputs: List[Any],
     results: pd.DataFrame,
     seconds_per_timestep: int,
-) -> Optional[float]:
-    """The useful heat of the simulated period in kWh, or None when the run states none.
+) -> Tuple[Dict[str, float], List[UnresolvedSubject]]:
+    """The useful heat of the simulated period by kind, and the listed sources that failed to state it.
 
-    None, not zero, when no component of `UsefulHeatSources` is in the run: a system without a
-    building has no heat demand the model knows of, and dividing by zero is what the KPI's
-    omission exists to avoid. None as well when a listed component lacks its column, with a
-    warning: a sum missing a source would publish a cost per kWh that is too high.
+    Every component of `adapter.UsefulHeatSources` contributes its kind, a zero included, so the
+    record says which kinds the run *has* as well as how much heat each delivered: a building with
+    no hot-water source is the gap `EvaluationInputs.heat_cost_omits_hot_water` reports.
+
+    A listed source whose column is missing, unconvertible or wrong-signed is not dropped with a
+    warning: a sum missing a source would publish a cost per kWh that is too high. It comes back as
+    an `UnresolvedSubject` naming the component and the column, which `build_evaluation_inputs`
+    adds to the others, so the D7 check aborts the evaluation exactly as it does for an
+    energy-balance flow that cannot be placed.
 
     Args:
         wrapped_components: The simulator's `ComponentWrapper` list.
         all_outputs: The run's output declarations, in the frame's column order.
         results: The per-timestep results frame.
-        seconds_per_timestep: Needed to integrate a column declared in W.
+        seconds_per_timestep: Passed to the unit conversion, which needs it for a power column.
 
     Returns:
-        The heat of the simulated period, not yet annualized (`EvaluationInputs.annual_heat_demand`
-        does that), or None.
+        `UsefulHeatKind` value -> kWh of the simulated period, not yet annualized
+        (`EvaluationInputs.annual_heat_demand` does that), and the failures.
     """
-    total: Optional[float] = None
+    by_kind: Dict[str, float] = {}
+    failures: List[UnresolvedSubject] = []
     for wrapper in wrapped_components:
         component = wrapper.my_component
-        field_name = UsefulHeatSources.BY_CLASS_NAME.get(type(component).__name__)
-        if field_name is None:
+        try:
+            heat = _useful_heat_of_component(component, all_outputs, results, seconds_per_timestep)
+        except CostDataError as err:
+            failures.append(UnresolvedSubject(subject=component.component_name, reason=str(err)))
             continue
-        found = _output_column_and_unit(component.component_name, field_name, all_outputs, results)
-        if found is None:
-            log.warning(
-                f"Lifecycle cost engine: {component.component_name} publishes no {field_name}, so "
-                "the useful heat is unknown and the levelized cost of heat is omitted."
-            )
-            return None
-        series, unit = found
-        heat = EnergyUnitConversion.to_kwh(
-            float(series.abs().sum()), unit, seconds_per_timestep, f"{component.component_name}.{field_name}"
-        )
-        total = heat if total is None else total + heat
-    return total
+        if heat is not None:
+            kind, kwh = heat
+            by_kind[kind] = by_kind.get(kind, 0.0) + kwh
+    return by_kind, failures
 
 
 def _power_series(
@@ -798,7 +864,10 @@ def build_evaluation_inputs(
     pricing as *not installed* whose meter nevertheless reported energy (`_non_zero_energy_flows`):
     the zero-size exclusion rests on the claim that such a device moves no energy, and where the
     determinants contradict it, billing the flows of a device the result says is absent is not an
-    answer this layer may pick. A run with no meter flows *at all* stays a warning, because a
+    answer this layer may pick. So does a source of useful heat (`adapter.UsefulHeatSources`)
+    whose column is missing, unconvertible or runs against its sign convention: the levelized cost
+    of heat would otherwise divide by a partial sum (`_useful_heat_by_kind`). A run with no meter
+    flows *at all* stays a warning, because a
     system with nothing metered is a legitimate — if unpriced — configuration rather than a broken
     meter (§3.4). And the simulated
     period is converted into `simulated_period_fraction`, which the engine uses to annualize; runs
@@ -904,6 +973,14 @@ def build_evaluation_inputs(
             # rather than a note because an asset that silently leaves the cost model is exactly
             # the omission a reader has to notice.
             not_installed.append(f"{subject}: {extraction.not_installed_reason}")
+    # The heat the levelized cost of heat divides by. A listed source that cannot state it is an
+    # unresolved subject like any other, so the D7 check below aborts rather than dividing by a
+    # partial sum.
+    useful_heat_by_kind, heat_failures = _useful_heat_by_kind(
+        wrapped_components, all_outputs, postprocessing_results, simulation_parameters.seconds_per_timestep
+    )
+    unresolved.extend(heat_failures)
+    measured_heat = sum(useful_heat_by_kind.values())
     if not_installed:
         log.warning(
             "Lifecycle cost engine: components configured at zero size, excluded from the cost "
@@ -949,13 +1026,24 @@ def build_evaluation_inputs(
         billing=billing,
         energy_attribution_by_subject_in_kwh=attribution,
         unresolved_subjects=unresolved,
-        useful_heat_of_simulated_period_in_kwh=_useful_heat_in_kwh(
-            wrapped_components, all_outputs, postprocessing_results, simulation_parameters.seconds_per_timestep
-        ),
+        # A measured total of zero states no heat, not a denominator of zero: the KPI is omitted.
+        # (`> 0` rather than `!= 0`: the per-timestep tolerance admits rounding noise below zero.)
+        useful_heat_of_simulated_period_in_kwh=measured_heat if measured_heat > 0 else None,
+        useful_heat_of_simulated_period_by_kind_in_kwh=useful_heat_by_kind,
     )
     context: Optional[EconomicContext] = getattr(simulation_parameters, "economic_context", None)
     if context is not None:
         _merge_context(inputs, context)
+    if inputs.heat_cost_omits_hot_water():
+        # hisim-4wlu: `adapter.UsefulHeatSources` lists only SimpleDHWStorage as a hot-water source
+        # so far, so a combi boiler or an electric water heater leaves the denominator at the
+        # rooms' heat. The plausibility panel carries the same statement into the report
+        # (`compute_lifecycle_costs`); this line is for whoever reads the log.
+        log.warning(
+            "Lifecycle cost engine: the run has a building but no hot-water source of "
+            "adapter.UsefulHeatSources, so the system cost per unit of heat divides by the rooms' "
+            "heat only and reads too high by the hot water's share (hisim-4wlu)."
+        )
     return inputs
 
 
@@ -970,8 +1058,8 @@ def _merge_context(inputs: EvaluationInputs, context: EconomicContext) -> None:
     the simulation it came from.
 
     "Declared" is `is not None`, not truthiness. The scalars used to be merged with
-    ``context.x or inputs.x``, which silently dropped a declared **0.0** — a building with no
-    heat demand, a rent-free unit, an emission intensity of zero — and left whatever the extraction
+    ``context.x or inputs.x``, which silently dropped a declared **0.0** — a rent-free unit, an
+    emission intensity of zero — and left whatever the extraction
     had instead. A zero is a statement, and the difference between "nobody said" and "somebody said
     none" is exactly what this merge exists to preserve.
 
@@ -1275,8 +1363,13 @@ def compute_lifecycle_costs(
             # The simulated fraction goes in so the §8.5 extrapolation of a short run is a row of
             # the plausibility panel, i.e. visible in cost_summary.md and in the HTML report,
             # rather than only in a log the reader of those files never sees.
+            # The same holds for a heat-cost figure that divides by the rooms' heat alone.
             plausibility = run_plausibility_checks(
-                matrix, simulated_period_fraction=inputs.simulated_period_fraction
+                matrix,
+                simulated_period_fraction=inputs.simulated_period_fraction,
+                heat_without_hot_water_in_kwh=(
+                    inputs.annual_heat_demand() if inputs.heat_cost_omits_hot_water() else None
+                ),
             )
             written.append(write_cost_summary(matrix, plausibility, result_directory))
             written.append(

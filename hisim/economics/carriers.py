@@ -81,6 +81,23 @@ class EnergyFlowRole(str, enum.Enum):
     GRID_EXPORT = "GRID_EXPORT"
 
 
+@enum.unique
+class UsefulHeatKind(str, enum.Enum):
+    """What a measured useful heat is spent on: the rooms, or the hot water drawn at the tap.
+
+    The vocabulary of the heat the system-cost-per-unit-of-heat figure divides by
+    (`adapter.UsefulHeatSources`, decision on hisim-4p86). The two kinds are recorded apart in
+    `economic_inputs.json` because the denominator is only whole with both: a run whose building
+    has no hot-water source the table lists divides by the rooms' heat alone, and the split is what
+    lets the engine say so rather than publish a figure per kWh that reads too high. Like
+    `EnergyFlowRole` it lives in this leaf so the extraction and the engine share it without
+    importing each other.
+    """
+
+    ROOM_HEATING = "ROOM_HEATING"
+    HOT_WATER = "HOT_WATER"
+
+
 def validate_energy_attribution(attribution: Dict[str, Dict[str, float]], context: str) -> None:
     """Refuses a per-subject energy record carrying a negative quantity.
 

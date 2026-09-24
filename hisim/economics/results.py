@@ -618,6 +618,12 @@ class EconomicAssumptions:
     Keys: escalation rates are keyed by a stable label — `general`, `investment`, `feed-in`,
     `energy:<carrier value>`, `investment:<asset class name>` — and the tariffs by carrier value,
     the same string the timeline uses as the subject of that carrier's energy entries.
+
+    `annual_heat_demand_in_kwh` is the figure the heat-cost KPI divided by: for one evaluation the
+    declared demand or the useful heat the run measured, annualized; for a staged plan the
+    *equivalent annual heat*, the annuity factor times the discounted sum of each horizon year's
+    heat from the stage active in that year (`StagedEvaluator._equivalent_annual_heat`), which is
+    one stage's demand only when a single stage covers the whole horizon.
     """
 
     escalation_rates: Dict[str, ResolvedRate] = field(default_factory=dict)

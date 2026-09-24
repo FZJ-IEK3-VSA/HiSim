@@ -40,7 +40,7 @@ import os
 from typing import Any, Dict, Optional
 
 from hisim.economics.calculators.aggregation import TimelineAggregation
-from hisim.economics.carriers import EnergyCarrier, validate_energy_attribution
+from hisim.economics.carriers import EnergyCarrier, UsefulHeatKind, validate_energy_attribution
 from hisim.economics.evaluator import EvaluationInputs, SubjectCostFacts, UnresolvedSubject
 from hisim.economics.exports import ExportFileNames
 from hisim.economics.facts import (
@@ -436,6 +436,9 @@ def inputs_to_json(inputs: EvaluationInputs) -> dict:
         "consumed_tariff_ids": inputs.consumed_tariff_ids,
         "annual_heat_demand_in_kwh": inputs.annual_heat_demand_in_kwh,
         "useful_heat_of_simulated_period_in_kwh": inputs.useful_heat_of_simulated_period_in_kwh,
+        "useful_heat_of_simulated_period_by_kind_in_kwh": dict(
+            inputs.useful_heat_of_simulated_period_by_kind_in_kwh
+        ),
         "building_specific_emissions_in_kg_per_m2_a": inputs.building_specific_emissions_in_kg_per_m2_a,
         "heated_floor_area_in_m2": inputs.heated_floor_area_in_m2,
         "living_area_in_m2": inputs.living_area_in_m2,
@@ -523,6 +526,12 @@ def inputs_from_json(raw: dict, tariffs_base_path: Optional[str] = None) -> Eval
         consumed_tariff_ids=raw.get("consumed_tariff_ids", []),
         annual_heat_demand_in_kwh=raw.get("annual_heat_demand_in_kwh"),
         useful_heat_of_simulated_period_in_kwh=raw.get("useful_heat_of_simulated_period_in_kwh"),
+        # Absent from files written before the split; `UsefulHeatKind(...)` refuses a kind it
+        # does not know rather than carrying it into `heat_cost_omits_hot_water`.
+        useful_heat_of_simulated_period_by_kind_in_kwh={
+            UsefulHeatKind(kind).value: float(kwh)
+            for kind, kwh in (raw.get("useful_heat_of_simulated_period_by_kind_in_kwh") or {}).items()
+        },
         building_specific_emissions_in_kg_per_m2_a=raw.get("building_specific_emissions_in_kg_per_m2_a"),
         heated_floor_area_in_m2=raw.get("heated_floor_area_in_m2"),
         living_area_in_m2=raw.get("living_area_in_m2"),

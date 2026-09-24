@@ -44,15 +44,16 @@ import pytest
 import hisim.simulator as sim
 from hisim import loadtypes, utils
 from hisim.config import SizingContext
-from hisim.economics import bridge, serialization
+from hisim.economics import adapter, bridge, serialization
 from hisim.economics.bridge import EconomicContext
-from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.carriers import EnergyCarrier, UsefulHeatKind
 from hisim.economics.database import CostDataError, CostDatabase
 from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs, SubjectCostFacts
-from hisim.economics.facts import ComponentCostFacts
+from hisim.economics.facts import ComponentCostFacts, CostRelevance
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import load_default_bundle, select_applicable
 from hisim.economics.plausibility import CheckIds, CheckStatus, run_plausibility_checks
+from hisim.economics.reporting import render_plausibility_findings
 from hisim.economics.scenarios import ScenarioSet
 from hisim.components import (
     building,
@@ -60,6 +61,7 @@ from hisim.components import (
     generic_pv_system,
     idealized_electric_heater,
     loadprofilegenerator_utsp_connector,
+    simple_water_storage,
     weather,
 )
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -658,15 +660,29 @@ class TestSharedHelpers:
 
 
 class Building:
-    """Stands in for the building by class name, as `UsefulHeatSources` looks it up."""
+    """Stands in for the building by class name, as `adapter.UsefulHeatSources` looks it up.
+
+    It carries the output-name constant the table resolves, and declares itself free of cost so
+    `build_evaluation_inputs` asks it nothing but its heat.
+    """
+
+    cost_relevance = CostRelevance.FREE_OF_COST
+    TheoreticalHeatingEnergyDemand = "TheoreticalHeatingEnergyDemand"
 
     def __init__(self, component_name: str) -> None:
         """Names the component."""
         self.component_name = component_name
 
 
-class SimpleDHWStorage(Building):
-    """Stands in for the hot-water tank by class name."""
+class SimpleDHWStorage:
+    """Stands in for the hot-water tank by class name, with its output-name constant."""
+
+    cost_relevance = CostRelevance.FREE_OF_COST
+    ThermalEnergyConsumptionDHW = "ThermalEnergyConsumptionDHW"
+
+    def __init__(self, component_name: str) -> None:
+        """Names the component."""
+        self.component_name = component_name
 
 
 class _Wrapper:
@@ -687,6 +703,7 @@ class _Output:
         self.unit = unit
 
 
+@pytest.mark.base
 class TestUsefulHeat:
     """hisim-4p86: the levelized cost of heat divides by the rooms' heat plus the hot water drawn."""
 
@@ -696,29 +713,157 @@ class TestUsefulHeat:
     ]
     # Two timesteps: 3 kWh of room heat, and 1 kWh of hot water signed as heat leaving the tank.
     FRAME = pd.DataFrame({0: [1000.0, 2000.0], 1: [-400.0, -600.0]})
+    ROOMS = UsefulHeatKind.ROOM_HEATING.value
+    HOT_WATER = UsefulHeatKind.HOT_WATER.value
 
-    def test_the_rooms_and_the_hot_water_are_added_as_magnitudes(self):
-        """3 kWh of rooms plus 1 kWh drawn at the tap, whatever sign the tank gives its outflow."""
-        wrappers = [_Wrapper(Building("Building")), _Wrapper(SimpleDHWStorage("DHWStorage"))]
+    @staticmethod
+    def _both():
+        """The building and its tank, as the run wraps them."""
+        return [_Wrapper(Building("Building")), _Wrapper(SimpleDHWStorage("DHWStorage"))]
 
-        heat = bridge._useful_heat_in_kwh(wrappers, self.OUTPUTS, self.FRAME, 900)  # pylint: disable=protected-access
+    @staticmethod
+    def _by_kind(wrappers, frame):
+        """The extraction under test, on the class's declared outputs."""
+        return bridge._useful_heat_by_kind(  # pylint: disable=protected-access
+            wrappers, TestUsefulHeat.OUTPUTS, frame, 900
+        )
 
-        assert heat == pytest.approx(4.0)
+    def test_each_source_is_read_by_its_own_sign_convention(self):
+        """3 kWh into the rooms and 1 kWh leaving the tank are 3 and 1 kWh of useful heat."""
+        by_kind, failures = self._by_kind(self._both(), self.FRAME)
 
-    def test_a_run_without_a_building_states_no_heat(self):
-        """None, not zero: the KPI is omitted rather than divided by nothing."""
-        heat = bridge._useful_heat_in_kwh([], self.OUTPUTS, self.FRAME, 900)  # pylint: disable=protected-access
+        assert not failures
+        assert by_kind == {self.ROOMS: pytest.approx(3.0), self.HOT_WATER: pytest.approx(1.0)}
 
-        assert heat is None
+    def test_a_timestep_of_the_wrong_sign_aborts_naming_the_value(self):
+        """Mixed signs: per-element magnitudes would say 1 kWh, a netted sum 0.2 — both are wrong.
 
-    def test_a_source_without_its_column_makes_the_heat_unknown(self, capsys):
-        """A partial sum would publish a cost per kWh that is too high, so it is dropped with a word."""
+        A tank reporting heat flowing *into* it through the tap is not delivering hot water, and
+        neither `abs` of each timestep nor `abs` of the sum is a denominator anyone stands behind.
+        """
+        frame = pd.DataFrame({0: [1000.0, 2000.0], 1: [-400.0, 600.0]})
+
+        by_kind, failures = self._by_kind(self._both(), frame)
+
+        assert self.HOT_WATER not in by_kind
+        assert len(failures) == 1
+        failure = failures[0]
+        assert failure.subject == "DHWStorage"
+        assert "DHWStorage.ThermalEnergyConsumptionDHW" in failure.reason
+        assert "600.0" in failure.reason
+
+    def test_rounding_noise_of_the_wrong_sign_is_not_a_reverse_flow(self):
+        """A nanowatt-hour above zero is float noise, below `SIGN_TOLERANCE_IN_KWH` by far."""
+        frame = pd.DataFrame({0: [1000.0, 2000.0], 1: [-1000.0, 1e-9]})
+
+        by_kind, failures = self._by_kind(self._both(), frame)
+
+        assert not failures
+        assert by_kind[self.HOT_WATER] == pytest.approx(1.0)
+
+    def test_a_run_without_a_listed_source_states_no_heat(self):
+        """No source, no kinds: the KPI is omitted rather than divided by nothing."""
+        assert self._by_kind([], self.FRAME) == ({}, [])
+
+    def test_a_source_without_its_column_aborts_the_evaluation(self, tmp_path):
+        """A partial sum would publish a cost per kWh that is too high, so D7 stops the run.
+
+        The failure names the component and the column, reaches `economic_inputs.json` as an
+        unresolved subject, and the evaluation aborts on it like on any other.
+        """
+        parameters = _Parameters(str(tmp_path))
         wrappers = [_Wrapper(Building("Building")), _Wrapper(SimpleDHWStorage("OtherTank"))]
 
-        heat = bridge._useful_heat_in_kwh(wrappers, self.OUTPUTS, self.FRAME, 900)  # pylint: disable=protected-access
+        with pytest.raises(CostDataError) as raised:
+            bridge.compute_lifecycle_costs(wrappers, self.OUTPUTS, self.FRAME, parameters)
 
-        assert heat is None
-        assert "OtherTank publishes no ThermalEnergyConsumptionDHW" in capsys.readouterr().out
+        assert "OtherTank" in str(raised.value)
+        assert "ThermalEnergyConsumptionDHW" in str(raised.value)
+        written = json.loads((tmp_path / "economic_inputs.json").read_text(encoding="utf-8"))
+        assert [item["subject"] for item in written["unresolved_subjects"]] == ["OtherTank"]
+
+    def test_a_class_that_lost_its_constant_aborts(self):
+        """The table names constants, so a renamed output is a refusal, not an empty column."""
+
+        class Building:  # pylint: disable=redefined-outer-name
+            """A building class that no longer declares the constant the table names."""
+
+            def __init__(self) -> None:
+                """Named like the real one."""
+                self.component_name = "Building"
+
+        _by_kind, failures = self._by_kind([_Wrapper(Building())], self.FRAME)
+
+        assert len(failures) == 1
+        failure = failures[0]
+        assert "TheoreticalHeatingEnergyDemand" in failure.reason
+        assert "UsefulHeatSources" in failure.reason
+
+    def test_the_table_names_constants_the_real_classes_declare(self):
+        """Every key is a real component class and every constant a real output-name constant."""
+        for real in (building.Building, simple_water_storage.SimpleDHWStorage):
+            source = adapter.UsefulHeatSources.BY_CLASS_NAME[real.__name__]
+            assert isinstance(getattr(real, source.output_constant, None), str), real.__name__
+        assert set(adapter.UsefulHeatSources.BY_CLASS_NAME) == {"Building", "SimpleDHWStorage"}
+
+    def test_a_measured_zero_states_no_heat(self, tmp_path):
+        """Zero kWh measured is no denominator, and the KPI is omitted rather than infinite."""
+        frame = pd.DataFrame({0: [0.0, 0.0], 1: [0.0, 0.0]})
+
+        inputs = bridge.build_evaluation_inputs(self._both(), self.OUTPUTS, frame, _Parameters(str(tmp_path)))
+
+        assert inputs.useful_heat_of_simulated_period_in_kwh is None
+        assert inputs.annual_heat_demand() is None
+
+    def test_the_extract_records_the_heat_split_by_kind(self, tmp_path):
+        """The total and the split both reach `EvaluationInputs`, the split summing to the total."""
+        inputs = bridge.build_evaluation_inputs(
+            self._both(), self.OUTPUTS, self.FRAME, _Parameters(str(tmp_path))
+        )
+
+        assert inputs.useful_heat_of_simulated_period_in_kwh == pytest.approx(4.0)
+        assert inputs.useful_heat_of_simulated_period_by_kind_in_kwh == {
+            self.ROOMS: pytest.approx(3.0),
+            self.HOT_WATER: pytest.approx(1.0),
+        }
+        assert not inputs.heat_cost_omits_hot_water()
+
+    def test_a_building_without_a_hot_water_source_is_warned_about(self, tmp_path, capsys):
+        """hisim-4wlu: the rooms' heat alone makes the figure too high, and the log says so."""
+        inputs = bridge.build_evaluation_inputs(
+            [_Wrapper(Building("Building"))], self.OUTPUTS, self.FRAME, _Parameters(str(tmp_path))
+        )
+
+        assert inputs.heat_cost_omits_hot_water()
+        assert "rooms' heat only" in capsys.readouterr().out
+
+    def test_a_declared_demand_is_not_warned_about(self, tmp_path, capsys):
+        """The declared figure is what the KPI divides by, so the measured split does not matter."""
+        parameters = _Parameters(str(tmp_path))
+        parameters.economic_context = EconomicContext(annual_heat_demand_in_kwh=15000.0)
+
+        inputs = bridge.build_evaluation_inputs(
+            [_Wrapper(Building("Building"))], self.OUTPUTS, self.FRAME, parameters
+        )
+
+        assert not inputs.heat_cost_omits_hot_water()
+        assert "rooms' heat only" not in capsys.readouterr().out
+
+    def test_the_panel_carries_the_rooms_only_statement(self):
+        """The report's reader sees it too: a WARN row stating the heat and what it lacks."""
+        report = run_plausibility_checks(_evaluated_empty_matrix(), heat_without_hot_water_in_kwh=12000.0)
+
+        (finding,) = [f for f in report.findings if f.check_id == CheckIds.CHECK_USEFUL_HEAT_WITHOUT_HOT_WATER]
+        assert finding.status == CheckStatus.WARN
+        assert finding.value == pytest.approx(12000.0)
+        (row,) = [row for row in render_plausibility_findings(report) if row.name == finding.name]
+        assert "rooms only" in row.value and "hisim-4wlu" in row.detail
+
+    def test_a_whole_denominator_adds_no_panel_row(self):
+        """Without the statement the panel is exactly what it was."""
+        report = run_plausibility_checks(_evaluated_empty_matrix())
+
+        assert not [f for f in report.findings if f.check_id == CheckIds.CHECK_USEFUL_HEAT_WITHOUT_HOT_WATER]
 
     @staticmethod
     def _inputs(declared: Optional[float], measured: Optional[float], fraction: float = 0.25) -> EvaluationInputs:
@@ -734,20 +879,41 @@ class TestUsefulHeat:
         """A quarter of a year's 3000 kWh is a year's 12000."""
         assert self._inputs(None, 3000.0).annual_heat_demand() == pytest.approx(12000.0)
 
-    def test_a_declared_demand_wins_even_when_it_is_zero(self):
-        """The setup's figure overrides the model's, and a declared zero is a declaration."""
+    def test_a_declared_demand_wins(self):
+        """The setup's figure overrides the model's."""
         assert self._inputs(15000.0, 3000.0).annual_heat_demand() == pytest.approx(15000.0)
-        assert self._inputs(0.0, 3000.0).annual_heat_demand() == 0.0
+
+    @pytest.mark.parametrize("declared", [0.0, float("nan"), float("inf")])
+    def test_a_declared_demand_that_is_no_denominator_is_refused(self, declared):
+        """Zero divides by zero, NaN and infinity publish a KPI of NaN or of nothing: refused early."""
+        with pytest.raises(ValueError) as raised:
+            EconomicContext(annual_heat_demand_in_kwh=declared)
+
+        assert repr(declared) in str(raised.value)
 
     def test_neither_leaves_the_kpi_out(self):
         """No declaration and no building: nothing to divide by."""
         assert self._inputs(None, None).annual_heat_demand() is None
 
     def test_the_measured_heat_survives_the_inputs_file(self):
-        """economic_inputs.json records it, so re-pricing a stored run divides by the same figure."""
+        """economic_inputs.json records it and its split, so re-pricing divides by the same figure."""
         inputs = self._inputs(None, 3000.0)
+        inputs.useful_heat_of_simulated_period_by_kind_in_kwh = {self.ROOMS: 3000.0}
 
         reloaded = serialization.inputs_from_json(serialization.inputs_to_json(inputs))
 
         assert reloaded.useful_heat_of_simulated_period_in_kwh == pytest.approx(3000.0)
+        assert reloaded.useful_heat_of_simulated_period_by_kind_in_kwh == {self.ROOMS: pytest.approx(3000.0)}
         assert reloaded.annual_heat_demand() == pytest.approx(12000.0)
+        assert reloaded.heat_cost_omits_hot_water()
+
+    def test_a_file_written_before_the_split_still_loads(self):
+        """An archived extract without the split keeps its total and states no kinds."""
+        raw = serialization.inputs_to_json(self._inputs(None, 3000.0))
+        del raw["useful_heat_of_simulated_period_by_kind_in_kwh"]
+
+        reloaded = serialization.inputs_from_json(raw)
+
+        assert reloaded.useful_heat_of_simulated_period_by_kind_in_kwh == {}
+        assert reloaded.annual_heat_demand() == pytest.approx(12000.0)
+        assert not reloaded.heat_cost_omits_hot_water()

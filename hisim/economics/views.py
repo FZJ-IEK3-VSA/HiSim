@@ -997,8 +997,8 @@ def total_subsidies_received(result: LifecycleCostResult) -> Optional[UncertainV
     complete by construction. It used to sum the solver's award amounts
     (`SubsidyDecision.applied[*].upfront_amount`) instead, which silently omitted every euro of
     support that reaches the timeline without a catalog award or without being upfront: the
-    §10.1 legacy flat shim, operational support, and the instalments of a scheduled payout or a
-    repayment grant. The per-subject counterpart is
+    since-retired §10.1 legacy flat shim, operational support, and the instalments of a
+    scheduled payout or a repayment grant. The per-subject counterpart is
     `ComponentCostBreakdown.subsidies_nominal_in_euro`; the per-award figure is
     `award_total_amount`.
 

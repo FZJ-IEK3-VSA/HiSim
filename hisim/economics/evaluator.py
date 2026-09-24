@@ -508,7 +508,7 @@ class EconomicEvaluator:
         parameters: EconomicParameters,
         subsidy_catalog: Optional[SubsidyCatalog] = None,
     ) -> None:
-        """The catalog is optional: without one the legacy flat-percentage shim applies (§10.1).
+        """The catalog is optional: without one no subsidy is booked (the §10.1 flat shim is retired).
 
         All three arguments are held as given and never modified, so an evaluator is a cheap,
         reusable handle over one dataset and one parameter set. `scenarios.evaluate_cube` relies
@@ -840,7 +840,7 @@ class EconomicEvaluator:
                 build_maintenance_entries(costing, gross, params.general_price_escalation_rate, horizon)
             )
 
-            # --- subsidies (§5; flat shim §10.1). Suppressed under MACROECONOMIC accounting
+            # --- subsidies (§5; none without a catalog). Suppressed under MACROECONOMIC accounting
             # because a subsidy is a transfer, not a resource cost (§4.5), and never applied to a
             # kept existing asset. Must precede the financing block below, which nets the year-0
             # SUBSIDY entries out of the loan principal.

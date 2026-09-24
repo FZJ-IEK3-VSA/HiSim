@@ -1,14 +1,14 @@
 """T-TABULA: which archetype a dwelling is simulated as, and what that approximated.
 
-Three rules and one workaround. The typology comes from the kind of dwelling (three of the six
-answers have no typology of their own and are approximations); the age band is the one whose
-year range contains the construction year, clamped at both ends; the variant is always ``001``.
-The workaround is the usable-row rule: rows whose door or window area is zero crash the
-``Building`` component, so the nearest usable band is chosen instead -- unless the request
-supplies both areas, in which case every row is usable and the exact band is used.
+Three rules. The typology comes from the kind of dwelling (three of the six answers have no
+typology of their own and are approximations); the age band is the one whose year range contains
+the construction year, clamped at both ends; the variant is always ``001``. Every generic-example
+row is selectable: the ``Building`` component guards every zero envelope area (hisim-4g9.1), so
+the former usable-row workaround -- a row without door or window geometry was skipped for the
+nearest band that had one -- is gone.
 
-``IE.N.SFH.05`` (1967-1977) is such a row, which is why the mockup's 1975 house is the example
-the specification names on both sides.
+``IE.N.SFH.05`` (1967-1977), the row the workaround used to skip for the mockup's 1975 house, is
+the example the specification names on both sides.
 """
 
 from typing import Optional
@@ -29,7 +29,6 @@ def select(
     building_type: BuildingType,
     year: int,
     country: str = "IE",
-    areas_given: bool = False,
     requested_code: Optional[str] = None,
 ):
     """Return the selection for one dwelling, with the arguments named for readability."""
@@ -37,7 +36,6 @@ def select(
         country=country,
         building_type=building_type,
         construction_year=year,
-        areas_given=areas_given,
         requested_code=requested_code,
     )
 
@@ -130,23 +128,29 @@ class TestTheBand:
 
 
 @pytest.mark.base
-class TestTheUsableRowRule:
-    """A row with no door or window area crashes ``Building``; the request can make it usable."""
+class TestEveryRowIsSelectable:
+    """The former usable-row rule is gone: no row is refused for its geometry any more.
 
-    def test_the_mockups_house_lands_on_a_neighbouring_band_without_areas(self) -> None:
-        """``IE.N.SFH.05`` has no door area, so 1975 is simulated as band 04 or 06."""
+    ``IE.N.SFH.05`` has no door or window area in the table; it used to be skipped for a
+    neighbouring band unless the request carried both areas. The ``Building`` guards those zero
+    areas now, so the exact band is used again, with or without areas.
+    """
+
+    def test_the_mockups_house_lands_on_its_own_band(self) -> None:
+        """1975 is band 05's range, and band 05 is used exactly, with no substitution note."""
         selection = select(BuildingType.DETACHED_SFH, 1975)
-
-        assert selection.code.split(".")[3] in {"04", "06"}
-        assert selection.is_approximated()
-        assert any("05 (1967-1977)" in note for note in selection.notes)
-
-    def test_the_same_house_lands_on_its_own_band_when_both_areas_are_given(self) -> None:
-        """With a door and a window area the Building cannot divide by zero, so every row is usable."""
-        selection = select(BuildingType.DETACHED_SFH, 1975, areas_given=True)
 
         assert selection.code == "IE.N.SFH.05.Gen.ReEx.001.001"
         assert not selection.is_approximated()
+
+    def test_an_expert_code_for_the_zero_area_row_is_accepted(self) -> None:
+        """The expert override used to refuse this row as unusable; there is nothing to refuse."""
+        selection = select(
+            BuildingType.DETACHED_SFH, 1975, requested_code="IE.N.SFH.05.Gen.ReEx.001.001"
+        )
+
+        assert selection.code == "IE.N.SFH.05.Gen.ReEx.001.001"
+        assert not selection.notes
 
     def test_an_expert_code_skips_the_derivation_entirely(self) -> None:
         """``tabula_building_code`` is an override: it is used as it stands, with no notes."""
@@ -156,21 +160,6 @@ class TestTheUsableRowRule:
 
         assert selection.code == "IE.N.SFH.08.Gen.ReEx.001.001"
         assert not selection.notes
-
-    def test_an_unusable_expert_code_without_areas_is_refused(self) -> None:
-        """An override cannot override physics: the Building would still divide by zero."""
-        with pytest.raises(TabulaUnresolvable):
-            select(BuildingType.DETACHED_SFH, 1975, requested_code="IE.N.SFH.05.Gen.ReEx.001.001")
-
-    def test_the_same_code_is_accepted_when_the_request_supplies_the_areas(self) -> None:
-        """The rule is about the crash, not about the row."""
-        selection = select(
-            BuildingType.DETACHED_SFH,
-            1975,
-            areas_given=True,
-            requested_code="IE.N.SFH.05.Gen.ReEx.001.001",
-        )
-        assert selection.code == "IE.N.SFH.05.Gen.ReEx.001.001"
 
     def test_a_code_the_table_does_not_carry_is_refused(self) -> None:
         """An override still has to name a row that exists."""

@@ -1292,9 +1292,8 @@ class UtspLpgConnector(cp.Component):
         list_of_file_exists_and_cache_files: List = []
         list_of_unique_household_configs: List = []
 
-        # check if cache_dir_path was chosen, otherwise use default cache_dir_path
-        if cache_dir_path is None:
-            cache_dir_path = self.my_simulation_parameters.cache_dir_path
+        # a config-level override stays the one directory; None falls through to the simulation's
+        # own cache locations, which may be a read-ordered list (hisim-epc.22)
 
         # config household is list of jsonreferences and no other guid than default is given ("")
         # if the guid = "" and multiple households are given as a list, each household will be calculated and cached individually

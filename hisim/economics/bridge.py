@@ -36,7 +36,7 @@ a *different* question's answer with a log line to explain it.
 - A **cost database** that will not load — a wrong path must not turn "compute my lifecycle costs"
   into a run with no cost files.
 - A **subsidy catalog** that will not load. It used to log an error and leave `catalog` at None,
-  which silently continues under the §10.1 flat shim: a run configured with a catalog would then
+  which silently continues without any subsidy: a run configured with a catalog would then
   publish subsidy figures that have nothing to do with it. The failure is wrapped into a
   `CostDataError` carrying the path and the original exception.
 - A **scenario cube** the setup declared and that fails to evaluate. It used to log ``"… (base
@@ -114,8 +114,8 @@ class EconomicContext:
     Attach via ``simulation_parameters.set_economic_context(...)``. With an existing-asset
     register present, the default perspective bundle switches from greenfield to the full
     brownfield set (owner/landlord/tenant, macroeconomic, ...); with a subsidy context and
-    ``EconomicParameters.subsidy_catalog_path`` set, the real subsidy engine replaces the
-    flat shim. See system_setups/economic_example/ for a complete worked example.
+    ``EconomicParameters.subsidy_catalog_path`` set, the subsidy engine prices support; without a
+    catalog none is booked. See system_setups/economic_example/ for a complete worked example.
 
     **The design question it answers**: a HiSim simulation models physics, so it can say how big
     the heat pump is and how many kWh crossed the meter, but it can say nothing about the *decision
@@ -153,7 +153,7 @@ class EconomicContext:
     **What happens if you attach nothing at all** (the default): the run stays valid and produces
     lifecycle costs, but only the greenfield perspectives are evaluated — every device is charged as
     a new purchase into an empty building, nothing is credited as already existing, no sunk cost or
-    anyway-cost applies. Subsidies fall back to the flat legacy shim, actor splits have no
+    anyway-cost applies. No subsidy is booked without a catalog, actor splits have no
     allocation basis, and the LCOH KPI is omitted for want of a heat demand. That is the correct
     answer to a question nobody asked in more detail — not a degraded one — but it is a *greenfield*
     answer, which is the thing to check first when brownfield figures are missing from a result set.
@@ -1122,8 +1122,8 @@ def compute_lifecycle_costs(
         price_basis_year=effective_price_basis_year(parameters, database, inputs.simulation_year),
     )
     # A configured catalog that will not load — or whose path does not resolve — is not a
-    # degradation, it is a different calculation: evaluation would silently fall back to the §10.1
-    # flat shim and publish subsidy figures that have nothing to do with the catalog the run asked
+    # degradation, it is a different calculation: evaluation would silently fall back to booking
+    # no subsidy and publish subsidy figures that have nothing to do with the catalog the run asked
     # for. `load_configured` is the one place that decision lives, shared with the CLI so both
     # paths refuse identically, and it raises the `CostDataError` postprocessing re-raises.
     catalog = SubsidyCatalog.load_configured(parameters.country, parameters.subsidy_catalog_path)

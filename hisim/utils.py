@@ -20,7 +20,7 @@ import pytz
 
 from hisim import log
 from hisim.caching import CacheClient
-from hisim.simulationparameters import SimulationParameters
+from hisim.simulationparameters import CacheLocations, SimulationParameters
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021-2022, FZJ-IEK-3 "
@@ -352,9 +352,11 @@ def get_cache_file(
     wastes work but is harmless. Never write to the returned path directly; use
     :func:`hisim.caching.atomic_cache_write`, otherwise a concurrent reader can see a half-written file.
 
-    The directory is chosen in this order: the ``cache_dir_path`` argument, then ``HISIM_CACHE_DIR``, then
-    ``my_simulation_parameters.cache_dir_path``. The argument wins over the environment so that a test
-    pointing at its own directory keeps working on a machine where the override is set.
+    The locations are chosen in this order: the ``cache_dir_path`` argument, then ``HISIM_CACHE_DIR``, then
+    ``my_simulation_parameters.cache_locations()`` -- the parameter list, read in order and written to the
+    first writable directory, which without a list is the single ``cache_dir_path`` (hisim-epc.22). The
+    argument wins over the environment so that a test pointing at its own directory keeps working on a
+    machine where the override or a directory list is set.
 
     Args:
         component_key: filename prefix, today the component's instance name.
@@ -371,13 +373,16 @@ def get_cache_file(
     key_material = build_cache_key_string(parameter_class, my_simulation_parameters)
     client = CacheClient.from_environment()
     if cache_dir_path is not None:
-        # The explicit argument outranks the environment; the override is simply not consulted.
-        directory = cache_dir_path
+        # The explicit argument outranks the environment and the parameter list; the override is
+        # simply not consulted. A test pointing at its own directory keeps working on a machine
+        # where an override or a directory list is set.
+        locations = CacheLocations([cache_dir_path])
     else:
-        directory = client.settings.resolve_local_directory(my_simulation_parameters.cache_dir_path)
+        locations = my_simulation_parameters.cache_locations()
         if client.settings.local_directory is not None:
-            client.announce_environment_override(directory)
-    entry = client.lookup(component_key, key_material, directory)
+            locations = CacheLocations([client.settings.local_directory])
+            client.announce_environment_override(locations.write_directory())
+    entry = client.lookup_across(component_key, key_material, locations)
     return entry.exists, entry.path
 
 

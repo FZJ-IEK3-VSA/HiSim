@@ -3,9 +3,9 @@
 Three rules. The typology comes from the kind of dwelling (three of the six answers have no
 typology of their own and are approximations); the age band is the one whose year range contains
 the construction year, clamped at both ends; the variant is always ``001``. Every generic-example
-row is selectable: the ``Building`` component guards every zero envelope area (hisim-4g9.1), so
-the former usable-row workaround -- a row without door or window geometry was skipped for the
-nearest band that had one -- is gone.
+row is selectable: the ``Building`` component guards a zero door or window area and gives a row
+without a door area TABULA's estimated door (hisim-4g9.1), so the former usable-row workaround --
+a row without door or window geometry was skipped for the nearest band that had one -- is gone.
 
 ``IE.N.SFH.05`` (1967-1977), the row the workaround used to skip for the mockup's 1975 house, is
 the example the specification names on both sides.
@@ -131,9 +131,9 @@ class TestTheBand:
 class TestEveryRowIsSelectable:
     """The former usable-row rule is gone: no row is refused for its geometry any more.
 
-    ``IE.N.SFH.05`` has no door or window area in the table; it used to be skipped for a
-    neighbouring band unless the request carried both areas. The ``Building`` guards those zero
-    areas now, so the exact band is used again, with or without areas.
+    ``IE.N.SFH.05`` has 29.01 m2 of windows but no door area in the table; it used to be skipped
+    for a neighbouring band unless the request carried both areas. The ``Building`` gives it
+    TABULA's estimated door now, so the exact band is used again, with or without areas.
     """
 
     def test_the_mockups_house_lands_on_its_own_band(self) -> None:
@@ -143,7 +143,7 @@ class TestEveryRowIsSelectable:
         assert selection.code == "IE.N.SFH.05.Gen.ReEx.001.001"
         assert not selection.is_approximated()
 
-    def test_an_expert_code_for_the_zero_area_row_is_accepted(self) -> None:
+    def test_an_expert_code_for_the_row_without_a_door_area_is_accepted(self) -> None:
         """The expert override used to refuse this row as unusable; there is nothing to refuse."""
         selection = select(
             BuildingType.DETACHED_SFH, 1975, requested_code="IE.N.SFH.05.Gen.ReEx.001.001"
@@ -165,6 +165,23 @@ class TestEveryRowIsSelectable:
         """An override still has to name a row that exists."""
         with pytest.raises(TabulaUnresolvable):
             select(BuildingType.DETACHED_SFH, 1975, requested_code="IE.N.SFH.99.Gen.ReEx.001.001")
+
+    def test_an_unknown_variant_of_an_existing_band_is_refused(self) -> None:
+        """The whole code is looked up: band 05 exists, its variant ``009`` does not.
+
+        Accepted, the code would only fail later, inside the simulation, when the ``Building``
+        finds no row for it.
+        """
+        with pytest.raises(TabulaUnresolvable, match="IE.N.SFH.05.Gen.ReEx.001.009"):
+            select(BuildingType.DETACHED_SFH, 1975, requested_code="IE.N.SFH.05.Gen.ReEx.001.009")
+
+    def test_an_existing_refurbishment_variant_is_accepted(self) -> None:
+        """The lookup is by whole code, so a variant the table does carry stays an override."""
+        selection = select(
+            BuildingType.DETACHED_SFH, 1975, requested_code="IE.N.SFH.05.Gen.ReEx.001.002"
+        )
+
+        assert selection.code == "IE.N.SFH.05.Gen.ReEx.001.002"
 
     def test_a_country_with_no_typology_is_refused(self) -> None:
         """Spain has no ``.N.`` codes, which the request validation turns into a named problem."""

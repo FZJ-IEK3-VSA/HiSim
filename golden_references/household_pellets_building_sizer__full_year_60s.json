@@ -1,7 +1,7 @@
 {
-  "BUI1.Battery.Battery charging energy": 2595.8015701590284,
+  "BUI1.Battery.Battery charging energy": 2595.801570159029,
   "BUI1.Battery.Battery discharging energy": 1903.6018859625747,
-  "BUI1.Battery.Battery losses": 692.1996841964537,
+  "BUI1.Battery.Battery losses": 692.1996841964542,
   "BUI1.Building.Building heating load": 7780.752200000001,
   "BUI1.Building.Conditioned floor area": 121.2,
   "BUI1.Building.Internal energy gains": 4576.192767603954,
@@ -81,7 +81,7 @@
   "BUI1.Heat Distribution System.Mean flow temperature of heat distribution system": 25.772069128888205,
   "BUI1.Heat Distribution System.Mean return temperature of heat distribution system": 24.56547243936891,
   "BUI1.Heat Distribution System.Mean temperature difference of heat distribution system": 1.2065966895192926,
-  "BUI1.Heat Distribution System.Min flow temperature of heat distribution system": 19.876566299864013,
+  "BUI1.Heat Distribution System.Min flow temperature of heat distribution system": 19.87656629986308,
   "BUI1.Heat Distribution System.Min return temperature of heat distribution system": 18.570338532046897,
   "BUI1.Heat Distribution System.Min temperature difference of heat distribution system": -1.9731255494933215,
   "BUI1.Heat Distribution System.Thermal output energy of heat distribution system": 11921.607550181858,

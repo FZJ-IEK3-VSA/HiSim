@@ -1,7 +1,7 @@
 {
-  "BUI1.Battery.Battery charging energy": 33.773970579244065,
+  "BUI1.Battery.Battery charging energy": 33.77397057924406,
   "BUI1.Battery.Battery discharging energy": 25.543760653253972,
-  "BUI1.Battery.Battery losses": 8.230209925990092,
+  "BUI1.Battery.Battery losses": 8.230209925990085,
   "BUI1.Building.Building heating load": 7780.752200000001,
   "BUI1.Building.Conditioned floor area": 121.2,
   "BUI1.Building.Internal energy gains": 90.00615941936138,
@@ -41,7 +41,7 @@
   "BUI1.Electricity Meter.Min power to grid": 0.0,
   "BUI1.Electricity Meter.Opex costs of electricity consumption from grid": 66.400662,
   "BUI1.Electricity Meter.Total energy from grid": 221.0695190237025,
-  "BUI1.Electricity Meter.Total energy to grid": 0.41390113333275314,
+  "BUI1.Electricity Meter.Total energy to grid": 0.4139011333327532,
   "BUI1.Emissions.CO2 footprint for equipment only heatpump per simulated period": 1.37,
   "BUI1.Emissions.CO2 footprint for equipment per simulated period": 7.38,
   "BUI1.Emissions.CO2 footprint for equipment without heatpump per simulated period": 6.01,

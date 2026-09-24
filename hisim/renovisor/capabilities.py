@@ -54,6 +54,7 @@ from hisim.renovisor.request import (
     OptionSpec,
     Request,
     RequestError,
+    SemanticChecks,
     ValueType,
 )
 from hisim.renovisor.translate import Translator
@@ -280,7 +281,7 @@ class ProbeSet:
 
     #: The low and high value probed for each free numeric option, from the request schema's own
     #: bounds on the field the option writes into: ``thickness_in_mm`` from ``added_insulation``,
-    #: ``new_room_temperature`` from ``set_heating_temperature_in_celsius``, ``installation_year``
+    #: ``new_room_temperature_in_celsius`` from ``set_heating_temperature_in_celsius``, ``installation_year``
     #: from ``construction_year``, and the four device options from their own blocks.
     OPTION_BOUNDS: ClassVar[Dict[str, Tuple[Any, Any]]] = {
         "thickness_in_mm": (10, 500),
@@ -290,7 +291,7 @@ class ProbeSet:
         "size_in_percent_of_roof_area": (1, 100),
         "days_to_cover": (1, 14),
         "number": (1, 2),
-        "new_room_temperature": (12, 28),
+        SemanticChecks.ROOM_TEMPERATURE_MEASURE[1]: SemanticChecks.ROOM_TEMPERATURE_RANGE,
     }
 
     #: The two-change probes the conditional entries of the list need, as
@@ -440,7 +441,7 @@ class ProbeSet:
     @classmethod
     def _first_value(cls, option: OptionSpec) -> Any:
         """Return the value a probe sends for one required option when it varies nothing."""
-        if option.name == CatalogueTable.MATERIAL:
+        if option.value_type is ValueType.MATERIAL:
             return dict(cls.MATERIAL)
         if option.values:
             return option.values[0]
@@ -451,7 +452,7 @@ class ProbeSet:
     @classmethod
     def _option_values(cls, option: OptionSpec) -> Tuple[Any, ...]:
         """Return the values one option is probed with: its list, its bounds, or both booleans."""
-        if option.name == CatalogueTable.MATERIAL:
+        if option.value_type is ValueType.MATERIAL:
             return (dict(cls.MATERIAL),)
         if option.values:
             return tuple(option.values)
@@ -741,6 +742,12 @@ class Aggregation:
         values: Mapping[str, Mapping[Any, Tuple[ReportStatus, Optional[str]]]],
     ) -> List[Dict[str, Any]]:
         """Return one entry per option the catalogue declares for one measure.
+
+        Only the catalogue's options: a report line for an option the catalogue does not declare
+        -- the defaulted ``thickness_in_mm`` of the two insulation measures that have no such
+        option -- stays in the mapping report and never reaches the document, whose options are
+        the contract's. It cannot change the measure's status either, because
+        :class:`hisim.renovisor.apply.MeasureStatusRules` passes over it.
 
         An option's note is the note of its own worst *option-level* observation, never of one
         of its values: a value's sentence belongs to the ``values`` entry that carries the
@@ -1053,17 +1060,37 @@ class CapabilityDocument:
         return 0
 
 
-def assert_catalogue_matches(measures_path: Optional[Path] = None) -> None:
+def assert_catalogue_matches(
+    measures_path: Optional[Path] = None,
+    frozen_table: Optional[Mapping[str, Sequence[OptionSpec]]] = None,
+) -> None:
     """Raise when the frozen catalogue table does not equal ``measures.yaml`` (T-CAT).
 
     Args:
         measures_path: The file to compare against; the vendored copy when omitted.
+        frozen_table: The table to check, as :attr:`CatalogueTable.BY_ID` shapes it;
+            :attr:`CatalogueTable.BY_ID` itself when omitted. A test passes a drifted copy.
 
     Raises:
         AssertionError: Naming the first difference. A catalogue edit has to be a deliberate
             change to :class:`hisim.renovisor.request.CatalogueTable`, not a surprise in a
-            user's refused request.
+            user's refused request. Also when an option the frozen table types
+            :attr:`ValueType.MATERIAL` is not named :attr:`CatalogueTable.MATERIAL`: the code
+            tells a material option by its type and the catalogue by its name, so the two have
+            to agree.
     """
+    table = CatalogueTable.BY_ID if frozen_table is None else frozen_table
+    misnamed = sorted(
+        f"{measure_id}.{option.name}"
+        for measure_id, options in table.items()
+        for option in options
+        if option.value_type is ValueType.MATERIAL and option.name != CatalogueTable.MATERIAL
+    )
+    if misnamed:
+        raise AssertionError(
+            f"the frozen catalogue table types {misnamed} as a material, but only an option named "
+            f"'{CatalogueTable.MATERIAL}' may be one"
+        )
     if measures_path is None:
         catalogue = ContractFiles.measures()
     else:
@@ -1075,7 +1102,7 @@ def assert_catalogue_matches(measures_path: Optional[Path] = None) -> None:
             (
                 str(option["name"]),
                 str(option["access_level"]),
-                str(option["value_type"]),
+                _declared_value_type(option),
                 tuple(option["values"]) if option.get("values") is not None else None,
             )
             for option in (measure.get("options") or [])
@@ -1085,7 +1112,7 @@ def assert_catalogue_matches(measures_path: Optional[Path] = None) -> None:
             (option.name, option.access_level.value, option.value_type.value, option.values)
             for option in options
         ]
-        for measure_id, options in CatalogueTable.BY_ID.items()
+        for measure_id, options in table.items()
     }
     if frozen != from_file:
         missing = sorted(set(from_file) - set(frozen))
@@ -1099,6 +1126,23 @@ def assert_catalogue_matches(measures_path: Optional[Path] = None) -> None:
             "the frozen catalogue table and measures.yaml disagree: "
             f"missing {missing}, extra {extra}, changed {changed}"
         )
+
+
+def _declared_value_type(option: Mapping[str, Any]) -> str:
+    """Return an option's value type as the catalogue declares it, for :func:`assert_catalogue_matches`.
+
+    The catalogue declares a ``material`` option by name and access level only, since contract
+    PR #10: its values are generated from ``materials.yaml``, and the request carries the material
+    object. Such an option compares as :attr:`ValueType.MATERIAL`. Any other option without a
+    ``value_type`` compares as ``"<missing>"``, so a catalogue that drops the key anywhere else
+    fails T-CAT by name instead of being read as a material. This is the one place that reads the
+    name as a type: the catalogue carries nothing else, and :func:`assert_catalogue_matches`
+    asserts that the frozen table's material options carry this name.
+    """
+    declared = option.get("value_type")
+    if declared is None and option.get("name") == CatalogueTable.MATERIAL:
+        return ValueType.MATERIAL.value
+    return str(declared) if declared is not None else "<missing>"
 
 
 def unlisted_lines(results: Iterable[ProbeResult]) -> Tuple[str, ...]:

@@ -147,15 +147,19 @@ class AccessLevel(str, Enum):
 class ValueType(str, Enum):
     """What kind of value an option carries, as ``measures.yaml`` declares it.
 
-    ``ENUM`` values are checked against the option's own ``values`` list, except for the
-    ``material`` option, whose request value is the material *object* of the schema and whose
-    catalogue values are class names the frontend resolved before sending (rule 5).
+    ``ENUM`` values are checked against the option's own ``values`` list. ``MATERIAL`` is the
+    ``material`` option, which the catalogue declares with a name and an access level only: its
+    values are generated from the ``materials.yaml`` rows whose ``measures`` name the measure
+    (contract PR #10), and its request value is the material *object* of the schema, the row's
+    properties copied by the frontend (rule 5). The catalogue writes no ``value_type`` for it;
+    the member is HiSim's name for that shape.
     """
 
     ENUM = "enum"
     INTEGER = "integer"
     NUMBER = "number"
     BOOLEAN = "boolean"
+    MATERIAL = "material"
 
 
 @dataclass(frozen=True)
@@ -177,7 +181,7 @@ class OptionSpec:
 
 
 class CatalogueTable:
-    """The 32 measures of the 2026-09-17 catalogue revision, frozen as code.
+    """The 32 measures of the 2026-09-22 catalogue revision (contract ``ffe1304``), frozen as code.
 
     The semantic checks need the ids, the option names, their access levels and their value
     lists, and reading ``measures.yaml`` at request time would turn a catalogue edit into a
@@ -199,19 +203,15 @@ class CatalogueTable:
     #: measure id -> its options, in the order the catalogue declares them.
     BY_ID: ClassVar[Dict[str, Tuple[OptionSpec, ...]]] = {
         "external_insulation": (
-            OptionSpec("material", AccessLevel.EVERYONE, ValueType.ENUM, ("EPS", "XPS")),
+            OptionSpec("material", AccessLevel.EVERYONE, ValueType.MATERIAL, None),
             OptionSpec("thickness_in_mm", AccessLevel.EXPERTS, ValueType.INTEGER, None),
         ),
         "internal_dry_lining_insulation": (
-            OptionSpec(
-                "material",
-                AccessLevel.EVERYONE,
-                ValueType.ENUM,
-                ("PIR", "XPS", "EPS", "Mineral wool"),
-            ),
+            OptionSpec("material", AccessLevel.EVERYONE, ValueType.MATERIAL, None),
             OptionSpec("thickness_in_mm", AccessLevel.EXPERTS, ValueType.INTEGER, None),
         ),
         "cavity_wall_insulation": (
+            OptionSpec("material", AccessLevel.EVERYONE, ValueType.MATERIAL, None),
             OptionSpec("thickness_in_mm", AccessLevel.EXPERTS, ValueType.INTEGER, None),
         ),
         "window_replacement": (
@@ -241,53 +241,40 @@ class CatalogueTable:
             ),
         ),
         "basement_ceiling_insulation": (
-            OptionSpec("material", AccessLevel.EVERYONE, ValueType.ENUM, ("EPS Foam", "Mineral Wool")),
+            OptionSpec("material", AccessLevel.EVERYONE, ValueType.MATERIAL, None),
             OptionSpec("thickness_in_mm", AccessLevel.EXPERTS, ValueType.INTEGER, None),
         ),
-        "basement_internal_insulation": (),
+        "basement_internal_insulation": (
+            OptionSpec("material", AccessLevel.EVERYONE, ValueType.MATERIAL, None),
+        ),
         "basement_external_insulation": (
-            OptionSpec("material", AccessLevel.EVERYONE, ValueType.ENUM, ("EPS Foam", "Mineral Wool")),
+            OptionSpec("material", AccessLevel.EVERYONE, ValueType.MATERIAL, None),
             OptionSpec("thickness_in_mm", AccessLevel.EXPERTS, ValueType.INTEGER, None),
         ),
         "solid_ground_floor_insulation": (
-            OptionSpec(
-                "material", AccessLevel.EVERYONE, ValueType.ENUM, ("Liquid Insulation", "EPS Foam")
-            ),
+            OptionSpec("material", AccessLevel.EVERYONE, ValueType.MATERIAL, None),
             OptionSpec("thickness_in_mm", AccessLevel.EXPERTS, ValueType.INTEGER, None),
         ),
         "suspended_ground_floor_insulation": (
-            OptionSpec("material", AccessLevel.EVERYONE, ValueType.ENUM, ("EPS Foam", "Mineral Wool")),
+            OptionSpec("material", AccessLevel.EVERYONE, ValueType.MATERIAL, None),
             OptionSpec("thickness_in_mm", AccessLevel.EXPERTS, ValueType.INTEGER, None),
             OptionSpec("air_barrier", AccessLevel.EXPERTS, ValueType.BOOLEAN, None),
         ),
         "warm_roof_insulation": (
-            OptionSpec(
-                "material",
-                AccessLevel.EVERYONE,
-                ValueType.ENUM,
-                ("PIR", "mineral wool", "glass wool", "wood fiber"),
-            ),
+            OptionSpec("material", AccessLevel.EVERYONE, ValueType.MATERIAL, None),
             OptionSpec("thickness_in_mm", AccessLevel.EXPERTS, ValueType.INTEGER, None),
         ),
         "rafter_insulation": (
-            OptionSpec(
-                "material",
-                AccessLevel.EVERYONE,
-                ValueType.ENUM,
-                ("open cell spray foam", "PIR", "glass wool", "wood fiber"),
-            ),
+            OptionSpec("material", AccessLevel.EVERYONE, ValueType.MATERIAL, None),
             OptionSpec("thickness_in_mm", AccessLevel.EXPERTS, ValueType.INTEGER, None),
         ),
         "rolled_out_attic_insulation": (
-            OptionSpec(
-                "material",
-                AccessLevel.EVERYONE,
-                ValueType.ENUM,
-                ("mineral wool", "glass wool", "wood fiber"),
-            ),
+            OptionSpec("material", AccessLevel.EVERYONE, ValueType.MATERIAL, None),
             OptionSpec("thickness_in_mm", AccessLevel.EXPERTS, ValueType.INTEGER, None),
         ),
-        "top_floor_ceiling_insulation": (),
+        "top_floor_ceiling_insulation": (
+            OptionSpec("material", AccessLevel.EVERYONE, ValueType.MATERIAL, None),
+        ),
         "ventilation_system": (
             OptionSpec(
                 "type_of_system",
@@ -376,7 +363,7 @@ class CatalogueTable:
             OptionSpec("number", AccessLevel.EVERYONE, ValueType.INTEGER, None),
         ),
         "change_room_temperature": (
-            OptionSpec("new_room_temperature", AccessLevel.EVERYONE, ValueType.INTEGER, None),
+            OptionSpec("new_room_temperature_in_celsius", AccessLevel.EVERYONE, ValueType.INTEGER, None),
         ),
         "diy_sealing_of_air_leaks": (),
         "thermocover_for_the_windows": (),
@@ -409,6 +396,19 @@ class CatalogueTable:
         """Return one named option of one measure, or ``None`` when the measure has no such option."""
         for option in cls.BY_ID.get(measure_id, ()):
             if option.name == name:
+                return option
+        return None
+
+    @classmethod
+    def material_option(cls, measure_id: str) -> Optional[OptionSpec]:
+        """Return the option of one measure whose request value is a material object, or ``None``.
+
+        "Is this the material option" is decided in one way everywhere in the package:
+        ``spec.value_type is ValueType.MATERIAL``, never by the option's name. T-CAT asserts that
+        every such option is named :attr:`MATERIAL`, so the type and the name cannot drift apart.
+        """
+        for option in cls.BY_ID.get(measure_id, ()):
+            if option.value_type is ValueType.MATERIAL:
                 return option
         return None
 
@@ -1031,13 +1031,13 @@ class Measure:
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "Measure":
         """Build one measure from its request object, expanding a material option."""
+        measure_id = str(raw["id"])
         options: Dict[str, Any] = {}
         for name, value in (raw.get("options") or {}).items():
-            options[str(name)] = (
-                Material.from_dict(value) if name == CatalogueTable.MATERIAL and isinstance(value, Mapping)
-                else value
-            )
-        return cls(id=str(raw["id"]), options=options)
+            spec = CatalogueTable.option(measure_id, str(name))
+            is_material = spec is not None and spec.value_type is ValueType.MATERIAL
+            options[str(name)] = Material.from_dict(value) if is_material and isinstance(value, Mapping) else value
+        return cls(id=measure_id, options=options)
 
 
 @dataclass(frozen=True)
@@ -1141,9 +1141,14 @@ class SemanticChecks:
     ROOM_TEMPERATURE_RANGE: ClassVar[Tuple[int, int]] = (12, 28)
 
     #: The measure whose option writes the room set point, and the option's name.
-    ROOM_TEMPERATURE_MEASURE: ClassVar[Tuple[str, str]] = ("change_room_temperature", "new_room_temperature")
+    #: ``tests/renovisor/test_request.py`` asserts that :class:`CatalogueTable` declares the pair.
+    ROOM_TEMPERATURE_MEASURE: ClassVar[Tuple[str, str]] = (
+        "change_room_temperature",
+        "new_room_temperature_in_celsius",
+    )
 
-    #: The measure whose option writes the number of vehicles, and the option's name.
+    #: The measure whose option writes the number of vehicles, and the option's name; pinned to
+    #: :class:`CatalogueTable` by the same test.
     VEHICLE_MEASURE: ClassVar[Tuple[str, str]] = ("electric_vehicle", "number")
 
     #: The per-measure price block of E-spec §7 and its two price fields. They are spelled here
@@ -1371,7 +1376,7 @@ class SemanticChecks:
     @classmethod
     def _value(cls, measure_id: str, spec: OptionSpec, value: Any, path: str) -> List[Problem]:
         """Check one option value against its declared type and, where it has one, its value list."""
-        if spec.name == CatalogueTable.MATERIAL:
+        if spec.value_type is ValueType.MATERIAL:
             return cls._material(value, path)
         if spec.value_type is ValueType.BOOLEAN:
             return cls._of_type(measure_id, spec, value, path, bool, "a boolean")

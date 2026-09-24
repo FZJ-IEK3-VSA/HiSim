@@ -70,8 +70,11 @@ class ContractFiles:
     #: The directory holding the vendored copies: the directory of this module.
     DIRECTORY: ClassVar[Path] = Path(__file__).resolve().parent
 
-    #: File names of the five vendored contract files and the pin record.
+    #: File names of the six vendored contract files and the pin record.
     OPENAPI_FILENAME: ClassVar[str] = "openapi.yaml"
+    #: ``HomeInventoryInput``, split out of ``openapi.yaml`` by contract PR #10 and referenced from
+    #: it relatively; the two are shipped side by side, so they are vendored side by side.
+    HOMEINVENTORY_FILENAME: ClassVar[str] = "homeinventory.yaml"
     MEASURES_FILENAME: ClassVar[str] = "measures.yaml"
     REQUEST_SCHEMA_FILENAME: ClassVar[str] = "calculation-request.schema.json"
     REQUEST_MOCKUP_FILENAME: ClassVar[str] = "calculation-request.mockup-1.yaml"

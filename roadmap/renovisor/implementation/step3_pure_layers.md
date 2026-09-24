@@ -158,6 +158,12 @@ application time, Q6/Q7): `MINERAL_WOOL`, `PIR`, `THERMAL_LAMINATE_DRYLINING_BOA
 A test asserts that once a catalogue value already equals its HiSim value the table entry is
 absent (so the table shrinks to nothing as the catalogue is revised).
 
+> **Note (2026-09-24, hisim-78l0):** the material rows of this table are history. Since contract
+> PR #10 the request carries the material *object* (the `materials.yaml` row's properties, copied
+> by the frontend) and the translator reads its conductivity directly; no catalogue material name
+> is mapped to an `asp_id` anywhere in HiSim, and the table is gone. The record above is kept as
+> it was written.
+
 ## 4. `options.py` — reading a measure's options from a request (Q1, M7)
 
 ```python

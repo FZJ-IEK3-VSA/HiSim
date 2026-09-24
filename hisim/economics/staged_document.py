@@ -37,14 +37,20 @@ import os
 from pathlib import Path
 from typing import Any, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Set, Tuple
 
+from hisim.economics.calculators.financing_application import FinancingConstants
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import Perspective
 from hisim.economics.results import LifecycleCostResult, VariantComparison
-from hisim.economics.staged import StagedResult
+from hisim.economics.staged import StagedEvaluator, StagedResult
 from hisim.economics.staged_parameters import StagedParameters
-from hisim.economics.subsidies import SubsidyDecision
+from hisim.economics.subsidies import PayoutKind, SubsidyDecision
 from hisim.economics.timeline import CashFlowEntry, CategoryRules, CostCategory
 from hisim.economics.uncertainty import UncertainValue
+
+
+#: How an awarded amount is found on a timeline: ``(scheme id, subject, stage)``, where the stage
+#: is the one whose evaluation booked it and ``None`` on the reference.
+AwardKey = Tuple[str, str, Optional[int]]
 
 
 class SchemaValidationUnavailableError(RuntimeError):
@@ -66,6 +72,17 @@ class BandOrderError(ValueError):
     instead. It is always a bug in this module: every band it publishes comes from an
     :class:`~hisim.economics.uncertainty.UncertainValue`, which cannot be unordered, unless the
     document builds one out of separate slot values and gets the ends wrong.
+    """
+
+
+class SubsidyReconciliationError(ValueError):
+    """An evaluation books a subsidy its own ``subsidies[]`` rows do not award.
+
+    Raised by :meth:`StagedDocument.assert_subsidies_reconciled` before the file is written. The
+    document states support twice — as the ``Subsidies`` group of every year's stack and as the
+    awarded rows of ``subsidies[]`` — and a frontend draws both, so a grant in one that is absent
+    from the other is a chart contradicting the table beside it (hisim-cyc.5). Like
+    :class:`BandOrderError` it is always a bug in the engine or in this module, never in the input.
     """
 
 
@@ -237,8 +254,6 @@ class StagedDocument:
         unpriced_subjects: Subjects present in the plan with no price behind them — an envelope
             measure whose request carried no ``cost`` block. They are flagged rather than hidden,
             so the document says what it does not know (step 10 §1).
-        subsidy_catalog_id: What ``parameters.subsidy_catalog`` says: the catalogue in force, or
-            ``None`` when the plan ran with none, in which case every subsidy row is undetermined.
         cost_provenance: Name of the provenance file beside the document, for ``provenance``.
     """
 
@@ -281,10 +296,21 @@ class StagedDocument:
         perspective: Perspective,
         measure_ids: Optional[Mapping[str, Optional[str]]] = None,
         unpriced_subjects: Iterable[str] = (),
-        subsidy_catalog_id: Optional[str] = None,
         cost_provenance: str = "cost_provenance.json",
     ) -> None:
-        """Store the plan and its context; nothing is built until :meth:`to_json`."""
+        """Store the plan and its context; nothing is built until :meth:`to_json`.
+
+        Which catalogue the plan was priced under is read off the result
+        (:attr:`~hisim.economics.staged.StagedResult.subsidy_catalog_id`) and not taken from the
+        caller, so the ``parameters`` block and the ``subsidies[]`` rows cannot name a catalogue
+        the figures were not priced with. A plan with no catalogue was priced with
+        ``subsidy_mode: NONE`` (:meth:`~hisim.economics.staged.StagedEvaluator.priced_under`), so
+        the parameters and the perspective are resolved the same way here, and the ``parameters``
+        block says what ran whichever perspective the caller passed.
+        """
+        subsidy_catalog_id = result.subsidy_catalog_id
+        if subsidy_catalog_id is None:
+            parameters, perspective = StagedEvaluator.priced_under(parameters, perspective, None)
         self._result = result
         self._parameters = parameters
         self._perspective = perspective
@@ -340,10 +366,13 @@ class StagedDocument:
             jsonschema.ValidationError: If the document does not match the schema, which is a bug
                 in this module rather than in its inputs.
             BandOrderError: If any band in the document is not ``min <= best <= max``.
+            SubsidyReconciliationError: If an evaluation books support that its ``subsidies[]``
+                rows do not award.
         """
         document = self.to_json()
         self.validate(document)
         self.assert_bands_ordered(document)
+        self.assert_subsidies_reconciled(document)
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -421,6 +450,78 @@ class StagedDocument:
         if isinstance(document, list):
             for index, value in enumerate(document):
                 cls.assert_bands_ordered(value, f"{path}[{index}]")
+
+    #: How far the two statements of support may drift apart, in euro, per band slot: the cent the
+    #: document's other sum checks are held to, for float sums over up to a horizon of years.
+    RECONCILIATION_TOLERANCE_IN_EURO: ClassVar[float] = 0.01
+
+    @classmethod
+    def assert_subsidies_reconciled(cls, document: Mapping[str, Any]) -> None:
+        """Raise unless each evaluation's ``Subsidies`` stack is exactly its awarded ``subsidies[]``.
+
+        Three statements are checked for the reference and for the plan. Every ``subsidy`` event
+        of the ``annual`` series names a scheme that ``subsidies[]`` reports as awarded, so no year
+        carries support from a scheme the table does not know. Every awarded row's
+        ``amount_by_year_in_euro`` sums to its ``amount_in_euro``. And in every year the
+        ``Subsidies`` group equals the awarded rows' amounts booked in that year, slot by slot, so
+        the chart and the table state one figure year by year and not only over the horizon: a
+        grant moved to another year with its total conserved is refused. An evaluation with no
+        awarded row therefore books no support in any year, which is the no-catalogue case
+        hisim-cyc.5 was about.
+
+        Args:
+            document: The finished document.
+
+        Raises:
+            SubsidyReconciliationError: Naming the evaluation, the year where there is one, and the
+                first disagreement found.
+        """
+        tolerance = cls.RECONCILIATION_TOLERANCE_IN_EURO
+        for variant in ("reference", "plan"):
+            evaluation = document[variant]
+            awarded = [
+                row for row in evaluation["subsidies"] if row["status"] == SubsidyStatus.AWARDED.value
+            ]
+            awarded_schemes = {row["scheme"] for row in awarded}
+            stated: Dict[int, Dict[str, float]] = {}
+            for row in awarded:
+                row_total = dict.fromkeys(cls.BAND_KEYS, 0.0)
+                for booking in row["amount_by_year_in_euro"]:
+                    in_year = stated.setdefault(booking["year"], dict.fromkeys(cls.BAND_KEYS, 0.0))
+                    for key in cls.BAND_KEYS:
+                        in_year[key] += booking["amount_in_euro"][key]
+                        row_total[key] += booking["amount_in_euro"][key]
+                for key in cls.BAND_KEYS:
+                    if abs(row_total[key] - row["amount_in_euro"][key]) > tolerance:
+                        raise SubsidyReconciliationError(
+                            f"{variant}.subsidies row of scheme {row['scheme']!r} (stage {row['stage']}) "
+                            f"states {row['amount_in_euro'][key]} in slot {key!r}, but its "
+                            f"amount_by_year_in_euro sums to {row_total[key]}."
+                        )
+            booked: Dict[int, Dict[str, float]] = {}
+            for year in evaluation["annual"]:
+                for event in year["events"]:
+                    if event["kind"] == EventKind.SUBSIDY.value and event["scheme"] not in awarded_schemes:
+                        raise SubsidyReconciliationError(
+                            f"{variant}.annual[{year['year']}] books support from scheme "
+                            f"{event['scheme']!r}, which {variant}.subsidies does not award "
+                            f"(awarded: {sorted(map(str, awarded_schemes)) or 'none'})."
+                        )
+                booked[year["year"]] = {
+                    key: year["by_group"][CostGroup.SUBSIDIES.value][key] for key in cls.BAND_KEYS
+                }
+            zero = dict.fromkeys(cls.BAND_KEYS, 0.0)
+            for year_index in sorted(set(booked) | set(stated)):
+                for key in cls.BAND_KEYS:
+                    in_stack = booked.get(year_index, zero)[key]
+                    in_rows = stated.get(year_index, zero)[key]
+                    if abs(in_stack - in_rows) > tolerance:
+                        raise SubsidyReconciliationError(
+                            f"{variant}: in year {year_index} the Subsidies group of the annual series "
+                            f"is {in_stack} in slot {key!r}, but the awarded {variant}.subsidies rows "
+                            f"book {in_rows} in that year; the document would draw a credit its table "
+                            "does not grant."
+                        )
 
     # ------------------------------------------------------------------ header blocks
 
@@ -735,18 +836,41 @@ class StagedDocument:
 
         With no catalogue configured the engine runs ``subsidy_mode: NONE``, so nothing is awarded
         and nothing is refused; the honest statement is then one undetermined row per stage that
-        buys something, saying that the country has no catalogue (step 10 §1). The engine's flat
-        shim is never published as a grant.
+        buys something, saying that the country has no catalogue (step 10 §1). Such a plan books
+        no support at all — the engine's §10.1 flat shim is retired — and
+        :meth:`assert_subsidies_reconciled` refuses a document whose stacks book support these rows
+        do not award.
+
+        On the plan, each decision's rows carry the stage whose evaluation made the decision, so a
+        subject bought in one stage and grown in another states each stage's grant on its own row.
         """
         if self._catalog_id is None:
             return self._no_catalogue_rows(staged)
         rows: List[Dict[str, Any]] = []
-        awarded = self._awarded_amounts(result)
-        for decision in result.subsidy_decisions:
-            stage = self._result.stage_of_subject(decision.measure_subject) if staged else None
+        awarded = self._awarded_amounts(result, staged)
+        claimed: Set[AwardKey] = set()
+        for stage, decision in self._decisions(result, staged):
             measure_id = self._measure_ids.get(decision.measure_subject)
-            rows.extend(self._decision_rows(decision, stage, measure_id, awarded))
+            rows.extend(self._decision_rows(decision, stage, measure_id, awarded, claimed))
         return rows
+
+    def _decisions(
+        self, result: LifecycleCostResult, staged: bool
+    ) -> List[Tuple[Optional[int], SubsidyDecision]]:
+        """Every subsidy decision of an evaluation, with the stage that made it.
+
+        The plan's decisions are its stages' decisions in stage order
+        (:meth:`~hisim.economics.staged.StagedEvaluator.evaluate` concatenates them), so they are
+        read stage by stage here, which is what tells each decision's stage. The reference is one
+        state and its decisions carry no stage.
+        """
+        if not staged:
+            return [(None, decision) for decision in result.subsidy_decisions]
+        return [
+            (index, decision)
+            for index, stage_result in enumerate(self._result.per_stage)
+            for decision in stage_result.subsidy_decisions
+        ]
 
     def _no_catalogue_rows(self, staged: bool) -> List[Dict[str, Any]]:
         """The undetermined rows a plan priced without a catalogue publishes."""
@@ -759,6 +883,7 @@ class StagedDocument:
                 "stage": index if staged else None,
                 "status": SubsidyStatus.UNDETERMINED.value,
                 "amount_in_euro": None,
+                "amount_by_year_in_euro": None,
                 "binding_cap": None,
                 "open_questions": [self.NO_CATALOGUE_QUESTION.format(country=country)],
                 "note": self.NO_CATALOGUE_NOTE.format(country=country),
@@ -766,24 +891,77 @@ class StagedDocument:
             for index in stages
         ]
 
+    #: What an awarded row of a benefit that books no cash says instead of a grant. Its amount is
+    #: a zero band: the scheme was awarded, so the row is not a question, and its money is in
+    #: another group of the stack.
+    NON_CASH_NOTES: ClassVar[Dict[PayoutKind, str]] = {
+        PayoutKind.LOAN_TERMS: "loan terms: the benefit is in the financing costs, not a grant",
+        PayoutKind.VAT_REDUCTION: "VAT reduction: the benefit is in the investment price, not a grant",
+    }
+
+    #: The note of the loan-terms row that carries the loan's repayment grant.
+    REPAYMENT_GRANT_NOTE: ClassVar[str] = (
+        "loan terms: the benefit is in the financing costs; the amount is the loan's repayment "
+        "grant, which is plan-wide and stated on this row only"
+    )
+
+    #: The note of a further loan-terms row of the same scheme, whose loan is stated elsewhere.
+    LOAN_STATED_ONCE_NOTE: ClassVar[str] = (
+        "loan terms: the loan and its repayment grant are plan-wide and stated on the first row "
+        "of this scheme"
+    )
+
     @classmethod
     def _decision_rows(
         cls,
         decision: SubsidyDecision,
         stage: Optional[int],
         measure_id: Optional[str],
-        awarded: Mapping[str, UncertainValue],
+        awarded: Mapping[AwardKey, Mapping[int, UncertainValue]],
+        claimed: Set[AwardKey],
     ) -> List[Dict[str, Any]]:
         """The rows of one measure's subsidy decision: awarded, refused and undecided.
 
         The awarded amount is read off the plan's own timeline rather than off the award record,
         so what the document publishes as support is exactly what the NPV was computed with — a
         staged award is escalated and moved into its stage's year, and re-reading the award would
-        state the unmoved figure.
+        state the unmoved figure. An awarded row always carries an amount: a benefit that books no
+        cash states a zero band and says where its money is instead.
+
+        A soft loan's repayment grant is booked under the financing subject rather than under any
+        measure, because the loan is taken out against the stage's investment as a whole. The
+        first loan-terms row of that scheme in the stage states it; a further row of the same
+        scheme states zero and says where the loan is (``claimed`` remembers which grants are
+        already stated, across the decisions of one evaluation).
+
+        Args:
+            decision: The solver's decision for one measure.
+            stage: The stage that made the decision, or ``None`` on the reference.
+            measure_id: The catalogue measure behind the decision's subject.
+            awarded: What :meth:`_awarded_amounts` read off the timeline.
+            claimed: The financing keys whose grant a row already states; updated in place.
+
+        Returns:
+            The rows, awarded first.
         """
         rows: List[Dict[str, Any]] = []
         for award in decision.applied:
-            amount = awarded.get(award.scheme_id)
+            by_year: Dict[int, UncertainValue] = dict(
+                awarded.get((award.scheme_id, decision.measure_subject, stage), {})
+            )
+            notes = [award.display_name] if award.display_name else []
+            if award.payout_kind == PayoutKind.LOAN_TERMS:
+                financing_key = (award.scheme_id, FinancingConstants.FINANCING_SUBJECT, stage)
+                if financing_key in claimed:
+                    notes.append(cls.LOAN_STATED_ONCE_NOTE)
+                else:
+                    claimed.add(financing_key)
+                    grant = awarded.get(financing_key, {})
+                    for year, amount in grant.items():
+                        by_year[year] = by_year.get(year, UncertainValue.exact(0.0)) + amount
+                    notes.append(cls.REPAYMENT_GRANT_NOTE if grant else cls.NON_CASH_NOTES[award.payout_kind])
+            elif award.payout_kind in cls.NON_CASH_NOTES and not by_year:
+                notes.append(cls.NON_CASH_NOTES[award.payout_kind])
             binding = sorted(slot for slot, bound in award.caps_binding_per_slot.items() if bound)
             rows.append(
                 {
@@ -791,10 +969,13 @@ class StagedDocument:
                     "measure_id": measure_id,
                     "stage": stage,
                     "status": SubsidyStatus.AWARDED.value,
-                    "amount_in_euro": cls._band(amount) if amount is not None else None,
+                    "amount_in_euro": cls._band(UncertainValue.sum(by_year.values())),
+                    "amount_by_year_in_euro": [
+                        {"year": year, "amount_in_euro": cls._band(by_year[year])} for year in sorted(by_year)
+                    ],
                     "binding_cap": ", ".join(binding) if binding else None,
                     "open_questions": [],
-                    "note": award.display_name or None,
+                    "note": "; ".join(notes) or None,
                 }
             )
         for rejected in decision.rejected:
@@ -805,6 +986,7 @@ class StagedDocument:
                     "stage": stage,
                     "status": SubsidyStatus.INELIGIBLE.value,
                     "amount_in_euro": None,
+                    "amount_by_year_in_euro": None,
                     "binding_cap": None,
                     "open_questions": [],
                     "note": str(rejected.get("reason")) if rejected.get("reason") else None,
@@ -818,6 +1000,7 @@ class StagedDocument:
                     "stage": stage,
                     "status": SubsidyStatus.UNDETERMINED.value,
                     "amount_in_euro": None,
+                    "amount_by_year_in_euro": None,
                     "binding_cap": None,
                     "open_questions": [str(field) for field in undetermined.get("missing_fields", [])],
                     "note": None,
@@ -825,15 +1008,39 @@ class StagedDocument:
             )
         return rows
 
-    @staticmethod
-    def _awarded_amounts(result: LifecycleCostResult) -> Dict[str, UncertainValue]:
-        """What each scheme actually paid on this timeline, by scheme id, signed as a credit."""
-        amounts: Dict[str, UncertainValue] = {}
-        for entry in result.timeline.entries:
-            if entry.category != CostCategory.SUBSIDY or entry.subsidy_scheme_id is None:
+    def _awarded_amounts(
+        self, result: LifecycleCostResult, staged: bool
+    ) -> Dict[AwardKey, Dict[int, UncertainValue]]:
+        """What each scheme paid for each subject in each stage, year by year, signed as a credit.
+
+        Keyed by ``(scheme id, subject, stage)`` because one scheme routinely funds two measures
+        of a plan, and one subject can be bought in one stage and grown in another: each row states
+        its own grant, not the scheme's total. The stage is the one the entry came from
+        (:meth:`~hisim.economics.staged.StagedResult.stage_of_timeline_entry`), which is the stage
+        whose decision awarded it even for a payout that runs on into a later stage's years; a
+        result without that map falls back to the stage active in the entry's year. On the
+        reference the stage is ``None``. A soft loan's repayment grant is keyed under
+        :attr:`~hisim.economics.calculators.financing_application.FinancingConstants.FINANCING_SUBJECT`.
+
+        Read off the scoped timeline, the one every other figure of the evaluation is a pivot of;
+        the entries are walked on the full timeline only because the stage map is indexed by it.
+        """
+        scoped = {id(entry) for entry in result.scoped_timeline().entries}
+        amounts: Dict[AwardKey, Dict[int, UncertainValue]] = {}
+        for position, entry in enumerate(result.timeline.entries):
+            if (
+                entry.category != CostCategory.SUBSIDY
+                or entry.subsidy_scheme_id is None
+                or id(entry) not in scoped
+            ):
                 continue
-            previous = amounts.get(entry.subsidy_scheme_id, UncertainValue.exact(0.0))
-            amounts[entry.subsidy_scheme_id] = previous + entry.amount_in_euro
+            stage: Optional[int] = None
+            if staged:
+                stage = self._result.stage_of_timeline_entry(position)
+                if stage is None:
+                    stage = self._result.stage_of_year(entry.year)
+            by_year = amounts.setdefault((entry.subsidy_scheme_id, entry.subject, stage), {})
+            by_year[entry.year] = by_year.get(entry.year, UncertainValue.exact(0.0)) + entry.amount_in_euro
         return amounts
 
     def _financing(

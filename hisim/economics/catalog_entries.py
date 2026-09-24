@@ -145,17 +145,13 @@ class DeviceEntry:
     # ~5 a, None falls back to EconomicParameters.anyway_threshold_years (2 a).
     anyway_threshold_years_override: Optional[float] = None
     # ---------------------------------------------------------------- §10.1 migration shim
+    # RETIRED 2026-09-24 (owner decision on the PR #799 review): read by nothing that prices.
     # NOT device data. `legacy_flat_subsidy_share` is *subsidy* data living in the device
     # catalog: the flat percentage the pre-catalog implementation applied to a device's
-    # investment, kept alive so countries without a subsidy catalog (Ireland today, issue #25)
-    # still produce the numbers they produced before. It is read only by the legacy flat shim in
-    # `calculators/subsidy_application.py`, is ignored whenever a subsidy catalog is active, and
-    # is deliberately *not* scenario-overlayable (see `_overlay_entries`). It disappears when
-    # §10.1 Phase 4 completes the catalogs; until then it stays, marked, rather than being
-    # deleted or quietly reclassified as device data (W2.6).
-    # Provenance: recorded with `ParameterOrigin.LEGACY_MIGRATION_SHIM`, citing a
-    # `field_sources["legacy_flat_subsidy_share"]` entry if the data file supplies one — the
-    # entry's own `source_ids` document its price, not any subsidy programme.
+    # investment. The shim that booked it as a grant when no subsidy catalog was loaded is gone,
+    # so a run without a catalog books no subsidy on any path; the field is still loaded and
+    # validated, and stays in the data files until its removal. It is deliberately *not*
+    # scenario-overlayable (see `_overlay_entries`, W2.6).
     legacy_flat_subsidy_share: float = 0.0
     # -------------------------------------------------------------- end §10.1 migration shim
     # "AS_LEGACY" marks entries migrated 1:1 from configuration.py whose VAT status is

@@ -30,7 +30,7 @@ module                       the concern it isolates
 `energy.py`                  the year-1 bill and its projection over the horizon
                              (§3.6 rule 5, §8.5)
 `co2.py`                     the four CO2 figures that must never be summed (§3.8)
-`subsidy_application.py`     awards -> SUBSIDY cash flows, and the legacy flat shim (§5)
+`subsidy_application.py`     awards -> SUBSIDY cash flows; none without a catalog (§5)
 `financing_application.py`   what gets financed and how the loan flows are laid out
                              (§4.4)
 `reserve.py`                 the OPERATING_ONLY sinking fund (§4.2)

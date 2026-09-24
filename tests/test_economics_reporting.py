@@ -108,8 +108,9 @@ PANEL_BEFORE_W42 = [
      "residual below discounted purchases", ""),
     ("residual value <= purchases (greenfield_net)", "PASS", "11,247 vs 29,423 EUR",
      "residual below discounted purchases", ""),
-    ("subsidies <= eligible basis (greenfield_net)", "PASS", "4,800 vs 16,000 EUR",
-     "support below its cost basis", ""),
+    # No "subsidies <= eligible basis" row: the fixture is priced without a subsidy catalog, which
+    # books no support since the §10.1 flat shim was retired, and the check only runs on support.
+    # It is pinned on a catalog-priced run by tests/goldens/cost_summary.md.
     ("effective ELECTRICITY price (year 1)", "PASS", "0.352 EUR/kWh", "0.1 - 0.6 EUR/kWh",
      "1,760 EUR for 5,000 kWh — catches unit mix-ups"),
     ("equivalent annual cost per m2 (greenfield_gross)", "PASS", "24.032 EUR/m2a", "5 - 80 EUR/m2a", ""),
@@ -151,6 +152,18 @@ class TestPlausibilityChecks:
             for check in render_plausibility_findings(run_plausibility_checks(matrix))
         ]
         assert rendered == PANEL_BEFORE_W42
+
+    def test_without_a_catalog_no_perspective_books_support(self, matrix):
+        """What removed the eligible-basis row: the retired §10.1 shim no longer grants anything.
+
+        The DE heat-pump entry still carries a legacy flat share and ``greenfield_net`` still admits
+        every scheme, but with no catalog there is no scheme, so no SUBSIDY entry is booked.
+        """
+        from hisim.economics.timeline import CostCategory
+
+        assert "greenfield_net" in matrix.results
+        for result in matrix.results.values():
+            assert not [entry for entry in result.timeline.entries if entry.category == CostCategory.SUBSIDY]
 
     def test_findings_carry_numbers_not_strings(self, matrix):
         """The engine-side finding is data: a float value, a unit and the required bounds."""

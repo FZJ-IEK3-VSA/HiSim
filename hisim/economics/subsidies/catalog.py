@@ -690,7 +690,8 @@ class SubsidyCatalog:
     entries, the country-level state-aid ceiling and the ``sources.json`` entries the schemes cite.
     It is the sole entry point to catalog data — the engine below never opens a file — and is
     attached to an evaluation through ``EconomicParameters.subsidy_catalog_path``; where no path is
-    set, no catalog is loaded at all and the §10.1 legacy flat shim applies instead.
+    set, no catalog is loaded at all and no subsidy is booked (the §10.1 legacy flat shim that used
+    to apply instead was retired on 2026-09-24).
 
     A catalog can also be built in Python (tests, worked examples), in which case it carries no
     registry and its schemes record ``IN_MEMORY_DEFINITION`` provenance rather than citing sources.
@@ -874,8 +875,9 @@ class SubsidyCatalog:
         Raises:
             CostDataError: If no candidate exists, or if more than one does. Named catalog data
                 that cannot be found — or that could be one of two different directories — is a
-                fail-fast condition (D25): the alternative is a full result priced by the §10.1
-                flat shim, or by the wrong catalog, under a catalog the caller believed was active.
+                fail-fast condition (D25): the alternative is a full result priced with no
+                subsidy at all, or by the wrong catalog, under a catalog the caller believed was
+                active.
         """
         package_directory = os.path.dirname(cls.DEFAULT_PATH)
         install_root = os.path.dirname(package_directory)
@@ -898,7 +900,7 @@ class SubsidyCatalog:
                 f"Configured subsidy catalog path {configured_path!r} does not resolve to a "
                 f"directory (tried: {', '.join(unique)}). Fix the path or remove "
                 "`subsidy_catalog_path` from the parameters — a catalog that was named but cannot "
-                "be read is never replaced by the §10.1 legacy flat-shim support."
+                "be read is never replaced by a run priced without subsidies."
             )
         raise CostDataError(
             f"Configured subsidy catalog path {configured_path!r} is ambiguous: it exists at "
@@ -973,9 +975,10 @@ class SubsidyCatalog:
 
         The single entry point every caller that holds `EconomicParameters` uses — the CLI's
         subcommands and the postprocessing bridge — so the two cases stay apart everywhere. Naming
-        no catalog is a legitimate parameter set: the country may have none yet (Ireland), and the
-        §10.1 legacy flat shim then prices the support from the device entries. Naming one that
-        cannot be read is not, and raises rather than falling through to that shim.
+        no catalog is a legitimate parameter set: the country may have none yet, and the run then
+        books no subsidy at all (the §10.1 legacy flat shim that priced support from the device
+        entries was retired on 2026-09-24). Naming one that cannot be read is not, and raises
+        rather than falling through to a run without subsidies.
 
         Every failure leaves here as a `CostDataError`, whatever the loader raised, because both
         callers need the same one: the bridge's failure has to reach `postprocessing_main` as the
@@ -1006,7 +1009,7 @@ class SubsidyCatalog:
             raise CostDataError(
                 f"The subsidy catalog configured at {path!r} for country {country!r} failed to "
                 f"load ({type(err).__name__}: {err}). A run that asked for its subsidies must not "
-                "quietly produce flat-shim ones instead."
+                "quietly be priced without any instead."
             ) from err
 
     # ------------------------------------------------------------------ provenance (§3.10, W2.4)

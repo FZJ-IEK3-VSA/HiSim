@@ -358,12 +358,13 @@ class TestFailuresAbortInsteadOfDegrading:
     """Every failure that used to be logged and worked around now fails the run (§10)."""
 
     def test_an_unloadable_subsidy_catalog_aborts(self, tmp_path):
-        """Catches a configured subsidy engine silently becoming the flat legacy shim.
+        """Catches a configured subsidy engine silently becoming a run priced without subsidies.
 
         Setting `subsidy_catalog_path` is what switches the §5.4 solver on. A catalog that will not
-        load used to log an error and leave `catalog` at None, which continues under the §10.1 flat
-        shim: the run then publishes subsidy figures that have nothing to do with the catalog it
-        was configured with, and the only trace is a line in a log. The path and the underlying
+        load used to log an error and leave `catalog` at None, which continued under the §10.1 flat
+        shim and today books no subsidy at all: either way the run publishes subsidy figures that
+        have nothing to do with the catalog it was configured with, and the only trace is a line in
+        a log. The path and the underlying
         error have to be in the message, because "it did not load" is not actionable on its own.
         """
         parameters = _Parameters(str(tmp_path))
@@ -375,7 +376,7 @@ class TestFailuresAbortInsteadOfDegrading:
             bridge.compute_lifecycle_costs([], [], pd.DataFrame(), parameters)
 
         assert "there_is_no_catalog_here" in str(raised.value)
-        assert "flat-shim" in str(raised.value)
+        assert "priced without subsidies" in str(raised.value)
 
     def test_a_failing_scenario_cube_aborts(self, tmp_path):
         """Catches a report quietly missing the sensitivity section it was asked for.

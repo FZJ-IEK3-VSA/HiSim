@@ -11,8 +11,8 @@ sibling file.
 
 **Surface.** Two subjects. `TestSubsidyProvenanceThroughTheEvaluator` follows a subsidy award from
 the catalog through a real evaluation into `explain()`, checking that the source ids survive the
-whole chain and that the §10.1 legacy shim labels itself as a migration leftover rather than a
-scheme. `TestScenarioAnalysis` covers §4.6: scenario-set expansion, the evaluation cube with its
+whole chain and that, the §10.1 legacy shim being retired, a run without a catalog books no
+support at all. `TestScenarioAnalysis` covers §4.6: scenario-set expansion, the evaluation cube with its
 tornado / swing / spread helpers, the counterfactual billing boundary and the break-even search.
 
 **Error class.** A failure here is an *integration* failure — the rules themselves are checked in
@@ -92,8 +92,14 @@ class TestSubsidyProvenanceThroughTheEvaluator:
     tests are the end of that chain: they run a real evaluation and check what reaches `explain()`.
     """
 
-    def test_legacy_flat_shim_records_its_own_origin(self):
-        """W2.6: support from the §10.1 shim is labelled as a migration leftover, not a scheme."""
+    def test_without_a_catalog_the_legacy_flat_share_books_nothing(self):
+        """The §10.1 shim is retired: a device entry's legacy share is no longer a grant.
+
+        The shipped DE heat-pump entry still carries a 30 % ``legacy_flat_subsidy_share``, and a
+        subsidies-on perspective with no catalog used to book it as ``LEGACY_FLAT`` support with a
+        ``LEGACY_MIGRATION_SHIM`` provenance record (W2.6). With no catalog, nothing is booked,
+        nothing is decided and nothing is recorded under the shim's origin.
+        """
         from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs, SubjectCostFacts
         from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
         from hisim.economics.provenance import ParameterOrigin
@@ -124,21 +130,14 @@ class TestSubsidyProvenanceThroughTheEvaluator:
         subsidy_entries = [
             entry for entry in result.timeline.entries if entry.category == CostCategory.SUBSIDY
         ]
-        assert subsidy_entries and {entry.subsidy_scheme_id for entry in subsidy_entries} == {"LEGACY_FLAT"}
+        assert subsidy_entries == []
+        assert result.subsidy_decisions == []
         assert result.ledger is not None
-        shim_records = [
+        assert not [
             record
             for record in result.ledger.records
             if record.origin == ParameterOrigin.LEGACY_MIGRATION_SHIM
         ]
-        assert len(shim_records) == 1
-        assert shim_records[0].parameter.endswith(".legacy_flat_subsidy_share")
-        assert "§10.1" in (shim_records[0].detail or "")
-        # The shim record is attached to the support it explains.
-        assert any(
-            result.ledger.records.index(shim_records[0]) in entry.provenance_ids
-            for entry in subsidy_entries
-        )
 
     def test_subsidy_sources_reach_the_report(self, catalog):
         """Load -> ledger -> `explain`: a subsidy award resolves to the statute it comes from."""

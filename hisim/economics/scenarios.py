@@ -517,8 +517,7 @@ def evaluate_cube(
         scenario_set: The authored definition; expanded here.
         database: Pre-loaded cost database, to avoid re-reading the data files per call. Loaded from
             `base_parameters` when omitted.
-        subsidy_catalog: Optional catalog; without it the §10.1 flat shim applies, in every cell
-            alike.
+        subsidy_catalog: Optional catalog; without it no subsidy is booked, in every cell alike.
 
     Returns:
         The populated cube, indexed `[perspective_id][scenario_id]`.

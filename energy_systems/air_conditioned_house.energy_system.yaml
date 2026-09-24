@@ -46,7 +46,7 @@ components:
     config:
       manufacturer: Panasonic
       model_name: CS-TZ71WKEW + CU-TZ71WKE
-      scale_factor: 0.5364243908677532
+      scale_factor: 0.527612638089571
       t_out_cooling_ref:
         - 23
         - 30

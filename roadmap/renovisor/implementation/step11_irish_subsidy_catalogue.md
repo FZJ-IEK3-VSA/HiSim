@@ -213,3 +213,14 @@ examined the entries, and the note says so.
 runs, pylint critical-only and prospector are clean on every touched file; the docs build has no
 new warning. The final report lists every scheme id with its amount and its page source, every
 mapping decision beyond §3, and every omission.
+
+## Note, 2026-09-24 (hisim-cyc.3)
+
+The record above stands as written; this note says what changed after it. HiSim now has the
+`TIERED_PER_UNIT` benefit kind item 5 of §3 asked for, and the four `LUMP_SUM` solar PV steps on
+`measure.technical_attributes.peak_power_in_kwp` became one scheme, `IE_SEAI_SOLAR_PV`: tiers
+`[{up_to: 2, amount_per_unit: 700}, {up_to: 4, amount_per_unit: 200}]`, `size_unit: "kW"`,
+`cap_in_euro: 1800`, priced on the PV cost facts' own size (the array's peak power in kW), so
+2.5 kWp gets SEAI's 1 500 € and an array below 1 kWp gets its share. The PV-step test of §5 became
+the pro-rata test in `tests/economics/test_ie_catalog.py`; `peak_power_in_kwp` is still published
+by the translator, as information for condition authors, and no shipped scheme reads it.

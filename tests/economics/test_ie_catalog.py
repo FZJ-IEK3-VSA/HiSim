@@ -6,9 +6,9 @@ person has checked it yet, so two different things are asserted here and both ma
 needing examination, and every context field it conditions on has a question a user can answer in
 both shipped languages — a placeholder nobody can see is worse than no placeholder at all. And
 the **behaviour**: the amounts the solver actually awards for the cases the pages state outright,
-including the two rules the catalogue language can only approximate (the stepped solar PV grant)
-and the one pair of grants that shares an asset class and must never both fire (cavity fill
-versus internal dry lining).
+including the pro-rata solar PV grant (one TIERED_PER_UNIT scheme since hisim-cyc.3, exact at
+every size) and the one pair of grants that shares an asset class and must never both fire
+(cavity fill versus internal dry lining).
 
 Everything here runs against the shipped catalogue rather than a fixture, because the point is
 the file that ships.

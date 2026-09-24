@@ -253,6 +253,10 @@ def _combination_awards(
     Returns:
         One award per scheme, amounts in nominal year-0 euro per slot. Awards may legitimately be
         zero-valued (a loan or VAT award carries terms only).
+
+    Raises:
+        SubsidyDataError: If a per-unit scheme's ``size_unit`` is not the unit the measure's size is
+            stated in.
     """
     awards: List[SubsidyAward] = []
     # Share-based schemes stack additively per cumulation group, capped by combined_rate_cap.
@@ -307,29 +311,25 @@ def _combination_awards(
                     eligible_basis_cap_in_euro=basis_cap,
                 )
             )
-        elif isinstance(benefit, PerUnitBenefit):
-            amount = UncertainValue.exact(benefit.amount * measure.facts.size)
-            awards.append(
-                SubsidyAward(
-                    scheme_id=scheme.id,
-                    payout_kind=scheme.payout_kind,
-                    upfront_amount=amount.clamp_upper(basis),
-                    caps_binding_per_slot=binding,
-                    eligible_basis_in_euro=basis,
-                    eligible_basis_cap_in_euro=basis_cap,
+        elif isinstance(benefit, (PerUnitBenefit, TieredPerUnitBenefit)):
+            # One path for both per-unit kinds: the benefit prices the measure's size (one rate
+            # times the size, or the band sum under the benefit's own cap), and the amount is
+            # clamped to the eligible basis like a lump sum — with the same exception for a scheme
+            # that declares no eligible-cost categories.
+            if measure.facts.size_unit != benefit.size_unit:
+                raise SubsidyDataError(
+                    f"Scheme {scheme.id}: its {scheme.benefit_kind.value} benefit is an amount per "
+                    f"{benefit.size_unit.value!r}, but the measure ({measure.facts.asset_class.value}) is "
+                    f"sized in {measure.facts.size_unit.value!r}; the amount cannot be priced on that size."
                 )
-            )
-        elif isinstance(benefit, TieredPerUnitBenefit):
-            # The same shape as PER_UNIT, with the band sum and the scheme's own cap in place of
-            # one rate times the size; clamped to the eligible basis like every fixed amount.
             amount = UncertainValue.exact(benefit.amount_for(measure.facts.size))
             awards.append(
                 SubsidyAward(
                     scheme_id=scheme.id,
                     payout_kind=scheme.payout_kind,
-                    upfront_amount=amount.clamp_upper(basis),
+                    upfront_amount=amount.clamp_upper(basis) if scheme.eligible_cost.categories else amount,
                     caps_binding_per_slot=binding,
-                    eligible_basis_in_euro=basis,
+                    eligible_basis_in_euro=basis if scheme.eligible_cost.categories else None,
                     eligible_basis_cap_in_euro=basis_cap,
                 )
             )

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import enum
 import json
+import math
 import os
 from dataclasses import dataclass, field
 from typing import (
@@ -28,6 +29,7 @@ from typing import (
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.database import SourceEntry, SourceRegistry
+from hisim.economics.facts import ComponentCostFacts
 from hisim.economics.provenance import (
     ParameterOrigin,
     ParameterProvenance,
@@ -35,7 +37,7 @@ from hisim.economics.provenance import (
     ResolvedSource,
 )
 from hisim.economics.timeline import CostCategory
-from hisim.loadtypes import ComponentType
+from hisim.loadtypes import ComponentType, Units
 
 from hisim.economics.subsidies.context import SubsidyContextFields, SubsidyDataError
 
@@ -129,9 +131,10 @@ class BenefitKind(str, enum.Enum):
     The *mechanism* a scheme uses to compute its support, surveyed from the schemes actually
     running in the EU (§5.1): a share of the eligible cost, a stackable bonus share, a fixed lump
     sum, an amount per unit of size, a tiered amount per unit of size with a cap, a multi-year tax
-    credit, a reduced VAT rate, soft-loan terms, or a per-kWh operational payment. The tag selects the typed payload class
-    (:attr:`BenefitTypes.BY_KIND`) that carries the mechanism's parameters, so adding a mechanism
-    means adding a payload type here — adding a *programme* means editing a catalog file only.
+    credit, a reduced VAT rate, soft-loan terms, or a per-kWh operational payment. The tag selects
+    the typed payload class (:attr:`BenefitTypes.BY_KIND`) that carries the mechanism's parameters,
+    so adding a mechanism means adding a payload type here — adding a *programme* means editing a
+    catalog file only.
 
     Note the deliberate distinction from :class:`PayoutKind`: a kind here says how much support is
     computed, a payout kind says when and in what form the money reaches the applicant.
@@ -186,13 +189,54 @@ def _optional_float(raw: Any) -> Optional[float]:
     return None if raw is None else float(raw)
 
 
+def _size_unit(raw: Any) -> Units:
+    """Converts a catalogue ``size_unit`` string into the :class:`Units` member it names.
+
+    The converter for the per-unit benefit kinds. The vocabulary is the one
+    ``ComponentCostFacts.size_unit`` is spelled in (``"kW"``, ``"kWh"``, ``"L"``, ``"m2"``, ``"-"``),
+    restricted to the units the cost database can price against, so a per-unit amount can only
+    name a unit a measure's size can actually be stated in.
+    """
+    if not isinstance(raw, str):
+        raise TypeError(f"expected a unit string, got {raw!r}")
+    unit = Units(raw)
+    _check_size_unit(unit)
+    return unit
+
+
+def _check_size_unit(unit: Any) -> None:
+    """Refuses a per-unit benefit's ``size_unit`` that no measure size can be stated in.
+
+    Shared by the JSON converter and the benefits' own ``__post_init__``, so a benefit built in
+    Python is held to the same vocabulary as one read from a catalogue.
+    """
+    if unit not in ComponentCostFacts.SUPPORTED_SIZE_UNITS:
+        raise SubsidyDataError(
+            f"size_unit {unit!r} is not a unit a measure is sized in; expected one of "
+            f"{[item.value for item in ComponentCostFacts.SUPPORTED_SIZE_UNITS]}."
+        )
+
+
+def _checked_size(size: float, kind: str) -> float:
+    """The measure size a per-unit benefit prices, refusing one that is not a finite number.
+
+    A NaN size would otherwise fall through every comparison of the band arithmetic and price as
+    zero, which is a silent wrong answer rather than an error. ``ComponentCostFacts`` already
+    refuses a non-finite size at declaration; this is the benefit's own guard for any other caller.
+    """
+    if not math.isfinite(size):
+        raise SubsidyDataError(f"{kind} benefit cannot price a measure size of {size!r}; a size is a finite number.")
+    return size
+
+
 @dataclass(frozen=True)
 class Tier:
     """One band of a :class:`TieredPerUnitBenefit`: an amount per unit, paid up to a size.
 
-    ``up_to`` is the size at which the band ends, in the unit of ``ComponentCostFacts.size``; the
-    band starts where the previous one ended (0 for the first). ``None`` is an open band that
-    runs to any size, and only the last band may be open.
+    ``up_to`` is the size at which the band ends, in the benefit's ``size_unit``; the band starts
+    where the previous one ended (0 for the first). ``None`` is an open band that runs to any size,
+    and only the last band may be open. A band checks its own domain; the ordering of the bands is
+    the benefit's check.
     """
 
     up_to: Optional[float]
@@ -200,6 +244,17 @@ class Tier:
 
     #: The two keys of a tier object in the catalogue, and nothing else.
     KEYS: ClassVar[Tuple[str, str]] = ("up_to", "amount_per_unit")
+
+    def __post_init__(self) -> None:
+        """Refuses a negative or non-finite amount, and a bound that is not a finite positive size."""
+        if not math.isfinite(self.amount_per_unit) or self.amount_per_unit < 0:
+            raise SubsidyDataError(
+                f"Tier pays {self.amount_per_unit} per unit; an amount cannot be negative and must be finite."
+            )
+        if self.up_to is not None and (not math.isfinite(self.up_to) or self.up_to <= 0):
+            raise SubsidyDataError(
+                f"Tier ends at {self.up_to}; a bound is a finite size above 0, or null for an open band."
+            )
 
 
 def _tiers(raw: Any) -> Tuple[Tier, ...]:
@@ -279,15 +334,22 @@ class Benefit:
                 f"Scheme {scheme_id}: benefit of kind {kind.value} has unknown key(s) {unknown} "
                 f"(expected keys: {[item.key for item in cls.SPEC]})."
             )
-        return cls(**values)
+        try:
+            return cls(**values)
+        except SubsidyDataError as err:
+            # The payload's own cross-field checks (__post_init__) do not know the scheme.
+            raise SubsidyDataError(f"Scheme {scheme_id}: {err}") from err
 
     def value_estimate(self, gross_cost_in_euro: float, measure_size: float) -> float:
         """Rough upper bound of the support this benefit could unlock, for question ordering.
 
-        The single definition of the *simplified* valuation (§5.7 pruning power): undiscounted,
-        uncapped, on the gross measure cost. The exact, per-slot, capped valuation lives in the
-        cumulation solver (:func:`_combination_awards`); both now read the same typed fields, so
-        the two can no longer drift apart on key names or defaults.
+        The single definition of the *simplified* valuation (§5.7 pruning power): undiscounted, on
+        the gross measure cost, and not clamped to the eligible-cost basis or bounded by the
+        solver's caps (combined rate, overall state-aid share). A cap the benefit itself states is
+        part of its value, though: a TIERED_PER_UNIT benefit's estimate never exceeds its
+        ``cap_in_euro``. The exact, per-slot, capped valuation lives in the cumulation solver
+        (:func:`_combination_awards`); both read the same typed fields, so the two can no longer
+        drift apart on key names or defaults.
         """
         del gross_cost_in_euro, measure_size  # unvalued kinds (loans, VAT, operational support)
         return 0.0
@@ -338,23 +400,47 @@ class LumpSumBenefit(Benefit):
 
 @dataclass(frozen=True)
 class PerUnitBenefit(Benefit):
-    """An amount per unit of measure size (EUR/kW, EUR/m², ... — the unit of the cost facts).
+    """An amount per unit of measure size (EUR/kW, EUR/m², ...), in a unit the catalogue states.
 
-    Covers €/m² insulation grants and €/kWp PV programmes (§5.1). The unit is *not* stated in the
-    catalog: the amount is multiplied by ``ComponentCostFacts.size``, so it silently inherits
-    whatever ``size_unit`` the asset class declares — which is the same unit the device price is
-    quoted in, and is enforced consistent by the pre-run resolution check. Like a lump sum the
-    result is exact in all slots and clamped to the eligible-cost basis.
+    Covers €/m² insulation grants and €/kWp PV programmes (§5.1). The amount is multiplied by
+    ``ComponentCostFacts.size``, and ``size_unit`` says which unit that size must be in — spelled
+    as ``ComponentCostFacts.size_unit`` spells it (``"kW"``, ``"m2"``, ...). The solver refuses to
+    price a measure sized in any other unit, so an amount per kWp can never be multiplied by a size
+    in m²; ``validate`` checks the unit against the cost database's entries for the scheme's asset
+    classes before any run. Like a lump sum the result is exact in all slots and clamped to the
+    eligible-cost basis.
     """
 
-    amount: float  # euro per unit of `ComponentCostFacts.size` (kW, m², liter, ...)
+    amount: float  # euro per unit of `ComponentCostFacts.size`, in `size_unit`
+    size_unit: Units  # the unit the measure's size must be stated in (kW, m2, ...)
 
-    SPEC: ClassVar[Tuple[BenefitField, ...]] = (BenefitField("amount", "amount", float),)
+    SPEC: ClassVar[Tuple[BenefitField, ...]] = (
+        BenefitField("amount", "amount", float),
+        BenefitField("size_unit", "size_unit", _size_unit),
+    )
+
+    def __post_init__(self) -> None:
+        """Refuses a unit no measure is sized in."""
+        _check_size_unit(self.size_unit)
+
+    def amount_for(self, size: float) -> float:
+        """The benefit for a measure of this size: the amount times the size.
+
+        Args:
+            size: The measure's size, in :attr:`size_unit`.
+
+        Returns:
+            The amount in euro, before the solver's clamp to the eligible basis.
+
+        Raises:
+            SubsidyDataError: If the size is not a finite number.
+        """
+        return self.amount * _checked_size(size, "Per-unit")
 
     def value_estimate(self, gross_cost_in_euro: float, measure_size: float) -> float:
         """Amount times measure size."""
         del gross_cost_in_euro
-        return self.amount * measure_size
+        return self.amount_for(measure_size)
 
 
 @dataclass(frozen=True)
@@ -364,35 +450,40 @@ class TieredPerUnitBenefit(Benefit):
     The pro-rata grants a flat :class:`PerUnitBenefit` cannot express: SEAI's solar PV grant pays
     700 EUR per kWp up to 2 kWp, 200 EUR per further kWp up to 4 kWp, and at most 1,800 EUR, so a
     2.5 kWp array receives 2 x 700 + 0.5 x 200 = 1,500 EUR. Each band pays its own rate on the part
-    of the size that falls inside it; the sum is then capped at ``cap_in_euro``. The unit is that of
-    ``ComponentCostFacts.size``, as for :class:`PerUnitBenefit` (kW, i.e. kWp, for PV). Like every
-    fixed-amount kind the result is exact in all slots and clamped to the eligible-cost basis by
-    the solver.
+    of the size that falls inside it; the sum is then capped at ``cap_in_euro``. The size is
+    ``ComponentCostFacts.size`` and must be in ``size_unit``, as for :class:`PerUnitBenefit` (``"kW"``,
+    i.e. kWp, for PV). Like every fixed-amount kind the result is exact in all slots and clamped to
+    the eligible-cost basis by the solver.
     """
 
     tiers: Tuple[Tier, ...]  # ascending by up_to; only the last may be open (up_to None)
+    size_unit: Units  # the unit the measure's size, and every band's up_to, is stated in
     cap_in_euro: Optional[float] = None  # the most the benefit pays, or None for no cap
 
     SPEC: ClassVar[Tuple[BenefitField, ...]] = (
         BenefitField("tiers", "tiers", _tiers),
+        BenefitField("size_unit", "size_unit", _size_unit),
         BenefitField("cap_in_euro", "cap_in_euro", _optional_float, required=False, default=None),
     )
 
     def __post_init__(self) -> None:
-        """Validates the bands: present, positive and ascending bounds, open only at the end.
+        """Validates the bands and the cap, so that every band can pay something.
 
-        Also refuses a cap below the first band's full value, since no band after the first could
-        then ever pay; a negative amount or cap is refused as well.
+        The bands: present, ascending, open only at the end (each band checks its own amount and
+        bound, see :class:`Tier`). The cap: finite and above zero — a cap of 0 would be a scheme
+        that silently pays nothing. A closed last band needs a cap, so that what the benefit pays
+        beyond its last bound is stated rather than implied. And with more than one band, a cap
+        at or below the first band's full value is refused, since no later band could then pay.
+        A single closed band with a binding cap is fine: that is a flat rate with a ceiling.
         """
+        object.__setattr__(self, "tiers", tuple(self.tiers))
         if not self.tiers:
             raise SubsidyDataError("Tiered per-unit benefit needs at least one tier.")
+        _check_size_unit(self.size_unit)
         previous = 0.0
         for index, tier in enumerate(self.tiers):
-            if tier.amount_per_unit < 0:
-                raise SubsidyDataError(
-                    f"Tiered per-unit benefit tier {index} pays {tier.amount_per_unit} per unit; "
-                    "an amount cannot be negative."
-                )
+            if not isinstance(tier, Tier):
+                raise SubsidyDataError(f"Tiered per-unit benefit tier {index} is not a Tier: {tier!r}.")
             if tier.up_to is None:
                 if index != len(self.tiers) - 1:
                     raise SubsidyDataError(
@@ -406,29 +497,44 @@ class TieredPerUnitBenefit(Benefit):
                     f"which is not above {previous}."
                 )
             previous = tier.up_to
-        if self.cap_in_euro is not None:
-            if self.cap_in_euro < 0:
-                raise SubsidyDataError(f"Tiered per-unit benefit cap {self.cap_in_euro} is negative.")
-            first = self.tiers[0]
-            if first.up_to is not None and self.cap_in_euro < first.amount_per_unit * first.up_to:
+        if self.cap_in_euro is None:
+            last = self.tiers[-1]
+            if last.up_to is not None:
                 raise SubsidyDataError(
-                    f"Tiered per-unit benefit cap {self.cap_in_euro} is below the first tier's full "
-                    f"value {first.amount_per_unit * first.up_to}, so no later tier could ever pay."
+                    f"Tiered per-unit benefit tier {len(self.tiers) - 1} is the last tier and ends at "
+                    f"{last.up_to}, but no cap_in_euro is set; the last tier must be open (up_to null) "
+                    "or the benefit must state its cap."
+                )
+            return
+        if not math.isfinite(self.cap_in_euro) or self.cap_in_euro <= 0:
+            raise SubsidyDataError(
+                f"Tiered per-unit benefit cap {self.cap_in_euro} is not a finite amount above 0; "
+                "omit cap_in_euro for no cap."
+            )
+        first = self.tiers[0]
+        if len(self.tiers) > 1 and first.up_to is not None:
+            first_full_value = first.amount_per_unit * first.up_to
+            if self.cap_in_euro <= first_full_value:
+                raise SubsidyDataError(
+                    f"Tiered per-unit benefit cap {self.cap_in_euro} is not above the first tier's full "
+                    f"value {first_full_value}, so no later tier could ever pay."
                 )
 
     def amount_for(self, size: float) -> float:
         """The benefit for a measure of this size: each band's rate on its share, then the cap.
 
         Args:
-            size: The measure's size, in the unit of ``ComponentCostFacts.size``; a negative size
-                is read as zero.
+            size: The measure's size, in :attr:`size_unit`; a negative size is read as zero.
 
         Returns:
             The amount in euro, never above ``cap_in_euro``.
+
+        Raises:
+            SubsidyDataError: If the size is not a finite number.
         """
         remaining_from = 0.0
         total = 0.0
-        size = max(size, 0.0)
+        size = max(_checked_size(size, "Tiered per-unit"), 0.0)
         for tier in self.tiers:
             upper = size if tier.up_to is None else min(size, tier.up_to)
             if upper > remaining_from:
@@ -439,7 +545,7 @@ class TieredPerUnitBenefit(Benefit):
         return total if self.cap_in_euro is None else min(total, self.cap_in_euro)
 
     def value_estimate(self, gross_cost_in_euro: float, measure_size: float) -> float:
-        """The tiered amount for the measure's size, capped."""
+        """The tiered amount for the measure's size, capped by the benefit's own cap."""
         del gross_cost_in_euro
         return self.amount_for(measure_size)
 

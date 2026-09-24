@@ -251,6 +251,30 @@ class TestTheEndToEndDocument:
         amount = awarded["IE_SEAI_HEAT_PUMP_UNIT_HOUSE"]["amount_in_euro"]
         assert amount["best"] == pytest.approx(-6500.0)
 
+    def test_the_solar_pv_grant_is_the_tiered_formula_on_the_arrays_cost_facts_size(self, runs, document) -> None:
+        """hisim-cyc.3 through the production wiring: the grant prices the size the stage extracted.
+
+        The size is read from the package stage's ``economic_inputs.json`` — the cost facts the
+        adapter built from ``PVSystem.power_in_watt`` — and the awarded row must be SEAI's rule on
+        exactly that size: 700 EUR/kWp to 2 kWp, 200 EUR/kWp to 4 kWp, at most 1,800 EUR.
+        """
+        _directory, _baseline, package = runs
+        extract = json.loads((package / "results" / "economic_inputs.json").read_text(encoding="utf-8"))
+        arrays = [entry["facts"] for entry in extract["cost_facts"] if entry["facts"]["asset_class"] == "PV"]
+        assert len(arrays) == 1, arrays
+        assert arrays[0]["size_unit"] == "KILOWATT", "the scheme is an amount per kW"
+        size = arrays[0]["size"]
+        expected = min(700.0 * min(size, 2.0) + 200.0 * max(0.0, min(size, 4.0) - 2.0), 1800.0)
+        awarded = {
+            row["scheme"]: row for row in document["plan"]["subsidies"] if row["status"] == "awarded"
+        }
+        assert "IE_SEAI_SOLAR_PV" in awarded, sorted(awarded)
+        amount = awarded["IE_SEAI_SOLAR_PV"]["amount_in_euro"]
+        for slot in ("min", "best", "max"):
+            assert amount[slot] == pytest.approx(-expected), (
+                f"a {size:g} kW array should be granted {expected:g} EUR in the {slot} slot, got {-amount[slot]:g}"
+            )
+
     def test_every_row_names_a_scheme_whose_display_name_carries_the_ai_marker(self, document) -> None:
         """Step 11 §1: a user must see that the Irish amounts are an unexamined AI draft.
 

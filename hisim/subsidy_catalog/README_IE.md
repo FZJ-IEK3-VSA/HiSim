@@ -71,23 +71,24 @@ from them.
    `excludes` is used for the standard/enhanced attic pairs, the standard/welfare cavity pairs
    and for Warmer Homes, which excludes every other scheme in the file.
 
-## Approximations this file contains
+## The approximation this file contains: the doors grant
 
-One rule the catalogue language cannot state exactly, flagged in its scheme's `display_name` as
-well as here; solar PV was the second until hisim-cyc.3 and is kept below as the record.
+The doors grant is the one rule the catalogue language cannot state exactly; it is flagged in its
+scheme's `display_name` as well as here. Solar PV was a second approximation until hisim-cyc.3 and
+is kept below the doors grant as the record of how it was resolved.
 
-* **Solar PV is pro rata, and so is the catalogue since hisim-cyc.3.** SEAI pays 700 €/kWp up to
-  2 kWp, then 200 €/kWp up to 4 kWp, capped at 1,800 €, *pro rata* — a 2.5 kWp array gets
-  1,500 €. `IE_SEAI_SOLAR_PV` states exactly that as one `TIERED_PER_UNIT` benefit (tiers
-  `[{up_to: 2, amount_per_unit: 700}, {up_to: 4, amount_per_unit: 200}]`, `cap_in_euro: 1800`) on
-  the array's size, which for PV is its peak power in kWp. It replaced four `LUMP_SUM` steps on
-  `measure.technical_attributes.peak_power_in_kwp` that were exact only at 1, 2, 3 and 4 kWp and
-  paid nothing below 1 kWp; the tiered grant needs no technical attribute, so an array sized as a
-  share of the roof is priced too.
 * **The doors grant assumes two doors.** SEAI pays 800 € per door for at most two doors; the
   request carries no door count, so the scheme is a 1,600 € lump sum and its display name says
   `(assumes 2 doors)`. A one-door replacement is overstated by 800 €, which the solver's clamp
   to the eligible cost only partly corrects.
+* **Solar PV is pro rata, and so is the catalogue since hisim-cyc.3.** SEAI pays 700 €/kWp up to
+  2 kWp, then 200 €/kWp up to 4 kWp, capped at 1,800 €, *pro rata* — a 2.5 kWp array gets
+  1,500 €. `IE_SEAI_SOLAR_PV` states exactly that as one `TIERED_PER_UNIT` benefit (tiers
+  `[{up_to: 2, amount_per_unit: 700}, {up_to: 4, amount_per_unit: 200}]`, `size_unit: "kW"`,
+  `cap_in_euro: 1800`) on the array's size, which for PV is its peak power in kWp. It replaced
+  four `LUMP_SUM` steps on `measure.technical_attributes.peak_power_in_kwp` that were exact only
+  at 1, 2, 3 and 4 kWp and paid nothing below 1 kWp; the tiered grant needs no technical
+  attribute, so an array sized as a share of the roof is priced too.
 
 Two further points a reader should know about how the numbers land:
 

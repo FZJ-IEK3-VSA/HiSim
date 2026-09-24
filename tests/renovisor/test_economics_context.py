@@ -373,7 +373,11 @@ class TestTheTechnicalAttributes:
         assert EconomicContextBuilder.PHOTOVOLTAIC_COMPONENT not in attributes
 
     def test_a_pinned_array_publishes_its_peak_power_in_kilowatt_peak(self) -> None:
-        """Ireland's solar PV grant steps with the array size and reads exactly this attribute."""
+        """The attribute a condition on array size could read; no shipped scheme reads it.
+
+        Ireland's solar PV grant is tiered on the cost facts' own size since hisim-cyc.3, not on
+        this attribute; it stays published as information for condition authors.
+        """
         document = _mockup()
         document["house"]["pv_system"] = {"power_in_watt": 3500}
         document["measures"] = [

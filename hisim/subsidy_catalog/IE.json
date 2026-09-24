@@ -3016,6 +3016,7 @@
             "amount_per_unit": 200
           }
         ],
+        "size_unit": "kW",
         "cap_in_euro": 1800
       },
       "eligible_cost": {

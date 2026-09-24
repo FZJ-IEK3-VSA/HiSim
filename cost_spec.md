@@ -1000,10 +1000,18 @@ Benefit kinds (tagged union):
 
 ```
 SHARE_OF_ELIGIBLE_COST(rate)             BONUS_SHARE(rate)          LUMP_SUM(amount)
-PER_UNIT(amount, unit)                   TAX_CREDIT(rate, years)    REDUCED_VAT(vat_rate)
+PER_UNIT(amount, size_unit)              TAX_CREDIT(rate, years)    REDUCED_VAT(vat_rate)
+TIERED_PER_UNIT(tiers[{up_to, amount_per_unit}], size_unit, cap_in_euro?)
 SOFT_LOAN(interest_rate, term, repayment_grant_rate)                OPERATIONAL(rate_per_kwh, carrier,
                                                                                  duration_years)
 ```
+
+`size_unit` is mandatory on both per-unit kinds and is spelled as `ComponentCostFacts.size_unit`
+spells it (`"kW"`, `"kWh"`, `"L"`, `"m2"`, `"-"`); the solver refuses to price a measure whose size
+is stated in another unit. `TIERED_PER_UNIT` pays each band's rate on the part of the size inside
+it (bands ascending, only the last open with `up_to: null`), then caps the sum at `cap_in_euro`; a
+closed last band needs a cap, and with more than one band the cap must lie above the first band's
+full value. SEAI's solar PV grant is the shipped case (hisim-cyc.3).
 
 Payout kinds map benefits to timeline entries: `UPFRONT_GRANT` (year 0, negative SUBSIDY),
 `TAX_CREDIT_SCHEDULE` (negative flows years 1..N), `LOAN_TERMS` (modifies FinancingPlan),

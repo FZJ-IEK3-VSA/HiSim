@@ -18,11 +18,11 @@ U-value travels in the request and overrides the row's, so the refurbishment var
 information any more.
 
 Two things can go wrong and each has one answer. A country with no ``.N.`` typology -- ``ES``
-today -- is a data gap and is refused with ``location.country.unsupported``. A row whose door or
-window area is zero crashes the ``Building`` component (``simulation_issues.md`` item 1); when
-the request supplies both ``door.area_in_m2`` and ``window.area_in_m2`` the crash cannot happen
-and every row is usable, and otherwise the nearest usable band is chosen and the note says which
-band was wanted.
+today -- is a data gap and is refused with ``location.country.unsupported``. A construction year
+outside every band of its typology is clamped to the nearest band, and the note says which band
+was wanted. The former third answer -- rows whose door or window area is zero crash the
+``Building`` component and are skipped for a neighbouring band -- is gone: the ``Building``
+guards every zero envelope area now (hisim-4g9.1), so every generic-example row is selectable.
 """
 
 import csv
@@ -52,15 +52,11 @@ class AgeBand:
         band: The two-digit band number as it appears in the code, e.g. ``"05"``.
         year_start: The first construction year the band covers.
         year_end: The last one; ``9999`` for the open-ended newest band.
-        usable: Whether the row has the door and window geometry the ``Building`` component
-            divides by. An unusable row is still indexed, so that a note can name the band the
-            dwelling actually belongs to.
     """
 
     band: str
     year_start: int
     year_end: int
-    usable: bool
 
     def covers(self, year: int) -> bool:
         """Return whether a construction year falls inside this band's range."""
@@ -151,8 +147,6 @@ class TabulaIndex:
     CODE_COLUMN: ClassVar[str] = "Code_BuildingVariant"
     YEAR_START_COLUMN: ClassVar[str] = "Year1_Building"
     YEAR_END_COLUMN: ClassVar[str] = "Year2_Building"
-    DOOR_AREA_COLUMN: ClassVar[str] = "A_Door_1"
-    WINDOW_AREA_COLUMNS: ClassVar[Tuple[str, str]] = ("A_Window_1", "A_Window_2")
 
     @classmethod
     @lru_cache(maxsize=1)
@@ -172,7 +166,6 @@ class TabulaIndex:
                 band=match.group("band"),
                 year_start=year_start,
                 year_end=year_end,
-                usable=cls._is_usable(row),
             )
         return {
             key: tuple(sorted(bands.values(), key=lambda band: band.band))
@@ -200,30 +193,13 @@ class TabulaIndex:
                     rows.append((match, row))
         return rows
 
-    @classmethod
-    def _is_usable(cls, row: Dict[str, str]) -> bool:
-        """Return whether a row has the door and window geometry the ``Building`` divides by."""
-        door = cls._decimal(row.get(cls.DOOR_AREA_COLUMN)) or 0.0
-        window = sum((cls._decimal(row.get(column)) or 0.0) for column in cls.WINDOW_AREA_COLUMNS)
-        return door > 0 and window > 0
-
-    @classmethod
-    def _decimal(cls, raw: object) -> Optional[float]:
-        """Parse one numeric cell, accepting the table's decimal comma; blanks become ``None``."""
-        if raw is None:
-            return None
-        try:
-            return float(str(raw).replace(cls.DECIMAL, "."))
-        except (TypeError, ValueError):
-            return None
-
 
 class BuildingCodeSelector:
     """Picks the TABULA code one dwelling is simulated as, and says what it approximated.
 
-    Three inputs decide it -- the country, the kind of dwelling and the construction year -- and
-    one fact softens it: when the request supplies both the door and the window area, the
-    ``Building`` cannot divide by zero and every row of the typology becomes usable.
+    Three inputs decide it -- the country, the kind of dwelling and the construction year. Every
+    generic-example row of the table is selectable: the ``Building`` component guards every zero
+    envelope area (hisim-4g9.1), so no row can crash it any more and no row is skipped.
     """
 
     @classmethod
@@ -232,7 +208,6 @@ class BuildingCodeSelector:
         country: str,
         building_type: BuildingType,
         construction_year: int,
-        areas_given: bool,
         requested_code: Optional[str] = None,
     ) -> BuildingCode:
         """Return the code for one dwelling.
@@ -241,21 +216,18 @@ class BuildingCodeSelector:
             country: The ISO country code of ``location.country``.
             building_type: The kind of dwelling the request states.
             construction_year: The year the age band is chosen by.
-            areas_given: Whether the request carries both ``door.area_in_m2`` and
-                ``window.area_in_m2``, which makes the usable-row rule unnecessary.
             requested_code: The expert override ``building.tabula_building_code``; when given,
-                the derivation is skipped and only the usable-row rule still applies.
+                the derivation is skipped and only the row's existence is checked.
 
         Returns:
             The selected code with its notes and the row's own reference temperature.
 
         Raises:
-            TabulaUnresolvable: When the country and typology have no rows at all, when every row
-                of the typology is unusable and no areas were given, or when a requested code is
-                not in the table or is not usable without areas.
+            TabulaUnresolvable: When the country and typology have no rows at all, or when a
+                requested code is not in the table.
         """
         if requested_code is not None:
-            return cls._requested(requested_code, areas_given)
+            return cls._requested(requested_code)
         typology, approximated_typology = TabulaTypology.of(building_type)
         bands = TabulaIndex.bands().get((country, typology))
         if not bands:
@@ -268,7 +240,7 @@ class BuildingCodeSelector:
                 f"a {building_type.value} has no TABULA typology of its own and is simulated as "
                 f"{typology}"
             )
-        band, band_note = cls._band(bands, construction_year, areas_given, country, typology)
+        band, band_note = cls._band(bands, construction_year, country, typology)
         if band_note is not None:
             notes.append(band_note)
         code = f"{country}.N.{typology}.{band.band}.Gen.ReEx.{TabulaIndex.VARIANT}.001"
@@ -279,8 +251,8 @@ class BuildingCodeSelector:
         )
 
     @classmethod
-    def _requested(cls, code: str, areas_given: bool) -> BuildingCode:
-        """Return the expert-supplied code, checking only that it exists and can be simulated."""
+    def _requested(cls, code: str) -> BuildingCode:
+        """Return the expert-supplied code, checking only that it exists in the table."""
         match = TabulaIndex.CODE_PATTERN.match(code)
         if match is None:
             raise TabulaUnresolvable(
@@ -295,11 +267,6 @@ class BuildingCodeSelector:
             raise TabulaUnresolvable(
                 f"'{code}' is not a generic-example row of the processed TABULA table"
             )
-        if not band.usable and not areas_given:
-            raise TabulaUnresolvable(
-                f"the TABULA row '{code}' has no door or window area and the request supplies "
-                "neither door.area_in_m2 nor window.area_in_m2, so the Building would divide by zero"
-            )
         return BuildingCode(
             code=code,
             typology=typology,
@@ -311,28 +278,15 @@ class BuildingCodeSelector:
         cls,
         bands: Tuple[AgeBand, ...],
         construction_year: int,
-        areas_given: bool,
         country: str,
         typology: str,
     ) -> Tuple[AgeBand, Optional[str]]:
         """Return the band a dwelling belongs to and the note explaining any substitution."""
         wanted = next((band for band in bands if band.covers(construction_year)), None)
-        selectable = bands if areas_given else tuple(band for band in bands if band.usable)
-        if not selectable:
-            raise TabulaUnresolvable(
-                f"every TABULA row of '{country}.N.{typology}' lacks door or window geometry and "
-                "the request supplies neither door.area_in_m2 nor window.area_in_m2"
-            )
-        if wanted is not None and wanted in selectable:
+        if wanted is not None:
             return wanted, None
-        nearest = min(selectable, key=lambda band: (band.distance_to(construction_year), band.band))
-        if wanted is None:
-            return nearest, (
-                f"no {country}.N.{typology} age band covers construction year {construction_year}; "
-                f"the nearest band {nearest.describe()} is used"
-            )
+        nearest = min(bands, key=lambda band: (band.distance_to(construction_year), band.band))
         return nearest, (
-            f"band {wanted.describe()} covers construction year {construction_year} but its TABULA "
-            f"row has no door or window area, which crashes the Building component; the nearest "
-            f"usable band {nearest.describe()} is used instead"
+            f"no {country}.N.{typology} age band covers construction year {construction_year}; "
+            f"the nearest band {nearest.describe()} is used"
         )

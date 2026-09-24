@@ -1507,10 +1507,6 @@ class SemanticChecks:
                 country=country,
                 building_type=BuildingType(building["building_type"]),
                 construction_year=int(building["construction_year"]),
-                areas_given=(
-                    building.get("door", {}).get("area_in_m2") is not None
-                    and building.get("window", {}).get("area_in_m2") is not None
-                ),
                 requested_code=building.get("tabula_building_code"),
             )
         except TabulaUnresolvable as error:

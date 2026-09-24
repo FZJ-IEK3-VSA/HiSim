@@ -83,6 +83,26 @@ class TestTheProbeSet:
         assert anchor["measures"] == []
         assert anchor["house"]["heating"]["type_of_system"] == "conventional_gas_heating"
 
+    def test_the_probe_material_is_the_mockups_external_insulation_row(self) -> None:
+        """No material is typed twice: a re-vendored mockup row is the row every probe sends."""
+        mockup = ContractFiles.request_mockup()
+        row = next(measure for measure in mockup["measures"] if measure["id"] == "external_insulation")
+        expected = row["options"][CatalogueTable.MATERIAL]
+
+        assert ProbeSet.material() == expected
+        for measure_id in CatalogueTable.ids():
+            options = ProbeSet.package(measure_id).get("options", {})
+            if CatalogueTable.MATERIAL in options:
+                assert options[CatalogueTable.MATERIAL] == expected
+
+    def test_a_mockup_without_that_row_is_refused_by_name(self) -> None:
+        """The probe set has no fallback material; losing the mockup's row is a loud failure."""
+        mockup = ContractFiles.request_mockup()
+        mockup["measures"] = [measure for measure in mockup["measures"] if measure["id"] != "external_insulation"]
+
+        with pytest.raises(ValueError, match="calculation-request.mockup-1.yaml carries no 'external_insulation'"):
+            ProbeSet.material(mockup)
+
     def test_the_bare_baseline_carries_no_optional_block_at_all(self) -> None:
         """The request the defect of c02bc801 was never exercised by, now probed every time."""
         bare = next(probe for probe in ProbeSet.build() if probe.kind is ProbeKind.BARE)

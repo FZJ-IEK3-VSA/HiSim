@@ -163,6 +163,10 @@ absent (so the table shrinks to nothing as the catalogue is revised).
 > by the frontend) and the translator reads its conductivity directly; no catalogue material name
 > is mapped to an `asp_id` anywhere in HiSim, and the table is gone. The record above is kept as
 > it was written.
+>
+> **Note (2026-09-24):** contract PR #10 renamed the row `polystyrene_eps_rigid_board` to
+> `eps_rigid_board` (the code block and the paragraph above); the translator and the mockup
+> use the new id.
 
 ## 4. `options.py` — reading a measure's options from a request (Q1, M7)
 

@@ -21,6 +21,7 @@ import pytest
 
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.apply import AddedLayer
+from hisim.renovisor.capabilities import ProbeSet
 from hisim.renovisor.kpis import (
     LifecycleCo2,
     ContractExamples,
@@ -93,16 +94,9 @@ def layers_of(*additions: AddedLayer) -> EnvelopeLayers:
     return EnvelopeLayers.of(additions, areas)
 
 
-def a_material(footprint: float = 21.207108) -> Material:
+def a_material() -> Material:
     """Return the mockup's own material, which is what a request carries under rule 5."""
-    return Material(
-        asp_id="eps_rigid_board",
-        thermal_conductivity_w_mk=0.0355,
-        heat_capacity_j_kgk=1400.0,
-        density_kg_m3=20.5,
-        co2_footprint_a1_a3_c3_c4_kg_m2=footprint,
-        lifespan_years=57.5,
-    )
+    return Material.from_dict(ProbeSet.material())
 
 
 def build(document: Any, period: Period, layers: EnvelopeLayers, co2: Any = None) -> Any:

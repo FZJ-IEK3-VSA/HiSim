@@ -270,18 +270,9 @@ class ProbeSet:
     read from the request schema when the document is built (:class:`RequestSchemaBounds`).
     """
 
-    #: The material object every probe of a ``material`` option sends. It is the mockup's own
-    #: row, so no material id and no conductivity is invented: rule 5 makes the catalogue's
-    #: class names ("EPS", "Mineral wool") the frontend's business, and the translator only ever
-    #: sees properties.
-    MATERIAL: ClassVar[Dict[str, Any]] = {
-        "asp_id": "eps_rigid_board",
-        "thermal_conductivity_w_mk": 0.0355,
-        "heat_capacity_j_kgk": 1400,
-        "density_kg_m3": 20.5,
-        "co2_footprint_a1_a3_c3_c4_kg_m2": 21.207108,
-        "lifespan_years": 57.5,
-    }
+    #: The mockup measure whose ``material`` option is the row every material probe sends
+    #: (:meth:`material`).
+    MATERIAL_MEASURE: ClassVar[str] = "external_insulation"
 
     #: The prefix a probe's subject carries in front of an inventory path.
     HOUSE_PREFIX: ClassVar[str] = "house."
@@ -452,6 +443,39 @@ class ProbeSet:
         return anchor
 
     @classmethod
+    def material(cls, mockup: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+        """Return the material object every probe of a ``material`` option sends.
+
+        It is the vendored mockup's own row -- the ``material`` option of its
+        :attr:`MATERIAL_MEASURE` measure -- so no material id and no conductivity is invented
+        here: rule 5 makes the catalogue's class names ("EPS", "Mineral wool") the frontend's
+        business, and the translator only ever sees properties. The mockup is read on every call,
+        as :class:`ContractFiles` reads everything, so a re-vendored row is probed at once.
+
+        Args:
+            mockup: The request to take the row from; the vendored mockup when omitted.
+
+        Returns:
+            A fresh copy of the row, which a caller may change.
+
+        Raises:
+            ValueError: If the mockup carries no :attr:`MATERIAL_MEASURE` measure with a material
+                object; the probe set has no other source for one.
+        """
+        request = ContractFiles.request_mockup() if mockup is None else mockup
+        for measure in request.get("measures") or []:
+            if not isinstance(measure, dict) or measure.get("id") != cls.MATERIAL_MEASURE:
+                continue
+            material = (measure.get("options") or {}).get(CatalogueTable.MATERIAL)
+            if isinstance(material, dict):
+                return copy.deepcopy(material)
+        raise ValueError(
+            f"{ContractFiles.REQUEST_MOCKUP_FILENAME} carries no {cls.MATERIAL_MEASURE!r} measure with a "
+            f"{CatalogueTable.MATERIAL!r} object, and the capability probes read the material they send "
+            "from exactly that measure"
+        )
+
+    @classmethod
     def build(cls) -> Tuple[Probe, ...]:
         """Return the whole probe set, in a stable order.
 
@@ -569,7 +593,7 @@ class ProbeSet:
     def _first_value(cls, option: OptionSpec) -> Any:
         """Return the value a probe sends for one required option when it varies nothing."""
         if option.value_type is ValueType.MATERIAL:
-            return dict(cls.MATERIAL)
+            return cls.material()
         if option.values:
             return option.values[0]
         if option.value_type is ValueType.BOOLEAN:
@@ -580,7 +604,7 @@ class ProbeSet:
     def _option_values(cls, option: OptionSpec) -> Tuple[Any, ...]:
         """Return the values one option is probed with: its list, its bounds, or both booleans."""
         if option.value_type is ValueType.MATERIAL:
-            return (dict(cls.MATERIAL),)
+            return (cls.material(),)
         if option.values:
             return tuple(option.values)
         if option.value_type is ValueType.BOOLEAN:

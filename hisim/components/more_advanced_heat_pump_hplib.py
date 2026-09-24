@@ -13,9 +13,10 @@ preparation on district heating for water/water heatpumps
 import hashlib
 
 import importlib
+import math
 from enum import Enum, unique
 from dataclasses import dataclass
-from typing import Any, ClassVar, List, Optional, Dict, Tuple
+from typing import Any, Callable, ClassVar, List, Optional, Dict, Tuple
 
 import pandas as pd
 import numpy as np
@@ -82,6 +83,14 @@ class PositionHotWaterStorageInSystemSetup(str, Enum):
     NO_STORAGE = "NO_STORAGE"
 
 
+@unique
+class ScopApplication(str, Enum):
+    """The two EN 14825 applications a datasheet rates a heat pump's SCOP for."""
+
+    W35 = "W35"
+    W55 = "W55"
+
+
 class StandardizedSeasonalCop:
     """The seasonal COP of an hplib heat pump by the bin method of EN 14825, average climate.
 
@@ -104,7 +113,7 @@ class StandardizedSeasonalCop:
     Source: EN 14825:2022, average climate (bins -10 to +15 °C, 4910 h) and the variable-outlet
     lines of its low- (W35) and medium-temperature (W55) applications. For a brine/water machine
     (hplib group 2) the brine enters at :attr:`BRINE_TEMPERATURE` in every bin, EN 14825's rating
-    condition, while the ambient term still follows the bin.
+    condition, while the ambient term still follows the bin. Any other hplib group is refused.
 
     Example::
 
@@ -128,7 +137,7 @@ class StandardizedSeasonalCop:
     SIZING_OUTDOOR_TEMPERATURE: ClassVar[float] = -7.0
     SIZING_FLOW_TEMPERATURE: ClassVar[float] = 52.0
 
-    #: Part load at A-7, (-7 - 16) / (-10 - 16) = 0.885: the design load is the A-7 output over it.
+    #: Part load at A-7, (-7 - 16) / (-10 - 16) ≈ 0.885: the design load is the A-7 output over it.
     DESIGN_SIZING_PART_LOAD: ClassVar[float] = (SIZING_OUTDOOR_TEMPERATURE - HEATING_LIMIT_TEMPERATURE) / (
         DESIGN_TEMPERATURE - HEATING_LIMIT_TEMPERATURE
     )
@@ -139,16 +148,19 @@ class StandardizedSeasonalCop:
     #: hplib's secondary-side temperature rise: the outlet is the inlet plus this, K.
     SECONDARY_TEMPERATURE_RISE: ClassVar[float] = 5.0
 
+    #: The hplib groups the rating covers, by the kind of machine each is.
+    RATED_GROUPS: ClassVar[Dict[int, str]] = {1: "air/water", 2: "brine/water"}
+
     #: Outlet-temperature line per application, as two (outdoor °C, outlet °C) points.
-    FLOW_LINES: ClassVar[Dict[str, Tuple[Tuple[float, float], Tuple[float, float]]]] = {
-        "W35": ((-7.0, 34.0), (12.0, 24.0)),
-        "W55": ((-7.0, 52.0), (12.0, 30.0)),
+    FLOW_LINES: ClassVar[Dict[ScopApplication, Tuple[Tuple[float, float], Tuple[float, float]]]] = {
+        ScopApplication.W35: ((-7.0, 34.0), (12.0, 24.0)),
+        ScopApplication.W55: ((-7.0, 52.0), (12.0, 30.0)),
     }
 
     @classmethod
-    def flow_temperature(cls, application: "ScopApplication", outdoor_temperature: float) -> float:
+    def flow_temperature(cls, application: ScopApplication, outdoor_temperature: float) -> float:
         """Return the application's outlet temperature at one outdoor temperature, °C."""
-        (t_1, f_1), (t_2, f_2) = cls.FLOW_LINES[application.value]
+        (t_1, f_1), (t_2, f_2) = cls.FLOW_LINES[application]
         return f_1 + (f_2 - f_1) * (outdoor_temperature - t_1) / (t_2 - t_1)
 
     @classmethod
@@ -159,7 +171,7 @@ class StandardizedSeasonalCop:
         )
 
     @classmethod
-    def mean_outlet_temperature(cls, application: "ScopApplication") -> float:
+    def mean_outlet_temperature(cls, application: ScopApplication) -> float:
         """Return the application's outlet temperature averaged over the season, weighted by heat, °C.
 
         28.9 °C for W35 and 40.7 °C for W55: where the rating actually spends its heat, which is
@@ -172,7 +184,7 @@ class StandardizedSeasonalCop:
 
     @classmethod
     def of(
-        cls, heatpump: Any, application: "ScopApplication", calibration: Optional["ScopCalibration"] = None
+        cls, heatpump: Any, application: ScopApplication, calibration: Optional["ScopCalibration"] = None
     ) -> float:
         """Return the seasonal COP of one hplib heat pump for one application.
 
@@ -184,7 +196,17 @@ class StandardizedSeasonalCop:
 
         Returns:
             Heat delivered over electricity drawn across the season.
+
+        Raises:
+            ValueError: When the machine is of any other hplib group, for which the bins' source
+                temperature is not defined here.
         """
+        if heatpump.group_id not in cls.RATED_GROUPS:
+            raise ValueError(
+                "the EN 14825 rating here covers air/water (hplib group 1) and brine/water (group 2) "
+                f"machines only, and this one is hplib group {heatpump.group_id:g}."
+            )
+
         def run(outdoor: float, flow: float) -> Tuple[float, float]:
             source = outdoor if heatpump.group_id == 1 else cls.BRINE_TEMPERATURE
             result = heatpump.simulate(
@@ -211,14 +233,6 @@ class StandardizedSeasonalCop:
         return heat / electricity
 
 
-@unique
-class ScopApplication(str, Enum):
-    """The two EN 14825 applications a datasheet rates a heat pump's SCOP for."""
-
-    W35 = "W35"
-    W55 = "W55"
-
-
 class ScopCalibration:
     """Scales an hplib heat pump's COP to the SCOP its datasheet states (hisim-4g9.15).
 
@@ -230,16 +244,23 @@ class ScopCalibration:
     less or more electricity. The factors are solved (:meth:`of`) so that the calibrated machine,
     rated by :class:`StandardizedSeasonalCop`, gives exactly the stated SCOPs.
 
-    * Both ratings stated: the factor is linear in the outlet temperature between each rating's
-      anchor and held at the nearer anchor's value outside. The anchors are the heat-weighted
-      mean outlets of the two rating lines (28.9 and 40.7 °C), where each rating spends its heat;
-      anchoring at the nominal 35 / 55 °C instead is ill-conditioned and drives the 55 °C factor
-      to 0.2–0.5 for wide pairs (decision with Noah, 2026-09-23; to be checked against measured
-      units, hisim-4g9.15 follow-up bead).
+    * Both ratings stated: the factor is linear in the outlet temperature between the two
+      :attr:`ANCHORS` and held at the nearer anchor's value outside. The anchors are the
+      heat-weighted mean outlets of the two rating lines (28.9 and 40.7 °C), where each rating
+      spends its heat; anchoring at the nominal 35 / 55 °C instead is ill-conditioned and drives
+      the 55 °C factor to 0.2–0.5 for wide pairs (decision with Noah, 2026-09-23; the check against
+      measured units is hisim-x2mu).
     * One stated: its factor everywhere.
     * The heating rod is never calibrated: a call where hplib runs the rod alone (COP 1) is left
       as it is, and in hplib's compressor-plus-rod branch only the compressor's share is scaled.
     * Cooling (mode 2) is out of scope and left as hplib returns it.
+
+    What the solve rests on: each rating is continuous and non-decreasing in each factor (a bin
+    whose calibrated COP falls to 1 switches to the back-up heater at COP 1, which draws the same
+    electricity, so there is no jump); it is 1 when the factors are so small that every bin runs
+    its back-up heater, and however large they grow it stays bounded by the back-up heater's share
+    of the season, which no factor scales. So a bracketed solve finds a rating's factor whenever
+    one exists, and a stated SCOP outside what the fit can reach is refused by name.
 
     Example::
 
@@ -247,56 +268,213 @@ class ScopCalibration:
         calibration.apply(heatpump, heatpump.simulate(...), mode=1)
     """
 
-    #: How close the calibrated rating must come to the stated SCOP, and how many rounds it may take.
+    #: How close the calibrated rating must come to the stated SCOP.
     TOLERANCE: ClassVar[float] = 1e-5
-    MAXIMUM_ITERATIONS: ClassVar[int] = 50
 
-    def __init__(self, factors: Dict["ScopApplication", float]) -> None:
+    #: The factors the solve searches between. At 0.001 no hplib COP comes near 1, so every bin
+    #: runs its back-up heater and the rating is 1; at 1000 the compressor draws a thousandth of
+    #: hplib's electricity, and the back-up heater's share is all that still bounds a rating.
+    MINIMUM_FACTOR: ClassVar[float] = 1e-3
+    MAXIMUM_FACTOR: ClassVar[float] = 1e3
+
+    #: The rounds one bracketed solve may take; the Illinois method needs twenty to thirty.
+    MAXIMUM_ITERATIONS: ClassVar[int] = 100
+
+    #: The outlet temperatures the W35 and the W55 factor hold at, °C (28.9 and 40.7): the
+    #: heat-weighted mean outlets of the two rating lines, computed once.
+    ANCHORS: ClassVar[Tuple[float, float]] = (
+        StandardizedSeasonalCop.mean_outlet_temperature(ScopApplication.W35),
+        StandardizedSeasonalCop.mean_outlet_temperature(ScopApplication.W55),
+    )
+
+    def __init__(self, factors: Dict[ScopApplication, float]) -> None:
         """Hold the factor per stated application; an empty map calibrates nothing."""
         self.factors = dict(factors)
 
     @classmethod
-    def of(cls, heatpump: Any, scop_w35: Optional[float], scop_w55: Optional[float]) -> "ScopCalibration":
+    def of(
+        cls, heatpump: Any, scop_w35: Optional[float], scop_w55: Optional[float], machine: str = "hplib's fit"
+    ) -> "ScopCalibration":
         """Return the factors that bring the fit, rated by the bin method, to the stated SCOPs.
 
-        Starts from ``stated / rated`` per application and repeats ``k <- k * stated / rated`` on the
-        calibrated machine until every rating is within :attr:`TOLERANCE`: the back-up heater's
-        share of the season is not scaled and, with two ratings, each factor reaches into the other
-        rating's line, so one ratio is not exact. Converges in about ten rounds.
+        One rating: its factor is the root of ``rated(factor) = stated`` (:meth:`solve`). Two
+        ratings: for a given W55 factor the W35 factor that rates W35 exactly is solved, and the
+        W55 rating of that pair rises with the W55 factor (the W55 factor moves the W55 line's hot
+        bins more than the W35 factor it displaces moves its mild ones; checked on the Generic
+        air/water and brine/water fits for W35 ratings from 1.1 to 10 over the whole factor range),
+        so the W55 factor is solved on it in turn. A single ratio ``stated / rated`` is not exact:
+        the back-up heater's share of the season is not scaled, and with two ratings each factor
+        reaches into the other rating's line. A typical pair takes a few hundred ratings, some tens
+        of milliseconds.
+
+        Args:
+            heatpump: An ``hplib.HeatPump`` of group 1 or 2, only read.
+            scop_w35: The stated W35 rating, or ``None``.
+            scop_w55: The stated W55 rating, or ``None``.
+            machine: How a refusal names the fit, e.g. "hplib's Generic air/water fit".
 
         Raises:
-            ValueError: When the ratings do not converge within :attr:`MAXIMUM_ITERATIONS`.
+            ValueError: When no factors between :attr:`MINIMUM_FACTOR` and :attr:`MAXIMUM_FACTOR`
+                reach the stated SCOPs; the message names the rating that cannot be met and the
+                limit the fit reaches.
         """
         stated = {
             application: float(value)
             for application, value in ((ScopApplication.W35, scop_w35), (ScopApplication.W55, scop_w55))
             if value is not None
         }
-        factors = {application: value / StandardizedSeasonalCop.of(heatpump, application) for application, value in stated.items()}
+        if not stated:
+            return cls({})
+        ratings = " and ".join(f"{application.value} {value}" for application, value in stated.items())
+        refused = f"the stated SCOP{'s' if len(stated) > 1 else ''} {ratings} cannot be met: "
+        lowest, highest = cls.MINIMUM_FACTOR, cls.MAXIMUM_FACTOR
+        if len(stated) == 1:
+            ((application, target),) = stated.items()
+
+            def single(factor: float) -> float:
+                return StandardizedSeasonalCop.of(heatpump, application, cls({application: factor}))
+
+            at_lowest, at_highest = single(lowest), single(highest)
+            if target <= at_lowest:
+                raise ValueError(refused + cls.unreachable(machine, application, at_lowest, False, False, None))
+            if target >= at_highest:
+                raise ValueError(refused + cls.unreachable(machine, application, at_highest, True, True, None))
+            return cls({application: cls.solve(single, target, cls.TOLERANCE / 10)})
+
+        w35, w55 = stated[ScopApplication.W35], stated[ScopApplication.W55]
+
+        def rated(application: ScopApplication, factor_w35: float, factor_w55: float) -> float:
+            calibration = cls({ScopApplication.W35: factor_w35, ScopApplication.W55: factor_w55})
+            return StandardizedSeasonalCop.of(heatpump, application, calibration)
+
+        def w35_factor(factor_w55: float) -> float:
+            # Solved finer than the outer solve's tolerance, so its rest does not stall that solve.
+            return cls.solve(lambda factor: rated(ScopApplication.W35, factor, factor_w55), w35, cls.TOLERANCE / 1000)
+
+        def w55_rating(factor_w55: float) -> float:
+            return rated(ScopApplication.W55, w35_factor(factor_w55), factor_w55)
+
+        highest_w35 = rated(ScopApplication.W35, highest, highest)
+        if w35 >= highest_w35:
+            raise ValueError(refused + cls.unreachable(machine, ScopApplication.W35, highest_w35, True, True, None))
+        # The W55 factors at which some W35 factor in range still rates W35 exactly: from where the
+        # highest W35 factor just reaches it to where the lowest one just does.
+        first = cls.solve(lambda factor: rated(ScopApplication.W35, highest, factor), w35, cls.TOLERANCE / 1000)
+        last = cls.solve(lambda factor: rated(ScopApplication.W35, lowest, factor), w35, cls.TOLERANCE / 1000)
+        condition = f"with W35 at {w35}, "
+        lowest_w55 = w55_rating(first)
+        if w55 <= lowest_w55:
+            # At the lowest W55 factor the W55 factor itself would have to go lower; above it, the W35
+            # factor that holds W35 would have to go above the range.
+            anchor, beyond = (ScopApplication.W55, False) if first <= lowest else (ScopApplication.W35, True)
+            raise ValueError(
+                refused
+                + condition
+                + cls.unreachable(machine, ScopApplication.W55, lowest_w55, False, beyond, anchor)
+            )
+        highest_w55 = w55_rating(last)
+        if w55 >= highest_w55:
+            # Mirrored: the W55 factor would have to go higher, or the W35 factor below the range.
+            anchor, beyond = (ScopApplication.W55, True) if last >= highest else (ScopApplication.W35, False)
+            raise ValueError(
+                refused
+                + condition
+                + cls.unreachable(machine, ScopApplication.W55, highest_w55, True, beyond, anchor)
+            )
+        factor_w55 = cls.solve(w55_rating, w55, cls.TOLERANCE / 10)
+        return cls({ScopApplication.W35: w35_factor(factor_w55), ScopApplication.W55: factor_w55})
+
+    @classmethod
+    def unreachable(
+        cls,
+        machine: str,
+        application: ScopApplication,
+        limit: float,
+        above: bool,
+        factor_above: bool,
+        anchor: Optional[ScopApplication],
+    ) -> str:
+        """Return the sentence that refuses one rating beyond what the fit reaches.
+
+        Args:
+            machine: How the sentence names the fit.
+            application: The rating that cannot be met.
+            limit: The furthest the fit rates it.
+            above: Whether the stated rating is above that limit (else below it).
+            factor_above: Whether reaching it would need a factor above :attr:`MAXIMUM_FACTOR`
+                (else below :attr:`MINIMUM_FACTOR`).
+            anchor: The anchor whose factor would have to leave the range, or ``None`` for a
+                single rating, whose factor holds everywhere.
+        """
+        bound = f"above {cls.MAXIMUM_FACTOR:g}" if factor_above else f"below {cls.MINIMUM_FACTOR:g}"
+        where = ""
+        if anchor is not None:
+            temperature = cls.ANCHORS[0 if anchor is ScopApplication.W35 else 1]
+            where = f" at the {anchor.value} anchor ({temperature:.1f} °C)"
+        sentence = (
+            f"{machine} cannot rate {'above' if above else 'below'} {application.value} {limit:.2f}; a "
+            f"{'higher' if above else 'lower'} {application.value} rating would need a factor {bound}{where}"
+        )
+        if above and factor_above and anchor in (None, application):
+            sentence += ", and the back-up heater's share of the season, which no factor scales, caps it there"
+        return sentence + "."
+
+    @classmethod
+    def solve(cls, rating: Callable[[float], float], target: float, tolerance: float) -> float:
+        """Return the factor at which a non-decreasing rating meets a target, to a tolerance.
+
+        The Illinois method (regula falsi that halves the stale end's miss when the same end moves
+        twice) on the factor's logarithm between :attr:`MINIMUM_FACTOR` and :attr:`MAXIMUM_FACTOR`;
+        a step that would leave the bracket bisects instead. A target the rating does not cross
+        in that range returns the nearer bound: the callers check the bounds first where a miss
+        must be refused, and the nested solve relies on the clamp.
+
+        Raises:
+            RuntimeError: When :attr:`MAXIMUM_ITERATIONS` rounds pass without meeting the
+                tolerance, which a continuous rating does not allow.
+        """
+        low, high = math.log(cls.MINIMUM_FACTOR), math.log(cls.MAXIMUM_FACTOR)
+        miss_low = rating(cls.MINIMUM_FACTOR) - target
+        if miss_low >= 0:
+            return cls.MINIMUM_FACTOR
+        miss_high = rating(cls.MAXIMUM_FACTOR) - target
+        if miss_high <= 0:
+            return cls.MAXIMUM_FACTOR
+        moved = 0
         for _round in range(cls.MAXIMUM_ITERATIONS):
-            calibration = cls(factors)
-            rated = {
-                application: StandardizedSeasonalCop.of(heatpump, application, calibration) for application in stated
-            }
-            if all(abs(rated[application] - value) < cls.TOLERANCE for application, value in stated.items()):
-                return calibration
-            factors = {application: factors[application] * value / rated[application] for application, value in stated.items()}
-        raise ValueError(
-            f"the SCOP calibration to {({a.value: v for a, v in stated.items()})} did not converge in "
-            f"{cls.MAXIMUM_ITERATIONS} rounds (last ratings {({a.value: round(r, 4) for a, r in rated.items()})})."
+            point = (low * miss_high - high * miss_low) / (miss_high - miss_low)
+            if not low < point < high:
+                point = (low + high) / 2
+            miss = rating(math.exp(point)) - target
+            if abs(miss) < tolerance:
+                return math.exp(point)
+            if miss < 0:
+                low, miss_low = point, miss
+                if moved < 0:
+                    miss_high /= 2
+                moved = -1
+            else:
+                high, miss_high = point, miss
+                if moved > 0:
+                    miss_low /= 2
+                moved = 1
+        raise RuntimeError(
+            f"the SCOP calibration's solve for a rating of {target} did not converge in "
+            f"{cls.MAXIMUM_ITERATIONS} rounds (bracket {math.exp(low):.6g} to {math.exp(high):.6g})."
         )
 
     def factor(self, outlet_temperature: float) -> float:
-        """Return the factor for one outlet temperature, °C."""
+        """Return the factor for one outlet temperature, °C: linear between the anchors, held outside."""
         if not self.factors:
             return 1.0
         if len(self.factors) == 1:
             return next(iter(self.factors.values()))
-        low = StandardizedSeasonalCop.mean_outlet_temperature(ScopApplication.W35)
-        high = StandardizedSeasonalCop.mean_outlet_temperature(ScopApplication.W55)
-        share = min(max((outlet_temperature - low) / (high - low), 0.0), 1.0)
-        return self.factors[ScopApplication.W35] + share * (
-            self.factors[ScopApplication.W55] - self.factors[ScopApplication.W35]
+        return float(
+            np.interp(
+                outlet_temperature,
+                self.ANCHORS,
+                (self.factors[ScopApplication.W35], self.factors[ScopApplication.W55]),
+            )
         )
 
     def apply(self, heatpump: Any, results: Dict[str, Any], mode: int) -> Dict[str, Any]:
@@ -1197,8 +1375,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         Raises:
             ValueError: When a stated SCOP is not above 1 or above :attr:`MAXIMUM_STANDARDIZED_SCOP`,
-                when the W55 rating exceeds the W35 one, or when the machine is neither air/water
-                nor brine/water, the two groups EN 14825's rating here covers.
+                when the W55 rating exceeds the W35 one, when the machine is neither air/water
+                nor brine/water, the two groups EN 14825's rating here covers, or when hplib's fit
+                cannot be calibrated to the stated pair (:meth:`ScopCalibration.of`).
         """
         w35, w55 = config.standardized_scop_en14825_w35, config.standardized_scop_en14825_w55
         given = {"standardized_scop_en14825_w35": w35, "standardized_scop_en14825_w55": w55}
@@ -1208,20 +1387,24 @@ class MoreAdvancedHeatPumpHPLib(Component):
         for name, value in stated.items():
             if not 1.0 < value <= cls.MAXIMUM_STANDARDIZED_SCOP:
                 raise ValueError(
-                    f"{config.component_id}: {name} is {value}; a standardised SCOP is above 1 and at "
+                    f"{config.component_id.name}: {name} is {value}; a standardised SCOP is above 1 and at "
                     f"most {cls.MAXIMUM_STANDARDIZED_SCOP}."
                 )
         if w35 is not None and w55 is not None and w55 > w35:
             raise ValueError(
-                f"{config.component_id}: the W55 SCOP {w55} is above the W35 SCOP {w35}; a unit rated for "
+                f"{config.component_id.name}: the W55 SCOP {w55} is above the W35 SCOP {w35}; a unit rated for "
                 "55 °C water cannot outperform its 35 °C rating."
             )
-        if heatpump.group_id not in (1, 2):
+        if heatpump.group_id not in StandardizedSeasonalCop.RATED_GROUPS:
             raise ValueError(
-                f"{config.component_id}: a standardised SCOP calibrates air/water (group 1) and brine/water "
+                f"{config.component_id.name}: a standardised SCOP calibrates air/water (group 1) and brine/water "
                 f"(group 2) machines only, and this one is hplib group {heatpump.group_id}."
             )
-        return ScopCalibration.of(heatpump, w35, w55)
+        machine = f"hplib's {config.model} {StandardizedSeasonalCop.RATED_GROUPS[int(heatpump.group_id)]} fit"
+        try:
+            return ScopCalibration.of(heatpump, w35, w55, machine=machine)
+        except ValueError as error:
+            raise ValueError(f"{config.component_id.name}: {error}") from error
 
     def write_to_report(self):
         """Write configuration to the report, with the SCOP calibration factors when there are any."""

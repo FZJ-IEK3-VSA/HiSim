@@ -7,6 +7,7 @@ thermal output and only changes the electricity the compressor draws, and that t
 refuses a configuration no datasheet could state.
 """
 
+import re
 from typing import Any, Dict
 
 import pytest
@@ -59,6 +60,16 @@ class TestTheBinMethod:
         """28.9 °C for the W35 line and 40.7 °C for the W55 line (decision of 2026-09-23)."""
         assert StandardizedSeasonalCop.mean_outlet_temperature(ScopApplication.W35) == pytest.approx(28.9, abs=0.05)
         assert StandardizedSeasonalCop.mean_outlet_temperature(ScopApplication.W55) == pytest.approx(40.7, abs=0.05)
+        assert ScopCalibration.ANCHORS == (
+            StandardizedSeasonalCop.mean_outlet_temperature(ScopApplication.W35),
+            StandardizedSeasonalCop.mean_outlet_temperature(ScopApplication.W55),
+        )
+
+    def test_a_machine_of_another_group_is_refused_by_name(self) -> None:
+        """The bins' source temperature is defined for air/water and brine/water only."""
+        heatpump = hpl.HeatPump(hpl.get_parameters("Generic", 3, 10, 52, 10000))
+        with pytest.raises(ValueError, match="this one is hplib group 3"):
+            StandardizedSeasonalCop.of(heatpump, ScopApplication.W35)
 
 
 class TestTheCalibration:
@@ -74,7 +85,30 @@ class TestTheCalibration:
         calibration = ScopCalibration.of(heatpump, w35, w55)
         for application, stated in ((ScopApplication.W35, w35), (ScopApplication.W55, w55)):
             if stated is not None:
-                assert StandardizedSeasonalCop.of(heatpump, application, calibration) == pytest.approx(stated, abs=1e-4)
+                assert StandardizedSeasonalCop.of(heatpump, application, calibration) == pytest.approx(
+                    stated, abs=ScopCalibration.TOLERANCE
+                )
+
+    @pytest.mark.parametrize(
+        "group_id, w35, w55",
+        [(1, 8.0, 1.5), (1, 3.0, 1.2), (2, 10.0, 1.5), (1, None, 1.1), (1, 10.0, 10.0), (2, None, 1.1)],
+    )
+    def test_the_pairs_the_fixed_point_iteration_missed_are_rated_exactly(
+        self, group_id: int, w35: Any, w55: Any
+    ) -> None:
+        """8.0 / 1.5 was slow, 3.0 / 1.2 and the brine 10 / 1.5 stalled; they and the extremes are met exactly."""
+        heatpump = generic(group_id)
+        calibration = ScopCalibration.of(heatpump, w35, w55)
+        for application, stated in ((ScopApplication.W35, w35), (ScopApplication.W55, w55)):
+            if stated is not None:
+                assert StandardizedSeasonalCop.of(heatpump, application, calibration) == pytest.approx(
+                    stated, abs=ScopCalibration.TOLERANCE
+                )
+
+    def test_a_pair_beyond_the_fits_reach_is_refused_with_the_limit(self) -> None:
+        """With W35 at 6.0 the air/water fit cannot rate W55 below 1.31, whatever the factors."""
+        with pytest.raises(ValueError, match=re.escape("with W35 at 6.0, hplib's fit cannot rate below W55 1.31")):
+            ScopCalibration.of(generic(1), 6.0, 1.1)
 
     def test_the_factors_stay_moderate_for_a_wide_pair(self) -> None:
         """The reason for the mean-outlet anchors: 5.5 / 3.0 no longer drives a factor to 0.46."""
@@ -165,9 +199,18 @@ class TestTheComponent:
             ({"standardized_scop_en14825_w55": 1.0}, "above 1"),
             ({"standardized_scop_en14825_w35": 11.0}, "at most"),
             ({"standardized_scop_en14825_w35": 3.4, "standardized_scop_en14825_w55": 4.6}, "cannot outperform"),
+            (
+                {"standardized_scop_en14825_w35": 6.0, "standardized_scop_en14825_w55": 1.1},
+                "HeatPump.*: "
+                + re.escape(
+                    "the stated SCOPs W35 6.0 and W55 1.1 cannot be met: with W35 at 6.0, hplib's "
+                    "Generic air/water fit cannot rate below W55 1.31; a lower W55 rating would need a factor "
+                    "below 0.001 at the W55 anchor (40.7 °C)."
+                ),
+            ),
         ],
     )
     def test_an_impossible_scop_is_refused_by_name(self, fields: Dict[str, float], message: str) -> None:
-        """A SCOP of 1 or less, above 10, or a W55 rating above W35 fails the build."""
+        """A SCOP of 1 or less, above 10, a W55 rating above W35, or a pair the fit cannot reach fails the build."""
         with pytest.raises(ValueError, match=message):
             self.build(self.config(**fields))

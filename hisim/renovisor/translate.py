@@ -825,6 +825,8 @@ class Targets:
     BATTERY_INVERTER: ClassVar[str] = "custom_pv_inverter_power_generic_in_watt"
     COLLECTOR_AREA: ClassVar[str] = "area_m2"
     FLOW_TEMPERATURE: ClassVar[str] = "flow_temperature_in_celsius"
+    STANDARDIZED_SCOP_W35: ClassVar[str] = "standardized_scop_en14825_w35"
+    STANDARDIZED_SCOP_W55: ClassVar[str] = "standardized_scop_en14825_w55"
     EFFICIENCY_MAXIMUM: ClassVar[str] = "eff_th_max"
     EFFICIENCY_MINIMUM: ClassVar[str] = "eff_th_min"
     BOILER_TYPE: ClassVar[str] = "boiler_type"
@@ -1462,6 +1464,7 @@ def _heating(state: _TranslationState) -> None:
         )
     _heat_distribution(state, generator)
     _flow_temperature(state, generator, heating)
+    _standardized_scop(state, generator, heating)
     _efficiency(state, generator, heating)
     for name in ("cooking_range", "secondary"):
         path = f"house.heating.{name}"
@@ -1578,6 +1581,65 @@ def _flow_temperature(state: _TranslationState, generator: HeatGenerator, heatin
         )
         return
     state.listed(path, heating.flow_temperature_in_celsius)
+
+
+def _standardized_scop(state: _TranslationState, generator: HeatGenerator, heating: Any) -> None:
+    """Write the heat pump's rated SCOP onto hplib, which calibrates its fit to it (hisim-4g9.15).
+
+    The request's checks guarantee a stated SCOP sits on a heat pump, and a ``heating_system``
+    measure removes it with the rest of the old generator's description: a new heat pump keeps
+    hplib's generic fit, any other new generator has no SCOP to take. Every heat pump runs the same
+    twin, whose hplib machine is air/water, so a ground-source or hybrid unit's rating calibrates
+    that air machine and is reported approximated (:func:`_scop_note`). Every heat-pump generator
+    selects a twin with the hplib component; one without it would be asked of the whitelist, which
+    lists neither rating, and so fail the translator's build.
+    """
+    for request_key, target in (
+        ("heatpump_scop_en14825_w35", Targets.STANDARDIZED_SCOP_W35),
+        ("heatpump_scop_en14825_w55", Targets.STANDARDIZED_SCOP_W55),
+    ):
+        path = f"house.heating.{request_key}"
+        if not state.present(path):
+            continue
+        value = getattr(heating, request_key)
+        if value is None:
+            state.report.approximated(
+                path,
+                "the heating_system measure replaced the heat pump this rating described; "
+                + (
+                    "the new heat pump keeps hplib's generic fit"
+                    if generator in BaseFiles.HEAT_PUMPS
+                    else f"the new {generator.value} is not a heat pump and has no SCOP to calibrate"
+                ),
+            )
+            continue
+        component = BaseFiles.generator_component(state.base_file_name)
+        if not state.write(component, target, value, source=path, note="calibrates hplib's fit to the stated SCOP"):
+            state.listed(path, value)
+            continue
+        note = _scop_note(generator)
+        if note is None:
+            state.report.used(path, Targets.describe(component, target), value=value)
+        else:
+            state.report.approximated(path, note, target=Targets.describe(component, target), value=value)
+
+
+def _scop_note(generator: HeatGenerator) -> Optional[str]:
+    """Return why a heat pump's rated SCOP only approximates its unit, or ``None`` when it is exact.
+
+    The heat-pump twin's hplib machine is air/water (group 1). A ground-source unit's rating was
+    measured with brine entering at 0 °C, and a hybrid unit's heat pump works beside a boiler the
+    twin does not have; either rating still calibrates the air machine, whose temperature
+    dependence across the season is the air fit's.
+    """
+    if generator is HeatGenerator.GROUND_SOURCE_HEAT_PUMP:
+        return "the rating calibrates hplib's air/water model; the twin has no brine/water machine yet (hisim-ztt7)"
+    if generator is HeatGenerator.HYBRID_HEAT_PUMP:
+        return (
+            "the rating calibrates hplib's air/water model, which heats alone; the twin has no hybrid "
+            "heat pump and boiler yet"
+        )
+    return None
 
 
 def _efficiency(state: _TranslationState, generator: HeatGenerator, heating: Any) -> None:

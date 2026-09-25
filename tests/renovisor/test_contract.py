@@ -10,11 +10,9 @@ Three of the six pinned files come from the contract repository and three from t
 repository (``renovisorissues``, where the shared specifications live since 2026-09-23), each at a
 named commit. Two files -- ``openapi.yaml`` and the ``homeinventory.yaml`` it references -- are
 pinned with ``authoritative: false`` because the request schema supersedes them; they are kept
-only so that the revision the branch once aligned against stays a committed fact. A seventh
-file, ``measure-capabilities.results-extension.yaml``, is HiSim's own proposal back to the
-frontend team and is deliberately unpinned; it is listed in
-``ContractFiles.HISIM_AUTHORED`` so that the "everything here is pinned" test stays exact
-instead of being loosened.
+only so that the revision the branch once aligned against stays a committed fact. Every file in
+the directory is a pinned copy: HiSim's former proposal for the capability document's ``results``
+section is part of the shared ``measure-capabilities.openapi.yaml`` since 2026-09-23.
 """
 
 import hashlib
@@ -82,27 +80,14 @@ class TestVendoredContract:
             assert recorded == source, f"{filename} is pinned to {recorded}, but its source is {source}"
 
     def test_every_vendored_file_is_pinned(self) -> None:
-        """No *copied* contract file lies beside PINNED.yaml without being recorded in it.
-
-        HiSim's own proposal files are the exception and are named as such: a pin records which
-        revision of somebody else's file a copy came from, and a file HiSim wrote has none.
-        """
+        """No contract file lies beside PINNED.yaml without being recorded in it."""
         pinned = set(ContractFiles.pinned()["files"])
         present = {
             path.name
             for pattern in ("*.yaml", "*.json")
             for path in ContractFiles.DIRECTORY.glob(pattern)
-        } - {ContractFiles.PINNED_FILENAME} - set(ContractFiles.HISIM_AUTHORED)
+        } - {ContractFiles.PINNED_FILENAME}
         assert present == pinned, f"unpinned or missing contract files: {present ^ pinned}"
-
-    def test_the_hisim_authored_results_extension_is_present_and_unpinned(self) -> None:
-        """The HiSim proposal for the capability document's ``results`` section, beside the copies."""
-        assert ContractFiles.RESULTS_EXTENSION_FILENAME in ContractFiles.HISIM_AUTHORED
-        assert ContractFiles.RESULTS_EXTENSION_FILENAME not in ContractFiles.pinned()["files"]
-
-        schemas = ContractFiles.results_extension_schema()["components"]["schemas"]
-        for name in ("ResultFields", "ResultField"):
-            assert name in schemas, f"the results extension lacks {name}"
 
     def test_the_superseded_openapi_is_pinned_as_not_authoritative(self) -> None:
         """The v0.3 draft stays vendored and says of itself that nothing may be read from it."""
@@ -129,7 +114,10 @@ class TestVendoredContract:
     def test_the_capability_schema_carries_the_shape_the_document_is_checked_against(self) -> None:
         """``ImplementedMeasures`` is what ``capabilities`` validates its output against."""
         schemas = ContractFiles.capabilities_schema()["components"]["schemas"]
-        for name in ("ImplementedMeasures", "ImplementedMeasure", "ImplementedOption"):
+        for name in (
+            "ImplementedMeasures", "ImplementedMeasure", "ImplementedOption", "ImplementedField",
+            "ImplementedValue", "ResultFields", "ResultField",
+        ):
             assert name in schemas, f"measure-capabilities.openapi.yaml lacks {name}"
 
     def test_the_catalogue_parses_to_its_list(self) -> None:

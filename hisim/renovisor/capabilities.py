@@ -22,14 +22,14 @@ image ``broken`` on that, and the point of the document is that it cannot.
 
 The document's shape is ``measure-capabilities.openapi.yaml``'s
 ``components.schemas.ImplementedMeasures``, and :meth:`CapabilityDocument.validate` checks it
-against that vendored schema before writing.
+against that vendored schema before writing. The schema is strict since 0.3.0 (2026-09-23): every
+key written here is declared there and no other key is admitted, so a key this module starts to
+emit fails the build until the shared spec declares it.
 
 One section is not aggregated from probes at all. ``results`` (:class:`ResultsSection`) says what
 the *answer* will look like -- every field ``result.json`` can carry, its source and its
-provenance -- generated from the same two tables the payload is built from. The vendored schema
-has no ``additionalProperties: false``, so the document still validates against it; the section
-is checked against ``measure-capabilities.results-extension.yaml`` as well, which is HiSim's own
-proposal for it.
+provenance -- generated from the same two tables the payload is built from. Its schema,
+``ResultFields``, was HiSim's own proposal until 2026-09-23 and is part of the shared schema now.
 """
 
 import copy
@@ -37,7 +37,7 @@ import json
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, ClassVar, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, cast
 
 import yaml
 from jsonschema import Draft202012Validator
@@ -162,14 +162,112 @@ def _write(house: Dict[str, Any], path: str, value: Any) -> None:
         current[parts[-1]] = value
 
 
+class RequestSchemaBounds:
+    """The bounds a numeric inventory field publishes, read from the request schema itself.
+
+    The shared ``measure-capabilities.openapi.yaml`` describes a field's ``minimum``/``maximum`` as
+    the request schema's own bounds, so they are looked up there when the document is built rather
+    than copied into a table beside it (decision of 2026-09-24, PR #807). Only an *inclusive*
+    bound is published: a field without a declared ``maximum`` publishes none, and one whose lower
+    bound is ``exclusiveMinimum`` publishes no ``minimum``, since the shared schema has no key for
+    an exclusive bound yet and a probe point standing in for it would claim a limit nobody set.
+    """
+
+    #: The two inclusive bound keywords of JSON Schema, which are also the document's keys.
+    INCLUSIVE: ClassVar[Tuple[str, str]] = ("minimum", "maximum")
+
+    #: The exclusive keyword that suppresses each inclusive one.
+    EXCLUSIVE: ClassVar[Dict[str, str]] = {"minimum": "exclusiveMinimum", "maximum": "exclusiveMaximum"}
+
+    #: The keywords whose alternatives are searched, e.g. a nullable ``oneOf``.
+    ALTERNATIVES: ClassVar[Tuple[str, ...]] = ("oneOf", "anyOf", "allOf")
+
+    @classmethod
+    def of(cls, path: str, schema: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+        """Return the bounds one request path publishes.
+
+        Args:
+            path: The dotted request path, ``house.`` included, e.g. ``house.building.construction_year``.
+            schema: The request schema; the vendored ``calculation-request.schema.json`` when omitted.
+
+        Returns:
+            ``{"minimum": ..., "maximum": ...}`` with each key present only when the schema
+            declares that bound and declares it inclusive.
+
+        Raises:
+            KeyError: When the schema has no such path, which means the probe table names a
+                field the request cannot carry.
+            ValueError: When two alternatives of the leaf declare the same bound differently.
+        """
+        root = schema if schema is not None else ContractFiles.request_schema()
+        node: Mapping[str, Any] = root
+        for part in path.split("."):
+            child = next(
+                (
+                    candidate["properties"][part]
+                    for candidate in cls._candidates(node, root)
+                    if part in candidate.get("properties", {})
+                ),
+                None,
+            )
+            if child is None:
+                raise KeyError(f"the request schema has no field {path!r} (stuck at {part!r})")
+            node = child
+        declared: Dict[str, Any] = {}
+        for candidate in cls._candidates(node, root):
+            for keyword in (*cls.INCLUSIVE, *cls.EXCLUSIVE.values()):
+                if keyword not in candidate:
+                    continue
+                if keyword in declared and declared[keyword] != candidate[keyword]:
+                    raise ValueError(f"{path}: the schema declares {keyword} both {declared[keyword]} and "
+                                     f"{candidate[keyword]}")
+                declared[keyword] = candidate[keyword]
+        return {
+            keyword: declared[keyword]
+            for keyword in cls.INCLUSIVE
+            if keyword in declared and cls.EXCLUSIVE[keyword] not in declared
+        }
+
+    @classmethod
+    def _candidates(cls, node: Mapping[str, Any], root: Mapping[str, Any]) -> List[Mapping[str, Any]]:
+        """Return *node* and every subschema it stands for: ``$ref`` targets, alternatives, ``items``."""
+        found: List[Mapping[str, Any]] = []
+        pending: List[Mapping[str, Any]] = [node]
+        while pending:
+            current = pending.pop(0)
+            if any(current is seen for seen in found):
+                continue
+            found.append(current)
+            if "$ref" in current:
+                pending.append(cls._resolve(str(current["$ref"]), root))
+            for keyword in cls.ALTERNATIVES:
+                pending.extend(current.get(keyword, []))
+            if isinstance(current.get("items"), Mapping):
+                pending.append(current["items"])
+        return found
+
+    @staticmethod
+    def _resolve(reference: str, root: Mapping[str, Any]) -> Mapping[str, Any]:
+        """Return the subschema a local ``$ref`` (``#/$defs/...``) points at."""
+        if not reference.startswith("#"):
+            raise ValueError(f"only local references are resolved, not {reference!r}")
+        target: Any = root
+        for token in reference.lstrip("#").strip("/").split("/"):
+            if token:
+                target = target[token.replace("~1", "/").replace("~0", "~")]
+        return cast(Mapping[str, Any], target)
+
+
 class ProbeSet:
     """The probes the capability document is aggregated from, as data.
 
-    Everything here is generated from two tables and the frozen catalogue, so a catalogue value
-    added tomorrow is probed tomorrow without anybody writing a probe. The two tables are the
-    inventory fields worth varying (:attr:`FIELD_VALUES`) and the bounds of the free numeric
-    options (:attr:`OPTION_BOUNDS`); both are the *request schema's* own numbers, so nothing is
-    invented here either.
+    Everything here is generated from three tables and the frozen catalogue, so a catalogue value
+    added tomorrow is probed tomorrow without anybody writing a probe. The tables are the
+    enumerated inventory fields worth varying (:attr:`FIELD_VALUES`, the request schema's own
+    enums), the values the numeric ones are probed at (:attr:`FIELD_PROBE_POINTS`, HiSim's own
+    choice and never published) and the bounds of the free numeric options
+    (:attr:`OPTION_BOUNDS`). The bounds a numeric field publishes are not in any of them: they are
+    read from the request schema when the document is built (:class:`RequestSchemaBounds`).
     """
 
     #: The material object every probe of a ``material`` option sends. It is the mockup's own
@@ -185,6 +283,9 @@ class ProbeSet:
         "lifespan_years": 57.5,
     }
 
+    #: The prefix a probe's subject carries in front of an inventory path.
+    HOUSE_PREFIX: ClassVar[str] = "house."
+
     #: The optional blocks a request may carry, each with the smallest body the schema accepts.
     BLOCKS: ClassVar[Dict[str, Dict[str, Any]]] = {
         "hot_water": {"supply": "together_with_heating_system"},
@@ -198,25 +299,16 @@ class ProbeSet:
         "electric_vehicles": {"number": 1},
     }
 
-    #: Inventory paths worth varying, each with the values to probe. Enum lists are the request
-    #: schema's; numeric pairs are its ``minimum``/``maximum``. ``ES`` is left out of the
-    #: country list because it is refused for want of a TABULA typology, which is a data gap the
-    #: document reports as an unsupported country rather than as a capability.
+    #: Enumerated inventory paths worth varying -- enums, booleans and the numeric enums such as
+    #: the glazing-pane counts and the three ``electric_vehicles`` fields -- each with the
+    #: request schema's own list. Every value is probed, and the document publishes one
+    #: ``values`` entry per value. A numeric field with a range is in :attr:`FIELD_PROBE_POINTS`
+    #: instead, and a path is in exactly one of the two (:meth:`varied_fields`).
     FIELD_VALUES: ClassVar[Dict[str, Tuple[Any, ...]]] = {
         "building.building_type": (
             "detached_sfh", "semi_detached_sfh", "terraced_sfh", "bungalow", "apartment", "other",
         ),
-        "building.construction_year": (1700, 2100),
-        "building.absolute_conditioned_floor_area_in_m2": (30, 400),
-        "building.number_of_storeys": (1, 6),
-        "building.set_heating_temperature_in_celsius": (12, 28),
         "building.roof.shape": ("pitched", "flat"),
-        "building.roof.u_value_in_watt_per_m2_per_kelvin": (0.1, 10),
-        "building.roof.area_in_m2": (0, 500),
-        "building.facade.area_in_m2": (0, 500),
-        "building.floor.area_in_m2": (0, 500),
-        "building.window.area_in_m2": (0, 500),
-        "building.door.area_in_m2": (0, 500),
         "building.window.glazing_panes": (1, 2, 3),
         "building.window.frame_material": ("wood", "plastic", "metal", "composite"),
         "building.window.low_emissivity_coating": (True, False),
@@ -224,8 +316,6 @@ class ProbeSet:
         "building.window.thermocover": (True, False),
         "building.door.glazing_panes": (0, 2, 3),
         "building.door.frame_material": ("wood", "plastic", "metal", "composite"),
-        "occupancy.number_of_residents": (1, 12),
-        "occupancy.home_office_days_per_week": (0, 7),
         "occupancy.pv_self_consumption_optimised": (True, False),
         "heating.type_of_system": (
             "air_source_heat_pump", "ground_source_heat_pump", "hybrid_heat_pump",
@@ -236,15 +326,12 @@ class ProbeSet:
         ),
         "heating.cooking_range": (True, False),
         "heating.secondary": ("open_fireplace", "wood_stove", "electric_heater"),
-        "heating.flow_temperature_in_celsius": (20, 90),
-        "heating.seasonal_efficiency_in_percent": (1, 400),
         "heat_distribution.type_of_system": (
             "surface_heating", "low_temperature_radiator", "conventional_radiator",
         ),
         "hot_water.supply": (
             "together_with_heating_system", "separate_heat_pump", "separate_direct_electric",
         ),
-        "hot_water.volume_heating_water_storage_in_liter": (0, 2000),
         "hot_water.tank_and_pipe_insulated": (True, False),
         "ventilation.type_of_system": (
             "natural", "window_trickle_vent", "mechanical_extract", "demand_controlled_extract",
@@ -252,18 +339,44 @@ class ProbeSet:
         ),
         "ventilation.air_tightness": ("as_built", "diy_sealed", "professionally_sealed"),
         "temperature_control.type_of_system": ("traditional_thermostats", "smart_heating_control_system"),
-        "air_conditioning.power_in_watt": (0, 50000),
         "appliances.white_appliances": ("existing", "new_efficient"),
+        "solar_thermal_system.supplies": ("dhw_only", "dhw_and_space_heating"),
+        "solar_thermal_system.collector_type": ("flat_plate", "evacuated_tube"),
+        "electric_vehicles.number": (1, 2),
+        "electric_vehicles.commuting_distance_in_km": (5, 10, 15, 20, 25, 30),
+        "electric_vehicles.charging_power_in_watt": (3700, 11000, 22000),
+    }
+
+    #: Numeric inventory paths worth varying, each with the low and the high value HiSim probes
+    #: it at. Where the request schema's bound is inclusive the point is the bound itself; where
+    #: it is exclusive (``exclusiveMinimum: 0``) the point lies inside it; where the schema has no
+    #: maximum it is a representative large value. These are probe points and nothing else: the
+    #: document never publishes them. A field publishes the schema's own inclusive bounds
+    #: (:class:`RequestSchemaBounds`) and folds the probes' statuses into its own (decision of
+    #: 2026-09-23: ``values[]`` is for enumerations only; of 2026-09-24: bounds come from the
+    #: schema). ``tests/renovisor/test_capabilities.py`` keeps every point inside the schema.
+    FIELD_PROBE_POINTS: ClassVar[Dict[str, Tuple[float, float]]] = {
+        "building.construction_year": (1700, 2100),
+        "building.absolute_conditioned_floor_area_in_m2": (1, 400),
+        "building.number_of_storeys": (1, 6),
+        "building.set_heating_temperature_in_celsius": (12, 28),
+        "building.roof.u_value_in_watt_per_m2_per_kelvin": (0.01, 10),
+        "building.roof.area_in_m2": (0, 500),
+        "building.facade.area_in_m2": (0, 500),
+        "building.floor.area_in_m2": (0, 500),
+        "building.window.area_in_m2": (0, 500),
+        "building.door.area_in_m2": (0, 500),
+        "occupancy.number_of_residents": (1, 12),
+        "occupancy.home_office_days_per_week": (0, 7),
+        "heating.flow_temperature_in_celsius": (20, 90),
+        "heating.seasonal_efficiency_in_percent": (1, 400),
+        "hot_water.volume_heating_water_storage_in_liter": (0, 2000),
+        "air_conditioning.power_in_watt": (0, 50000),
         "pv_system.size_in_percent_of_roof_area": (1, 100),
         "pv_system.azimuth": (0, 360),
         "pv_system.tilt": (0, 90),
         "battery.days_to_cover": (1, 14),
-        "solar_thermal_system.supplies": ("dhw_only", "dhw_and_space_heating"),
-        "solar_thermal_system.collector_type": ("flat_plate", "evacuated_tube"),
-        "solar_thermal_system.area_m2": (1, 100),
-        "electric_vehicles.number": (1, 2),
-        "electric_vehicles.commuting_distance_in_km": (5, 30),
-        "electric_vehicles.charging_power_in_watt": (3700, 22000),
+        "solar_thermal_system.area_m2": (0.1, 100),
     }
 
     #: Which block each inventory path needs present before it can be set at all.
@@ -357,7 +470,7 @@ class ProbeSet:
         for block, body in cls.BLOCKS.items():
             probes.append(
                 Probe(name=f"block:{block}", kind=ProbeKind.BLOCK, house={block: dict(body)},
-                      subject=f"house.{block}")
+                      subject=f"{cls.HOUSE_PREFIX}{block}")
             )
         probes.extend(cls._measure_probes())
         probes.extend(cls._field_probes())
@@ -400,10 +513,24 @@ class ProbeSet:
         return probes
 
     @classmethod
+    def varied_fields(cls) -> Dict[str, Tuple[Any, ...]]:
+        """Return every inventory path worth varying with the values it is probed at.
+
+        Raises:
+            ValueError: When a path is both enumerated and numeric. Merging the two tables would
+                let one silently shadow the other, and the document would publish the path as
+                whichever won -- a list of values or a pair of bounds -- without anybody deciding.
+        """
+        shared = sorted(set(cls.FIELD_VALUES) & set(cls.FIELD_PROBE_POINTS))
+        if shared:
+            raise ValueError(f"FIELD_VALUES and FIELD_PROBE_POINTS both list {shared}")
+        return {**cls.FIELD_VALUES, **cls.FIELD_PROBE_POINTS}
+
+    @classmethod
     def _field_probes(cls) -> List[Probe]:
         """Return one probe per inventory value worth varying, with its block switched on first."""
         probes: List[Probe] = []
-        for path, values in cls.FIELD_VALUES.items():
+        for path, values in cls.varied_fields().items():
             block = path.split(".")[0]
             prelude: Dict[str, Any] = (
                 {block: dict(cls.BLOCKS[block])} if block in cls.FIELD_BLOCK else {}
@@ -414,7 +541,7 @@ class ProbeSet:
                         name=f"field:{path}={value}",
                         kind=ProbeKind.FIELD,
                         house={**prelude, path: value},
-                        subject=f"house.{path}",
+                        subject=f"{cls.HOUSE_PREFIX}{path}",
                         value=value,
                     )
                 )
@@ -806,9 +933,12 @@ class Aggregation:
     def fields(cls, results: Sequence[ProbeResult]) -> List[Dict[str, Any]]:
         """Return the ``fields`` array: the same aggregation over the inventory.
 
-        As for a measure's options, a probe that varies one field's value contributes that
+        As for a measure's options, a probe that varies an enumerated field's value contributes that
         value's own status to ``values`` and not to the field's, and a ``PAIR`` probe contributes
-        to neither. What is left for the field's own status is every probe that carried the field
+        to neither. A numeric field (:attr:`ProbeSet.FIELD_PROBE_POINTS`) carries no ``values``: it
+        publishes the request schema's inclusive ``minimum``/``maximum`` where the schema declares
+        them (:class:`RequestSchemaBounds`) -- never its probe points -- and the probes at both ends
+        count towards its own status. What is left for the field's own status is every probe that carried the field
         without being about it -- the anchor, the block probes and the measure probes -- and,
         when nothing did, the worst of its values. The note follows the status out of the same
         observations, which is what makes ``house.hot_water.supply`` explain itself with the two
@@ -816,11 +946,16 @@ class Aggregation:
         """
         observed: Dict[str, List[Observation]] = {}
         per_value: Dict[str, Dict[Any, Tuple[ReportStatus, Optional[str]]]] = {}
+        schema = ContractFiles.request_schema()
+        bounds = {
+            f"{ProbeSet.HOUSE_PREFIX}{path}": RequestSchemaBounds.of(f"{ProbeSet.HOUSE_PREFIX}{path}", schema)
+            for path in ProbeSet.FIELD_PROBE_POINTS
+        }
         for result in results:
             probe = result.probe
             own = probe.subject if probe.kind is ProbeKind.FIELD and probe.subject else ""
             for path, (status, note) in result.fields.items():
-                if path == own:
+                if path == own and path not in bounds:
                     per_value.setdefault(path, {})[_key(probe.value)] = (status, note)
                 elif probe.kind is not ProbeKind.PAIR:
                     observed.setdefault(path, []).append(Observation(status, note))
@@ -832,6 +967,7 @@ class Aggregation:
             status = NoteAggregation.status_of(observations)
             note = NoteAggregation.note_of(observations, status)
             entry: Dict[str, Any] = {"path": path, "status": status.value}
+            entry.update(bounds.get(path, {}))
             if per_value.get(path):
                 entry["values"] = [
                     {
@@ -879,14 +1015,13 @@ class ResultsSection:
 
     It is generated from the two tables ``result.json`` is itself built out of --
     :class:`hisim.renovisor.kpis.KpiSchema`, written in terms of ``KpiSources``, and
-    :class:`hisim.renovisor.costs.CostSchema`, whose rows name no source at all since step 10
-    because the money left the payload: each of them says instead which key of
-    ``economics_result.json`` answers the field (:class:`hisim.renovisor.costs.EconomicsDocument`)
-    or why no key does. Neither is a second list beside the builders, so the section cannot
+    :class:`hisim.renovisor.costs.CostSchema`, whose rows read nothing from the simulation since
+    step 10 because the money left the payload: each of them names instead the key of
+    ``economics_result.json`` that answers the field (:class:`hisim.renovisor.costs.EconomicsDocument`),
+    or says why no key does. Neither is a second list beside the builders, so the section cannot
     announce a field the payload does not carry or a source the builder does not read. Its shape is
-    ``measure-capabilities.results-extension.yaml``'s ``ResultFields``, which is HiSim's proposal
-    to the frontend team rather than a vendored file, and which
-    :meth:`CapabilityDocument.validate` checks the section against.
+    the shared schema's ``ResultFields``, which :meth:`CapabilityDocument.validate` checks with
+    the rest of the document.
     """
 
     #: The key of the KPI half of the section, which is the payload block's own name.
@@ -894,9 +1029,6 @@ class ResultsSection:
 
     #: The key of the cost half.
     COSTS_KEY: ClassVar[str] = "costs"
-
-    #: The document path of the section's schema inside the extension file.
-    SCHEMA_REF: ClassVar[str] = "#/components/schemas/ResultFields"
 
     @classmethod
     def build(cls) -> Dict[str, Any]:
@@ -909,21 +1041,6 @@ class ResultsSection:
             cls.KPIS_KEY: [row.to_json() for row in KpiSchema.rows()],
             cls.COSTS_KEY: [row.to_json() for row in CostSchema.rows()],
         }
-
-    @classmethod
-    def validate(cls, section: Mapping[str, Any]) -> None:
-        """Check one section against the results-extension schema.
-
-        Args:
-            section: The ``results`` block of a document.
-
-        Raises:
-            jsonschema.ValidationError: On the first way the section is not the shape the
-                extension file declares.
-        """
-        extension = dict(ContractFiles.results_extension_schema())
-        extension["$ref"] = cls.SCHEMA_REF
-        Draft202012Validator(extension).validate(dict(section))
 
 
 @dataclass(frozen=True)
@@ -1018,28 +1135,19 @@ class CapabilityDocument:
     #: The document path of the whole document's schema inside the vendored capabilities file.
     SCHEMA_REF: ClassVar[str] = "#/components/schemas/ImplementedMeasures"
 
-    #: The key the results section sits under.
-    RESULTS_KEY: ClassVar[str] = "results"
-
     def validate(self) -> None:
-        """Check the document against both schemas it has to satisfy.
+        """Check the document against the vendored ``measure-capabilities.openapi.yaml``.
 
-        The whole document is checked against the vendored
-        ``measure-capabilities.openapi.yaml``, which is what ``GET /measures`` returns and which
-        carries no ``additionalProperties: false``, so the ``results`` section passes it
-        untouched. The section itself is then checked against
-        ``measure-capabilities.results-extension.yaml``, HiSim's own proposal for it, so that a
-        section nobody has agreed to yet is still a shape somebody wrote down.
+        That is what ``GET /measures`` returns, and it is strict: every key the document always
+        carries is required and no undeclared key is admitted, the ``results`` section included.
 
         Raises:
-            jsonschema.ValidationError: On the first way the document is not what the contract
-                says ``GET /measures`` returns, or the first way the results section is not what
-                the extension file declares.
+            jsonschema.ValidationError: On the first way the document is not what the shared
+                schema says ``GET /measures`` returns.
         """
         schema = dict(ContractFiles.capabilities_schema())
         schema["$ref"] = self.SCHEMA_REF
         Draft202012Validator(schema).validate(self.body)
-        ResultsSection.validate(self.body[self.RESULTS_KEY])
 
     def write(self, path: Path) -> int:
         """Validate the document and write it as JSON.

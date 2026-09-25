@@ -14,6 +14,7 @@ no source is absent with its reason rather than present with a zero.
 
 import datetime
 import json
+import math
 from pathlib import Path
 from typing import Any, Dict
 
@@ -23,7 +24,7 @@ from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.apply import AddedLayer
 from hisim.components.building.building import Building
 from hisim.renovisor.capabilities import ProbeSet
-from hisim.renovisor.constants import ComfortGrades
+from hisim.renovisor.constants import ComfortGrades, GradeScale
 from hisim.renovisor.kpis import (
     LifecycleCo2,
     ComfortSources,
@@ -357,18 +358,41 @@ def test_emissions_are_partial_over_a_part_year_and_absent_without_the_engine() 
     assert "lifecycle_costs.json" in reasons[f"kpis.{KpiField.EMISSIONS.value}"]
 
 
-def comfort_document(below: float, above: float) -> KpiDocument:
-    """A year's KPI document with the two degree-hour sums the comfort grades read."""
-    return document_of({ComfortSources.UNDERHEATING_NAME: below, ComfortSources.OVERHEATING_NAME: above})
+def comfort_document(below: float, above: float, unit: str = Building.DEGREE_HOURS_UNIT) -> KpiDocument:
+    """Return a KPI document with the two degree-hour sums the comfort grades read.
+
+    Args:
+        below: The heating degree-hours of the simulated period, which the builder does not scale.
+        above: The summer degree-hours of the simulated period, likewise.
+        unit: The unit the entries carry; empty for an entry that names none.
+
+    Returns:
+        The document, in the three-level shape HiSim writes.
+    """
+    values = {ComfortSources.UNDERHEATING_NAME: below, ComfortSources.OVERHEATING_NAME: above}
+    return KpiDocument(
+        {
+            "BUI1": {
+                "Building": {
+                    name: {"name": name, "unit": unit, "value": value}
+                    for name, value in values.items()
+                }
+            }
+        }
+    )
+
+
+def nearly_a_year() -> Period:
+    """Return 363 days, which :meth:`Period.is_full_year` admits as a year (0.6 % short)."""
+    return Period.from_dates(datetime.datetime(2021, 1, 1), datetime.datetime(2021, 12, 30))
 
 
 class TestComfortGrades:
-    """hisim-sska (renovisorissues #29): the grades are computed from the simulated year."""
+    """hisim-sska (renovisorissues #29): the grades are computed from the simulated year.
 
-    def test_the_names_are_the_building_s_own(self) -> None:
-        """A rename in the Building would otherwise turn every grade into a missing field."""
-        assert ComfortSources.UNDERHEATING_NAME == Building.UNDERHEATING_DEGREE_HOURS_KPI
-        assert ComfortSources.OVERHEATING_NAME == Building.OVERHEATING_DEGREE_HOURS_KPI
+    Scope: every test feeds a hand-made ``all_kpis.json``. The chain from a real full-year run to
+    the graded ``result.json`` is left to a slow job (bead hisim-evw9).
+    """
 
     @pytest.mark.parametrize(
         "below, heating", [(0.0, "high"), (100.0, "high"), (100.1, "medium"), (500.0, "medium"), (501.0, "low")]
@@ -396,9 +420,55 @@ class TestComfortGrades:
         assert summer["value"] == protection
         assert summer["provenance"] == Provenance.SIMULATED.value
 
-    def test_the_two_scales_fail_together_at_din_s_limit(self) -> None:
-        """'low' and 1 both start above 1200 K*h/a, DIN 4108-2's requirement for homes."""
-        assert ComfortGrades.SUMMER[-1][0] == ComfortGrades.SUMMER_HEAT_PROTECTION[-1][0] == 1200.0
+    @pytest.mark.parametrize("below, shown, heating", [(100.04, "100.0", "high"), (100.06, "100.1", "medium")])
+    def test_the_grade_is_taken_from_the_value_the_source_shows(self, below: float, shown: str, heating: str) -> None:
+        """Just above a limit: rounded to one decimal, shown with one and graded as shown."""
+        block = build(comfort_document(below, 0.0), a_full_year(), layers_of())
+
+        leaf = block.values[KpiField.COMFORT.value]["heating"]
+        assert leaf["value"] == heating
+        assert f" = {shown} {Building.DEGREE_HOURS_UNIT} over the simulated year;" in leaf["source"]
+
+    @pytest.mark.parametrize("period", [nearly_a_year(), a_full_year()], ids=["363 days", "365 days"])
+    def test_a_full_year_period_is_graded_unscaled(self, period: Period) -> None:
+        """A period that counts as a year is that year: 100.0 on the limit stays high, 99.5 is 99.5."""
+        assert period.is_full_year()
+        for below, shown in ((99.5, "99.5"), (100.0, "100.0")):
+            leaf = build(comfort_document(below, 0.0), period, layers_of()).values[KpiField.COMFORT.value]["heating"]
+            assert leaf["value"] == "high"
+            assert f" = {shown} {Building.DEGREE_HOURS_UNIT} over the simulated year;" in leaf["source"]
+
+    @pytest.mark.parametrize("unit", [Building.DEGREE_HOURS_UNIT, ""])
+    def test_the_source_quotes_the_building_s_unit(self, unit: str) -> None:
+        """The unit the KPI was published in, or the Building's own when the entry names none."""
+        block = build(comfort_document(10.0, 0.0, unit=unit), a_full_year(), layers_of())
+
+        source = block.values[KpiField.COMFORT.value]["heating"]["source"]
+        assert f"{Building.DEGREE_HOURS_UNIT} over the simulated year" in source
+        assert "K*h" not in source
+
+    @pytest.mark.parametrize("value", [float("nan"), float("inf")])
+    def test_a_non_finite_sum_is_absent_with_the_value(self, value: float) -> None:
+        """A NaN temperature propagates to the sum; it is named, not graded as the worst or best."""
+        document = KpiDocument(
+            {"BUI1": {"Building": {"x": {"name": ComfortSources.OVERHEATING_NAME, "unit": "°C*h", "value": value}}}}
+        )
+        block = build(document, a_full_year(), layers_of())
+
+        assert KpiField.SUMMER_HEAT_PROTECTION.value not in block.values
+        reasons = {entry.field: entry.reason for entry in block.missing}
+        for path in ("comfort.cooling", KpiField.SUMMER_HEAT_PROTECTION.value):
+            assert ComfortSources.OVERHEATING_NAME in reasons[f"kpis.{path}"]
+            assert repr(value) in reasons[f"kpis.{path}"]
+
+    def test_the_two_summer_scales_fail_together(self) -> None:
+        """'low' and 1 start above one shared limit, DIN 4108-2's requirement for homes."""
+        summer, protection = ComfortGrades.SUMMER, ComfortGrades.SUMMER_HEAT_PROTECTION
+        limit = summer.limits[-1]
+
+        assert protection.limits[-1] == limit
+        assert summer.grade(limit) != summer.worst and protection.grade(limit) != protection.worst
+        assert summer.grade(limit + 0.1) == summer.worst and protection.grade(limit + 0.1) == protection.worst
 
     def test_a_short_run_publishes_no_grade(self) -> None:
         """A winter day has no summer: the three grades are missing with the reason."""
@@ -417,3 +487,27 @@ class TestComfortGrades:
         assert KpiField.COMFORT.value not in block.values
         reasons = [entry.reason for entry in block.missing if entry.field == "kpis.comfort.heating"]
         assert reasons and ComfortSources.UNDERHEATING_NAME in reasons[0]
+
+
+class TestGradeScale:
+    """The scale refuses what no sum of clipped temperature differences produces."""
+
+    def test_a_negative_value_is_refused_with_the_value(self) -> None:
+        """A negative sum is a bug upstream, not the best grade."""
+        with pytest.raises(ValueError, match="-0.5"):
+            ComfortGrades.HEATING.grade(-0.5)
+
+    def test_a_non_finite_value_is_refused(self) -> None:
+        """A value that compares false with every limit, like NaN, would otherwise take the worst grade."""
+        with pytest.raises(ValueError, match="nan"):
+            ComfortGrades.HEATING.grade(math.nan)
+
+    @pytest.mark.parametrize(
+        "limits, grades",
+        [((500.0, 100.0), ("high", "medium")), ((100.0, 100.0), ("high", "medium")),
+         ((-1.0, 100.0), ("high", "medium")), ((100.0,), ("high", "medium")), ((), ())],
+    )
+    def test_a_malformed_scale_is_refused_on_construction(self, limits: Any, grades: Any) -> None:
+        """Descending, repeated or negative limits, a grade without a limit, or no limit at all."""
+        with pytest.raises(ValueError):
+            GradeScale(limits=limits, grades=grades, worst="low")

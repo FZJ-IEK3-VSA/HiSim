@@ -14,8 +14,13 @@ electricity per resident, because the MVP sizes a battery from the CHR01 profile
 uses rather than from a table (decision D-C).
 """
 
+import math
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, ClassVar, Dict, Tuple
+from typing import ClassVar, Dict, Generic, Tuple, TypeVar
+
+#: The type of a grade: the contract's words (``high``) or its 1..5 numbers.
+Grade = TypeVar("Grade")
 
 
 class Placement(str, Enum):
@@ -352,6 +357,64 @@ class AnywayShareByPlacement:
         return cls.BY_PLACEMENT.get(placement, cls.INTERNAL_FIRST_TIME)
 
 
+@dataclass(frozen=True)
+class GradeScale(Generic[Grade]):
+    """One grade scale: the limits that cut annual degree-hours into grades, best grade first.
+
+    A value on a limit takes the better grade, and a value above the last limit takes
+    :attr:`worst`. The scale checks itself on construction, so a mistyped limit is an error at
+    import rather than a grade that quietly never occurs.
+
+    Args:
+        limits: The upper limit of each grade in degree-hours per year, strictly ascending and
+            never negative.
+        grades: The grade each limit closes, in the same order, the best first.
+        worst: The grade of every value above the last limit.
+    """
+
+    limits: Tuple[float, ...]
+    grades: Tuple[Grade, ...]
+    worst: Grade
+
+    def __post_init__(self) -> None:
+        """Refuse a scale whose limits are not strictly ascending, are negative or lack a grade."""
+        if not self.limits:
+            raise ValueError("a grade scale needs at least one limit")
+        if len(self.limits) != len(self.grades):
+            raise ValueError(
+                f"a grade scale needs one grade per limit; got limits {self.limits} and grades {self.grades}"
+            )
+        if self.limits[0] < 0.0:
+            raise ValueError(f"the limits of a grade scale are never negative; got {self.limits}")
+        if any(lower >= upper for lower, upper in zip(self.limits, self.limits[1:])):
+            raise ValueError(f"the limits of a grade scale must be strictly ascending; got {self.limits}")
+
+    def grade(self, degree_hours: float) -> Grade:
+        """Return the grade of the first limit the degree-hours do not exceed.
+
+        Args:
+            degree_hours: The annual degree-hours, a finite number that is never negative.
+
+        Returns:
+            The grade.
+
+        Raises:
+            ValueError: When the degree-hours are negative or not finite, which no sum of clipped
+                temperature differences produces.
+        """
+        if not math.isfinite(degree_hours) or degree_hours < 0.0:
+            raise ValueError(f"degree-hours to grade must be finite and never negative; got {degree_hours!r}")
+        for limit, grade in zip(self.limits, self.grades):
+            if degree_hours <= limit:
+                return grade
+        return self.worst
+
+    def describe(self) -> str:
+        """Return the scale as one phrase, e.g. ``high <= 100, medium <= 500, else low``."""
+        bands = ", ".join(f"{grade} <= {limit:g}" for limit, grade in zip(self.limits, self.grades))
+        return f"{bands}, else {self.worst}"
+
+
 class ComfortGrades:
     """Where the comfort grades of ``result.json`` cut the simulated degree-hours (hisim-sska).
 
@@ -367,46 +430,17 @@ class ComfortGrades:
       this is summer overheating of the free-floating building. The two scales share the limit of
       1200 K·h/a, DIN 4108-2's requirement for homes: ``low`` and ``1`` both mean "would fail it".
 
-    A value on a limit takes the better grade. Every limit here is HiSim's proposal, chosen with
-    the owner and not taken from a rating procedure except where named. TO BE REVIEWED.
+    Every limit here is HiSim's proposal, chosen with the owner and not taken from a rating
+    procedure except where named. TO BE REVIEWED.
     """
 
-    #: Degree-hours per year more than 1 K below the heating setpoint -> grade, best first; above
-    #: the last: low.
-    HEATING: ClassVar[Tuple[Tuple[float, str], ...]] = ((100.0, "high"), (500.0, "medium"))
-    HEATING_WORST: ClassVar[str] = "low"
+    #: Degree-hours per year more than 1 K below the heating setpoint -> high, medium, else low.
+    HEATING: ClassVar[GradeScale[str]] = GradeScale(limits=(100.0, 500.0), grades=("high", "medium"), worst="low")
 
-    #: Degree-hours per year above 26 °C -> grade, best first; above the last: low.
-    SUMMER: ClassVar[Tuple[Tuple[float, str], ...]] = ((500.0, "high"), (1200.0, "medium"))
-    SUMMER_WORST: ClassVar[str] = "low"
+    #: Degree-hours per year above 26 °C -> high, medium, else low.
+    SUMMER: ClassVar[GradeScale[str]] = GradeScale(limits=(500.0, 1200.0), grades=("high", "medium"), worst="low")
 
-    #: Degree-hours per year above 26 °C -> the contract's 1..5 scale (5 = high), best first.
-    SUMMER_HEAT_PROTECTION: ClassVar[Tuple[Tuple[float, int], ...]] = (
-        (250.0, 5),
-        (500.0, 4),
-        (900.0, 3),
-        (1200.0, 2),
+    #: Degree-hours per year above 26 °C -> the contract's 1..5 scale, 5 the best.
+    SUMMER_HEAT_PROTECTION: ClassVar[GradeScale[int]] = GradeScale(
+        limits=(250.0, 500.0, 900.0, 1200.0), grades=(5, 4, 3, 2), worst=1
     )
-    SUMMER_HEAT_PROTECTION_WORST: ClassVar[int] = 1
-
-    @staticmethod
-    def grade(degree_hours: float, bands: Tuple[Tuple[float, Any], ...], worst: Any) -> Any:
-        """Return the grade of the first band whose limit the degree-hours do not exceed.
-
-        Args:
-            degree_hours: The annual degree-hours, never negative.
-            bands: ``(limit, grade)`` pairs, best grade first.
-            worst: The grade above the last limit.
-
-        Returns:
-            The grade.
-        """
-        for limit, grade in bands:
-            if degree_hours <= limit:
-                return grade
-        return worst
-
-    @staticmethod
-    def describe(bands: Tuple[Tuple[float, Any], ...], worst: Any) -> str:
-        """Return the bands as one phrase, e.g. ``high <= 100, medium <= 500, else low``."""
-        return ", ".join(f"{grade} <= {limit:g}" for limit, grade in bands) + f", else {worst}"

@@ -27,12 +27,14 @@ over that day, and dividing it by the period fraction would produce a nonsense a
 """
 
 import json
+import math
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 
-from hisim.renovisor.constants import ComfortGrades
+from hisim.components.building.building import Building
+from hisim.renovisor.constants import ComfortGrades, GradeScale
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.layers import EnvelopeLayers
 from hisim.renovisor.provenance import MissingField, Period, ProvenancedValue
@@ -86,9 +88,13 @@ class KpiDocument:
     #: The key every entry carries its value under.
     VALUE_KEY: ClassVar[str] = "value"
 
+    #: The key every entry carries its unit under.
+    UNIT_KEY: ClassVar[str] = "unit"
+
     def __init__(self, document: Mapping[str, Any]) -> None:
         """Index every entry of the document by its plain KPI name."""
         self._by_name: Dict[str, Any] = {}
+        self._units_by_name: Dict[str, Any] = {}
         for groups in document.values():
             if not isinstance(groups, Mapping):
                 continue
@@ -98,6 +104,7 @@ class KpiDocument:
                 for entry in entries.values():
                     if isinstance(entry, Mapping) and self.NAME_KEY in entry:
                         self._by_name.setdefault(str(entry[self.NAME_KEY]), entry.get(self.VALUE_KEY))
+                        self._units_by_name.setdefault(str(entry[self.NAME_KEY]), entry.get(self.UNIT_KEY))
 
     @classmethod
     def load(cls, results_directory: Path) -> Optional["KpiDocument"]:
@@ -129,6 +136,18 @@ class KpiDocument:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             return None
         return float(value)
+
+    def unit(self, name: str) -> Optional[str]:
+        """Return one KPI's unit as the run wrote it, or ``None`` when it is absent or empty.
+
+        Args:
+            name: The KPI's plain name.
+
+        Returns:
+            The unit, e.g. ``"°C*h"``, or ``None``.
+        """
+        unit = self._units_by_name.get(name)
+        return unit if isinstance(unit, str) and unit else None
 
     def has(self, name: str) -> bool:
         """Return whether the document carries a KPI of that name."""
@@ -215,23 +234,40 @@ class ComfortSources:
     """The two Building KPIs the comfort grades read (decision of 2026-09-23, hisim-sska).
 
     Both are degree-hours of the simulated indoor air temperature, published by the Building
-    under names that do not change with its setpoints (``Building.UNDERHEATING_DEGREE_HOURS_KPI``
-    and ``OVERHEATING_DEGREE_HOURS_KPI``; a unit test pins the two strings to those constants).
-    They are graded by :class:`~hisim.renovisor.constants.ComfortGrades`, and only from a full
-    year: a short run has no summer, and a winter day graded as "high" in summer is not a result.
+    under names that do not change with its setpoints. The names are the Building's own constants
+    rather than a copy of them, so a renamed KPI renames the lookup with it. They are graded by
+    :class:`~hisim.renovisor.constants.ComfortGrades`, and only from a full year: the heating
+    grade needs the winter and the two summer grades need the summer.
     """
 
     #: Degree-hours more than 1 K below the house's own heating setpoint, over the simulated period.
-    UNDERHEATING_NAME: ClassVar[str] = (
-        "Degree-hours of building indoor air temperature more than 1.0 K below its heating set temperature"
-    )
+    UNDERHEATING_NAME: ClassVar[str] = Building.UNDERHEATING_DEGREE_HOURS_KPI
     #: Degree-hours above 26 °C (DIN 4108-2, region B), over the simulated period.
-    OVERHEATING_NAME: ClassVar[str] = "Degree-hours of building indoor air temperature above 26.0 Celsius"
+    OVERHEATING_NAME: ClassVar[str] = Building.OVERHEATING_DEGREE_HOURS_KPI
+
+    #: The unit the ``source`` quotes when ``all_kpis.json`` names none: the Building's own.
+    FALLBACK_UNIT: ClassVar[str] = Building.DEGREE_HOURS_UNIT
+
+    #: The decimals the degree-hours are rounded to. The ``source`` shows the rounded value and
+    #: the grade is taken from it, so the number a reader sees is the number graded.
+    DECIMALS: ClassVar[int] = 1
 
     #: Why a grade is absent from a run shorter than a year.
     SHORT_RUN_REASON: ClassVar[str] = (
-        "comfort is graded over a full simulated year; a shorter run has no summer to grade"
+        "the comfort grades need a full simulated year, winter and summer; a shorter run is not graded"
     )
+
+    @classmethod
+    def rounded(cls, degree_hours: float) -> float:
+        """Return the degree-hours rounded to :attr:`DECIMALS`.
+
+        Args:
+            degree_hours: The degree-hours of the simulated year.
+
+        Returns:
+            The rounded degree-hours, which is both what the ``source`` shows and what is graded.
+        """
+        return round(degree_hours, cls.DECIMALS)
 
 
 class ContractExamples:
@@ -537,7 +573,6 @@ class KpiBuilder:
                 KpiField.SUMMER_HEAT_PROTECTION.value,
                 ComfortSources.OVERHEATING_NAME,
                 ComfortGrades.SUMMER_HEAT_PROTECTION,
-                ComfortGrades.SUMMER_HEAT_PROTECTION_WORST,
             ),
         )
         self._put(values, KpiField.COMFORT, self._comfort())
@@ -733,41 +768,52 @@ class KpiBuilder:
             return None
         return ProvenancedValue(value=value, provenance=Provenance.MOCKED, source=source).to_json()
 
-    def _graded(
-        self, path: str, name: str, bands: Tuple[Tuple[float, Any], ...], worst: Any
-    ) -> Optional[Dict[str, Any]]:
+    def _graded(self, path: str, name: str, scale: GradeScale[Any]) -> Optional[Dict[str, Any]]:
         """Return one comfort grade of a full simulated year, or record why there is none.
+
+        A full-year period is graded unscaled, unlike the annual energies (:meth:`_annual`), which
+        are divided by the period's fraction of a year. The grade limits are for a year, and a
+        period :meth:`Period.is_full_year` admits (within one per cent) is that year: dividing a
+        calendar year of 365 days by its fraction of 365.25 would only push a value on a limit
+        into the worse grade.
 
         Args:
             path: The field's path inside ``kpis``, e.g. ``comfort.heating``, for the absence
                 record.
             name: The Building KPI of degree-hours to grade (:class:`ComfortSources`).
-            bands: The grade's ``(limit, grade)`` pairs from :class:`ComfortGrades`, best first.
-            worst: The grade above the last limit.
+            scale: The grade scale from :class:`ComfortGrades`.
 
         Returns:
-            The provenance object, or ``None`` when the run is shorter than a year or lacks the KPI.
+            The provenance object, or ``None`` when the run is shorter than a year, lacks the KPI
+            or carries a non-finite value for it.
         """
+        field = f"{self.MISSING_PREFIX}.{path}"
         if not self._period.is_full_year():
-            self._missing.append(
-                MissingField(field=f"{self.MISSING_PREFIX}.{path}", reason=ComfortSources.SHORT_RUN_REASON)
-            )
+            self._missing.append(MissingField(field=field, reason=ComfortSources.SHORT_RUN_REASON))
             return None
         degree_hours = self._document.number(name) if self._document is not None else None
         if degree_hours is None:
             self._missing.append(
+                MissingField(field=field, reason=f"the run's {KpiDocument.FILE_NAME} has no KPI '{name}'")
+            )
+            return None
+        if not math.isfinite(degree_hours):
+            self._missing.append(
                 MissingField(
-                    field=f"{self.MISSING_PREFIX}.{path}",
-                    reason=f"the run's {KpiDocument.FILE_NAME} has no KPI '{name}'",
+                    field=field,
+                    reason=f"the run's {KpiDocument.FILE_NAME} has a non-finite '{name}' = {degree_hours!r}",
                 )
             )
             return None
+        rounded = ComfortSources.rounded(degree_hours)
+        unit = (self._document.unit(name) if self._document is not None else None) or ComfortSources.FALLBACK_UNIT
+        decimals = ComfortSources.DECIMALS
         return ProvenancedValue(
-            value=ComfortGrades.grade(degree_hours, bands, worst),
+            value=scale.grade(rounded),
             provenance=Provenance.SIMULATED,
             source=(
-                f"{KpiDocument.FILE_NAME}: '{name}' = {degree_hours:.0f} K*h over the year; "
-                f"{ComfortGrades.describe(bands, worst)} (hisim-sska, TO BE REVIEWED)"
+                f"{KpiDocument.FILE_NAME}: '{name}' = {rounded:.{decimals}f} {unit} over the simulated "
+                f"year; {scale.describe()} (hisim-sska, TO BE REVIEWED)"
             ),
             period=self._period,
         ).to_json()
@@ -780,11 +826,11 @@ class KpiBuilder:
             ``None`` when neither could.
         """
         leaves: Dict[str, Any] = {}
-        for leaf, name, bands, worst in (
-            ("heating", ComfortSources.UNDERHEATING_NAME, ComfortGrades.HEATING, ComfortGrades.HEATING_WORST),
-            ("cooling", ComfortSources.OVERHEATING_NAME, ComfortGrades.SUMMER, ComfortGrades.SUMMER_WORST),
+        for leaf, name, scale in (
+            ("heating", ComfortSources.UNDERHEATING_NAME, ComfortGrades.HEATING),
+            ("cooling", ComfortSources.OVERHEATING_NAME, ComfortGrades.SUMMER),
         ):
-            value = self._graded(f"{KpiField.COMFORT.value}.{leaf}", name, bands, worst)
+            value = self._graded(f"{KpiField.COMFORT.value}.{leaf}", name, scale)
             if value is not None:
                 leaves[leaf] = value
         return leaves or None
@@ -902,8 +948,12 @@ class KpiSchema:
         "material's CO2 footprint is unknown"
     )
 
-    #: When the comfort grades are absent: they need a whole year, summer included.
-    COMFORT_WHEN: ClassVar[str] = "absent when the period is shorter than a full year"
+    #: When the comfort grades are absent: they need a whole year, winter and summer, and a finite
+    #: sum of degree-hours to grade.
+    COMFORT_WHEN: ClassVar[str] = (
+        "absent when the period is shorter than a full year, or when the run's all_kpis.json lacks "
+        "the degree-hours KPI or carries a non-finite value for it"
+    )
 
     #: The energy label's one condition: the field exists and its value is always null.
     ENERGY_LABEL_CONDITION: ClassVar[str] = "the value is always null; no letter is invented"
@@ -970,10 +1020,8 @@ class KpiSchema:
             PayloadFieldRow(
                 cls.BLOCK,
                 KpiField.SUMMER_HEAT_PROTECTION.value,
-                f"all_kpis.json '{ComfortSources.OVERHEATING_NAME}' graded 5..1: "
-                + ComfortGrades.describe(
-                    ComfortGrades.SUMMER_HEAT_PROTECTION, ComfortGrades.SUMMER_HEAT_PROTECTION_WORST
-                ),
+                f"all_kpis.json '{ComfortSources.OVERHEATING_NAME}' over the simulated year, graded 5..1: "
+                + ComfortGrades.SUMMER_HEAT_PROTECTION.describe(),
                 Provenance.SIMULATED,
                 reason=ComfortSources.SHORT_RUN_REASON,
                 when=cls.COMFORT_WHEN,
@@ -981,10 +1029,10 @@ class KpiSchema:
             PayloadFieldRow(
                 cls.BLOCK,
                 KpiField.COMFORT.value,
-                f"heating: all_kpis.json '{ComfortSources.UNDERHEATING_NAME}', "
-                + ComfortGrades.describe(ComfortGrades.HEATING, ComfortGrades.HEATING_WORST)
-                + f"; cooling: '{ComfortSources.OVERHEATING_NAME}', "
-                + ComfortGrades.describe(ComfortGrades.SUMMER, ComfortGrades.SUMMER_WORST),
+                f"heating: all_kpis.json '{ComfortSources.UNDERHEATING_NAME}' over the simulated year, "
+                + ComfortGrades.HEATING.describe()
+                + f"; cooling: '{ComfortSources.OVERHEATING_NAME}' over the simulated year, "
+                + ComfortGrades.SUMMER.describe(),
                 Provenance.SIMULATED,
                 reason=ComfortSources.SHORT_RUN_REASON,
                 when=cls.COMFORT_WHEN,

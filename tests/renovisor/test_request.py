@@ -178,12 +178,37 @@ class TestTheSchemaIsTheTruth:
 
         assert ("schema_version", ProblemCode.SCHEMA_VERSION_UNSUPPORTED.value) in codes_of(document)
 
-    def test_a_device_sized_two_ways_at_once_violates_its_choice(self) -> None:
-        """``pv_system`` is sized by exactly one of power and roof share, never both."""
+    def test_a_battery_sized_two_ways_at_once_violates_its_choice(self) -> None:
+        """``battery`` is sized by exactly one of capacity and days_to_cover, never both."""
+        document = mockup()
+        document["house"]["battery"] = {"custom_battery_capacity_generic_in_kilowatt_hour": 8, "days_to_cover": 2}
+
+        assert ("house.battery", ProblemCode.ONEOF_VIOLATED.value) in codes_of(document)
+
+    def test_an_array_may_state_its_power_and_its_roof_share_together(self) -> None:
+        """§3.13 since 2026-09-25: at least one of the two, and both are allowed."""
         document = mockup()
         document["house"]["pv_system"] = {"power_in_watt": 4000, "size_in_percent_of_roof_area": 60}
 
-        assert ("house.pv_system", ProblemCode.ONEOF_VIOLATED.value) in codes_of(document)
+        assert not codes_of(document)
+
+    def test_an_array_with_neither_power_nor_share_names_both_in_its_choice(self) -> None:
+        """A failed ``anyOf`` of bare ``required`` branches is ``oneof.violated``, naming the fields (hisim-wevr)."""
+        document = mockup()
+        document["house"]["pv_system"] = {"tilt": 30}
+
+        with pytest.raises(RequestError) as refusal:
+            Request.parse(document)
+        (problem,) = [problem for problem in refusal.value.problems if problem.path == "house.pv_system"]
+        assert problem.code is ProblemCode.ONEOF_VIOLATED
+        assert "at least one of 'power_in_watt', 'size_in_percent_of_roof_area'" in problem.message
+
+    def test_an_any_of_over_types_stays_a_type_fault(self) -> None:
+        """Only a choice between required keys is ``oneof.violated``; an option value of no admitted type is not."""
+        document = mockup()
+        document["measures"] = [{"id": "outside_shading", "options": {"colour": None}}]
+
+        assert ("measures[0].options.colour", ProblemCode.TYPE_INVALID.value) in codes_of(document)
 
 
 @pytest.mark.base
@@ -685,10 +710,10 @@ class TestTheAdditiveRequestFields:
             document
         )
 
-    def test_an_applicant_block_validates_with_every_key_optional(self) -> None:
-        """The empty block is the all-undetermined questionnaire, and it is a legal one."""
+    def test_an_applicant_block_validates_with_every_key_but_main_residence_optional(self) -> None:
+        """The block stating main_residence alone is the otherwise undetermined questionnaire, and it is legal."""
         document = mockup()
-        document["applicant"] = {}
+        document["applicant"] = {"main_residence": False}
 
         assert not codes_of(document)
 
@@ -704,17 +729,39 @@ class TestTheAdditiveRequestFields:
 
         assert not codes_of(document)
 
+    def test_a_request_without_an_applicant_block_is_refused_by_name(self) -> None:
+        """hisim-snt9 (renovisorissues !19): the block is required, and the problem says why."""
+        document = mockup()
+        del document["applicant"]
+
+        with pytest.raises(RequestError) as refusal:
+            Request.parse(document)
+        (problem,) = refusal.value.problems
+        assert (problem.path, problem.code) == ("applicant", ProblemCode.REQUIRED_MISSING)
+        assert "main residence" in problem.message
+
+    def test_an_applicant_block_without_main_residence_is_refused_by_name(self) -> None:
+        """hisim-snt9: several bonuses depend on the answer, so the request is refused rather than priced on a guess."""
+        document = mockup()
+        document["applicant"] = {"role": "owner_occupier", "household_size": 2}
+
+        with pytest.raises(RequestError) as refusal:
+            Request.parse(document)
+        (problem,) = refusal.value.problems
+        assert (problem.path, problem.code) == ("applicant.main_residence", ProblemCode.REQUIRED_MISSING)
+        assert "subsidy bonuses" in problem.message
+
     def test_an_applicant_role_outside_the_vocabulary_is_refused(self) -> None:
         """Four roles; the engine's catalogue conditions name no fifth."""
         document = mockup()
-        document["applicant"] = {"role": "housing_cooperative"}
+        document["applicant"] = {"role": "housing_cooperative", "main_residence": True}
 
         assert ("applicant.role", ProblemCode.ENUM_UNKNOWN.value) in codes_of(document)
 
     def test_a_negative_household_income_is_refused(self) -> None:
         """An income below zero is a form error, not a poor applicant."""
         document = mockup()
-        document["applicant"] = {"taxable_household_income_in_euro": -1}
+        document["applicant"] = {"taxable_household_income_in_euro": -1, "main_residence": True}
 
         assert ("applicant.taxable_household_income_in_euro", ProblemCode.RANGE_EXCEEDED.value) in codes_of(
             document
@@ -723,7 +770,7 @@ class TestTheAdditiveRequestFields:
     def test_an_applicant_block_answers_no_house_leaf(self) -> None:
         """The block sits beside the house, so an inventory key inside it is refused at it."""
         document = mockup()
-        document["applicant"] = {"construction_year": 1975}
+        document["applicant"] = {"construction_year": 1975, "main_residence": True}
 
         assert ("applicant.construction_year", ProblemCode.KEY_UNKNOWN.value) in codes_of(document)
 

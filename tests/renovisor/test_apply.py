@@ -447,8 +447,8 @@ class TestReplacementsAndRemovals:
         assert "power_in_watt sizes the array" in (share.note or "")
         assert applied.measures[0].status is ReportStatus.USED
 
-    def test_the_shading_loss_is_accepted_and_not_implemented(self) -> None:
-        """The array is simulated unshaded; the option is written down, not dropped."""
+    def test_the_shading_loss_is_copied_into_the_array_and_not_implemented(self) -> None:
+        """§4.2: the measure writes the loss into pv_system; the array is simulated unshaded all the same."""
         applied = apply(
             anchor_house(),
             measures_of({"id": "photovoltaic_system", "options": {
@@ -459,7 +459,8 @@ class TestReplacementsAndRemovals:
         line = next(option for option in applied.measures[0].options if option.name == "shading_losses_in_percent")
         assert line.status is ReportStatus.NOT_IMPLEMENTED_YET
         assert "unshaded" in (line.note or "")
-        assert "shading_losses_in_percent" not in applied.house["pv_system"]
+        assert applied.house["pv_system"]["shading_losses_in_percent"] == 8.0
+        assert [option.name for option in applied.measures[0].options].count("shading_losses_in_percent") == 1
 
     def test_a_new_battery_replaces_the_old_one_entirely(self) -> None:
         """The measure states the new battery; nothing of the old one survives."""

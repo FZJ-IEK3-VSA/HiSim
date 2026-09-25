@@ -730,6 +730,9 @@ class MeasureRegistry:
         ("tilt_in_degree", "tilt"),
     )
 
+    #: The photovoltaic measure's shading option, which is also the ``pv_system`` key it writes.
+    PV_SHADING_LOSSES: ClassVar[str] = "shading_losses_in_percent"
+
     #: The note on the roof share when a stated power sizes the array instead. The catalogue's own
     #: reason (measures.yaml at contract 882a8c1): both are carried because they answer
     #: different questions.
@@ -746,8 +749,10 @@ class MeasureRegistry:
         The roof share is the ``everyone`` option and is always written. ``power_in_watt``, when
         the request states it, is written beside it and wins for the simulation: the translator
         pins the array's power and the share is recorded. A stated azimuth or tilt replaces the old
-        array's; an absent one keeps it. ``shading_losses_in_percent`` has no HiSim counterpart and
-        is left to the whitelist by :func:`_record_unseen_options`.
+        array's; an absent one keeps it. A stated ``shading_losses_in_percent`` is copied into the
+        block as the spec's §4.2 row says, and deferred to the whitelist: ``PVSystem`` has no
+        shading loss, so the option's own line is ``not_implemented_yet`` and no house line repeats
+        it (the renovated block's value is the package's, not a request leaf).
         """
         existing = context.effects.read(HousePaths.PV_SYSTEM)
         replacement: Dict[str, Any] = {
@@ -770,6 +775,10 @@ class MeasureRegistry:
                 context.target(f"PVSystem.config.{key}")
             elif isinstance(existing, Mapping) and existing.get(key) is not None:
                 replacement[key] = existing[key]
+        shading = context.option(cls.PV_SHADING_LOSSES)
+        if _is_number(shading):
+            replacement[cls.PV_SHADING_LOSSES] = float(shading)
+            context.defer(f"{context.measure.id}.{cls.PV_SHADING_LOSSES}", shading, cls.PV_SHADING_LOSSES)
         context.effects.replace_block(HousePaths.PV_SYSTEM, replacement)
 
     #: The ``battery`` keys the measure writes: the request schema's own capacity field (HiSim's

@@ -331,8 +331,8 @@ class TestTheMappingReportHalf:
             for path, value, _note in built.defaults
         )
 
-    def test_the_stated_leaves_carry_the_dated_boiler_the_mockup_states(self) -> None:
-        """The translator covers these before its fail-loud stage; the mockup dates its boiler."""
+    def test_the_stated_leaves_carry_the_dated_boiler_and_the_applicant_the_mockup_states(self) -> None:
+        """Covered before the fail-loud stage: the mockup's dated boiler and its main_residence answer."""
         leaves = EconomicContextBuilder.stated_leaves(_mockup())
 
         assert leaves == [
@@ -340,7 +340,8 @@ class TestTheMappingReportHalf:
                 "house.heating.installation_year",
                 _mockup()["house"]["heating"]["installation_year"],
                 EconomicContextBuilder.INSTALLATION_YEAR_USED_NOTE,
-            )
+            ),
+            ("applicant.main_residence", True, EconomicContextBuilder.APPLICANT_USED_NOTE),
         ]
 
     def test_a_stated_installation_year_on_a_device_and_an_element_is_picked_up(self) -> None:
@@ -355,6 +356,7 @@ class TestTheMappingReportHalf:
             "house.heating.installation_year",
             "house.pv_system.installation_year",
             "house.building.facade.installation_year",
+            "applicant.main_residence",
         ]
 
 
@@ -374,8 +376,8 @@ class TestTheSubsidyContext:
         assert context.applicant.taxable_household_income_in_euro is None
         assert context.applicant.household_size is None
 
-    def test_the_three_irish_applicant_answers_stay_none_without_an_applicant_block(self) -> None:
-        """The mockup carries no block, so nothing may be inferred."""
+    def test_the_three_irish_applicant_answers_stay_none_when_the_block_leaves_them_out(self) -> None:
+        """The mockup's block states only main_residence, so nothing else may be inferred."""
         context = _built(_mockup()).context.subsidy_context
         assert context.applicant.receives_means_tested_benefit is None
         assert context.applicant.first_time_buyer is None
@@ -385,6 +387,7 @@ class TestTheSubsidyContext:
         """Step 11 §3.2/§3.3: read when present, never guessed, never defaulted to false."""
         document = _mockup()
         document["applicant"] = {
+            "main_residence": True,
             "receives_means_tested_benefit": True,
             "first_time_buyer": False,
             "managed_full_retrofit": True,
@@ -408,10 +411,21 @@ class TestTheSubsidyContext:
     def test_the_applicant_role_becomes_the_profiles_actor(self, role: str, actor: ApplicantActor) -> None:
         """hisim-epc.14: a landlord applies to landlord programmes, not to owner-occupier ones."""
         document = _mockup()
-        document["applicant"] = {"role": role}
+        document["applicant"] = {"role": role, "main_residence": True}
         context = _built(document).context.subsidy_context
 
         assert context.applicant.actor is actor
+
+    @pytest.mark.parametrize("main_residence", [True, False])
+    def test_main_residence_is_read_from_the_request_and_not_from_the_profiles_default(
+        self, main_residence: bool
+    ) -> None:
+        """hisim-snt9: the schema requires the answer, so a 'no' reaches the eligibility conditions as a 'no'."""
+        document = _mockup()
+        document["applicant"] = {"main_residence": main_residence}
+        context = _built(document).context.subsidy_context
+
+        assert context.applicant.main_residence is main_residence
 
     def test_every_role_of_the_schema_is_one_of_the_four_above(self) -> None:
         """A fifth role in the shared schema has to be given an actor here, not a KeyError at run time."""
@@ -448,7 +462,7 @@ class TestTheSubsidyContext:
     def test_an_applicant_block_without_a_role_keeps_the_default_actor(self) -> None:
         """The profile's own assertion stands: the archetype is an owner-occupied dwelling."""
         document = _mockup()
-        document["applicant"] = {"household_size": 4}
+        document["applicant"] = {"household_size": 4, "main_residence": True}
         context = _built(document).context.subsidy_context
 
         assert context.applicant.actor is ApplicantActor.OWNER_OCCUPIER

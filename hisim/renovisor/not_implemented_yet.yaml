@@ -125,9 +125,18 @@
   note: No night-setback group in the recorded base files yet.
   tracked: challenges.md D-D
 
+# The whole block, its power and (since the shared schema of 2026-09-25) its installation_year:
+# neither the simulation nor the economics has an air-conditioner asset.
 - path: house.air_conditioning
   note: No air-conditioner group in the recorded base files yet.
   tracked: challenges.md D-D
+
+# --- Photovoltaics ------------------------------------------------------------------------------
+
+# The house's own array and the photovoltaic_system measure (below) state the same annual loss; the
+# measure copies its value into pv_system and is reported on its option line, the house's on its path.
+- path: house.pv_system.shading_losses_in_percent
+  note: No shading-loss parameter on PVSystem; the array is simulated unshaded.
 
 # --- Ventilation ------------------------------------------------------------------------------
 
@@ -198,7 +207,8 @@
   note: No HiSim parameter for the age of a new array.
 
 # Contract 882a8c1 gave the measure the array's own figures; power, azimuth and tilt reach PVSystem,
-# the annual shading loss has no counterpart there (the PV model computes an unshaded array).
+# the annual shading loss has no counterpart there (the PV model computes an unshaded array). The
+# house path of the same figure is listed under Photovoltaics above, with the same sentence.
 - measure: photovoltaic_system.shading_losses_in_percent
   note: No shading-loss parameter on PVSystem; the array is simulated unshaded.
 

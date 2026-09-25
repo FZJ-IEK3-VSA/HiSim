@@ -610,7 +610,9 @@ class TestNumericOptions:
         "photovoltaic_system.power_in_watt": "house.pv_system.power_in_watt",
         "photovoltaic_system.azimuth_in_degree": "house.pv_system.azimuth",
         "photovoltaic_system.tilt_in_degree": "house.pv_system.tilt",
+        "photovoltaic_system.shading_losses_in_percent": "house.pv_system.shading_losses_in_percent",
         "battery_system.capacity_in_kwh": "house.battery.custom_battery_capacity_generic_in_kilowatt_hour",
+        "battery_system.power_in_watt": "house.battery.power_in_watt",
     }
 
     def test_every_free_numeric_option_has_two_probe_points(self) -> None:
@@ -650,10 +652,8 @@ class TestNumericOptions:
 class TestNumericFields:
     """A numeric field publishes the request schema's bounds, never its probe points (PR #807)."""
 
-    def test_a_numeric_field_publishes_exactly_the_schemas_inclusive_bounds(
-        self, document: CapabilityDocument
-    ) -> None:
-        """No invented maximum, no probe point in place of an exclusive minimum, no ``values``."""
+    def test_a_numeric_field_publishes_exactly_the_schemas_bounds(self, document: CapabilityDocument) -> None:
+        """Each of the four bound keywords the schema declares, under its own name; nothing invented, no ``values``."""
         fields = {entry["path"]: entry for entry in document.body["fields"]}
         for path in ProbeSet.FIELD_PROBE_POINTS:
             full = f"{ProbeSet.HOUSE_PREFIX}{path}"
@@ -661,17 +661,30 @@ class TestNumericFields:
             assert declared is not None, path
             assert "values" not in entry, path
             assert "enum" not in declared, path
-            for key, exclusive in (("minimum", "exclusiveMinimum"), ("maximum", "exclusiveMaximum")):
-                if key in declared and exclusive not in declared:
+            for key in ("minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"):
+                if key in declared:
                     assert entry[key] == declared[key], (path, key)
                 else:
                     assert key not in entry, (path, key)
+
+    def test_the_exclusive_bounds_of_the_request_schema_are_published(self, document: CapabilityDocument) -> None:
+        """hisim-9h7t: floor area, roof U-value, SCOP, collector area and the two device powers are > 0 or > 1."""
+        fields = {entry["path"]: entry for entry in document.body["fields"]}
+
+        assert fields["house.building.absolute_conditioned_floor_area_in_m2"]["exclusiveMinimum"] == 0
+        assert fields["house.building.roof.u_value_in_watt_per_m2_per_kelvin"]["exclusiveMinimum"] == 0
+        assert fields["house.heating.heatpump_scop_en14825_w35"]["exclusiveMinimum"] == 1
+        assert fields["house.solar_thermal_system.area_m2"]["exclusiveMinimum"] == 0
+        assert fields["house.pv_system.power_in_watt"]["exclusiveMinimum"] == 0
+        assert fields["house.pv_system.power_in_watt"]["maximum"] == 100000
+        assert fields["house.battery.power_in_watt"]["exclusiveMinimum"] == 0
+        assert "minimum" not in fields["house.battery.power_in_watt"]
 
     def test_only_a_probed_numeric_field_carries_bounds(self, document: CapabilityDocument) -> None:
         """A bound on any other entry would be one nobody derived from the schema."""
         numeric = {f"{ProbeSet.HOUSE_PREFIX}{path}" for path in ProbeSet.FIELD_PROBE_POINTS}
         for entry in document.body["fields"]:
-            if "minimum" in entry or "maximum" in entry:
+            if set(entry) & {"minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"}:
                 assert entry["path"] in numeric, entry["path"]
 
     def test_an_enum_declared_field_publishes_the_schemas_enum(self, document: CapabilityDocument) -> None:
@@ -706,7 +719,7 @@ class TestNumericFields:
                 assert point < declared.get("exclusiveMaximum", point + 1), (path, point)
 
     def test_the_walker_reads_through_references_and_nullable_alternatives(self) -> None:
-        """A bound behind ``$ref`` and a nullable ``oneOf`` is found; an exclusive one is not published."""
+        """A bound behind ``$ref`` and a nullable ``oneOf`` is found; an exclusive one keeps its own keyword."""
         schema = {
             "properties": {"house": {"$ref": "#/$defs/house"}},
             "$defs": {
@@ -721,7 +734,7 @@ class TestNumericFields:
         }
 
         assert RequestSchemaBounds.of("house.block.closed", schema) == {"minimum": 2, "maximum": 9}
-        assert RequestSchemaBounds.of("house.block.open", schema) == {}
+        assert RequestSchemaBounds.of("house.block.open", schema) == {"exclusiveMinimum": 0}
         with pytest.raises(KeyError):
             RequestSchemaBounds.of("house.block.missing", schema)
 

@@ -768,8 +768,8 @@ class LifecycleCostResult:
     parameters: EconomicParameters
     total_npv_in_euro: UncertainValue  # net present cost over the horizon
     equivalent_annual_cost_in_euro: UncertainValue  # NPV x annuity factor — the headline KPI
-    #: The equivalent annual cost over `TimelineAggregation.MONTHS_PER_YEAR`: the level monthly
-    #: payment worth the whole horizon, and the headline monthly figure (hisim-cyc.6). Not
+    #: The equivalent annual cost over `TimelineAggregation.MONTHS_PER_YEAR`: an even monthly spread
+    #: of that yearly payment, not a monthly annuity, and the headline monthly figure (hisim-cyc.6). Not
     #: `monthly_cost_year1_in_euro`, which is year 1's cash and carries whatever that year replaces.
     monthly_equivalent_cost_in_euro: UncertainValue
     npv_by_category: Dict[CostCategory, UncertainValue]

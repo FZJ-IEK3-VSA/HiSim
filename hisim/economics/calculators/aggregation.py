@@ -50,8 +50,8 @@ class TimelineAggregation:
     `npv_by_*` value are euro bands **discounted to year 0** at the run's interest rate, cost
     positive (lower is better; a negative NPV means the variant nets money);
     `equivalent_annual_cost_in_euro` is that NPV times the VDI 2067-1 annuity factor, in euro per
-    year, and `monthly_equivalent_cost_in_euro` is that annuity over twelve — the level monthly
-    payment worth the whole horizon (hisim-cyc.6); `annual_cost_series_nominal_in_euro` is
+    year, and `monthly_equivalent_cost_in_euro` is that annuity over twelve — an even monthly
+    spread of it, not a monthly annuity (hisim-cyc.6); `annual_cost_series_nominal_in_euro` is
     **undiscounted** nominal euro indexed by year 0..T (the liquidity view, §4.3), and
     `monthly_cost_year1_in_euro` is its year-1 element over twelve. All are scoped to `scope_payer`
     except `npv_by_payer`, which deliberately covers every payer so the §6.5 zero-sum check has

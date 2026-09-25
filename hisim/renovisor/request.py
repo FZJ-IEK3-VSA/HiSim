@@ -449,6 +449,25 @@ class SchemaProblems:
         "anyOf": ProblemCode.TYPE_INVALID,
     }
 
+    #: Why a required key is required, for the keys whose bare ``required.missing`` message would
+    #: not tell the frontend what it forgot to ask: the applicant block and its ``main_residence``
+    #: are required since the shared schema of 2026-09-24 (renovisorissues !19, §3.17), because
+    #: several subsidy bonuses depend on the answer and a request that does not give it is refused
+    #: rather than priced on an assumption.
+    REQUIRED_REASONS: ClassVar[Dict[str, str]] = {
+        "applicant": (
+            "the request must say who applies for the subsidies, at least whether the dwelling is "
+            "their main residence (§3.17)"
+        ),
+        "applicant.main_residence": (
+            "several subsidy bonuses depend on whether the dwelling is the applicant's main "
+            "residence, so the request must say (§3.17)"
+        ),
+    }
+
+    #: How many of its alternatives a choice between required keys asks for, by keyword.
+    CHOICE_WORDING: ClassVar[Dict[str, str]] = {"oneOf": "exactly one", "anyOf": "at least one"}
+
     @classmethod
     def validator(cls) -> Draft202012Validator:
         """Return a validator over the vendored request schema.
@@ -490,11 +509,24 @@ class SchemaProblems:
             ]
         if keyword == "required":
             name = cls._missing(error)
+            missing = cls.join(path, name)
+            reason = cls.REQUIRED_REASONS.get(missing)
             return [
                 Problem(
-                    path=cls.join(path, name),
+                    path=missing,
                     code=ProblemCode.REQUIRED_MISSING,
-                    message=f"'{name}' is required and the request does not carry it",
+                    message=f"'{name}' is required and the request does not carry it"
+                    + (f": {reason}" if reason else ""),
+                )
+            ]
+        choice = cls._required_choice(error)
+        if choice is not None:
+            return [
+                Problem(
+                    path=path,
+                    code=ProblemCode.ONEOF_VIOLATED,
+                    message=f"{cls.CHOICE_WORDING[keyword]} of {', '.join(repr(name) for name in choice)} "
+                    "is required",
                 )
             ]
         if keyword == "const":
@@ -524,6 +556,24 @@ class SchemaProblems:
         if not isinstance(instance, Mapping):
             return ()
         return tuple(sorted(str(key) for key in instance if key not in declared))
+
+    @classmethod
+    def _required_choice(cls, error: SchemaValidationError) -> Optional[Tuple[str, ...]]:
+        """Return the keys a failed choice between required keys names, or ``None`` for any other error.
+
+        ``house.battery`` is a ``oneOf`` and ``house.pv_system`` an ``anyOf`` whose every branch is
+        a bare ``required``: which way a device is sized. Both are ``oneof.violated``, the code the
+        shared spec names for either (translator-implementation-spec §3); an ``anyOf`` over types
+        stays ``type.invalid``.
+        """
+        if error.validator not in cls.CHOICE_WORDING or not isinstance(error.validator_value, list):
+            return None
+        names: List[str] = []
+        for branch in error.validator_value:
+            if not isinstance(branch, Mapping) or set(branch) != {"required"}:
+                return None
+            names.extend(str(name) for name in branch["required"])
+        return tuple(names)
 
     @classmethod
     def _missing(cls, error: SchemaValidationError) -> str:
@@ -835,11 +885,15 @@ class HotWater:
 
 @dataclass(frozen=True)
 class PvSystem:
-    """A photovoltaic array, sized either by its power or by the share of roof it covers.
+    """A photovoltaic array, sized by its power, by the share of roof it covers, or by both.
+
+    With both (shared schema of 2026-09-25, §3.13) the power sizes the array and the share is
+    recorded. The block's ``shading_losses_in_percent`` is not read: ``PVSystem`` has no shading
+    loss, and the leaf is reported ``not_implemented_yet``.
 
     Args:
-        power_in_watt: An existing array's installed peak power.
-        size_in_percent_of_roof_area: The share of the usable roof a new array covers.
+        power_in_watt: The array's installed peak power, which pins it when stated.
+        size_in_percent_of_roof_area: The share of the usable roof the array covers.
         azimuth: Degrees, 180 being south.
         tilt: Degrees from horizontal.
     """
@@ -865,14 +919,15 @@ class PvSystem:
 class Battery:
     """A household battery, sized either by its capacity or by the days it should cover.
 
-    The request schema's ``house.battery`` offers the capacity and ``days_to_cover``. The power is
-    not a request field: only the ``battery_system`` measure writes it into the renovated house,
-    from its ``power_in_watt`` option (contract 882a8c1).
+    The request schema's ``house.battery`` offers the capacity or the legacy ``days_to_cover``, with
+    an optional ``power_in_watt`` beside either (shared schema of 2026-09-25, §3.14); the
+    ``battery_system`` measure writes the same power from its own option (contract 882a8c1).
 
     Args:
         custom_battery_capacity_generic_in_kilowatt_hour: The battery's usable capacity.
         days_to_cover: How many days of household electricity a battery sized by days should hold.
-        power_in_watt: The battery's charging and discharging power, when a measure stated it.
+        power_in_watt: The battery's charging and discharging power, when the house or a measure
+            states it; 0.5 C of the capacity otherwise.
     """
 
     custom_battery_capacity_generic_in_kilowatt_hour: Optional[float] = None

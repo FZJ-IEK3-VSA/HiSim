@@ -610,8 +610,9 @@ class StagedDocument:
         """The seven headline figures of an evaluation.
 
         Two of them are monthly, and they answer different questions.
-        ``monthly_equivalent_cost_in_euro`` is the equivalent annual cost over twelve: the level
-        monthly payment worth the whole horizon, and the headline (hisim-cyc.6). The result
+        ``monthly_equivalent_cost_in_euro`` is the equivalent annual cost over twelve: an even
+        monthly spread of that yearly payment, not a monthly annuity, and the headline (hisim-cyc.6,
+        E-spec §3). The result
         carries it, from :class:`~hisim.economics.calculators.aggregation.TimelineAggregation`,
         so the document divides nothing itself. ``monthly_cost_year1_in_euro`` is year 1's cash
         over twelve, replacements included: true for that year, and misleading as a running cost

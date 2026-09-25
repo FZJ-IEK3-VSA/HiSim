@@ -132,6 +132,27 @@ class TestExitTwo:
         assert problems[0]["path"] == "house.heating.type_of_system"
         assert problems[0]["code"] == "enum.unknown"
 
+    @pytest.mark.parametrize(
+        "applicant, path", [(None, "applicant"), ({"household_size": 2}, "applicant.main_residence")]
+    )
+    def test_a_request_that_does_not_say_main_residence_is_exit_two(
+        self, tmp_path: Path, applicant: Any, path: str
+    ) -> None:
+        """hisim-snt9: no subsidy is priced on an assumed answer; the request is refused by name."""
+        document = copy.deepcopy(ContractFiles.request_mockup())
+        if applicant is None:
+            del document["applicant"]
+        else:
+            document["applicant"] = applicant
+        request = tmp_path / "request.json"
+        request.write_text(json.dumps(document), encoding="utf-8")
+        out = tmp_path / "out"
+
+        assert calculation(request, out).run() == ExitCode.REQUEST_INVALID
+
+        problems = json.loads((out / Outputs.PROBLEMS).read_text(encoding="utf-8"))["problems"]
+        assert [(problem["path"], problem["code"]) for problem in problems] == [(path, "required.missing")]
+
     def test_a_file_that_is_not_a_request_is_exit_two_as_well(self, tmp_path: Path) -> None:
         """An unreadable file is the same kind of answer as an unreadable field."""
         request = tmp_path / "request.json"

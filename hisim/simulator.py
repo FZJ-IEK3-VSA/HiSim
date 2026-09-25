@@ -4,7 +4,7 @@ It iterates over all components in each timestep until convergence and loops ove
 """
 import os
 import datetime
-from typing import List, Tuple, Optional, Dict, Any, Union
+from typing import List, Tuple, Optional, Dict, Any, Type, Union
 import time
 import pandas as pd
 
@@ -56,6 +56,36 @@ def _has_cost_facts_source(component_class: type) -> bool:
     if hook is not None and hook is not cp.Component.get_cost_facts:
         return True
     return component_class.__name__ in FactsExtractors.BY_CLASS_NAME
+
+
+def cost_declaration_refusal(component_class: type) -> Optional[Type[ValueError]]:
+    """Which refusal `Simulator.check_cost_declarations` holds against one class, if any (§9.1/§9.2).
+
+    The one statement of the pre-run rule, so that the check and anything that asks the same
+    question ahead of a run -- a test over the classes a recorded energy system wires, say -- cannot
+    disagree about which classes a lifecycle-cost run refuses. A class is refused when it declares
+    no `cost_relevance` and therefore keeps the `UNDECLARED` base-class default, or when it declares
+    `PRICED` while nothing can produce its cost facts (`_has_cost_facts_source`). Whether those facts
+    can then be priced against a country's cost database is not part of the rule: that needs the
+    database, and stays with the D7 check in postprocessing.
+
+    The lookup goes through `getattr` with the `UNDECLARED` default, as
+    `adapter.effective_cost_relevance` does: a class that does not carry the attribute at all is
+    undeclared, not a crash.
+
+    Args:
+        component_class: A component's class.
+
+    Returns:
+        `UndeclaredCostRelevanceError` for an undeclared class, `UnpriceableComponentError` for a
+        `PRICED` class with no facts source, and None for a class the check lets through.
+    """
+    relevance = getattr(component_class, "cost_relevance", CostRelevance.UNDECLARED)
+    if relevance is CostRelevance.UNDECLARED:
+        return UndeclaredCostRelevanceError
+    if relevance is CostRelevance.PRICED and not _has_cost_facts_source(component_class):
+        return UnpriceableComponentError
+    return None
 
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago, Maximillian Hillen"
@@ -372,6 +402,9 @@ class Simulator:
            `get_cost_facts` implementation of its own nor an entry in
            `adapter.FactsExtractors.BY_CLASS_NAME`.
 
+        The rule for one class is `cost_declaration_refusal`; this method applies it to the class of
+        every registered component and raises one error per kind of refusal.
+
         Both end the same way in postprocessing: the bridge turns them into unresolved subjects and
         the D7 check aborts the evaluation. Finding that out there means a year-long simulation runs
         for hours and then dies without producing the cost report it was started for, so both are
@@ -410,16 +443,11 @@ class Simulator:
         unpriceable: List[type] = []
         for wrapped_component in self.wrapped_components:
             component_class = type(wrapped_component.my_component)
-            # `getattr` with the default mirrors `adapter.effective_cost_relevance`: a class that
-            # does not carry the attribute at all is undeclared, not a crash.
-            relevance = getattr(component_class, "cost_relevance", CostRelevance.UNDECLARED)
-            if relevance is CostRelevance.UNDECLARED:
-                if component_class not in undeclared:
-                    undeclared.append(component_class)
-                continue
-            if relevance is CostRelevance.PRICED and not _has_cost_facts_source(component_class):
-                if component_class not in unpriceable:
-                    unpriceable.append(component_class)
+            refusal = cost_declaration_refusal(component_class)
+            if refusal is UndeclaredCostRelevanceError and component_class not in undeclared:
+                undeclared.append(component_class)
+            elif refusal is UnpriceableComponentError and component_class not in unpriceable:
+                unpriceable.append(component_class)
         if undeclared:
             raise UndeclaredCostRelevanceError(undeclared)
         if unpriceable:

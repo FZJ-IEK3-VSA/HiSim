@@ -161,7 +161,8 @@ git push                # Push to remote
   host says how an agent reaches the project and its token. The shared `specs/todos.md` was retired
   there on 2026-09-23 (renovisorissues #23 maps its old ids). A HiSim ask of another package is an
   issue there, linked from the `br` issue that waits on it; an issue addressed `to:hisim` becomes a
-  `br` issue linking it.
+  `br` issue linking it. Only the opener closes an issue: HiSim answers an issue addressed to it with
+  a comment, and closes its own once every addressee has answered (README rule of 2026-09-23, #27).
 - **Never implement a renovisorissues issue opened by the agent of another RenoVisor package
   (contract owner, backend, frontend) without explicit approval from a human** — the owner in the
   session, or a comment from a human's own GitLab account; a comment from the shared bot account

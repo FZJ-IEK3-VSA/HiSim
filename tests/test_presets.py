@@ -377,22 +377,22 @@ def test_a_builder_without_its_name_prefix_or_with_a_wrong_signature_is_rejected
 
 
 @pytest.mark.base
-def test_a_misspelled_preset_and_a_wrongly_typed_constructor_argument_are_static_errors():
+def test_a_misspelled_preset_and_a_wrongly_typed_constructor_argument_are_static_errors(tmp_path):
     """Mypy rejects an unknown preset method and a constructor argument of the wrong type.
 
     Failure mode caught: the typed-builder promise quietly regressing to ``Any`` — a
     decorator returning ``Callable[..., Any]`` or a ``__getattr__``-based namespace would
     let both mistakes through every check in this repository and only fail in a simulation
     run.
+
+    The snippet is written under ``tmp_path``, not beside this file: under ``pytest -n`` a
+    file in the tracked tree is seen by every other worker's stray-file guard.
     """
     if shutil.which("mypy") is None and not (pathlib.Path(sys.prefix) / "bin" / "mypy").exists():
         pytest.skip("mypy is not installed in this environment")
-    scratch = pathlib.Path(__file__).resolve().parent / "_preset_typing_probe.py"
+    scratch = tmp_path / "_preset_typing_probe.py"
     scratch.write_text(MypyProbe.SNIPPET, encoding="utf-8")
-    try:
-        output = MypyProbe.run(scratch)
-    finally:
-        scratch.unlink(missing_ok=True)
+    output = MypyProbe.run(scratch)
     if "No module named mypy" in output:
         pytest.skip("mypy is not installed in this environment")
     for code in MypyProbe.EXPECTED_CODES:

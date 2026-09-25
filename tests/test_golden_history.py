@@ -8,7 +8,9 @@ golden files as they stand today.
 
 The reality half needs the git history of ``golden_references/``, which a shallow CI
 checkout does not have; those tests skip themselves when fewer than two commits touch the
-directory. Nothing here writes outside ``tmp_path``.
+directory. The two that compare the table with the *upstream* commits themselves live in
+``tests/test_golden_history_upstream.py``, outside the base tier. Nothing here writes
+outside ``tmp_path``.
 """
 
 from __future__ import annotations
@@ -47,7 +49,6 @@ from scripts.golden_kpi_renames import (
     FLEET_WIDE,
     KPI_RENAMES,
     PAIR_RENAMES,
-    KpiRename,
     canonical_pair,
     kpi_renames_for,
 )
@@ -407,24 +408,6 @@ def current_keys() -> Dict[str, set]:
     }
 
 
-@requires_history
-def test_every_declared_old_kpi_name_really_existed(  # pylint: disable=redefined-outer-name
-    historical_keys: Dict[str, set],
-) -> None:
-    """A rename claims a name the goldens once carried; a typo in it would go unnoticed."""
-    for stem, entries in KPI_RENAMES.items():
-        for entry in entries:
-            if stem == FLEET_WIDE:
-                assert any(entry.old in keys for keys in historical_keys.values()), (
-                    f"no golden ever carried {entry.old!r}"
-                )
-            else:
-                assert stem in historical_keys, f"no golden file was ever named {stem!r}"
-                assert entry.old in historical_keys[stem], (
-                    f"{stem!r} never carried {entry.old!r}"
-                )
-
-
 def test_every_declared_new_kpi_name_is_carried_today(  # pylint: disable=redefined-outer-name
     current_keys: Dict[str, set],
 ) -> None:
@@ -451,17 +434,6 @@ def test_no_declared_rename_is_still_in_effect_under_its_old_name(  # pylint: di
             assert entry.old not in current_keys.get(stem, set()), (
                 f"{stem!r} still carries {entry.old!r}; that is not a rename"
             )
-
-
-@requires_history
-def test_every_rename_names_a_commit_that_touched_the_goldens() -> None:
-    """The commit column is the evidence; it has to be a golden commit of this branch."""
-    shas = {commit.sha for commit in golden_commits(REPO_ROOT)}
-    claims: List[KpiRename] = [entry for entries in KPI_RENAMES.values() for entry in entries]
-    for entry in claims:
-        assert entry.commit in shas, f"{entry.commit} does not touch golden_references/"
-    for rename in PAIR_RENAMES.values():
-        assert rename.commit in shas, f"{rename.commit} does not touch golden_references/"
 
 
 @requires_history

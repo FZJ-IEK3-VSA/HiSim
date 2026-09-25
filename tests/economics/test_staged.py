@@ -608,7 +608,7 @@ class TestThePlansHeatCostDividesByItsDiscountedHeat:
         assert self.RENOVATED_HEAT_IN_KWH < equivalent_heat < self.BASELINE_HEAT_IN_KWH
 
     def test_one_stage_over_the_whole_horizon_divides_exactly_as_before(self, database, parameters):
-        """RenoVisor's plans start every stage in year 0: the last stage's heat, bit for bit."""
+        """A plan as RenoVisor builds it starts every stage in year 0: the last stage's heat, bit for bit."""
         stages = [
             self._with_heat(baseline_stage(), self.BASELINE_HEAT_IN_KWH),
             self._with_heat(envelope_stage(0), self.RENOVATED_HEAT_IN_KWH),

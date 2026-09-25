@@ -24,7 +24,8 @@ The document's shape is ``measure-capabilities.openapi.yaml``'s
 ``components.schemas.ImplementedMeasures``, and :meth:`CapabilityDocument.validate` checks it
 against that vendored schema before writing. The schema is strict since 0.3.0 (2026-09-23): every
 key written here is declared there and no other key is admitted, so a key this module starts to
-emit fails the build until the shared spec declares it.
+emit fails the build until the shared spec declares it. 0.4.0 (2026-09-24) added a numeric field's
+``exclusiveMinimum``/``exclusiveMaximum``.
 
 One section is not aggregated from probes at all. ``results`` (:class:`ResultsSection`) says what
 the *answer* will look like -- every field ``result.json`` can carry, its source and its
@@ -167,17 +168,14 @@ class RequestSchemaBounds:
 
     The shared ``measure-capabilities.openapi.yaml`` describes a field's ``minimum``/``maximum`` as
     the request schema's own bounds, so they are looked up there when the document is built rather
-    than copied into a table beside it (decision of 2026-09-24, PR #807). Only an *inclusive*
-    bound is published: a field without a declared ``maximum`` publishes none, and one whose lower
-    bound is ``exclusiveMinimum`` publishes no ``minimum``, since the shared schema has no key for
-    an exclusive bound yet and a probe point standing in for it would claim a limit nobody set.
+    than copied into a table beside it (decision of 2026-09-24, PR #807). Each bound is published
+    under the schema's own keyword: an inclusive one as ``minimum``/``maximum``, an exclusive one as
+    ``exclusiveMinimum``/``exclusiveMaximum`` (measure-capabilities 0.4.0, renovisorissues !18),
+    and an end the schema leaves open publishes nothing -- never a probe point standing in for it.
     """
 
-    #: The two inclusive bound keywords of JSON Schema, which are also the document's keys.
-    INCLUSIVE: ClassVar[Tuple[str, str]] = ("minimum", "maximum")
-
-    #: The exclusive keyword that suppresses each inclusive one.
-    EXCLUSIVE: ClassVar[Dict[str, str]] = {"minimum": "exclusiveMinimum", "maximum": "exclusiveMaximum"}
+    #: The four bound keywords of JSON Schema, which are also the document's keys.
+    KEYWORDS: ClassVar[Tuple[str, ...]] = ("minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum")
 
     #: The keywords whose alternatives are searched, e.g. a nullable ``oneOf``.
     ALTERNATIVES: ClassVar[Tuple[str, ...]] = ("oneOf", "anyOf", "allOf")
@@ -191,8 +189,8 @@ class RequestSchemaBounds:
             schema: The request schema; the vendored ``calculation-request.schema.json`` when omitted.
 
         Returns:
-            ``{"minimum": ..., "maximum": ...}`` with each key present only when the schema
-            declares that bound and declares it inclusive.
+            ``{"minimum": ..., "exclusiveMaximum": ...}`` and so on, each of the four keys present
+            exactly when the schema declares that bound.
 
         Raises:
             KeyError: When the schema has no such path, which means the probe table names a
@@ -215,18 +213,14 @@ class RequestSchemaBounds:
             node = child
         declared: Dict[str, Any] = {}
         for candidate in cls._candidates(node, root):
-            for keyword in (*cls.INCLUSIVE, *cls.EXCLUSIVE.values()):
+            for keyword in cls.KEYWORDS:
                 if keyword not in candidate:
                     continue
                 if keyword in declared and declared[keyword] != candidate[keyword]:
                     raise ValueError(f"{path}: the schema declares {keyword} both {declared[keyword]} and "
                                      f"{candidate[keyword]}")
                 declared[keyword] = candidate[keyword]
-        return {
-            keyword: declared[keyword]
-            for keyword in cls.INCLUSIVE
-            if keyword in declared and cls.EXCLUSIVE[keyword] not in declared
-        }
+        return {keyword: declared[keyword] for keyword in cls.KEYWORDS if keyword in declared}
 
     @classmethod
     def _candidates(cls, node: Mapping[str, Any], root: Mapping[str, Any]) -> List[Mapping[str, Any]]:
@@ -352,8 +346,8 @@ class ProbeSet:
     #: it at. Where the request schema's bound is inclusive the point is the bound itself; where
     #: it is exclusive (``exclusiveMinimum: 0``) the point lies inside it; where the schema has no
     #: maximum it is a representative large value. These are probe points and nothing else: the
-    #: document never publishes them. A field publishes the schema's own inclusive bounds
-    #: (:class:`RequestSchemaBounds`) and folds the probes' statuses into its own (decision of
+    #: document never publishes them. A field publishes the schema's own bounds, inclusive and
+    #: exclusive (:class:`RequestSchemaBounds`), and folds the probes' statuses into its own (decision of
     #: 2026-09-23: ``values[]`` is for enumerations only; of 2026-09-24: bounds come from the
     #: schema). ``tests/renovisor/test_capabilities.py`` keeps every point inside the schema.
     FIELD_PROBE_POINTS: ClassVar[Dict[str, Tuple[float, float]]] = {
@@ -373,9 +367,14 @@ class ProbeSet:
         "heating.seasonal_efficiency_in_percent": (1, 400),
         "hot_water.volume_heating_water_storage_in_liter": (0, 2000),
         "air_conditioning.power_in_watt": (0, 50000),
+        "air_conditioning.installation_year": (1900, 2100),
+        # The block carries its roof share beside the power (both are allowed since the shared
+        # schema of 2026-09-25); the power's lower bound is exclusive.
+        "pv_system.power_in_watt": (100, 100000),
         "pv_system.size_in_percent_of_roof_area": (1, 100),
         "pv_system.azimuth": (0, 360),
         "pv_system.tilt": (0, 90),
+        "pv_system.shading_losses_in_percent": (0, 100),
         "pv_system.installation_year": (1900, 2100),
         "building.living_area_in_m2": (30, 400),
         "building.roof.installation_year": (1900, 2100),
@@ -388,6 +387,8 @@ class ProbeSet:
         "heating.heatpump_scop_en14825_w35": (1.1, 10),
         "heating.heatpump_scop_en14825_w55": (1.1, 10),
         "battery.days_to_cover": (1, 14),
+        # Beside the block's days_to_cover; the lower bound is exclusive.
+        "battery.power_in_watt": (250, 100000),
         "battery.installation_year": (1900, 2100),
         "solar_thermal_system.area_m2": (0.1, 100),
         "solar_thermal_system.installation_year": (1900, 2100),
@@ -424,23 +425,24 @@ class ProbeSet:
         # house.pv_system.azimuth and .tilt, the two fields these options write.
         "photovoltaic_system.azimuth_in_degree": (0, 360),
         "photovoltaic_system.tilt_in_degree": (0, 90),
+        # house.pv_system.shading_losses_in_percent, which the option is copied into.
+        "photovoltaic_system.shading_losses_in_percent": (0, 100),
         "number": (1, 2),
         SemanticChecks.ROOM_TEMPERATURE_MEASURE[1]: SemanticChecks.ROOM_TEMPERATURE_RANGE,
     }
 
     #: The values the numeric options with no inclusive schema bound are probed at, by
     #: ``measure_id.option``. As for :attr:`FIELD_PROBE_POINTS`, these are HiSim's own choice and
-    #: are never published: where the schema's bound on the field an option writes is exclusive
-    #: (``exclusiveMinimum: 0``) the low point lies just inside it, and where the schema has no
-    #: field at all the points are representative values.
+    #: are never published: the schema's bound on the field each of them writes is exclusive
+    #: (``exclusiveMinimum: 0``), the low point lies just inside it, and the shared schema's
+    #: ImplementedOption has no key for an exclusive bound (measure-capabilities 0.4.0 added them
+    #: to ImplementedField only).
     OPTION_PROBE_POINTS: ClassVar[Dict[str, Tuple[Any, Any]]] = {
         # house.pv_system.power_in_watt: exclusiveMinimum 0, maximum 100000.
         "photovoltaic_system.power_in_watt": (100, 100000),
-        # No schema field: an annual loss in percent of the unshaded array.
-        "photovoltaic_system.shading_losses_in_percent": (0, 100),
         # house.battery.custom_battery_capacity_generic_in_kilowatt_hour: exclusiveMinimum 0, maximum 200.
         "battery_system.capacity_in_kwh": (0.5, 200),
-        # No schema field: a household battery's power, a small and a very large one.
+        # house.battery.power_in_watt: exclusiveMinimum 0, maximum 100000.
         "battery_system.power_in_watt": (250, 100000),
     }
 
@@ -1042,8 +1044,9 @@ class Aggregation:
         As for a measure's options, a probe that varies an enumerated field's value contributes that
         value's own status to ``values`` and not to the field's, and a ``PAIR`` probe contributes
         to neither. A numeric field (:attr:`ProbeSet.FIELD_PROBE_POINTS`) carries no ``values``: it
-        publishes the request schema's inclusive ``minimum``/``maximum`` where the schema declares
-        them (:class:`RequestSchemaBounds`) -- never its probe points -- and the probes at both ends
+        publishes the request schema's ``minimum``/``maximum`` and ``exclusiveMinimum``/
+        ``exclusiveMaximum`` where the schema declares them (:class:`RequestSchemaBounds`) -- never
+        its probe points -- and the probes at both ends
         count towards its own status. What is left for the field's own status is every probe that carried the field
         without being about it -- the anchor, the block probes and the measure probes -- and,
         when nothing did, the worst of its values. The note follows the status out of the same

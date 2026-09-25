@@ -42,7 +42,7 @@ from hisim.energy_system.model import (
     VariantOption,
 )
 from hisim.renovisor import TRANSLATOR_VERSION
-from hisim.renovisor.apply import AppliedPackage
+from hisim.renovisor.apply import AppliedPackage, HousePaths
 from hisim.renovisor.economics import EconomicContextBuilder
 from hisim.renovisor.constants import (
     BatteryLaw,
@@ -1806,7 +1806,13 @@ def _comfort(state: _TranslationState) -> None:
                 "house.temperature_control.type_of_system", entry.note, value=value
             )
     if state.present("house.air_conditioning"):
-        state.listed("house.air_conditioning.power_in_watt", state.house.air_conditioning_power_in_watt)
+        # The whole block is on the list, so every leaf the request carries in it -- the power and
+        # the unit's installation_year (shared schema of 2026-09-25) -- is reported at its own path
+        # with the block's note; the power as the package left it.
+        block = state.request.document["house"]["air_conditioning"]
+        for name in block:
+            stated: Any = state.house.air_conditioning_power_in_watt if name == "power_in_watt" else block[name]
+            state.listed(f"house.air_conditioning.{name}", stated)
 
 
 def _devices(state: _TranslationState) -> None:
@@ -1947,22 +1953,28 @@ def _battery(state: _TranslationState) -> None:
         )
     state.write(Targets.BATTERY, Targets.BATTERY_CAPACITY, capacity, source="house.battery",
                 note="the usable capacity")
+    # The power is the house's own battery.power_in_watt (shared schema of 2026-09-25) or the
+    # battery_system measure's option. The measure reports its power, stated or defaulted, on its
+    # own option line; the house's is reported here.
+    path = "house.battery.power_in_watt"
+    target = Targets.describe(Targets.BATTERY, Targets.BATTERY_INVERTER)
+    from_measure = _replaced_by(state, path) is not None
     if battery.power_in_watt is not None:
-        # Only the battery_system measure writes a power (the request schema's house.battery has no
-        # such field), so the measure's own option line reports it and no request leaf does.
         state.write(Targets.BATTERY, Targets.BATTERY_INVERTER, battery.power_in_watt,
-                    source="battery_system.power_in_watt", note="the stated charging and discharging power")
+                    source="battery_system.power_in_watt" if from_measure else path,
+                    note="the stated charging and discharging power")
+        if not from_measure:
+            state.report.used(path, target, value=battery.power_in_watt)
         return
-    state.write(
-        Targets.BATTERY,
-        Targets.BATTERY_INVERTER,
-        capacity * BatteryLaw.INVERTER_WATT_PER_KILOWATT_HOUR,
-        source="house.battery",
-        note=(
-            f"{BatteryLaw.INVERTER_WATT_PER_KILOWATT_HOUR:g} W per kWh, the class's own C-rate of "
-            "0.5 and the catalogue's rule for an unstated power, pinned so that the two move together"
-        ),
+    power = capacity * BatteryLaw.INVERTER_WATT_PER_KILOWATT_HOUR
+    rule = (
+        f"{BatteryLaw.INVERTER_WATT_PER_KILOWATT_HOUR:g} W per kWh, the class's own C-rate of 0.5 and the "
+        "catalogue's rule for an unstated power"
     )
+    state.write(Targets.BATTERY, Targets.BATTERY_INVERTER, power, source="house.battery",
+                note=f"{rule}, pinned so that the two move together")
+    if not from_measure:
+        state.report.defaulted(path, power, note=rule, target=target)
 
 
 def _solar_thermal(state: _TranslationState) -> None:
@@ -2035,9 +2047,38 @@ def _unmodelled(state: _TranslationState) -> None:
     for path in MappingReport.request_leaves(state.request.document):
         if state.report.has(path):
             continue
-        if any(path.startswith(f"{recorded}.") for recorded in ("house.air_conditioning",)):
+        value = _leaf_value(state.request.document, path)
+        replaced_by = _replaced_by(state, path)
+        if replaced_by is not None and state.whitelist.match(Unmapped(path, value), state.raw) is None:
+            state.report.approximated(
+                path,
+                f"the {replaced_by} measure replaced the device this value described; the new one is "
+                "what the measure states",
+                value=value,
+            )
             continue
-        state.listed(path, _leaf_value(state.request.document, path))
+        state.listed(path, value)
+
+
+#: The device blocks a measure replaces whole rather than edits, with the measure that does.
+_REPLACING_MEASURES: Dict[str, str] = {
+    HousePaths.PV_SYSTEM: "photovoltaic_system",
+    HousePaths.BATTERY: "battery_system",
+}
+
+
+def _replaced_by(state: _TranslationState, path: str) -> Optional[str]:
+    """Return the measure that replaced the device block one request leaf lies in, or ``None``.
+
+    The photovoltaic and the battery measure describe the new device, not an addition to the old
+    one (§4.2), so a value of the house's own array or battery that the new block no longer carries
+    -- an existing array's power under a roof-share measure, a battery sized by days under a stated
+    capacity -- has nothing left to size.
+    """
+    for block, measure_id in _REPLACING_MEASURES.items():
+        if path.startswith(f"house.{block}.") and block in state.applied.written_paths:
+            return measure_id
+    return None
 
 
 def _leaf_value(document: Mapping[str, Any], path: str) -> Any:

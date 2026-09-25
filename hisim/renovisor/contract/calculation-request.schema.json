@@ -5,7 +5,7 @@
   "description": "One house inventory plus one list of measures — one simulation. Sparse: a field is present only when the frontend set it; the backend defaults the rest and reports every default. Unknown keys and unknown enum values are refused (422), never ignored. The body is the cache key: nothing in it identifies the submission.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "location", "house", "measures"],
+  "required": ["schema_version", "location", "house", "measures", "applicant"],
   "properties": {
     "schema_version": {
       "const": 1
@@ -523,6 +523,9 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 50000
+        },
+        "installation_year": {
+          "$ref": "#/$defs/installation_year"
         }
       }
     },
@@ -538,8 +541,8 @@
     "pv_system": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Sized by exactly one of power_in_watt (an existing array) or size_in_percent_of_roof_area (the measure).",
-      "oneOf": [
+      "description": "Sized by at least one of power_in_watt or size_in_percent_of_roof_area, and both may be given: the photovoltaic_system measure carries both since contract 882a8c1, because they answer different questions — the share of the roof is about future potential (whether the array can still grow), the watts are what a yield calculation reads. With both, power_in_watt sizes the array and the share is recorded. The measure's options carry the unit suffix (azimuth_in_degree, tilt_in_degree); this block keeps HiSim's field names azimuth and tilt.",
+      "anyOf": [
         {
           "required": ["power_in_watt"]
         },
@@ -570,6 +573,12 @@
           "maximum": 90,
           "description": "HiSim PVSystem field, verbatim; degrees from horizontal."
         },
+        "shading_losses_in_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Annual generation lost to shading, as a percent of the unshaded array."
+        },
         "installation_year": {
           "$ref": "#/$defs/installation_year"
         }
@@ -578,7 +587,7 @@
     "battery": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Sized by exactly one of custom_battery_capacity_generic_in_kilowatt_hour (an existing battery, HiSim field verbatim) or days_to_cover (the measure).",
+      "description": "Sized by exactly one of custom_battery_capacity_generic_in_kilowatt_hour (the capacity, HiSim field verbatim) or days_to_cover (legacy), with an optional power_in_watt beside either. The battery_system measure carries capacity_in_kwh and power_in_watt since contract 882a8c1 (the frontend converts its days-to-cover question into them) and writes the capacity here; a house block sized by days stays accepted.",
       "oneOf": [
         {
           "required": ["custom_battery_capacity_generic_in_kilowatt_hour"]
@@ -593,10 +602,17 @@
           "exclusiveMinimum": 0,
           "maximum": 200
         },
+        "power_in_watt": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 100000,
+          "description": "The battery's rated power (HiSim's custom_pv_inverter_power_generic_in_watt). Absent: 0.5 C of the capacity, 500 W per kWh — the catalogue's rule and HiSim's battery's own."
+        },
         "days_to_cover": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 14
+          "maximum": 14,
+          "description": "Legacy: how many days of the household's electricity the battery holds, sized against the consumption the run simulates (approximated). The battery_system measure no longer carries it (contract 882a8c1); state the capacity instead. Still accepted, so no existing request breaks."
         },
         "installation_year": {
           "$ref": "#/$defs/installation_year"
@@ -707,7 +723,8 @@
     "applicant": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Who applies for the subsidy, for the eligibility conditions of the country's catalogue. Every key is optional; a key the block omits stays undetermined, which a scheme reads as a question rather than as a denial. Absent block: everything is undetermined, except the role, which defaults to owner_occupier.",
+      "required": ["main_residence"],
+      "description": "Who applies for the subsidy, for the eligibility conditions of the country's catalogue. The block is required and must state main_residence (decision of 2026-09-24); every other key is optional, and a key the block omits stays undetermined, which a scheme reads as a question rather than as a denial. An omitted role defaults to owner_occupier.",
       "properties": {
         "role": {
           "enum": ["owner_occupier", "landlord", "tenant", "condominium_association"],
@@ -737,7 +754,7 @@
         },
         "main_residence": {
           "type": "boolean",
-          "description": "Whether the dwelling is the applicant's main residence; required by several bonuses."
+          "description": "Whether the dwelling is the applicant's main residence; required by several bonuses. Required: a request that does not state it is refused, since the answer changes which schemes apply."
         }
       }
     }

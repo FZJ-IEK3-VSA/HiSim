@@ -408,6 +408,10 @@ class EconomicContextBuilder:
     #: other value, so the lookup cannot miss.
     APPLICANT_ROLE_KEY: ClassVar[str] = "role"
 
+    #: The one key of that block the schema requires (renovisorissues !19, §3.17): several bonuses
+    #: depend on it, so it is read from the request and never left to the profile's default.
+    APPLICANT_MAIN_RESIDENCE_KEY: ClassVar[str] = "main_residence"
+
     #: The other fields of that block, which the builder copies onto the applicant profile under
     #: the same name on :class:`~hisim.economics.subsidies.ApplicantProfile`. They are exactly the
     #: schema's ``applicant`` properties besides ``role``, which
@@ -1102,8 +1106,10 @@ class EconomicContextBuilder:
     def _subsidy_context(self, result: EconomicContextResult) -> SubsidyContext:
         """Who is applying and what the building is, for the eligibility conditions.
 
-        The applicant half comes from the request's ``applicant`` block when it carries one
-        (E-spec §7); every field it does not answer stays ``None``, which the engine reads as
+        The applicant half comes from the request's ``applicant`` block (E-spec §7), which the
+        schema requires since 2026-09-24 together with its ``main_residence``: that answer is read
+        from the request, never taken from the profile's default. Every other field the block does
+        not answer stays ``None``, which the engine reads as
         *undetermined* and reports as a question rather than as a denial (§5.7). The three
         fields the Irish catalogue reads — ``receives_means_tested_benefit``, ``first_time_buyer``
         and ``managed_full_retrofit``, the last of which is the One Stop Shop route — are read
@@ -1124,15 +1130,14 @@ class EconomicContextBuilder:
         Returns:
             The context the eligibility conditions resolve against.
         """
-        raw = self._request.document.get(self.APPLICANT_KEY)
-        profile = ApplicantProfile()
-        if isinstance(raw, Mapping):
-            role = raw.get(self.APPLICANT_ROLE_KEY)
-            if role is not None:
-                profile.actor = ApplicantActor(str(role).upper())
-            for name in self.APPLICANT_FIELDS:
-                if name in raw:
-                    setattr(profile, name, raw[name])
+        raw: Mapping[str, Any] = self._request.document[self.APPLICANT_KEY]
+        profile = ApplicantProfile(main_residence=bool(raw[self.APPLICANT_MAIN_RESIDENCE_KEY]))
+        role = raw.get(self.APPLICANT_ROLE_KEY)
+        if role is not None:
+            profile.actor = ApplicantActor(str(role).upper())
+        for name in self.APPLICANT_FIELDS:
+            if name in raw:
+                setattr(profile, name, raw[name])
         building_type = self._original.building.building_type
         dwelling_type = DwellingTypes.of(building_type)
         if building_type in DwellingTypes.APPROXIMATED and dwelling_type is not None:

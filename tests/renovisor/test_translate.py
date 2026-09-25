@@ -369,6 +369,105 @@ class TestTheSwitchesOfDecisionDD:
 
 
 @pytest.mark.base
+class TestTheHouseFieldsOfTheSharedSchemaAt882a8c1:
+    """hisim-wevr: the battery's power, the array's power beside its share, its loss, the air conditioner's year."""
+
+    def test_a_house_batterys_stated_power_pins_the_inverter(self) -> None:
+        """house.battery.power_in_watt lands on custom_pv_inverter_power_generic_in_watt, reported used."""
+        system = translate(
+            baseline(battery={"custom_battery_capacity_generic_in_kilowatt_hour": 8, "power_in_watt": 3000})
+        )
+
+        config = config_of(system, Targets.BATTERY)
+        assert config[Targets.BATTERY_CAPACITY] == 8
+        assert config[Targets.BATTERY_INVERTER] == 3000
+        line = system.report.line("house.battery.power_in_watt")
+        assert line is not None and line.status is ReportStatus.USED and line.value == 3000
+
+    def test_a_house_battery_without_a_power_is_half_a_c_reported_as_a_default(self) -> None:
+        """Absent: 0.5 C of the capacity, the catalogue's rule and the class's own (§5 defaults)."""
+        system = translate(baseline(battery={"custom_battery_capacity_generic_in_kilowatt_hour": 8}))
+
+        line = system.report.line("house.battery.power_in_watt")
+        assert line is not None and line.status is ReportStatus.DEFAULTED
+        assert line.value == pytest.approx(8 * 500.0)
+
+    def test_a_legacy_days_to_cover_battery_takes_a_stated_power(self) -> None:
+        """The power sits beside either sizing; the days still size the capacity."""
+        system = translate(baseline(battery={"days_to_cover": 2, "power_in_watt": 2500}))
+
+        assert config_of(system, Targets.BATTERY)[Targets.BATTERY_INVERTER] == 2500
+        days = system.report.line("house.battery.days_to_cover")
+        assert days is not None and days.status is ReportStatus.APPROXIMATED
+
+    def test_a_house_array_with_power_and_share_is_sized_by_the_power(self) -> None:
+        """§3.13: both may be given; the power sizes the array and the share is recorded, as for the measure."""
+        system = translate(baseline(pv_system={"power_in_watt": 4200, "size_in_percent_of_roof_area": 60}))
+
+        config = config_of(system, Targets.PV)
+        assert config[Targets.POWER_IN_WATT] == 4200
+        assert config[Targets.SHARE_OF_ROOF] == pytest.approx(0.6)
+        share = system.report.line("house.pv_system.size_in_percent_of_roof_area")
+        assert share is not None and "power_in_watt sizes the array" in (share.note or "")
+        power = system.report.line("house.pv_system.power_in_watt")
+        assert power is not None and power.status is ReportStatus.USED
+
+    def test_a_house_arrays_shading_loss_is_not_implemented_at_its_path(self) -> None:
+        """The array model has no shading loss; the leaf carries the list's sentence."""
+        system = translate(baseline(pv_system={"size_in_percent_of_roof_area": 60, "shading_losses_in_percent": 5}))
+
+        line = system.report.line("house.pv_system.shading_losses_in_percent")
+        assert line is not None and line.status is ReportStatus.NOT_IMPLEMENTED_YET
+        assert "unshaded" in (line.note or "")
+
+    def test_a_measures_shading_loss_is_reported_once_on_its_option_line(self) -> None:
+        """The measure copies the loss into pv_system (§4.2); only its option line reports it, not a house path."""
+        document = baseline(pv_system=None)
+        document["measures"] = [{"id": "photovoltaic_system", "options": {
+            "size_in_percent_of_roof_area": 60, "shading_losses_in_percent": 5}}]
+        system = translate(document)
+
+        assert system.report.line("house.pv_system.shading_losses_in_percent") is None
+        entries = system.report.to_json()["measures"]
+        assert len(entries) == 1
+        shading = [option for option in entries[0]["options"] if option["name"] == "shading_losses_in_percent"]
+        assert len(shading) == 1 and shading[0]["status"] == ReportStatus.NOT_IMPLEMENTED_YET.value
+
+    def test_the_air_conditioners_installation_year_is_accounted_for_with_the_block(self) -> None:
+        """The whole block is not_implemented_yet; the new leaf gets the block's sentence, not a translator error."""
+        document = baseline(air_conditioning={"power_in_watt": 3000, "installation_year": 2012})
+        system = translate(document)
+
+        system.report.assert_complete(document)
+        for name in ("power_in_watt", "installation_year"):
+            line = system.report.line(f"house.air_conditioning.{name}")
+            assert line is not None and line.status is ReportStatus.NOT_IMPLEMENTED_YET, name
+
+    @pytest.mark.parametrize(
+        "block, measure, superseded",
+        [
+            ("pv_system", {"id": "photovoltaic_system", "options": {"size_in_percent_of_roof_area": 50}},
+             {"power_in_watt": 3000}),
+            ("battery", {"id": "battery_system", "options": {"capacity_in_kwh": 10}},
+             {"days_to_cover": 2, "power_in_watt": 2000}),
+        ],
+    )
+    def test_a_value_of_the_device_a_measure_replaces_is_reported_rather_than_a_translator_error(
+        self, block: str, measure: Dict[str, Any], superseded: Dict[str, Any]
+    ) -> None:
+        """The measure describes the new device (§4.2); the old one's sizing has nothing left to size."""
+        document = baseline(**{block: dict(superseded)})
+        document["measures"] = [measure]
+        system = translate(document)
+
+        system.report.assert_complete(document)
+        for name in superseded:
+            line = system.report.line(f"house.{block}.{name}")
+            assert line is not None and line.status is ReportStatus.APPROXIMATED, name
+            assert f"the {measure['id']} measure replaced" in (line.note or ""), name
+
+
+@pytest.mark.base
 class TestTheReportAccountsForTheRequest:
     """Every leaf exactly once, every default with its value, every note from the list."""
 

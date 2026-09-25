@@ -18,7 +18,7 @@
 openapi: 3.1.0
 info:
   title: RenoVisor simulation backend — implemented measures (proposal)
-  version: 0.3.0
+  version: 0.4.0
   description: |
     The measure capabilities of one registered engine version.
 
@@ -147,9 +147,10 @@ components:
         fields:
           type: array
           description: |
-            One entry per leaf of the calculation request's `house` that the probes
-            varied or carried, in path order: the same aggregation as for measure
-            options, over the home inventory instead of the catalogue.
+            One entry per request path the probes varied or carried — the leaves of
+            `house`, and the few paths outside it the mapping reports name (such as
+            `location.postcode`) — in path order: the same aggregation as for measure
+            options, over the request instead of the catalogue.
           items: { $ref: '#/components/schemas/ImplementedField' }
         results:
           $ref: '#/components/schemas/ResultFields'
@@ -216,8 +217,8 @@ components:
           type: array
           description: For enums — one entry per catalogue value with its own status and note.
           items: { $ref: '#/components/schemas/ImplementedValue' }
-        minimum: { type: number, description: For numbers — the lowest value probed, from the request schema's bounds. }
-        maximum: { type: number, description: For numbers — the highest value probed, from the request schema's bounds. }
+        minimum: { type: number, description: "For numbers — the lowest value probed, from the request schema's bounds." }
+        maximum: { type: number, description: "For numbers — the highest value probed, from the request schema's bounds." }
         note: { type: string }
     ImplementedField:
       type: object
@@ -225,8 +226,11 @@ components:
         One leaf of the calculation request's `house`, as ImplementedOption is one
         option of a measure. An enumerated field (including booleans and the
         glazing-pane counts) carries `values`, one per value with its own status; a
-        numeric field carries `minimum`/`maximum` and no `values`, and the probes at
-        both ends count towards its own status.
+        numeric field carries the request schema's own bounds and no `values`: an
+        inclusive bound as `minimum`/`maximum`, an exclusive one as
+        `exclusiveMinimum`/`exclusiveMaximum` (JSON Schema's names), and nothing
+        for an end the request schema leaves open — never a value HiSim chose. The
+        probes near both ends count towards the field's own status.
       required: [path, status, substitution]
       additionalProperties: false
       properties:
@@ -242,8 +246,10 @@ components:
           type: array
           description: For enumerated fields — one entry per value with its own status.
           items: { $ref: '#/components/schemas/ImplementedValue' }
-        minimum: { type: number, description: For numeric fields — the request schema's lower bound, probed. }
-        maximum: { type: number, description: For numeric fields — the request schema's upper bound, probed. }
+        minimum: { type: number, description: "For numeric fields — the request schema's inclusive lower bound; absent when it declares none." }
+        maximum: { type: number, description: "For numeric fields — the request schema's inclusive upper bound; absent when it declares none." }
+        exclusiveMinimum: { type: number, description: "For numeric fields — the request schema's exclusive lower bound (the value must be greater)." }
+        exclusiveMaximum: { type: number, description: "For numeric fields — the request schema's exclusive upper bound (the value must be smaller)." }
         substitution: { $ref: '#/components/schemas/Substitution' }
         note: { type: string }
     ImplementedValue:

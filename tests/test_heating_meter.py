@@ -189,6 +189,9 @@ def test_house(
             "MoreAdvancedHeatPumpHPLibControllerSH"
         ).resolve(
             SizingContext(
+                set_heating_temperature_in_celsius=concrete(
+                    my_heat_distribution_controller_config.set_heating_temperature_for_building_in_celsius
+                ),
                 heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
                 # This controller keeps heating up to 16 °C outside, two kelvin below the threshold
                 # the emitter circuit derives from the building, which is what this test has always run.

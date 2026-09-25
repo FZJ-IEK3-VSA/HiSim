@@ -111,6 +111,9 @@ HiSim trusts the caller and composes.
 | `Thermal Laminate drylining board` | **no** (a product: plasterboard + PIR or EPS) |
 | `Liquid Insulation` | **no** (probably one of the three insulating screeds, or spray foam) |
 
+> **Note (2026-09-24):** contract PR #10 renamed the row `polystyrene_eps_rigid_board` to
+> `eps_rigid_board` (first row above); the translator and the mockup use the new id.
+
 **Challenge C9 — the material vocabulary has to be closed on one side.** Either the catalogue's
 `material` options become `asp_id`s from the database (and the three missing materials get
 rows), or HiSim keeps an alias table from catalogue strings to `asp_id`s with three entries

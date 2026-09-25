@@ -49,6 +49,9 @@ them>]`, empty list on rows no measure names. The eight rows and their values, f
 | `open_cell_spray_foam` | `open cell spray foam` |
 | `liquid_insulation` | `Liquid Insulation` |
 
+> **Note (2026-09-24):** contract PR #10 renamed the row `polystyrene_eps_rigid_board` to
+> `eps_rigid_board` (first row above); the translator and the mockup use the new id.
+
 Spelling variants are kept as given: `measures.yaml` is authoritative, and folding them is the
 contract owner's job (C1 stays open with that wording). A `vocabularies` entry
 `measure_material_values` is **not** added (the vocabulary is `measures.yaml`'s option values).
@@ -63,7 +66,8 @@ contract owner's job (C1 stays open with that wording). A `vocabularies` entry
   the `asp_id` stays provenance (rule 5). The mapping report's material note may name the
   resolved row beside the value — optional, say what you did.
 - The capability document keeps announcing the `measures.yaml` values under `values`; no change.
-  `ProbeSet.MATERIAL` keeps its `asp_id`/properties object.
+  `ProbeSet.MATERIAL` keeps its `asp_id`/properties object. (Note 2026-09-24, PR #808 review: the
+  probe material is now `ProbeSet.material()`, read from the mockup's `external_insulation` row.)
 - Tests: every `material` value of `measures.yaml` resolves to exactly one row (`base`); the
   vendored `materials.yaml` equals the shared one (drift test); a value the table does not know is
   refused by name; the eight rows carry exactly the values of §2.

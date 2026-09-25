@@ -251,7 +251,7 @@ class TestInsulationLayers:
         applied = apply(
             anchor_house(),
             measures_of({"id": "cavity_wall_insulation", "options": {
-                "material": dict(ProbeSet.MATERIAL), "thickness_in_mm": 400}}),
+                "material": ProbeSet.material(), "thickness_in_mm": 400}}),
             whitelist(),
         )
 
@@ -271,7 +271,7 @@ class TestInsulationLayers:
         measure ``approximated``. The layer now carries the request's own material, the option
         and the measure are ``used``, and nothing about it is approximated.
         """
-        material = dict(ProbeSet.MATERIAL, asp_id="stone_wool", thermal_conductivity_w_mk=0.036)
+        material = dict(ProbeSet.material(), asp_id="stone_wool", thermal_conductivity_w_mk=0.036)
         applied = apply(anchor_house(), measures_of({"id": measure_id, "options": {"material": material}}), whitelist())
 
         assert applied.layers[0].material.asp_id == "stone_wool"
@@ -294,7 +294,7 @@ class TestInsulationLayers:
         applied = apply(
             anchor_house(),
             measures_of({"id": "external_insulation", "options": {
-                "material": dict(ProbeSet.MATERIAL), "thickness_in_mm": 120}}),
+                "material": ProbeSet.material(), "thickness_in_mm": 120}}),
             whitelist(),
         )
 

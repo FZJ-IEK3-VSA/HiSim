@@ -167,6 +167,8 @@ the reason code and its description. The decision ids come from the registry fun
   HiSim target (`Building.roof_u_value_in_watt_per_m2_per_kelvin`, `constructor for_tabula_code`,
   or the file name) · status. Hovering a row highlights every cell of the same measure across
   sub-rows and dims the rest; clicking pins the highlight.
+  (Note 2026-09-24: contract PR #10 renamed the effect example's row `polystyrene_eps_rigid_board` to
+  `eps_rigid_board`; the translator and the mockup use the new id.)
 - **Elements tab:** matrix measures × `ThermalElement` marking which measures add resistance or
   set a U-value on which element, with the exclusivity groups outlined so contradictory pairs are
   visible.

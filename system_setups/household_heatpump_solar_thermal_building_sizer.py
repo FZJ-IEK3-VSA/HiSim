@@ -312,7 +312,7 @@ def setup_function(
             "MoreAdvancedHeatPumpHPLibControllerSH"
         ).resolve(
             SizingContext(
-                set_heating_temperature_in_celsius=(
+                set_heating_temperature_in_celsius=concrete(
                     my_heat_distribution_controller_config.set_heating_temperature_for_building_in_celsius
                 ),
                 heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,

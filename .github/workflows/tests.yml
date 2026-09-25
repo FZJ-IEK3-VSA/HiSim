@@ -57,6 +57,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
+      with:
+        # The full history, so the upstream_history tests (tests/test_golden_history_upstream.py)
+        # can compare the KPI rename table with the commits that touched golden_references/.
+        fetch-depth: 0
     # Wall time, CPU time and peak memory for this job; see the action.
     - name: Start the resource monitor
       uses: ./.github/actions/resource-monitor

@@ -14,6 +14,8 @@
   "BUI1.Battery.Battery losses": 0.0,
   "BUI1.Building.Building heating load": 9779.9022,
   "BUI1.Building.Conditioned floor area": 170.5,
+  "BUI1.Building.Degree-hours of building indoor air temperature above 26.0 Celsius": 0.0,
+  "BUI1.Building.Degree-hours of building indoor air temperature more than 1.0 K below its heating set temperature": 20.44546353368445,
   "BUI1.Building.Internal energy gains": 85.6809742543288,
   "BUI1.Building.Maximum building indoor air temperature reached": 23.118905602504604,
   "BUI1.Building.Minimum building indoor air temperature reached": 16.93265924990739,

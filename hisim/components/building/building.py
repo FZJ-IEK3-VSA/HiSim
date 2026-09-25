@@ -32,6 +32,49 @@ from hisim.config import DisplayConfig
 from hisim.economics.facts import CostRelevance
 
 
+SECONDS_PER_HOUR = 3600
+
+
+def degree_hours_below(
+    temperatures_in_celsius: pd.Series, threshold_in_celsius: float, seconds_per_timestep: int
+) -> float:
+    """Return the degree-hours, in K*h, a temperature series spent below a threshold.
+
+    Every time step below the threshold adds its distance to the threshold times the step's length
+    in hours; a step on or above it adds nothing. A missing temperature is not skipped: it makes the
+    sum NaN, so a gap in the series cannot pass for a comfortable hour.
+
+    Args:
+        temperatures_in_celsius: One temperature per time step.
+        threshold_in_celsius: The temperature below which a step counts.
+        seconds_per_timestep: The length of one step.
+
+    Returns:
+        The degree-hours, never negative, or NaN when a temperature is missing.
+    """
+    shortfall = (threshold_in_celsius - temperatures_in_celsius).clip(lower=0.0)
+    return float(shortfall.sum(skipna=False) * seconds_per_timestep / SECONDS_PER_HOUR)
+
+
+def degree_hours_above(
+    temperatures_in_celsius: pd.Series, threshold_in_celsius: float, seconds_per_timestep: int
+) -> float:
+    """Return the degree-hours, in K*h, a temperature series spent above a threshold.
+
+    The mirror of :func:`degree_hours_below`, with the same treatment of a missing temperature.
+
+    Args:
+        temperatures_in_celsius: One temperature per time step.
+        threshold_in_celsius: The temperature above which a step counts.
+        seconds_per_timestep: The length of one step.
+
+    Returns:
+        The degree-hours, never negative, or NaN when a temperature is missing.
+    """
+    excess = (temperatures_in_celsius - threshold_in_celsius).clip(lower=0.0)
+    return float(excess.sum(skipna=False) * seconds_per_timestep / SECONDS_PER_HOUR)
+
+
 class BuildingState:
     """BuildingState class."""
 
@@ -129,6 +172,25 @@ class Building(cp.Component):
     HeatFluxToThermalMass = "HeatFluxToThermalMass"
     TotalThermalMassHeatFlux = "TotalThermalMassHeatFlux"
     OpenWindow = "OpenWindow"
+
+    #: The indoor air temperature above which a summer hour counts as overheating: the limit of
+    #: DIN 4108-2's summer climate region B, independent of any cooling setpoint.
+    OVERHEATING_THRESHOLD_IN_CELSIUS = 26.0
+    #: How far below its heating setpoint the room has to be before an hour counts as cold. It
+    #: keeps the ripple of an on/off controller, a few tenths of a kelvin, out of the sum.
+    UNDERHEATING_TOLERANCE_IN_KELVIN = 1.0
+    #: KPI names that stay the same whatever the setpoints are, for readers outside HiSim (the
+    #: RenoVisor comfort grades look them up). Each is spelled from its own constant, to one
+    #: decimal like the setpoint-named KPIs below, so a changed limit renames its KPI with it.
+    UNDERHEATING_DEGREE_HOURS_KPI = (
+        "Degree-hours of building indoor air temperature more than "
+        f"{UNDERHEATING_TOLERANCE_IN_KELVIN:.1f} K below its heating set temperature"
+    )
+    OVERHEATING_DEGREE_HOURS_KPI = (
+        f"Degree-hours of building indoor air temperature above {OVERHEATING_THRESHOLD_IN_CELSIUS:.1f} Celsius"
+    )
+    #: The unit the Building publishes every degree-hour KPI in.
+    DEGREE_HOURS_UNIT = "°C*h"
 
     @utils.measure_execution_time
     def __init__(
@@ -1324,6 +1386,37 @@ class Building(cp.Component):
                 description=self.component_name,
             )
             list_of_kpi_entries.append(max_temperature_reached_in_celsius_entry)
+            # Two sums under names that do not change with the configuration, which is what a
+            # reader outside HiSim can look up (the RenoVisor comfort grades, hisim-sska): the
+            # heating one beyond a 1 K tolerance, so controller ripple is not counted as cold, and
+            # the summer one against the fixed DIN 4108-2 limit rather than the cooling setpoint
+            # of an air conditioner the house may not have.
+            underheating_degree_hours = degree_hours_below(
+                indoor_temperatures_in_celsius,
+                self.set_heating_temperature_in_celsius - self.UNDERHEATING_TOLERANCE_IN_KELVIN,
+                self.seconds_per_timestep,
+            )
+            overheating_degree_hours = degree_hours_above(
+                indoor_temperatures_in_celsius, self.OVERHEATING_THRESHOLD_IN_CELSIUS, self.seconds_per_timestep
+            )
+            list_of_kpi_entries.append(
+                KpiEntry(
+                    name=self.UNDERHEATING_DEGREE_HOURS_KPI,
+                    unit=self.DEGREE_HOURS_UNIT,
+                    value=underheating_degree_hours,
+                    tag=KpiTagEnumClass.BUILDING,
+                    description=self.component_name,
+                )
+            )
+            list_of_kpi_entries.append(
+                KpiEntry(
+                    name=self.OVERHEATING_DEGREE_HOURS_KPI,
+                    unit=self.DEGREE_HOURS_UNIT,
+                    value=overheating_degree_hours,
+                    tag=KpiTagEnumClass.BUILDING,
+                    description=self.component_name,
+                )
+            )
         return list_of_kpi_entries
 
     def get_building_kpis_from_outputs(

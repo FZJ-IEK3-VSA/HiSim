@@ -17,7 +17,7 @@ import pytest
 
 from hisim.renovisor.apply import MeasureRegistry, apply
 from hisim.renovisor.capabilities import ProbeSet
-from hisim.renovisor.constants import LayerDefaults, OpeningUValues
+from hisim.renovisor.constants import BatteryLaw, LayerDefaults, OpeningUValues
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.request import CatalogueTable, Measure, Request
 from hisim.renovisor.vocabulary import ReportStatus
@@ -101,8 +101,17 @@ TOUCHED: Dict[str, Set[str]] = {
     "hot_water_system": {"hot_water.supply"},
     "temperature_control_system": {"temperature_control.type_of_system"},
     "replace_white_appliances": {"appliances.white_appliances"},
-    "photovoltaic_system": {"pv_system.size_in_percent_of_roof_area"},
-    "battery_system": {"battery.days_to_cover"},
+    "photovoltaic_system": {
+        "pv_system.size_in_percent_of_roof_area",
+        "pv_system.power_in_watt",
+        "pv_system.azimuth",
+        "pv_system.tilt",
+    },
+    "battery_system": {
+        "battery.custom_battery_capacity_generic_in_kilowatt_hour",
+        "battery.power_in_watt",
+        "battery.days_to_cover",
+    },
     "solar_thermal_system": {"solar_thermal_system.supplies"},
     "electric_vehicle": {"electric_vehicles.number"},
     "change_room_temperature": {"building.set_heating_temperature_in_celsius"},
@@ -226,25 +235,33 @@ class TestInsulationLayers:
         assert applied.layers[0].thickness_in_mm == LayerDefaults.thickness_of("warm_roof_insulation")
 
     @pytest.mark.parametrize("measure_id", ["basement_internal_insulation", "top_floor_ceiling_insulation"])
-    def test_a_thickness_the_catalogue_offers_no_option_for_is_still_reported(self, measure_id: str) -> None:
-        """The layer is as thick as the translator's default either way, so the report says so.
+    def test_the_two_measures_that_gained_a_thickness_option_read_it(self, measure_id: str) -> None:
+        """Since contract 882a8c1 these two offer ``thickness_in_mm`` too (hisim-1h7f), and it is read.
 
-        These two measures have no ``thickness_in_mm`` option in the catalogue (renovisorissues
-        #38), which used to leave their default unreported. The line names an option the
-        catalogue does not declare, so it leaves the measure's own status ``used``.
+        A stated thickness is ``used`` and makes the layer; an absent one is the ordinary
+        ``defaulted`` line every other insulation measure reports. Either way the measure stays
+        ``used``, because the option is an ``experts`` one.
         """
-        assert CatalogueTable.option(measure_id, "thickness_in_mm") is None
-        applied = apply(anchor_house(), measures_of(ProbeSet.package(measure_id)), whitelist())
-
-        default = LayerDefaults.thickness_of(measure_id)
-        line = next(option for option in applied.measures[0].options if option.name == "thickness_in_mm")
-        assert line.status is ReportStatus.DEFAULTED
-        assert line.note == (
-            f"the catalogue offers no thickness_in_mm option for {measure_id}; the translator's default is {default} mm"
+        assert CatalogueTable.option(measure_id, "thickness_in_mm") is not None
+        stated = apply(
+            anchor_house(),
+            measures_of({"id": measure_id, "options": {"material": ProbeSet.material(), "thickness_in_mm": 140}}),
+            whitelist(),
         )
-        assert applied.layers[0].thickness_in_mm == default
-        assert applied.layers[0].thickness_defaulted
-        assert applied.measures[0].status is ReportStatus.USED
+        line = next(option for option in stated.measures[0].options if option.name == "thickness_in_mm")
+        assert line.status is ReportStatus.USED
+        assert stated.layers[0].thickness_in_mm == 140
+        assert not stated.layers[0].thickness_defaulted
+        assert stated.measures[0].status is ReportStatus.USED
+
+        absent = apply(anchor_house(), measures_of(ProbeSet.package(measure_id)), whitelist())
+        default = LayerDefaults.thickness_of(measure_id)
+        line = next(option for option in absent.measures[0].options if option.name == "thickness_in_mm")
+        assert line.status is ReportStatus.DEFAULTED
+        assert line.note == f"absent from the request; the translator's default for {measure_id} is {default} mm"
+        assert absent.layers[0].thickness_in_mm == default
+        assert absent.layers[0].thickness_defaulted
+        assert absent.measures[0].status is ReportStatus.USED
 
     def test_a_cavity_deeper_than_the_cavity_is_capped_and_said_so(self) -> None:
         """A cavity cannot be filled deeper than it is wide; the cap is an approximation."""
@@ -403,18 +420,103 @@ class TestReplacementsAndRemovals:
             "tilt": 25,
         }
 
-    def test_a_new_battery_replaces_the_old_one_entirely(self) -> None:
-        """A battery sized by days and one sized by capacity are two different batteries."""
+    def test_the_array_s_own_figures_replace_the_old_ones_and_the_power_wins(self) -> None:
+        """Contract 882a8c1: power, azimuth and tilt are written; the share is kept and recorded."""
         house = anchor_house()
-        house["battery"] = {"custom_battery_capacity_generic_in_kilowatt_hour": 5}
+        house["pv_system"] = {"power_in_watt": 3000, "azimuth": 200, "tilt": 25}
 
         applied = apply(
             house,
-            measures_of({"id": "battery_system", "options": {"days_to_cover": 3}}),
+            measures_of({"id": "photovoltaic_system", "options": {
+                "size_in_percent_of_roof_area": 60, "power_in_watt": 5500,
+                "azimuth_in_degree": 170, "tilt_in_degree": 35}}),
             whitelist(),
         )
 
-        assert applied.house["battery"] == {"days_to_cover": 3}
+        assert applied.house["pv_system"] == {
+            "size_in_percent_of_roof_area": 60,
+            "power_in_watt": 5500.0,
+            "azimuth": 170.0,
+            "tilt": 35.0,
+        }
+        options = {option.name: option for option in applied.measures[0].options}
+        for name in ("power_in_watt", "azimuth_in_degree", "tilt_in_degree"):
+            assert options[name].status is ReportStatus.USED
+        share = options["size_in_percent_of_roof_area"]
+        assert share.status is ReportStatus.USED
+        assert "power_in_watt sizes the array" in (share.note or "")
+        assert applied.measures[0].status is ReportStatus.USED
+
+    def test_the_shading_loss_is_accepted_and_not_implemented(self) -> None:
+        """The array is simulated unshaded; the option is written down, not dropped."""
+        applied = apply(
+            anchor_house(),
+            measures_of({"id": "photovoltaic_system", "options": {
+                "size_in_percent_of_roof_area": 60, "shading_losses_in_percent": 8}}),
+            whitelist(),
+        )
+
+        line = next(option for option in applied.measures[0].options if option.name == "shading_losses_in_percent")
+        assert line.status is ReportStatus.NOT_IMPLEMENTED_YET
+        assert "unshaded" in (line.note or "")
+        assert "shading_losses_in_percent" not in applied.house["pv_system"]
+
+    def test_a_new_battery_replaces_the_old_one_entirely(self) -> None:
+        """The measure states the new battery; nothing of the old one survives."""
+        house = anchor_house()
+        house["battery"] = {"custom_battery_capacity_generic_in_kilowatt_hour": 5, "installation_year": 2015}
+
+        applied = apply(
+            house,
+            measures_of({"id": "battery_system", "options": {"capacity_in_kwh": 10, "power_in_watt": 4000}}),
+            whitelist(),
+        )
+
+        assert applied.house["battery"] == {
+            "custom_battery_capacity_generic_in_kilowatt_hour": 10.0,
+            "power_in_watt": 4000.0,
+        }
+        options = {option.name: option.status for option in applied.measures[0].options}
+        assert options == {"capacity_in_kwh": ReportStatus.USED, "power_in_watt": ReportStatus.USED}
+        assert applied.measures[0].status is ReportStatus.USED
+
+    def test_an_absent_battery_power_is_the_catalogue_s_half_c_rule(self) -> None:
+        """The catalogue: power from the capacity at 0.5 C when unset; reported defaulted with the rule."""
+        applied = apply(
+            anchor_house(),
+            measures_of({"id": "battery_system", "options": {"capacity_in_kwh": 8}}),
+            whitelist(),
+        )
+
+        assert applied.house["battery"] == {"custom_battery_capacity_generic_in_kilowatt_hour": 8.0}
+        line = next(option for option in applied.measures[0].options if option.name == "power_in_watt")
+        assert line.status is ReportStatus.DEFAULTED
+        assert "0.5 C" in (line.note or "") and "500 W per kWh" in (line.note or "")
+        assert applied.measures[0].status is ReportStatus.USED
+
+    def test_an_absent_battery_capacity_is_read_back_from_a_stated_power(self) -> None:
+        """The same 0.5 C rule, the other way round: 3000 W is a 6 kWh battery."""
+        applied = apply(
+            anchor_house(),
+            measures_of({"id": "battery_system", "options": {"power_in_watt": 3000}}),
+            whitelist(),
+        )
+
+        assert applied.house["battery"] == {
+            "custom_battery_capacity_generic_in_kilowatt_hour": 6.0,
+            "power_in_watt": 3000.0,
+        }
+        line = next(option for option in applied.measures[0].options if option.name == "capacity_in_kwh")
+        assert line.status is ReportStatus.DEFAULTED
+
+    def test_a_battery_measure_stating_neither_number_is_sized_like_the_frontend_sizes_one(self) -> None:
+        """One day of the simulated household's electricity, and the measure says it approximated."""
+        applied = apply(anchor_house(), measures_of({"id": "battery_system", "options": {}}), whitelist())
+
+        assert applied.house["battery"] == {"days_to_cover": BatteryLaw.DAYS_TO_COVER_WHEN_UNSIZED}
+        assert applied.measures[0].status is ReportStatus.APPROXIMATED
+        statuses = {option.name: option.status for option in applied.measures[0].options}
+        assert statuses == {"capacity_in_kwh": ReportStatus.DEFAULTED, "power_in_watt": ReportStatus.DEFAULTED}
 
 
 @pytest.mark.base
@@ -450,11 +552,11 @@ class TestTheWhitelistIsAskedOfTheRenovatedHouse:
         assert supply.note == "No separate domestic-hot-water heat pump component."
 
     def test_an_installation_year_is_recorded_and_carries_its_note(self) -> None:
-        """Five measures have it and no HiSim parameter takes it."""
+        """Six measures have it and no HiSim parameter takes it."""
         applied = apply(
             anchor_house(),
             measures_of(
-                {"id": "battery_system", "options": {"days_to_cover": 2, "installation_year": 2020}}
+                {"id": "battery_system", "options": {"capacity_in_kwh": 8, "installation_year": 2020}}
             ),
             whitelist(),
         )

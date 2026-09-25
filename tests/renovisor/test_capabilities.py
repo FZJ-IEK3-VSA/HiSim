@@ -15,7 +15,7 @@ battery.
 """
 
 from pathlib import Path
-from typing import Any, Dict, Iterator, Mapping, Optional
+from typing import Any, ClassVar, Dict, Iterator, Mapping, Optional
 
 import copy
 import pytest
@@ -597,6 +597,53 @@ def _request_schema_leaf(path: str) -> Optional[Dict[str, Any]]:
             return None
         node = child
     return {key: value for candidate in expand(node) for key, value in candidate.items() if key in BOUND_KEYWORDS}
+
+
+@pytest.mark.base
+class TestNumericOptions:
+    """A numeric option publishes bounds only where the request schema bounds its field inclusively."""
+
+    #: ``measure_id.option`` -> the request field the option writes, for the options of contract
+    #: 882a8c1 whose field the request schema declares.
+    OPTION_FIELDS: ClassVar[Dict[str, str]] = {
+        "air_conditioners.power_in_watt": "house.air_conditioning.power_in_watt",
+        "photovoltaic_system.power_in_watt": "house.pv_system.power_in_watt",
+        "photovoltaic_system.azimuth_in_degree": "house.pv_system.azimuth",
+        "photovoltaic_system.tilt_in_degree": "house.pv_system.tilt",
+        "battery_system.capacity_in_kwh": "house.battery.custom_battery_capacity_generic_in_kilowatt_hour",
+    }
+
+    def test_every_free_numeric_option_has_two_probe_points(self) -> None:
+        """A numeric option the catalogue adds without points fails here by name, not in a probe."""
+        for measure_id in CatalogueTable.ids():
+            for option in CatalogueTable.options_of(measure_id):
+                if option.values is None and option.value_type in (ValueType.INTEGER, ValueType.NUMBER):
+                    (low, high), _published = ProbeSet.option_points(measure_id, option.name)
+                    assert low < high, (measure_id, option.name)
+
+    def test_an_option_with_a_schema_field_is_probed_inside_it_and_publishes_only_inclusive_bounds(self) -> None:
+        """Published bounds are the schema's own; an exclusive or missing bound makes them private points."""
+        for qualified, path in self.OPTION_FIELDS.items():
+            measure_id, name = qualified.split(".")
+            (low, high), published = ProbeSet.option_points(measure_id, name)
+            declared = _request_schema_leaf(path)
+            assert declared is not None, path
+            for point in (low, high):
+                assert point >= declared.get("minimum", point), (qualified, point)
+                assert point <= declared.get("maximum", point), (qualified, point)
+                assert point > declared.get("exclusiveMinimum", point - 1), (qualified, point)
+            inclusive = "minimum" in declared and "maximum" in declared
+            assert published == inclusive, qualified
+            if published:
+                assert (low, high) == (declared["minimum"], declared["maximum"]), qualified
+
+    def test_a_private_probe_point_never_reaches_the_document(self, document: CapabilityDocument) -> None:
+        """The battery's two numbers and the array's power and shading publish no minimum or maximum."""
+        measures = {entry["measure_id"]: entry for entry in document.body["measures"]}
+        for qualified in ProbeSet.OPTION_PROBE_POINTS:
+            measure_id, name = qualified.split(".")
+            option = next(entry for entry in measures[measure_id]["options"] if entry["name"] == name)
+            assert "minimum" not in option and "maximum" not in option, qualified
 
 
 @pytest.mark.base

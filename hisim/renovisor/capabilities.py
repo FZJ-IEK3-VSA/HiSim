@@ -261,13 +261,15 @@ class RequestSchemaBounds:
 class ProbeSet:
     """The probes the capability document is aggregated from, as data.
 
-    Everything here is generated from three tables and the frozen catalogue, so a catalogue value
+    Everything here is generated from four tables and the frozen catalogue, so a catalogue value
     added tomorrow is probed tomorrow without anybody writing a probe. The tables are the
     enumerated inventory fields worth varying (:attr:`FIELD_VALUES`, the request schema's own
     enums), the values the numeric ones are probed at (:attr:`FIELD_PROBE_POINTS`, HiSim's own
-    choice and never published) and the bounds of the free numeric options
-    (:attr:`OPTION_BOUNDS`). The bounds a numeric field publishes are not in any of them: they are
-    read from the request schema when the document is built (:class:`RequestSchemaBounds`).
+    choice and never published), the bounds of the free numeric options (:attr:`OPTION_BOUNDS`)
+    and the points of those the schema bounds only exclusively or not at all
+    (:attr:`OPTION_PROBE_POINTS`, never published). The bounds a numeric field publishes are not in
+    any of them: they are read from the request schema when the document is built
+    (:class:`RequestSchemaBounds`).
     """
 
     #: The mockup measure whose ``material`` option is the row every material probe sends
@@ -292,6 +294,7 @@ class ProbeSet:
         "air_conditioning": {"power_in_watt": 3000},
         "appliances": {"white_appliances": "existing"},
         "pv_system": {"size_in_percent_of_roof_area": 50},
+        # The request schema's house.battery is sized by exactly one of a capacity or days_to_cover.
         "battery": {"days_to_cover": 2},
         "solar_thermal_system": {"supplies": "dhw_only"},
         "electric_vehicles": {"number": 1},
@@ -404,19 +407,70 @@ class ProbeSet:
     }
 
     #: The low and high value probed for each free numeric option, from the request schema's own
-    #: bounds on the field the option writes into: ``thickness_in_mm`` from ``added_insulation``,
-    #: ``new_room_temperature_in_celsius`` from ``set_heating_temperature_in_celsius``, ``installation_year``
-    #: from ``construction_year``, and the four device options from their own blocks.
+    #: inclusive bounds on the field the option writes into: ``thickness_in_mm`` from
+    #: ``added_insulation``, ``new_room_temperature_in_celsius`` from
+    #: ``set_heating_temperature_in_celsius``, ``installation_year`` from ``construction_year``, and
+    #: the device options from their own blocks. They are published as the option's
+    #: ``minimum``/``maximum``, which the shared schema defines as the values probed from the
+    #: request schema's bounds. A key is an option name, valid for every measure that has the
+    #: option, or ``measure_id.option`` where one name means different fields in different measures
+    #: (``power_in_watt``); the qualified key wins (:meth:`option_points`).
     OPTION_BOUNDS: ClassVar[Dict[str, Tuple[Any, Any]]] = {
         "thickness_in_mm": (10, 500),
         "installation_year": (1700, 2100),
         "u_value_in_watt_per_m2_per_kelvin": (0.1, 10),
-        "power_in_watt": (0, 50000),
+        "air_conditioners.power_in_watt": (0, 50000),
         "size_in_percent_of_roof_area": (1, 100),
-        "days_to_cover": (1, 14),
+        # house.pv_system.azimuth and .tilt, the two fields these options write.
+        "photovoltaic_system.azimuth_in_degree": (0, 360),
+        "photovoltaic_system.tilt_in_degree": (0, 90),
         "number": (1, 2),
         SemanticChecks.ROOM_TEMPERATURE_MEASURE[1]: SemanticChecks.ROOM_TEMPERATURE_RANGE,
     }
+
+    #: The values the numeric options with no inclusive schema bound are probed at, by
+    #: ``measure_id.option``. As for :attr:`FIELD_PROBE_POINTS`, these are HiSim's own choice and
+    #: are never published: where the schema's bound on the field an option writes is exclusive
+    #: (``exclusiveMinimum: 0``) the low point lies just inside it, and where the schema has no
+    #: field at all the points are representative values.
+    OPTION_PROBE_POINTS: ClassVar[Dict[str, Tuple[Any, Any]]] = {
+        # house.pv_system.power_in_watt: exclusiveMinimum 0, maximum 100000.
+        "photovoltaic_system.power_in_watt": (100, 100000),
+        # No schema field: an annual loss in percent of the unshaded array.
+        "photovoltaic_system.shading_losses_in_percent": (0, 100),
+        # house.battery.custom_battery_capacity_generic_in_kilowatt_hour: exclusiveMinimum 0, maximum 200.
+        "battery_system.capacity_in_kwh": (0.5, 200),
+        # No schema field: a household battery's power, a small and a very large one.
+        "battery_system.power_in_watt": (250, 100000),
+    }
+
+    @classmethod
+    def option_points(cls, measure_id: str, name: str) -> Tuple[Tuple[Any, Any], bool]:
+        """Return the low and high value one numeric option is probed at, and whether they are published.
+
+        Args:
+            measure_id: The catalogue id.
+            name: The option's name.
+
+        Returns:
+            ``((low, high), published)``: from :attr:`OPTION_BOUNDS` by qualified then by plain key,
+            published; or from :attr:`OPTION_PROBE_POINTS`, not published.
+
+        Raises:
+            KeyError: When neither table names the option, which a catalogue edit that added a
+                numeric option causes until somebody chooses its points.
+        """
+        qualified = f"{measure_id}.{name}"
+        if qualified in cls.OPTION_BOUNDS:
+            return cls.OPTION_BOUNDS[qualified], True
+        if qualified in cls.OPTION_PROBE_POINTS:
+            return cls.OPTION_PROBE_POINTS[qualified], False
+        if name in cls.OPTION_BOUNDS:
+            return cls.OPTION_BOUNDS[name], True
+        raise KeyError(
+            f"no probe points for the numeric option {qualified}; add them to ProbeSet.OPTION_BOUNDS "
+            "(the request schema's inclusive bounds) or ProbeSet.OPTION_PROBE_POINTS"
+        )
 
     #: The two-change probes the conditional entries of the list need, as
     #: ``name -> (house changes, package)``.
@@ -549,7 +603,7 @@ class ProbeSet:
                       measures=[base], subject=measure_id)
             )
             for option in CatalogueTable.options_of(measure_id):
-                for value in cls._option_values(option):
+                for value in cls._option_values(measure_id, option):
                     entry = copy.deepcopy(base)
                     entry["options"][option.name] = value
                     probes.append(
@@ -614,11 +668,11 @@ class ProbeSet:
         for option in CatalogueTable.options_of(measure_id):
             if option.access_level is not AccessLevel.EVERYONE:
                 continue
-            options[option.name] = cls._first_value(option)
+            options[option.name] = cls._first_value(measure_id, option)
         return {"id": measure_id, "options": options}
 
     @classmethod
-    def _first_value(cls, option: OptionSpec) -> Any:
+    def _first_value(cls, measure_id: str, option: OptionSpec) -> Any:
         """Return the value a probe sends for one required option when it varies nothing."""
         if option.value_type is ValueType.MATERIAL:
             return cls.material()
@@ -626,18 +680,18 @@ class ProbeSet:
             return option.values[0]
         if option.value_type is ValueType.BOOLEAN:
             return True
-        return cls.OPTION_BOUNDS[option.name][0]
+        return cls.option_points(measure_id, option.name)[0][0]
 
     @classmethod
-    def _option_values(cls, option: OptionSpec) -> Tuple[Any, ...]:
-        """Return the values one option is probed with: its list, its bounds, or both booleans."""
+    def _option_values(cls, measure_id: str, option: OptionSpec) -> Tuple[Any, ...]:
+        """Return the values one option is probed with: its list, its two points, or both booleans."""
         if option.value_type is ValueType.MATERIAL:
             return (cls.material(),)
         if option.values:
             return tuple(option.values)
         if option.value_type is ValueType.BOOLEAN:
             return (True, False)
-        return cls.OPTION_BOUNDS[option.name]
+        return cls.option_points(measure_id, option.name)[0]
 
 
 @dataclass
@@ -923,9 +977,8 @@ class Aggregation:
         """Return one entry per option the catalogue declares for one measure.
 
         Only the catalogue's options: a report line for an option the catalogue does not declare
-        -- the defaulted ``thickness_in_mm`` of the two insulation measures that have no such
-        option -- stays in the mapping report and never reaches the document, whose options are
-        the contract's. It cannot change the measure's status either, because
+        stays in the mapping report and never reaches the document, whose options are the
+        contract's. It cannot change the measure's status either, because
         :class:`hisim.renovisor.apply.MeasureStatusRules` passes over it.
 
         An option's note is the note of its own worst *option-level* observation, never of one
@@ -950,9 +1003,10 @@ class Aggregation:
                     cls._value(value, values.get(spec.name, {}).get(_key(value)))
                     for value in spec.values
                 ]
-            bounds = ProbeSet.OPTION_BOUNDS.get(spec.name)
-            if spec.values is None and bounds is not None and spec.value_type is not ValueType.BOOLEAN:
-                entry["minimum"], entry["maximum"] = bounds
+            if spec.values is None and spec.value_type in (ValueType.INTEGER, ValueType.NUMBER):
+                bounds, published = ProbeSet.option_points(measure_id, spec.name)
+                if published:
+                    entry["minimum"], entry["maximum"] = bounds
             note = NoteAggregation.note_of(observations, status)
             if note is not None:
                 entry["note"] = note

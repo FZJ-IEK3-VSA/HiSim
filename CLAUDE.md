@@ -138,8 +138,8 @@ Commands: `python -m hisim.renovisor {run|translate|validate|capabilities|map}`.
 2 the request is not a request (`problems.json` lists every fault), 3 a translator error
 (`translator_error.json`), 5 HiSim refused the file or the simulation raised.
 
-Layers: `contract/` (vendored measure catalogue, superseded OpenAPI draft with its home inventory, request
-schema, worked mockup and capability-document schema, each pinned to a commit in `PINNED.yaml`; refresh with
+Layers: `contract/` (vendored measure catalogue, request schema, worked mockup and capability-document
+schema, each pinned to a commit in `PINNED.yaml`; refresh with
 `python -m hisim.renovisor.contract.refresh <contract checkout> --specs <renovisorissues clone>` (`--specs` is
 required; `--specs ''` keeps the spec copies and their pins); the shared
 specs live in `specs/` of https://jugit.fz-juelich.de/iek-3/groups/urbanmodels/renovisorissues), `vocabulary.py` (closed enums

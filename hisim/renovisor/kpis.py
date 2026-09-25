@@ -1,12 +1,16 @@
-"""The ``kpis`` block of ``result.json``: three simulated figures, one derived, and six constants.
+"""The ``kpis`` block of ``result.json``: simulated figures and grades, one derived, four constants.
 
 The contract asks for thirteen key performance indicators; HiSim computes three of them, derives a
 fourth from the material table, and has no model at all behind the rest (challenge C22). Decision
 A12 settled what to do about that: the constants are published with ``provenance: MOCKED`` and are
 the *contract's own* examples rather than numbers invented here, so the frontend that asked for the
-field gets the value it documented, clearly marked as not a simulation result. Decision R8 settled
-the remaining case: a field with neither a computation nor a mocked constant is absent from the
-payload and is listed under ``result.json["missing"]`` with the reason.
+field gets the value it documented, clearly marked as not a simulation result. Since 2026-09-25
+they are held as HiSim's own placeholders (:class:`MockedKpis`), no longer read out of the
+superseded contract draft, and the two qualitative ones sit on the contract's shared Rating 1..5.
+The comfort grades and summer heat protection are graded from the simulated year on that scale
+(:class:`~hisim.renovisor.constants.ComfortGrades`). Decision R8 settled the remaining case: a
+field with neither a computation nor a mocked constant is absent from the payload and is listed
+under ``result.json["missing"]`` with the reason.
 
 The three simulated figures and where they come from (decision Q22 fixed the boundaries)::
 
@@ -31,11 +35,11 @@ import math
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 
 from hisim.components.building.building import Building
 from hisim.renovisor.constants import ComfortGrades, GradeScale
-from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.layers import EnvelopeLayers
 from hisim.renovisor.provenance import MissingField, Period, ProvenancedValue
 from hisim.renovisor.vocabulary import Provenance
@@ -270,72 +274,92 @@ class ComfortSources:
         return round(degree_hours, cls.DECIMALS)
 
 
-class ContractExamples:
-    """The contract schema's own ``examples``, read at build time rather than typed out here.
+class MockedKpis:
+    """HiSim's placeholders for the three KPIs it has no model for, each with the reason for its value.
 
-    Decision A12 allows a mocked KPI; it does not allow an invented one. The difference is where
-    the constant comes from: a number the frontend wrote into ``openapi.yaml`` as the example of
-    its own field is the frontend's number, and a number typed into HiSim would be HiSim inventing
-    a comfort grade. So every mocked value is read out of the vendored contract at the moment the
-    payload is built, and its ``source`` names the schema path it was read from::
+    Decision A12 allows a mocked KPI; it does not allow an invented one. Until 2026-09-25 the values
+    were read at build time out of the contract's ``openapi.yaml``, the examples the frontend wrote
+    for its own fields. HiSim no longer vendors that superseded draft (owner decision 2026-09-25,
+    hisim-4p3n), so the values are held here, each still the contract's own example, and each
+    published with ``provenance: MOCKED`` and a ``source`` saying it is HiSim's placeholder and
+    which bead replaces it::
 
-        ContractExamples.of("indoor_air_quality")        # ('high', 'openapi.yaml Kpis…')
+        MockedKpis.of(KpiField.INDOOR_AIR_QUALITY)   # (3, "HiSim's placeholder, …")
 
-    A field whose schema carries no example yields ``None`` with a source saying so, which makes
-    it a missing field rather than a guess.
+    The field names are HiSim's own (owner decision 2026-09-25): the contract's
+    ``disruption_by_level_in_days`` is this payload's ``disruption_days_by_level``.
     """
-
-    #: The document path of the KPI schema's property map inside ``openapi.yaml``.
-    SCHEMA_PATH: ClassVar[Tuple[str, ...]] = ("components", "schemas", "Kpis", "properties")
-
-    #: The key an OpenAPI 3.1 schema carries its examples list under.
-    EXAMPLES_KEY: ClassVar[str] = "examples"
-
-    #: The key a nested object schema carries its own properties under.
-    PROPERTIES_KEY: ClassVar[str] = "properties"
 
     #: The decision that allows a mocked value at all, quoted in every mocked source string.
     DECISION: ClassVar[str] = "A12"
 
+    #: The bead that replaces the placeholders by computed values.
+    TRACKED: ClassVar[str] = "hisim-kuna"
+
+    # Reason: the contract's own example of the field -- ``Kpis.disruption_by_level_in_days``
+    # ``examples[0]`` of openapi.yaml, the same at renovisor-api-contract@4383e21 and @882a8c1:
+    # whole days per disruption level, 0 meaning the level does not occur. It describes no package;
+    # HiSim has no model of how long a measure disrupts a home.
+    DISRUPTION_DAYS_BY_LEVEL: ClassVar[Mapping[str, int]] = MappingProxyType(
+        {"none": 6, "minor": 12, "moderate": 5, "major": 0}
+    )
+
+    # Reason: the middle of the contract's shared ``Rating`` 1..5 (5 best), which is also that
+    # schema's own example (openapi.yaml ``Rating`` ``examples[0]`` at renovisor-api-contract@882a8c1).
+    # HiSim models no indoor air, so the one value that claims neither a good nor a bad home is used.
+    INDOOR_AIR_QUALITY: ClassVar[int] = 3
+
+    # Reason: as for :attr:`INDOOR_AIR_QUALITY`, the middle of ``Rating`` 1..5 and its own example.
+    # A grade of the envelope's improvement is computable (hisim-kuna) and not computed yet.
+    THERMAL_INSULATION_EFFECT: ClassVar[int] = 3
+
+    #: What each value is, for the ``source`` a reader sees, by field.
+    DESCRIPTIONS: ClassVar[Mapping[str, str]] = MappingProxyType(
+        {
+            "disruption_days_by_level": "the contract's example of the field, days per disruption level",
+            "indoor_air_quality": "the middle of the contract's Rating 1..5 and that schema's example",
+            "thermal_insulation_effect": "the middle of the contract's Rating 1..5 and that schema's example",
+        }
+    )
+
     @classmethod
-    def schema(cls, *names: str) -> Mapping[str, Any]:
-        """Return the schema of one KPI property, or of a property nested inside one.
+    def values(cls) -> Dict[str, Any]:
+        """Return every mocked field's value, by field name, as a fresh copy."""
+        return {
+            "disruption_days_by_level": dict(cls.DISRUPTION_DAYS_BY_LEVEL),
+            "indoor_air_quality": cls.INDOOR_AIR_QUALITY,
+            "thermal_insulation_effect": cls.THERMAL_INSULATION_EFFECT,
+        }
+
+    @classmethod
+    def source(cls, field_name: str) -> str:
+        """Return the ``source`` one mocked field is published with.
 
         Args:
-            *names: The property names from ``Kpis`` downwards, e.g. ``("comfort", "heating")``.
+            field_name: The field's name in the ``kpis`` block.
 
         Returns:
-            The schema object, or an empty mapping when the contract has no such property.
+            One sentence: HiSim's placeholder, what the value is, the bead and the decision.
         """
-        node: Any = ContractFiles.openapi()
-        for key in cls.SCHEMA_PATH:
-            node = node.get(key) if isinstance(node, Mapping) else None
-        for index, name in enumerate(names):
-            if not isinstance(node, Mapping):
-                return {}
-            if index:
-                node = node.get(cls.PROPERTIES_KEY)
-                node = node.get(name) if isinstance(node, Mapping) else None
-            else:
-                node = node.get(name)
-        return node if isinstance(node, Mapping) else {}
+        return (
+            f"HiSim's placeholder, not computed: {cls.DESCRIPTIONS[field_name]} "
+            f"({cls.TRACKED}; {cls.DECISION})"
+        )
 
     @classmethod
-    def of(cls, *names: str) -> Tuple[Any, str]:
-        """Return the first example of one KPI property and the sentence naming where it came from.
+    def of(cls, field_name: str) -> Tuple[Any, str]:
+        """Return one mocked field's value and its source.
 
         Args:
-            *names: The property names from ``Kpis`` downwards.
+            field_name: The field's name in the ``kpis`` block.
 
         Returns:
-            ``(value, source)``. ``value`` is ``None`` when the property has no examples, and the
-            source then says so instead of naming an example that does not exist.
+            ``(value, source)``, the value a fresh copy the caller may keep.
+
+        Raises:
+            KeyError: When the field is not one of the mocked ones.
         """
-        path = f"Kpis.{'.'.join(names)}"
-        examples = cls.schema(*names).get(cls.EXAMPLES_KEY)
-        if not isinstance(examples, list) or not examples:
-            return None, f"{ContractFiles.OPENAPI_FILENAME} {path} carries no examples; {cls.DECISION}"
-        return examples[0], f"{ContractFiles.OPENAPI_FILENAME} {path} examples[0]; {cls.DECISION}"
+        return cls.values()[field_name], cls.source(field_name)
 
 
 @dataclass(frozen=True)
@@ -514,7 +538,7 @@ class KpiBuilder:
     #: Why there is no energy label. HiSim implements no BER or DEAP procedure, and a letter
     #: derived from a kilowatt-hour figure by some other rule would be a rating nobody issued.
     ENERGY_LABEL_REASON: ClassVar[str] = (
-        f"no BER/DEAP procedure in HiSim; no letter is invented ({ContractExamples.DECISION})"
+        f"no BER/DEAP procedure in HiSim; no letter is invented ({MockedKpis.DECISION})"
     )
 
     #: Why there is no embodied-carbon figure when the package adds no insulation. Decision R8
@@ -522,7 +546,7 @@ class KpiBuilder:
     #: to report rather than none of it.
     EMBODIED_CO2_ABSENT_REASON: ClassVar[str] = "the package adds no insulation layer (R8)"
 
-    #: The mocked scalar fields, each read from its own property's examples.
+    #: The mocked fields, each valued with HiSim's placeholder (:class:`MockedKpis`).
     MOCKED_SCALAR_FIELDS: ClassVar[Tuple[KpiField, ...]] = (
         KpiField.DISRUPTION_DAYS,
         KpiField.INDOOR_AIR_QUALITY,
@@ -565,7 +589,7 @@ class KpiBuilder:
             value=None, provenance=Provenance.MOCKED, source=self.ENERGY_LABEL_REASON
         ).to_json()
         for field in self.MOCKED_SCALAR_FIELDS:
-            self._put(values, field, self._mocked(field.value))
+            values[field.value] = self._mocked(field.value)
         self._put(
             values,
             KpiField.SUMMER_HEAT_PROTECTION,
@@ -752,20 +776,16 @@ class KpiBuilder:
             ),
         ).to_json()
 
-    def _mocked(self, *names: str) -> Optional[Dict[str, Any]]:
-        """Return one mocked field, valued with the contract schema's own example.
+    def _mocked(self, field_name: str) -> Dict[str, Any]:
+        """Return one mocked field, valued with HiSim's placeholder.
 
         Args:
-            *names: The property names from ``Kpis`` downwards.
+            field_name: The field's name in the ``kpis`` block.
 
         Returns:
-            The provenance object, or ``None`` when the schema carries no example, in which case
-            the field is recorded as absent.
+            The provenance object, ``MOCKED``, with the source naming the placeholder's reason.
         """
-        value, source = ContractExamples.of(*names)
-        if value is None:
-            self._absent(KpiField(names[0]), source)
-            return None
+        value, source = MockedKpis.of(field_name)
         return ProvenancedValue(value=value, provenance=Provenance.MOCKED, source=source).to_json()
 
     def _graded(self, path: str, name: str, scale: GradeScale[Any]) -> Optional[Dict[str, Any]]:
@@ -813,13 +833,16 @@ class KpiBuilder:
             provenance=Provenance.SIMULATED,
             source=(
                 f"{KpiDocument.FILE_NAME}: '{name}' = {rounded:.{decimals}f} {unit} over the simulated "
-                f"year; {scale.describe()} (hisim-sska, TO BE REVIEWED)"
+                f"year; Rating 5..1, 5 the best: {scale.describe()} (hisim-sska, TO BE REVIEWED)"
             ),
             period=self._period,
         ).to_json()
 
     def _comfort(self) -> Optional[Dict[str, Any]]:
         """Return the nested ``comfort`` object: a heating and a summer grade of the simulated year.
+
+        Both are integers on the contract's ``Rating`` 1..5, 5 the best; ``cooling`` is graded on
+        the very scale ``summer_heat_protection`` is, so the two always agree.
 
         Returns:
             ``{"heating": {...}, "cooling": {...}}`` with the leaves that could be graded, or
@@ -961,7 +984,6 @@ class KpiSchema:
     @classmethod
     def rows(cls) -> Tuple[PayloadFieldRow, ...]:
         """Return one row per field of the ``kpis`` block, in payload order."""
-        mocked = f"{ContractFiles.OPENAPI_FILENAME} Kpis.{{}} examples[0]"
         return (
             PayloadFieldRow(
                 cls.BLOCK,
@@ -1002,19 +1024,19 @@ class KpiSchema:
             PayloadFieldRow(
                 cls.BLOCK,
                 KpiField.DISRUPTION_DAYS.value,
-                mocked.format(KpiField.DISRUPTION_DAYS.value),
+                MockedKpis.source(KpiField.DISRUPTION_DAYS.value),
                 Provenance.MOCKED,
             ),
             PayloadFieldRow(
                 cls.BLOCK,
                 KpiField.INDOOR_AIR_QUALITY.value,
-                mocked.format(KpiField.INDOOR_AIR_QUALITY.value),
+                MockedKpis.source(KpiField.INDOOR_AIR_QUALITY.value),
                 Provenance.MOCKED,
             ),
             PayloadFieldRow(
                 cls.BLOCK,
                 KpiField.THERMAL_INSULATION_EFFECT.value,
-                mocked.format(KpiField.THERMAL_INSULATION_EFFECT.value),
+                MockedKpis.source(KpiField.THERMAL_INSULATION_EFFECT.value),
                 Provenance.MOCKED,
             ),
             PayloadFieldRow(
@@ -1030,8 +1052,10 @@ class KpiSchema:
                 cls.BLOCK,
                 KpiField.COMFORT.value,
                 f"heating: all_kpis.json '{ComfortSources.UNDERHEATING_NAME}' over the simulated year, "
+                "graded 5..1: "
                 + ComfortGrades.HEATING.describe()
-                + f"; cooling: '{ComfortSources.OVERHEATING_NAME}' over the simulated year, "
+                + f"; cooling: '{ComfortSources.OVERHEATING_NAME}' over the simulated year, graded 5..1 on "
+                "summer_heat_protection's own scale: "
                 + ComfortGrades.SUMMER.describe(),
                 Provenance.SIMULATED,
                 reason=ComfortSources.SHORT_RUN_REASON,

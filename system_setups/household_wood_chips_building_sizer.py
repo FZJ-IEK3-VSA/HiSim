@@ -122,7 +122,10 @@ def setup_function(
     if heating_system != HeatingSystems.WOOD_CHIP_HEATING:
         raise ValueError("Heating system needs to be wood chip heater for this system setup.")
 
-    heating_reference_temperature_in_celsius = -7.0
+    heating_reference_temperature_in_celsius = arche_type_config_.heating_reference_temperature_in_celsius
+    if heating_reference_temperature_in_celsius is None:
+        heating_reference_temperature_in_celsius = -7.0
+
     building_set_heating_temperature_in_celsius = 20.0
     building_set_cooling_temperature_in_celsius = 25.0
 

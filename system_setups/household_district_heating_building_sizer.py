@@ -123,7 +123,10 @@ def setup_function(
             f"Heating system was set as {heating_system} but needs to be {HeatingSystems.DISTRICT_HEATING.value} for this system setup."
         )
 
-    heating_reference_temperature_in_celsius = -7.0
+    heating_reference_temperature_in_celsius = arche_type_config_.heating_reference_temperature_in_celsius
+    if heating_reference_temperature_in_celsius is None:
+        heating_reference_temperature_in_celsius = -7.0
+
     building_set_heating_temperature_in_celsius = 20.0
     building_set_cooling_temperature_in_celsius = 25.0
 

@@ -119,7 +119,10 @@ def setup_function(
     heating_system = energy_system_config_.heating_system
     if heating_system != HeatingSystems.HEAT_PUMP:
         raise ValueError("Heating system needs to be heat pump for this system setup.")
-    heating_reference_temperature_in_celsius = -7.0
+    heating_reference_temperature_in_celsius = arche_type_config_.heating_reference_temperature_in_celsius
+    if heating_reference_temperature_in_celsius is None:
+        heating_reference_temperature_in_celsius = -7.0
+
     building_set_heating_temperature_in_celsius = 20.0
     building_set_cooling_temperature_in_celsius = 25.0
     hp_controller_mode = 1  # hp controller mode 1 for only heating and off (2 would be heating, cooling, off)

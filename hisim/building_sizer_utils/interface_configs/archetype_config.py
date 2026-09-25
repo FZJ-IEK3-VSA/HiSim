@@ -25,6 +25,8 @@ class ArcheTypeConfig:
     conditioned_floor_area_in_m2: float = 121.2
     number_of_dwellings_per_building: int = 1
     norm_heating_load_in_kilowatt: Optional[float] = None
+    heating_reference_temperature_in_celsius: Optional[float] = None
+
     # weather_location: str = "AACHEN"
     weather_location: Optional[str] = None
     weather_try_region: int = 6

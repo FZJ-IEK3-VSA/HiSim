@@ -251,6 +251,10 @@ class _CheckHints:
             "the load was timed worse than a flat profile; the projection used 0 instead "
             "(controller signal or price series inverted?)"
         ),
+        CheckIds.CHECK_USEFUL_HEAT_WITHOUT_HOT_WATER: (
+            "no hot-water source the cost engine recognizes, so the system cost per unit of heat "
+            "divides by the rooms' heat only and reads too high by the hot water's share (hisim-4wlu)"
+        ),
     }
 
 
@@ -319,6 +323,10 @@ def _render_finding(finding: PlausibilityFinding) -> PlausibilityCheck:  # pylin
         )
     if finding.check_id == CheckIds.CHECK_FLEXIBILITY_VALUE:
         return PlausibilityCheck(finding.name, finding.status, f"{_fmt(value)} EUR", ">= 0 EUR", detail)
+    if finding.check_id == CheckIds.CHECK_USEFUL_HEAT_WITHOUT_HOT_WATER:
+        return PlausibilityCheck(
+            finding.name, finding.status, f"{value:,.0f} {finding.unit} rooms only", "rooms + hot water", detail
+        )
     low, high = finding.bounds if finding.bounds else (0.0, 0.0)
     return PlausibilityCheck(
         name=finding.name,

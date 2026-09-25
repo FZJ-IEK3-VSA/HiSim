@@ -54,12 +54,12 @@ agree (this is what closed issue #11 / §2.1 issue #21).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, ClassVar, Dict, Optional, Tuple
 
 from hisim import log
 from hisim import loadtypes as lt
 from hisim.config import concrete
-from hisim.economics.carriers import EnergyCarrier, EnergyFlowRole
+from hisim.economics.carriers import EnergyCarrier, EnergyFlowRole, UsefulHeatKind
 from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
 from hisim.loadtypes import ComponentType, Units
@@ -392,9 +392,9 @@ def _declared_output_name(component: Any, constant_name: str, table_name: str) -
 
     Reads the constant off `type(component)` instead of repeating its value here, so the component
     class owns the name of the column it writes and the adapter can only ever ask for a column
-    that class actually declares. Both compatibility tables that name columns — the meter contracts
-    and the energy-balance specs — resolve through this one function, so a renamed output is the
-    same loud failure whichever table pointed at it.
+    that class actually declares. Every compatibility table that names columns — the meter
+    contracts, the energy-balance specs and the useful-heat sources — resolves through this one
+    function, so a renamed output is the same loud failure whichever table pointed at it.
 
     Args:
         component: The component instance; only its class is read.
@@ -699,6 +699,108 @@ def resolve_device_energy_flows(component: Any) -> Optional[Tuple[ResolvedDevice
             positive_part=spec.positive_part,
         )
         for spec in specs
+    )
+
+
+@dataclass(frozen=True)
+class UsefulHeatSource:
+    """Where one component class states useful heat, and which way its column counts it.
+
+    The heat-side sibling of `DeviceEnergySpec`: `output_constant` is the **name of the class
+    constant** holding the column name, resolved through `_declared_output_name`, so a renamed
+    output is a `CostDataError` rather than a column nothing writes.
+
+    `sign` records the column's sign convention instead of summing magnitudes. A source that
+    states heat going into the house writes it positive (`INTO_THE_HOUSE`); a store that states
+    heat *leaving* it writes it negative (`LEAVING_THE_SOURCE`). The extraction sums
+    `sign * column`, and a timestep of the other sign is refused (`bridge._useful_heat_by_kind`):
+    it is not useful heat, and taking its magnitude would count heat flowing the wrong way as if
+    it had been delivered.
+    """
+
+    #: The column counts heat delivered into the house as positive.
+    INTO_THE_HOUSE: ClassVar[int] = 1
+    #: The column counts heat leaving the component as negative.
+    LEAVING_THE_SOURCE: ClassVar[int] = -1
+
+    kind: UsefulHeatKind
+    output_constant: str
+    sign: int
+
+    def __post_init__(self) -> None:
+        """Refuses a sign convention that is neither of the two the table knows.
+
+        Raises:
+            ValueError: If `sign` is not `INTO_THE_HOUSE` or `LEAVING_THE_SOURCE`.
+        """
+        if self.sign not in (self.INTO_THE_HOUSE, self.LEAVING_THE_SOURCE):
+            raise ValueError(
+                f"UsefulHeatSource for {self.output_constant!r} has sign {self.sign!r}; a sign "
+                f"convention is {self.INTO_THE_HOUSE} (heat into the house) or "
+                f"{self.LEAVING_THE_SOURCE} (heat leaving the component)."
+            )
+
+
+@dataclass(frozen=True)
+class ResolvedUsefulHeatSource:
+    """One `UsefulHeatSource` with its column name resolved off the component class."""
+
+    kind: UsefulHeatKind
+    field_name: str
+    sign: int
+
+
+class UsefulHeatSources:
+    """Where the simulation states the useful heat the levelized cost of heat divides by.
+
+    Decision on hisim-4p86 (2026-09-23): the denominator is the heat the house *uses* — the rooms'
+    heating demand plus the hot water drawn — not the heat a generator produces, so the reference
+    and the plan divide by the same house's need however well either system converts it. Hot water
+    counts because the costs above the line pay for heating it.
+
+    Keyed by class name like `DeviceEnergySpecs`, so this module keeps importing no component, and
+    naming output *constants* rather than column strings, so the component class owns the name of
+    the column it writes. `tests/test_economics_bridge.py` binds every key and constant to the real
+    classes. A class with no row states no useful heat. Hot-water components other than
+    `SimpleDHWStorage` — combi boilers, electric water heaters, heat-pump DHW paths — are not yet
+    surveyed (hisim-4wlu), which is why a run with a building and no listed hot-water source is
+    warned about rather than trusted (`EvaluationInputs.heat_cost_omits_hot_water`).
+    """
+
+    BY_CLASS_NAME: ClassVar[Dict[str, UsefulHeatSource]] = {
+        # The ideal heating demand of the rooms, cooling excluded: the building splits its thermal
+        # demand by sign and writes the heating half clipped at zero, so it is >= 0 by construction.
+        "Building": UsefulHeatSource(
+            UsefulHeatKind.ROOM_HEATING, "TheoreticalHeatingEnergyDemand", UsefulHeatSource.INTO_THE_HOUSE
+        ),
+        # The heat in the hot water drawn off, from the fresh-water to the tap temperature. The
+        # tank writes it as c * m * (T_fresh - T_tap), i.e. as heat leaving the tank (<= 0).
+        "SimpleDHWStorage": UsefulHeatSource(
+            UsefulHeatKind.HOT_WATER, "ThermalEnergyConsumptionDHW", UsefulHeatSource.LEAVING_THE_SOURCE
+        ),
+    }
+
+
+def resolve_useful_heat_source(component: Any) -> Optional[ResolvedUsefulHeatSource]:
+    """The useful-heat column this component class publishes, resolved, or None for no row.
+
+    Args:
+        component: The wrapped component; its class name selects the row and its class carries the
+            output-name constant the row refers to.
+
+    Returns:
+        The resolved source, or `None` for a class `UsefulHeatSources` does not list.
+
+    Raises:
+        CostDataError: If the row names an output constant the class does not declare.
+    """
+    source = UsefulHeatSources.BY_CLASS_NAME.get(type(component).__name__)
+    if source is None:
+        return None
+    return ResolvedUsefulHeatSource(
+        kind=source.kind,
+        field_name=_declared_output_name(component, source.output_constant, "UsefulHeatSources"),
+        sign=source.sign,
     )
 
 

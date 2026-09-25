@@ -269,8 +269,11 @@ def aggregate_timeline(
         co2_result: Finished CO2 accounting, passed through to :func:`build_breakdowns`.
         parameters: Economic parameters — supplies the interest rate, the horizon and the annuity
             factor.
-        annual_heat_demand_in_kwh: Annual useful heat demand for the per-kWh heat figure. `None`
-            or zero suppresses it, since a system that delivers no heat has no cost per unit of it.
+        annual_heat_demand_in_kwh: Annual useful heat demand for the per-kWh heat figure — for a
+            staged plan the equivalent annual heat of its horizon
+            (`StagedEvaluator._equivalent_annual_heat`), which makes the quotient
+            NPV(costs) / NPV(heat). `None` or zero suppresses it, since a system that delivers no
+            heat has no cost per unit of it.
 
     Returns:
         A `TimelineAggregation`; see its docstring for the units of each field.

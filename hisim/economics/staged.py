@@ -1311,13 +1311,14 @@ class StagedEvaluator:
             for subject_facts in stage.inputs.cost_facts:
                 facts_by_subject[subject_facts.subject] = subject_facts.facts
         co2 = self._splice_co2(per_stage, active, horizon)
+        equivalent_heat = self._equivalent_annual_heat(stages, active, parameters)
         aggregation = aggregate_timeline(
             timeline=timeline,
             actor_scope=perspective.actor_scope,
             facts_by_subject=facts_by_subject,
             co2_result=co2,
             parameters=parameters,
-            annual_heat_demand_in_kwh=stages[active[horizon]].inputs.annual_heat_demand_in_kwh,
+            annual_heat_demand_in_kwh=equivalent_heat,
         )
         shares: Dict[str, float] = {}
         bases: Dict[str, float] = {}
@@ -1365,8 +1366,53 @@ class StagedEvaluator:
             anyway_basis_by_subject=bases,
             anyway_basis_kind_by_subject=kinds,
             modernization_levy=last.modernization_levy,
-            assumptions=last.assumptions,
+            # The plan's heat demand is the one its heat-cost figure divided by — the equivalent
+            # annual heat of the whole horizon, not the last stage's — so the published assumption
+            # and the heat-cost derivation that reads it state the division the KPI made.
+            assumptions=(
+                replace(last.assumptions, annual_heat_demand_in_kwh=equivalent_heat)
+                if last.assumptions is not None
+                else None
+            ),
         )
+
+    @staticmethod
+    def _equivalent_annual_heat(
+        stages: Tuple[Stage, ...], active: Tuple[int, ...], parameters: EconomicParameters
+    ) -> Optional[float]:
+        """The plan's heat as one annual figure: the annuity of its discounted per-year heat.
+
+        Decision A of the PR #812 review: the plan's levelized cost of heat is the textbook
+        NPV(costs) / NPV(heat), and each horizon year's heat is the heat of the stage active in that
+        year. The aggregation divides `total_npv x annuity` by the figure returned here, so it is
+        `annuity x sum_y heat_active[y] x df_y` over the years 1..T the energy flows are booked in,
+        with the discount factors `CashFlowTimeline.npv` applies to those flows; the annuity cancels
+        and the quotient is NPV(costs) / NPV(heat). Dividing by the last stage's heat, as before,
+        charged the whole horizon's costs to the insulated house's demand alone.
+
+        When every year's heat is the same figure — a plan whose stages all start in year 0, or
+        whose stages all state the same heat — it is returned as it is: the annuity factor is the
+        reciprocal of the discount sum, so the arithmetic would reproduce it only up to rounding,
+        and the unstaged evaluation divides by exactly this figure.
+
+        Args:
+            stages: The plan as given.
+            active: Which stage is active in each horizon year, from :meth:`_active_by_year`.
+            parameters: The assumptions: the interest rate, the horizon and the annuity factor.
+
+        Returns:
+            The equivalent annual heat in kWh/a, or None when any stage active in the horizon
+            states no heat — the plan's heat-cost figure is then omitted, as a stage's own is.
+        """
+        years = range(1, parameters.observation_period_in_years + 1)
+        stated = [stages[active[year]].inputs.annual_heat_demand() for year in years]
+        heat_by_year = [heat for heat in stated if heat is not None]
+        if len(heat_by_year) < len(stated):
+            return None
+        if len(set(heat_by_year)) == 1:
+            return heat_by_year[0]
+        discounted = sum(heat * parameters.discount_factor(year) for year, heat in zip(years, heat_by_year))
+        return parameters.annuity_factor() * discounted
 
     @staticmethod
     def _splice_co2(

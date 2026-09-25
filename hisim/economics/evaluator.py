@@ -42,6 +42,7 @@ from hisim.economics.calculators.aggregation import (
     annual_energy_attribution,
     annual_energy_quantities,
 )
+from hisim.economics.calculators.annualization import annualize_optional
 from hisim.economics.calculators.context_resolution import resolve_device, resolve_replaced_asset
 from hisim.economics.calculators.co2 import (
     accumulate_embodied_co2,
@@ -66,7 +67,7 @@ from hisim.economics.calculators.subsidy_application import (
     build_subsidy_flows,
     nominal_support_from_entries,
 )
-from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.carriers import EnergyCarrier, UsefulHeatKind
 from hisim.economics.database import CostDatabase, CostDataError
 from hisim.economics.facts import (
     BillingDeterminants,
@@ -233,12 +234,54 @@ class EvaluationInputs:
     tariff_contracts: Dict[EnergyCarrier, TariffContract] = field(default_factory=dict)
     # Tariff ids whose price signal a controller consumed during the run (§4.6 boundary):
     consumed_tariff_ids: List[str] = field(default_factory=list)
-    annual_heat_demand_in_kwh: Optional[float] = None  # for the system cost per unit of heat
+    # For the system cost per unit of heat: a figure the setup declared for a whole year, and the
+    # useful heat the simulation measured over its own period (the building's room-heating demand
+    # plus the hot water drawn, `adapter.UsefulHeatSources`). `annual_heat_demand()` picks one.
+    annual_heat_demand_in_kwh: Optional[float] = None
+    # The measured total, None when the run lists no source or its heat sums to zero, and the same
+    # heat split by `UsefulHeatKind` value, one entry per kind the run has a source of (a zero
+    # included). A file written before the split existed loads with an empty map.
+    useful_heat_of_simulated_period_in_kwh: Optional[float] = None
+    useful_heat_of_simulated_period_by_kind_in_kwh: Dict[str, float] = field(default_factory=dict)
     # Building context for the actor model (§6.3, §6.4):
     building_specific_emissions_in_kg_per_m2_a: Optional[float] = None
     heated_floor_area_in_m2: Optional[float] = None
     living_area_in_m2: Optional[float] = None
     current_cold_rent_in_euro_per_m2_month: Optional[float] = None
+
+    def annual_heat_demand(self) -> Optional[float]:
+        """The kWh a year the levelized cost of heat divides by, or None when nothing states it.
+
+        A figure the setup declared wins: the author may know the demand better than the model,
+        and `EconomicContext` has always carried it. Otherwise the useful heat the simulation
+        measured is annualized with `simulated_period_fraction`, exactly as its energy bills are
+        (decision on hisim-4p86, 2026-09-23), through the same `annualize_optional` the integrated
+        bill figures use. The measured heat is rooms plus hot water because the costs above the
+        line pay for both. A non-positive fraction states nothing to annualize with; the energy
+        calculator refuses such a record before any figure divides by this one.
+        """
+        if self.annual_heat_demand_in_kwh is not None:
+            return self.annual_heat_demand_in_kwh
+        if self.simulated_period_fraction <= 0:
+            return None
+        return annualize_optional(self.useful_heat_of_simulated_period_in_kwh, self.simulated_period_fraction)
+
+    def heat_cost_omits_hot_water(self) -> bool:
+        """True when the heat-cost figure divides by the rooms' measured heat and no hot water.
+
+        That is a run with a building and no hot-water source `adapter.UsefulHeatSources` lists,
+        pricing by the heat it measured rather than by a declared demand. The costs above the line
+        still pay for heating the water, so the figure reads too high by the hot water's share.
+        The bridge logs it and the plausibility panel carries it into the report; hisim-4wlu
+        surveys the hot-water components the table does not list yet.
+        """
+        by_kind = self.useful_heat_of_simulated_period_by_kind_in_kwh
+        return (
+            self.annual_heat_demand_in_kwh is None
+            and self.useful_heat_of_simulated_period_in_kwh is not None
+            and UsefulHeatKind.ROOM_HEATING.value in by_kind
+            and UsefulHeatKind.HOT_WATER.value not in by_kind
+        )
 
 
 @dataclass(frozen=True)
@@ -1001,7 +1044,7 @@ class EconomicEvaluator:
             },
             co2_result=co2_result,
             parameters=params,
-            annual_heat_demand_in_kwh=inputs.annual_heat_demand_in_kwh,
+            annual_heat_demand_in_kwh=inputs.annual_heat_demand(),
         )
 
         return LifecycleCostResult(
@@ -1110,7 +1153,7 @@ class EconomicEvaluator:
         return EconomicAssumptions(
             escalation_rates=rates,
             tariffs=tariffs,
-            annual_heat_demand_in_kwh=inputs.annual_heat_demand_in_kwh,
+            annual_heat_demand_in_kwh=inputs.annual_heat_demand(),
         )
 
     def _source_resolver(self) -> Dict[str, ResolvedSource]:

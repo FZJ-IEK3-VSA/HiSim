@@ -13,6 +13,8 @@ is step 12 §2.1, where the expectations are hand-computed from the synthetic pl
 inputs instead of being compared against another run of the same engine.
 """
 
+from dataclasses import replace
+
 import pytest
 
 from hisim.economics.evaluator import EconomicEvaluator
@@ -559,3 +561,86 @@ class TestAgeingFromTheStagesOwnYear:
         classes = {asset.asset_class for asset in merged.existing_assets.assets}
         assert ComponentType.HEAT_PUMP not in classes
         evaluator.evaluate(list(stages), parameters, brownfield_perspective())
+
+
+class TestThePlansHeatCostDividesByItsDiscountedHeat:
+    """Decision A of the PR #812 review: the plan's LCOH is NPV(costs) / NPV(heat).
+
+    Each horizon year's heat is the heat of the stage active in that year, discounted with the
+    factors the cost NPV uses, over the years 1..T its energy flows are booked in. The expectations
+    are computed by hand from those definitions, not by a second run of the engine.
+    """
+
+    BASELINE_HEAT_IN_KWH = 20000.0
+    RENOVATED_HEAT_IN_KWH = 8000.0
+
+    @staticmethod
+    def _with_heat(stage: Stage, heat) -> Stage:
+        """The stage with its heat demand replaced."""
+        return replace(stage, inputs=replace(stage.inputs, annual_heat_demand_in_kwh=heat))
+
+    def test_two_stages_divide_the_cost_npv_by_the_heat_npv(self, database, parameters):
+        """Heat of 20 MWh a year for years 1..3, then 8 MWh from year 4: the hand-made NPV ratio."""
+        stages = [
+            self._with_heat(baseline_stage(), self.BASELINE_HEAT_IN_KWH),
+            self._with_heat(heat_pump_stage(4), self.RENOVATED_HEAT_IN_KWH),
+        ]
+
+        plan = StagedEvaluator(database).evaluate(stages, parameters, brownfield_perspective()).plan
+
+        rate = parameters.interest_rate
+        heat_npv = sum(
+            (self.BASELINE_HEAT_IN_KWH if year < 4 else self.RENOVATED_HEAT_IN_KWH) / (1.0 + rate) ** year
+            for year in range(1, SyntheticPlan.HORIZON + 1)
+        )
+        levelized = plan.levelized_cost_of_heat_in_euro_per_kwh
+        assert levelized is not None
+        for slot in ("minimum", "best_estimate", "maximum"):
+            assert getattr(levelized, slot) == pytest.approx(
+                getattr(plan.total_npv_in_euro, slot) / heat_npv, rel=1e-12
+            )
+        # The published assumption is the equivalent annual heat the KPI divided by, so the
+        # heat-cost derivation (equivalent annual cost / this figure) states the same division.
+        assert plan.assumptions is not None
+        equivalent_heat = plan.assumptions.annual_heat_demand_in_kwh
+        assert equivalent_heat == pytest.approx(parameters.annuity_factor() * heat_npv, rel=1e-12)
+        assert equivalent_heat is not None
+        assert self.RENOVATED_HEAT_IN_KWH < equivalent_heat < self.BASELINE_HEAT_IN_KWH
+
+    def test_one_stage_over_the_whole_horizon_divides_exactly_as_before(self, database, parameters):
+        """A plan as RenoVisor builds it starts every stage in year 0: the last stage's heat, bit for bit."""
+        stages = [
+            self._with_heat(baseline_stage(), self.BASELINE_HEAT_IN_KWH),
+            self._with_heat(envelope_stage(0), self.RENOVATED_HEAT_IN_KWH),
+        ]
+
+        plan = StagedEvaluator(database).evaluate(stages, parameters, brownfield_perspective()).plan
+
+        assert plan.levelized_cost_of_heat_in_euro_per_kwh == plan.total_npv_in_euro.scale(
+            parameters.annuity_factor() / self.RENOVATED_HEAT_IN_KWH
+        )
+        assert plan.assumptions is not None
+        assert plan.assumptions.annual_heat_demand_in_kwh == self.RENOVATED_HEAT_IN_KWH
+
+    def test_an_active_stage_without_heat_leaves_the_plans_figure_out(self, database, parameters):
+        """A horizon whose heat is known for some years only has no NPV of heat to divide by."""
+        stages = [
+            self._with_heat(baseline_stage(), None),
+            self._with_heat(heat_pump_stage(4), self.RENOVATED_HEAT_IN_KWH),
+        ]
+
+        plan = StagedEvaluator(database).evaluate(stages, parameters, brownfield_perspective()).plan
+
+        assert plan.levelized_cost_of_heat_in_euro_per_kwh is None
+
+    def test_a_stage_that_is_never_active_does_not_count(self, database, parameters):
+        """A baseline replaced in year 0 contributes no year of heat, stated or not."""
+        stages = [
+            self._with_heat(baseline_stage(), None),
+            self._with_heat(envelope_stage(0), self.RENOVATED_HEAT_IN_KWH),
+        ]
+
+        plan = StagedEvaluator(database).evaluate(stages, parameters, brownfield_perspective()).plan
+
+        assert plan.assumptions is not None
+        assert plan.assumptions.annual_heat_demand_in_kwh == self.RENOVATED_HEAT_IN_KWH

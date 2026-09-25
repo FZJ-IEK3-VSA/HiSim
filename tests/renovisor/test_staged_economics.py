@@ -316,6 +316,35 @@ class TestTheEndToEndDocument:
             comparison["equivalent_annual_cost_delta_in_euro"]["best"] / 12.0
         )
 
+    def test_both_evaluations_publish_a_cost_per_kwh_of_heat(self, document, runs) -> None:
+        """hisim-4p86: the denominator is the useful heat each stage's run measured.
+
+        Both job directories record the rooms' heat plus the hot water, and the package's
+        insulation leaves the house needing less of it. The published figure is bound to that
+        heat: the equivalent annual cost the document publishes, divided by the measured heat
+        annualized as the bills are. The reference is the baseline alone; the plan's two stages
+        both start in year 0, so its heat is the package's for the whole horizon.
+        """
+        _directory, baseline, package = runs
+        annual_heat = {}
+        for variant, job in (("reference", baseline), ("plan", package)):
+            (inputs_file,) = job.rglob("economic_inputs.json")
+            inputs = json.loads(inputs_file.read_text(encoding="utf-8"))
+            by_kind = inputs["useful_heat_of_simulated_period_by_kind_in_kwh"]
+            assert set(by_kind) == {"ROOM_HEATING", "HOT_WATER"}, variant
+            measured = inputs["useful_heat_of_simulated_period_in_kwh"]
+            assert measured == pytest.approx(sum(by_kind.values()), rel=1e-12), variant
+            annual_heat[variant] = measured / inputs["simulated_period_fraction"]
+        assert 0 < annual_heat["plan"] < annual_heat["reference"]
+        for variant, heat in annual_heat.items():
+            totals = document[variant]["totals"]
+            heat_cost = totals["levelized_cost_of_heat_in_euro_per_kwh"]
+            assert heat_cost is not None and heat_cost["best"] > 0, variant
+            for slot in ("min", "best", "max"):
+                assert heat_cost[slot] == pytest.approx(
+                    totals["equivalent_annual_cost_in_euro"][slot] / heat, rel=1e-9
+                ), (variant, slot)
+
     def test_the_subsidy_stack_is_the_awarded_rows(self, document) -> None:
         """hisim-cyc.5 on a real run: the grant the stacks book is the grant the rows award."""
         StagedDocument.assert_subsidies_reconciled(document)

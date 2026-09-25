@@ -4733,9 +4733,10 @@ def economic_assumptions(results: Sequence[LifecycleCostResult]) -> List[Assumpt
                                   areas.heated_floor_area_in_m2, configuration,
                                   AssumptionKinds.SQUARE_METERS, "m2"))
     heat_demand = assumptions.annual_heat_demand_in_kwh if assumptions is not None else None
-    # `is not None`, not truthiness: a declared heat demand of zero is a statement about the
-    # building — every per-kWh figure below divides by it — and dropping the row would present the
-    # run as one that never declared one.
+    # `is not None`, not truthiness: `EconomicContext` now refuses a declared zero, but a result
+    # archived before it may carry one, and dropping the row would present that run as one that
+    # never declared a demand. For a staged plan the figure is the equivalent annual heat of the
+    # horizon (`EconomicAssumptions`).
     if heat_demand is not None:
         rows.append(AssumptionRow(AssumptionGroups.QUANTITIES, "annual heat demand",
                                   heat_demand, configuration,
@@ -5062,7 +5063,10 @@ class LevelizedHeatCostDerivation:
     levelized cost of heat (`results.HeatCostNaming`). Second, the equivalent form of the
     denominator: dividing by the annuity factor is the same as dividing by the *discounted sum of
     heat*, the annual demand repeated over the horizon and discounted, which is the form the LCOH
-    literature states. Both forms are given so a reader can reproduce the figure either way.
+    literature states. Both forms are given so a reader can reproduce the figure either way. For a
+    staged plan the recorded demand is already the equivalent annual heat of the horizon (each
+    year's heat from the stage active in it, discounted and annualized), so its discounted sum is
+    the plan's NPV of heat and the same two forms hold.
 
     Every figure here is read off the result, never recomputed: the numerator is
     `total_npv_in_euro`, the annualized numerator is the published

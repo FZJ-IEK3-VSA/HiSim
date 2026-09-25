@@ -207,6 +207,10 @@ measures:
         # Values found in materials.yaml by reverse lookup (the rows whose `measures` name this
         # measure); written by GoogleSheets/materials_sync.py -- do not edit.
 
+      - name: thickness_in_mm
+        access_level: experts
+        value_type: integer
+
   # Always might require damp proof course
   - id: basement_external_insulation
     category: building envelope measures
@@ -304,6 +308,10 @@ measures:
         access_level: everyone
         # Values found in materials.yaml by reverse lookup (the rows whose `measures` name this
         # measure); written by GoogleSheets/materials_sync.py -- do not edit.
+
+      - name: thickness_in_mm
+        access_level: experts
+        value_type: integer
 
   - id: ventilation_system
     category: ventilation system
@@ -442,15 +450,43 @@ measures:
     options:
       # Was "3-15 kW" as a single string. The unit now lives in the option name and the
       # value is a plain number; the 3-15 kW span was a product range, not a constraint.
+      #
+      # TODO: INCOMPLETE against homeinventory.yaml, and deliberately left so rather than faked.
+      # `energy_system_config.air_conditioning_system` states a unit as two rating CURVES
+      # — `cooling` and `heating`, each three parallel arrays of outdoor temperature,
+      # efficiency (EER/COP) and capacity — because neither mode's curve implies the
+      # other and a single number at an unnamed outdoor temperature says very little.
+      # None of that is expressible here: an option's `value_type` is one of
+      # `enum`, `integer`, `boolean`, `number` (`yaml_types::VALUE_TYPES`) and there is no
+      # array among them, so the six arrays have no shape to be written in. Adding
+      # `array` to that list is an engine change, not a catalogue change, which is why
+      # this option still carries a scalar. Until then an installed unit's curves reach
+      # the building only through `homeinventory.yaml`, never through this measure.
       - name: power_in_watt
         access_level: everyone
         value_type: integer
 
-  # Question: Should this be kept?
+      # Year of installation — see `heating system` for why this is an option rather than
+      # a parameter. `energy_system_config.air_conditioning_system.installation_year` has
+      # always existed; this measure could not set it, so an a/c unit a pathway installed
+      # had no age and every age rule silently skipped it.
+      - name: installation_year
+        access_level: experts
+        value_type: integer
+
   - id: hot_water_system
     category: heating system
     subcategory: domestic hot water
     options:
+      # Where domestic hot water comes from — the same vocabulary as
+      # `energy_system_config.heating_system.hot_water_supply` in homeinventory.yaml, for
+      # the reason given on `heating system` above.
+      #
+      # ("Should this be kept?" stood here while the inventory had only
+      # `with_dhw_preparation`, a boolean: two of these three values both meant `false`,
+      # so applying the measure produced a building that could not say which had been
+      # installed. The inventory now carries the field, and the two lists are one
+      # vocabulary.)
       - name: supply
         access_level: everyone
         value_type: enum
@@ -479,9 +515,45 @@ measures:
     category: appliances
     subcategory: renewable energy systems
     options:
+      # How much of the usable roof the array covers. This is the option a homeowner
+      # answers and the one that says whether the array can still grow: a full roof and a
+      # quarter-full roof of the same power are the same building without it, and no
+      # extension measure can be sized against either.
+      #
+      # It does not size the generation — `power_in_watt` below does. Both are carried,
+      # here and in `homeinventory.yaml`, because they answer different questions:
+      # percentage of roof is about future potential, watts are what a yield calculation
+      # reads.
       - name: size_in_percent_of_roof_area
         access_level: everyone
         value_type: integer
+
+      # The array the building ends up with — the same three fields as
+      # `energy_system_config.photovoltaics` in homeinventory.yaml, for the reason given
+      # on `heating system` above: an installed array becomes a stage-0 occurrence of this
+      # measure carrying its own figures.
+      #
+      # Together with the site (from `location`) these determine the yearly yield to the
+      # accuracy any irradiance database offers: azimuth and tilt fix the plane of array,
+      # power fixes the scale, and shading covers what the horizon takes away.
+      - name: power_in_watt
+        access_level: experts
+        value_type: number
+
+      - name: azimuth_in_degree
+        access_level: experts
+        value_type: number
+
+      - name: tilt_in_degree
+        access_level: experts
+        value_type: number
+
+      # Annual generation lost to shading, as a percent of the unshaded array. A single
+      # annual figure rather than a horizon profile — see the field of the same name in
+      # homeinventory.yaml for why that is a simplification worth making.
+      - name: shading_losses_in_percent
+        access_level: experts
+        value_type: number
 
       # Year of installation — see `heating system` for why this is an option rather than
       # a parameter.
@@ -493,9 +565,32 @@ measures:
     category: appliances
     subcategory: renewable energy systems
     options:
-      - name: days_to_cover
-        access_level: everyone
-        value_type: integer
+      # The battery the building ends up with, in the two fields
+      # `energy_system_config.battery_storage` of homeinventory.yaml states it by and that
+      # HiSim's `advanced_battery_bslib.BatteryConfig` reads directly
+      # (`custom_battery_capacity_generic_in_kilowatt_hour` and
+      # `custom_pv_inverter_power_generic_in_watt`).
+      #
+      # `days_to_cover` was here instead and is gone. It is the right question to ASK and
+      # the wrong thing to store: it is not a property of a battery but of a battery
+      # against a particular household's consumption, so the same cell stack is a
+      # different `days_to_cover` in two buildings and the figure cannot be compared,
+      # carried into a result, or matched against an existing installation.
+      #
+      # THE FRONTEND KEEPS THE FRIENDLY QUESTION. Days to cover is what the user should
+      # see — a slider or a text box at `everyone` level, "how many days should the
+      # battery carry the house?" — and the frontend turns the answer into the two values
+      # below before it sends anything: capacity from the household's daily consumption
+      # times the days, then power from the capacity at the usual 0.5 C, which is the
+      # same rule HiSim applies when power is left unset. The conversion belongs there,
+      # where the consumption figure lives; what reaches the contract is the battery.
+      - name: capacity_in_kwh
+        access_level: experts
+        value_type: number
+
+      - name: power_in_watt
+        access_level: experts
+        value_type: number
 
       # Year of installation — see `heating system` for why this is an option rather than
       # a parameter.
@@ -521,9 +616,12 @@ measures:
       # collector is installed for space heating alone: such an array is sized well above
       # the summer counterpart of the winter heating demand, the cylinder is already
       # plumbed in, and the surplus has nowhere else to go — so it carries the hot water
-      # too. `homeinventory.yaml` still permits the combination, `used_for_dhw` and
-      # `used_for_space_heating` being independent booleans, which is why the check lives
-      # in the assembler and is a hard error naming both flags.
+      # too. `homeinventory.yaml` used to permit the combination, `used_for_dhw` and
+      # `used_for_space_heating` being independent booleans, and the assembler answered
+      # for it with a hard error naming both flags. That field is now one `supplies` enum
+      # carrying these two values and `none`, so the combination cannot be written at all
+      # and the check is the vocabulary itself; what is left in the assembler guards
+      # against a value from outside it.
       - name: supplies
         access_level: everyone
         value_type: enum

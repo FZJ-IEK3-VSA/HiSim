@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import ClassVar, Dict, Generic, Tuple, TypeVar
 
-#: The type of a grade: the contract's words (``high``) or its 1..5 numbers.
+#: The type of a grade; every scale in use grades on the contract's shared Rating 1..5 (an ``int``).
 Grade = TypeVar("Grade")
 
 
@@ -65,10 +65,10 @@ class Placement(str, Enum):
 class LayerDefaults:
     """How thick an insulation layer is when the request states no thickness.
 
-    ``thickness_in_mm`` is an ``experts`` option of ten of the twelve insulation measures, so most
-    requests leave it out and the translator supplies one; ``basement_internal_insulation`` and
-    ``top_floor_ceiling_insulation`` have no such option in the catalogue and always get theirs.
-    Each number is the typical installed thickness of that build-up as the frontend side's
+    ``thickness_in_mm`` is an ``experts`` option of all twelve insulation measures (of
+    ``basement_internal_insulation`` and ``top_floor_ceiling_insulation`` too since contract
+    ``882a8c1``, hisim-1h7f), so most requests leave it out and the translator supplies one. Each
+    number is the typical installed thickness of that build-up as the frontend side's
     specification §4.2 tabulates it; every use is a ``defaulted`` line in the mapping report
     naming the value.
     """
@@ -235,8 +235,18 @@ class BatteryLaw:
 
     # Source: hisim/components/advanced_battery_bslib.py — the class's own C-rate of 0.5 means
     # an inverter of 500 W per kilowatt hour of capacity. Pinning both keeps them consistent
-    # when the request pins the capacity; it is a HiSim law, not an estimate.
+    # when the request pins the capacity; it is a HiSim law, not an estimate. It is also the rule
+    # measures.yaml states for the battery_system measure at contract 882a8c1: "power from the
+    # capacity at the usual 0.5 C, which is the same rule HiSim applies when power is left unset".
     INVERTER_WATT_PER_KILOWATT_HOUR: ClassVar[float] = 500.0
+
+    # Source: none beyond the catalogue's own conversion. Since contract 882a8c1 the
+    # battery_system measure carries capacity_in_kwh and power_in_watt, both ``experts`` options,
+    # and the frontend turns its "how many days should the battery carry the house?" question into
+    # them before it sends anything. A request that carries neither is sized the way the frontend
+    # would size it, at the smallest days_to_cover the request schema's house.battery admits: one
+    # day of the household electricity the run simulates. TO BE REVIEWED.
+    DAYS_TO_COVER_WHEN_UNSIZED: ClassVar[int] = 1
 
 
 class BoilerEfficiency:
@@ -410,7 +420,7 @@ class GradeScale(Generic[Grade]):
         return self.worst
 
     def describe(self) -> str:
-        """Return the scale as one phrase, e.g. ``high <= 100, medium <= 500, else low``."""
+        """Return the scale as one phrase, e.g. ``5 <= 50, 4 <= 100, 3 <= 250, 2 <= 500, else 1``."""
         bands = ", ".join(f"{grade} <= {limit:g}" for limit, grade in zip(self.limits, self.grades))
         return f"{bands}, else {self.worst}"
 
@@ -419,28 +429,31 @@ class ComfortGrades:
     """Where the comfort grades of ``result.json`` cut the simulated degree-hours (hisim-sska).
 
     Decision of 2026-09-23 (renovisorissues #29): the grades are computed from a full year of the
-    simulated indoor air temperature, not copied from the contract's examples.
+    simulated indoor air temperature, not copied from the contract's examples. Owner decision of
+    2026-09-25: every grade is on the contract's shared ``Rating``, an integer from 1 to 5 with 5
+    the best, so the comfort grades and summer heat protection read alike.
 
     * ``comfort.heating`` grades the degree-hours the room spent more than 1 K below the house's
       own heating setpoint. The tolerance keeps an on/off controller's ripple out: on the mockup
       it leaves a working gas boiler at 3 and a working heat pump at 57 K·h/a, where the ripple
       alone made 331 and 729 (decision of 2026-09-23, after the controller fix hisim-q1rm).
     * ``comfort.cooling`` and ``summer_heat_protection`` grade the same quantity, the degree-hours
-      above 26 °C (DIN 4108-2, summer climate region B). No RenoVisor house has active cooling, so
-      this is summer overheating of the free-floating building. The two scales share the limit of
-      1200 K·h/a, DIN 4108-2's requirement for homes: ``low`` and ``1`` both mean "would fail it".
+      above 26 °C (DIN 4108-2, summer climate region B), on the same scale: :attr:`SUMMER` *is*
+      :attr:`SUMMER_HEAT_PROTECTION`, so the two grades agree by construction. No RenoVisor house
+      has active cooling, so this is summer overheating of the free-floating building. Its last
+      limit is 1200 K·h/a, DIN 4108-2's requirement for homes: 1 means "would fail it".
 
-    Every limit here is HiSim's proposal, chosen with the owner and not taken from a rating
-    procedure except where named. TO BE REVIEWED.
+    A value on a limit takes the better grade. Every limit here is HiSim's proposal, chosen with
+    the owner and not taken from a rating procedure except where named. TO BE REVIEWED.
     """
 
-    #: Degree-hours per year more than 1 K below the heating setpoint -> high, medium, else low.
-    HEATING: ClassVar[GradeScale[str]] = GradeScale(limits=(100.0, 500.0), grades=("high", "medium"), worst="low")
+    #: Degree-hours per year more than 1 K below the heating setpoint -> Rating 5..1, 5 the best.
+    HEATING: ClassVar[GradeScale[int]] = GradeScale(limits=(50.0, 100.0, 250.0, 500.0), grades=(5, 4, 3, 2), worst=1)
 
-    #: Degree-hours per year above 26 °C -> high, medium, else low.
-    SUMMER: ClassVar[GradeScale[str]] = GradeScale(limits=(500.0, 1200.0), grades=("high", "medium"), worst="low")
-
-    #: Degree-hours per year above 26 °C -> the contract's 1..5 scale, 5 the best.
+    #: Degree-hours per year above 26 °C -> Rating 5..1, 5 the best.
     SUMMER_HEAT_PROTECTION: ClassVar[GradeScale[int]] = GradeScale(
         limits=(250.0, 500.0, 900.0, 1200.0), grades=(5, 4, 3, 2), worst=1
     )
+
+    #: ``comfort.cooling``'s scale: the very same object as :attr:`SUMMER_HEAT_PROTECTION`.
+    SUMMER: ClassVar[GradeScale[int]] = SUMMER_HEAT_PROTECTION

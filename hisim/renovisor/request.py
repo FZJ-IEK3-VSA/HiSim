@@ -181,7 +181,7 @@ class OptionSpec:
 
 
 class CatalogueTable:
-    """The 32 measures of the 2026-09-22 catalogue revision (contract ``ffe1304``), frozen as code.
+    """The 32 measures of the 2026-09-25 catalogue revision (contract ``882a8c1``), frozen as code.
 
     The semantic checks need the ids, the option names, their access levels and their value
     lists, and reading ``measures.yaml`` at request time would turn a catalogue edit into a
@@ -193,7 +193,7 @@ class CatalogueTable:
     ``options: []`` for them, and a request may send no ``options`` key or an empty one.
     """
 
-    #: The option ``experts`` option that five measures share and no HiSim parameter receives.
+    #: The ``experts`` option that six measures share and no HiSim parameter receives.
     INSTALLATION_YEAR: ClassVar[str] = "installation_year"
 
     #: The option whose request value is the material object of the schema rather than one of the
@@ -246,6 +246,7 @@ class CatalogueTable:
         ),
         "basement_internal_insulation": (
             OptionSpec("material", AccessLevel.EVERYONE, ValueType.MATERIAL, None),
+            OptionSpec("thickness_in_mm", AccessLevel.EXPERTS, ValueType.INTEGER, None),
         ),
         "basement_external_insulation": (
             OptionSpec("material", AccessLevel.EVERYONE, ValueType.MATERIAL, None),
@@ -274,6 +275,7 @@ class CatalogueTable:
         ),
         "top_floor_ceiling_insulation": (
             OptionSpec("material", AccessLevel.EVERYONE, ValueType.MATERIAL, None),
+            OptionSpec("thickness_in_mm", AccessLevel.EXPERTS, ValueType.INTEGER, None),
         ),
         "ventilation_system": (
             OptionSpec(
@@ -327,6 +329,7 @@ class CatalogueTable:
         ),
         "air_conditioners": (
             OptionSpec("power_in_watt", AccessLevel.EVERYONE, ValueType.INTEGER, None),
+            OptionSpec("installation_year", AccessLevel.EXPERTS, ValueType.INTEGER, None),
         ),
         "hot_water_system": (
             OptionSpec(
@@ -347,10 +350,15 @@ class CatalogueTable:
         "replace_white_appliances": (),
         "photovoltaic_system": (
             OptionSpec("size_in_percent_of_roof_area", AccessLevel.EVERYONE, ValueType.INTEGER, None),
+            OptionSpec("power_in_watt", AccessLevel.EXPERTS, ValueType.NUMBER, None),
+            OptionSpec("azimuth_in_degree", AccessLevel.EXPERTS, ValueType.NUMBER, None),
+            OptionSpec("tilt_in_degree", AccessLevel.EXPERTS, ValueType.NUMBER, None),
+            OptionSpec("shading_losses_in_percent", AccessLevel.EXPERTS, ValueType.NUMBER, None),
             OptionSpec("installation_year", AccessLevel.EXPERTS, ValueType.INTEGER, None),
         ),
         "battery_system": (
-            OptionSpec("days_to_cover", AccessLevel.EVERYONE, ValueType.INTEGER, None),
+            OptionSpec("capacity_in_kwh", AccessLevel.EXPERTS, ValueType.NUMBER, None),
+            OptionSpec("power_in_watt", AccessLevel.EXPERTS, ValueType.NUMBER, None),
             OptionSpec("installation_year", AccessLevel.EXPERTS, ValueType.INTEGER, None),
         ),
         "solar_thermal_system": (
@@ -857,22 +865,30 @@ class PvSystem:
 class Battery:
     """A household battery, sized either by its capacity or by the days it should cover.
 
+    The request schema's ``house.battery`` offers the capacity and ``days_to_cover``. The power is
+    not a request field: only the ``battery_system`` measure writes it into the renovated house,
+    from its ``power_in_watt`` option (contract 882a8c1).
+
     Args:
-        custom_battery_capacity_generic_in_kilowatt_hour: An existing battery's usable capacity.
-        days_to_cover: How many days of household electricity a new battery should hold.
+        custom_battery_capacity_generic_in_kilowatt_hour: The battery's usable capacity.
+        days_to_cover: How many days of household electricity a battery sized by days should hold.
+        power_in_watt: The battery's charging and discharging power, when a measure stated it.
     """
 
     custom_battery_capacity_generic_in_kilowatt_hour: Optional[float] = None
     days_to_cover: Optional[int] = None
+    power_in_watt: Optional[float] = None
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "Battery":
         """Build the battery block from the renovated house."""
         capacity = raw.get("custom_battery_capacity_generic_in_kilowatt_hour")
         days = raw.get("days_to_cover")
+        power = raw.get("power_in_watt")
         return cls(
             custom_battery_capacity_generic_in_kilowatt_hour=None if capacity is None else float(capacity),
             days_to_cover=None if days is None else int(days),
+            power_in_watt=None if power is None else float(power),
         )
 
 

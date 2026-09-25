@@ -6,20 +6,20 @@ pin, so a hand edit or a half-done refresh fails the build. They also parse each
 that is not valid YAML or JSON -- or a request schema that lost the definitions the validator
 resolves -- is caught before any translation code reads it.
 
-Three of the six pinned files come from the contract repository and three from the specs
-repository (``renovisorissues``, where the shared specifications live since 2026-09-23), each at a
-named commit. Two files -- ``openapi.yaml`` and the ``homeinventory.yaml`` it references -- are
-pinned with ``authoritative: false`` because the request schema supersedes them; they are kept
-only so that the revision the branch once aligned against stays a committed fact. Every file in
-the directory is a pinned copy: HiSim's former proposal for the capability document's ``results``
-section is part of the shared ``measure-capabilities.openapi.yaml`` since 2026-09-23.
+One of the four pinned files comes from the contract repository -- the measure catalogue -- and
+three from the specs repository (``renovisorissues``, where the shared specifications live since
+2026-09-23), each at a named commit. The contract repository's superseded v0.3 draft,
+``openapi.yaml``, and the ``homeinventory.yaml`` it references are not vendored since 2026-09-25
+(hisim-4p3n), and neither is its material database. Every file in the directory is a pinned copy:
+HiSim's former proposal for the capability document's ``results`` section is part of the shared
+``measure-capabilities.openapi.yaml`` since 2026-09-23.
 """
 
 import hashlib
 import subprocess
 
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, Tuple
 
 import pytest
 
@@ -89,12 +89,6 @@ class TestVendoredContract:
         } - {ContractFiles.PINNED_FILENAME}
         assert present == pinned, f"unpinned or missing contract files: {present ^ pinned}"
 
-    def test_the_superseded_openapi_is_pinned_as_not_authoritative(self) -> None:
-        """The v0.3 draft stays vendored and says of itself that nothing may be read from it."""
-        entry = ContractFiles.pinned()["files"][ContractFiles.OPENAPI_FILENAME]
-        assert entry["authoritative"] is False
-        assert "calculation-request.schema.json" in entry["note"]
-
     def test_the_catalogue_is_the_revision_the_frozen_table_was_written_against(self) -> None:
         """32 measures, lowercase ids, ``options`` always a list (the 2026-09-17 revision)."""
         measures = ContractFiles.measures()["measures"]
@@ -153,6 +147,34 @@ class TestTheMaterialDatabaseIsNotVendored:
     def test_the_pin_records_no_material_database(self) -> None:
         """``PINNED.yaml`` has no entry for it either, so no refresh would write one back."""
         assert self.MATERIALS_FILENAME not in ContractFiles.pinned()["files"]
+
+
+@pytest.mark.base
+class TestTheSupersededDraftIsNotVendored:
+    """Neither ``openapi.yaml`` nor ``homeinventory.yaml`` is vendored, and the pin records neither.
+
+    Both are the contract repository's v0.3 draft, which ``calculation-request.schema.json``
+    supersedes. They were kept here with ``authoritative: false`` for the record only, and the one
+    thing HiSim read from them -- the example values of the three mocked KPIs -- became HiSim's own
+    constants (``hisim.renovisor.kpis.MockedKpis``), so the owner's decision of 2026-09-25
+    (hisim-4p3n) dropped the copies. This test is what would notice a refresh bringing them back.
+    """
+
+    #: The file names this package deliberately does not hold, spelled out because there is no
+    #: ``ContractFiles`` attribute for them any more.
+    SUPERSEDED_FILENAMES: ClassVar[Tuple[str, ...]] = ("openapi.yaml", "homeinventory.yaml")
+
+    def test_the_vendored_directory_holds_neither_file(self) -> None:
+        """No copy of the draft beside the other vendored files."""
+        for filename in self.SUPERSEDED_FILENAMES:
+            assert not (ContractFiles.DIRECTORY / filename).exists(), f"{filename} is vendored again"
+
+    def test_neither_the_pin_nor_the_sources_name_them(self) -> None:
+        """``PINNED.yaml`` has no entry and :class:`ContractSources` no source for either file."""
+        pinned = ContractFiles.pinned()["files"]
+        for filename in self.SUPERSEDED_FILENAMES:
+            assert filename not in pinned
+            assert filename not in ContractSources.CONTRACT_BY_FILENAME
 
 
 @pytest.mark.base

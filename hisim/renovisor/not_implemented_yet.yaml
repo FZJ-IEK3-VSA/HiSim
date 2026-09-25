@@ -197,6 +197,11 @@
 - measure: photovoltaic_system.installation_year
   note: No HiSim parameter for the age of a new array.
 
+# Contract 882a8c1 gave the measure the array's own figures; power, azimuth and tilt reach PVSystem,
+# the annual shading loss has no counterpart there (the PV model computes an unshaded array).
+- measure: photovoltaic_system.shading_losses_in_percent
+  note: No shading-loss parameter on PVSystem; the array is simulated unshaded.
+
 - measure: battery_system.installation_year
   note: No HiSim parameter for the age of a new battery.
 

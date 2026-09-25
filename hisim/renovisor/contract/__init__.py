@@ -1,9 +1,8 @@
 """The vendored copies of the RenoVisor contract that this HiSim speaks.
 
-The contract lives in two repositories. ``measures.yaml`` (the catalogue of renovation measures),
-``openapi.yaml`` (the superseded v0.3 draft) and ``homeinventory.yaml`` (the part of that draft it
-references) come from ``climatemedia/renovisor-api-contract``, which is co-owned by the RenoVisor
-teams and holds only contract files at its root. ``calculation-request.schema.json`` (the request
+The contract lives in two repositories. ``measures.yaml`` (the catalogue of renovation measures)
+comes from ``climatemedia/renovisor-api-contract``, which is co-owned by the RenoVisor teams and
+holds only contract files at its root. ``calculation-request.schema.json`` (the request
 the translator validates against), ``calculation-request.mockup-1.yaml`` (the worked example every
 probe set anchors on) and ``measure-capabilities.openapi.yaml`` (the shape of the capability
 document the translator generates) come from ``specs/`` of the ``renovisorissues`` project on
@@ -26,10 +25,11 @@ to change these files, and by ``tests/renovisor/test_contract.py``, which fails 
 longer matches the hash ``PINNED.yaml`` records -- so a hand edit of a vendored copy, or a refresh
 that forgot to update the pin, is a failing build rather than silent drift.
 
-``openapi.yaml`` and ``homeinventory.yaml`` are pinned with ``authoritative: false``: they are the
-v0.3 draft written before the energy-system redesign, superseded by
-``calculation-request.schema.json``. They stay vendored only so that the revision the branch once
-aligned against remains a committed fact.
+The contract repository's ``openapi.yaml`` and ``homeinventory.yaml`` are not vendored either
+(owner decision 2026-09-25, hisim-4p3n). They are the v0.3 draft written before the energy-system
+redesign, superseded by ``calculation-request.schema.json``, and were kept here for the record
+only; the one thing HiSim read from them, the example values of the three mocked KPIs, are
+HiSim's own constants now (:class:`hisim.renovisor.kpis.MockedKpis`).
 
 Reading the copies::
 
@@ -68,11 +68,7 @@ class ContractFiles:
     #: The directory holding the vendored copies: the directory of this module.
     DIRECTORY: ClassVar[Path] = Path(__file__).resolve().parent
 
-    #: File names of the six vendored contract files and the pin record.
-    OPENAPI_FILENAME: ClassVar[str] = "openapi.yaml"
-    #: ``HomeInventoryInput``, split out of ``openapi.yaml`` by contract PR #10 and referenced from
-    #: it relatively; the two are shipped side by side, so they are vendored side by side.
-    HOMEINVENTORY_FILENAME: ClassVar[str] = "homeinventory.yaml"
+    #: File names of the four vendored contract files and the pin record.
     MEASURES_FILENAME: ClassVar[str] = "measures.yaml"
     REQUEST_SCHEMA_FILENAME: ClassVar[str] = "calculation-request.schema.json"
     REQUEST_MOCKUP_FILENAME: ClassVar[str] = "calculation-request.mockup-1.yaml"
@@ -99,11 +95,6 @@ class ContractFiles:
             return yaml.safe_load(handle)
 
     @classmethod
-    def openapi(cls) -> Dict[str, Any]:
-        """Return the parsed ``openapi.yaml`` (the OpenAPI 3.1 document as a dictionary)."""
-        return cast(Dict[str, Any], cls._load(cls.OPENAPI_FILENAME))
-
-    @classmethod
     def measures(cls) -> Dict[str, Any]:
         """Return the parsed ``measures.yaml``; its ``measures`` key holds the catalogue list."""
         return cast(Dict[str, Any], cls._load(cls.MEASURES_FILENAME))
@@ -113,8 +104,8 @@ class ContractFiles:
         """Return the parsed ``PINNED.yaml``: ``refreshed_at`` and the ``files`` mapping.
 
         ``files`` maps each vendored file name to its entry: ``repository``, ``ref``, ``path``,
-        ``commit``, ``commit_date`` and ``sha256``, plus ``authoritative`` and ``note`` where
-        :mod:`hisim.renovisor.contract.refresh` sets them. There is no top-level repository;
+        ``commit``, ``commit_date`` and ``sha256``, plus a ``note`` where
+        :mod:`hisim.renovisor.contract.refresh` sets one. There is no top-level repository;
         each file records its own, since the copies come from two.
         """
         return cast(Dict[str, Any], cls._load(cls.PINNED_FILENAME))

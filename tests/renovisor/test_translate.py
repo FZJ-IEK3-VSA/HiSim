@@ -338,6 +338,35 @@ class TestTheSwitchesOfDecisionDD:
         assert config[Targets.BATTERY_CAPACITY] == 8
         assert config[Targets.BATTERY_INVERTER] == pytest.approx(8 * 500.0)
 
+    def test_a_battery_measures_stated_power_pins_the_inverter(self) -> None:
+        """Contract 882a8c1: capacity and power map straight onto the two Battery fields."""
+        document = baseline()
+        document["measures"] = [{"id": "battery_system", "options": {"capacity_in_kwh": 10, "power_in_watt": 4000}}]
+        system = translate(document)
+
+        assert system.model.variants[Targets.ELECTRICITY_MANAGEMENT].selected == Targets.WITH_BATTERY
+        config = config_of(system, Targets.BATTERY)
+        assert config[Targets.BATTERY_CAPACITY] == 10
+        assert config[Targets.BATTERY_INVERTER] == 4000
+        assert system.report.line("house.battery.power_in_watt") is None
+
+    def test_a_pv_measures_stated_power_wins_and_its_share_is_recorded(self) -> None:
+        """The watts size the array; the share is written beside them and says it does not size it."""
+        document = baseline(pv_system=None)
+        document["measures"] = [{"id": "photovoltaic_system", "options": {
+            "size_in_percent_of_roof_area": 60, "power_in_watt": 5500, "azimuth_in_degree": 170, "tilt_in_degree": 35}}]
+        system = translate(document)
+
+        config = config_of(system, Targets.PV)
+        assert config[Targets.POWER_IN_WATT] == 5500
+        assert config[Targets.SHARE_OF_ROOF] == pytest.approx(0.6)
+        assert (config[Targets.AZIMUTH], config[Targets.TILT]) == (170, 35)
+        share = system.report.line("house.pv_system.size_in_percent_of_roof_area")
+        assert share is not None and "power_in_watt sizes the array" in (share.note or "")
+        for name in ("azimuth", "tilt"):
+            line = system.report.line(f"house.pv_system.{name}")
+            assert line is not None and line.status is ReportStatus.USED
+
 
 @pytest.mark.base
 class TestTheReportAccountsForTheRequest:

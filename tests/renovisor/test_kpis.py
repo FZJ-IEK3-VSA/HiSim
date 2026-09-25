@@ -20,7 +20,6 @@ from typing import Any, Dict
 
 import pytest
 
-from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.apply import AddedLayer
 from hisim.components.building.building import Building
 from hisim.renovisor.capabilities import ProbeSet
@@ -28,12 +27,12 @@ from hisim.renovisor.constants import ComfortGrades, GradeScale
 from hisim.renovisor.kpis import (
     LifecycleCo2,
     ComfortSources,
-    ContractExamples,
     KpiBuilder,
     KpiDocument,
     KpiField,
     KpiSchema,
     KpiSources,
+    MockedKpis,
 )
 from hisim.renovisor.layers import ElementAreas, EnvelopeLayers
 from hisim.renovisor.request import Material
@@ -173,32 +172,40 @@ def test_a_run_without_a_kpi_file_leaves_every_computed_field_missing() -> None:
     assert f"kpis.{KpiField.SELF_SUFFICIENCY.value}" in missing
 
 
-def test_the_mocked_values_are_the_contracts_own_examples() -> None:
-    """Decision A12 allows a mocked value; it does not allow one HiSim made up."""
-    schema = ContractFiles.openapi()["components"]["schemas"]["Kpis"]["properties"]
+def test_the_mocked_values_are_hisims_placeholders_on_the_contracts_scales() -> None:
+    """Decision A12 allows a mocked value; the three are the contract's examples, held by HiSim.
+
+    The disruption days are the contract's example of the field; the two qualitative ones are the
+    middle of its shared Rating 1..5, an integer, like every other grade of the block.
+    """
     block = build(document_of({}), one_day(), layers_of())
 
-    assert (
-        block.values[KpiField.DISRUPTION_DAYS.value]["value"]
-        == schema["disruption_days_by_level"]["examples"][0]
-    )
-    assert (
-        block.values[KpiField.INDOOR_AIR_QUALITY.value]["value"]
-        == schema["indoor_air_quality"]["examples"][0]
-    )
-    for field in (
-        KpiField.DISRUPTION_DAYS,
-        KpiField.INDOOR_AIR_QUALITY,
-        KpiField.THERMAL_INSULATION_EFFECT,
-    ):
+    assert block.values[KpiField.DISRUPTION_DAYS.value]["value"] == {"none": 6, "minor": 12, "moderate": 5, "major": 0}
+    for field in (KpiField.INDOOR_AIR_QUALITY, KpiField.THERMAL_INSULATION_EFFECT):
+        value = block.values[field.value]["value"]
+        assert isinstance(value, int) and not isinstance(value, bool)
+        assert value == 3
+    for field in (KpiField.DISRUPTION_DAYS, KpiField.INDOOR_AIR_QUALITY, KpiField.THERMAL_INSULATION_EFFECT):
         assert block.values[field.value]["provenance"] == Provenance.MOCKED.value
 
 
-def test_the_mocked_source_names_the_schema_path_it_was_read_from() -> None:
-    """A reader has to be able to find the constant in the contract without asking anybody."""
-    _, source = ContractExamples.of(KpiField.SUMMER_HEAT_PROTECTION.value)
-    assert ContractFiles.OPENAPI_FILENAME in source
-    assert "examples[0]" in source
+def test_the_mocked_source_says_it_is_hisims_placeholder_and_names_the_bead() -> None:
+    """A reader learns from the source alone that the value is not computed and what replaces it."""
+    block = build(document_of({}), one_day(), layers_of())
+
+    for field in (KpiField.DISRUPTION_DAYS, KpiField.INDOOR_AIR_QUALITY, KpiField.THERMAL_INSULATION_EFFECT):
+        source = block.values[field.value]["source"]
+        assert source == MockedKpis.source(field.value)
+        assert "HiSim's placeholder" in source
+        assert MockedKpis.TRACKED in source and MockedKpis.DECISION in source
+
+
+def test_a_mocked_value_is_a_fresh_copy_every_time() -> None:
+    """Two payloads never share the disruption dictionary, so editing one cannot change the other."""
+    first, _ = MockedKpis.of(KpiField.DISRUPTION_DAYS.value)
+    first["none"] = 99
+    second, _ = MockedKpis.of(KpiField.DISRUPTION_DAYS.value)
+    assert second["none"] == 6
 
 
 def test_the_energy_label_is_a_labelled_null() -> None:
@@ -395,9 +402,10 @@ class TestComfortGrades:
     """
 
     @pytest.mark.parametrize(
-        "below, heating", [(0.0, "high"), (100.0, "high"), (100.1, "medium"), (500.0, "medium"), (501.0, "low")]
+        "below, heating",
+        [(0.0, 5), (50.0, 5), (50.1, 4), (100.0, 4), (100.1, 3), (250.0, 3), (250.1, 2), (500.0, 2), (501.0, 1)],
     )
-    def test_the_heating_grade_cuts_at_100_and_500(self, below: float, heating: str) -> None:
+    def test_the_heating_grade_cuts_at_50_100_250_and_500(self, below: float, heating: int) -> None:
         """Degree-hours below the house's own setpoint; a value on a limit takes the better grade."""
         block = build(comfort_document(below, 0.0), a_full_year(), layers_of())
 
@@ -407,21 +415,20 @@ class TestComfortGrades:
         assert ComfortSources.UNDERHEATING_NAME in leaf["source"]
 
     @pytest.mark.parametrize(
-        "above, cooling, protection",
-        [(0.0, "high", 5), (250.0, "high", 5), (400.0, "high", 4), (700.0, "medium", 3),
-         (1200.0, "medium", 2), (1500.0, "low", 1)],
+        "above, grade",
+        [(0.0, 5), (250.0, 5), (250.1, 4), (400.0, 4), (700.0, 3), (900.0, 3), (1200.0, 2), (1200.1, 1), (1500.0, 1)],
     )
-    def test_the_summer_grades_share_one_axis(self, above: float, cooling: str, protection: int) -> None:
-        """comfort.cooling and summer_heat_protection grade the same degree-hours above 26 °C."""
+    def test_the_summer_grades_agree(self, above: float, grade: int) -> None:
+        """comfort.cooling and summer_heat_protection grade the same degree-hours on the same scale."""
         block = build(comfort_document(0.0, above), a_full_year(), layers_of())
 
-        assert block.values[KpiField.COMFORT.value]["cooling"]["value"] == cooling
+        assert block.values[KpiField.COMFORT.value]["cooling"]["value"] == grade
         summer = block.values[KpiField.SUMMER_HEAT_PROTECTION.value]
-        assert summer["value"] == protection
+        assert summer["value"] == grade
         assert summer["provenance"] == Provenance.SIMULATED.value
 
-    @pytest.mark.parametrize("below, shown, heating", [(100.04, "100.0", "high"), (100.06, "100.1", "medium")])
-    def test_the_grade_is_taken_from_the_value_the_source_shows(self, below: float, shown: str, heating: str) -> None:
+    @pytest.mark.parametrize("below, shown, heating", [(100.04, "100.0", 4), (100.06, "100.1", 3)])
+    def test_the_grade_is_taken_from_the_value_the_source_shows(self, below: float, shown: str, heating: int) -> None:
         """Just above a limit: rounded to one decimal, shown with one and graded as shown."""
         block = build(comfort_document(below, 0.0), a_full_year(), layers_of())
 
@@ -431,11 +438,11 @@ class TestComfortGrades:
 
     @pytest.mark.parametrize("period", [nearly_a_year(), a_full_year()], ids=["363 days", "365 days"])
     def test_a_full_year_period_is_graded_unscaled(self, period: Period) -> None:
-        """A period that counts as a year is that year: 100.0 on the limit stays high, 99.5 is 99.5."""
+        """A period that counts as a year is that year: 100.0 on the limit stays 4, 99.5 is 99.5."""
         assert period.is_full_year()
         for below, shown in ((99.5, "99.5"), (100.0, "100.0")):
             leaf = build(comfort_document(below, 0.0), period, layers_of()).values[KpiField.COMFORT.value]["heating"]
-            assert leaf["value"] == "high"
+            assert leaf["value"] == 4
             assert f" = {shown} {Building.DEGREE_HOURS_UNIT} over the simulated year;" in leaf["source"]
 
     @pytest.mark.parametrize("unit", [Building.DEGREE_HOURS_UNIT, ""])
@@ -461,14 +468,18 @@ class TestComfortGrades:
             assert ComfortSources.OVERHEATING_NAME in reasons[f"kpis.{path}"]
             assert repr(value) in reasons[f"kpis.{path}"]
 
-    def test_the_two_summer_scales_fail_together(self) -> None:
-        """'low' and 1 start above one shared limit, DIN 4108-2's requirement for homes."""
+    def test_the_two_summer_scales_are_one(self) -> None:
+        """One scale object, so the two cannot drift; 1 starts above DIN 4108-2's 1200 K·h/a for homes."""
         summer, protection = ComfortGrades.SUMMER, ComfortGrades.SUMMER_HEAT_PROTECTION
-        limit = summer.limits[-1]
 
-        assert protection.limits[-1] == limit
-        assert summer.grade(limit) != summer.worst and protection.grade(limit) != protection.worst
-        assert summer.grade(limit + 0.1) == summer.worst and protection.grade(limit + 0.1) == protection.worst
+        assert summer is protection
+        assert protection.limits[-1] == 1200.0
+        assert protection.grade(1200.0) == 2 and protection.grade(1200.1) == 1
+
+    @pytest.mark.parametrize("scale", [ComfortGrades.HEATING, ComfortGrades.SUMMER_HEAT_PROTECTION])
+    def test_every_grade_is_on_the_contracts_rating(self, scale: GradeScale[int]) -> None:
+        """Owner decision 2026-09-25: every grade an integer from 1 to 5, 5 the best, each one reachable."""
+        assert tuple(scale.grades) + (scale.worst,) == (5, 4, 3, 2, 1)
 
     def test_a_short_run_publishes_no_grade(self) -> None:
         """A winter day has no summer: the three grades are missing with the reason."""
@@ -504,10 +515,10 @@ class TestGradeScale:
 
     @pytest.mark.parametrize(
         "limits, grades",
-        [((500.0, 100.0), ("high", "medium")), ((100.0, 100.0), ("high", "medium")),
-         ((-1.0, 100.0), ("high", "medium")), ((100.0,), ("high", "medium")), ((), ())],
+        [((500.0, 100.0), (5, 4)), ((100.0, 100.0), (5, 4)),
+         ((-1.0, 100.0), (5, 4)), ((100.0,), (5, 4)), ((), ())],
     )
     def test_a_malformed_scale_is_refused_on_construction(self, limits: Any, grades: Any) -> None:
         """Descending, repeated or negative limits, a grade without a limit, or no limit at all."""
         with pytest.raises(ValueError):
-            GradeScale(limits=limits, grades=grades, worst="low")
+            GradeScale(limits=limits, grades=grades, worst=1)

@@ -13,12 +13,12 @@ written on its command line (owner decision 2026-09-24).
 Every vendored file comes from a git repository at a ref, and the script reads it there with
 ``git show``, recording the commit the ref resolved to and its date. Since 2026-09-23 there are two
 repositories. The **contract repository** (``renovisor-api-contract``, the positional checkout)
-holds the contract files at its root: the measure catalogue, the superseded OpenAPI draft and the
-home inventory schema it references. The **specs repository** (``renovisorissues`` on jugit,
-``--specs``) holds, under ``specs/``, the shared specifications all packages read, among them the
-request schema the translator validates against, the worked example and the capability
-document's schema. They moved there from the contract repository's ``specs/`` folder, which was
-read from its working tree without a commit; now every pin names an immutable revision.
+holds the contract files at its root, of which HiSim vendors one: the measure catalogue. The
+**specs repository** (``renovisorissues`` on jugit, ``--specs``) holds, under ``specs/``, the shared
+specifications all packages read, among them the request schema the translator validates against,
+the worked example and the capability document's schema. They moved there from the contract
+repository's ``specs/`` folder, which was read from its working tree without a commit; now every
+pin names an immutable revision.
 
 Every entry of ``PINNED.yaml`` records its repository, ref, path, commit, commit date and the
 SHA-256 of the content written, and ``tests/renovisor/test_contract.py`` recomputes the hashes, so
@@ -37,7 +37,9 @@ path, branch or repository is a one-line change here and nowhere else. A file dr
 attributes is dropped from the pin as well: the pin is written from the sources every run, so a
 vendored copy stops being recorded the moment it stops being a source. That is what happened to
 ``materials.yaml`` on 2026-09-20, when HiSim stopped vendoring the material database it never
-reads.
+reads, and to ``openapi.yaml`` and ``homeinventory.yaml`` on 2026-09-25 (hisim-4p3n), when it
+stopped vendoring the v0.3 draft the request schema supersedes: a copy kept only for the record is
+a file nothing reads, and the record is the contract repository's own history.
 """
 
 import argparse
@@ -77,8 +79,6 @@ class ContractSources:
 
     #: vendored file name -> (git ref, path inside the contract repository)
     CONTRACT_BY_FILENAME: ClassVar[Dict[str, Tuple[str, str]]] = {
-        ContractFiles.OPENAPI_FILENAME: ("origin/main", "openapi.yaml"),
-        ContractFiles.HOMEINVENTORY_FILENAME: ("origin/main", "homeinventory.yaml"),
         ContractFiles.MEASURES_FILENAME: ("origin/main", "measures.yaml"),
     }
 
@@ -94,20 +94,6 @@ class ContractSources:
     #: deviation is a recorded fact rather than unexplained drift. Empty since 2026-09-20: every
     #: vendored copy is its source's own bytes.
     NOTES: ClassVar[Dict[str, str]] = {}
-
-    #: Vendored files that are kept for the record but must not be read as the truth about
-    #: anything. ``openapi.yaml`` is the v0.3 draft the request schema supersedes, and
-    #: ``homeinventory.yaml`` is the part of it contract PR #10 split into its own file.
-    NOT_AUTHORITATIVE: ClassVar[Dict[str, str]] = {
-        ContractFiles.OPENAPI_FILENAME: (
-            "v0.3 draft written before the energy-system redesign; superseded by "
-            "calculation-request.schema.json, which the translator validates against"
-        ),
-        ContractFiles.HOMEINVENTORY_FILENAME: (
-            "HomeInventoryInput of the v0.3 draft, split out of openapi.yaml and referenced from "
-            "it; the house the translator reads is calculation-request.schema.json's"
-        ),
-    }
 
 
 class ContractRefresher:
@@ -202,8 +188,7 @@ class ContractRefresher:
         Returns:
             The ``files`` mapping of the pin record: vendored file name to a dictionary with
             ``repository``, ``ref``, ``path``, ``commit``, ``commit_date`` and the ``sha256`` of the
-            content written, plus ``authoritative`` and ``note`` where
-            :attr:`ContractSources.NOT_AUTHORITATIVE` or :attr:`ContractSources.NOTES` names it.
+            content written, plus a ``note`` where :attr:`ContractSources.NOTES` names one.
 
         Raises:
             SystemExit: When a checkout is not a git clone, a ref does not resolve, a path is
@@ -241,10 +226,6 @@ class ContractRefresher:
                     "commit_date": commit_date,
                     "sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
                 }
-        for filename, note in ContractSources.NOT_AUTHORITATIVE.items():
-            if filename in entries:
-                entries[filename]["authoritative"] = False
-                entries[filename]["note"] = note
         for filename, note in ContractSources.NOTES.items():
             if filename in entries:
                 entries[filename]["note"] = note
@@ -284,8 +265,8 @@ class ContractRefresher:
     ) -> Dict[str, Any]:
         """Return the pin entry a run with ``--specs ''`` keeps for one file, after checking its shape.
 
-        Only the keys of :attr:`KEPT_ENTRY_KEYS` are kept; ``authoritative`` and ``note`` are
-        applied afresh from :class:`ContractSources`, like for every other entry.
+        Only the keys of :attr:`KEPT_ENTRY_KEYS` are kept; a ``note`` is applied afresh from
+        :class:`ContractSources`, like for every other entry.
 
         Raises:
             SystemExit: When the entry is missing, of an older format or incomplete, or records a

@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim.renovisor.constants import (
+    BatteryLaw,
     LayerDefaults,
     OpeningUValues,
     Placement,
@@ -553,13 +554,11 @@ class MeasureRegistry:
     def _thickness_of(cls, context: MeasureContext, measure_id: str) -> Tuple[int, bool]:
         """Return the layer's thickness and whether the translator supplied it.
 
-        A supplied thickness is always a ``defaulted`` line naming the value, including for the
-        two measures whose catalogue entry offers no ``thickness_in_mm`` option at all
-        (``basement_internal_insulation`` and ``top_floor_ceiling_insulation``): their layer is
-        as thick as the translator's default, and rule 6 forbids using that number silently. The
-        line names an option the catalogue does not declare, so :class:`MeasureStatusRules`
-        passes over it -- the measure stays ``used`` -- and the capability document, which lists
-        the catalogue's options only, never shows it; only the mapping report carries it.
+        A supplied thickness is always a ``defaulted`` line naming the value, since rule 6 forbids
+        using a default silently. Every insulation measure offers ``thickness_in_mm`` as an
+        ``experts`` option since contract ``882a8c1`` (hisim-1h7f), so the line is the ordinary
+        used/defaulted pair for all twelve; an ``experts`` option never changes the measure's own
+        status (:class:`MeasureStatusRules`).
         """
         given = context.option("thickness_in_mm")
         capped = measure_id == "cavity_wall_insulation"
@@ -576,14 +575,7 @@ class MeasureRegistry:
                 context.record("thickness_in_mm", ReportStatus.USED)
             return thickness, False
         default = LayerDefaults.thickness_of(measure_id)
-        if CatalogueTable.option(measure_id, "thickness_in_mm") is not None:
-            note = f"absent from the request; the translator's default for {measure_id} is {default} mm"
-        else:
-            # renovisorissues #38 asks the contract owner to give these measures the option.
-            note = (
-                f"the catalogue offers no thickness_in_mm option for {measure_id}; "
-                f"the translator's default is {default} mm"
-            )
+        note = f"absent from the request; the translator's default for {measure_id} is {default} mm"
         context.record("thickness_in_mm", ReportStatus.DEFAULTED, note)
         return default, True
 
@@ -731,31 +723,118 @@ class MeasureRegistry:
         """Replace the large appliances; the precomputed profile has a fixed intensity."""
         context.effects.set("appliances.white_appliances", "new_efficient")
 
+    #: The photovoltaic measure's two orientation options, each with the ``pv_system`` key it
+    #: writes: the house block keeps HiSim's own field names, ``azimuth`` and ``tilt``.
+    PV_ORIENTATION: ClassVar[Tuple[Tuple[str, str], ...]] = (
+        ("azimuth_in_degree", "azimuth"),
+        ("tilt_in_degree", "tilt"),
+    )
+
+    #: The note on the roof share when a stated power sizes the array instead. The catalogue's own
+    #: reason (measures.yaml at contract 882a8c1): both are carried because they answer
+    #: different questions.
+    PV_SHARE_RECORDED_NOTE: ClassVar[str] = (
+        "recorded as the share of the roof the array covers; the stated power_in_watt sizes the "
+        "array, because the share is about future potential and the watts are what a yield "
+        "calculation reads"
+    )
+
     @classmethod
     def photovoltaic_system(cls, context: MeasureContext) -> None:
-        """Install a photovoltaic array covering a share of the roof, replacing any existing one."""
-        existing = context.effects.read(HousePaths.PV_SYSTEM) or {}
+        """Install a photovoltaic array, replacing any existing one; a stated power sizes it.
+
+        The roof share is the ``everyone`` option and is always written. ``power_in_watt``, when
+        the request states it, is written beside it and wins for the simulation: the translator
+        pins the array's power and the share is recorded. A stated azimuth or tilt replaces the old
+        array's; an absent one keeps it. ``shading_losses_in_percent`` has no HiSim counterpart and
+        is left to the whitelist by :func:`_record_unseen_options`.
+        """
+        existing = context.effects.read(HousePaths.PV_SYSTEM)
         replacement: Dict[str, Any] = {
             "size_in_percent_of_roof_area": context.option("size_in_percent_of_roof_area")
         }
-        for kept in ("azimuth", "tilt"):
-            if isinstance(existing, Mapping) and existing.get(kept) is not None:
-                replacement[kept] = existing[kept]
-        context.effects.replace_block(HousePaths.PV_SYSTEM, replacement)
-        context.record("size_in_percent_of_roof_area", ReportStatus.USED)
         context.target("PVSystem.config.share_of_maximum_pv_potential")
+        power = context.option("power_in_watt")
+        if _is_number(power):
+            replacement["power_in_watt"] = float(power)
+            context.record("size_in_percent_of_roof_area", ReportStatus.USED, cls.PV_SHARE_RECORDED_NOTE)
+            context.record("power_in_watt", ReportStatus.USED)
+            context.target("PVSystem.config.power_in_watt")
+        else:
+            context.record("size_in_percent_of_roof_area", ReportStatus.USED)
+        for option, key in cls.PV_ORIENTATION:
+            stated = context.option(option)
+            if _is_number(stated):
+                replacement[key] = float(stated)
+                context.record(option, ReportStatus.USED)
+                context.target(f"PVSystem.config.{key}")
+            elif isinstance(existing, Mapping) and existing.get(key) is not None:
+                replacement[key] = existing[key]
+        context.effects.replace_block(HousePaths.PV_SYSTEM, replacement)
+
+    #: The ``battery`` keys the measure writes: the request schema's own capacity field (HiSim's
+    #: config field verbatim), a power the schema's house block does not offer yet, and the
+    #: days-to-cover sizing the schema does offer, for a measure that states neither number.
+    BATTERY_CAPACITY_KEY: ClassVar[str] = "custom_battery_capacity_generic_in_kilowatt_hour"
+    BATTERY_POWER_KEY: ClassVar[str] = "power_in_watt"
+    BATTERY_DAYS_KEY: ClassVar[str] = "days_to_cover"
 
     @classmethod
     def battery_system(cls, context: MeasureContext) -> None:
-        """Install a battery sized by the days of household electricity it should cover."""
-        context.effects.replace_block(HousePaths.BATTERY, {"days_to_cover": context.option("days_to_cover")})
-        context.record("days_to_cover", ReportStatus.APPROXIMATED)
-        context.line.status = ReportStatus.APPROXIMATED
-        context.line.note = (
-            "the capacity is the stated days times the daily electricity of the precomputed CHR01 "
-            "profile the run itself uses; the formula and its numbers are in the field's note"
+        """Install a battery of a stated capacity and power, replacing any existing one.
+
+        Since contract 882a8c1 the measure states the battery itself, ``capacity_in_kwh`` and
+        ``power_in_watt``; the frontend converts its days-to-cover question into them. An absent
+        power follows the catalogue's rule, 0.5 C of the capacity, which the translator applies;
+        an absent capacity is read back from a stated power by the same rule; a measure stating
+        neither is sized as the frontend would size it, one day of the simulated household's
+        electricity (:attr:`BatteryLaw.DAYS_TO_COVER_WHEN_UNSIZED`), and is ``approximated``.
+        """
+        rate = BatteryLaw.INVERTER_WATT_PER_KILOWATT_HOUR
+        capacity = context.option("capacity_in_kwh")
+        power = context.option("power_in_watt")
+        block: Dict[str, Any] = {}
+        if _is_number(capacity):
+            block[cls.BATTERY_CAPACITY_KEY] = float(capacity)
+            context.record("capacity_in_kwh", ReportStatus.USED)
+        elif _is_number(power):
+            block[cls.BATTERY_CAPACITY_KEY] = float(power) / rate
+            context.record(
+                "capacity_in_kwh",
+                ReportStatus.DEFAULTED,
+                f"absent from the request; the stated {float(power):g} W at the catalogue's 0.5 C "
+                f"({rate:g} W per kWh) is {float(power) / rate:.4g} kWh",
+            )
+        else:
+            days = BatteryLaw.DAYS_TO_COVER_WHEN_UNSIZED
+            block[cls.BATTERY_DAYS_KEY] = days
+            context.record(
+                "capacity_in_kwh",
+                ReportStatus.DEFAULTED,
+                f"absent from the request, and so is power_in_watt; sized as the frontend sizes a "
+                f"battery, {days} day(s) of the household electricity this run simulates",
+            )
+            context.line.status = ReportStatus.APPROXIMATED
+            context.line.note = (
+                "the request states no capacity, so the translator sizes the battery from the "
+                "precomputed CHR01 profile the run itself uses; the formula and its numbers are in "
+                "the field's note"
+            )
+        if _is_number(power):
+            block[cls.BATTERY_POWER_KEY] = float(power)
+            context.record("power_in_watt", ReportStatus.USED)
+        else:
+            context.record(
+                "power_in_watt",
+                ReportStatus.DEFAULTED,
+                f"absent from the request; the catalogue's rule, 0.5 C of the capacity ({rate:g} W per "
+                "kWh), which is also HiSim's battery's own",
+            )
+        context.effects.replace_block(HousePaths.BATTERY, block)
+        context.target(
+            "Battery.config.custom_battery_capacity_generic_in_kilowatt_hour",
+            "Battery.config.custom_pv_inverter_power_generic_in_watt",
         )
-        context.target("Battery.config.custom_battery_capacity_generic_in_kilowatt_hour")
 
     @classmethod
     def solar_thermal_system(cls, context: MeasureContext) -> None:
@@ -926,10 +1005,15 @@ def apply(house: Mapping[str, Any], measures: Sequence[Measure], whitelist: Whit
     )
 
 
+def _is_number(value: Any) -> bool:
+    """Return whether an option value is a number, a boolean never being one."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
 def _record_unseen_options(context: MeasureContext) -> None:
     """Add a line for every option the request carried that the measure function said nothing about.
 
-    ``installation_year`` is the expected case -- five measures have it and none of them has a
+    ``installation_year`` is the expected case -- six measures have it and none of them has a
     HiSim parameter for it -- but the rule is general: an option nobody recorded is deferred to
     the whitelist, so forgetting one in a measure function fails the build instead of dropping a
     value silently.

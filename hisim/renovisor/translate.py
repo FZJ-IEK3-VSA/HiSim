@@ -678,6 +678,12 @@ class ConstructorSwaps:
 class BatteryCapacityLaw:
     """How ``battery.days_to_cover`` becomes a capacity in kilowatt hours.
 
+    Two things write that field: a request whose ``house.battery`` is sized by days, which the
+    request schema still admits, and a ``battery_system`` measure that states neither a capacity nor
+    a power (:attr:`~hisim.renovisor.constants.BatteryLaw.DAYS_TO_COVER_WHEN_UNSIZED`). A measure
+    that states its capacity never comes here: since contract 882a8c1 the frontend converts days
+    into a capacity before it sends anything.
+
     Decision D-C removed the invented per-resident table the frontend side's spec proposed: in
     the MVP every household runs the precomputed ``CHR01 Couple both at Work`` profile, so the
     daily electricity the battery is sized against is the daily electricity the simulation will
@@ -1853,13 +1859,24 @@ def _photovoltaics(state: _TranslationState) -> None:
         return
     if array.size_in_percent_of_roof_area is not None:
         share = array.size_in_percent_of_roof_area / Targets.PERCENT
-        state.write(Targets.PV, Targets.SHARE_OF_ROOF, share, source="house.pv_system.size_in_percent_of_roof_area",
-                    note="HiSim sizes the array from the roof area and this share")
+        sized_by_share = array.power_in_watt is None
+        state.write(
+            Targets.PV, Targets.SHARE_OF_ROOF, share, source="house.pv_system.size_in_percent_of_roof_area",
+            note=(
+                "HiSim sizes the array from the roof area and this share" if sized_by_share
+                else "recorded; the stated power pins the array, so the share does not size it"
+            ),
+        )
         state.report.used(
             "house.pv_system.size_in_percent_of_roof_area",
             Targets.describe(Targets.PV, Targets.SHARE_OF_ROOF),
             value=share,
-            note="the power stays AUTO and moves with the roof",
+            note=(
+                "the power stays AUTO and moves with the roof" if sized_by_share
+                else "recorded as the share of the roof the array covers; the stated power_in_watt "
+                "sizes the array, because the share is about future potential and the watts are "
+                "what a yield calculation reads"
+            ),
         )
     if array.power_in_watt is not None:
         state.write(Targets.PV, Targets.POWER_IN_WATT, array.power_in_watt,
@@ -1869,10 +1886,11 @@ def _photovoltaics(state: _TranslationState) -> None:
             Targets.describe(Targets.PV, Targets.POWER_IN_WATT),
             value=array.power_in_watt,
         )
-    for name, value in (("azimuth", azimuth), ("tilt", tilt)):
+    for name, value, stated in (("azimuth", azimuth, array.azimuth), ("tilt", tilt, array.tilt)):
         path = f"house.pv_system.{name}"
         target = Targets.describe(Targets.PV, name)
-        if state.present(path):
+        if stated is not None:
+            # Stated by the request or by the photovoltaic_system measure's *_in_degree option.
             state.report.used(path, target, value=value)
         else:
             state.report.defaulted(
@@ -1929,6 +1947,12 @@ def _battery(state: _TranslationState) -> None:
         )
     state.write(Targets.BATTERY, Targets.BATTERY_CAPACITY, capacity, source="house.battery",
                 note="the usable capacity")
+    if battery.power_in_watt is not None:
+        # Only the battery_system measure writes a power (the request schema's house.battery has no
+        # such field), so the measure's own option line reports it and no request leaf does.
+        state.write(Targets.BATTERY, Targets.BATTERY_INVERTER, battery.power_in_watt,
+                    source="battery_system.power_in_watt", note="the stated charging and discharging power")
+        return
     state.write(
         Targets.BATTERY,
         Targets.BATTERY_INVERTER,
@@ -1936,7 +1960,7 @@ def _battery(state: _TranslationState) -> None:
         source="house.battery",
         note=(
             f"{BatteryLaw.INVERTER_WATT_PER_KILOWATT_HOUR:g} W per kWh, the class's own C-rate of "
-            "0.5, pinned so that the two move together"
+            "0.5 and the catalogue's rule for an unstated power, pinned so that the two move together"
         ),
     )
 

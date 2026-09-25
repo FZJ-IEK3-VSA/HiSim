@@ -597,3 +597,214 @@ class TestTheMeasurePriceBand:
         assert SemanticChecks.COST_KEY == EconomicContextBuilder.COST_KEY
         assert SemanticChecks.COST_MINIMUM_KEY == EconomicContextBuilder.COST_MINIMUM_KEY
         assert SemanticChecks.COST_MAXIMUM_KEY == EconomicContextBuilder.COST_MAXIMUM_KEY
+
+
+@pytest.mark.base
+class TestTheAdditiveRequestFields:
+    """T-SCHEMA: the four E-spec §7 fields the schema adopted (hisim-epc.14).
+
+    They were read before they were accepted — the readers exist, the schema did not carry the
+    blocks — so a real request could not reach them. The cases here are the schema's own: a
+    well-formed field is accepted at its place, and every way a field can be malformed is refused
+    at the object it was sent to, with the path naming the leaf.
+    """
+
+    @staticmethod
+    def _at(document: Dict[str, Any], path: str) -> Any:
+        """The object a dotted path names, for setting and deleting one key."""
+        node: Any = document
+        for part in [item for item in path.split(".") if item]:
+            node = node[int(part)] if isinstance(node, list) else node[part]
+        return node
+
+    def test_the_mockups_cost_block_and_dated_boiler_validate(self) -> None:
+        """The vendored example carries a price band and an installation year, and is one request."""
+        document = mockup()
+
+        assert not codes_of(document)
+
+    def test_a_cost_block_without_its_source_is_refused(self) -> None:
+        """The band without its provenance is a number nobody can trace, so the block is whole."""
+        document = mockup()
+        del self._at(document, "measures.2.cost")["source"]
+
+        assert ("measures[2].cost.source", ProblemCode.REQUIRED_MISSING.value) in codes_of(document)
+
+    def test_a_negative_price_inside_a_cost_block_is_refused_by_the_schema(self) -> None:
+        """The schema's own ``minimum: 0`` says it before the semantic checks do."""
+        document = mockup()
+        self._at(document, "measures.2.cost")["min_in_euro_per_m2"] = -5
+
+        assert ("measures[2].cost.min_in_euro_per_m2", ProblemCode.RANGE_EXCEEDED.value) in codes_of(
+            document
+        )
+
+    def test_an_installation_year_is_accepted_on_every_dated_block(self) -> None:
+        """Four house blocks and five envelope elements; the register reads all nine."""
+        places = [
+            "house.heating",
+            "house.building.roof",
+            "house.building.facade",
+            "house.building.floor",
+            "house.building.window",
+            "house.building.door",
+        ]
+        optional = {
+            "house.pv_system": {"power_in_watt": 4000},
+            "house.battery": {"days_to_cover": 2},
+            "house.solar_thermal_system": {"supplies": "dhw_only"},
+        }
+        for parent in places + list(optional):
+            document = mockup()
+            if parent in optional:
+                document["house"][parent.rsplit(".", 1)[1]] = optional[parent]
+            self._at(document, parent)["installation_year"] = 2003
+
+            assert not codes_of(document), parent
+
+    @pytest.mark.parametrize("year", [1899, 2101, 2003.5, "2003"])
+    def test_a_malformed_installation_year_is_refused(self, year: Any) -> None:
+        """An integer between 1900 and 2100, or nothing."""
+        document = mockup()
+        self._at(document, "house.heating")["installation_year"] = year
+
+        assert (
+            "house.heating.installation_year",
+            ProblemCode.RANGE_EXCEEDED.value if year in (1899, 2101) else ProblemCode.TYPE_INVALID.value,
+        ) in codes_of(document)
+
+    def test_a_living_area_is_accepted_and_a_fictitious_one_is_refused(self) -> None:
+        """A positive number scales the cost lines; zero or less sizes nothing."""
+        document = mockup()
+        self._at(document, "house.building")["living_area_in_m2"] = 132.5
+
+        assert not codes_of(document)
+
+        self._at(document, "house.building")["living_area_in_m2"] = 0
+        assert ("house.building.living_area_in_m2", ProblemCode.RANGE_EXCEEDED.value) in codes_of(
+            document
+        )
+
+    def test_an_applicant_block_validates_with_every_key_optional(self) -> None:
+        """The empty block is the all-undetermined questionnaire, and it is a legal one."""
+        document = mockup()
+        document["applicant"] = {}
+
+        assert not codes_of(document)
+
+        document["applicant"] = {
+            "role": "landlord",
+            "receives_means_tested_benefit": True,
+            "first_time_buyer": False,
+            "managed_full_retrofit": True,
+            "taxable_household_income_in_euro": 61000.0,
+            "household_size": 4,
+            "main_residence": True,
+        }
+
+        assert not codes_of(document)
+
+    def test_an_applicant_role_outside_the_vocabulary_is_refused(self) -> None:
+        """Four roles; the engine's catalogue conditions name no fifth."""
+        document = mockup()
+        document["applicant"] = {"role": "housing_cooperative"}
+
+        assert ("applicant.role", ProblemCode.ENUM_UNKNOWN.value) in codes_of(document)
+
+    def test_a_negative_household_income_is_refused(self) -> None:
+        """An income below zero is a form error, not a poor applicant."""
+        document = mockup()
+        document["applicant"] = {"taxable_household_income_in_euro": -1}
+
+        assert ("applicant.taxable_household_income_in_euro", ProblemCode.RANGE_EXCEEDED.value) in codes_of(
+            document
+        )
+
+    def test_an_applicant_block_answers_no_house_leaf(self) -> None:
+        """The block sits beside the house, so an inventory key inside it is refused at it."""
+        document = mockup()
+        document["applicant"] = {"construction_year": 1975}
+
+        assert ("applicant.construction_year", ProblemCode.KEY_UNKNOWN.value) in codes_of(document)
+
+    def test_a_heat_pump_scop_pair_is_accepted(self) -> None:
+        """The two EN 14825 ratings of renovisorissues #8, on a heat pump, W55 at or below W35."""
+        document = mockup()
+        heating = self._at(document, "house.heating")
+        heating.update(
+            {
+                "type_of_system": "air_source_heat_pump",
+                "heatpump_scop_en14825_w35": 4.6,
+                "heatpump_scop_en14825_w55": 3.4,
+            }
+        )
+
+        assert not codes_of(document)
+
+    def test_a_scop_outside_its_range_is_refused(self) -> None:
+        """A SCOP is above 1 and at most 10; 1 and below is no heat pump at all."""
+        document = mockup()
+        heating = self._at(document, "house.heating")
+        heating.update({"type_of_system": "air_source_heat_pump", "heatpump_scop_en14825_w35": 1})
+
+        assert ("house.heating.heatpump_scop_en14825_w35", ProblemCode.RANGE_EXCEEDED.value) in codes_of(document)
+
+    def test_a_scop_on_a_boiler_is_refused_by_name(self) -> None:
+        """The mockup heats with gas: a SCOP there contradicts the request, and it says which field."""
+        document = mockup()
+        self._at(document, "house.heating")["heatpump_scop_en14825_w55"] = 3.4
+
+        assert (
+            "house.heating.heatpump_scop_en14825_w55",
+            ProblemCode.HEATING_SCOP_NOT_A_HEAT_PUMP.value,
+        ) in codes_of(document)
+
+    def test_a_w55_rating_above_w35_is_refused_by_name(self) -> None:
+        """A unit rated for 55 °C water cannot outperform its 35 °C rating; the pair is swapped."""
+        document = mockup()
+        heating = self._at(document, "house.heating")
+        heating.update(
+            {"type_of_system": "hybrid_heat_pump", "heatpump_scop_en14825_w35": 3.4, "heatpump_scop_en14825_w55": 4.6}
+        )
+
+        assert (
+            "house.heating.heatpump_scop_en14825_w55",
+            ProblemCode.HEATING_SCOP_W55_ABOVE_W35.value,
+        ) in codes_of(document)
+
+    @pytest.mark.parametrize("key", ["heatpump_scop_en14825_w35", "heatpump_scop_en14825_w55"])
+    def test_a_nan_scop_is_refused_by_name(self, key: str) -> None:
+        """The schema's bounds let NaN through, because every comparison with NaN is false."""
+        document = mockup()
+        heating = self._at(document, "house.heating")
+        heating.update({"type_of_system": "air_source_heat_pump", key: float("nan")})
+
+        assert codes_of(document) == [(f"house.heating.{key}", ProblemCode.HEATING_SCOP_NOT_FINITE.value)]
+
+    @pytest.mark.parametrize("key", ["heatpump_scop_en14825_w35", "heatpump_scop_en14825_w55"])
+    def test_an_infinite_scop_is_refused_by_the_schema_and_by_name(self, key: str) -> None:
+        """Infinity is above the schema's maximum; the semantic check refuses it on its own as well.
+
+        The check does not lean on the bound: both halves are asserted, so a schema that loses its
+        maximum still refuses the value by name.
+        """
+        document = mockup()
+        heating = self._at(document, "house.heating")
+        heating.update({"type_of_system": "air_source_heat_pump", key: float("inf")})
+
+        assert (f"house.heating.{key}", ProblemCode.RANGE_EXCEEDED.value) in codes_of(document)
+        # pylint: disable=protected-access
+        problems = SemanticChecks._heat_pump_scop(document["house"])
+        assert [(problem.path, problem.code) for problem in problems] == [
+            (f"house.heating.{key}", ProblemCode.HEATING_SCOP_NOT_FINITE)
+        ]
+
+    def test_every_new_leaf_is_refused_at_an_unknown_place(self) -> None:
+        """The blocks are where the specification puts them; nowhere else accepts the names."""
+        document = mockup()
+        self._at(document, "house.building")["heatpump_scop_en14825_w35"] = 3.4
+        self._at(document, "house.occupancy")["installation_year"] = 2003
+
+        problems = codes_of(document)
+        assert ("house.building.heatpump_scop_en14825_w35", ProblemCode.KEY_UNKNOWN.value) in problems
+        assert ("house.occupancy.installation_year", ProblemCode.KEY_UNKNOWN.value) in problems

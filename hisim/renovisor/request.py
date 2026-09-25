@@ -78,10 +78,10 @@ class ProblemCode(str, Enum):
     LOCATION_COUNTRY_UNSUPPORTED = "location.country.unsupported"
     HOT_WATER_CONFLICTING_VOLUMES = "hot_water.conflicting_volumes"
     TABULA_UNRESOLVABLE = "tabula.unresolvable"
-    # Not in §7 of the contract: the `measures[i].cost` block it belongs to is the E-spec §7
-    # proposal the vendored schema has not adopted yet (findings F7/F10), so its code is minted
-    # here in the contract's own spelling and joins §7 when the block does.
     MEASURE_COST_BAND_INVALID = "measure.cost.band_invalid"
+    HEATING_SCOP_NOT_A_HEAT_PUMP = "heating.scop.not_a_heat_pump"
+    HEATING_SCOP_W55_ABOVE_W35 = "heating.scop.w55_above_w35"
+    HEATING_SCOP_NOT_FINITE = "heating.scop.not_finite"
 
 
 @dataclass(frozen=True)
@@ -1174,6 +1174,7 @@ class SemanticChecks:
         problems.extend(cls._country(document["location"]))
         problems.extend(cls._added_insulation(house))
         problems.extend(cls._hot_water_volumes(house))
+        problems.extend(cls._heat_pump_scop(house))
         problems.extend(cls._measures(document["measures"], house))
         problems.extend(cls._cost_bands(document["measures"]))
         problems.extend(cls._tabula(document))
@@ -1305,6 +1306,64 @@ class SemanticChecks:
                 ),
             )
         ]
+
+    #: The two rated-SCOP fields of ``house.heating``, low- then medium-temperature application.
+    SCOP_KEYS: ClassVar[Tuple[str, str]] = ("heatpump_scop_en14825_w35", "heatpump_scop_en14825_w55")
+
+    @classmethod
+    def _heat_pump_scop(cls, house: Mapping[str, Any]) -> List[Problem]:
+        """Refuse a SCOP that is not a finite number, one on a heating that is not a heat pump, and a W55 above W35.
+
+        The first is a hole in the schema: its bounds cannot refuse ``NaN``, because every
+        comparison with ``NaN`` is false, so it passes ``exclusiveMinimum`` and ``maximum`` alike.
+        ``Infinity`` is above the ``maximum`` today and is refused here as well, so the check does
+        not lean on that bound. The other two are contradictions inside the request
+        (renovisorissues #8): a SCOP rates a heat pump, and a unit rated for 55 °C water cannot
+        outperform its own 35 °C rating. A value that is not finite takes no part in that
+        comparison.
+        """
+        heating = house.get("heating") or {}
+        w35_key, w55_key = cls.SCOP_KEYS
+        stated = [key for key in cls.SCOP_KEYS if heating.get(key) is not None]
+        if not stated:
+            return []
+        problems = [
+            Problem(
+                path=f"house.heating.{key}",
+                code=ProblemCode.HEATING_SCOP_NOT_FINITE,
+                message=f"a rated SCOP is a finite number, and house.heating.{key} is {heating[key]!r}",
+            )
+            for key in stated
+            if not math.isfinite(float(heating[key]))
+        ]
+        generator = heating.get("type_of_system")
+        if generator not in {member.value for member in HeatGenerator.heat_pumps()}:
+            return problems + [
+                Problem(
+                    path=f"house.heating.{key}",
+                    code=ProblemCode.HEATING_SCOP_NOT_A_HEAT_PUMP,
+                    message=(
+                        f"a rated SCOP describes a heat pump, and house.heating.type_of_system is "
+                        f"{generator!r}; leave it out, or state the heat pump the house has"
+                    ),
+                )
+                for key in stated
+            ]
+        w35, w55 = heating.get(w35_key), heating.get(w55_key)
+        if problems or w35 is None or w55 is None:
+            return problems
+        if float(w55) > float(w35):
+            return [
+                Problem(
+                    path=f"house.heating.{w55_key}",
+                    code=ProblemCode.HEATING_SCOP_W55_ABOVE_W35,
+                    message=(
+                        f"the W55 rating {w55} is above the W35 rating {w35}; a unit rated for 55 °C "
+                        "water cannot outperform its 35 °C rating, so the two are likely swapped"
+                    ),
+                )
+            ]
+        return []
 
     @classmethod
     def _measures(cls, measures: Sequence[Any], house: Mapping[str, Any]) -> List[Problem]:

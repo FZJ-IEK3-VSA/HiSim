@@ -553,11 +553,7 @@ class BaseFiles:
     }
 
     #: The generators whose twin is a heat pump, which alone has a flow temperature to write.
-    HEAT_PUMPS: ClassVar[Tuple[HeatGenerator, ...]] = (
-        HeatGenerator.AIR_SOURCE_HEAT_PUMP,
-        HeatGenerator.GROUND_SOURCE_HEAT_PUMP,
-        HeatGenerator.HYBRID_HEAT_PUMP,
-    )
+    HEAT_PUMPS: ClassVar[Tuple[HeatGenerator, ...]] = HeatGenerator.heat_pumps()
 
     #: The generators whose twin is a ``GenericBoiler``, which alone has efficiency bounds.
     BOILERS: ClassVar[Tuple[HeatGenerator, ...]] = (
@@ -874,6 +870,10 @@ class Translator:
         "RenoVisor translator {version} from base {base}"
     )
 
+    #: The target the ``used`` lines of the economics-only leaves name. These leaves write no
+    #: simulation component; they feed the economic context the engine evaluates.
+    ECONOMICS_TARGET: ClassVar[str] = "the economic context the lifecycle engine evaluates"
+
     #: The note explaining the transmission adjustment factor a written U-value fixes.
     ADJUSTMENT_NOTE: ClassVar[str] = (
         "overriding this element's U-value also fixes its transmission adjustment factor "
@@ -913,6 +913,12 @@ class Translator:
         editor = SystemEditor(base)
         report = MappingReport(request.schema_version, request.country.value)
         report.base_file = base_file_name
+        # The economics-only leaves are covered before the stages run: the fail-loud stage below
+        # accounts for every leftover leaf, and the builder that reads these leaves needs the
+        # translated model, which only exists after it.
+        for path, value, note in EconomicContextBuilder.stated_leaves(request.document):
+            report.used(path, self.ECONOMICS_TARGET, value=value, note=note)
+        self._cost_blocks(request, raw, report)
         edits: List[Edit] = []
         state = _TranslationState(
             request=request,
@@ -985,6 +991,30 @@ class Translator:
         self._self_check(text, file_name)
         report.assert_complete(request.document)
         return translated
+
+    def _cost_blocks(self, request: Request, house: Mapping[str, Any], report: MappingReport) -> None:
+        """Report every ``measures[i].cost`` block: used on an envelope measure, listed on any other.
+
+        The fail-loud stage walks the house, not the package, so a block nobody reads would pass
+        it silently. An envelope measure's block prices its cost subject; any other measure is
+        priced from HiSim's cost database, and its block is asked of ``not_implemented_yet.yaml``
+        like every other leaf the translator does not act on.
+
+        Args:
+            request: The validated request.
+            house: The renovated house, which the list's conditions are evaluated on.
+            report: The report being written.
+
+        Raises:
+            TranslatorError: When the list does not carry
+                :attr:`~hisim.renovisor.economics.EconomicContextBuilder.UNREAD_COST_ITEM`.
+        """
+        for path, block, read in EconomicContextBuilder.cost_blocks(request.document):
+            if read:
+                report.used(path, self.ECONOMICS_TARGET, value=dict(block), note=EconomicContextBuilder.COST_USED_NOTE)
+                continue
+            entry = self._whitelist.require(Unmapped(EconomicContextBuilder.UNREAD_COST_ITEM), house)
+            report.not_implemented_yet(path, entry.note, value=dict(block))
 
     @classmethod
     def _self_check(cls, text: str, file_name: str) -> None:

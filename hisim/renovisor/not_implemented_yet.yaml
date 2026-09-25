@@ -97,6 +97,14 @@
   when: heating.type_of_system == air_source_heat_pump
   note: The heat pump follows its hplib model curve.
 
+- path: house.heating.heatpump_scop_en14825_w35
+  note: The heat pump follows hplib's generic curve; calibrating it to the stated SCOP is not implemented yet.
+  tracked: hisim-4g9.15
+
+- path: house.heating.heatpump_scop_en14825_w55
+  note: The heat pump follows hplib's generic curve; calibrating it to the stated SCOP is not implemented yet.
+  tracked: hisim-4g9.15
+
 - path: house.heat_distribution.type_of_system
   when: heating.type_of_system == electric_heating
   note: Electric heating has no heat distribution system.
@@ -161,6 +169,15 @@
   note: One weather station per country; the postcode is recorded and has no target.
 
 # --- Measures -------------------------------------------------------------------------------
+
+# A measure's `cost` block prices the envelope subject an insulation measure or a window or door
+# replacement creates (EconomicContextBuilder.PRICED_FROM_REQUEST). On every other measure it is
+# accepted and not read. The report line sits at the block's own `measures[i].cost` path; the `[]`
+# here stands for every measure of the package, which is the one item the translator asks about.
+- path: measures[].cost
+  note: HiSim prices this measure from its cost database; a request's cost block is used for envelope
+    measures only so far.
+  tracked: hisim-5j3h
 
 - measure: heating_system.type_of_system=ground_source_heat_pump
   note: No brine/water preset; modelled as air_source_heat_pump.

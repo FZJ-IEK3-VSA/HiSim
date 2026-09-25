@@ -95,7 +95,7 @@ TOUCHED: Dict[str, Set[str]] = {
     "shallow_air_tightness_measures": {"ventilation.air_tightness"},
     "diy_sealing_of_air_leaks": {"ventilation.air_tightness"},
     "hot_water_tank_and_pipe_insulation": {"hot_water.tank_and_pipe_insulated"},
-    "heating_system": {"heating.type_of_system"},
+    "heating_system": {"heating.type_of_system", "heating.installation_year"},
     "heating_installation": {"heat_distribution.type_of_system"},
     "air_conditioners": {"air_conditioning.power_in_watt"},
     "hot_water_system": {"hot_water.supply"},

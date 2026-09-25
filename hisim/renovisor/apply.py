@@ -457,12 +457,13 @@ class MeasureRegistry:
         "conductivity used; heat capacity, density, CO2 footprint and lifespan recorded only"
     )
 
-    #: The four heating facts that described the generator a heating_system measure replaces.
+    #: The five heating facts that described the generator a heating_system measure replaces.
     SUPERSEDED_BY_NEW_GENERATOR: ClassVar[Tuple[str, ...]] = (
         "heating.flow_temperature_in_celsius",
         "heating.seasonal_efficiency_in_percent",
         "heating.secondary",
         "heating.cooking_range",
+        "heating.installation_year",
     )
 
     @classmethod
@@ -679,7 +680,7 @@ class MeasureRegistry:
 
     @classmethod
     def heating_system(cls, context: MeasureContext) -> None:
-        """Replace the heat generator, and drop the four facts that described the old one."""
+        """Replace the heat generator, and drop the facts that described the old one."""
         generator = context.option("type_of_system")
         context.effects.set("heating.type_of_system", generator)
         context.record("type_of_system", ReportStatus.USED)

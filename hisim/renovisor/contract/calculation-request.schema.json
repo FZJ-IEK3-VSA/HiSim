@@ -16,6 +16,9 @@
     "house": {
       "$ref": "#/$defs/house"
     },
+    "applicant": {
+      "$ref": "#/$defs/applicant"
+    },
     "measures": {
       "type": "array",
       "items": {
@@ -116,6 +119,11 @@
           "minimum": 1700,
           "maximum": 2100
         },
+        "living_area_in_m2": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "The dwelling's living area in m², for the cost lines that scale with it. Absent: the conditioned floor area stands in and is reported defaulted."
+        },
         "absolute_conditioned_floor_area_in_m2": {
           "type": "number",
           "exclusiveMinimum": 0,
@@ -159,6 +167,12 @@
       "exclusiveMinimum": 0,
       "maximum": 10,
       "description": "W/(m²·K), as the frontend derived it from its country pack. Written to Building.<element>_u_value_in_watt_per_m2_per_kelvin verbatim; a measure's added layer lowers it in apply()."
+    },
+    "installation_year": {
+      "type": "integer",
+      "minimum": 1900,
+      "maximum": 2100,
+      "description": "The year the existing asset was installed. Economics only — it dates the like-for-like replacement and the sunk-cost credit. Absent: the building's construction year stands in and is reported defaulted."
     },
     "area": {
       "type": "number",
@@ -246,6 +260,9 @@
         "area_in_m2": {
           "$ref": "#/$defs/area"
         },
+        "installation_year": {
+          "$ref": "#/$defs/installation_year"
+        },
         "shape": {
           "enum": ["pitched", "flat"],
           "description": "Sets the PV and solar-thermal tilt."
@@ -266,6 +283,9 @@
         "area_in_m2": {
           "$ref": "#/$defs/area"
         },
+        "installation_year": {
+          "$ref": "#/$defs/installation_year"
+        },
         "added_insulation": {
           "$ref": "#/$defs/added_insulation"
         }
@@ -281,6 +301,9 @@
         },
         "area_in_m2": {
           "$ref": "#/$defs/area"
+        },
+        "installation_year": {
+          "$ref": "#/$defs/installation_year"
         },
         "added_insulation": {
           "$ref": "#/$defs/added_insulation"
@@ -308,6 +331,9 @@
         "area_in_m2": {
           "$ref": "#/$defs/area"
         },
+        "installation_year": {
+          "$ref": "#/$defs/installation_year"
+        },
         "outside_shading": {
           "type": "boolean"
         },
@@ -332,6 +358,9 @@
         },
         "area_in_m2": {
           "$ref": "#/$defs/area"
+        },
+        "installation_year": {
+          "$ref": "#/$defs/installation_year"
         }
       }
     },
@@ -400,6 +429,21 @@
           "type": "number",
           "minimum": 1,
           "maximum": 400
+        },
+        "installation_year": {
+          "$ref": "#/$defs/installation_year"
+        },
+        "heatpump_scop_en14825_w35": {
+          "type": "number",
+          "exclusiveMinimum": 1,
+          "maximum": 10,
+          "description": "Seasonal coefficient of performance of the heat pump in the house, as rated under EN 14825 for the low-temperature application (35 °C water outlet, W35), average climate: the datasheet or ErP fiche's 'low temperature' column. The SCOP itself, not the seasonal space-heating efficiency ηs and not a metered seasonal performance factor (JAZ). Only for a heat-pump type_of_system (else refused, heating.scop.not_a_heat_pump); give both ratings where the fiche has both. Omit when unknown."
+        },
+        "heatpump_scop_en14825_w55": {
+          "type": "number",
+          "exclusiveMinimum": 1,
+          "maximum": 10,
+          "description": "The same rating for the medium-temperature application (55 °C water outlet, W55): the fiche's 'medium temperature' column, on every fiche of a heat pump not sold as a low-temperature unit. Everything said for heatpump_scop_en14825_w35 applies; with both given, W55 must not exceed W35 (else refused, heating.scop.w55_above_w35)."
         }
       }
     },
@@ -525,6 +569,9 @@
           "minimum": 0,
           "maximum": 90,
           "description": "HiSim PVSystem field, verbatim; degrees from horizontal."
+        },
+        "installation_year": {
+          "$ref": "#/$defs/installation_year"
         }
       }
     },
@@ -550,6 +597,9 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 14
+        },
+        "installation_year": {
+          "$ref": "#/$defs/installation_year"
         }
       }
     },
@@ -575,6 +625,9 @@
           "type": "number",
           "minimum": 0,
           "maximum": 5000
+        },
+        "installation_year": {
+          "$ref": "#/$defs/installation_year"
         }
       }
     },
@@ -605,6 +658,27 @@
           "type": "string",
           "pattern": "^[a-z0-9_]+$"
         },
+        "cost": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["min_in_euro_per_m2", "max_in_euro_per_m2", "source"],
+          "description": "The measure's installed-price band in euro per square metre, which prices the envelope subject it creates. The frontend copies it out of materials.yaml's measure_costs; the backend reads no catalogue. The cheap end above the expensive end, a negative or non-finite price is refused (measure.cost.band_invalid).",
+          "properties": {
+            "min_in_euro_per_m2": {
+              "type": "number",
+              "minimum": 0
+            },
+            "max_in_euro_per_m2": {
+              "type": "number",
+              "minimum": 0,
+              "description": "The expensive end of the band, at or above min_in_euro_per_m2 (checked by the backend's semantic rules)."
+            },
+            "source": {
+              "type": "string",
+              "description": "Provenance of the band, e.g. the materials.yaml row it was copied from."
+            }
+          }
+        },
         "options": {
           "type": "object",
           "propertyNames": {
@@ -629,6 +703,43 @@
         }
       },
       "description": "Verbatim {id, options} from measures.yaml, with a material option expanded to its properties. Ids, option names and values are checked by the translation layer's table, not by this schema."
+    },
+    "applicant": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Who applies for the subsidy, for the eligibility conditions of the country's catalogue. Every key is optional; a key the block omits stays undetermined, which a scheme reads as a question rather than as a denial. Absent block: everything is undetermined, except the role, which defaults to owner_occupier.",
+      "properties": {
+        "role": {
+          "enum": ["owner_occupier", "landlord", "tenant", "condominium_association"],
+          "description": "Who signs the funding application. Absent: owner_occupier."
+        },
+        "receives_means_tested_benefit": {
+          "type": "boolean",
+          "description": "Whether the applicant draws a means-tested social benefit (Ireland: a qualifying welfare payment)."
+        },
+        "first_time_buyer": {
+          "type": "boolean",
+          "description": "Whether the applicant bought this home as their first home."
+        },
+        "managed_full_retrofit": {
+          "type": "boolean",
+          "description": "Whether the works are delivered as one managed complete upgrade — Ireland's One Stop Shop route."
+        },
+        "taxable_household_income_in_euro": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Per year, gross of tax."
+        },
+        "household_size": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Persons; some income thresholds scale with it."
+        },
+        "main_residence": {
+          "type": "boolean",
+          "description": "Whether the dwelling is the applicant's main residence; required by several bonuses."
+        }
+      }
     }
   }
 }

@@ -227,11 +227,12 @@ class TestTheEndToEndDocument:
         assert any(row["measure_id"] == "heating_system" for row in heat_pumps)
         assert any(row["stage"] == 1 for row in heat_pumps)
 
-    def test_the_envelope_subject_is_unpriced(self, document) -> None:
-        """The mockup carries no ``cost`` block, so the measure is in the plan with no price."""
+    def test_the_envelope_subject_is_priced_by_its_cost_block(self, document) -> None:
+        """The mockup carries the band out of materials.yaml, so the subject has an investment."""
         rows = {row["subject"]: row for row in document["plan"]["by_subject"]}
         assert "external_insulation" in rows
-        assert rows["external_insulation"]["unpriced"] is True
+        assert rows["external_insulation"]["unpriced"] is False
+        assert rows["external_insulation"]["investment_in_euro"]["best"] > 0.0
 
     def test_the_subsidy_rows_are_no_longer_all_undetermined(self, document) -> None:
         """Ireland has a catalogue now, so the rows carry real verdicts (step 11 §3.12)."""

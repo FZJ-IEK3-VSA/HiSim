@@ -2468,25 +2468,28 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
     The on/off logic in front of the machine's space-heating side: it compares the buffer
     vessel's water temperature with the flow temperature the heat distribution system asks
     for, and it stops heating once the daily average outside temperature has risen above
-    the heating threshold. The named default is :meth:`preset_standard`; the two fields
-    that belong to the emitter circuit rather than to the machine --
-    :attr:`heat_distribution_system_type` and
-    :attr:`set_heating_threshold_outside_temperature_in_celsius` -- are sizable, so the
-    preset leaves them ``AUTO`` and ``.resolve(ctx)`` copies them from the heat
-    distribution controller's facts::
+    the heating threshold. The named default is :meth:`preset_standard`; the three fields
+    that belong to the building and its emitter circuit rather than to the machine --
+    :attr:`heat_distribution_system_type`,
+    :attr:`set_heating_threshold_outside_temperature_in_celsius` and
+    :attr:`set_heating_temperature_for_building_in_celsius` -- are sizable, so the preset
+    leaves them ``AUTO`` and ``.resolve(ctx)`` copies them from the facts the building and
+    the heat distribution controller contribute::
 
         MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
             "MoreAdvancedHeatPumpHPLibControllerSH"
         ).resolve(
             SizingContext(
+                set_heating_temperature_in_celsius=20.0,
                 heat_distribution_system_type=HeatDistributionSystemType.FLOORHEATING,
                 set_heating_threshold_outside_temperature_in_celsius=18.0,
             )
         )
 
-    Copying rather than restating is the point: the emitter circuit already decides which
-    emitter it feeds and above which outside temperature nothing heats, and a generator
-    controller that disagreed with it would heat into a circuit that has switched off.
+    Copying rather than restating is the point: the building decides the room temperature it
+    is heated to, the emitter circuit decides which emitter it feeds and above which outside
+    temperature nothing heats, and a generator controller that disagreed with either would
+    heat water too cold for the room or into a circuit that has switched off.
     """
 
     MAIN_CLASS = "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating"
@@ -2518,9 +2521,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
         rule=Size.HEAT_DISTRIBUTION_SYSTEM_TYPE, value_type=HeatDistributionSystemType
     )
     #: The room temperature the building is heated to, copied from the building. Sizable: left
-    #: ``AUTO`` it is the building's own setpoint. The machine always switches on when the
-    #: water is below it, whatever the hysteresis band says (hisim-q1rm): water colder than the
-    #: room it should heat cannot heat it.
+    #: ``AUTO`` it is the building's own setpoint. It floors the hysteresis band (hisim-q1rm).
     set_heating_temperature_for_building_in_celsius: Sizable[float] = sized_field(
         rule=Size.SET_HEATING_TEMPERATURE_IN_CELSIUS
     )
@@ -2532,15 +2533,15 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
 
         The field defaults are that controller: the plain on/off law, a five-kelvin
         hysteresis band either side of the requested flow temperature, and no cooling below
-        20 °C outside. What the preset does not fix is the emitter type and the heating
-        threshold, which stay ``AUTO`` so that both are copied from the heat distribution
-        controller instead of repeating its choices here.
+        20 °C outside. What the preset does not fix is the emitter type, the heating
+        threshold and the room setpoint, which stay ``AUTO`` so that they are copied from the
+        heat distribution controller and the building instead of repeating their choices here.
 
         Args:
             name: Instance name of the controller in the simulation.
 
         Returns:
-            The configuration, with its two sizable fields still ``AUTO``.
+            The configuration, with its three sizable fields still ``AUTO``.
         """
         return cls(component_id=ComponentID(name=name))
 
@@ -2599,6 +2600,9 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
         )
 
         self.heat_distribution_system_type = self.heatpump_controller_config.heat_distribution_system_type
+        self.set_heating_temperature_for_building_in_celsius: float = float(
+            concrete(self.heatpump_controller_config.set_heating_temperature_for_building_in_celsius)
+        )
         self.build(
             mode=self.heatpump_controller_config.mode,
             upper_temperature_offset_for_state_conditions_in_celsius=self.heatpump_controller_config.upper_temperature_offset_for_state_conditions_in_celsius,
@@ -2844,70 +2848,89 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
         lower_temperature_offset_for_state_conditions_in_celsius: float,
     ) -> None:
         """Set conditions for the heat pump controller mode."""
+        switch_on_in_celsius, switch_off_in_celsius = self.heating_switch_temperatures_in_celsius(
+            set_heating_flow_temperature_in_celsius,
+            upper_temperature_offset_for_state_conditions_in_celsius,
+            lower_temperature_offset_for_state_conditions_in_celsius,
+            storage_temperature_modifier,
+        )
 
         if self.controller_heatpumpmode == "heating":
-            if (
-                water_temperature_input_in_celsius
-                > (
-                    set_heating_flow_temperature_in_celsius
-                    # + 0.5
-                    + upper_temperature_offset_for_state_conditions_in_celsius
-                    + storage_temperature_modifier
-                )
-                or summer_heating_mode == "off"
-            ):  # + 1:
+            if water_temperature_input_in_celsius > switch_off_in_celsius or summer_heating_mode == "off":
                 self.controller_heatpumpmode = "off"
                 return
 
         elif self.controller_heatpumpmode == "off":
-            # heat pump is only turned on if the water temperature is below the switch-on point
-            # and if the avg daily outside temperature is cold enough (summer mode on)
-            if (
-                water_temperature_input_in_celsius
-                < self.switch_on_temperature_in_celsius(
-                    set_heating_flow_temperature_in_celsius,
-                    lower_temperature_offset_for_state_conditions_in_celsius,
-                    storage_temperature_modifier,
-                )
-                and summer_heating_mode == "on"
-            ):
-                self.controller_heatpumpmode = "heating"
+            if self.start_heating_if_due(water_temperature_input_in_celsius, switch_on_in_celsius, summer_heating_mode):
                 return
 
         else:
             raise ValueError("unknown mode")
 
-    def switch_on_temperature_in_celsius(
+    def heating_switch_temperatures_in_celsius(
         self,
         set_heating_flow_temperature_in_celsius: float,
+        upper_temperature_offset_for_state_conditions_in_celsius: float,
         lower_temperature_offset_for_state_conditions_in_celsius: float,
         storage_temperature_modifier: float,
-    ) -> float:
-        """Return the water temperature below which an idle machine starts heating.
+    ) -> Tuple[float, float]:
+        """Return the water temperatures at which the machine starts and stops heating.
 
-        The hysteresis band puts it ``lower_temperature_offset`` below the flow temperature the
-        emitter circuit asks for. A floor-heating curve asks for barely more than the room
-        setpoint in mild weather (about 23 °C at 21 °C), which put that point below the room
-        temperature: the buffer, sitting at room temperature, never reached it, and the machine
-        stayed off from spring to autumn while the room cooled to 18 °C (hisim-q1rm). The point
-        is therefore never below the building's heating setpoint, since water colder than that
+        The hysteresis band puts the switch-on point ``lower_temperature_offset`` below the flow
+        temperature the emitter circuit asks for, and the switch-off point ``upper_temperature_offset``
+        above it. A floor-heating curve asks for barely more than the room setpoint in mild
+        weather (about 23 °C at 21 °C), which put the switch-on point below the room temperature:
+        the buffer, sitting at room temperature, never reached it, and the machine stayed off
+        from spring to autumn while the room cooled to 18 °C (hisim-q1rm). The switch-on point is
+        therefore never below the building's heating setpoint, since water colder than that
         cannot heat the room.
+
+        The switch-off point is floored the same way, at least ``upper_temperature_offset`` above
+        the switch-on point: a flow request below ``room setpoint - upper_temperature_offset``
+        would otherwise put it below the switch-on point, and the machine would toggle every
+        step. The invariant is ``switch-off - switch-on >= upper_temperature_offset``, the
+        storage modifier included, since the modifier raises both points alike. Wherever the
+        flow temperature is at or above the room setpoint -- which the heat distribution
+        controller's heating curve guarantees, its lowest flow being the room setpoint -- the
+        switch-off point is exactly ``flow + upper_temperature_offset + modifier``, as it always was.
 
         Args:
             set_heating_flow_temperature_in_celsius: The flow temperature the circuit asks for.
+            upper_temperature_offset_for_state_conditions_in_celsius: The upper half of the band.
             lower_temperature_offset_for_state_conditions_in_celsius: The lower half of the band.
             storage_temperature_modifier: The energy management system's raise of the target.
 
         Returns:
-            The switch-on temperature in °C.
+            The switch-on and the switch-off temperature in °C.
         """
-        room_setpoint_in_celsius = float(
-            concrete(self.heatpump_controller_config.set_heating_temperature_for_building_in_celsius)
+        switch_on_without_modifier_in_celsius = max(
+            set_heating_flow_temperature_in_celsius - lower_temperature_offset_for_state_conditions_in_celsius,
+            self.set_heating_temperature_for_building_in_celsius,
         )
-        band_point_in_celsius = (
-            set_heating_flow_temperature_in_celsius - lower_temperature_offset_for_state_conditions_in_celsius
+        switch_off_without_modifier_in_celsius = (
+            max(set_heating_flow_temperature_in_celsius, switch_on_without_modifier_in_celsius)
+            + upper_temperature_offset_for_state_conditions_in_celsius
         )
-        return max(band_point_in_celsius, room_setpoint_in_celsius) + storage_temperature_modifier
+        return (
+            switch_on_without_modifier_in_celsius + storage_temperature_modifier,
+            switch_off_without_modifier_in_celsius + storage_temperature_modifier,
+        )
+
+    def start_heating_if_due(
+        self,
+        water_temperature_input_in_celsius: float,
+        switch_on_temperature_in_celsius: float,
+        summer_heating_mode: str,
+    ) -> bool:
+        """Switch an idle machine to heating if the water is below the switch-on point in the heating season.
+
+        Returns:
+            Whether the machine now heats.
+        """
+        if water_temperature_input_in_celsius < switch_on_temperature_in_celsius and summer_heating_mode == "on":
+            self.controller_heatpumpmode = "heating"
+            return True
+        return False
 
     def conditions_heating_cooling_off(
         self,
@@ -2921,17 +2944,17 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
     ) -> None:
         """Set conditions for the heat pump controller mode according to the flow temperature."""
         # Todo: storage temperature modifier is only working for heating so far. Implement for cooling similar
-        heating_set_temperature = set_heating_flow_temperature_in_celsius
         cooling_set_temperature = set_heating_flow_temperature_in_celsius
+        # Todo: Check if storage_temperature_modifier is neccessary for the switch-off point
+        switch_on_in_celsius, switch_off_in_celsius = self.heating_switch_temperatures_in_celsius(
+            set_heating_flow_temperature_in_celsius,
+            upper_temperature_offset_for_state_conditions_in_celsius,
+            lower_temperature_offset_for_state_conditions_in_celsius,
+            storage_temperature_modifier,
+        )
 
         if self.controller_heatpumpmode == "heating":
-            if (
-                water_temperature_input_in_celsius
-                >= heating_set_temperature
-                + upper_temperature_offset_for_state_conditions_in_celsius
-                + storage_temperature_modifier  # Todo: Check if storage_temperature_modifier is neccessary here
-                or summer_heating_mode == "off"
-            ):
+            if water_temperature_input_in_celsius >= switch_off_in_celsius or summer_heating_mode == "off":
                 self.controller_heatpumpmode = "off"
                 return
         elif self.controller_heatpumpmode == "cooling":
@@ -2944,18 +2967,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
                 return
 
         elif self.controller_heatpumpmode == "off":
-            # heat pump is only turned on if the water temperature is below the switch-on point
-            # and if the avg daily outside temperature is cold enough (summer heating mode on)
-            if (
-                water_temperature_input_in_celsius
-                < self.switch_on_temperature_in_celsius(
-                    heating_set_temperature,
-                    lower_temperature_offset_for_state_conditions_in_celsius,
-                    storage_temperature_modifier,
-                )
-                and summer_heating_mode == "on"
-            ):
-                self.controller_heatpumpmode = "heating"
+            if self.start_heating_if_due(water_temperature_input_in_celsius, switch_on_in_celsius, summer_heating_mode):
                 return
 
             # heat pump is only turned on for cooling if the water temperature is above a certain flow temperature

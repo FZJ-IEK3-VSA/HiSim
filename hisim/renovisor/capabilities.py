@@ -11,10 +11,11 @@ something the translator does not do::
 The probe set is data, not a loop (:class:`ProbeSet`), so the verification harness can reuse it.
 It is the anchor -- the vendored mockup with an empty package -- plus the bare baseline with
 every optional block absent, plus one probe per optional block present alone, one per measure,
-one per enum value of every option, one per boundary of every free numeric option, one per
-inventory enum value and one per inventory range boundary, plus the handful of two-change
-probes the conditional entries of ``not_implemented_yet.yaml`` need (a solar thermal collector
-on an oil boiler cannot be reached by changing one thing).
+one per enum value of every option, one per boundary of every free numeric option, and one per
+value of every settable leaf of the request schema -- the inventory, the location, the applicant
+and a measure's cost band, each enum value, both booleans and both ends of a range -- plus the
+handful of two-change probes the conditional entries of ``not_implemented_yet.yaml`` need (a
+solar thermal collector on an oil boiler cannot be reached by changing one thing).
 
 Every probe runs ``validate`` + ``apply`` + ``translate`` and no simulation, so the whole set
 takes a second. A probe that raises a translator error fails the build: the backend marks an
@@ -38,7 +39,7 @@ import json
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, cast
+from typing import Any, ClassVar, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple, cast
 
 import yaml
 from jsonschema import Draft202012Validator
@@ -92,7 +93,8 @@ class ProbeKind(str, Enum):
     ``ANCHOR`` and ``BARE`` prove the two ends of the sparseness rule: a request with a package
     and a request with nothing optional in it at all. ``BLOCK`` turns one optional block on;
     ``MEASURE`` applies one measure; ``OPTION`` varies one option of one measure; ``FIELD``
-    varies one inventory field; ``PAIR`` changes two things at once, which the conditional
+    varies one leaf of the request -- an inventory field, the country, an applicant answer or a
+    bound of a measure's cost band; ``PAIR`` changes two things at once, which the conditional
     entries of the list need.
     """
 
@@ -116,8 +118,9 @@ class Probe:
             removes the block.
         measures: The package this probe sends, or ``None`` to keep the anchor's empty one.
         location: What to write into the anchor's ``location``, by key.
-        subject: The measure id or inventory path the probe is about, for the aggregation.
+        subject: The measure id or request path the probe is about, for the aggregation.
         value: The value it set, for a per-value status.
+        applicant: What to write into the anchor's ``applicant``, by key.
     """
 
     name: str
@@ -127,6 +130,7 @@ class Probe:
     location: Mapping[str, Any] = field(default_factory=dict)
     subject: Optional[str] = None
     value: Any = None
+    applicant: Mapping[str, Any] = field(default_factory=dict)
 
     def document(self, anchor: Mapping[str, Any]) -> Dict[str, Any]:
         """Return the request this probe sends.
@@ -146,6 +150,8 @@ class Probe:
             _write(request["house"], path, copy.deepcopy(value))
         for key, value in self.location.items():
             _write(request["location"], key, copy.deepcopy(value))
+        for key, value in self.applicant.items():
+            _write(request["applicant"], key, copy.deepcopy(value))
         if self.measures is not None:
             request["measures"] = [copy.deepcopy(dict(entry)) for entry in self.measures]
         return request
@@ -256,18 +262,139 @@ class RequestSchemaBounds:
         return cast(Mapping[str, Any], target)
 
 
+class SchemaLeaves:
+    """A small walker over the vendored request JSON Schema: local ``$ref``, alternatives, properties.
+
+    It enumerates every settable leaf of a request (:meth:`settable`), which two readers need: the
+    probe set, which generates a probe for every leaf its tables do not name
+    (:meth:`ProbeSet.varied_fields`), and the path-verification harness, which checks that some probe
+    changes each of them (:class:`hisim.renovisor.verify.probes.Completeness`). Separate from
+    :class:`RequestSchemaBounds`, which looks one path up.
+    """
+
+    #: The keywords whose alternatives are merged into one node.
+    ALTERNATIVES: ClassVar[Tuple[str, ...]] = ("oneOf", "anyOf", "allOf")
+
+    #: The request blocks whose leaves are walked.
+    BLOCKS: ClassVar[Tuple[str, ...]] = ("location", "house", "applicant")
+
+    #: How the cost block of any measure is spelled, since it is the same leaf on every measure.
+    COST_PATH: ClassVar[str] = "measures[id=*].cost"
+
+    @classmethod
+    def resolve(cls, root: Mapping[str, Any], node: Mapping[str, Any]) -> Mapping[str, Any]:
+        """Return the node a local ``$ref`` points at, or *node* itself."""
+        while "$ref" in node:
+            target: Any = root
+            for token in str(node["$ref"]).lstrip("#").strip("/").split("/"):
+                target = target[token]
+            node = target
+        return node
+
+    @classmethod
+    def candidates(cls, root: Mapping[str, Any], node: Mapping[str, Any]) -> List[Mapping[str, Any]]:
+        """Return *node* and every alternative it stands for, references resolved."""
+        found: List[Mapping[str, Any]] = []
+        pending = [node]
+        while pending:
+            current = cls.resolve(root, pending.pop(0))
+            if any(current is seen for seen in found):
+                continue
+            found.append(current)
+            for keyword in cls.ALTERNATIVES:
+                pending.extend(current.get(keyword, []))
+        return found
+
+    @classmethod
+    def properties(cls, root: Mapping[str, Any], node: Mapping[str, Any]) -> Dict[str, Mapping[str, Any]]:
+        """Return the union of the properties every alternative of *node* declares."""
+        merged: Dict[str, Mapping[str, Any]] = {}
+        for candidate in cls.candidates(root, node):
+            merged.update(candidate.get("properties", {}))
+        return merged
+
+    @classmethod
+    def merged(cls, root: Mapping[str, Any], node: Mapping[str, Any]) -> Dict[str, Any]:
+        """Return the keywords of every alternative of a leaf, merged into one mapping."""
+        merged: Dict[str, Any] = {}
+        for candidate in cls.candidates(root, node):
+            merged.update({key: value for key, value in candidate.items() if key not in cls.ALTERNATIVES})
+        return merged
+
+    @classmethod
+    def walk(cls, root: Mapping[str, Any], node: Mapping[str, Any], prefix: str) -> List[Tuple[str, Dict[str, Any]]]:
+        """Return ``(path, leaf keywords)`` for every leaf under *node*.
+
+        An object recurses into its declared properties; anything else is a leaf.
+        """
+        properties = cls.properties(root, node)
+        if not properties:
+            return [(prefix, cls.merged(root, node))]
+        leaves: List[Tuple[str, Dict[str, Any]]] = []
+        for name, child in properties.items():
+            leaves.extend(cls.walk(root, child, f"{prefix}.{name}"))
+        return leaves
+
+    @classmethod
+    def settable(cls, schema: Optional[Mapping[str, Any]] = None) -> List[Tuple[str, Dict[str, Any]]]:
+        """Return every leaf a request can set, in schema order.
+
+        Args:
+            schema: The request schema; the vendored one when omitted.
+
+        Returns:
+            ``(path, leaf keywords)`` for every leaf of ``location``, ``house`` and ``applicant``,
+            then for every leaf of a measure's ``cost`` block, spelled :attr:`COST_PATH` ``.<name>``.
+            A ``const`` leaf (``schema_version``) is not among them; the measures and their options
+            are the catalogue's, not the schema's.
+        """
+        root = schema if schema is not None else ContractFiles.request_schema()
+        leaves: List[Tuple[str, Dict[str, Any]]] = []
+        for block in cls.BLOCKS:
+            leaves.extend(cls.walk(root, root["properties"][block], block))
+        measure = cls.resolve(root, root["properties"]["measures"]["items"])
+        for name, node in cls.properties(root, measure["properties"]["cost"]).items():
+            leaves.append((f"{cls.COST_PATH}.{name}", cls.merged(root, node)))
+        return leaves
+
+    @staticmethod
+    def types(leaf: Mapping[str, Any]) -> Set[str]:
+        """Return the JSON types a leaf declares, as a set whether the schema lists one or several."""
+        declared = leaf.get("type")
+        if isinstance(declared, list):
+            return {str(item) for item in declared}
+        return {str(declared)} if declared is not None else set()
+
+
+class FieldShape(str, Enum):
+    """What a varied request leaf is, which decides what the capability document publishes for it.
+
+    ``ENUMERATED`` (an enum or a boolean) publishes one ``values`` entry per value; ``NUMERIC``
+    publishes the request schema's own bounds (:class:`RequestSchemaBounds`) and never its probe
+    points; ``FREE`` (a string such as the TABULA override) publishes neither, and its probes count
+    towards the field's own status.
+    """
+
+    ENUMERATED = "enumerated"
+    NUMERIC = "numeric"
+    FREE = "free"
+
+
 class ProbeSet:
     """The probes the capability document is aggregated from, as data.
 
-    Everything here is generated from four tables and the frozen catalogue, so a catalogue value
-    added tomorrow is probed tomorrow without anybody writing a probe. The tables are the
-    enumerated inventory fields worth varying (:attr:`FIELD_VALUES`, the request schema's own
-    enums), the values the numeric ones are probed at (:attr:`FIELD_PROBE_POINTS`, HiSim's own
-    choice and never published), the bounds of the free numeric options (:attr:`OPTION_BOUNDS`)
-    and the points of those the schema bounds only exclusively or not at all
-    (:attr:`OPTION_PROBE_POINTS`, never published). The bounds a numeric field publishes are not in
-    any of them: they are read from the request schema when the document is built
-    (:class:`RequestSchemaBounds`).
+    Everything here is generated from a few tables, the frozen catalogue and the request schema,
+    so a catalogue value added tomorrow is probed tomorrow without anybody writing a probe, and so
+    is a request field. The measure side reads the bounds of the free numeric options
+    (:attr:`OPTION_BOUNDS`) and the points of those the schema bounds only exclusively or not at
+    all (:attr:`OPTION_PROBE_POINTS`, never published). The request side varies *every* settable
+    leaf of the request schema (:meth:`varied_fields`): the inventory fields of
+    :attr:`FIELD_VALUES` and :attr:`FIELD_PROBE_POINTS` at the values chosen there, and every other
+    leaf at the values the schema itself decides -- each enum value, both booleans, an inclusive
+    bound, a point just inside an exclusive one -- or, where it decides none, at the points of
+    :attr:`OPEN_END_POINTS` and :attr:`FREE_VALUES`. A leaf that no table and no bound decides stops
+    the build by name. The bounds a numeric field publishes are not in any of the tables: they are
+    read from the request schema when the document is built (:class:`RequestSchemaBounds`).
     """
 
     #: The mockup measure whose ``material`` option is the row every material probe sends
@@ -276,9 +403,45 @@ class ProbeSet:
 
     #: What a field probe has to change first so that the field is legal at all: a rated SCOP is
     #: only accepted on a heat pump (``heating.scop.not_a_heat_pump``), and the anchor heats with gas.
+    #: A battery sized by its capacity replaces the block's ``days_to_cover`` (``BLOCKS``) rather
+    #: than joining it, since the schema's ``house.battery`` is sized by exactly one of the two.
     FIELD_PRELUDE: ClassVar[Dict[str, Dict[str, Any]]] = {
         "heating.heatpump_scop_en14825_w35": {"heating.type_of_system": "air_source_heat_pump"},
         "heating.heatpump_scop_en14825_w55": {"heating.type_of_system": "air_source_heat_pump"},
+        "battery.custom_battery_capacity_generic_in_kilowatt_hour": {
+            "battery": {"custom_battery_capacity_generic_in_kilowatt_hour": 10},
+        },
+    }
+
+    #: The ``added_insulation`` layer a probe of one of its leaves starts from, per element: the
+    #: placement that belongs to the element, :attr:`LAYER_THICKNESS_IN_MM` and the mockup's
+    #: material (:meth:`material`). The schema admits the block in a request although only
+    #: ``apply`` may write one (owner decision of 2026-09-26: probe it as a request field), so every
+    #: such probe is refused by ``added_insulation.not_allowed``, which is what it is there to show.
+    LAYER_PLACEMENT: ClassVar[Dict[str, str]] = {
+        "roof": "roof_between_rafter",
+        "facade": "external_wall_external",
+        "floor": "basement_ceiling",
+    }
+
+    #: The thickness of the layer :attr:`LAYER_PLACEMENT` describes.
+    LAYER_THICKNESS_IN_MM: ClassVar[int] = 100
+
+    #: The measure whose ``cost`` block the probes of a cost leaf vary. It is an envelope measure,
+    #: the only kind whose band HiSim reads, on the mockup's facade, which states its area.
+    COST_MEASURE: ClassVar[str] = "external_insulation"
+
+    #: The band a probe of a cost leaf starts from, per leaf, so that every probe keeps the cheap end
+    #: at or below the expensive one (``measure.cost.band_invalid``) while it moves one of them to
+    #: either end of :attr:`OPEN_END_POINTS`; any other leaf of the block starts from ``""``'s.
+    COST_BANDS: ClassVar[Dict[str, Dict[str, Any]]] = {
+        "": {"min_in_euro_per_m2": 50, "max_in_euro_per_m2": 70, "source": "the capability probe set"},
+        "min_in_euro_per_m2": {
+            "min_in_euro_per_m2": 50, "max_in_euro_per_m2": 1000, "source": "the capability probe set",
+        },
+        "max_in_euro_per_m2": {
+            "min_in_euro_per_m2": 0, "max_in_euro_per_m2": 70, "source": "the capability probe set",
+        },
     }
 
     #: The prefix a probe's subject carries in front of an inventory path.
@@ -397,6 +560,50 @@ class ProbeSet:
         "solar_thermal_system.area_m2": (0.1, 100),
         "solar_thermal_system.installation_year": (1900, 2100),
     }
+
+    #: The request leaves the schema walk skips, each with the reason. ``location.postcode`` is sent
+    #: by the probe ``pair:postcode``, which keeps it out of the field aggregation.
+    NOT_VARIED: ClassVar[Dict[str, str]] = {
+        "location.postcode": "sent by pair:postcode",
+    }
+
+    #: The points of the generated numeric leaves whose schema leaves an end open, which the schema
+    #: therefore cannot decide, by full request path (a cost leaf as ``measures[id=*].cost.<name>``).
+    #: As :attr:`FIELD_PROBE_POINTS`, HiSim's own choice and never published; an exclusive bound gets
+    #: a point inside it. ``tests/renovisor/test_capabilities.py`` keeps every point inside the schema.
+    OPEN_END_POINTS: ClassVar[Dict[str, Tuple[Any, Any]]] = {
+        **{
+            f"house.building.{element}.added_insulation.material.{name}": points
+            for element in ("roof", "facade", "floor")
+            for name, points in (
+                ("heat_capacity_j_kgk", (100, 5000)),
+                ("density_kg_m3", (1, 3000)),
+                ("co2_footprint_a1_a3_c3_c4_kg_m2", (0, 500)),
+                ("lifespan_years", (1, 100)),
+            )
+        },
+        "applicant.taxable_household_income_in_euro": (0, 250000),
+        "applicant.household_size": (1, 12),
+        "measures[id=*].cost.min_in_euro_per_m2": (0, 1000),
+        "measures[id=*].cost.max_in_euro_per_m2": (0, 1000),
+    }
+
+    #: The values the free-text leaves are probed with, by full request path; each is a value no base
+    #: already carries, so the probe changes the leaf.
+    FREE_VALUES: ClassVar[Dict[str, Tuple[str, ...]]] = {
+        # The neighbouring age band of the anchor's own derived IE.N.SFH.05.Gen.ReEx.001.001, a row of
+        # the vendored TABULA table, so the override changes the archetype.
+        "house.building.tabula_building_code": ("IE.N.SFH.06.Gen.ReEx.001.001",),
+        **{
+            f"house.building.{element}.added_insulation.material.asp_id": ("mineral_wool",)
+            for element in ("roof", "facade", "floor")
+        },
+        "measures[id=*].cost.source": ("materials.yaml measure_costs, as the capability probe set copies it",),
+    }
+
+    #: How far inside an exclusive bound a derived point lies, as the leaf's range divided by this:
+    #: ``u_value`` (0, 10] is probed at 0.01, as the roof's always was.
+    INSIDE_DIVISOR: ClassVar[int] = 1000
 
     #: Which block each inventory path needs present before it can be set at all.
     FIELD_BLOCK: ClassVar[Dict[str, str]] = {
@@ -625,39 +832,204 @@ class ProbeSet:
 
     @classmethod
     def varied_fields(cls) -> Dict[str, Tuple[Any, ...]]:
-        """Return every inventory path worth varying with the values it is probed at.
+        """Return every request leaf the probe set varies, by full request path, with its values.
+
+        A cost leaf is spelled for :attr:`COST_MEASURE`, ``measures[id=external_insulation].cost.<name>``.
+
+        Raises:
+            ValueError: When a path is both enumerated and numeric (:meth:`field_plan`).
+            KeyError: When a leaf of the schema has no values the probe set can choose
+                (:meth:`schema_points`).
+        """
+        return {path: values for path, (values, _) in cls.field_plan().items()}
+
+    @classmethod
+    def field_shapes(cls) -> Dict[str, FieldShape]:
+        """Return what each varied leaf is, by full request path, for what the document publishes."""
+        return {path: shape for path, (_, shape) in cls.field_plan().items()}
+
+    @classmethod
+    def field_plan(cls, schema: Optional[Mapping[str, Any]] = None) -> Dict[str, Tuple[Tuple[Any, ...], FieldShape]]:
+        """Return every varied request leaf with its values and its shape, in probe order.
+
+        First the two inventory tables, in their own order, then every other settable leaf of the
+        request schema (:meth:`SchemaLeaves.settable`) in schema order, except a ``const`` and the
+        leaves of :attr:`NOT_VARIED`. A field added to the schema is therefore probed without a
+        table entry wherever the schema decides its values.
+
+        Args:
+            schema: The request schema; the vendored one when omitted.
 
         Raises:
             ValueError: When a path is both enumerated and numeric. Merging the two tables would
                 let one silently shadow the other, and the document would publish the path as
                 whichever won -- a list of values or a pair of bounds -- without anybody deciding.
+            KeyError: From :meth:`schema_points`, naming a leaf whose values nobody chose.
         """
         shared = sorted(set(cls.FIELD_VALUES) & set(cls.FIELD_PROBE_POINTS))
         if shared:
             raise ValueError(f"FIELD_VALUES and FIELD_PROBE_POINTS both list {shared}")
-        return {**cls.FIELD_VALUES, **cls.FIELD_PROBE_POINTS}
+        plan: Dict[str, Tuple[Tuple[Any, ...], FieldShape]] = {}
+        for path, values in cls.FIELD_VALUES.items():
+            plan[f"{cls.HOUSE_PREFIX}{path}"] = (tuple(values), FieldShape.ENUMERATED)
+        for path, points in cls.FIELD_PROBE_POINTS.items():
+            plan[f"{cls.HOUSE_PREFIX}{path}"] = (tuple(points), FieldShape.NUMERIC)
+        for generic, leaf in SchemaLeaves.settable(schema):
+            path = cls.concrete(generic)
+            if path in plan or generic in cls.NOT_VARIED or "const" in leaf:
+                continue
+            plan[path] = cls.schema_points(generic, leaf)
+        return plan
+
+    @classmethod
+    def concrete(cls, path: str) -> str:
+        """Return a settable path with a cost leaf spelled for :attr:`COST_MEASURE`."""
+        generic = f"{SchemaLeaves.COST_PATH}."
+        if path.startswith(generic):
+            return f"measures[id={cls.COST_MEASURE}].cost.{path[len(generic):]}"
+        return path
+
+    @classmethod
+    def schema_points(cls, path: str, leaf: Mapping[str, Any]) -> Tuple[Tuple[Any, ...], FieldShape]:
+        """Return the values one schema leaf outside the inventory tables is probed with, and its shape.
+
+        Args:
+            path: The settable path, a cost leaf spelled ``measures[id=*].cost.<name>``.
+            leaf: The leaf's schema keywords, alternatives merged.
+
+        Returns:
+            Every enum value; both booleans; for a number, the points of :attr:`OPEN_END_POINTS` or
+            those :meth:`derived_points` reads off the schema's bounds; for a string, the values of
+            :attr:`FREE_VALUES`.
+
+        Raises:
+            KeyError: When the leaf is a number with an open end or a string and no table names it,
+                or of a type the probe set has no rule for.
+        """
+        if "enum" in leaf:
+            return tuple(leaf["enum"]), FieldShape.ENUMERATED
+        types = SchemaLeaves.types(leaf)
+        if "boolean" in types:
+            return (True, False), FieldShape.ENUMERATED
+        if types & {"number", "integer"}:
+            if path in cls.OPEN_END_POINTS:
+                return tuple(cls.OPEN_END_POINTS[path]), FieldShape.NUMERIC
+            return cls.derived_points(path, leaf), FieldShape.NUMERIC
+        if "string" in types and path in cls.FREE_VALUES:
+            return tuple(cls.FREE_VALUES[path]), FieldShape.FREE
+        raise KeyError(
+            f"the request schema's leaf {path} ({sorted(types) or 'untyped'}) has no probe values; add them to "
+            "ProbeSet.FREE_VALUES (a string) or ProbeSet.OPEN_END_POINTS (a number), or the path to NOT_VARIED"
+        )
+
+    @classmethod
+    def derived_points(cls, path: str, leaf: Mapping[str, Any]) -> Tuple[Any, Any]:
+        """Return the low and high point of a numeric leaf the schema bounds at both ends.
+
+        An inclusive bound is the point itself; an exclusive one gets a point the range divided by
+        :attr:`INSIDE_DIVISOR` inside it, or one step inside for an integer.
+
+        Raises:
+            KeyError: When an end is open; its point is HiSim's choice (:attr:`OPEN_END_POINTS`).
+        """
+        lower = leaf.get("minimum", leaf.get("exclusiveMinimum"))
+        upper = leaf.get("maximum", leaf.get("exclusiveMaximum"))
+        if lower is None or upper is None:
+            raise KeyError(
+                f"the request schema leaves an end of {path} open; choose its points in ProbeSet.OPEN_END_POINTS"
+            )
+        integer = "integer" in SchemaLeaves.types(leaf) and "number" not in SchemaLeaves.types(leaf)
+        step: Any = 1 if integer else (upper - lower) / cls.INSIDE_DIVISOR
+        low = lower if "minimum" in leaf else lower + step
+        high = upper if "maximum" in leaf else upper - step
+        return low, high
+
+    @classmethod
+    def prelude(cls, path: str) -> Probe:
+        """Return what a probe of one request leaf changes first so that the leaf can be set at all.
+
+        It is read from the tables, never from a probe, so the path-verification harness measures
+        every field probe from exactly this request (:meth:`hisim.renovisor.verify.probes.ProbeBases.natural_base`):
+        the optional block the leaf lives in (:attr:`FIELD_BLOCK`), what :attr:`FIELD_PRELUDE` names
+        for it, the layer an ``added_insulation`` leaf lives in (:attr:`LAYER_PLACEMENT`) and the
+        package entry of :attr:`COST_MEASURE` with its band for a cost leaf (:attr:`COST_BANDS`).
+
+        Args:
+            path: A full request path, as :meth:`varied_fields` spells it.
+
+        Returns:
+            A patch on the anchor; empty for a leaf the anchor can carry as it is.
+        """
+        house: Dict[str, Any] = {}
+        measures: Optional[List[Dict[str, Any]]] = None
+        if path.startswith(cls.HOUSE_PREFIX):
+            own = path[len(cls.HOUSE_PREFIX):]
+            block = own.split(".")[0]
+            if block in cls.FIELD_BLOCK:
+                house[block] = dict(cls.BLOCKS[block])
+            house.update(cls.FIELD_PRELUDE.get(own, {}))
+            for element in cls.LAYER_PLACEMENT:
+                layer = f"building.{element}.added_insulation"
+                if own.startswith(f"{layer}."):
+                    house[layer] = cls.layer(element)
+        cost = f"measures[id={cls.COST_MEASURE}].cost."
+        if path.startswith(cost):
+            band = cls.COST_BANDS.get(path[len(cost):], cls.COST_BANDS[""])
+            measures = [{**cls.package(cls.COST_MEASURE), "cost": dict(band)}]
+        return Probe(name=f"prelude:{path}", kind=ProbeKind.FIELD, house=house, measures=measures)
+
+    @classmethod
+    def layer(cls, element: str) -> Dict[str, Any]:
+        """Return the ``added_insulation`` layer a probe of one element's layer starts from."""
+        return {
+            "placement": cls.LAYER_PLACEMENT[element],
+            "thickness_in_mm": cls.LAYER_THICKNESS_IN_MM,
+            "material": cls.material(),
+        }
 
     @classmethod
     def _field_probes(cls) -> List[Probe]:
-        """Return one probe per inventory value worth varying, with its block switched on first."""
+        """Return one probe per request value worth varying, with its prelude set first."""
         probes: List[Probe] = []
         for path, values in cls.varied_fields().items():
-            block = path.split(".")[0]
-            prelude: Dict[str, Any] = (
-                {block: dict(cls.BLOCKS[block])} if block in cls.FIELD_BLOCK else {}
-            )
-            prelude.update(cls.FIELD_PRELUDE.get(path, {}))
+            prelude = cls.prelude(path)
             for value in values:
-                probes.append(
-                    Probe(
-                        name=f"field:{path}={value}",
-                        kind=ProbeKind.FIELD,
-                        house={**prelude, path: value},
-                        subject=f"{cls.HOUSE_PREFIX}{path}",
-                        value=value,
-                    )
-                )
+                probes.append(cls._field_probe(prelude, path, value))
         return probes
+
+    @classmethod
+    def _field_probe(cls, prelude: Probe, path: str, value: Any) -> Probe:
+        """Return the probe that sets one request leaf to one value on top of its prelude.
+
+        Raises:
+            ValueError: When the path lies in no block a field probe can write.
+        """
+        house = dict(prelude.house)
+        location: Dict[str, Any] = {}
+        applicant: Dict[str, Any] = {}
+        measures = copy.deepcopy([dict(entry) for entry in prelude.measures]) if prelude.measures else None
+        block, _, rest = path.partition(".")
+        if block == "house":
+            house[rest] = value
+        elif block == "location":
+            location[rest] = value
+        elif block == "applicant":
+            applicant[rest] = value
+        elif block.startswith("measures[id=") and measures is not None:
+            measure_id = block[len("measures[id="):-1]
+            _write(next(entry for entry in measures if entry["id"] == measure_id), rest, value)
+        else:
+            raise ValueError(f"a field probe cannot write {path}")
+        return Probe(
+            name=f"field:{rest if block == 'house' else path}={value}",
+            kind=ProbeKind.FIELD,
+            house=house,
+            measures=measures,
+            location=location,
+            subject=path,
+            value=value,
+            applicant=applicant,
+        )
 
     @classmethod
     def package(cls, measure_id: str) -> Dict[str, Any]:
@@ -906,6 +1278,9 @@ class Aggregation:
     always explained by the probe that produced the status it publishes.
     """
 
+    #: The prefix of a mapping-report line about a package entry rather than a request field.
+    PACKAGE_PREFIX: ClassVar[str] = "measures["
+
     #: The phrase a note has to contain for the entry to count as a substitution rather than as
     #: a missing model. The review's D-E asked for the distinction so that the frontend can hide
     #: one class and offer the other; this is the whole of it.
@@ -1058,11 +1433,14 @@ class Aggregation:
 
         As for a measure's options, a probe that varies an enumerated field's value contributes that
         value's own status to ``values`` and not to the field's, and a ``PAIR`` probe contributes
-        to neither. A numeric field (:attr:`ProbeSet.FIELD_PROBE_POINTS`) carries no ``values``: it
+        to neither. A numeric field (:attr:`FieldShape.NUMERIC`) carries no ``values``: it
         publishes the request schema's ``minimum``/``maximum`` and ``exclusiveMinimum``/
         ``exclusiveMaximum`` where the schema declares them (:class:`RequestSchemaBounds`) -- never
-        its probe points -- and the probes at both ends
-        count towards its own status. What is left for the field's own status is every probe that carried the field
+        its probe points -- and the probes at both ends count towards its own status, as the
+        probes of a free-text field (:attr:`FieldShape.FREE`) count towards its. The report's line
+        for a package entry's cost block, ``measures[<position>].cost``, is left out: it is spelled
+        by position in one probe's package, which says nothing about the request's fields. What is
+        left for the field's own status is every probe that carried the field
         without being about it -- the anchor, the block probes and the measure probes -- and,
         when nothing did, the worst of its values. The note follows the status out of the same
         observations, which is what makes ``house.hot_water.supply`` explain itself with the two
@@ -1071,15 +1449,19 @@ class Aggregation:
         observed: Dict[str, List[Observation]] = {}
         per_value: Dict[str, Dict[Any, Tuple[ReportStatus, Optional[str]]]] = {}
         schema = ContractFiles.request_schema()
+        shapes = ProbeSet.field_shapes()
         bounds = {
-            f"{ProbeSet.HOUSE_PREFIX}{path}": RequestSchemaBounds.of(f"{ProbeSet.HOUSE_PREFIX}{path}", schema)
-            for path in ProbeSet.FIELD_PROBE_POINTS
+            path: RequestSchemaBounds.of(path, schema)
+            for path, shape in shapes.items()
+            if shape is FieldShape.NUMERIC and not path.startswith(cls.PACKAGE_PREFIX)
         }
         for result in results:
             probe = result.probe
             own = probe.subject if probe.kind is ProbeKind.FIELD and probe.subject else ""
             for path, (status, note) in result.fields.items():
-                if path == own and path not in bounds:
+                if path.startswith(cls.PACKAGE_PREFIX):
+                    continue
+                if path == own and shapes.get(path) is FieldShape.ENUMERATED:
                     per_value.setdefault(path, {})[_key(probe.value)] = (status, note)
                 elif probe.kind is not ProbeKind.PAIR:
                     observed.setdefault(path, []).append(Observation(status, note))

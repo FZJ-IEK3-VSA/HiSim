@@ -19,11 +19,12 @@ block      the anchor; the change is the block it adds
 measure    the anchor; the change is the measure switched on with its required options
 option     the probe ``measure:<id>``, the smallest package carrying the measure, so the
            change is the one option
-field      the anchor with the field's *prelude* -- the block it needs present
-           (``ProbeSet.FIELD_BLOCK``), the heat pump a SCOP needs (``ProbeSet.FIELD_PRELUDE``)
-           -- read from those tables rather than from the probe, and always another probe of the
-           set (``block:<name>``, ``field:heating.type_of_system=air_source_heat_pump``) or
-           the anchor itself
+field      the anchor with the field's *prelude* (``ProbeSet.prelude``) -- the block it needs
+           present (``ProbeSet.FIELD_BLOCK``), the heat pump a SCOP needs
+           (``ProbeSet.FIELD_PRELUDE``), the layer an ``added_insulation`` leaf lives in, the
+           priced package entry a cost leaf lives in -- read from those tables rather than from
+           the probe; mostly another probe of the set (``block:<name>``,
+           ``field:heating.type_of_system=air_source_heat_pump``) or the anchor itself
 pair       the anchor; a pair is the spec's §7 combination, two changes on purpose
 ========== =============================================================================
 
@@ -45,7 +46,7 @@ import copy
 from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
-from hisim.renovisor.capabilities import Probe, ProbeKind, ProbeSet
+from hisim.renovisor.capabilities import Probe, ProbeKind, ProbeSet, SchemaLeaves
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.request import CatalogueTable, ValueType
 from hisim.renovisor.verify.leaves import ABSENT, Change, RequestLeaves, diff, request_hash
@@ -90,8 +91,10 @@ class VerificationProbe:
         subject = self.probe.subject or ""
         if kind in (ProbeKind.MEASURE, ProbeKind.OPTION):
             return f"measure:{subject.split('.')[0]}"
+        if subject.startswith(f"{RequestLeaves.MEASURES}[id="):
+            return f"measure:{subject[len(RequestLeaves.MEASURES) + len('[id='):subject.index(']')]}"
         if kind in (ProbeKind.FIELD, ProbeKind.BLOCK):
-            return ".".join(subject.split(".")[:2])
+            return ".".join(subject.split(".")[:2 if subject.startswith(ProbeSet.HOUSE_PREFIX) else 1])
         if kind is ProbeKind.PAIR:
             return "combination"
         return "anchor"
@@ -216,13 +219,11 @@ class ProbeBases:
             # The prelude is read from the tables that declare it, never from the probe: a probe
             # that slipped a second change into its own patch would otherwise carry it into its
             # base, and stage 1 would not see it.
-            own = str(probe.subject)[len(ProbeSet.HOUSE_PREFIX):]
-            block = own.split(".", maxsplit=1)[0]
-            prelude: Dict[str, Any] = {block: dict(ProbeSet.BLOCKS[block])} if block in ProbeSet.FIELD_BLOCK else {}
-            prelude.update(ProbeSet.FIELD_PRELUDE.get(own, {}))
-            base = Probe(name="prelude", kind=ProbeKind.FIELD, house=prelude)
-            return base.document(anchor), (
-                f"the anchor with {', '.join(prelude)} set first, which the field needs" if prelude else "the anchor"
+            prelude = ProbeSet.prelude(str(probe.subject))
+            parts = [*prelude.house]
+            parts.extend(RequestLeaves.measure_path(str(entry["id"])) for entry in prelude.measures or [])
+            return prelude.document(anchor), (
+                f"the anchor with {', '.join(parts)} set first, which the field needs" if parts else "the anchor"
             )
         return copy.deepcopy(dict(anchor)), "the anchor"
 
@@ -268,6 +269,7 @@ class ProbeBases:
         paths: List[str] = [f"{ProbeSet.HOUSE_PREFIX}{path}" for path in probe.house]
         paths.extend(RequestLeaves.measure_path(str(entry["id"])) for entry in probe.measures or [])
         paths.extend(f"location.{key}" for key in probe.location)
+        paths.extend(f"applicant.{key}" for key in probe.applicant)
         return tuple(paths)
 
 
@@ -308,11 +310,8 @@ class Completeness:
       and for a ``material`` any change of the material at all.
     """
 
-    #: The request blocks whose leaves are walked from the schema.
-    BLOCKS: ClassVar[Tuple[str, ...]] = ("location", "house", "applicant")
-
     #: How the cost block of any measure is spelled, since it is the same leaf on every measure.
-    COST_PATH: ClassVar[str] = "measures[id=*].cost"
+    COST_PATH: ClassVar[str] = SchemaLeaves.COST_PATH
 
     @classmethod
     def missing(cls, probes: Sequence[VerificationProbe]) -> Tuple[MissingProbe, ...]:
@@ -331,13 +330,8 @@ class Completeness:
                     continue
                 seen.setdefault(cls._generic(change.path), []).append(change.after)
         gaps: List[MissingProbe] = []
-        schema = ContractFiles.request_schema()
-        for block in cls.BLOCKS:
-            for path, leaf in SchemaLeaves.walk(schema, schema["properties"][block], block):
-                gaps.extend(cls._leaf_gaps(path, leaf, seen))
-        measure = SchemaLeaves.resolve(schema, schema["properties"]["measures"]["items"])
-        for name, node in SchemaLeaves.properties(schema, measure["properties"]["cost"]).items():
-            gaps.extend(cls._leaf_gaps(f"{cls.COST_PATH}.{name}", SchemaLeaves.merged(schema, node), seen))
+        for path, leaf in SchemaLeaves.settable(ContractFiles.request_schema()):
+            gaps.extend(cls._leaf_gaps(path, leaf, seen))
         gaps.extend(cls._catalogue_gaps(probes, seen))
         return tuple(gaps)
 
@@ -412,68 +406,3 @@ def _contains(values: Sequence[Any], wanted: Any) -> bool:
         elif value == wanted:
             return True
     return False
-
-
-class SchemaLeaves:
-    """A small walker over the vendored request JSON Schema: local ``$ref``, alternatives, properties.
-
-    Separate from :class:`hisim.renovisor.capabilities.RequestSchemaBounds`, which looks one path
-    up; this one enumerates every leaf, which that class has no reason to do.
-    """
-
-    #: The keywords whose alternatives are merged into one node.
-    ALTERNATIVES: ClassVar[Tuple[str, ...]] = ("oneOf", "anyOf", "allOf")
-
-    @classmethod
-    def resolve(cls, root: Mapping[str, Any], node: Mapping[str, Any]) -> Mapping[str, Any]:
-        """Return the node a local ``$ref`` points at, or *node* itself."""
-        while "$ref" in node:
-            target: Any = root
-            for token in str(node["$ref"]).lstrip("#").strip("/").split("/"):
-                target = target[token]
-            node = target
-        return node
-
-    @classmethod
-    def candidates(cls, root: Mapping[str, Any], node: Mapping[str, Any]) -> List[Mapping[str, Any]]:
-        """Return *node* and every alternative it stands for, references resolved."""
-        found: List[Mapping[str, Any]] = []
-        pending = [node]
-        while pending:
-            current = cls.resolve(root, pending.pop(0))
-            if any(current is seen for seen in found):
-                continue
-            found.append(current)
-            for keyword in cls.ALTERNATIVES:
-                pending.extend(current.get(keyword, []))
-        return found
-
-    @classmethod
-    def properties(cls, root: Mapping[str, Any], node: Mapping[str, Any]) -> Dict[str, Mapping[str, Any]]:
-        """Return the union of the properties every alternative of *node* declares."""
-        merged: Dict[str, Mapping[str, Any]] = {}
-        for candidate in cls.candidates(root, node):
-            merged.update(candidate.get("properties", {}))
-        return merged
-
-    @classmethod
-    def merged(cls, root: Mapping[str, Any], node: Mapping[str, Any]) -> Dict[str, Any]:
-        """Return the keywords of every alternative of a leaf, merged into one mapping."""
-        merged: Dict[str, Any] = {}
-        for candidate in cls.candidates(root, node):
-            merged.update({key: value for key, value in candidate.items() if key not in cls.ALTERNATIVES})
-        return merged
-
-    @classmethod
-    def walk(cls, root: Mapping[str, Any], node: Mapping[str, Any], prefix: str) -> List[Tuple[str, Dict[str, Any]]]:
-        """Return ``(path, leaf keywords)`` for every leaf under *node*.
-
-        An object recurses into its declared properties; anything else is a leaf.
-        """
-        properties = cls.properties(root, node)
-        if not properties:
-            return [(prefix, cls.merged(root, node))]
-        leaves: List[Tuple[str, Dict[str, Any]]] = []
-        for name, child in properties.items():
-            leaves.extend(cls.walk(root, child, f"{prefix}.{name}"))
-        return leaves

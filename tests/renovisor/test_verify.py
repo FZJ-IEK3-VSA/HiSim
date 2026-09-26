@@ -240,6 +240,30 @@ class TestCompleteness:
         assert not report.completeness_checked
         assert not report.missing
 
+    def test_the_whole_set_leaves_no_settable_leaf_unprobed(self) -> None:
+        """hisim-qzyv: every leaf of the request schema and the catalogue has a probe that changes it."""
+        assert not Completeness.missing(ProbeBases.build())
+
+    def test_every_field_probe_changes_exactly_its_own_leaf(self) -> None:
+        """Its base is its prelude, or a sibling where the prelude already carries the value: one change either way."""
+        for probe in ProbeBases.build():
+            if probe.probe.kind is ProbeKind.FIELD:
+                assert [change.path for change in probe.stage_one()] == [probe.probe.subject], probe.name
+
+    def test_an_applicant_and_a_cost_leaf_are_measured_from_their_preludes(self) -> None:
+        """The applicant needs no prelude; a cost bound needs the priced measure with a band that stays valid."""
+        role, cost = ProbeBases.build(
+            _probes("field:applicant.role=tenant", "field:measures[id=external_insulation].cost.max_in_euro_per_m2=0")
+        )
+
+        assert role.base_name == "anchor"
+        assert role.category == "applicant"
+        (change,) = cost.stage_one()
+        assert (change.path, change.before, change.after) == (
+            "measures[id=external_insulation].cost.max_in_euro_per_m2", 70, 0
+        )
+        assert cost.category == "measure:external_insulation"
+
 
 @pytest.mark.base
 class TestTheReport:

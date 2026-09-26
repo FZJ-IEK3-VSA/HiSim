@@ -443,6 +443,28 @@ class BillingDeterminants:
         )
 
 
+class InstallationYearOrigin(str, enum.Enum):
+    """Where an installation year came from, as ``economics_result.json`` states it (schema 5).
+
+    The engine reads an existing asset's age off its installation year -- the replacement it is
+    due, the book value a measure writes off -- and a reader of a replacement in year 2 needs to
+    know whether that year was stated or assumed (renovisorissues #58). The value is the
+    document's spelling, which is why the members are lower-case strings.
+
+    ``REQUEST`` is a year the request states. ``MID_LIFE_DEFAULT`` is the mid-life year the
+    RenoVisor translator assumes for an undated device (price basis year less half its service
+    life, never before the construction year; ``hisim.renovisor.economics.UnknownAge``), and
+    ``CONSTRUCTION_YEAR_DEFAULT`` the construction year an undated envelope element takes.
+    ``STAGE`` is not a register value: it is what the document says of a subject a stage of the
+    plan bought, installed in the calendar year that stage starts in.
+    """
+
+    REQUEST = "request"
+    MID_LIFE_DEFAULT = "mid_life_default"
+    CONSTRUCTION_YEAR_DEFAULT = "construction_year_default"
+    STAGE = "stage"
+
+
 @dataclass
 class ExistingAsset:
     """An asset already installed in the building (brownfield register, §4.1).
@@ -489,6 +511,10 @@ class ExistingAsset:
     #: against it credits money nobody would ever have spent. The default keeps the historical
     #: behaviour, so every register written before this field existed is unchanged.
     anyway_share: float = 1.0
+    #: Where `installation_year` came from, which the arithmetic never reads and the result
+    #: document publishes beside the year (schema 5). `None` for a register whose author did not
+    #: say, which is every register written before the field existed.
+    installation_year_origin: Optional[InstallationYearOrigin] = None
 
     def __post_init__(self) -> None:
         """Validation: normalizes the replacement-cost override and rejects impossible inputs.

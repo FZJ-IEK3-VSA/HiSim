@@ -21,8 +21,14 @@ from typing import Any, Dict, Optional
 import pytest
 
 from hisim.economics.carriers import EnergyCarrier
-from hisim.economics.facts import ComponentCostFacts, ExistingAssetRegister
-from hisim.economics.serialization import subsidy_context_from_json, subsidy_context_to_json
+from hisim.economics.adapter import FactsExtractors
+from hisim.economics.facts import ComponentCostFacts, ExistingAssetRegister, InstallationYearOrigin
+from hisim.economics.serialization import (
+    asset_from_json,
+    asset_to_json,
+    subsidy_context_from_json,
+    subsidy_context_to_json,
+)
 from hisim.economics.timeline import CostCategory
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
@@ -48,6 +54,7 @@ from hisim.renovisor.economics import (
     EconomicContextBuilder,
     EnvelopeAssets,
     GeneratorAssets,
+    MeasureSubjects,
     RealizedTwin,
     TwinEquipment,
     UnknownAge,
@@ -1283,9 +1290,131 @@ class TestTheEquipmentTheHouseAlreadyHas:
 
     def test_every_equipment_row_names_a_class_the_cost_adapter_extracts(self) -> None:
         """The register reads sizes through the adapter's own table, so every row must be in it."""
-        from hisim.economics.adapter import FactsExtractors
-
         for equipment in TwinEquipment.ALL:
             assert equipment.component_class in FactsExtractors.BY_CLASS_NAME, equipment
             if equipment.measure_id is not None:
                 assert MeasureRegistry.function_for(equipment.measure_id) is not None, equipment
+
+
+class TestEveryMeasureHasASubject:
+    """Every measure the translator acts on stands for a cost subject (renovisorissues #58).
+
+    ``economics_result.json`` draws what the work costs from ``by_subject``, one row per cost
+    subject, so a measure without a subject disappeared from it -- the hot-water lagging of the
+    mockup package did. The walk below runs one probe per catalogue measure, as the capability
+    document does, so the next measure that acts on something without a subject fails here, not in
+    front of a reader.
+    """
+
+    @staticmethod
+    def _probe(measure_id: str) -> Any:
+        """Translate the capability probe of one measure: the anchor plus that measure alone."""
+        from hisim.renovisor.capabilities import Probe, ProbeKind, ProbeSet  # pylint: disable=import-outside-toplevel
+
+        probe = Probe(
+            name=f"measure:{measure_id}",
+            kind=ProbeKind.MEASURE,
+            measures=[ProbeSet.package(measure_id)],
+            subject=measure_id,
+        )
+        return _translated(probe.document(ProbeSet.anchor()))
+
+    @staticmethod
+    def _priced_subjects(translated: Any) -> Dict[str, str]:
+        """Every subject the engine will price for this translation, and what prices it."""
+        priced = {facts.subject: "envelope" for facts in translated.economic_context.extra_cost_facts}
+        for name, class_name, config in RealizedTwin.of(translated.model).components:
+            extractor = FactsExtractors.BY_CLASS_NAME.get(class_name)
+            facts = extractor(config) if extractor is not None else None
+            if facts is not None and not facts.is_not_installed():
+                priced[name] = facts.asset_class.name
+        return priced
+
+    def test_every_measure_the_translator_acts_on_yields_a_row(self) -> None:
+        """A priced subject, or a declared costless or unpriced one -- and the declarations are exact."""
+        from hisim.renovisor.request import CatalogueTable  # pylint: disable=import-outside-toplevel
+
+        acted_on = [status.value for status in MeasureSubjects.ACTED_ON]
+        declared_only = set()
+        for measure_id in CatalogueTable.ids():
+            translated = self._probe(measure_id)
+            report = translated.report.to_json()
+            status = next(line["status"] for line in report["measures"] if line["id"] == measure_id)
+            if status not in acted_on:
+                continue
+            subjects = [subject for subject, measure in report["subjects"].items() if measure == measure_id]
+            assert subjects, f"{measure_id} is acted on and stands for no cost subject"
+            priced = self._priced_subjects(translated)
+            declared = set(report["costless_subjects"]) | set(report["unpriced_subjects"])
+            for subject in subjects:
+                assert subject in priced or subject in declared, (measure_id, subject)
+            if not any(subject in priced for subject in subjects):
+                declared_only.add(measure_id)
+                assert all(subject in report["subject_notes"] for subject in subjects), measure_id
+        assert declared_only == set(MeasureSubjects.COSTLESS) | set(MeasureSubjects.UNPRICED)
+
+    def test_the_setting_is_costless_and_the_lagging_unpriced(self) -> None:
+        """The two declared measures, each with its own subject, flag and note."""
+        setting = self._probe("change_room_temperature").report.to_json()
+        assert setting["subjects"]["change_room_temperature"] == "change_room_temperature"
+        assert setting["costless_subjects"] == ["change_room_temperature"]
+        assert "change_room_temperature" not in setting["unpriced_subjects"]
+        assert setting["subject_notes"]["change_room_temperature"].startswith("a setting, not a purchase")
+
+        lagging = self._probe("hot_water_tank_and_pipe_insulation").report.to_json()
+        subject = "hot_water_tank_and_pipe_insulation"
+        assert lagging["subjects"][subject] == subject
+        assert subject in lagging["unpriced_subjects"]
+        assert not lagging["costless_subjects"]
+        assert "hisim-5j3h" in lagging["subject_notes"][subject]
+        assert "renovisorissues #39" in lagging["subject_notes"][subject]
+
+    def test_an_undeclared_measure_without_a_subject_fails_the_translation(self, monkeypatch) -> None:
+        """Fail loudly: the translation is refused rather than a row silently missing."""
+        monkeypatch.setattr(MeasureSubjects, "COSTLESS", {})
+        with pytest.raises(TranslatorError, match="change_room_temperature"):
+            self._probe("change_room_temperature")
+
+    def test_the_acted_on_statuses_are_the_ones_a_stage_lists(self) -> None:
+        """The staged command lists a stage's measures by the same statuses the check walks."""
+        from hisim.economics.__main__ import StagedCli  # pylint: disable=import-outside-toplevel
+
+        assert tuple(status.value for status in MeasureSubjects.ACTED_ON) == StagedCli.STAGE_MEASURE_STATUSES
+
+
+class TestTheRegisterSaysWhereEachYearCameFrom:
+    """Every register entry says whether its year was stated or assumed (renovisorissues #58)."""
+
+    def test_the_mockups_years_are_stated_assumed_mid_life_or_the_construction_year(self) -> None:
+        """Its boiler's year is stated, its meters are at mid-life, its facade is as old as the house."""
+        translated = _translated(_mockup())
+
+        assert _registered(translated, ComponentType.GAS_HEATER).installation_year_origin is (
+            InstallationYearOrigin.REQUEST
+        )
+        assert _registered(translated, ComponentType.DOMESTIC_HOT_WATER_STORAGE).installation_year_origin is (
+            InstallationYearOrigin.REQUEST
+        )
+        assert _registered(translated, ComponentType.ELECTRICITY_METER).installation_year_origin is (
+            InstallationYearOrigin.MID_LIFE_DEFAULT
+        )
+        assert _registered(translated, ComponentType.WALL_EXTERNAL_INSULATION).installation_year_origin is (
+            InstallationYearOrigin.CONSTRUCTION_YEAR_DEFAULT
+        )
+
+    def test_an_undated_generator_is_at_mid_life(self) -> None:
+        """The #48 oil boiler states no year, and its entry says the year is assumed."""
+        translated = _translated(_oil_house())
+        assert _registered(translated, ComponentType.OIL_HEATER).installation_year_origin is (
+            InstallationYearOrigin.MID_LIFE_DEFAULT
+        )
+
+    def test_the_origin_survives_the_stored_inputs_and_an_older_file_reads_as_unsaid(self) -> None:
+        """``economic_inputs.json`` carries the origin; a register written before it reads as ``None``."""
+
+        meter = _registered(_translated(_mockup()), ComponentType.ELECTRICITY_METER)
+        stored = asset_to_json(meter)
+        assert stored["installation_year_origin"] == "mid_life_default"
+        assert asset_from_json(stored).installation_year_origin is InstallationYearOrigin.MID_LIFE_DEFAULT
+        del stored["installation_year_origin"]
+        assert asset_from_json(stored).installation_year_origin is None

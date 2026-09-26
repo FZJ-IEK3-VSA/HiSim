@@ -16,7 +16,9 @@ Its shape is §6 of the calculation-request specification::
       "fields": [{"path", "status", "target?", "value?", "note?"}],
       "measures": [{"id", "status", "options": [{"name", "status", "note?"}], "targets"}],
       "subjects": {"<cost subject>": "<measure id or null>"},
-      "unpriced_subjects": ["<cost subject>"]
+      "unpriced_subjects": ["<cost subject>"],
+      "costless_subjects": ["<cost subject>"],
+      "subject_notes": {"<cost subject>": "<sentence>"}
     }
 
 :meth:`MappingReport.assert_complete` is the invariant as a check rather than as a promise: it
@@ -210,6 +212,12 @@ class MappingReport:
     SUBJECTS_FIELD: ClassVar[str] = "subjects"
     UNPRICED_SUBJECTS_FIELD: ClassVar[str] = "unpriced_subjects"
 
+    #: The two keys that give a measure without a priced cost subject its row (renovisorissues
+    #: #58): the subjects that cost nothing to carry out, and the sentence each subject's row
+    #: carries as its ``note`` -- why it is unpriced, why it costs nothing.
+    COSTLESS_SUBJECTS_FIELD: ClassVar[str] = "costless_subjects"
+    SUBJECT_NOTES_FIELD: ClassVar[str] = "subject_notes"
+
     #: The key of the measure half, one entry per measure of the package in package order.
     MEASURES_FIELD: ClassVar[str] = "measures"
 
@@ -231,6 +239,8 @@ class MappingReport:
         self._measures: List[Dict[str, Any]] = []
         self._subjects: Dict[str, Optional[str]] = {}
         self._unpriced_subjects: List[str] = []
+        self._costless_subjects: List[str] = []
+        self._subject_notes: Dict[str, str] = {}
         self.base_file: Optional[str] = None
         self.energy_system_file: Optional[str] = None
 
@@ -325,6 +335,28 @@ class MappingReport:
         """Return the cost subjects with no price behind them, in package order."""
         return tuple(self._unpriced_subjects)
 
+    def set_costless_subjects(self, subjects: Sequence[str], notes: Mapping[str, str]) -> None:
+        """Store the subjects of measures that cost nothing, and the note every subject's row carries.
+
+        A measure that changes a setting buys nothing; its row in ``economics_result.json`` is a
+        real zero, where an unpriced row is an unknown one, and the two are told apart by these
+        lists rather than by the amount (renovisorissues #58).
+
+        Args:
+            subjects: The costless subjects, in package order.
+            notes: Subject -> the sentence its ``by_subject`` row carries as ``note``.
+        """
+        self._costless_subjects = list(subjects)
+        self._subject_notes = dict(notes)
+
+    def costless_subjects(self) -> Tuple[str, ...]:
+        """Return the cost subjects of measures that cost nothing, in package order."""
+        return tuple(self._costless_subjects)
+
+    def subject_notes(self) -> Dict[str, str]:
+        """Return the note of every subject that has one, sorted by subject."""
+        return {subject: self._subject_notes[subject] for subject in sorted(self._subject_notes)}
+
     def to_json(self) -> Dict[str, Any]:
         """Return the whole document, ready to be written."""
         return {
@@ -341,6 +373,8 @@ class MappingReport:
             self.MEASURES_FIELD: list(self._measures),
             self.SUBJECTS_FIELD: self.subjects(),
             self.UNPRICED_SUBJECTS_FIELD: list(self._unpriced_subjects),
+            self.COSTLESS_SUBJECTS_FIELD: list(self._costless_subjects),
+            self.SUBJECT_NOTES_FIELD: self.subject_notes(),
         }
 
     def legacy_factors(self) -> str:

@@ -117,6 +117,10 @@ python -m hisim.economics staged --stage <dir0>:0:baseline --stage <dir1>:3:"sta
     --parameters economics.json --out economics_result.json
 ```
 
+`staged` writes `cost_provenance.json` beside `--out`: the one provenance ledger the reference,
+every stage and the spliced plan recorded into, in an ordinary run's format under the plan's
+perspective id, so every `provenance_ids` entry of the plan resolves in it.
+
 `staged` is the exception to the paragraph below: its `--parameters` file is **not** an
 `EconomicParameters` record but the `economics_result.json` document's own `parameters` block, so
 a reader can feed a document's assumptions back in unchanged. Every key is optional —

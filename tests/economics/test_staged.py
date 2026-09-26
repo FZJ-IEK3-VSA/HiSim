@@ -789,3 +789,70 @@ class TestAReplacedBufferIsBoughtWhole:
         assert len(credited) == 1 and credited[0] < 0.0
         # The baseline keeps its vessel, so it books no purchase of its own.
         assert not [key for key in booked if key[0] is CostCategory.INVESTMENT and key[1] == 0]
+
+
+class TestOnePlanOneLedger:
+    """Every stage records into one provenance ledger, and every id of the result resolves in it.
+
+    An id on a :class:`~hisim.economics.timeline.CashFlowEntry` is an index into the ledger it was
+    recorded in. With one fresh ledger per stage the plan carried stage 0's, so the ids the splice
+    copied from stage 1 and stage 2 pointed at stage 0's records — or past its end. One shared
+    ledger is what ``cost_provenance.json`` publishes (``economics-backend-spec.md`` §2.3).
+    """
+
+    @pytest.fixture(name="result")
+    def fixture_result(self, database, parameters):
+        """The three-stage synthetic plan, with the heat pump in year 4."""
+        return StagedEvaluator(database).evaluate(
+            [baseline_stage(), envelope_stage(0), heat_pump_stage(4)], parameters, brownfield_perspective()
+        )
+
+    def test_the_reference_every_stage_and_the_plan_share_the_ledger(self, result):
+        """One object, reachable from every result the plan carries."""
+        assert result.ledger is not None
+        assert result.plan.ledger is result.ledger
+        assert result.reference.ledger is result.ledger
+        assert all(stage.ledger is result.ledger for stage in result.per_stage)
+
+    def test_every_id_on_every_timeline_resolves(self, result):
+        """The reference's, each stage's and the spliced plan's entries point inside the ledger."""
+        size = len(result.ledger)
+        timelines = [result.reference.timeline, result.plan.timeline] + [
+            stage.timeline for stage in result.per_stage
+        ]
+        for timeline in timelines:
+            for entry in timeline.entries:
+                assert all(0 <= record_id < size for record_id in entry.provenance_ids), entry
+
+    def test_a_later_stages_purchase_cites_its_own_prices(self, result):
+        """The spliced purchases of stages 1 and 2 resolve to their own subject's records.
+
+        The case the per-stage ledgers got wrong: the ids were right in the ledger they came from
+        and named another subject's records — or none — in the one the plan carried.
+        """
+        purchases = [
+            (result.stage_of_timeline_entry(position), entry)
+            for position, entry in enumerate(result.plan.timeline.entries)
+            if entry.category is CostCategory.INVESTMENT
+        ]
+        assert {stage for stage, _entry in purchases} >= {1, 2}
+        for _stage, entry in purchases:
+            assert entry.provenance_ids
+            cited = [result.ledger.get(record_id).parameter for record_id in entry.provenance_ids]
+            assert all(parameter.startswith(f"{entry.subject}.") for parameter in cited), (entry.subject, cited)
+
+    def test_one_record_has_one_id_across_the_stages(self, result):
+        """A price every stage reads is interned once: no record appears under two ids."""
+        records = result.ledger.records
+        assert len(set(records)) == len(records)
+        shared = [
+            record_id
+            for record_id, record in enumerate(records)
+            if record.parameter.startswith("energy_prices_")
+        ]
+        cited_by_stage = [
+            {record_id for entry in stage.timeline.entries for record_id in entry.provenance_ids}
+            for stage in result.per_stage
+        ]
+        # The electricity price is read by every stage, and all of them cite the same id for it.
+        assert shared and all(set(shared) & cited for cited in cited_by_stage)

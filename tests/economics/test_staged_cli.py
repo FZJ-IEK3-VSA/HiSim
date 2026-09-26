@@ -23,7 +23,8 @@ from hisim.economics.evaluator import effective_price_basis_year
 from hisim.economics.exports import ExportFileNames
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.serialization import SerializationFileNames, write_inputs
-from hisim.economics.staged import StagedEvaluationError, StagedEvaluator
+from hisim.economics.provenance import ProvenanceLedger
+from hisim.economics.staged import StagedEvaluationError, StagedEvaluator, StagedResult
 from hisim.economics.staged_document import StagedDocument
 from hisim.economics.staged_parameters import ParameterKeys
 
@@ -249,6 +250,7 @@ class TestADocumentTheEngineGotWrong:
         assert main(_arguments(workspace, out)) == StagedCli.ENGINE_FAILED
         assert "the engine contradicted itself" in capsys.readouterr().err
         assert not out.exists()
+        assert not (workspace / ExportFileNames.PROVENANCE_FILE_NAME).exists()
 
 
 class TestTheStageArgument:
@@ -285,6 +287,62 @@ class TestTheHappyPath:
         assert [stage["label"] for stage in document["stages"]] == ["baseline", "stage 1", "stage 2"]
         assert document["stages"][2]["job_id"] == "job-heat-pump"
         assert "economics_result.json" in capsys.readouterr().out
+
+    def test_it_writes_the_plans_ledger_beside_the_document(self, workspace):
+        """``cost_provenance.json`` lands in ``--out``'s directory, in an ordinary run's format.
+
+        An artifact of every economics job (``economics-backend-spec.md`` §2.3), named by the
+        document's ``provenance`` block. It holds the one ledger every stage recorded into, so the
+        prices of the envelope and heat-pump stages are in it and not only the baseline's.
+        """
+        out = workspace / "results" / "economics_result.json"
+        assert main(_arguments(workspace, out)) == 0
+        document = json.loads(out.read_text(encoding="utf-8"))
+        path = out.parent / document["provenance"]["cost_provenance"]
+        assert path.name == ExportFileNames.PROVENANCE_FILE_NAME == SerializationFileNames.PROVENANCE_FILE_NAME
+        stored = json.loads(path.read_text(encoding="utf-8"))
+        assert list(stored) == [document["parameters"]["perspective_id"]]
+        ledger = ProvenanceLedger.from_json(stored[document["parameters"]["perspective_id"]])
+        cited = {record.parameter.split(".", 1)[0] for record in ledger.records}
+        assert {SyntheticPlan.BOILER_SUBJECT, SyntheticPlan.ENVELOPE_SUBJECT, SyntheticPlan.HEAT_PUMP_SUBJECT} <= cited
+        assert not (workspace / ExportFileNames.PROVENANCE_FILE_NAME).exists()
+
+    def test_every_id_of_the_plan_resolves_in_the_written_ledger(self, workspace, monkeypatch):
+        """The file is the ledger the plan was priced with: every id of every timeline is in it.
+
+        The priced plan is captured on its way out of the evaluator and each entry's ids are
+        resolved in the *written* file, so a file holding one stage's ledger — or the right records
+        in another order — fails here rather than in an archived ``explain``.
+        """
+        priced: List[StagedResult] = []
+        evaluate = StagedEvaluator.evaluate
+
+        def capture(self, *args, **kwargs) -> StagedResult:
+            priced.append(evaluate(self, *args, **kwargs))
+            return priced[-1]
+
+        monkeypatch.setattr(StagedEvaluator, "evaluate", capture)
+        out = workspace / "economics_result.json"
+        assert main(_arguments(workspace, out)) == 0
+        assert len(priced) == 1
+        result = priced[0]
+        assert result.ledger is not None
+        stored = json.loads((workspace / ExportFileNames.PROVENANCE_FILE_NAME).read_text(encoding="utf-8"))
+        # Compared as JSON: a degenerate band reads back as a bare float (`ProvenanceLedger.from_json`).
+        assert stored[result.plan.perspective_id] == result.ledger.to_json()
+        written = ProvenanceLedger.from_json(stored[result.plan.perspective_id])
+        timelines = [result.reference.timeline, result.plan.timeline] + [
+            stage.timeline for stage in result.per_stage
+        ]
+        cited = {
+            record_id for timeline in timelines for entry in timeline.entries for record_id in entry.provenance_ids
+        }
+        assert cited and max(cited) < len(written)
+        assert any(
+            entry.provenance_ids
+            for position, entry in enumerate(result.plan.timeline.entries)
+            if (result.stage_of_timeline_entry(position) or 0) >= 1
+        )
 
     def test_the_mapping_reports_stamp_the_measure_ids(self, workspace):
         """``subjects`` from every stage directory, later stages winning over earlier ones."""
@@ -357,6 +415,7 @@ class TestTheRefusals:
         )
         assert code == StagedCli.PLAN_REFUSED
         assert not out.exists()
+        assert not (out.parent / ExportFileNames.PROVENANCE_FILE_NAME).exists()
         assert "economic_inputs.json" in self._problems(out)["problems"][0]["message"]
 
     def test_years_that_run_backwards(self, workspace):

@@ -50,6 +50,7 @@ from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs
 from hisim.economics.facts import ComponentCostFacts, ExistingAsset, ExistingAssetRegister
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import Perspective, SubsidyMode
+from hisim.economics.provenance import ProvenanceLedger
 from hisim.economics.results import (
     LifecycleCo2Result,
     LifecycleCostResult,
@@ -259,7 +260,9 @@ class StagedResult:
             plan minus reference, slot-wise, so a negative NPV delta means the plan is cheaper.
         stages: The stages as they were given, in order.
         per_stage: Each stage evaluated alone over the full horizon, in stage order. Stage ``k``'s
-            evaluation already carries the merged ageing register of every stage before it.
+            evaluation already carries the merged ageing register of every stage before it. All of
+            them, and therefore ``reference`` and ``plan`` too, carry the *same* provenance ledger
+            (:attr:`ledger`), so an id means one record wherever in the result it appears.
         charged_subjects_by_stage: Which cost subjects each stage pays for, and at which share of
             the stage's own year-0 figure — 1.0 for a subject new in the stage, the size increment
             for one that grew, and absent for a subject carried over unchanged.
@@ -287,6 +290,16 @@ class StagedResult:
     active_stage_by_year: Tuple[int, ...] = field(default_factory=tuple)
     stage_by_entry: Tuple[int, ...] = field(default_factory=tuple)
     subsidy_catalog_id: Optional[str] = None
+
+    @property
+    def ledger(self) -> Optional[ProvenanceLedger]:
+        """The one provenance ledger of the plan, which ``cost_provenance.json`` publishes.
+
+        Every stage was evaluated into it, so it resolves the ids on the reference's timeline, on
+        each stage's and on the spliced plan's alike. ``None`` only for a result assembled by hand
+        without one.
+        """
+        return self.plan.ledger
 
     def stage_of_year(self, year: int) -> int:
         """Index of the stage the house is in during one horizon year.
@@ -410,10 +423,11 @@ class StagedEvaluator:
         """Price one plan: evaluate every stage, splice the timelines, compare against stage 0.
 
         The seven steps of step 10 §2, in order: validate the plan, evaluate each stage over the
-        full horizon with the ageing register of the stages before it, splice the operating flows
-        by active year and the investment flows by stage start year, aggregate the spliced
-        timeline exactly as an ordinary evaluation aggregates its own, and compare the result
-        against ``stages[0]``.
+        full horizon with the ageing register of the stages before it — every stage recording into
+        one shared provenance ledger, so the ids the splice carries over stay resolvable — splice
+        the operating flows by active year and the investment flows by stage start year, aggregate
+        the spliced timeline exactly as an ordinary evaluation aggregates its own, and compare the
+        result against ``stages[0]``.
 
         Args:
             stages: The plan, in ascending ``from_year`` order; at least one stage.
@@ -440,19 +454,25 @@ class StagedEvaluator:
         evaluator = EconomicEvaluator(self.database, parameters, catalog)
         active_by_year = self._active_by_year(ordered, parameters.observation_period_in_years)
 
+        # One ledger for the whole plan: the spliced timeline carries entries of every stage, and
+        # an id is only an index into the ledger it was recorded in. With one ledger per stage,
+        # stage 1's ids pointed at stage 0's records once spliced. Interning makes the sharing
+        # free — a price every stage reads is one record — and `cost_provenance.json` then
+        # resolves every id of the reference, of every stage and of the plan.
+        ledger = ProvenanceLedger()
         per_stage: List[LifecycleCostResult] = []
         charged_by_stage: List[Dict[str, float]] = []
         for index in range(len(ordered)):
             charged = self._charged_subjects(ordered, index)
             inputs = self._staged_inputs(ordered, index, charged_by_stage)
-            per_stage.append(evaluator.evaluate(inputs, perspective))
+            per_stage.append(evaluator.evaluate(inputs, perspective, ledger))
             charged_by_stage.append(charged)
 
         spliced = self._splice(
             ordered, tuple(per_stage), tuple(charged_by_stage), evaluator, parameters, active_by_year
         )
         plan = self._aggregate(
-            ordered, tuple(per_stage), spliced.timeline, perspective, parameters, active_by_year
+            ordered, tuple(per_stage), spliced.timeline, perspective, parameters, active_by_year, ledger
         )
         reference = per_stage[0]
         return StagedResult(
@@ -1321,6 +1341,7 @@ class StagedEvaluator:
         perspective: Perspective,
         parameters: EconomicParameters,
         active: Tuple[int, ...],
+        ledger: ProvenanceLedger,
     ) -> LifecycleCostResult:
         """Turn the spliced timeline into a result, exactly as an ordinary evaluation does.
 
@@ -1339,6 +1360,8 @@ class StagedEvaluator:
             perspective: The accounting frame, for the id and the actor scope.
             parameters: The assumptions.
             active: Which stage is active in each horizon year, from :meth:`_active_by_year`.
+            ledger: The one provenance ledger every stage recorded into, which every id on the
+                spliced timeline points into.
 
         Returns:
             The plan's :class:`~hisim.economics.results.LifecycleCostResult`.
@@ -1391,7 +1414,7 @@ class StagedEvaluator:
             sunk_cost_written_off_in_euro=UncertainValue.sum(
                 result.sunk_cost_written_off_in_euro for result in per_stage
             ),
-            ledger=per_stage[0].ledger,
+            ledger=ledger,
             source_resolver=per_stage[0].source_resolver,
             scope_payer=aggregation.scope_payer,
             annual_energy_quantities_by_carrier=dict(year_one.annual_energy_quantities_by_carrier),

@@ -175,6 +175,19 @@ class TestTheVariant:
         assert "no variant 002 (usual_refurb)" in selection.variant_note
         assert not selection.is_approximated(), "the band and the typology were not approximated"
 
+    def test_the_bands_without_the_usual_refurbishment_are_the_newest_irish_dutch_and_belgian_ones(self) -> None:
+        """The capability document announces ``usual_refurb`` approximated because of exactly these bands."""
+        expected = (
+            "BE.N.AB.05", "BE.N.MFH.05", "BE.N.SFH.05", "BE.N.TH.05",
+            "IE.N.AB.10", "IE.N.SFH.10",
+            "NL.N.AB.06", "NL.N.MFH.06", "NL.N.SFH.06", "NL.N.TH.06",
+        )
+
+        assert TabulaIndex.bands_without("002") == expected
+        assert not TabulaIndex.bands_without("001")
+        note = select(BuildingType.DETACHED_SFH, 2015, retrofit_status=RetrofitStatus.USUAL_REFURB).variant_note
+        assert note is not None and all(stem in note for stem in expected)
+
     def test_an_advanced_refurbishment_of_the_newest_band_has_its_own_variant(self) -> None:
         """``003`` is present wherever ``002`` is, and in the newest Irish band without it."""
         selection = select(BuildingType.DETACHED_SFH, 2015, retrofit_status=RetrofitStatus.ADVANCED_REFURB)
@@ -258,6 +271,19 @@ class TestTheArchetypeEnvelope:
 
         assert "U_Actual_Floor_1" in floor.origin
         assert floor.adjustment_factor > 0
+
+    def test_a_written_u_value_switches_to_the_fixed_factor_whatever_the_rows(self) -> None:
+        """AT.N.SFH.01's floor has b_Transmission 1; a stated or insulated floor uses the fixed 0.5 instead.
+
+        Kept by owner decision (2026-09-26); the mapping note of a defaulted-then-insulated
+        element names both numbers.
+        """
+        elements = ArchetypeEnvelope.of("AT.N.SFH.01.Gen.ReEx.001.001", 140).elements
+
+        assert elements[ThermalElement.FLOOR].adjustment_factor == pytest.approx(1.0)
+        assert elements[ThermalElement.FLOOR].fixed_adjustment_factor == pytest.approx(0.5)
+        for element in (ThermalElement.ROOF, ThermalElement.FACADE, ThermalElement.WINDOW, ThermalElement.DOOR):
+            assert elements[element].fixed_adjustment_factor == pytest.approx(1.0)
 
 
 @pytest.mark.base

@@ -65,9 +65,11 @@ come from `location.country`, `building.building_type` and `building.constructio
 refurbishment variant — the code's last three digits — from `building.retrofit_status`:
 `unrenovated` → `001`, `usual_refurb` → `002`, `advanced_refurb` → `003`, absent → `001`. A band
 without the wanted variant (the newest Irish, Dutch and Belgian bands have no `002`) takes `001`, reported
-`approximated` with the missing variant named. An expert `tabula_building_code` skips the
-derivation; its variant stands when `retrofit_status` is absent, and a stated status that names
-another variant is refused (`tabula.variant_conflict`).
+`approximated` with the missing variant and every band without it named; since a request cannot know
+which band it lands in, the capability document announces `usual_refurb` `approximated` everywhere. An
+expert `tabula_building_code` skips the derivation; its variant stands when `retrofit_status` is absent
+(a variant none of the three statuses selects, such as `011`, is reported as it is, with a note saying
+so), and a stated status that names another variant is refused (`tabula.variant_conflict`).
 
 Every element's `u_value_in_watt_per_m2_per_kelvin` is optional. A stated one is written to
 `Building.config.<element>_u_value_in_watt_per_m2_per_kelvin` and fixes the element's transmission
@@ -75,7 +77,8 @@ adjustment factor (floor 0.5, others 1). A missing one leaves that field unset, 
 keeps the row's area-weighted U-value and adjustment factor (for a row whose door U-value is `0`,
 its estimated door); the report calls it `defaulted` and names the value and the row. An
 insulation measure on such an element starts from the row's U-value (§4.3's `U_existing`), and the
-arithmetic note says so. The variant is its whole row: the `Building` also reads the row's air
+arithmetic note says so; the written U-value then switches the adjustment factor from the row's
+`b_Transmission` to the fixed one, and the note names both numbers. The variant is its whole row: the `Building` also reads the row's air
 infiltration and thermal-bridge surcharge, so `retrofit_status` changes the house even when every
 U-value is stated, and the `house.building.retrofit_status` line names both numbers.
 

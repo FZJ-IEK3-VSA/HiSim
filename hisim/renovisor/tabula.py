@@ -245,6 +245,26 @@ class TabulaIndex:
         return frozenset(typology for indexed, typology in cls.bands() if indexed == country)
 
     @classmethod
+    def bands_without(cls, variant: str) -> Tuple[str, ...]:
+        """Return every band of the index that lacks one refurbishment variant, as sorted code stems.
+
+        Args:
+            variant: The three-digit variant, e.g. ``"002"``.
+
+        Returns:
+            ``<CC>.N.<TYPE>.<NN>`` per band that has no row of *variant*, sorted; empty when every
+            band has one.
+        """
+        return tuple(
+            sorted(
+                f"{country}.N.{typology}.{band.band}"
+                for (country, typology), bands in cls.bands().items()
+                for band in bands
+                if variant not in band.variants
+            )
+        )
+
+    @classmethod
     def variant_of(cls, code: str) -> str:
         """Return a generic-example code's refurbishment variant, its last three digits.
 
@@ -381,7 +401,8 @@ class BuildingCodeSelector:
             return status.variant, None
         return TabulaIndex.EXISTING_STATE, (
             f"the TABULA table has no variant {status.variant} ({status.value}) for {stem}; its "
-            f"existing state {TabulaIndex.EXISTING_STATE} is used"
+            f"existing state {TabulaIndex.EXISTING_STATE} is used, as in every band without it "
+            f"({', '.join(TabulaIndex.bands_without(status.variant))})"
         )
 
     @classmethod
@@ -411,11 +432,15 @@ class ElementDefault:
         u_value_in_watt_per_m2_per_kelvin: The U-value the simulation uses.
         adjustment_factor: The transmission adjustment factor it is paired with, the row's own.
         origin: Where the U-value comes from, in a phrase the report can quote.
+        fixed_adjustment_factor: The factor the ``Building`` uses instead once the element's
+            U-value is written -- stated or insulated --, which is HiSim's fixed one (floor 0.5,
+            others 1) rather than the row's ``b_Transmission`` (owner decision, 2026-09-26).
     """
 
     u_value_in_watt_per_m2_per_kelvin: float
     adjustment_factor: float
     origin: str
+    fixed_adjustment_factor: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -531,6 +556,7 @@ class ArchetypeEnvelope:
                 ),
                 adjustment_factor=float(getattr(information, f"{element.value}_adjustment_factor_from_tabula")),
                 origin=origin,
+                fixed_adjustment_factor=float(descriptor.fixed_adjustment_factor),
             )
         return cls(
             code=code,

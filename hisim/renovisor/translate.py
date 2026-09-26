@@ -1381,7 +1381,15 @@ def _report_variant(state: _TranslationState, code: BuildingCode, archetype: Arc
         return
     status = code.retrofit_status
     if state.present("house.building.tabula_building_code"):
-        note = f"absent from the request; the tabula_building_code's own variant {code.variant} stands: {row}"
+        unmatched = "" if status is not None else (
+            ", which matches none of the three retrofit statuses ("
+            + ", ".join(f"{known.variant} {known.value}" for known in RetrofitStatus)
+            + ")"
+        )
+        note = (
+            f"absent from the request; the tabula_building_code's own variant {code.variant}{unmatched} "
+            f"stands: {row}"
+        )
     else:
         note = f"absent from the request, so {RetrofitStatus.UNRENOVATED.value}: variant {code.variant}, {row}"
     state.report.defaulted(path, status.value if status is not None else code.variant, note=note, target=target)
@@ -1422,7 +1430,8 @@ def _element(state: _TranslationState, element: ThermalElement, archetype: Arche
                 block.u_value_in_watt_per_m2_per_kelvin,
                 note=(
                     f"absent from the request, where the Building would keep {row_note}; {written}; "
-                    f"{Translator.ADJUSTMENT_NOTE}"
+                    f"{Translator.ADJUSTMENT_NOTE}: the factor switches from the row's "
+                    f"{row.adjustment_factor:g} to the fixed {row.fixed_adjustment_factor:g}"
                 ),
                 target=u_target,
             )

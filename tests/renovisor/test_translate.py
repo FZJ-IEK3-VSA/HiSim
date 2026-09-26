@@ -640,6 +640,19 @@ class TestTheRetrofitStatus:
         assert line is not None and line.status is ReportStatus.DEFAULTED
         assert line.value == "usual_refurb"
         assert "own variant 002" in str(line.note)
+        assert "matches none" not in str(line.note)
+
+    def test_an_absent_status_reports_a_code_variant_none_of_the_statuses_selects_raw(self) -> None:
+        """``…001.011`` without a status is accepted; the line carries the raw variant, which is none of the three."""
+        code = "IE.N.SFH.10.Gen.ReEx.001.011"
+        system = translate(baseline(building__construction_year=2015, building__tabula_building_code=code))
+
+        assert constructor_of(system, Targets.BUILDING)["building_code"] == code  # type: ignore[index]
+        line = system.report.line("house.building.retrofit_status")
+        assert line is not None and line.status is ReportStatus.DEFAULTED
+        assert line.value == "011"
+        assert "own variant 011, which matches none of the three retrofit statuses" in str(line.note)
+        assert "001 unrenovated, 002 usual_refurb, 003 advanced_refurb" in str(line.note)
 
     def test_a_band_without_the_variant_falls_back_to_the_existing_state_approximated(self) -> None:
         """An Irish detached house of 2015 has no 002: 001, approximated, with the gap named."""
@@ -672,6 +685,7 @@ class TestTheRetrofitStatus:
         assert line is not None and line.status is ReportStatus.DEFAULTED
         assert "not in the request: TABULA IE.N.SFH.05.Gen.ReEx.001.002" in str(line.note)
         assert "fixes its transmission adjustment factor" in str(line.note)
+        assert "the factor switches from the row's 1 to the fixed 1" in str(line.note)
 
     def test_every_leaf_of_an_undescribed_house_is_accounted_for(self) -> None:
         """No U-value in, a line for every element out."""

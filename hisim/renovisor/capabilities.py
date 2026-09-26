@@ -843,7 +843,8 @@ class ProbeSet:
         "pair:postcode": ({}, None),  # the location half is added in :meth:`build`
         # retrofit_status in a band without the variant it selects: Irish detached houses of 2011-
         # (IE.N.SFH.10) have no 002, so usual_refurb falls back to 001, approximated (§5.3 step 3).
-        # The anchor's band has all three, so the field probes never meet the fallback.
+        # The anchor's band has all three, so the field probes never meet the fallback; this pair
+        # is what makes the document announce usual_refurb approximated (WORST_CASE_PAIRS).
         "pair:usual_refurb_in_a_band_without_its_variant": (
             {"building.construction_year": 2015, "building.retrofit_status": "usual_refurb"},
             None,
@@ -861,6 +862,17 @@ class ProbeSet:
             [{"id": "heating_system", "options": {"type_of_system": "air_source_heat_pump"},
               "cost": {"min_in_euro_per_m2": 50, "max_in_euro_per_m2": 70, "source": "the capability probe set"}}],
         ),
+    }
+
+    #: The pairs that reach the worst case of one enumerated field's value, as ``name -> (path, value)``.
+    #: Unlike every other pair, which constructs a combination whose status the document cannot
+    #: state (hisim-5dfc), such a pair counts towards the value it names: the value is announced at
+    #: the worse of its field probe's status and the pair's. ``usual_refurb`` is ``approximated``
+    #: wherever it is sent, by owner decision (2026-09-26), because a request cannot know whether its
+    #: construction year lands in a band without variant 002 and the document's conditions cannot
+    #: state a year range; the pair's note names every such band (:meth:`TabulaIndex.bands_without`).
+    WORST_CASE_PAIRS: ClassVar[Dict[str, Tuple[str, Any]]] = {
+        "pair:usual_refurb_in_a_band_without_its_variant": ("house.building.retrofit_status", "usual_refurb"),
     }
 
     #: The postcode the one probe that carries one sends; a Dublin postal district.
@@ -1606,7 +1618,9 @@ class Aggregation:
 
         As for a measure's options, a probe that varies an enumerated field's value contributes that
         value's own status to ``values`` and not to the field's, and a ``PAIR`` probe contributes
-        to neither. A numeric field (:attr:`FieldShape.NUMERIC`) carries no ``values``: it
+        to neither -- except a pair of :attr:`ProbeSet.WORST_CASE_PAIRS`, which counts towards the
+        one value it names, so that the value announces the worst case the pair reaches. A numeric
+        field (:attr:`FieldShape.NUMERIC`) carries no ``values``: it
         publishes the request schema's ``minimum``/``maximum`` and ``exclusiveMinimum``/
         ``exclusiveMaximum`` where the schema declares them (:class:`RequestSchemaBounds`) -- never
         its probe points -- and the probes at both ends count towards its own status, as the
@@ -1638,6 +1652,12 @@ class Aggregation:
                     per_value.setdefault(path, {})[value_key(probe.value)] = (status, note)
                 elif probe.kind is not ProbeKind.PAIR:
                     observed.setdefault(path, []).append(Observation(status, note))
+        for result in results:
+            worst_case = ProbeSet.WORST_CASE_PAIRS.get(result.probe.name)
+            if worst_case is None or worst_case[0] not in result.fields:
+                continue
+            path, value = worst_case
+            cls._worsen(per_value.setdefault(path, {}), value_key(value), *result.fields[path])
         entries: List[Dict[str, Any]] = []
         for path in sorted(set(observed) | set(per_value)):
             observations = observed.get(path) or [
@@ -1666,6 +1686,27 @@ class Aggregation:
             entry["substitution"] = cls.is_substitution(note)
             entries.append(entry)
         return entries
+
+    @staticmethod
+    def _worsen(
+        values: Dict[Any, Tuple[ReportStatus, Optional[str]]],
+        key: Any,
+        status: ReportStatus,
+        note: Optional[str],
+    ) -> None:
+        """Let one worst-case pair's observation replace a value's own when it is worse.
+
+        A status the pair shares with the value's own probe keeps both notes, as
+        :class:`NoteAggregation` joins a tie; a better one changes nothing. The value's place in
+        ``values`` stays its field probe's, so the order remains the request schema's.
+        """
+        own = values.get(key)
+        if own is None:
+            values[key] = (status, note)
+            return
+        observations = [Observation(*own), Observation(status, note)]
+        worst = NoteAggregation.status_of(observations)
+        values[key] = (worst, NoteAggregation.note_of(observations, worst))
 
     @classmethod
     def tally(cls, measures: Sequence[Mapping[str, Any]]) -> Dict[str, int]:

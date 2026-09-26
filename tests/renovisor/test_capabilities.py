@@ -506,16 +506,28 @@ class TestTheDocument:
     def test_the_retrofit_status_announces_every_variant_and_defaults_to_unrenovated(
         self, document: CapabilityDocument
     ) -> None:
-        """Each status selects its variant in the anchor's band; absent, it is unrenovated (§5.3)."""
+        """Each status selects its variant; absent, it is unrenovated (§5.3).
+
+        ``usual_refurb`` is announced ``approximated`` everywhere, by owner decision (2026-09-26):
+        the newest Irish, Dutch and Belgian bands lack variant 002 and fall back to 001, and the
+        document's conditions cannot state a year range, so it announces the worse case and its
+        note names the bands. The field keeps its own status, as every enumerated field does.
+        """
         entry = {item["path"]: item for item in document.body["fields"]}["house.building.retrofit_status"]
 
         assert entry["status"] == ReportStatus.DEFAULTED.value
         assert "variant 001" in entry["note"]
-        assert {value["value"]: value["status"] for value in entry["values"]} == {
+        values = {value["value"]: value for value in entry["values"]}
+        assert list(values) == ["unrenovated", "usual_refurb", "advanced_refurb"]
+        assert {value: item["status"] for value, item in values.items()} == {
             "unrenovated": ReportStatus.USED.value,
-            "usual_refurb": ReportStatus.USED.value,
+            "usual_refurb": ReportStatus.APPROXIMATED.value,
             "advanced_refurb": ReportStatus.USED.value,
         }
+        note = values["usual_refurb"]["note"]
+        assert "no variant 002 (usual_refurb)" in note
+        for stem in ("BE.N.SFH.05", "IE.N.AB.10", "IE.N.SFH.10", "NL.N.TH.06"):
+            assert stem in note
 
     def test_two_builds_of_one_state_are_byte_identical(
         self, document: CapabilityDocument, tmp_path: Path

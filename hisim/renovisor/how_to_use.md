@@ -20,7 +20,10 @@ python -m hisim.renovisor verify       --out DIR [--base-files DIR]
 exist for the verification harness and the end-to-end tests. `translate` stops after the
 energy-system file and the mapping report. `validate` prints the problems JSON and writes
 nothing. `capabilities` writes the document the backend serves as `GET /measures` for this
-image. `map` regenerates `roadmap/renovisor/translation_map.html`. `verify` runs tier 1 of the
+image; where a pair probe (two changes at once) reports a leaf differently from its unconditional
+status, the leaf carries a `conditions` entry (measure-capabilities 0.5.0) whose terms are the pair's
+other change — the seasonal efficiency is `approximated`, and `not_implemented_yet` when the request
+also states `house.heating.type_of_system: air_source_heat_pump`. `map` regenerates `roadmap/renovisor/translation_map.html`. `verify` runs tier 1 of the
 path verification (below).
 
 ## The files
@@ -66,7 +69,8 @@ refurbishment variant — the code's last three digits — from `building.retrof
 `unrenovated` → `001`, `usual_refurb` → `002`, `advanced_refurb` → `003`, absent → `001`. A band
 without the wanted variant (the newest Irish, Dutch and Belgian bands have no `002`) takes `001`, reported
 `approximated` with the missing variant and every band without it named; since a request cannot know
-which band it lands in, the capability document announces `usual_refurb` `approximated` everywhere. An
+which band it lands in, the capability document announces `usual_refurb` `approximated` everywhere
+(not a condition: a construction-year range is no term a condition can state). An
 expert `tabula_building_code` skips the derivation; its variant stands when `retrofit_status` is absent
 (a variant none of the three statuses selects, such as `011`, is reported as it is, with a note saying
 so), and a stated status that names another variant is refused (`tabula.variant_conflict`).
@@ -97,7 +101,7 @@ Three stages per probe, one matrix column each:
 | Column | Stage | ● | ◐ | ○ | ✖ | – |
 | --- | --- | --- | --- | --- | --- | --- |
 | `req` | the request diff | exactly the probe's change | | | a stray or an empty change | |
-| `map` | the mapping report's line for each changed leaf | every changed leaf's line says `used` (a leaf the probe removes is expected to be `defaulted` and is not counted; the anchor, which changes nothing, is ● by definition) | a line `approximated` / `defaulted` / `not_implemented_yet` no worse than the capability document announces; a request a semantic check refuses on purpose (`added_insulation.not_allowed`, `location.country.unsupported`), with the problem code; for a pair, a status below the announced one (a finding, see below) | | no line, a raise, a request the schema refuses, or a status below the announced one: `approximated`/`defaulted`/`not_implemented_yet` where `used` is announced, `defaulted`/`not_implemented_yet` where `approximated` is | the request is identical to its base |
+| `map` | the mapping report's line for each changed leaf | every changed leaf's line says `used` (a leaf the probe removes is expected to be `defaulted` and is not counted; the anchor, which changes nothing, is ● by definition) | a line `approximated` / `defaulted` / `not_implemented_yet` no worse than the capability document announces; a request a semantic check refuses on purpose (`added_insulation.not_allowed`, `location.country.unsupported`), with the problem code | | no line, a raise, a request the schema refuses, or a status below the announced one: `approximated`/`defaulted`/`not_implemented_yet` where `used` is announced, `defaulted`/`not_implemented_yet` where `approximated` is | the request is identical to its base |
 | `sys` | the energy-system (and economic-context) diff, per config field | something changed — shown, not judged | nothing changed, nothing `used` | nothing changed although a leaf is `used` (a finding) | the translation raised, the schema refuses the request, or the base did not translate | the anchor (no base), a request identical to its base, or a request a semantic check refused (nothing translated) |
 
 So a ● in `map` means `used`, never merely "as announced": an `approximated` line the document
@@ -111,19 +115,16 @@ full traceback where there is no line; stages 4–5 read "not run (tier 2)") and
 own log of the run, which the logger would otherwise write to `../logs` of the working directory).
 It exits **4** when the report lists a failure — a settable leaf, enum value, range end, measure or
 option value of the request schema or the catalogue that no probe changes (`missing_probe`), a
-stage-1 diff that is not the probe's change (`request_diff`), a single-change probe's status below
-the announced one (`status_below_announced`), a translation that raised (`translation_error`, with
+stage-1 diff that is not the probe's change (`request_diff`), a status below the announced one
+(`status_below_announced`; for a pair probe, the status the document's `conditions` announce for its
+combination, since the announcement is always read for the probe's own request), a translation that raised (`translation_error`, with
 its traceback in `report.json`), a probe the request schema refuses (`probe_refused_by_schema`,
 naming the schema's problems) and a base that did not translate (`base_not_translated`: a base that
 raised or that the schema refuses, or a base a semantic check refuses under a probe that translates)
 — and **0** otherwise; findings never fail it. A finding is a leaf reported `used` whose probe
-leaves the energy system unchanged (`no_effect`), or a **pair** probe (one of the probe set's
-combinations, spec §7) whose status is below the one the capability document announces for the
-leaf (`conditional_status`, its `map` cell ◐): a combination's status is conditional — solar
-thermal's `supplies` beside an oil boiler, a seasonal efficiency beside a heat pump — and the
-document cannot state a conditional status until bead `hisim-5dfc` lands. That is a bridge by owner
-decision (2026-09-26): `CONDITIONAL_PROBE_KINDS` in `hisim/renovisor/verify/runner.py`, which
-becomes `()` when hisim-5dfc lands.
+leaves the energy system unchanged (`no_effect`). The `announced` column of a probe page names the
+conditions that gave the status, e.g. `not_implemented_yet (where house.heating.type_of_system =
+"air_source_heat_pump")`.
 
 CI runs it (`.github/workflows/path-verification.yml`) on every push to `main`, on every pull
 request that targets `main`, and by hand (`workflow_dispatch`); a stacked pull request, whose base

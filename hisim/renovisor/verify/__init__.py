@@ -11,8 +11,8 @@ writes ``report.json``, ``index.html`` (the matrix, one row per probe, columns `
 and one page per probe, and HiSim's own log (:mod:`hisim.log`, which a component the translation
 builds may write to) under ``logs/`` beside them rather than in the working directory's ``../logs``.
 The exit code is :attr:`VerifyExitCode.PASSED` or, when anything under ``failures`` is listed,
-:attr:`VerifyExitCode.FAILED`; findings ("no effect", and a pair's conditional status below the
-announced one until ``hisim-5dfc``) never fail it.
+:attr:`VerifyExitCode.FAILED`; findings ("no effect") never fail it. A pair probe is held to the
+status the capability document's ``conditions`` announce for its combination, like any other probe.
 
 Modules: :mod:`~hisim.renovisor.verify.leaves` (the artefacts as flat tables and their diffs),
 :mod:`~hisim.renovisor.verify.probes` (each probe's base, and the completeness check),

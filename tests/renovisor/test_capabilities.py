@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, ClassVar, Dict, Iterator, List, Mapping, Optional
 
 import copy
+import json
 import pytest
 from jsonschema import Draft202012Validator
 
@@ -25,6 +26,7 @@ from hisim.renovisor.apply import MeasureRegistry
 from hisim.renovisor.capabilities import (
     Aggregation,
     CapabilityDocument,
+    Conditions,
     FieldShape,
     MaterialRows,
     MeasureStatus,
@@ -528,6 +530,82 @@ class TestTheDocument:
         assert "no variant 002 (usual_refurb)" in note
         for stem in ("BE.N.SFH.05", "IE.N.AB.10", "IE.N.SFH.10", "NL.N.TH.06"):
             assert stem in note
+
+    def test_the_pairs_are_published_as_conditions(self, document: CapabilityDocument) -> None:
+        """measure-capabilities 0.5.0: what a pair reports differently is a condition on the leaf it states."""
+        fields = {entry["path"]: entry for entry in document.body["fields"]}
+        measures = {entry["measure_id"]: entry for entry in document.body["measures"]}
+        heat_pump = [{"path": "house.heating.type_of_system", "in": ["air_source_heat_pump"]}]
+        oil = [{"path": "house.heating.type_of_system", "in": ["conventional_oil_heating"]}]
+
+        efficiency = fields["house.heating.seasonal_efficiency_in_percent"]
+        assert efficiency["status"] == ReportStatus.APPROXIMATED.value
+        assert efficiency["conditions"] == [{
+            "when": heat_pump, "status": "not_implemented_yet", "note": "The heat pump follows its hplib model curve.",
+        }]
+        # Better than the unconditional status, too: the flow temperature is a heat pump's input.
+        flow = fields["house.heating.flow_temperature_in_celsius"]
+        assert (flow["status"], [(item["when"], item["status"]) for item in flow["conditions"]]) == (
+            "not_implemented_yet", [(heat_pump, "used")]
+        )
+        solar = measures["solar_thermal_system"]
+        assert [(item["when"], item["status"]) for item in solar["conditions"]] == [(oil, "not_implemented_yet")]
+        supplies = next(option for option in solar["options"] if option["name"] == "supplies")
+        dhw_only = next(value for value in supplies["values"] if value["value"] == "dhw_only")
+        assert [(item["when"], item["status"]) for item in dhw_only["conditions"]] == [(oil, "not_implemented_yet")]
+        assert "conditions" not in supplies
+
+    def test_the_worst_case_pair_is_no_condition(self, document: CapabilityDocument) -> None:
+        """usual_refurb stays approximated everywhere; its pair gives no condition anywhere (owner decision)."""
+        fields = {entry["path"]: entry for entry in document.body["fields"]}
+        retrofit = fields["house.building.retrofit_status"]
+
+        assert "conditions" not in retrofit and "conditions" not in fields["house.building.construction_year"]
+        assert all("conditions" not in value for value in retrofit["values"])
+        assert "retrofit_status" not in json.dumps(
+            [entry.get("conditions", []) for entry in document.body["fields"]]
+        )
+
+    def test_every_condition_is_one_a_pair_request_holds(self, document: CapabilityDocument) -> None:
+        """Each condition's terms hold for a pair probe's request: a condition is what a probe tried."""
+        anchor = ProbeSet.anchor()
+        requests = {probe.name: probe.document(anchor) for probe in ProbeSet.build()}
+        found = []
+        for entry in [*document.body["fields"], *document.body["measures"]]:
+            nested = [entry, *entry.get("values", [])]
+            for option in entry.get("options", []):
+                nested.extend([option, *option.get("values", [])])
+            for item in nested:
+                for condition in item.get("conditions", []):
+                    holding = [
+                        name for name, request in requests.items() if Conditions.holds(condition["when"], request)
+                    ]
+                    assert any(name.startswith("pair:") for name in holding), condition
+                    found.append(condition)
+        assert len(found) == 7
+
+    def test_a_term_is_matched_as_the_request_states_it(self) -> None:
+        """A leaf the request does not state never matches; a value compares as JSON, so 1 is not true."""
+        request = {"house": {"heating": {"type_of_system": "air_source_heat_pump"}},
+                   "measures": [{"id": "hot_water_system", "options": {"supply": "separate_heat_pump"}}]}
+        on_heat_pump = [{"path": "house.heating.type_of_system", "in": ["air_source_heat_pump", "hybrid_heat_pump"]}]
+        option = [{"path": "measures[id=hot_water_system].options.supply", "in": ["separate_heat_pump"]}]
+
+        assert Conditions.holds(on_heat_pump, request)
+        assert Conditions.holds(on_heat_pump + option, request)
+        assert not Conditions.holds([{"path": "house.hot_water.supply", "in": ["separate_heat_pump"]}], request)
+        assert not Conditions.holds([{"path": "house.heating.cooking_range", "in": [1]}],
+                                    {"house": {"heating": {"cooking_range": True}}})
+
+    def test_a_term_the_schema_cannot_spell_stops_the_build(self) -> None:
+        """A removal or an applicant answer is no term; a condition that needed one would announce too much."""
+        with pytest.raises(ValueError, match="cannot state"):
+            Conditions.terms({"house.building.facade.u_value_in_watt_per_m2_per_kelvin": None,
+                              "measures[id=external_insulation].options.thickness_in_mm": 100},
+                             "measures[id=external_insulation", "pair:x")
+        with pytest.raises(ValueError, match="no other change"):
+            Conditions.terms({"house.heating.flow_temperature_in_celsius": 40},
+                             "house.heating.flow_temperature_in_celsius", "pair:x")
 
     def test_two_builds_of_one_state_are_byte_identical(
         self, document: CapabilityDocument, tmp_path: Path

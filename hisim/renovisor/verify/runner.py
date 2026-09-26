@@ -21,14 +21,15 @@ probe's change, a changed leaf whose status is below the one the capability docu
 it (``approximated``, ``defaulted`` or ``not_implemented_yet`` under an announced ``used``;
 ``defaulted`` or ``not_implemented_yet`` under an announced ``approximated``), a translation that
 raised, a probe the request *schema* refuses (the probe is broken), and a base that did not
-translate. A probe a *semantic* check refuses (``added_insulation.not_allowed``,
-``location.country.unsupported``) is refused on purpose: its ``map`` cell is ◐ with the problem code.
-What does not fail the run is a finding: "no effect", and -- the bridge of
-:data:`CONDITIONAL_PROBE_KINDS`, until ``hisim-5dfc`` -- a pair probe whose status is below the
-announced one, because a combination's status is conditional and the capability document cannot say
-so yet.
+translate. The announced status is the one the document's ``conditions`` give for the probe's own
+request, as the frontend reads it (measure-capabilities 0.5.0), so a pair probe is held to the
+condition its combination announces and every other probe to the unconditional status. A probe a
+*semantic* check refuses (``added_insulation.not_allowed``, ``location.country.unsupported``) is
+refused on purpose: its ``map`` cell is ◐ with the problem code. What does not fail the run is a
+finding: "no effect".
 """
 
+import dataclasses
 import traceback
 from dataclasses import dataclass, field
 from enum import Enum
@@ -37,28 +38,13 @@ from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim.energy_system.emitter import EnergySystemEmitter
 from hisim.renovisor import TRANSLATOR_VERSION
-from hisim.renovisor.capabilities import Aggregation, Probe, ProbeKind, ProbeResult, ProbeRunner, value_key
+from hisim.renovisor.capabilities import Aggregation, Conditions, Probe, ProbeResult, ProbeRunner, value_key
 from hisim.renovisor.report import HiSimCommit
 from hisim.renovisor.request import Problem, Request, RequestError
 from hisim.renovisor.verify.leaves import ABSENT, Change, RequestLeaves, SystemLeaves, edit_sources
 from hisim.renovisor.verify.probes import Completeness, MissingProbe, ProbeBases, VerificationProbe
 from hisim.renovisor.vocabulary import ReportStatus
 from hisim.renovisor.whitelist import Whitelist
-
-#: The bead that retires :data:`CONDITIONAL_PROBE_KINDS`: conditional statuses in the capability document.
-CONDITIONAL_STATUS_BEAD = "hisim-5dfc"
-
-#: A bridge, by owner decision (Noah, 2026-09-26), until :data:`CONDITIONAL_STATUS_BEAD` lands.
-#:
-#: A probe of these kinds -- a pair, one of the capability probe set's combinations (spec §7) --
-#: changes two things at once, and a leaf's status *in that combination* can be below the one the
-#: capability document announces for the leaf: solar thermal's ``supplies`` beside an oil boiler,
-#: a seasonal efficiency beside a heat pump. The document has no way yet to state a status that
-#: holds only under a condition, so for these probes a status below the announced one is a finding
-#: (``conditional_status``) and its ``map`` cell is ◐, not ✖. Every other probe keeps the failure
-#: rule. When hisim-5dfc lands, this becomes ``()`` -- the one edit that retires the bridge, since
-#: :meth:`VerificationRunner._conditional`, the finding and the legend's remark all read it.
-CONDITIONAL_PROBE_KINDS: Tuple[ProbeKind, ...] = (ProbeKind.PAIR,)
 
 
 class CellState(str, Enum):
@@ -86,11 +72,8 @@ class CellState(str, Enum):
         """Return what the legend says the symbol means."""
         return {
             CellState.AS_EXPECTED: "as expected",
-            CellState.AS_LISTED: "approximated / not_implemented_yet / defaulted, as listed; a request a "
-            "semantic check refuses, as intended" + (
-                f"; or a combination's conditional status below the announced one ({CONDITIONAL_STATUS_BEAD})"
-                if CONDITIONAL_PROBE_KINDS else ""
-            ),
+            CellState.AS_LISTED: "approximated / not_implemented_yet / defaulted, as listed (a combination's "
+            "as its condition announces); a request a semantic check refuses, as intended",
             CellState.NO_EFFECT: "no effect",
             CellState.FAILED: "failed",
             CellState.NOT_RUN: "not run: the anchor's system, a request identical to its base, or a system a "
@@ -116,12 +99,11 @@ class IssueCode(str, Enum):
     PROBE_REFUSED_BY_SCHEMA = "probe_refused_by_schema"
     BASE_NOT_TRANSLATED = "base_not_translated"
     NO_EFFECT = "no_effect"
-    CONDITIONAL_STATUS = "conditional_status"
 
     @property
     def is_failure(self) -> bool:
         """Return whether an issue of this kind fails the run; the other kinds are findings."""
-        return self not in (IssueCode.NO_EFFECT, IssueCode.CONDITIONAL_STATUS)
+        return self is not IssueCode.NO_EFFECT
 
 
 @dataclass(frozen=True)
@@ -288,46 +270,73 @@ class ArtefactCache:
         )
 
 
+@dataclass(frozen=True)
+class Announced:
+    """What the capability document announces for one leaf of one request.
+
+    Args:
+        status: The status, in the report's words (a measure's ``supported`` read back as ``used``):
+            the worst of the ``conditions`` that hold for the request, else the unconditional one.
+        conditions: The conditions that hold, as the document carries them; empty when the
+            unconditional status applies.
+    """
+
+    status: str
+    conditions: Tuple[Mapping[str, Any], ...] = ()
+
+
 class Announcements:
     """What the capability document announces, per measure, option, value and inventory field.
 
-    Built with :class:`~hisim.renovisor.capabilities.Aggregation` from the same probe run, so it is
-    the document ``python -m hisim.renovisor capabilities`` writes for this build. The measure-level
-    word ``supported`` is read back as the report's ``used``.
+    Built with :meth:`~hisim.renovisor.capabilities.Aggregation.entries` from the same probe run, so
+    it is the document ``python -m hisim.renovisor capabilities`` writes for this build, conditions
+    included. Every lookup takes the request it is asked for and applies the entry's ``conditions``
+    to it as the shared spec says a consumer does: when one or more hold, the worst of their
+    statuses; otherwise the unconditional status. The measure-level word ``supported`` is read back
+    as the report's ``used``.
     """
 
     def __init__(self, results: Sequence[ProbeResult]) -> None:
         """Aggregate the probe results the way the capability document does."""
-        self._measures: Dict[str, str] = {}
-        self._options: Dict[Tuple[str, str], Tuple[str, Dict[str, str]]] = {}
-        for entry in Aggregation.measures(results):
-            status = str(entry["status"])
-            self._measures[entry["measure_id"]] = ReportStatus.USED.value if status == "supported" else status
+        measures, fields = Aggregation.entries(results)
+        self._measures: Dict[str, Mapping[str, Any]] = {}
+        self._options: Dict[Tuple[str, str], Mapping[str, Any]] = {}
+        for entry in measures:
+            self._measures[entry["measure_id"]] = entry
             for option in entry["options"]:
-                values = {value_key(value["value"]): str(value["status"]) for value in option.get("values", [])}
-                self._options[(entry["measure_id"], option["name"])] = (str(option["status"]), values)
-        self._fields: Dict[str, Tuple[str, Dict[str, str]]] = {}
-        for entry in Aggregation.fields(results):
-            values = {value_key(value["value"]): str(value["status"]) for value in entry.get("values", [])}
-            self._fields[entry["path"]] = (str(entry["status"]), values)
+                self._options[(entry["measure_id"], option["name"])] = option
+        self._fields: Dict[str, Mapping[str, Any]] = {entry["path"]: entry for entry in fields}
 
-    def measure(self, measure_id: str) -> Optional[str]:
-        """Return the status announced for one measure."""
-        return self._measures.get(measure_id)
+    def measure(self, measure_id: str, document: Mapping[str, Any]) -> Optional[Announced]:
+        """Return what is announced for one measure in one request."""
+        entry = self._measures.get(measure_id)
+        return None if entry is None else self._resolve(entry, document)
 
-    def option(self, measure_id: str, name: str, value: Any) -> Optional[str]:
-        """Return the status announced for one option at one value: the value's own, else the option's."""
+    def option(self, measure_id: str, name: str, value: Any, document: Mapping[str, Any]) -> Optional[Announced]:
+        """Return what is announced for one option at one value: the value's entry, else the option's."""
         entry = self._options.get((measure_id, name))
-        if entry is None:
-            return None
-        return entry[1].get(value_key(value), entry[0])
+        return None if entry is None else self._resolve(self._at(entry, value), document)
 
-    def field(self, path: str, value: Any) -> Optional[str]:
-        """Return the status announced for one inventory path at one value: the value's own, else the field's."""
+    def field(self, path: str, value: Any, document: Mapping[str, Any]) -> Optional[Announced]:
+        """Return what is announced for one inventory path at one value: the value's entry, else the field's."""
         entry = self._fields.get(path)
-        if entry is None:
-            return None
-        return entry[1].get(value_key(value), entry[0])
+        return None if entry is None else self._resolve(self._at(entry, value), document)
+
+    @staticmethod
+    def _at(entry: Mapping[str, Any], value: Any) -> Mapping[str, Any]:
+        """Return the ``values`` entry of *value*, or *entry* itself when it has none."""
+        key = value_key(value)
+        return next((item for item in entry.get("values", []) if value_key(item["value"]) == key), entry)
+
+    @staticmethod
+    def _resolve(entry: Mapping[str, Any], document: Mapping[str, Any]) -> Announced:
+        """Apply an entry's conditions to one request."""
+        holding = tuple(
+            condition for condition in entry.get("conditions", []) if Conditions.holds(condition["when"], document)
+        )
+        words = [str(condition["status"]) for condition in holding] or [str(entry["status"])]
+        statuses = [ReportStatus.USED if word == "supported" else ReportStatus(word) for word in words]
+        return Announced(ReportStatus.worst_of(*statuses).value, holding)
 
 
 @dataclass(frozen=True)
@@ -342,9 +351,12 @@ class StatusLine:
         target: The HiSim target the line names.
         value: The value the line names.
         note: The line's sentence.
-        announced: The status the capability document announces for the leaf at this value.
+        announced: The status the capability document announces for the leaf at this value in this
+            request, its ``conditions`` applied.
         removed: Whether the probe removes the leaf rather than setting it; a removed leaf is
             expected to be ``defaulted`` and is not held to the announcement.
+        conditions: The document's conditions that hold for this request and gave *announced*;
+            empty when the unconditional status did.
 
     A line is below its announcement (:attr:`below_announcement`) when its status ranks under the
     announced one in :attr:`RANK`: ``approximated``, ``defaulted`` or ``not_implemented_yet`` under
@@ -360,6 +372,7 @@ class StatusLine:
     note: Optional[str] = None
     announced: Optional[str] = None
     removed: bool = False
+    conditions: Tuple[Mapping[str, Any], ...] = ()
 
     #: How much of a leaf a status acts on; an announcement not ranked here promises nothing.
     RANK: ClassVar[Dict[str, int]] = {
@@ -377,13 +390,12 @@ class StatusLine:
         promised = self.RANK.get(self.announced, 0)
         return promised > 0 and self.RANK.get(self.status, 0) < promised
 
-    def conditional_message(self) -> str:
-        """Return what the finding of a combination's status below the announced one says."""
-        return (
-            f"{self.path} is {self.status} in this combination although the capability document announces "
-            f"{self.announced} for the leaf: a combination whose status is conditional, which the document "
-            f"cannot state until {CONDITIONAL_STATUS_BEAD}"
-        )
+    def announcement(self) -> str:
+        """Return the announced status with the terms of the conditions that gave it, for a remark."""
+        if not self.conditions:
+            return str(self.announced)
+        terms = " or ".join(Conditions.describe(condition["when"]) for condition in self.conditions)
+        return f"{self.announced} (where {terms})"
 
     def to_json(self) -> Dict[str, Any]:
         """Return the line as ``report.json`` carries it."""
@@ -393,6 +405,8 @@ class StatusLine:
                 row[key] = getattr(self, key)
         if self.removed:
             row["removed"] = True
+        if self.conditions:
+            row["conditions"] = [dict(condition) for condition in self.conditions]
         return row
 
 
@@ -432,7 +446,7 @@ class StatusLines:
                 other.path != change.path and RequestLeaves.is_under(other.path, change.path) for other in changes
             ):
                 continue
-            line = cls._line(change, fields, measures, positions, announcements)
+            line = cls._line(change, fields, measures, positions, (announcements, document))
             lines.setdefault(line.line, line)
         return tuple(lines.values())
 
@@ -443,24 +457,27 @@ class StatusLines:
         fields: Mapping[str, Mapping[str, Any]],
         measures: Mapping[str, Mapping[str, Any]],
         positions: Mapping[str, int],
-        announcements: Announcements,
+        announcing: Tuple[Announcements, Mapping[str, Any]],
     ) -> StatusLine:
-        """Return the report line one changed leaf reaches."""
+        """Return the report line one changed leaf reaches, beside what is announced for it in this request."""
+        announcements, document = announcing
         removed = change.after is ABSENT
         path = change.path
         if not path.startswith(f"{RequestLeaves.MEASURES}[id="):
             row = cls._nearest(path, fields)
             if row is None:
                 return StatusLine(path=path, line=path, status=None, removed=removed)
-            return StatusLine(
-                path=path,
-                line=str(row["path"]),
-                status=str(row["status"]),
-                target=row.get("target"),
-                value=row.get("value"),
-                note=row.get("note"),
-                announced=None if removed else announcements.field(path, change.after),
-                removed=removed,
+            return cls._announced(
+                StatusLine(
+                    path=path,
+                    line=str(row["path"]),
+                    status=str(row["status"]),
+                    target=row.get("target"),
+                    value=row.get("value"),
+                    note=row.get("note"),
+                    removed=removed,
+                ),
+                None if removed else announcements.field(path, change.after, document),
             )
         measure_id = path[len(f"{RequestLeaves.MEASURES}[id="):path.index("]")]
         prefix = RequestLeaves.measure_path(measure_id)
@@ -480,23 +497,34 @@ class StatusLines:
             name = rest[len(".options."):].split(".")[0]
             option_path = f"{prefix}.options.{name}"
             option = next((row for row in (measure or {}).get("options", []) if row.get("name") == name), None)
-            return StatusLine(
-                path=option_path,
-                line=option_path,
-                status=None if option is None else str(option["status"]),
-                note=None if option is None else option.get("note"),
-                announced=None if removed else announcements.option(measure_id, name, cls._option_value(change)),
-                removed=removed,
+            return cls._announced(
+                StatusLine(
+                    path=option_path,
+                    line=option_path,
+                    status=None if option is None else str(option["status"]),
+                    note=None if option is None else option.get("note"),
+                    removed=removed,
+                ),
+                None if removed else announcements.option(measure_id, name, cls._option_value(change), document),
             )
-        return StatusLine(
-            path=prefix,
-            line=prefix,
-            status=None if measure is None else str(measure["status"]),
-            target=(", ".join(measure.get("targets", [])) or None) if measure is not None else None,
-            note=None if measure is None else measure.get("note"),
-            announced=None if removed else announcements.measure(measure_id),
-            removed=removed,
+        return cls._announced(
+            StatusLine(
+                path=prefix,
+                line=prefix,
+                status=None if measure is None else str(measure["status"]),
+                target=(", ".join(measure.get("targets", [])) or None) if measure is not None else None,
+                note=None if measure is None else measure.get("note"),
+                removed=removed,
+            ),
+            None if removed else announcements.measure(measure_id, document),
         )
+
+    @staticmethod
+    def _announced(line: StatusLine, announced: Optional[Announced]) -> StatusLine:
+        """Return *line* with what the document announces for it in this request."""
+        if announced is None:
+            return line
+        return dataclasses.replace(line, announced=announced.status, conditions=announced.conditions)
 
     @staticmethod
     def _nearest(path: str, fields: Mapping[str, Mapping[str, Any]]) -> Optional[Mapping[str, Any]]:
@@ -530,8 +558,6 @@ class ProbeVerdict:
         stage_three: The energy-system diff; empty when either side did not translate.
         cells: The state of each column.
         remarks: One sentence per column, saying why it has its state.
-        conditional: The stage-2 lines below the announced status that are a finding rather than a
-            failure, because the probe is a combination (:data:`CONDITIONAL_PROBE_KINDS`).
     """
 
     probe: VerificationProbe
@@ -543,7 +569,6 @@ class ProbeVerdict:
     stage_three: Tuple[Change, ...]
     cells: Dict[Stage, CellState]
     remarks: Dict[Stage, str]
-    conditional: Tuple[StatusLine, ...] = ()
 
     @property
     def base_is_broken(self) -> bool:
@@ -654,17 +679,10 @@ class VerificationReport:
         return tuple(issues)
 
     def findings(self) -> Tuple[Issue, ...]:
-        """Return every finding, per probe in probe order.
-
-        Two kinds: a combination whose status is below the announced one
-        (:data:`CONDITIONAL_PROBE_KINDS`), and a used leaf that left the energy system unchanged.
-        """
+        """Return every finding, per probe in probe order: a used leaf that left the energy system unchanged."""
         issues: List[Issue] = []
         for verdict in self.verdicts:
             name = verdict.probe.name
-            if verdict.conditional:
-                message = "; ".join(line.conditional_message() for line in verdict.conditional)
-                issues.append(Issue(IssueCode.CONDITIONAL_STATUS, message, name))
             if verdict.cells[Stage.SYSTEM] is CellState.NO_EFFECT:
                 issues.append(Issue(IssueCode.NO_EFFECT, verdict.remarks[Stage.SYSTEM], name))
         return tuple(issues)
@@ -762,8 +780,7 @@ class VerificationRunner:
         stage_two: Tuple[StatusLine, ...] = ()
         if tested.report is not None:
             stage_two = StatusLines.of(stage_one, tested.report, probe.document, announcements)
-        conditional = cls._conditional(probe, stage_two)
-        cells[Stage.MAPPING], remarks[Stage.MAPPING] = cls._mapping_cell(tested, stage_two, conditional)
+        cells[Stage.MAPPING], remarks[Stage.MAPPING] = cls._mapping_cell(tested, stage_two)
         stage_three: Tuple[Change, ...] = ()
         if base is not None and base.system is not None and tested.system is not None:
             stage_three = base.system.diff(tested.system, tested.sources)
@@ -781,7 +798,6 @@ class VerificationRunner:
             # failure is the verdict.
             for stage in (Stage.MAPPING, Stage.SYSTEM):
                 cells[stage], remarks[stage] = CellState.NOT_RUN, "the request does not differ from its base"
-            conditional = ()
         return ProbeVerdict(
             probe=probe,
             tested=tested,
@@ -792,7 +808,6 @@ class VerificationRunner:
             stage_three=stage_three,
             cells=cells,
             remarks=remarks,
-            conditional=conditional,
         )
 
     @staticmethod
@@ -833,46 +848,35 @@ class VerificationRunner:
             return CellState.FAILED, f"the translation raised {tested.error}"
         return None
 
-    @staticmethod
-    def _conditional(probe: VerificationProbe, lines: Sequence[StatusLine]) -> Tuple[StatusLine, ...]:
-        """Return the lines below the announced status that the bridge of :data:`CONDITIONAL_PROBE_KINDS` excuses.
-
-        A probe of one of those kinds is a combination, whose status the capability document cannot
-        yet announce as conditional (``hisim-5dfc``); for any other probe nothing is excused.
-        """
-        if probe.probe.kind not in CONDITIONAL_PROBE_KINDS:
-            return ()
-        return tuple(line for line in lines if line.below_announcement)
-
     @classmethod
-    def _mapping_cell(
-        cls, tested: Artefacts, lines: Sequence[StatusLine], conditional: Sequence[StatusLine] = ()
-    ) -> Tuple[CellState, str]:
+    def _mapping_cell(cls, tested: Artefacts, lines: Sequence[StatusLine]) -> Tuple[CellState, str]:
         """Stage 2: the report's status for every changed leaf, against the announcement.
 
-        A line below the announcement fails the cell, unless it is one of *conditional*: then the
-        cell is ◐ and its remark says why (:data:`CONDITIONAL_PROBE_KINDS`).
+        The announcement is the one the document's conditions give for this request
+        (:class:`Announcements`), so a combination is held to its condition like any single change to
+        the unconditional status: a line below it fails the cell. A remark names the conditions that
+        applied, so a ◐ or ● that a condition decided says so.
         """
         unfinished = cls._unfinished(tested, Stage.MAPPING)
         if unfinished is not None:
             return unfinished
         problems = [f"the mapping report carries no line for {line.path}" for line in lines if line.status is None]
         problems.extend(
-            f"{line.path} is {line.status} although the capability document announces {line.announced}"
+            f"{line.path} is {line.status} although the capability document announces {line.announcement()}"
             for line in lines
-            if line.below_announcement and line not in conditional
+            if line.below_announcement
         )
-        excused = [line.conditional_message() for line in conditional]
         if problems:
-            return CellState.FAILED, "; ".join(problems + excused)
-        if excused:
-            return CellState.AS_LISTED, "; ".join(excused)
+            return CellState.FAILED, "; ".join(problems)
+        conditioned = "".join(
+            f"; {line.path} announced {line.announcement()}" for line in lines if line.conditions
+        )
         statuses = sorted({str(line.status) for line in lines if not line.removed})
         if not lines:
             return CellState.AS_EXPECTED, "the anchor's report accounts for every leaf"
         if statuses and statuses != [ReportStatus.USED.value]:
-            return CellState.AS_LISTED, f"status {', '.join(statuses)}"
-        return CellState.AS_EXPECTED, "used" if statuses else "removed leaves, defaulted as documented"
+            return CellState.AS_LISTED, f"status {', '.join(statuses)}{conditioned}"
+        return CellState.AS_EXPECTED, ("used" if statuses else "removed leaves, defaulted as documented") + conditioned
 
     @classmethod
     def _system_cell(

@@ -15,7 +15,9 @@ one per enum value of every option, one per boundary of every free numeric optio
 value of every settable leaf of the request schema -- the inventory, the location, the applicant
 and a measure's cost band, each enum value, both booleans and both ends of a range -- plus the
 handful of two-change probes the conditional entries of ``not_implemented_yet.yaml`` need (a
-solar thermal collector on an oil boiler cannot be reached by changing one thing).
+solar thermal collector on an oil boiler cannot be reached by changing one thing). What such a pair
+reports differently from a leaf's unconditional status is published as that leaf's ``conditions``
+(:class:`Conditions`, measure-capabilities 0.5.0).
 
 Every probe runs ``validate`` + ``apply`` + ``translate`` and no simulation, so the whole set
 takes a second. A probe that raises a translator error fails the build: the backend marks an
@@ -26,7 +28,7 @@ The document's shape is ``measure-capabilities.openapi.yaml``'s
 against that vendored schema before writing. The schema is strict since 0.3.0 (2026-09-23): every
 key written here is declared there and no other key is admitted, so a key this module starts to
 emit fails the build until the shared spec declares it. 0.4.0 (2026-09-24) added a numeric field's
-``exclusiveMinimum``/``exclusiveMaximum``.
+``exclusiveMinimum``/``exclusiveMaximum``, 0.5.0 (2026-09-26) the optional ``conditions``.
 
 One section is not aggregated from probes at all. ``results`` (:class:`ResultsSection`) says what
 the *answer* will look like -- every field ``result.json`` can carry, its source and its
@@ -37,6 +39,7 @@ provenance -- generated from the same two tables the payload is built from. Its 
 import copy
 import json
 import math
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -98,7 +101,8 @@ class ProbeKind(str, Enum):
     ``MEASURE`` applies one measure; ``OPTION`` varies one option of one measure; ``FIELD``
     varies one leaf of the request -- an inventory field, the country, an applicant answer or a
     bound of a measure's cost band; ``PAIR`` changes two things at once, which the conditional
-    entries of the list need.
+    entries of the list need, and what it reports differently is a ``conditions`` entry
+    (:class:`Conditions`).
     """
 
     ANCHOR = "anchor"
@@ -810,7 +814,10 @@ class ProbeSet:
 
     #: The two-change probes the conditional entries of the list and the combinations the translator
     #: treats differently need, as ``name -> (house changes, package)``. A package entry without
-    #: ``options`` stands for the measure's smallest package (:meth:`package`).
+    #: ``options`` stands for the measure's smallest package (:meth:`package`). A leaf a pair states
+    #: and reports differently from its unconditional status gets a ``conditions`` entry whose terms
+    #: are the pair's other leaves (:class:`Conditions`); a differing leaf whose terms the shared
+    #: schema cannot spell (a removal, an applicant answer, a cost block) stops the build.
     PAIRS: ClassVar[Dict[str, Tuple[Dict[str, Any], Optional[List[Dict[str, Any]]]]]] = {
         "pair:solar_thermal_on_oil": (
             {"heating.type_of_system": "conventional_oil_heating",
@@ -865,8 +872,8 @@ class ProbeSet:
     }
 
     #: The pairs that reach the worst case of one enumerated field's value, as ``name -> (path, value)``.
-    #: Unlike every other pair, which constructs a combination whose status the document cannot
-    #: state (hisim-5dfc), such a pair counts towards the value it names: the value is announced at
+    #: Unlike every other pair, whose combination becomes a ``conditions`` entry (:class:`Conditions`),
+    #: such a pair counts towards the value it names and gives no condition: the value is announced at
     #: the worse of its field probe's status and the pair's. ``usual_refurb`` is ``approximated``
     #: wherever it is sent, by owner decision (2026-09-26), because a request cannot know whether its
     #: construction year lands in a band without variant 002 and the document's conditions cannot
@@ -1452,6 +1459,245 @@ class NoteAggregation:
         return cls.SEPARATOR.join(notes) if notes else None
 
 
+class ConditionLevel(str, Enum):
+    """Which vocabulary a condition's status is spelled in: the level of the entry it sits on.
+
+    ``measure-capabilities.openapi.yaml`` 0.5.0 declares three condition shapes that differ only in
+    their status enum: ``MeasureCondition`` (``supported | approximated | not_implemented_yet``),
+    ``OptionCondition`` on an option or an inventory field (the report's four words) and
+    ``ValueCondition`` on an enumerated value (``used | approximated | not_implemented_yet``). The
+    unconditional status of each level is spelled the same way, so a condition is compared with
+    it in the published word.
+    """
+
+    MEASURE = "measure"
+    OPTION = "option"
+    VALUE = "value"
+
+    def word(self, status: ReportStatus) -> str:
+        """Return the published word for a mapping-report status at this level."""
+        if self is ConditionLevel.MEASURE:
+            return MeasureStatus.of(status).value
+        if self is ConditionLevel.VALUE and status is ReportStatus.DEFAULTED:
+            return ReportStatus.APPROXIMATED.value
+        return status.value
+
+
+class Conditions:
+    """The ``conditions`` of the capability document: what a combination probe reports differently.
+
+    measure-capabilities 0.5.0 (renovisorissues !22, owner decision of 2026-09-26) lets a measure,
+    an option, an inventory field or an enumerated value carry ``conditions``: ``{when, status,
+    note}`` entries, each saying that a request which *also* states every term of ``when`` gets
+    ``status`` instead of the unconditional one. The entries come from the probe set's ``PAIR``
+    probes (:attr:`ProbeSet.PAIRS`), which change two things at once:
+
+    * A leaf the pair states -- an inventory leaf it sets, a measure of its package or an option of
+      one -- whose line in the pair's mapping report carries a status other than the leaf's
+      unconditional one gets one entry. A leaf the pair removes is left alone, since absence
+      cannot be a term, and so is a leaf the document has no entry for.
+    * ``when`` is every *other* leaf the pair states (:meth:`changes`), each as ``{path, in:
+      [value]}`` in the mapping report's spelling; for a measure or one of its options, the other
+      leaves are those outside the measure's own package entry. A term the shared schema cannot
+      spell -- a removal, an ``applicant`` answer, a cost block -- stops the build by name
+      (:meth:`terms`), because a condition that announced less than the probe changed would be a
+      promise about a combination no probe tried.
+    * ``note`` is the pair's own sentence for the line, or, where the line carries none (a leaf
+      that is simply ``used`` in the combination), a sentence naming the terms.
+
+    A pair of :attr:`ProbeSet.WORST_CASE_PAIRS` is not a condition: it counts towards the value it
+    names, by owner decision (a construction-year range is not a term the schema can state).
+    :meth:`holds` evaluates a ``when`` against a request, as the frontend and the path verifier do.
+    """
+
+    #: The prefix of a term that names an option of a package entry.
+    MEASURE_PREFIX: ClassVar[str] = "measures[id="
+
+    @classmethod
+    def term_pattern(cls) -> "re.Pattern[str]":
+        """Return the shared schema's own pattern for a term's ``path``, which :meth:`terms` holds every term to."""
+        schema = ContractFiles.capabilities_schema()
+        return re.compile(str(schema["components"]["schemas"]["ConditionTerm"]["properties"]["path"]["pattern"]))
+
+    @classmethod
+    def changes(cls, probe: Probe) -> Dict[str, Any]:
+        """Return every request leaf a probe states on top of the anchor, by the path a term spells.
+
+        A block is flattened into its leaves (``house.solar_thermal_system.supplies``); an option's
+        value is one leaf even when it is an object (a material); a removal is ``None``; a package
+        entry's cost block is one leaf, ``measures[id=<id>].cost``.
+        """
+        leaves: Dict[str, Any] = {}
+        for prefix, patch in (("house", probe.house), ("location", probe.location), ("applicant", probe.applicant)):
+            for path, value in patch.items():
+                cls._flatten(f"{prefix}.{path}", value, leaves)
+        for entry in probe.measures or []:
+            for name, value in (entry.get("options") or {}).items():
+                leaves[f"{cls.MEASURE_PREFIX}{entry['id']}].options.{name}"] = value
+            if "cost" in entry:
+                leaves[f"{cls.MEASURE_PREFIX}{entry['id']}].cost"] = entry["cost"]
+        return leaves
+
+    @classmethod
+    def _flatten(cls, path: str, value: Any, leaves: Dict[str, Any]) -> None:
+        """Write *value* into *leaves* under *path*, one entry per leaf of a block."""
+        if isinstance(value, Mapping) and value:
+            for key, child in value.items():
+                cls._flatten(f"{path}.{key}", child, leaves)
+        else:
+            leaves[path] = value
+
+    @classmethod
+    def terms(cls, changes: Mapping[str, Any], own: str, probe: str) -> List[Dict[str, Any]]:
+        """Return the ``when`` of a condition: every leaf of *changes* outside *own*.
+
+        Args:
+            changes: What the pair states (:meth:`changes`).
+            own: The leaf the condition sits on, or ``measures[id=<id>]`` for a measure and its
+                options, whose whole package entry is then excluded.
+            probe: The pair's name, for the error.
+
+        Raises:
+            ValueError: When a term is a removal or a path the shared schema's pattern refuses, or
+                when nothing is left, since ``when`` has at least one term.
+        """
+        pattern = cls.term_pattern()
+        terms: List[Dict[str, Any]] = []
+        for path, value in changes.items():
+            if path == own or path.startswith(f"{own}.") or path.startswith(f"{own}]"):
+                continue
+            if value is None or not pattern.match(path):
+                raise ValueError(
+                    f"{probe}: a condition on {own} would need the term {path}={value!r}, which "
+                    "measure-capabilities cannot state (no absence, no applicant or cost term)"
+                )
+            terms.append({"path": path, "in": [value]})
+        if not terms:
+            raise ValueError(f"{probe}: a condition on {own} has no other change to be conditional on")
+        return terms
+
+    @staticmethod
+    def describe(terms: Sequence[Mapping[str, Any]]) -> str:
+        """Return the terms as one phrase, ``path = value and ...``."""
+        return " and ".join(
+            f"{term['path']} = {' or '.join(json.dumps(value) for value in term['in'])}" for term in terms
+        )
+
+    @classmethod
+    def add(
+        cls,
+        target: Dict[str, Any],
+        level: ConditionLevel,
+        observed: Tuple[ReportStatus, Optional[str]],
+        when: Any,
+    ) -> None:
+        """Give *target* a condition when a pair's observation differs from its unconditional status.
+
+        Args:
+            target: The document entry: a measure, an option, a field or a value.
+            level: Which vocabulary the entry speaks.
+            observed: The status and note the pair's mapping report carries for the leaf.
+            when: A callable returning the terms, called only when a condition is written, so a
+                pair whose leaves all agree with the document needs no expressible terms.
+        """
+        status, note = observed
+        word = level.word(status)
+        if word == target["status"]:
+            return
+        terms = when()
+        condition = {
+            "when": terms,
+            "status": word,
+            "note": note or f"{word} when the request also states {cls.describe(terms)}",
+        }
+        existing = target.setdefault("conditions", [])
+        if condition not in existing:
+            existing.append(condition)
+
+    @classmethod
+    def attach(
+        cls, measures: Sequence[Dict[str, Any]], fields: Sequence[Dict[str, Any]], results: Sequence["ProbeResult"]
+    ) -> None:
+        """Write the ``conditions`` every pair probe gives into the aggregated entries.
+
+        Args:
+            measures: The ``measures`` array, changed in place.
+            fields: The ``fields`` array, changed in place.
+            results: Every probe's result; the pairs among them are read.
+        """
+        by_measure = {str(entry["measure_id"]): entry for entry in measures}
+        by_path = {str(entry["path"]): entry for entry in fields}
+        for result in results:
+            probe = result.probe
+            if probe.kind is not ProbeKind.PAIR or probe.name in ProbeSet.WORST_CASE_PAIRS or result.refused:
+                continue
+            changes = cls.changes(probe)
+            for path, value in changes.items():
+                if value is None or path not in result.fields or path not in by_path:
+                    continue
+                target, level = cls._target(by_path[path], value, ConditionLevel.OPTION)
+                cls.add(target, level, result.fields[path], cls._when(changes, path, probe.name))
+            for package in probe.measures or []:
+                measure_id = str(package["id"])
+                row = result.measures.get(measure_id)
+                if row is None or measure_id not in by_measure:
+                    continue
+                entry = by_measure[measure_id]
+                own = f"{cls.MEASURE_PREFIX}{measure_id}"
+                when = cls._when(changes, own, probe.name)
+                cls.add(entry, ConditionLevel.MEASURE, (row[0], row[1]), when)
+                options = {str(option["name"]): option for option in entry["options"]}
+                for name, value in (package.get("options") or {}).items():
+                    if name in row[2] and name in options:
+                        target, level = cls._target(options[name], value, ConditionLevel.OPTION)
+                        cls.add(target, level, row[2][name], when)
+
+    @staticmethod
+    def _when(changes: Mapping[str, Any], own: str, probe: str) -> Any:
+        """Return the deferred :meth:`terms` of one leaf."""
+        return lambda: Conditions.terms(changes, own, probe)
+
+    @staticmethod
+    def _target(entry: Dict[str, Any], value: Any, level: ConditionLevel) -> Tuple[Dict[str, Any], ConditionLevel]:
+        """Return the entry a leaf's condition sits on: its value's entry when it has one, else itself."""
+        for item in entry.get("values", []):
+            if value_key(item["value"]) == value_key(value):
+                return item, ConditionLevel.VALUE
+        return entry, level
+
+    @classmethod
+    def read(cls, document: Mapping[str, Any], path: str) -> Tuple[bool, Any]:
+        """Return whether a request states one term's leaf, and its value.
+
+        ``measures[id=<id>].options.<name>`` is read from the package entry with that id; any other
+        path is walked through the request's objects. The leaf is read as the request states it.
+        """
+        if path.startswith(cls.MEASURE_PREFIX):
+            measure_id, _, rest = path[len(cls.MEASURE_PREFIX):].partition("]")
+            name = rest[len(".options."):]
+            for entry in document.get("measures") or []:
+                if isinstance(entry, Mapping) and entry.get("id") == measure_id:
+                    options = entry.get("options") or {}
+                    return (name in options, options.get(name))
+            return False, None
+        node: Any = document
+        for part in path.split("."):
+            if not isinstance(node, Mapping) or part not in node:
+                return False, None
+            node = node[part]
+        return True, node
+
+    @classmethod
+    def holds(cls, when: Sequence[Mapping[str, Any]], document: Mapping[str, Any]) -> bool:
+        """Return whether a request states every term of one condition, compared as JSON values."""
+        for term in when:
+            stated, value = cls.read(document, str(term["path"]))
+            encoded = json.dumps(value, sort_keys=True)
+            if not stated or encoded not in {json.dumps(item, sort_keys=True) for item in term["in"]}:
+                return False
+        return True
+
+
 class Aggregation:
     """Reduces the probe results to one status per measure, option, value and inventory field.
 
@@ -1487,13 +1733,26 @@ class Aggregation:
         return any(mark in lowered for mark in cls.SUBSTITUTION_MARKS)
 
     @classmethod
-    def measures(cls, results: Sequence[ProbeResult]) -> List[Dict[str, Any]]:
-        """Return the ``measures`` array of the document, one entry per catalogue measure.
+    def entries(cls, results: Sequence[ProbeResult]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """Return the ``measures`` and ``fields`` arrays with the pairs' ``conditions`` in them.
 
-        Two probe kinds are deliberately left out. A ``PAIR`` probe constructs an unsupported
+        The one place the document's two aggregated arrays are made, so the capability run and the
+        path verifier (:class:`hisim.renovisor.verify.runner.Announcements`) announce the same
+        statuses and the same conditions (:class:`Conditions`).
+        """
+        measures, fields = cls.measures(results), cls.fields(results)
+        Conditions.attach(measures, fields, results)
+        return measures, fields
+
+    @classmethod
+    def measures(cls, results: Sequence[ProbeResult]) -> List[Dict[str, Any]]:
+        """Return the ``measures`` array of the document, one entry per catalogue measure, unconditioned.
+
+        Two probe kinds are deliberately left out of the statuses. A ``PAIR`` probe constructs a
         combination on purpose -- a solar thermal collector on an oil boiler -- and a measure's
-        status is about the measure, not about a combination, so letting a pair probe set it
-        would announce that the collector is never modelled. And an ``OPTION`` probe of a valued
+        unconditional status is about the measure, not about a combination, so letting a pair probe
+        set it would announce that the collector is never modelled; what a pair reports differently
+        becomes a ``conditions`` entry instead (:meth:`entries`). And an ``OPTION`` probe of a valued
         option carries one value's own status, which belongs in ``values`` and, by the openapi
         schema's own wording, never changes the option's. Neither kind contributes a note
         either: a note an entry's own status cannot account for is what addendum A removed.
@@ -1618,8 +1877,9 @@ class Aggregation:
 
         As for a measure's options, a probe that varies an enumerated field's value contributes that
         value's own status to ``values`` and not to the field's, and a ``PAIR`` probe contributes
-        to neither -- except a pair of :attr:`ProbeSet.WORST_CASE_PAIRS`, which counts towards the
-        one value it names, so that the value announces the worst case the pair reaches. A numeric
+        to neither -- it gives a ``conditions`` entry instead (:meth:`entries`) -- except a pair of
+        :attr:`ProbeSet.WORST_CASE_PAIRS`, which counts towards the one value it names, so that the
+        value announces the worst case the pair reaches. A numeric
         field (:attr:`FieldShape.NUMERIC`) carries no ``values``: it
         publishes the request schema's ``minimum``/``maximum`` and ``exclusiveMinimum``/
         ``exclusiveMaximum`` where the schema declares them (:class:`RequestSchemaBounds`) -- never
@@ -1815,7 +2075,7 @@ class CapabilityDocument:
         assert_catalogue_matches(measures_path)
         runner = ProbeRunner(base_files_directory)
         results = runner.run()
-        measures = Aggregation.measures(results)
+        measures, fields = Aggregation.entries(results)
         body = {
             "engine": cls.ENGINE,
             # `or_unknown` rather than `of`: the vendored contract schema types both commit
@@ -1831,7 +2091,7 @@ class CapabilityDocument:
                 "probes": len(results),
             },
             "measures": measures,
-            "fields": Aggregation.fields(results),
+            "fields": fields,
             "results": ResultsSection.build(),
         }
         return cls(body=body, results=results, whitelist=runner.whitelist)

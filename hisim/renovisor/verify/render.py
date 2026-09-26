@@ -18,6 +18,7 @@ import re
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Mapping, Sequence
 
+from hisim.renovisor.capabilities import Conditions
 from hisim.renovisor.verify.runner import CellState, Stage, VerificationReport
 
 
@@ -112,6 +113,16 @@ def _cell(state: str) -> str:
     """Return one matrix cell."""
     glyph = CellState(state).glyph
     return f'<td class="cell {state}" title="{_escape(CellState(state).legend)}">{glyph}</td>'
+
+
+def _announced(line: Mapping[str, Any]) -> str:
+    """Return a stage-2 line's announced status, with the terms of the conditions that gave it."""
+    announced = _escape(line.get("announced", ""))
+    conditions = line.get("conditions") or []
+    if not conditions:
+        return announced
+    terms = " or ".join(_escape(Conditions.describe(condition["when"])) for condition in conditions)
+    return f"{announced} <small>(where {terms})</small>"
 
 
 def _legend(document: Mapping[str, Any]) -> str:
@@ -336,7 +347,7 @@ class ProbePage:
             return '<p class="muted">no changed leaf</p>'
         rows = "".join(
             f"<tr><td><code>{_escape(line['line'])}</code>{' (removed)' if line.get('removed') else ''}</td>"
-            f"<td>{_escape(line['status'])}</td><td class=\"muted\">{_escape(line.get('announced', ''))}</td>"
+            f"<td>{_escape(line['status'])}</td><td class=\"muted\">{_announced(line)}</td>"
             f"<td><code>{_escape(line.get('target', ''))}</code></td>"
             f"<td>{_value(line, 'value') if 'value' in line else ''}</td>"
             f"<td class=\"muted\">{_escape(line.get('note', ''))}</td></tr>"

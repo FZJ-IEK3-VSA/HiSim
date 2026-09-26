@@ -19,7 +19,9 @@ What fails the run (spec §6, what applies without expectations) is an :class:`I
 ``failures``: a settable thing no probe changes, a stage-1 diff that is not the probe's change, a
 changed leaf whose status is ``defaulted`` or ``not_implemented_yet`` although the capability
 document announces ``used`` or ``approximated`` for it, and a translation that raised. What does
-not fail it is a finding: "no effect".
+not fail it is a finding: "no effect", and -- the bridge of :data:`CONDITIONAL_PROBE_KINDS`, until
+``hisim-5dfc`` -- a pair probe whose status is below the announced one, because a combination's
+status is conditional and the capability document cannot say so yet.
 """
 
 import json
@@ -31,7 +33,7 @@ from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 from hisim.energy_system.emitter import EnergySystemEmitter
 from hisim.renovisor import TRANSLATOR_VERSION
 from hisim.renovisor.apply import apply
-from hisim.renovisor.capabilities import Aggregation, Probe, ProbeResult, ProbeRunner
+from hisim.renovisor.capabilities import Aggregation, Probe, ProbeKind, ProbeResult, ProbeRunner
 from hisim.renovisor.report import HiSimCommit
 from hisim.renovisor.request import Request, RequestError
 from hisim.renovisor.translate import Translator
@@ -39,6 +41,21 @@ from hisim.renovisor.verify.leaves import ABSENT, Change, RequestLeaves, SystemL
 from hisim.renovisor.verify.probes import Completeness, MissingProbe, ProbeBases, VerificationProbe
 from hisim.renovisor.vocabulary import ReportStatus
 from hisim.renovisor.whitelist import Whitelist
+
+#: The bead that retires :data:`CONDITIONAL_PROBE_KINDS`: conditional statuses in the capability document.
+CONDITIONAL_STATUS_BEAD = "hisim-5dfc"
+
+#: A bridge, by owner decision (Noah, 2026-09-26), until :data:`CONDITIONAL_STATUS_BEAD` lands.
+#:
+#: A probe of these kinds -- a pair, one of the capability probe set's combinations (spec §7) --
+#: changes two things at once, and a leaf's status *in that combination* can be below the one the
+#: capability document announces for the leaf: solar thermal's ``supplies`` beside an oil boiler,
+#: a seasonal efficiency beside a heat pump. The document has no way yet to state a status that
+#: holds only under a condition, so for these probes a status below the announced one is a finding
+#: (``conditional_status``) and its ``map`` cell is ◐, not ✖. Every other probe keeps the failure
+#: rule. When hisim-5dfc lands, this becomes ``()`` -- the one edit that retires the bridge, since
+#: :meth:`VerificationRunner._conditional`, the finding and the legend's remark all read it.
+CONDITIONAL_PROBE_KINDS: Tuple[ProbeKind, ...] = (ProbeKind.PAIR,)
 
 
 class CellState(str, Enum):
@@ -66,7 +83,10 @@ class CellState(str, Enum):
         """Return what the legend says the symbol means."""
         return {
             CellState.AS_EXPECTED: "as expected",
-            CellState.AS_LISTED: "approximated / not_implemented_yet / defaulted, as listed",
+            CellState.AS_LISTED: "approximated / not_implemented_yet / defaulted, as listed" + (
+                f"; or a combination's conditional status below the announced one ({CONDITIONAL_STATUS_BEAD})"
+                if CONDITIONAL_PROBE_KINDS else ""
+            ),
             CellState.NO_EFFECT: "no effect",
             CellState.FAILED: "failed",
             CellState.NOT_RUN: "not run",
@@ -87,7 +107,7 @@ class Issue:
 
     Args:
         code: What kind: ``missing_probe``, ``request_diff``, ``status_below_announced``,
-            ``translation_error`` (failures) or ``no_effect`` (a finding).
+            ``translation_error`` (failures), ``no_effect`` or ``conditional_status`` (findings).
         message: One sentence a person reads.
         probe: The probe it is about, when it is about one.
     """
@@ -267,6 +287,14 @@ class StatusLine:
         """Return whether the report is silent about a leaf the document promises to act on."""
         return not self.removed and self.status in self.SILENT and self.announced in self.PROMISED
 
+    def conditional_message(self) -> str:
+        """Return what the finding of a combination's status below the announced one says."""
+        return (
+            f"{self.path} is {self.status} in this combination although the capability document announces "
+            f"{self.announced} for the leaf: a combination whose status is conditional, which the document "
+            f"cannot state until {CONDITIONAL_STATUS_BEAD}"
+        )
+
     def to_json(self) -> Dict[str, Any]:
         """Return the line as ``report.json`` carries it."""
         row: Dict[str, Any] = {"path": self.path, "line": self.line, "status": self.status}
@@ -406,6 +434,8 @@ class ProbeVerdict:
         stage_three: The energy-system diff; empty when either side did not translate.
         cells: The state of each column.
         remarks: One sentence per column, saying why it has its state.
+        conditional: The stage-2 lines below the announced status that are a finding rather than a
+            failure, because the probe is a combination (:data:`CONDITIONAL_PROBE_KINDS`).
     """
 
     probe: VerificationProbe
@@ -417,6 +447,7 @@ class ProbeVerdict:
     stage_three: Tuple[Change, ...]
     cells: Dict[Stage, CellState]
     remarks: Dict[Stage, str]
+    conditional: Tuple[StatusLine, ...] = ()
 
     def to_json(self) -> Dict[str, Any]:
         """Return the probe as ``report.json`` carries it."""
@@ -489,12 +520,20 @@ class VerificationReport:
         return tuple(issues)
 
     def findings(self) -> Tuple[Issue, ...]:
-        """Return every finding: the probes whose used leaf left the energy system unchanged."""
-        return tuple(
-            Issue("no_effect", verdict.remarks[Stage.SYSTEM], verdict.probe.name)
-            for verdict in self.verdicts
-            if verdict.cells[Stage.SYSTEM] is CellState.NO_EFFECT
-        )
+        """Return every finding, per probe in probe order.
+
+        Two kinds: a combination whose status is below the announced one
+        (:data:`CONDITIONAL_PROBE_KINDS`), and a used leaf that left the energy system unchanged.
+        """
+        issues: List[Issue] = []
+        for verdict in self.verdicts:
+            name = verdict.probe.name
+            if verdict.conditional:
+                message = "; ".join(line.conditional_message() for line in verdict.conditional)
+                issues.append(Issue("conditional_status", message, name))
+            if verdict.cells[Stage.SYSTEM] is CellState.NO_EFFECT:
+                issues.append(Issue("no_effect", verdict.remarks[Stage.SYSTEM], name))
+        return tuple(issues)
 
     def tally(self) -> Dict[str, Dict[str, int]]:
         """Return how many cells of each column carry each state."""
@@ -589,7 +628,8 @@ class VerificationRunner:
         stage_two: Tuple[StatusLine, ...] = ()
         if tested.report is not None:
             stage_two = StatusLines.of(stage_one, tested.report, probe.document, announcements)
-        cells[Stage.MAPPING], remarks[Stage.MAPPING] = cls._mapping_cell(tested, stage_two)
+        conditional = cls._conditional(probe, stage_two)
+        cells[Stage.MAPPING], remarks[Stage.MAPPING] = cls._mapping_cell(tested, stage_two, conditional)
         stage_three: Tuple[Change, ...] = ()
         if base is not None and base.system is not None and tested.system is not None:
             stage_three = base.system.diff(tested.system, tested.sources)
@@ -607,6 +647,7 @@ class VerificationRunner:
             # failure is the verdict.
             for stage in (Stage.MAPPING, Stage.SYSTEM):
                 cells[stage], remarks[stage] = CellState.NOT_RUN, "the request does not differ from its base"
+            conditional = ()
         return ProbeVerdict(
             probe=probe,
             tested=tested,
@@ -617,6 +658,7 @@ class VerificationRunner:
             stage_three=stage_three,
             cells=cells,
             remarks=remarks,
+            conditional=conditional,
         )
 
     @staticmethod
@@ -647,9 +689,26 @@ class VerificationRunner:
             return CellState.FAILED, f"the translation raised {tested.error}"
         return None
 
+    @staticmethod
+    def _conditional(probe: VerificationProbe, lines: Sequence[StatusLine]) -> Tuple[StatusLine, ...]:
+        """Return the lines below the announced status that the bridge of :data:`CONDITIONAL_PROBE_KINDS` excuses.
+
+        A probe of one of those kinds is a combination, whose status the capability document cannot
+        yet announce as conditional (``hisim-5dfc``); for any other probe nothing is excused.
+        """
+        if probe.probe.kind not in CONDITIONAL_PROBE_KINDS:
+            return ()
+        return tuple(line for line in lines if line.below_announcement)
+
     @classmethod
-    def _mapping_cell(cls, tested: Artefacts, lines: Sequence[StatusLine]) -> Tuple[CellState, str]:
-        """Stage 2: the report's status for every changed leaf, against the announcement."""
+    def _mapping_cell(
+        cls, tested: Artefacts, lines: Sequence[StatusLine], conditional: Sequence[StatusLine] = ()
+    ) -> Tuple[CellState, str]:
+        """Stage 2: the report's status for every changed leaf, against the announcement.
+
+        A line below the announcement fails the cell, unless it is one of *conditional*: then the
+        cell is ◐ and its remark says why (:data:`CONDITIONAL_PROBE_KINDS`).
+        """
         unfinished = cls._unfinished(tested)
         if unfinished is not None:
             return unfinished
@@ -657,10 +716,13 @@ class VerificationRunner:
         problems.extend(
             f"{line.path} is {line.status} although the capability document announces {line.announced}"
             for line in lines
-            if line.below_announcement
+            if line.below_announcement and line not in conditional
         )
+        excused = [line.conditional_message() for line in conditional]
         if problems:
-            return CellState.FAILED, "; ".join(problems)
+            return CellState.FAILED, "; ".join(problems + excused)
+        if excused:
+            return CellState.AS_LISTED, "; ".join(excused)
         statuses = sorted({str(line.status) for line in lines if not line.removed})
         if not lines:
             return CellState.AS_EXPECTED, "the anchor's report accounts for every leaf"

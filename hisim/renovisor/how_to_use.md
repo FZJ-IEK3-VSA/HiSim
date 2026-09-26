@@ -72,17 +72,24 @@ Three stages per probe, one matrix column each:
 | Column | Stage | ● | ◐ | ○ | ✖ |
 | --- | --- | --- | --- | --- | --- |
 | `req` | the request diff | exactly the probe's change | | | a stray or an empty change |
-| `map` | the mapping report's line for each changed leaf | `used` | approximated / defaulted / not_implemented_yet | | no line, a raise, or `defaulted`/`not_implemented_yet` where the capability document announces `used`/`approximated` |
+| `map` | the mapping report's line for each changed leaf | `used` | approximated / defaulted / not_implemented_yet; for a pair, a status below the announced one (a finding, see below) | | no line, a raise, or `defaulted`/`not_implemented_yet` where the capability document announces `used`/`approximated` |
 | `sys` | the energy-system (and economic-context) diff, per config field | something changed — shown, not judged | nothing changed, nothing `used` | nothing changed although a leaf is `used` (a finding) | the translation raised |
 
 It writes `DIR/report.json` (the same content, machine-readable), `DIR/index.html` (the matrix,
 filterable by category and state) and `DIR/probes/*.html` (one probe's path, stages 1–3 with
 before and after; stages 4–5 read "not run (tier 2)"). It exits **4** when the report lists a
 failure — a settable leaf, enum value, range end, measure or option value of the request schema or
-the catalogue that no probe changes, a stage-1 diff that is not the probe's change, a status below
-the announced one, a translation that raised — and **0** otherwise; findings never fail it. CI runs
-it on every push and pull request (`.github/workflows/path-verification.yml`) and uploads the directory
-as the artifact **`path-verification-report`**.
+the catalogue that no probe changes, a stage-1 diff that is not the probe's change, a single-change
+probe's status below the announced one, a translation that raised — and **0** otherwise; findings
+never fail it. A finding is a leaf reported `used` whose probe leaves the energy system unchanged
+(`no_effect`), or a **pair** probe (one of the probe set's combinations, spec §7) whose status is
+below the one the capability document announces for the leaf (`conditional_status`, its `map` cell
+◐): a combination's status is conditional — solar thermal's `supplies` beside an oil boiler, a
+seasonal efficiency beside a heat pump — and the document cannot state a conditional status until
+bead `hisim-5dfc` lands. That is a bridge by owner decision (2026-09-26): `CONDITIONAL_PROBE_KINDS`
+in `hisim/renovisor/verify/runner.py`, which becomes `()` when hisim-5dfc lands. CI runs it on every
+push and pull request (`.github/workflows/path-verification.yml`) and uploads the directory as the
+artifact **`path-verification-report`**.
 
 ## The one rule worth knowing
 

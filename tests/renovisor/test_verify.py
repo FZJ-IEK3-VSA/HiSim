@@ -22,7 +22,8 @@ from hisim.renovisor.verify import VerifyExitCode, verify
 from hisim.renovisor.verify.leaves import ABSENT, RequestLeaves, request_hash
 from hisim.renovisor.verify.probes import Completeness, MissingProbe, ProbeBases
 from hisim.renovisor.verify.render import ReportWriter
-from hisim.renovisor.verify.runner import CellState, Stage, VerificationReport, VerificationRunner
+from hisim.renovisor.verify import runner as runner_module
+from hisim.renovisor.verify.runner import Announcements, CellState, Stage, VerificationReport, VerificationRunner
 from hisim.renovisor.whitelist import TranslatorError
 
 #: The probe of the spec's own worked example: the external insulation's thickness.
@@ -36,6 +37,12 @@ AZIMUTH = "field:pv_system.azimuth=0"
 
 #: A probe that sends the anchor's own value, and so is measured from its sibling.
 DETACHED = "field:building.building_type=detached_sfh"
+
+#: A pair whose leaf is not_implemented_yet beside a heat pump, although the field alone is approximated.
+SCOP_ON_HEAT_PUMP = "pair:seasonal_efficiency_on_heat_pump"
+
+#: The single-change probe that makes the capability document announce the SCOP as approximated.
+SCOP = "field:heating.seasonal_efficiency_in_percent=400"
 
 
 def _probes(*names: str) -> Sequence[Probe]:
@@ -248,6 +255,49 @@ class TestTheThreeStages:
 
 
 @pytest.mark.base
+class TestConditionalStatuses:
+    """The bridge until hisim-5dfc: a pair below the announced status is a finding, a single change still fails."""
+
+    def test_a_pair_below_the_announced_status_is_a_finding(self) -> None:
+        """The SCOP is approximated on its own and not_implemented_yet beside a heat pump: ◐, pointing to hisim-5dfc."""
+        report = _run(SCOP, SCOP_ON_HEAT_PUMP)
+        verdict = _verdict(report, SCOP_ON_HEAT_PUMP)
+        line = next(line for line in verdict.stage_two if line.path == "house.heating.seasonal_efficiency_in_percent")
+
+        assert (line.status, line.announced) == ("not_implemented_yet", "approximated")
+        assert verdict.conditional == (line,)
+        assert verdict.cells[Stage.MAPPING] is CellState.AS_LISTED
+        assert "hisim-5dfc" in verdict.remarks[Stage.MAPPING]
+        assert not report.failures()
+        (finding,) = [issue for issue in report.findings() if issue.code == "conditional_status"]
+        assert finding.probe == SCOP_ON_HEAT_PUMP
+        assert "conditional" in finding.message and "hisim-5dfc" in finding.message
+        assert "not_implemented_yet" in finding.message and "announces approximated" in finding.message
+
+    def test_without_the_bridge_the_same_pair_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Retiring the bridge is emptying CONDITIONAL_PROBE_KINDS; the pair then fails as a single change does."""
+        monkeypatch.setattr(runner_module, "CONDITIONAL_PROBE_KINDS", ())
+        report = _run(SCOP, SCOP_ON_HEAT_PUMP)
+
+        assert _verdict(report, SCOP_ON_HEAT_PUMP).cells[Stage.MAPPING] is CellState.FAILED
+        assert [(issue.code, issue.probe) for issue in report.failures()] == [
+            ("status_below_announced", SCOP_ON_HEAT_PUMP)
+        ]
+        assert not [issue for issue in report.findings() if issue.code == "conditional_status"]
+
+    def test_a_single_change_below_the_announced_status_still_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Shading is not_implemented_yet; announced as used, its field probe is ✖ and a failure, not a finding."""
+        monkeypatch.setattr(Announcements, "field", lambda self, path, value: "used")
+        report = _run(SHADING)
+        verdict = _verdict(report, SHADING)
+
+        assert verdict.cells[Stage.MAPPING] is CellState.FAILED
+        assert verdict.conditional == ()
+        assert [(issue.code, issue.probe) for issue in report.failures()] == [("status_below_announced", SHADING)]
+        assert not report.findings()
+
+
+@pytest.mark.base
 class TestCompleteness:
     """Every settable leaf and value of the two contracts has a probe that changes it."""
 
@@ -348,3 +398,10 @@ class TestTheReport:
         ]
         assert verify(tmp_path / "failing") is VerifyExitCode.FAILED
         assert (tmp_path / "failing" / "index.html").is_file()
+
+        chosen["probes"] = _probes(SCOP, SCOP_ON_HEAT_PUMP)
+        assert verify(tmp_path / "conditional") is VerifyExitCode.PASSED
+        written = json.loads((tmp_path / "conditional" / "report.json").read_text(encoding="utf-8"))
+        assert [finding["code"] for finding in written["findings"]] == ["conditional_status"]
+        assert "hisim-5dfc" in written["legend"]["as_listed"]["meaning"]
+        assert "hisim-5dfc" in (tmp_path / "conditional" / "index.html").read_text(encoding="utf-8")

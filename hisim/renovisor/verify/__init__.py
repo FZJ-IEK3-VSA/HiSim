@@ -9,7 +9,8 @@ the capability probe set (:class:`hisim.renovisor.capabilities.ProbeSet`)::
 
 writes ``report.json``, ``index.html`` (the matrix, one row per probe, columns ``req | map | sys``)
 and one page per probe. The exit code is :attr:`VerifyExitCode.PASSED` or, when anything under
-``failures`` is listed, :attr:`VerifyExitCode.FAILED`; findings ("no effect") never fail it.
+``failures`` is listed, :attr:`VerifyExitCode.FAILED`; findings ("no effect", and a pair's
+conditional status below the announced one until ``hisim-5dfc``) never fail it.
 
 Modules: :mod:`~hisim.renovisor.verify.leaves` (the artefacts as flat tables and their diffs),
 :mod:`~hisim.renovisor.verify.probes` (each probe's base, and the completeness check),

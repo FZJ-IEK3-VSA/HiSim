@@ -146,10 +146,10 @@ class UnresolvedSubject:
 class _PriceBasisYearWarnings:
     """Warn-once bookkeeping for `effective_price_basis_year`.
 
-    Log noise only, never semantics. The basis-year policy is re-resolved on every evaluation — once per perspective, and again
-    for every cell of a scenario cube — so a simulation year the shipped data does not cover
-    would otherwise log the identical warning thousands of times in a sweep. The seen keys live
-    at class level so the deduplication also holds across separately constructed evaluators.
+    Log noise only, never semantics. The basis-year policy is re-resolved on every evaluation —
+    once per perspective, and again for every cell of a scenario cube — so a simulation year the
+    shipped data does not cover would otherwise log the identical warning thousands of times in a
+    sweep. The seen keys live at class level so the deduplication also holds across separately constructed evaluators.
     """
 
     WARNED: set = set()
@@ -983,6 +983,12 @@ class EconomicEvaluator:
         central-heating grant beside a heat pump -- sees the whole evaluation whichever subject
         it is assessed for. Neither the ledger nor the caller's inputs are touched.
 
+        A subject whose facts say it is not installed (size 0,
+        :meth:`~hisim.economics.facts.ComponentCostFacts.is_not_installed`) installs nothing and is
+        not listed: the bridge drops such facts before they reach an extract, but an extract built
+        another way can carry them, and a 0 kWp array must not satisfy a condition on a
+        co-installed array.
+
         Args:
             inputs: The variant's extract.
             context: The perspective's installation context.
@@ -995,7 +1001,8 @@ class EconomicEvaluator:
             {
                 subject_facts.facts.asset_class.value
                 for subject_facts in inputs.cost_facts
-                if installation_verdict(
+                if not subject_facts.facts.is_not_installed()
+                and installation_verdict(
                     subject_facts.facts.asset_class, context, inputs.existing_assets
                 ).is_new_investment
             }

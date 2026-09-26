@@ -648,15 +648,16 @@ class TestThePlansHeatCostDividesByItsDiscountedHeat:
 
 
 class TestAReplacedBufferIsBoughtWhole:
-    """renovisorissues #48: a buffer the stage's register declares replaced is a new vessel.
+    """renovisorissues #48: anything the stage's register declares replaced is a new purchase.
 
     The increment rule charges ``(new - old) / new`` of a subject present in both stages and larger
     in the later one. A heating_system measure does not enlarge the buffer, though: it takes the old
     vessel out and puts a bigger one in, which the stage's own evaluation already prices -- the full
     new price, the old one's removal and write-off, the anyway credit. Charging only the increment of
     that booked a fraction of a replacement and left the rest of the new vessel on the reference.
-    The exception is the buffer's alone (owner decision 2026-09-26): every other device keeps the
-    increment rule even where the register declares it replaced.
+    The rule holds for every replaced device, not the buffer alone (owner decision 2026-09-26, which
+    reversed the buffer-only limit of the same day): the increment is only for enlarging a device
+    the house keeps.
     """
 
     #: The subject both stages declare, as the translator names the space-heating buffer.
@@ -715,33 +716,46 @@ class TestAReplacedBufferIsBoughtWhole:
             self.BUFFER_SUBJECT: pytest.approx((self.NEW_SIZE - self.OLD_SIZE) / self.NEW_SIZE)
         }
 
-    def test_any_other_replaced_device_is_still_charged_its_increment(self, database):
-        """An array the register declares replaced keeps the increment rule: the exception is the buffer's."""
-        register = ExistingAssetRegister(
-            assets=[
+    @staticmethod
+    def _pv_stage(size: float, replaced: Optional[bool], label: str) -> Stage:
+        """A state with a PV array of ``size`` kW; ``replaced`` None means the house had no array."""
+        assets = []
+        if replaced is not None:
+            assets.append(
                 ExistingAsset(
                     asset_class=ComponentType.PV,
                     size=4.0,
                     size_unit=Units.KILOWATT,
                     installation_year=SyntheticPlan.YEAR - 10,
-                    replaced_by_asset_classes=[ComponentType.PV],
+                    replaced_by_asset_classes=[ComponentType.PV] if replaced else [],
                     replacement_cost_override_in_euro=UncertainValue.exact(6000.0),
                 )
-            ]
+            )
+        return Stage(
+            inputs=state_inputs(
+                [("PVSystem", ComponentType.PV, size, size * 1500.0)],
+                SyntheticPlan.BASELINE_ELECTRICITY_IN_KWH,
+                register=ExistingAssetRegister(assets=assets),
+            ),
+            from_year=0,
+            label=label,
         )
 
-        def stage(size: float, inventory: ExistingAssetRegister, label: str) -> Stage:
-            return Stage(
-                inputs=state_inputs(
-                    [("PVSystem", ComponentType.PV, size, size * 1500.0)],
-                    SyntheticPlan.BASELINE_ELECTRICITY_IN_KWH,
-                    register=inventory,
-                ),
-                from_year=0,
-                label=label,
-            )
+    def test_a_replaced_array_is_bought_whole(self, database):
+        """An array the register declares replaced is a new array, not the 6 kW it adds to the old one."""
+        stages = (self._pv_stage(4.0, False, "baseline"), self._pv_stage(10.0, True, "package"))
+        # pylint: disable=protected-access
+        assert StagedEvaluator(database)._charged_subjects(stages, 1) == {"PVSystem": 1.0}
 
-        stages = (stage(4.0, ExistingAssetRegister(assets=[]), "baseline"), stage(10.0, register, "package"))
+    def test_a_same_size_replacement_is_not_free(self, database):
+        """A replacement of the same size was charged nothing under the increment rule; it is bought whole."""
+        stages = (self._pv_stage(4.0, False, "baseline"), self._pv_stage(4.0, True, "package"))
+        # pylint: disable=protected-access
+        assert StagedEvaluator(database)._charged_subjects(stages, 1) == {"PVSystem": 1.0}
+
+    def test_an_enlarged_kept_array_is_still_charged_its_increment(self, database):
+        """An array the house keeps and enlarges from 4 to 10 kW pays for the 6 kW it adds: 6 / 10."""
+        stages = (self._pv_stage(4.0, False, "baseline"), self._pv_stage(10.0, False, "package"))
         # pylint: disable=protected-access
         assert StagedEvaluator(database)._charged_subjects(stages, 1) == {"PVSystem": pytest.approx(0.6)}
 

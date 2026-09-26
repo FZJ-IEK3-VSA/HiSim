@@ -42,7 +42,6 @@ from hisim.economics.adapter import FactsExtractors
 from hisim.economics.bridge import EconomicContext
 from hisim.economics.calculators.context_resolution import ContextResolutionConstants
 from hisim.economics.carriers import EnergyCarrier
-from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import SubjectCostFacts, effective_price_basis_year
 from hisim.economics.facts import ComponentCostFacts, ExistingAsset, ExistingAssetRegister
@@ -424,8 +423,16 @@ class UnknownAge:
     Both inputs are the engine's own. The price basis year is the one the run prices at
     (:func:`~hisim.economics.evaluator.effective_price_basis_year` for the calculation's country and
     simulation year, which ``economic_inputs.json`` records), and the service life is the one the
-    engine reads for the asset class at that year from the shipped cost database -- the entry's
-    ``service_life_in_years``, or the engine's fallback for a class the database does not price.
+    engine reads for the asset class at that year from the cost database -- the entry's
+    ``service_life_in_years``, or the engine's fallback
+    (:attr:`~hisim.economics.calculators.context_resolution.ContextResolutionConstants.FALLBACK_SERVICE_LIFE_IN_YEARS`)
+    for a class the database has no entry for at all, which the mapping report then says. Any other
+    failure of the lookup -- a country without device data, a class priced only from a later year --
+    is an error of the data and propagates.
+
+    The database read is the **shipped** one (``CostDatabase(None)``), which is the one every
+    RenoVisor calculation is priced against: the translator has no other database to consult, and a
+    run pointed at a different one would age its assets by a service life it is not priced with.
     """
 
     #: What the mapping report says about a mid-life year.
@@ -433,6 +440,14 @@ class UnknownAge:
         "the request states no installation year, so the asset is assumed to be at mid-life: the price "
         "basis year {basis} less half its {life:g}-year service life, never before the construction "
         "year {built}"
+    )
+
+    #: What it says instead when the cost database has no entry for the class, so the service life
+    #: is the engine's fallback rather than a figure of the data.
+    FALLBACK_NOTE: ClassVar[str] = (
+        "the request states no installation year, so the asset is assumed to be at mid-life: the price "
+        "basis year {basis} less half its service life of {life:g} years, the engine's fallback: the "
+        "cost database has no entry for {asset_class}; never before the construction year {built}"
     )
 
     #: The shipped cost database, loaded once: it is immutable, and loading it is the expensive part.
@@ -451,12 +466,26 @@ class UnknownAge:
         return effective_price_basis_year(EconomicParameters(country=country), cls.database(), SimulationSetup.YEAR)
 
     @classmethod
-    def service_life(cls, asset_class: ComponentType, year: int, country: str) -> float:
-        """The service life the engine reads for one asset class, in years."""
-        try:
-            return float(cls.database().get_device_entry(asset_class, year, country).service_life_in_years)
-        except CostDataError:
-            return ContextResolutionConstants.FALLBACK_SERVICE_LIFE_IN_YEARS
+    def service_life(cls, asset_class: ComponentType, year: int, country: str) -> Tuple[float, bool]:
+        """The service life the engine reads for one asset class, and whether it is the fallback.
+
+        Args:
+            asset_class: The class to look up.
+            year: The price basis year the entry must be valid at.
+            country: The calculation's country.
+
+        Returns:
+            ``(years, is_fallback)``: the entry's ``service_life_in_years`` and ``False``, or the
+            engine's fallback and ``True`` when the country's data has no entry for the class.
+
+        Raises:
+            CostDataError: When the country has no device data at all, or when it prices the class
+                but not at ``year``: both are faults of the data, not an unknown class.
+        """
+        database = cls.database()
+        if country in database.devices and not database.has_device_entry(asset_class, country):
+            return ContextResolutionConstants.FALLBACK_SERVICE_LIFE_IN_YEARS, True
+        return float(database.get_device_entry(asset_class, year, country).service_life_in_years), False
 
     @classmethod
     def installation_year(cls, asset_class: ComponentType, country: str, construction_year: int) -> Tuple[int, str]:
@@ -471,9 +500,10 @@ class UnknownAge:
             ``(installation year, mapping-report note)``.
         """
         basis = cls.price_basis_year(country)
-        life = cls.service_life(asset_class, basis, country)
+        life, is_fallback = cls.service_life(asset_class, basis, country)
         year = max(construction_year, basis - int(round(life / 2.0)))
-        return year, cls.NOTE.format(basis=basis, life=life, built=construction_year)
+        note = cls.FALLBACK_NOTE if is_fallback else cls.NOTE
+        return year, note.format(basis=basis, life=life, built=construction_year, asset_class=asset_class.name)
 
 
 class DwellingTypes:
@@ -1104,6 +1134,13 @@ class EconomicContextBuilder:
         "such part"
     )
 
+    #: What it adds when a measure removes the part and the package's twin has none in its place.
+    EQUIPMENT_REMOVED_NOTE: ClassVar[str] = (
+        "; removed by {measure} without a successor, since the package's twin has no such part: the "
+        "engine books no removal cost and no written-off book value for a part removed without "
+        "replacement"
+    )
+
     def _equipment_assets(self, result: Optional[EconomicContextResult] = None) -> List[ExistingAsset]:
         """One register entry per piece of :class:`TwinEquipment` the house has before the package.
 
@@ -1113,10 +1150,19 @@ class EconomicContextBuilder:
         realized configuration, so the entry describes the vessel exactly as the engine will price
         its successor, and the anyway credit compares like with like.
 
-        An entry is replaced when its row's measure is in the package: by the class the plan twin
+        An entry is replaced when its row's measure is in the package, by the class the plan twin
         installs in its place (the new emitters of ``heating_installation`` may be of another
-        class than the old ones), or like-for-like when the plan twin has no such component to say.
-        Everything else is kept, and a kept entry is what keeps the reference from buying it.
+        class than the old ones). Everything else is kept, and a kept entry is what keeps the
+        reference from buying it.
+
+        A measure can also take a part out without putting one in: a ``heating_system`` measure
+        that installs electric heating leaves a twin with no buffer and no emitters. Such an entry
+        is *not* declared replaced by its own class -- nothing of that class is bought -- and its
+        ``replaced_by_asset_classes`` stays empty, which the mapping report words as a removal. The
+        engine has no booking for a removal without a successor (``cost_spec.md`` §4.1 books the
+        removal cost and the written-off book value only through the subject that replaces an
+        asset, ``calculators/context_resolution.py``), so neither is counted, and the note says so
+        rather than inventing a booking here (hisim-tqkn).
 
         Args:
             result: The result being assembled, for the approximation line each entry carries.
@@ -1133,9 +1179,14 @@ class EconomicContextBuilder:
                 continue
             component, facts = found
             replaced: List[ComponentType] = []
+            removed = ""
             if equipment.measure_id in self._measure_ids:
-                successor = self._plan_twin.cost_facts(equipment.component_class) if self._plan_twin else None
-                replaced = [successor[1].asset_class if successor is not None else facts.asset_class]
+                plan_twin = self._plan_twin if self._plan_twin is not None else self._baseline_twin
+                successor = plan_twin.cost_facts(equipment.component_class)
+                if successor is not None:
+                    replaced = [successor[1].asset_class]
+                else:
+                    removed = self.EQUIPMENT_REMOVED_NOTE.format(measure=equipment.measure_id)
             stated = self._stated_year(self._raw_original.get(equipment.dated_by)) if equipment.dated_by else None
             if stated is not None:
                 year = stated
@@ -1165,7 +1216,7 @@ class EconomicContextBuilder:
                             "installation_year": year,
                             "replaced_by_asset_classes": [asset_class.name for asset_class in replaced],
                         },
-                        self.EQUIPMENT_NOTE.format(dated=dated),
+                        self.EQUIPMENT_NOTE.format(dated=dated) + removed,
                     )
                 )
         return assets

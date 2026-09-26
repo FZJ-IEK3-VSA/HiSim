@@ -169,16 +169,37 @@ class ReplacedAssetOutcome:
 class InstallationVerdict:
     """Whether one asset class is bought, kept or replacing something, before any price (§4.1).
 
+    Three outcomes, and the fields say which one without contradiction: a **replacement** is a new
+    investment with the register entry it replaces; a **kept** asset is no investment and names the
+    register entry it is; anything else is either a new investment of nothing registered
+    (GREENFIELD, or BROWNFIELD without a matching entry) or, under STATUS_QUO, no investment of
+    nothing registered. A replacement is always a new investment: STATUS_QUO carries out no
+    replacement, so its verdict never names one (:func:`installation_verdict`).
+
     Attributes:
         is_new_investment: Whether the subject is charged at year 0.
         replaced_asset: The register entry the subject replaces, if it replaces one.
         kept_asset: The register entry the subject *is*, if it is a kept existing asset (under
-            BROWNFIELD or STATUS_QUO with a matching register entry that nothing replaces).
+            BROWNFIELD or STATUS_QUO with a matching register entry that nothing replaces, or
+            under STATUS_QUO with any matching register entry).
+
+    Raises:
+        ValueError: On a verdict that is a replacement and not an investment, or kept and an
+            investment, or both a replacement and kept.
     """
 
     is_new_investment: bool
     replaced_asset: Optional[ExistingAsset] = None
     kept_asset: Optional[ExistingAsset] = None
+
+    def __post_init__(self) -> None:
+        """Refuse the combinations :func:`installation_verdict` never produces."""
+        if self.replaced_asset is not None and self.kept_asset is not None:
+            raise ValueError("an installation verdict is a replacement or a kept asset, never both")
+        if self.replaced_asset is not None and not self.is_new_investment:
+            raise ValueError("a replacement is a new investment; a verdict that is not one replaces nothing")
+        if self.kept_asset is not None and self.is_new_investment:
+            raise ValueError("a kept existing asset is not a new investment")
 
 
 def installation_verdict(
@@ -188,11 +209,20 @@ def installation_verdict(
 ) -> InstallationVerdict:
     """Decide the §4.1 installation context of one asset class, touching no price and no ledger.
 
-    The replacement check runs FIRST, so a like-for-like measure (new windows replacing old
-    windows, same asset class) is charged as an investment instead of being "kept". Under
-    STATUS_QUO nothing is a new investment. Split out of :func:`resolve_device` so the evaluator
-    can ask, before it prices anything, which asset classes an evaluation installs -- what the
-    subsidy conditions' ``package.*`` fields report -- with exactly the rule the pricing uses.
+    Under BROWNFIELD the replacement check runs FIRST, so a like-for-like measure (new windows
+    replacing old windows, same asset class) is charged as an investment instead of being
+    "kept". Under STATUS_QUO nothing is a new investment and so nothing is replaced: the register's
+    replacements are the measures the do-nothing reference does not carry out, and a matching
+    entry is a kept asset that ages toward its like-for-like replacement. Split out of
+    :func:`resolve_device` so the evaluator can ask, before it prices anything, which asset classes
+    an evaluation installs -- what the subsidy conditions' ``package.*`` fields report -- with
+    exactly the rule the pricing uses.
+
+    Before 2026-09-26 STATUS_QUO ran the replacement check too and returned "not a new investment,
+    replacing X": every consumer gates the replaced asset on ``is_new_investment``, so the removal,
+    write-off and credit it names were never booked, but it hid the kept asset of a like-for-like
+    replacement, whose first replacement then fell at a full service life instead of at its
+    remaining life.
 
     Args:
         asset_class: The subject's asset class.
@@ -201,15 +231,29 @@ def installation_verdict(
 
     Returns:
         The verdict.
+
+    Raises:
+        ValueError: When more than one register entry is declared replaced by ``asset_class``.
+            One subject replaces one asset; with two, the first match would silently decide whose
+            removal, write-off and anyway credit the subject carries and the other would be kept.
     """
     replaced_asset: Optional[ExistingAsset] = None
     kept_asset: Optional[ExistingAsset] = None
     is_new_investment = True
+    if context == InstallationContext.BROWNFIELD and register is not None:
+        replaced = [asset for asset in register.assets if asset_class in asset.replaced_by_asset_classes]
+        if len(replaced) > 1:
+            raise ValueError(
+                f"{len(replaced)} register entries are replaced by {asset_class.value!r}: "
+                + " and ".join(
+                    f"{asset.asset_class.value!r} ({asset.size:g} {asset.size_unit.value}, installed "
+                    f"{asset.installation_year})"
+                    for asset in replaced
+                )
+                + "; one subject replaces one asset, so the register must name one."
+            )
+        replaced_asset = replaced[0] if replaced else None
     if context in (InstallationContext.BROWNFIELD, InstallationContext.STATUS_QUO) and register is not None:
-        replaced_asset = next(
-            (asset for asset in register.assets if asset_class in asset.replaced_by_asset_classes),
-            None,
-        )
         if replaced_asset is None:
             kept_asset = register.find(asset_class)
             if kept_asset is not None:

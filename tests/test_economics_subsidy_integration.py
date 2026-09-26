@@ -477,3 +477,25 @@ class TestTheEvaluatorStatesWhatThePackageInstalls:
         assert greenfield.package.installed_asset_classes == ("Conventional Radiator", "HeatPump", "PV")
         assert status_quo.package.installed_asset_classes == ()
         assert inputs.subsidy_context.package.installed_asset_classes is None, "the caller's inputs are untouched"
+
+    def test_a_subject_configured_at_zero_size_is_not_listed(self):
+        """A 0 kWp array is declared but not built: it installs nothing a condition could read."""
+        from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs, SubjectCostFacts
+        from hisim.economics.perspectives import InstallationContext
+
+        inputs = EvaluationInputs(
+            simulation_year=2024,
+            simulated_period_fraction=1.0,
+            cost_facts=[
+                SubjectCostFacts(
+                    "HeatPump",
+                    ComponentCostFacts(asset_class=ComponentType.HEAT_PUMP, size=8.0, size_unit=Units.KILOWATT),
+                ),
+                SubjectCostFacts(
+                    "Array", ComponentCostFacts(asset_class=ComponentType.PV, size=0.0, size_unit=Units.KILOWATT)
+                ),
+            ],
+        )
+        # pylint: disable=protected-access  # the pre-pass has no public surface of its own
+        package = EconomicEvaluator._with_package(inputs, InstallationContext.GREENFIELD).package
+        assert package.installed_asset_classes == ("HeatPump",)

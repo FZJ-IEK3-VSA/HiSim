@@ -611,6 +611,31 @@ class TestConditionAstAndFieldVocabulary:
         with pytest.raises(SubsidyDataError, match="TEST: unknown op"):
             parse_condition({"field": "building.dwelling_units", "op": "=~", "value": 1}, "TEST")
 
+    @pytest.mark.parametrize(
+        "fieldname, op, value, misspelled",
+        [
+            ("package.installed_asset_classes", "contains", "Heatpump", "Heatpump"),
+            ("building.existing_heating.asset_class", "==", "HEAT_PUMP", "HEAT_PUMP"),
+            ("building.existing_heating.replaced_by_asset_classes", "contains", "HeatPumps", "HeatPumps"),
+            ("measure.asset_class", "in", ["HeatPump", "OilHeatr"], "OilHeatr"),
+        ],
+    )
+    def test_parse_rejects_a_value_that_is_not_an_asset_class(self, fieldname, op, value, misspelled):
+        """An asset-class field compares ComponentType values: a misspelled one would never match."""
+        with pytest.raises(SubsidyDataError, match=f"TEST: condition on '{fieldname}'.*{misspelled}"):
+            parse_condition({"field": fieldname, "op": op, "value": value}, "TEST")
+
+    def test_parse_accepts_asset_class_values_and_exists_without_one(self):
+        """The ComponentType values themselves parse, and ``exists`` has no value to check."""
+        parse_condition({"field": "package.installed_asset_classes", "op": "contains", "value": "HeatPump"}, "T")
+        parse_condition({"field": "measure.asset_class", "op": "in", "value": ["HeatPump", "OilHeater"]}, "T")
+        parse_condition({"field": "building.existing_heating.asset_class", "op": "exists"}, "T")
+
+    @pytest.mark.parametrize("country", ["AT", "DE", "IE"])
+    def test_every_shipped_catalog_names_only_real_asset_classes(self, country):
+        """The refusal runs at load, so every shipped catalogue loading is the check."""
+        assert SubsidyCatalog.load(country).schemes
+
     def test_evaluation_semantics_are_tri_state(self):
         """Leaf/all/any/not semantics, unchanged by the split (§5.7)."""
         context = SubsidyContext(
@@ -1024,7 +1049,8 @@ class TestScenarioDataOverlays:
         entry = overlaid.get_device_entry(ComponentType.HEAT_PUMP, 2024, "DE")
         assert entry.specific_investment.best_estimate == pytest.approx(1100.0)
         # The shipped database is untouched.
-        assert database.get_device_entry(ComponentType.HEAT_PUMP, 2024, "DE").specific_investment.best_estimate == 1600.0
+        entry = database.get_device_entry(ComponentType.HEAT_PUMP, 2024, "DE")
+        assert entry.specific_investment.best_estimate == 1600.0
         assert overlaid.overlay_records and overlaid.overlay_records[0].detail == "cheap_hp"
 
     def test_an_override_that_breaks_the_parameters_is_refused(self):

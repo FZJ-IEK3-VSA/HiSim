@@ -391,12 +391,6 @@ class StagedEvaluator:
         "plan for a country that has one."
     )
 
-    #: The asset classes a stage buys whole when its register newly declares them replaced,
-    #: instead of charging the size increment over the previous stage (:meth:`_charged_subjects`).
-    #: Only the space-heating buffer, which a heating_system measure replaces with the vessel the
-    #: new generator is sized for (renovisorissues #48, owner decision 2026-09-26).
-    BOUGHT_WHOLE_WHEN_REPLACED: FrozenSet[ComponentType] = frozenset({ComponentType.SPACE_HEATING_STORAGE})
-
     def __init__(self, cost_database: CostDatabase) -> None:
         """Bind the evaluator to one cost database.
 
@@ -646,17 +640,20 @@ class StagedEvaluator:
         absent from the returned mapping rather than present with a zero, so "did this stage buy
         this" is one membership test.
 
-        One exception to the increment, for the space-heating buffer alone
-        (:attr:`BOUGHT_WHOLE_WHEN_REPLACED`), and it is the house's own register that states it: a
-        buffer the stage's inventory declares *replaced*, where the stage before declared no such
-        replacement, is a new vessel bought whole in this stage, however large the old one was
-        (:meth:`_newly_replaced_classes`). The stage's own evaluation already prices it so -- the
-        full new price, the old one's removal, its written-off book value and the anyway credit
+        The increment is only for something the house *keeps* and enlarges. Anything the stage's
+        inventory declares *replaced*, where the stage before declared no such replacement
+        (:meth:`_newly_replaced_classes`), is a new purchase bought whole in this stage, however
+        large the old one was: a generator, a buffer, a cylinder, the emitters, a PV array, a
+        battery, a collector. The stage's own evaluation already prices it so -- the full new
+        price, the old one's removal, its written-off book value and the anyway credit
         (``cost_spec.md`` §4.1) -- and charging only the size increment of that would book a
         fraction of a replacement. A heating_system measure that replaces a 430-litre buffer with a
-        970-litre one buys a 970-litre vessel, not 540 litres of one (renovisorissues #48). Every
-        other replaced device -- an array, a battery, a collector, a generator -- keeps the rule
-        above (owner decision 2026-09-26).
+        970-litre one buys a 970-litre vessel, not 540 litres of one (renovisorissues #48).
+
+        An owner decision of 2026-09-26 first limited this to the space-heating buffer; it was
+        reversed later that day, because under the increment rule every same-class replacement
+        of the same size or smaller was free -- a hot_water_system measure replacing a cylinder
+        with one of the same size, a heat pump replacing a heat pump.
 
         Args:
             stages: The plan as given.
@@ -674,8 +671,7 @@ class StagedEvaluator:
         charged: Dict[str, float] = {}
         for subject, facts in current.items():
             before = previous.get(subject)
-            bought_whole = facts.asset_class in replaced and facts.asset_class in cls.BOUGHT_WHOLE_WHEN_REPLACED
-            if before is None or before.asset_class != facts.asset_class or bought_whole:
+            if before is None or before.asset_class != facts.asset_class or facts.asset_class in replaced:
                 charged[subject] = 1.0
                 continue
             if before.size <= 0.0:

@@ -908,7 +908,7 @@ class TestStatedEnergyPrices:
     @pytest.fixture(name="stated")
     def fixture_stated(self, parameters) -> EconomicParameters:
         """The synthetic assumptions with a stated electricity price and rate."""
-        return replace(
+        stated: EconomicParameters = replace(
             parameters,
             energy_price_escalation_rates={EnergyCarrier.ELECTRICITY: self.RATE},
             energy_prices={
@@ -917,6 +917,7 @@ class TestStatedEnergyPrices:
                 )
             },
         )
+        return stated
 
     @pytest.fixture(name="result")
     def fixture_result(self, database, stated):
@@ -984,6 +985,7 @@ class TestStatedEnergyPrices:
         """Stated terms say ``stated``; the feed-in rate nobody stated is the database's."""
         echo = result.energy_echo
         assert echo is not None
+        assert echo is not None
         assert echo.rates == {EnergyCarrier.ELECTRICITY: (self.RATE, EchoOrigin.STATED)}
         electricity = echo.prices[EnergyCarrier.ELECTRICITY]
         assert electricity.working_price_in_euro_per_kwh == self.WORKING
@@ -1010,17 +1012,21 @@ class TestStatedEnergyPrices:
         for amount in revenue.values():
             assert _close(amount, UncertainValue.exact(-sold * rate))
         entry = next(entry for entry in result.plan.timeline.entries if entry.category is CostCategory.FEED_IN_REVENUE)
+        assert result.ledger is not None
         record = result.ledger.get(entry.provenance_ids[0])
         assert record.origin is ParameterOrigin.REQUEST
         assert record.parameter == "parameters.energy_prices.ELECTRICITY_FEED_IN.working_price_in_euro_per_kwh"
+        assert result.energy_echo is not None
         assert result.energy_echo.prices[EnergyCarrier.ELECTRICITY_FEED_IN].working_price_origin is EchoOrigin.STATED
 
     def test_nothing_stated_bills_exactly_as_before(self, database, parameters):
         """An empty block is the database's contract, entry for entry, with its default id."""
         stages = [baseline_stage(), envelope_stage(0)]
         plain = StagedEvaluator(database).evaluate(stages, parameters, brownfield_perspective())
+        assert plain.per_stage[0].assumptions is not None
         assert plain.per_stage[0].assumptions.tariffs["ELECTRICITY"].is_default_contract
         echo = plain.energy_echo
+        assert echo is not None
         assert echo.prices[EnergyCarrier.ELECTRICITY].working_price_origin is EchoOrigin.DATABASE
         assert echo.rates[EnergyCarrier.ELECTRICITY] == (parameters.general_price_escalation_rate, EchoOrigin.GENERAL)
 
@@ -1182,10 +1188,12 @@ class TestStatedPricesAgainstTheCarbonPath:
         """Unstated gas is echoed as the database's working price plus the year-1 carbon price."""
         result = StagedEvaluator(shipped).evaluate([self._stage()], irish, brownfield_perspective())
         echo = result.energy_echo
+        assert echo is not None
         entry = shipped.get_energy_price(EnergyCarrier.NATURAL_GAS, self.YEAR, "IE")
         carbon = self._co2_per_kwh(shipped, EnergyCarrier.NATURAL_GAS, self.YEAR)
         gas = echo.prices[EnergyCarrier.NATURAL_GAS]
         all_in = entry.working_price_in_euro_per_kwh + UncertainValue.exact(carbon)
+        assert gas.working_price_in_euro_per_kwh is not None
         assert _close(gas.working_price_in_euro_per_kwh, all_in)
         assert gas.working_price_origin is EchoOrigin.DATABASE
         assert gas.standing_charge_in_euro_per_year == entry.standing_charge_in_euro_per_year
@@ -1196,6 +1204,7 @@ class TestStatedPricesAgainstTheCarbonPath:
         """The database's all-in price, stated, gives the same year-1 bill and the same NPV."""
         first = StagedEvaluator(shipped).evaluate([self._stage()], irish, brownfield_perspective())
         echo = first.energy_echo
+        assert echo is not None
         stated = replace(
             irish,
             energy_price_escalation_rates={carrier: rate for carrier, (rate, _origin) in echo.rates.items()},
@@ -1206,6 +1215,7 @@ class TestStatedPricesAgainstTheCarbonPath:
         )
         second = StagedEvaluator(shipped).evaluate([self._stage()], stated, brownfield_perspective())
         assert _close(second.plan.total_npv_in_euro, first.plan.total_npv_in_euro)
+        assert second.energy_echo is not None
         assert {price.working_price_origin for price in second.energy_echo.prices.values()} == {EchoOrigin.STATED}
 
     def test_a_stated_price_below_the_year_one_carbon_price_is_refused(self, shipped, irish):

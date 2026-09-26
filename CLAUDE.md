@@ -134,9 +134,12 @@ the frontend side's `calculation-request` specification; the decision register i
 `roadmap/renovisor/challenges.md` (§9, §12 and the decisions of §13), and the implementation specs are
 under `roadmap/renovisor/implementation/`. One page of usage: `hisim/renovisor/how_to_use.md`.
 
-Commands: `python -m hisim.renovisor {run|translate|validate|capabilities|map}`. Exit codes 0 finished,
+Commands: `python -m hisim.renovisor {run|translate|validate|capabilities|map|verify}`. Exit codes 0 finished,
 2 the request is not a request (`problems.json` lists every fault), 3 a translator error
-(`translator_error.json`), 5 HiSim refused the file or the simulation raised.
+(`translator_error.json`), 5 HiSim refused the file or the simulation raised. `verify --out DIR` is tier 1
+of the path verification (`hisim/renovisor/verify/`): every capability probe translated and diffed against
+its base (request, mapping report, energy system), written as `report.json` + an HTML matrix; it exits 4 when
+the report lists a failure. CI uploads it as the artifact `path-verification-report`.
 
 Layers: `contract/` (vendored measure catalogue, request schema, worked mockup and capability-document
 schema, each pinned to a commit in `PINNED.yaml`; refresh with
@@ -152,7 +155,9 @@ arithmetic), `tabula.py` (the archetype, every `.N.` country), `translate.py` (t
 `result.py`/`kpis.py`/`costs.py`/`layers.py`/`provenance.py` (`result.json`), `capabilities.py` (the probe
 set and the document the backend serves per image), `map.py` (generates the committed
 `roadmap/renovisor/translation_map.html`; regenerate with `python -m hisim.renovisor map` whenever the
-catalogue, the registry or the bindings change, or `tests/renovisor/test_map.py` fails).
+catalogue, the registry or the bindings change, or `tests/renovisor/test_map.py` fails), `verify/` (the
+path-verification harness, tier 1: `probes.py` chooses each probe's base and checks completeness against
+the request schema and the catalogue, `runner.py` translates and diffs, `render.py` writes the report).
 
 The rule the package rests on: **fail loudly, except for what is written down.** A feature the translator
 has not implemented is a note in the mapping report and the calculation runs, but only if

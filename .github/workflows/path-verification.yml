@@ -1,0 +1,73 @@
+# Tier 1 of the RenoVisor path verification (renovisorissues specs/path_verification_spec.md,
+# §9 step 1): every capability probe translated against its base -- request, mapping report,
+# energy system -- inside the prebuilt HiSim test image, with no simulation. The report is
+# uploaded as the artifact path-verification-report whatever the verdict, because a failing run
+# is the one somebody opens it for. See hisim/renovisor/how_to_use.md.
+#
+# A workflow of its own rather than a job of tests.yml: golden-year.yml's gate
+# (scripts/ci_prereqs_done.sh) waits for tests.yml to be green, and a verification failure --
+# a probe missing for a settable leaf, a status below the announced one -- says nothing about
+# whether the full-year golden references may run.
+
+name: path-verification
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  # Runnable by hand as well, because the two automatic triggers above only fire for pull
+  # requests that target main; a stacked pull request is verified by dispatching this workflow.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: path-verification-${{ github.ref }}
+  # Cancel superseded runs on feature branches, but let every push to main finish.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  verify:
+    name: path verification (tier 1)
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+    - uses: actions/checkout@v7
+    # Wall time, CPU time and peak memory for this job; see the action.
+    - name: Start the resource monitor
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: start
+    - name: Mark workspace as safe for git
+      # The report names the commit it verified, which git has to be allowed to read.
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+    - name: Install HiSim package
+      run: |
+        uv pip install --system -e .
+    # Exits 4 when the report lists a failure, which fails the job; findings never fail it.
+    - name: Verify every probe path (request, mapping report, energy system)
+      run: python -m hisim.renovisor verify --out path-verification-report
+    # Diagnostics like the coverage upload of tests.yml, so a refusal of the artifact service
+    # must not read as a verification failure; the verdict is the step above.
+    - name: Upload the path-verification report
+      if: always()
+      continue-on-error: true
+      uses: actions/upload-artifact@v7
+      with:
+        name: path-verification-report
+        path: path-verification-report/
+        if-no-files-found: warn
+    # Kept on failure too: a job killed for running out of memory is the one
+    # whose measurement matters most.
+    - name: Report the resource usage
+      if: always()
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: report

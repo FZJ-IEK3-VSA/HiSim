@@ -1,6 +1,6 @@
 """The command-line entry point of the RenoVisor translation layer.
 
-Five commands, files in and files out, and nothing posted anywhere -- the service that started
+Six commands, files in and files out, and nothing posted anywhere -- the service that started
 the container collects the files::
 
     python -m hisim.renovisor run          <request.{json,yaml}> --out DIR [--period ...]
@@ -8,19 +8,23 @@ the container collects the files::
     python -m hisim.renovisor validate     <request>
     python -m hisim.renovisor capabilities --out FILE [--measures measures.yaml]
     python -m hisim.renovisor map          [--out translation_map.html]
+    python -m hisim.renovisor verify       --out DIR [--base-files DIR]
 
 ``run`` is what the backend calls. ``translate`` stops after the energy-system file and the
 mapping report, which is what the verification harness and every probe use. ``validate`` prints
 the problems JSON and exits without touching the disk. ``capabilities`` writes the document the
 backend serves as ``GET /measures`` for this image. ``map`` regenerates the committed HTML page
-that shows the whole translation at a glance.
+that shows the whole translation at a glance. ``verify`` runs tier 1 of the path verification --
+every capability probe translated and diffed against its base, request, mapping report and energy
+system -- and writes the matrix report (:mod:`hisim.renovisor.verify`).
 
 There is no ``--variant``: the baseline is a request with ``measures: []``.
 
 Exit codes are the translator's, not argparse's: ``0`` finished, ``2`` the request is not a
 request, ``3`` the translator could not map something nobody listed, ``5`` HiSim refused the
 file or the simulation raised. The last line on standard error for ``3`` and ``5`` is one line,
-because the backend shows it as the job's error message.
+because the backend shows it as the job's error message. ``verify`` exits ``0`` when the report
+lists no failure and ``4`` when it lists one.
 """
 
 import argparse
@@ -174,6 +178,37 @@ class MapCommand:
         return int(TranslationMap.write(Path(arguments.out) if arguments.out else None))
 
 
+class VerifyCommand:
+    """The ``verify`` subcommand: tier 1 of the path verification, as a report directory."""
+
+    #: The subcommand's name on the command line.
+    NAME: ClassVar[str] = "verify"
+
+    #: What the command does, printed by ``--help``.
+    HELP: ClassVar[str] = "translate every capability probe against its base and write the path-verification report"
+
+    @classmethod
+    def add_to(cls, subparsers: Any) -> None:
+        """Declare the subcommand and its arguments on an argument parser."""
+        parser = subparsers.add_parser(cls.NAME, help=cls.HELP)
+        _add_out_argument(parser, "directory to write report.json, index.html and the probe pages into")
+        parser.add_argument(
+            "--base-files",
+            default=None,
+            help="directory holding the recorded energy-system files (default: energy_systems/)",
+        )
+        parser.set_defaults(handler=cls.run)
+
+    @classmethod
+    def run(cls, arguments: argparse.Namespace) -> int:
+        """Run the verification and return ``0``, or ``4`` when the report lists a failure."""
+        from hisim.renovisor.verify import verify
+
+        return int(
+            verify(Path(arguments.out), Path(arguments.base_files) if arguments.base_files else None)
+        )
+
+
 def _add_request_argument(parser: argparse.ArgumentParser) -> None:
     """Declare the positional request file every request-taking command has."""
     parser.add_argument("request", metavar="REQUEST", help="the calculation request, JSON or YAML")
@@ -223,7 +258,7 @@ class RenovisorCommandLine:
         """Return the argument parser with every subcommand declared on it."""
         parser = argparse.ArgumentParser(prog=cls.PROGRAM, description=cls.DESCRIPTION)
         subparsers = parser.add_subparsers(dest="command", required=True)
-        for command in (RunCommand, TranslateCommand, ValidateCommand, CapabilitiesCommand, MapCommand):
+        for command in (RunCommand, TranslateCommand, ValidateCommand, CapabilitiesCommand, MapCommand, VerifyCommand):
             command.add_to(subparsers)
         return parser
 

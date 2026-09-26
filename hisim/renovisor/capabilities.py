@@ -135,13 +135,17 @@ class Probe:
             anchor: The anchor request, which is never mutated.
 
         Returns:
-            A deep copy of the anchor with this probe's changes applied.
+            A deep copy of the anchor with this probe's changes applied. Every value is copied
+            in as well: a field probe's prelude block is one dictionary shared by every value
+            probe of that field, and writing the field into the block itself would otherwise
+            change the prelude of every sibling (found by the path-verification harness, whose
+            bases are the preludes).
         """
         request = copy.deepcopy(dict(anchor))
         for path, value in self.house.items():
-            _write(request["house"], path, value)
+            _write(request["house"], path, copy.deepcopy(value))
         for key, value in self.location.items():
-            _write(request["location"], key, value)
+            _write(request["location"], key, copy.deepcopy(value))
         if self.measures is not None:
             request["measures"] = [copy.deepcopy(dict(entry)) for entry in self.measures]
         return request
@@ -719,6 +723,37 @@ class ProbeResult:
     hits: Tuple[str, ...] = ()
     targets: Dict[str, Tuple[str, ...]] = field(default_factory=dict)
 
+    @classmethod
+    def of_report(cls, probe: Probe, report: Mapping[str, Any], hits: Tuple[str, ...]) -> "ProbeResult":
+        """Reduce one translated probe's mapping report to what the document aggregates.
+
+        The one place the reduction is written, so the capability run and the path-verification
+        harness (:mod:`hisim.renovisor.verify`), which translates the same probes and keeps the
+        whole report, aggregate the same statuses.
+
+        Args:
+            probe: The probe that was translated.
+            report: Its ``mapping_report.json``, as :meth:`MappingReport.to_json` returns it.
+            hits: The whitelist entries the translation matched.
+
+        Returns:
+            The probe's result, with its field, measure and target statuses.
+        """
+        fields = {
+            row["path"]: (ReportStatus(row["status"]), row.get("note"))
+            for row in report["fields"]
+        }
+        measures: Dict[str, Any] = {}
+        targets: Dict[str, Tuple[str, ...]] = {}
+        for row in report["measures"]:
+            options = {
+                option["name"]: (ReportStatus(option["status"]), option.get("note"))
+                for option in row["options"]
+            }
+            measures[row["id"]] = (ReportStatus(row["status"]), row.get("note"), options)
+            targets[row["id"]] = tuple(row["targets"])
+        return cls(probe=probe, fields=fields, measures=measures, hits=hits, targets=targets)
+
 
 class ProbeRunner:
     """Runs the probe set through ``validate`` + ``apply`` + ``translate`` and collects the answers.
@@ -779,27 +814,7 @@ class ProbeRunner:
             )
         applied = apply(request.document["house"], request.measures, self._whitelist)
         translated = translator.translate(request, applied)
-        report = translated.report.to_json()
-        fields = {
-            row["path"]: (ReportStatus(row["status"]), row.get("note"))
-            for row in report["fields"]
-        }
-        measures: Dict[str, Any] = {}
-        targets: Dict[str, Tuple[str, ...]] = {}
-        for row in report["measures"]:
-            options = {
-                option["name"]: (ReportStatus(option["status"]), option.get("note"))
-                for option in row["options"]
-            }
-            measures[row["id"]] = (ReportStatus(row["status"]), row.get("note"), options)
-            targets[row["id"]] = tuple(row["targets"])
-        return ProbeResult(
-            probe=probe,
-            fields=fields,
-            measures=measures,
-            hits=self._whitelist.hits(),
-            targets=targets,
-        )
+        return ProbeResult.of_report(probe, translated.report.to_json(), self._whitelist.hits())
 
 
 @dataclass(frozen=True)

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/FZJ-IEK3-VSA/HiSim/hisim/economics/economics_result.schema.json",
   "title": "economics_result.json",
-  "description": "One staged renovation plan priced by hisim.economics.staged, in the shape the RenoVisor frontend draws from (economics-hisim-spec.md section 3). Every amount is a band {min, best, max}; costs are positive and money arriving is negative; years are relative to the start of the horizon and every row carries its calendar year; every subject, asset class, measure and scheme is an id the frontend labels itself.",
+  "description": "One staged renovation plan priced by hisim.economics.staged, in the shape the RenoVisor frontend draws from (economics-hisim-spec.md section 3). Every amount is a band {min, best, max}; costs are positive and money arriving is negative; years are relative to the start of the horizon and every row carries its calendar year (null when the plan states no plan_start_year); every subject, asset class, measure and scheme is an id the frontend labels itself.",
   "type": "object",
   "required": [
     "schema_version",
@@ -18,8 +18,8 @@
   ],
   "properties": {
     "schema_version": {
-      "const": 4,
-      "description": "4 since 2026-09-26: parameters.escalation.energy states the per-carrier rate actually used for every carrier a stage bills and every carrier the plan named, no longer only the stated ones, and parameters carries the required energy_prices (the year-1 prices used, the working price all-in with carbon) and origins (where each came from) (renovisorissues #52). 3 since 2026-09-26: every by_subject row carries the required investment_by_stage, the subject's investment split by the stage that bought it (renovisorissues #48, hisim-fig7). 2 since 2026-09-24: a subsidies[] row the plan awarded states amount_by_year_in_euro and an amount (hisim-cyc.5), and totals and comparison carry the headline monthly_equivalent_cost_in_euro / monthly_equivalent_cost_delta_in_euro (hisim-cyc.6)."
+      "const": 5,
+      "description": "5 since 2026-09-26 (renovisorissues #57), a breaking change: parameters.simulation_year is renamed parameters.weather_year (the year of the weather the stages were simulated with; it dates nothing), parameters carries the required plan_start_year (the calendar year of the plan's year 0, or null), and every annual[].calendar_year is plan_start_year + year, null when plan_start_year is null, no longer simulation_year + year. 4 since 2026-09-26: parameters.escalation.energy states the per-carrier rate actually used for every carrier a stage bills and every carrier the plan named, no longer only the stated ones, and parameters carries the required energy_prices (the year-1 prices used, the working price all-in with carbon) and origins (where each came from) (renovisorissues #52). 3 since 2026-09-26: every by_subject row carries the required investment_by_stage, the subject's investment split by the stage that bought it (renovisorissues #48, hisim-fig7). 2 since 2026-09-24: a subsidies[] row the plan awarded states amount_by_year_in_euro and an amount (hisim-cyc.5), and totals and comparison carry the headline monthly_equivalent_cost_in_euro / monthly_equivalent_cost_delta_in_euro (hisim-cyc.6)."
     },
     "engine": {
       "type": "object",
@@ -39,7 +39,8 @@
         "interest_rate",
         "country",
         "price_basis_year",
-        "simulation_year",
+        "plan_start_year",
+        "weather_year",
         "perspective_id",
         "subsidy_mode",
         "financing",
@@ -53,7 +54,16 @@
         "interest_rate": {"type": "number"},
         "country": {"type": "string"},
         "price_basis_year": {"type": ["integer", "null"]},
-        "simulation_year": {"type": ["integer", "null"]},
+        "plan_start_year": {
+          "type": ["integer", "null"],
+          "minimum": 1900,
+          "maximum": 2100,
+          "description": "The calendar year of the plan's year 0, as the plan stated it; null when it stated none. Also an input of `staged --parameters`, and the price basis year when neither the stages nor the parameters state one."
+        },
+        "weather_year": {
+          "type": ["integer", "null"],
+          "description": "The year of the weather the stages were simulated with (simulation_year up to schema version 4). A fact of the run, accepted and ignored on input; it dates nothing in this document."
+        },
         "perspective_id": {"type": "string"},
         "subsidy_mode": {
           "type": "string",
@@ -395,7 +405,10 @@
             ],
             "properties": {
               "year": {"type": "integer", "minimum": 0},
-              "calendar_year": {"type": ["integer", "null"]},
+              "calendar_year": {
+                "type": ["integer", "null"],
+                "description": "parameters.plan_start_year + year; null when the plan states no start year."
+              },
               "stage": {"type": "integer", "minimum": 0},
               "total_nominal_in_euro": {"$ref": "#/$defs/band"},
               "total_discounted_in_euro": {"$ref": "#/$defs/band"},

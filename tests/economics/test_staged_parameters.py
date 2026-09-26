@@ -28,6 +28,7 @@ from hisim.economics.staged_parameters import (
     FinancingKindName,
     ParameterKeys,
     ParameterProblem,
+    PlanYearBounds,
     StagedParameters,
     SubsidyModeName,
 )
@@ -91,7 +92,7 @@ class TestTheKeyTable:
         """A document's own block carries them, and neither is an assumption a caller may state."""
         stored = _stored()
         parsed = StagedParameters.from_mapping(
-            {ParameterKeys.SIMULATION_YEAR: 1999, ParameterKeys.SUBSIDY_CATALOG: "IE@2026-09-19"},
+            {ParameterKeys.WEATHER_YEAR: 1999, ParameterKeys.SUBSIDY_CATALOG: "IE@2026-09-19"},
             stored,
         )
         assert not parsed.problems
@@ -240,6 +241,88 @@ class TestThePriceBasisYear:
         assert not parsed.problems
         assert parsed.parameters is not None
         assert parsed.parameters.price_basis_year == 2024
+
+
+class TestThePlanStartYear:
+    """``plan_start_year``: the calendar year of the plan's year 0, the reader's (#57)."""
+
+    def test_a_stated_year_is_read_and_changes_no_engine_field(self):
+        """It dates the document; the stages' price basis year is untouched by it."""
+        parsed = StagedParameters.from_mapping({ParameterKeys.PLAN_START_YEAR: 2026}, _stored())
+        assert not parsed.problems
+        assert parsed.plan_start_year == 2026
+        assert parsed.parameters == _stored()
+
+    def test_absent_or_null_is_no_start_year(self):
+        """The document writes ``null`` when there is none, so ``null`` has to round trip."""
+        for block in ({}, {ParameterKeys.PLAN_START_YEAR: None}):
+            parsed = StagedParameters.from_mapping(block, _stored())
+            assert not parsed.problems
+            assert parsed.plan_start_year is None
+
+    @pytest.mark.parametrize(
+        "value",
+        [PlanYearBounds.MINIMUM - 1, PlanYearBounds.MAXIMUM + 1, 26, 20260, 2026.0, "2026", True],
+    )
+    def test_a_year_that_is_no_calendar_year_is_refused(self, value):
+        """A whole number within the bounds, like every other year of the block; typos are refused."""
+        parsed = StagedParameters.from_mapping({ParameterKeys.PLAN_START_YEAR: value}, _stored())
+        assert _codes(parsed) == ["parameters.plan_start_year.invalid"]
+        assert parsed.parameters is None
+
+    def test_the_bounds_themselves_are_accepted(self):
+        """Inclusive at both ends."""
+        for year in (PlanYearBounds.MINIMUM, PlanYearBounds.MAXIMUM):
+            parsed = StagedParameters.from_mapping({ParameterKeys.PLAN_START_YEAR: year}, _stored())
+            assert parsed.plan_start_year == year
+
+    def test_it_is_the_basis_year_when_neither_stages_nor_file_state_one(self):
+        """The plan's "today" is the year it starts in, never the weather year of its stages."""
+        parsed = StagedParameters.from_mapping(
+            {ParameterKeys.PLAN_START_YEAR: 2026}, None, stored_country="IE"
+        )
+        assert not parsed.problems
+        assert parsed.parameters is not None
+        assert parsed.parameters.price_basis_year == 2026
+
+    def test_a_stated_basis_year_wins_over_it(self):
+        """An explicit ``price_basis_year`` is the basis year; the start year only dates the rows."""
+        parsed = StagedParameters.from_mapping(
+            {ParameterKeys.PLAN_START_YEAR: 2030, ParameterKeys.PRICE_BASIS_YEAR: 2024}, None, stored_country="IE"
+        )
+        assert not parsed.problems
+        assert parsed.parameters is not None
+        assert parsed.parameters.price_basis_year == 2024
+        assert parsed.plan_start_year == 2030
+
+    def test_the_stages_basis_year_wins_over_it(self):
+        """Stored inputs cannot be re-based, so a start year does not move the stages' basis year."""
+        parsed = StagedParameters.from_mapping({ParameterKeys.PLAN_START_YEAR: 2030}, _stored())
+        assert not parsed.problems
+        assert parsed.parameters is not None
+        assert parsed.parameters.price_basis_year == 2024
+
+    def test_the_old_simulation_year_key_is_refused(self):
+        """Schema version 5 renamed it ``weather_year``; the old spelling is an unknown key now."""
+        parsed = StagedParameters.from_mapping({"simulation_year": 2019}, _stored())
+        assert _codes(parsed) == ["parameters.unknown_key"]
+
+    def test_the_document_block_echoes_it_and_the_weather_year(self):
+        """Both are published, each under its own name, and the block reads back to the same year."""
+        perspective = Perspective(id="brownfield_net", installation_context=InstallationContext.BROWNFIELD)
+        block = StagedParameters.to_document_block(
+            parameters=_stored(),
+            perspective=perspective,
+            weather_year=2019,
+            subsidy_catalog=None,
+            plan_start_year=2026,
+        )
+        assert block[ParameterKeys.PLAN_START_YEAR] == 2026
+        assert block[ParameterKeys.WEATHER_YEAR] == 2019
+        assert "simulation_year" not in block
+        parsed = StagedParameters.from_mapping(block, _stored())
+        assert not parsed.problems
+        assert parsed.plan_start_year == 2026
 
 
 class TestTheRefusals:
@@ -428,7 +511,7 @@ class TestTheDocumentBlock:
         return StagedParameters.to_document_block(
             parameters=_stored(),
             perspective=perspective,
-            simulation_year=2021,
+            weather_year=2021,
             subsidy_catalog="IE@2026-09-19",
         )
 
@@ -489,7 +572,7 @@ class TestTheDocumentBlock:
             StagedParameters.to_document_block(
                 parameters=parameters,
                 perspective=priced_under,
-                simulation_year=2021,
+                weather_year=2021,
                 subsidy_catalog="IE@2026-09-19",
             )
             == block
@@ -680,7 +763,7 @@ class TestTheEnergyEchoWithoutAPricedPlan:
         return StagedParameters.to_document_block(
             parameters=self._stated(),
             perspective=Perspective(id="brownfield_net", installation_context=InstallationContext.BROWNFIELD),
-            simulation_year=2021,
+            weather_year=2021,
             subsidy_catalog=None,
         )
 

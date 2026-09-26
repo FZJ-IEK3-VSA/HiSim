@@ -130,8 +130,13 @@ a reader can feed a document's assumptions back in unchanged. Every key is optio
  "financing": {"kind": "cash"}, "subsidy_mode": "full"}
 ```
 
-— plus `country`, `price_basis_year`, `escalation`, `energy_prices`, and `simulation_year`,
-`subsidy_catalog` and `origins`, which are accepted and ignored. `escalation.energy` names a
+— plus `country`, `price_basis_year`, `plan_start_year`, `escalation`, `energy_prices`, and
+`weather_year`, `subsidy_catalog` and `origins`, which are accepted and ignored. `plan_start_year`
+(1900–2100) is the calendar year of the plan's year 0: every `annual[].calendar_year` of the
+document is `plan_start_year + year`, and `null` when the plan states none — never the weather
+year, which the document publishes as `weather_year` (`simulation_year` up to schema version 4;
+renovisorissues #57). With neither the stages nor the file stating a `price_basis_year`, a stated
+`plan_start_year` is the price basis year. `escalation.energy` names a
 per-carrier rate (`ELECTRICITY_FEED_IN` is refused: its remuneration is fixed for 20 years and
 then follows `escalation.feed_in`). `energy_prices` states what the household pays in year 1
 (renovisorissues #52), per carrier —

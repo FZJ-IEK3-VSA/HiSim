@@ -71,8 +71,14 @@ class ParameterKeys:
     #: ISO-2 country code deciding the price data and the subsidy catalogue.
     COUNTRY: ClassVar[str] = "country"
 
-    #: Price basis year of the database lookups, or null for "the simulation year".
+    #: Price basis year of the database lookups, or null for "the stages' year" (see
+    #: :meth:`StagedParameters._read_price_basis_year`).
     PRICE_BASIS_YEAR: ClassVar[str] = "price_basis_year"
+
+    #: The calendar year the plan starts in: year 0 of the horizon (renovisorissues #57). Every
+    #: calendar year the document publishes is this plus the relative year, and none is published
+    #: without it. An assumption of the reader, not a fact of the stages.
+    PLAN_START_YEAR: ClassVar[str] = "plan_start_year"
 
     #: Id of the perspective the plan is priced under.
     PERSPECTIVE_ID: ClassVar[str] = "perspective_id"
@@ -98,9 +104,12 @@ class ParameterKeys:
     #: ``--subsidy-catalog``.
     SUBSIDY_CATALOG: ClassVar[str] = "subsidy_catalog"
 
-    #: The year the stages were simulated in. Accepted and ignored on input: it is a fact of the
-    #: stages, not an assumption a caller may state.
-    SIMULATION_YEAR: ClassVar[str] = "simulation_year"
+    #: The year of the weather the stages were simulated with (the ``simulation_year`` of their
+    #: ``economic_inputs.json``). Accepted and ignored on input: it is a fact of the stages, not an
+    #: assumption a caller may state. It dates nothing in the document (renovisorissues #57):
+    #: the weather year and the plan's calendar are different things, and the calendar is
+    #: :attr:`PLAN_START_YEAR`.
+    WEATHER_YEAR: ClassVar[str] = "weather_year"
 
     #: General price escalation, inside :attr:`ESCALATION`.
     ESCALATION_GENERAL: ClassVar[str] = "general"
@@ -142,7 +151,8 @@ class ParameterKeys:
         INTEREST_RATE,
         COUNTRY,
         PRICE_BASIS_YEAR,
-        SIMULATION_YEAR,
+        PLAN_START_YEAR,
+        WEATHER_YEAR,
         PERSPECTIVE_ID,
         SUBSIDY_MODE,
         FINANCING,
@@ -206,6 +216,25 @@ class StatedPriceBounds:
 
     #: And at most 5,000 EUR a year.
     STANDING_CHARGE_MAXIMUM_IN_EURO_PER_YEAR: ClassVar[float] = 5000.0
+
+
+class PlanYearBounds:
+    """The range ``plan_start_year`` must lie in: a typo guard, not a statement about plans (#57).
+
+    Wide enough for a plan dated in the past (a retrospective) or far ahead, narrow enough to catch
+    a two-digit year, a year with a digit too many and a relative year typed where a calendar
+    year belongs. A value outside is refused as ``parameters.plan_start_year.invalid``.
+
+    Example::
+
+        PlanYearBounds.MINIMUM <= 2026 <= PlanYearBounds.MAXIMUM
+    """
+
+    #: The earliest calendar year a plan may start in.
+    MINIMUM: ClassVar[int] = 1900
+
+    #: The latest calendar year a plan may start in.
+    MAXIMUM: ClassVar[int] = 2100
 
 
 class EchoOrigin(enum.Enum):
@@ -531,12 +560,13 @@ class ParameterReader:
         """
         return key in self.raw
 
-    def integer(self, key: str, minimum: Optional[int] = None) -> Optional[int]:
+    def integer(self, key: str, minimum: Optional[int] = None, maximum: Optional[int] = None) -> Optional[int]:
         """One integer value, or None when the key is absent or its value is refused.
 
         Args:
             key: The key name.
             minimum: The smallest accepted value, or None for no lower bound.
+            maximum: The largest accepted value, or None for no upper bound.
 
         Returns:
             The integer, or None.
@@ -550,6 +580,11 @@ class ParameterReader:
         if minimum is not None and value < minimum:
             self.refuse(
                 key, ParameterProblemCodes.INVALID, f"{value!r} is below the smallest accepted value {minimum}."
+            )
+            return None
+        if maximum is not None and value > maximum:
+            self.refuse(
+                key, ParameterProblemCodes.INVALID, f"{value!r} is above the largest accepted value {maximum}."
             )
             return None
         return value
@@ -693,7 +728,7 @@ class StagedParameters:
     problem list into ``problems.json`` with exit 2.
 
     Accepted keys are :class:`ParameterKeys`; three of them are accepted and ignored.
-    :attr:`ParameterKeys.SIMULATION_YEAR` is a fact of the stages rather than an assumption,
+    :attr:`ParameterKeys.WEATHER_YEAR` is a fact of the stages rather than an assumption,
     :attr:`ParameterKeys.SUBSIDY_CATALOG` documents which catalogue produced a document while the
     catalogue actually used comes from the shipped directory or from ``--subsidy-catalog``, and
     :attr:`ParameterKeys.ORIGINS` says where a document's echoed rates and prices came from. All
@@ -711,6 +746,8 @@ class StagedParameters:
             *and* None when the file said nothing — :attr:`financing_given` tells the two apart.
         financing_given: Whether the file stated :attr:`ParameterKeys.FINANCING` at all.
         subsidy_mode: The subsidy mode the file asked for, or None when it said nothing.
+        plan_start_year: The calendar year the plan starts in, or None when the file names none —
+            in which case the document dates nothing (renovisorissues #57).
         problems: Every fault found, in the order they were found.
     """
 
@@ -724,6 +761,7 @@ class StagedParameters:
     financing: Optional[FinancingPlan] = None
     financing_given: bool = False
     subsidy_mode: Optional[SubsidyModeName] = None
+    plan_start_year: Optional[int] = None
     problems: Tuple[ParameterProblem, ...] = ()
 
     @classmethod
@@ -745,8 +783,9 @@ class StagedParameters:
         just a mapping. The plan's country is the one the stages were priced under; a ``country``
         in the file must equal it or the run is refused naming both; a file without ``country``
         over stages without a stored one is refused too. ``price_basis_year`` follows the same
-        rule, because the stored inputs were priced at the stages' basis year. Nothing here ever
-        substitutes ``"DE"``.
+        rule, because the stored inputs were priced at the stages' basis year, with one fallback:
+        stages and file stating none, a stated ``plan_start_year`` is the basis year. Nothing here
+        ever substitutes ``"DE"``.
 
         Example::
 
@@ -785,8 +824,12 @@ class StagedParameters:
         overrides: Dict[str, Any] = {}
         cls._read_horizon_and_interest(reader, overrides)
         cls._read_country(reader, cls._stages_country(stored, stored_country), overrides)
+        plan_start_year = cls._read_plan_start_year(reader)
         cls._read_price_basis_year(
-            reader, cls._stages_price_basis_year(stored, stored_price_basis_year), overrides
+            reader,
+            cls._stages_price_basis_year(stored, stored_price_basis_year),
+            overrides,
+            plan_start_year,
         )
         cls._read_escalation(reader, problems, overrides)
         cls._read_energy_prices(reader, problems, overrides)
@@ -801,6 +844,7 @@ class StagedParameters:
                 financing=financing,
                 financing_given=financing_given,
                 subsidy_mode=subsidy_mode,
+                plan_start_year=plan_start_year,
                 problems=tuple(problems),
             )
         # With no stored parameters the record is built from the overrides alone, so no field
@@ -813,6 +857,27 @@ class StagedParameters:
             financing=financing,
             financing_given=financing_given,
             subsidy_mode=subsidy_mode,
+            plan_start_year=plan_start_year,
+        )
+
+    @classmethod
+    def _read_plan_start_year(cls, reader: ParameterReader) -> Optional[int]:
+        """Read ``plan_start_year``, the calendar year of the plan's year 0 (renovisorissues #57).
+
+        A ``null`` says nothing, as for ``price_basis_year``: a document without a start year
+        writes ``null``, and its block has to read back. A stated year is a whole number within
+        :class:`PlanYearBounds`, refused as ``parameters.plan_start_year.invalid`` otherwise.
+
+        Args:
+            reader: The top-level block's reader.
+
+        Returns:
+            The year, or None when the file states none or states a refused one.
+        """
+        if reader.raw.get(ParameterKeys.PLAN_START_YEAR) is None:
+            return None
+        return reader.integer(
+            ParameterKeys.PLAN_START_YEAR, minimum=PlanYearBounds.MINIMUM, maximum=PlanYearBounds.MAXIMUM
         )
 
     @classmethod
@@ -920,7 +985,11 @@ class StagedParameters:
 
     @classmethod
     def _read_price_basis_year(
-        cls, reader: ParameterReader, stored_year: Optional[int], overrides: Dict[str, Any]
+        cls,
+        reader: ParameterReader,
+        stored_year: Optional[int],
+        overrides: Dict[str, Any],
+        plan_start_year: Optional[int] = None,
     ) -> None:
         """Resolve the price basis year against the stages, with no re-derivation anywhere.
 
@@ -929,30 +998,40 @@ class StagedParameters:
         re-based without being re-run. A ``null`` says nothing and takes the stages', so a
         document whose block is fed back in round trips.
 
-        When no stage states a year, the run is **refused** rather than re-derived from the
-        simulation year. Re-deriving is the same class of silent difference as a defaulted
-        country: it produces a complete-looking plan priced at a year none of its runs used, and
-        nothing downstream can tell. A caller who has only such stages — extracts written before
-        the key existed — names ``price_basis_year`` in the file, or re-runs the jobs.
+        When no stage states a year and the file states none either, a stated
+        ``plan_start_year`` is the basis year (renovisorissues #57): the plan's own "today" is the
+        calendar year it starts in, which the caller has just named. Without one the run is
+        **refused** rather than re-derived from the simulation year — the year of the stages'
+        weather, which says nothing about price levels. Re-deriving is the same class of silent
+        difference as a defaulted country: it produces a complete-looking plan priced at a year
+        none of its runs used, and nothing downstream can tell. A caller who has only such stages
+        — extracts written before the key existed — names ``price_basis_year`` or
+        ``plan_start_year`` in the file, or re-runs the jobs. Stages that do state a year keep it
+        whatever ``plan_start_year`` says: their stored inputs cannot be re-based.
 
         Args:
             reader: The top-level block's reader.
             stored_year: The year the stages were priced at, or None when none states one.
             overrides: The engine-field overrides being assembled; written in place.
+            plan_start_year: The calendar year the file says the plan starts in, or None.
         """
         states_a_year = (
             reader.has(ParameterKeys.PRICE_BASIS_YEAR)
             and reader.raw[ParameterKeys.PRICE_BASIS_YEAR] is not None
         )
         if not states_a_year:
+            if stored_year is None and plan_start_year is not None:
+                overrides["price_basis_year"] = plan_start_year
+                return
             if stored_year is None:
                 reader.refuse(
                     ParameterKeys.PRICE_BASIS_YEAR,
                     ParameterProblemCodes.MISSING,
                     "no stage says which price basis year it was priced at — neither its stored "
-                    "evaluation nor its stored inputs — and re-deriving one from the simulation "
+                    "evaluation nor its stored inputs — and re-deriving one from the weather "
                     "year would price the plan at a level none of its runs used: name "
-                    "`price_basis_year` in the --parameters file, or re-run the jobs.",
+                    "`price_basis_year` or `plan_start_year` in the --parameters file, or re-run "
+                    "the jobs.",
                 )
                 return
             # Written out for the same reason as the country: with no stored record the engine
@@ -1368,18 +1447,23 @@ class StagedParameters:
         cls,
         parameters: EconomicParameters,
         perspective: Perspective,
-        simulation_year: Optional[int],
+        weather_year: Optional[int],
         subsidy_catalog: Optional[str],
         energy: Optional[EnergyEcho] = None,
+        plan_start_year: Optional[int] = None,
     ) -> Dict[str, Any]:
         """The ``parameters`` block ``economics_result.json`` publishes.
 
         The output half of the one table of keys: every key here is one
         :meth:`from_mapping` accepts, so a reader can copy this block out of a document, hand it
         back as ``--parameters`` over the same stages, and get the same run. The three keys that
-        are statements about the run rather than assumptions — ``simulation_year``,
+        are statements about the run rather than assumptions — ``weather_year``,
         ``subsidy_catalog`` and ``origins`` — are published for the reader and ignored when read
-        back.
+        back. ``plan_start_year`` is an assumption and reads back as one; ``null`` when the plan
+        named none.
+
+        ``weather_year`` was ``simulation_year`` up to schema version 4 (renovisorissues #57): it is
+        the year of the weather the stages were simulated with and dates nothing in the document.
 
         ``escalation.energy`` and ``energy_prices`` state the per-carrier rates and year-1 prices
         the plan was *priced with* (renovisorissues #52, schema version 4): for every carrier a
@@ -1390,10 +1474,11 @@ class StagedParameters:
         Args:
             parameters: The engine record the plan was priced with.
             perspective: The perspective it was priced under, after any override was applied.
-            simulation_year: The calendar year of the stages' simulations, or None.
+            weather_year: The year of the weather the stages were simulated with, or None.
             subsidy_catalog: The catalogue id in force, or None when the plan ran with none.
             energy: The rates and prices the plan was priced with, as the staged evaluator resolved
                 them; None echoes only what ``parameters`` states (:meth:`EnergyEcho.stated_only`).
+            plan_start_year: The calendar year the plan starts in, or None when it named none.
 
         Returns:
             The block, with the keys in the order the document writes them.
@@ -1406,7 +1491,8 @@ class StagedParameters:
             ParameterKeys.INTEREST_RATE: parameters.interest_rate,
             ParameterKeys.COUNTRY: parameters.country,
             ParameterKeys.PRICE_BASIS_YEAR: parameters.price_basis_year,
-            ParameterKeys.SIMULATION_YEAR: simulation_year,
+            ParameterKeys.PLAN_START_YEAR: plan_start_year,
+            ParameterKeys.WEATHER_YEAR: weather_year,
             ParameterKeys.PERSPECTIVE_ID: perspective.id,
             ParameterKeys.SUBSIDY_MODE: cls.subsidy_mode_of(perspective).value,
             ParameterKeys.FINANCING: cls.financing_block(perspective.financing),

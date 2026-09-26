@@ -25,6 +25,8 @@ from hisim.economics.subsidies import (
     SubsidyBuildingContext,
     SubsidyCatalog,
     SubsidyContext,
+    SubsidyContextFields,
+    SubsidyPackageContext,
     scheme_context_fields,
     solve_cumulation,
 )
@@ -105,8 +107,10 @@ class IrishCatalogueCase:
 
         Args:
             **answers: Field names of :class:`~hisim.economics.subsidies.ApplicantProfile` or of
-                :class:`~hisim.economics.subsidies.SubsidyBuildingContext`; everything not named
-                stays unanswered and therefore undetermined.
+                :class:`~hisim.economics.subsidies.SubsidyBuildingContext`, or
+                ``installed_asset_classes`` -- the asset classes the evaluation installs beside the
+                measure, which the evaluator computes; everything not named stays unanswered and
+                therefore undetermined.
 
         Returns:
             The context the eligibility conditions resolve against.
@@ -116,11 +120,15 @@ class IrishCatalogueCase:
             "first_time_buyer",
             "managed_full_retrofit",
         }
+        package = answers.pop("installed_asset_classes", None)
         applicant = {name: value for name, value in answers.items() if name in applicant_fields}
         building = {name: value for name, value in answers.items() if name not in applicant_fields}
         return SubsidyContext(
             applicant=ApplicantProfile(**applicant),
             building=SubsidyBuildingContext(**building),
+            package=SubsidyPackageContext(
+                installed_asset_classes=None if package is None else tuple(sorted(item.value for item in package))
+            ),
         )
 
     @classmethod
@@ -212,13 +220,13 @@ class TestTheQuestionnaireIsComplete:
     """§5.7: a condition on a field nobody is asked about can never be settled."""
 
     def test_every_referenced_context_field_has_a_question_in_both_languages(self) -> None:
-        """Including the three fields step 11 added; `measure.*` fields are not asked."""
+        """Including the three fields step 11 added; computed fields (`measure.*`, `package.*`) are not asked."""
         catalog = IrishCatalogueCase.catalog()
         referenced = {
             fieldname
             for scheme in catalog.schemes
             for fieldname in scheme_context_fields(scheme)
-            if fieldname and not fieldname.startswith("measure.")
+            if fieldname and not SubsidyContextFields.is_computed(fieldname)
         }
         assert referenced, "no IE scheme conditions on anything"
         for fieldname in sorted(referenced):
@@ -272,8 +280,12 @@ class TestTheAmountsThePagesState:
         assert awards["IE_SEAI_RENEWABLE_HEAT_BONUS"] == 4000.0
         assert awards["IE_SEAI_HEAT_PUMP_UNIT_HOUSE"] == 6500.0
 
-    def test_the_renewable_heat_bonus_is_refused_for_replacing_a_heat_pump(self) -> None:
-        """Replacing a heat pump is not decarbonising, so the unit grant is all there is."""
+    def test_replacing_a_heat_pump_earns_neither_heat_pump_grant(self) -> None:
+        """Replacing a heat pump is not decarbonising: no bonus and, since 2026-09-26, no unit grant.
+
+        Owner decision: the unit grant is for a household's first heat pump, so it carries the
+        same ``existing_heating.asset_class != HeatPump`` condition as the central-heating grant.
+        """
         statuses = IrishCatalogueCase.statuses(
             IrishCatalogueCase.measure(ComponentType.HEAT_PUMP, 20000.0, measure_kind="REPLACE"),
             IrishCatalogueCase.context(
@@ -283,7 +295,43 @@ class TestTheAmountsThePagesState:
             ),
         )
         assert statuses["IE_SEAI_RENEWABLE_HEAT_BONUS"] == "ineligible"
-        assert statuses["IE_SEAI_HEAT_PUMP_UNIT_HOUSE"] == "awarded"
+        assert statuses["IE_SEAI_HEAT_PUMP_UNIT_HOUSE"] == "ineligible"
+        assert statuses["IE_SEAI_HEAT_PUMP_UNIT_APARTMENT"] == "ineligible"
+
+    def test_the_central_heating_grant_needs_a_heat_pump_in_the_same_package(self) -> None:
+        """New radiators on an oil boiler get nothing: the grant is "beside a heat pump" (its legal basis)."""
+        radiators = IrishCatalogueCase.measure(
+            ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR, 8000.0, measure_kind="REPLACE"
+        )
+        answers = {
+            "construction_year": 1990,
+            "dwelling_type": DwellingType.DETACHED,
+            "existing_heating": IrishCatalogueCase.oil_boiler(),
+        }
+        with_pump = IrishCatalogueCase.statuses(
+            radiators,
+            IrishCatalogueCase.context(
+                installed_asset_classes=[ComponentType.HEAT_PUMP, ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR],
+                **answers,
+            ),
+        )
+        alone = IrishCatalogueCase.statuses(
+            radiators,
+            IrishCatalogueCase.context(
+                installed_asset_classes=[ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR], **answers
+            ),
+        )
+        unstated = IrishCatalogueCase.statuses(radiators, IrishCatalogueCase.context(**answers))
+
+        assert with_pump["IE_SEAI_HEAT_PUMP_CENTRAL_HEATING_HOUSE"] == "awarded"
+        assert alone["IE_SEAI_HEAT_PUMP_CENTRAL_HEATING_HOUSE"] == "ineligible"
+        # A caller that did not say what the package installs is not told "no".
+        assert unstated["IE_SEAI_HEAT_PUMP_CENTRAL_HEATING_HOUSE"] == "undetermined"
+
+    def test_the_package_field_is_computed_and_never_asked(self) -> None:
+        """No question entry is needed for it, and the questionnaire derivation skips it."""
+        assert SubsidyContextFields.is_computed("package.installed_asset_classes")
+        assert "package.installed_asset_classes" not in IrishCatalogueCase.catalog().questions
 
     @pytest.mark.parametrize(
         "peak_power_in_kwp, expected_in_euro",

@@ -43,7 +43,11 @@ from hisim.economics.calculators.aggregation import (
     annual_energy_quantities,
 )
 from hisim.economics.calculators.annualization import annualize_optional
-from hisim.economics.calculators.context_resolution import resolve_device, resolve_replaced_asset
+from hisim.economics.calculators.context_resolution import (
+    installation_verdict,
+    resolve_device,
+    resolve_replaced_asset,
+)
 from hisim.economics.calculators.co2 import (
     accumulate_embodied_co2,
     accumulate_operational_emissions,
@@ -95,7 +99,7 @@ from hisim.economics.results import (
     ResolvedRate,
     TariffAssumption,
 )
-from hisim.economics.subsidies import SubsidyCatalog, SubsidyContext, SubsidyDecision
+from hisim.economics.subsidies import SubsidyCatalog, SubsidyContext, SubsidyDecision, SubsidyPackageContext
 from hisim.economics.tariffs import TariffContract
 from hisim.economics.timeline import CashFlowTimeline, CostCategory
 from hisim.economics.uncertainty import UncertainValue
@@ -800,6 +804,7 @@ class EconomicEvaluator:
 
         replacement_flows_for_reserve: List[Tuple[int, UncertainValue]] = []
         replacement_flows_by_subject: List[Tuple[str, int, UncertainValue]] = []
+        subsidy_context = self._with_package(inputs, context)
 
         for subject_facts in inputs.cost_facts:
             costing = resolve_device(
@@ -896,7 +901,7 @@ class EconomicEvaluator:
                 subsidy_result = build_subsidy_flows(
                     costing=costing,
                     subsidy_catalog=self.subsidy_catalog,
-                    subsidy_context=inputs.subsidy_context,
+                    subsidy_context=subsidy_context,
                     subsidy_mode=perspective.subsidy_mode,
                     billing=inputs.billing,
                     simulated_period_fraction=inputs.simulated_period_fraction,
@@ -967,6 +972,37 @@ class EconomicEvaluator:
         )
 
     # ------------------------------------------------------------------ evaluation (§3.7)
+
+    @staticmethod
+    def _with_package(inputs: EvaluationInputs, context: InstallationContext) -> SubsidyContext:
+        """The subsidy context with ``package.*`` stating what this evaluation installs.
+
+        One pass over the cost subjects with the §4.1 rule the pricing itself applies
+        (:func:`~hisim.economics.calculators.context_resolution.installation_verdict`), before
+        anything is priced, so a scheme conditioned on a co-installed measure -- SEAI's
+        central-heating grant beside a heat pump -- sees the whole evaluation whichever subject
+        it is assessed for. Neither the ledger nor the caller's inputs are touched.
+
+        Args:
+            inputs: The variant's extract.
+            context: The perspective's installation context.
+
+        Returns:
+            A copy of ``inputs.subsidy_context`` whose ``package`` lists the ``ComponentType``
+            values of every new investment, sorted.
+        """
+        installed = sorted(
+            {
+                subject_facts.facts.asset_class.value
+                for subject_facts in inputs.cost_facts
+                if installation_verdict(
+                    subject_facts.facts.asset_class, context, inputs.existing_assets
+                ).is_new_investment
+            }
+        )
+        return replace(
+            inputs.subsidy_context, package=SubsidyPackageContext(installed_asset_classes=tuple(installed))
+        )
 
     def evaluate(
         self,

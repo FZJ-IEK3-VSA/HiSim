@@ -579,6 +579,10 @@ class TestHeatingModernizationLevy:
                 "PELLET_HEATER",
                 "WOOD_CHIP_HEATER",
                 "THERMAL_ENERGY_STORAGE",
+                # The buffer and the hot-water cylinder the storage class was split into, so a
+                # heat-pump package keeps the §559e rate on its vessels (renovisorissues #48).
+                "SPACE_HEATING_STORAGE",
+                "DOMESTIC_HOT_WATER_STORAGE",
             }
         )
         assert ruleset.levy.heating_levy_rate_per_year == pytest.approx(0.10)

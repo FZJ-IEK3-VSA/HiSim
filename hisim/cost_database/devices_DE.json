@@ -303,6 +303,62 @@
       "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
     },
     {
+      "component_type": "SPACE_HEATING_STORAGE",
+      "valid_from_year": 2024,
+      "specific_investment": {
+        "value": 14.51,
+        "per_unit": "liter"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.01,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 0.5958,
+        "per_unit": "liter"
+      },
+      "vat_rate": 0.19,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.15,
+      "source_ids": [
+        "src_capex_19",
+        "src_capex_20",
+        "src_capex_32"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band). The space-heating buffer vessel's row, copied unchanged from THERMAL_ENERGY_STORAGE when the buffer and the hot-water cylinder became two asset classes (the existing-asset register matches by class); a price law of its own is hisim-4wo2."
+    },
+    {
+      "component_type": "DOMESTIC_HOT_WATER_STORAGE",
+      "valid_from_year": 2024,
+      "specific_investment": {
+        "value": 14.51,
+        "per_unit": "liter"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.01,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 0.5958,
+        "per_unit": "liter"
+      },
+      "vat_rate": 0.19,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.15,
+      "source_ids": [
+        "src_capex_19",
+        "src_capex_20",
+        "src_capex_32"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band). The domestic-hot-water cylinder's row, copied unchanged from THERMAL_ENERGY_STORAGE when the buffer and the hot-water cylinder became two asset classes (the existing-asset register matches by class); a price law of its own is hisim-4wo2."
+    },
+    {
       "component_type": "SOLAR_THERMAL_SYSTEM",
       "valid_from_year": 2024,
       "specific_investment": {
@@ -899,6 +955,74 @@
       "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
     },
     {
+      "component_type": "SPACE_HEATING_STORAGE",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 10,
+          "best_estimate": 14,
+          "max": 18
+        },
+        "per_unit": "liter"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.015
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 0.6,
+        "per_unit": "liter"
+      },
+      "vat_rate": 0.19,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.15,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. The space-heating buffer vessel's row, copied unchanged from THERMAL_ENERGY_STORAGE when the buffer and the hot-water cylinder became two asset classes (the existing-asset register matches by class); a price law of its own is hisim-4wo2."
+    },
+    {
+      "component_type": "DOMESTIC_HOT_WATER_STORAGE",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 10,
+          "best_estimate": 14,
+          "max": 18
+        },
+        "per_unit": "liter"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.015
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 0.6,
+        "per_unit": "liter"
+      },
+      "vat_rate": 0.19,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.15,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. The domestic-hot-water cylinder's row, copied unchanged from THERMAL_ENERGY_STORAGE when the buffer and the hot-water cylinder became two asset classes (the existing-asset register matches by class); a price law of its own is hisim-4wo2."
+    },
+    {
       "component_type": "SOLAR_THERMAL_SYSTEM",
       "valid_from_year": 2026,
       "specific_investment": {
@@ -1475,6 +1599,74 @@
         "src_ai_estimates"
       ],
       "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "SPACE_HEATING_STORAGE",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 11,
+          "best_estimate": 15,
+          "max": 20
+        },
+        "per_unit": "liter"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.015
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 0.5,
+        "per_unit": "liter"
+      },
+      "vat_rate": 0.19,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.15,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. The space-heating buffer vessel's row, copied unchanged from THERMAL_ENERGY_STORAGE when the buffer and the hot-water cylinder became two asset classes (the existing-asset register matches by class); a price law of its own is hisim-4wo2."
+    },
+    {
+      "component_type": "DOMESTIC_HOT_WATER_STORAGE",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 11,
+          "best_estimate": 15,
+          "max": 20
+        },
+        "per_unit": "liter"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.015
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 0.5,
+        "per_unit": "liter"
+      },
+      "vat_rate": 0.19,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.15,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. The domestic-hot-water cylinder's row, copied unchanged from THERMAL_ENERGY_STORAGE when the buffer and the hot-water cylinder became two asset classes (the existing-asset register matches by class); a price law of its own is hisim-4wo2."
     },
     {
       "component_type": "SOLAR_THERMAL_SYSTEM",

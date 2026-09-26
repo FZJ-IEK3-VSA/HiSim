@@ -182,6 +182,33 @@ class SubsidyBuildingContext:
         return self.residential_floor_area_in_m2 / total
 
 
+@dataclass
+class SubsidyPackageContext:
+    """What the evaluation being priced installs, for conditions on what a measure comes with.
+
+    Some grants are only paid for a measure carried out *together with* another one: SEAI's
+    central-heating grant is for the radiators or floor circuits installed beside a heat pump, not
+    for new radiators on an oil boiler. Nothing about one measure's own cost facts can say that, so
+    the evaluator states, per evaluation, which asset classes that evaluation newly installs --
+    every cost subject that is a new investment or a replacement under the §4.1 installation
+    context, exactly the ones it charges at year 0 (``calculators.context_resolution
+    .installation_verdict``). In a staged plan one evaluation is one stage, so "in the same
+    package" means "bought in the same stage": a heat pump an earlier stage bought is an existing
+    asset of the later one.
+
+    The fields are computed, never asked (like ``measure.*``): the questionnaire has no question
+    for them, and a context nobody filled -- a caller outside the evaluator -- leaves them
+    ``None``, i.e. unanswered, so a condition on them is UNDETERMINED rather than false.
+
+    Example: the catalog leaf ``{"field": "package.installed_asset_classes", "op": "contains",
+    "value": "HeatPump"}`` holds when the same evaluation installs a heat pump. The values are the
+    ``ComponentType`` *values*, as ``building.existing_heating.asset_class`` compares them.
+    """
+
+    #: The ``ComponentType`` values of every asset class the evaluation newly installs, sorted.
+    installed_asset_classes: Optional[Tuple[str, ...]] = None
+
+
 # --------------------------------------------------------------------------- field vocabulary
 # W2.3: ONE source of truth for the names conditions and questions may use. The vocabulary is
 # derived from the context dataclasses themselves, so a field added to `ApplicantProfile` or
@@ -266,7 +293,18 @@ class SubsidyContextFields:
     CONTEXT_ROOTS: Dict[str, type] = {
         "applicant": ApplicantProfile,
         "building": SubsidyBuildingContext,
+        "package": SubsidyPackageContext,
     }
+
+    #: Roots whose fields the engine computes and no user is ever asked: the measure's own cost
+    #: facts and what the evaluation installs beside it. The questionnaire derivation and the
+    #: question-coverage check both skip them.
+    COMPUTED_ROOTS: Tuple[str, ...] = ("measure", "package")
+
+    @classmethod
+    def is_computed(cls, fieldname: str) -> bool:
+        """Whether a condition field is computed by the engine rather than asked (§5.7)."""
+        return fieldname.split(".", 1)[0] in cls.COMPUTED_ROOTS
 
     #: Fields that are computed from other fields and therefore never asked directly: the
     #: derived field maps to the user-answerable fields whose answers determine it (§5.7). This

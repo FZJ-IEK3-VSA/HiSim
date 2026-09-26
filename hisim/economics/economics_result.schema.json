@@ -286,6 +286,7 @@
               "unpriced",
               "npv_in_euro",
               "investment_in_euro",
+              "investment_by_stage",
               "subsidy_in_euro",
               "replacements_in_euro",
               "maintenance_in_euro",
@@ -301,7 +302,23 @@
               "stage": {"type": ["integer", "null"]},
               "unpriced": {"type": "boolean"},
               "npv_in_euro": {"$ref": "#/$defs/band"},
-              "investment_in_euro": {"$ref": "#/$defs/band"},
+              "investment_in_euro": {
+                "$ref": "#/$defs/band",
+                "description": "Year-0 investment: the investment, planning and removal booked in year 0, by every stage that starts then. Stages starting later are in investment_by_stage."
+              },
+              "investment_by_stage": {
+                "description": "The subject's investment split by the stage that bought it: one entry per stage whose evaluation booked investment, planning or removal for the subject on the plan's timeline, ascending by stage, each the nominal amount in the year that stage starts. Kept or carried-over subjects have no entry; reference rows carry an empty list.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["stage", "investment_in_euro"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "stage": {"type": "integer", "minimum": 0},
+                    "investment_in_euro": {"$ref": "#/$defs/band"}
+                  }
+                }
+              },
               "subsidy_in_euro": {"$ref": "#/$defs/band"},
               "replacements_in_euro": {"$ref": "#/$defs/band"},
               "maintenance_in_euro": {"$ref": "#/$defs/band"},

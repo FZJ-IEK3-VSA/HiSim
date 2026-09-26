@@ -276,6 +276,13 @@ class ComponentType(str, enum.Enum):
     BOILER = "Boiler"
     BUFFER = "Buffer"
     THERMAL_ENERGY_STORAGE = "ThermalEnergyStorage"
+    # The two water vessels of a household, told apart because the lifecycle cost engine's
+    # existing-asset register matches by asset class: the space-heating buffer goes with the heat
+    # generator, the domestic-hot-water cylinder with the hot-water supply, and a measure that
+    # replaces one must not look like it replaced the other. THERMAL_ENERGY_STORAGE stays for
+    # the legacy CAPEX path and for any vessel that is neither.
+    SPACE_HEATING_STORAGE = "SpaceHeatingStorage"
+    DOMESTIC_HOT_WATER_STORAGE = "DomesticHotWaterStorage"
     HEATERS = [HEAT_PUMP, GAS_HEATER]
     RESIDENTS = "Residents"
     BUILDINGS = "Buildings"

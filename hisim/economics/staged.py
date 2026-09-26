@@ -391,6 +391,12 @@ class StagedEvaluator:
         "plan for a country that has one."
     )
 
+    #: The asset classes a stage buys whole when its register newly declares them replaced,
+    #: instead of charging the size increment over the previous stage (:meth:`_charged_subjects`).
+    #: Only the space-heating buffer, which a heating_system measure replaces with the vessel the
+    #: new generator is sized for (renovisorissues #48, owner decision 2026-09-26).
+    BOUGHT_WHOLE_WHEN_REPLACED: FrozenSet[ComponentType] = frozenset({ComponentType.SPACE_HEATING_STORAGE})
+
     def __init__(self, cost_database: CostDatabase) -> None:
         """Bind the evaluator to one cost database.
 
@@ -640,6 +646,18 @@ class StagedEvaluator:
         absent from the returned mapping rather than present with a zero, so "did this stage buy
         this" is one membership test.
 
+        One exception to the increment, for the space-heating buffer alone
+        (:attr:`BOUGHT_WHOLE_WHEN_REPLACED`), and it is the house's own register that states it: a
+        buffer the stage's inventory declares *replaced*, where the stage before declared no such
+        replacement, is a new vessel bought whole in this stage, however large the old one was
+        (:meth:`_newly_replaced_classes`). The stage's own evaluation already prices it so -- the
+        full new price, the old one's removal, its written-off book value and the anyway credit
+        (``cost_spec.md`` §4.1) -- and charging only the size increment of that would book a
+        fraction of a replacement. A heating_system measure that replaces a 430-litre buffer with a
+        970-litre one buys a 970-litre vessel, not 540 litres of one (renovisorissues #48). Every
+        other replaced device -- an array, a battery, a collector, a generator -- keeps the rule
+        above (owner decision 2026-09-26).
+
         Args:
             stages: The plan as given.
             index: The stage to answer for.
@@ -652,10 +670,12 @@ class StagedEvaluator:
         if index == 0:
             return {subject: 1.0 for subject in current}
         previous = {facts.subject: facts.facts for facts in stages[index - 1].inputs.cost_facts}
+        replaced = cls._newly_replaced_classes(stages, index)
         charged: Dict[str, float] = {}
         for subject, facts in current.items():
             before = previous.get(subject)
-            if before is None or before.asset_class != facts.asset_class:
+            bought_whole = facts.asset_class in replaced and facts.asset_class in cls.BOUGHT_WHOLE_WHEN_REPLACED
+            if before is None or before.asset_class != facts.asset_class or bought_whole:
                 charged[subject] = 1.0
                 continue
             if before.size <= 0.0:
@@ -667,6 +687,32 @@ class StagedEvaluator:
             elif facts.size > before.size:
                 charged[subject] = (facts.size - before.size) / facts.size
         return charged
+
+    @classmethod
+    def _newly_replaced_classes(cls, stages: Tuple[Stage, ...], index: int) -> FrozenSet[ComponentType]:
+        """The asset classes stage ``index``'s inventory replaces and the stage before did not.
+
+        A stage's inventory is the house as its translator declared it, and each entry names the
+        classes that replace it (``ExistingAsset.replaced_by_asset_classes``). A replacement that
+        the previous stage already declared was carried out there -- a plan's stages each carry
+        every measure before them -- so only the difference is this stage's own.
+
+        Args:
+            stages: The plan as given.
+            index: The stage to answer for, at least 1.
+
+        Returns:
+            The asset classes this stage replaces for the first time.
+        """
+
+        def declared(stage: Stage) -> Set[ComponentType]:
+            return {
+                asset_class
+                for asset in cls._inventory(stage.inputs)
+                for asset_class in asset.replaced_by_asset_classes
+            }
+
+        return frozenset(declared(stages[index]) - declared(stages[index - 1]))
 
     @classmethod
     def _carried_over_subjects(

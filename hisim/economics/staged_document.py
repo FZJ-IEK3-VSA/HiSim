@@ -658,22 +658,52 @@ class StagedDocument:
         ``unpriced`` says the opposite of what an absent row would: the subject is part of the
         plan and its price is not known, which is the honest answer for an envelope measure whose
         request carried no ``cost`` block.
+
+        ``stage`` is the *last* stage that charged the subject. ``investment_in_euro`` is the
+        **year-0 investment** -- the investment, planning and removal booked in year 0, by every
+        stage that starts then; **stages starting later are in** ``investment_by_stage``. On those
+        two alone a row two stages paid into cannot be filtered by stage: the filter would count
+        the earlier stage's purchase as the later one's (renovisorissues #48).
+        ``investment_by_stage`` is that split, and it is additive: one
+        ``{"stage": k, "investment_in_euro": band}`` per stage whose evaluation booked investment,
+        planning or removal for the subject on the plan's timeline, ascending by ``k``, each the
+        nominal amount of that stage's purchase in the year the stage starts. A stage that carried
+        the subject over unchanged has no entry, and neither has a stage that kept it as existing
+        equipment. For a plan whose stages all start in year 0 the entries sum to
+        ``investment_in_euro``; a stage starting later books its purchase in its own year, which
+        ``investment_in_euro`` deliberately does not count (owner decision 2026-09-26) and
+        ``investment_by_stage`` does. The reference is not staged: its rows carry an empty list,
+        and its ``investment_in_euro`` is its whole purchase.
+
+        A reference row carries a ``measure_id`` only for a measure the reference itself carries
+        out (``stages[0].measures``, normally none): the measure map is read over every stage's
+        mapping report, and a buffer the plan's heating_system replaces is, in the reference, the
+        house's own vessel.
         """
         rows: List[Dict[str, Any]] = []
         replacements = self._replacement_years(result)
+        by_stage = self._investment_by_stage(result) if staged else {}
+        reference_measures = set(self._result.stages[0].measures) if self._result.stages else set()
         for subject in sorted(result.component_breakdowns):
             breakdown = result.component_breakdowns[subject]
             categories = breakdown.npv_by_category
+            measure_id = self._measure_ids.get(subject)
+            if not staged and measure_id not in reference_measures:
+                measure_id = None
             rows.append(
                 {
                     "subject": subject,
                     "kind": SubjectKindNames.of(breakdown.subject_kind),
                     "asset_class": breakdown.asset_class.value if breakdown.asset_class else None,
-                    "measure_id": self._measure_ids.get(subject),
+                    "measure_id": measure_id,
                     "stage": self._result.stage_of_subject(subject) if staged else None,
                     "unpriced": subject in self._unpriced,
                     "npv_in_euro": self._band(breakdown.total_npv_in_euro),
                     "investment_in_euro": self._band(breakdown.investment_gross_in_euro),
+                    "investment_by_stage": [
+                        {"stage": stage, "investment_in_euro": self._band(amount)}
+                        for stage, amount in sorted(by_stage.get(subject, {}).items())
+                    ],
                     "subsidy_in_euro": self._band(
                         categories.get(CostCategory.SUBSIDY, UncertainValue.exact(0.0))
                     ),
@@ -691,6 +721,32 @@ class StagedDocument:
                 }
             )
         return rows
+
+    def _investment_by_stage(self, result: LifecycleCostResult) -> Dict[str, Dict[int, UncertainValue]]:
+        """Each subject's gross purchase on the plan's timeline, split by the stage that made it.
+
+        The categories are :attr:`INVESTMENT_TOTAL_CATEGORIES` -- investment, planning, removal,
+        the three ``investment_in_euro`` sums -- in whatever year the stage books them; the stage
+        of an entry is the one the splice took it from
+        (:meth:`~hisim.economics.staged.StagedResult.stage_of_timeline_entry`), which is the stage
+        that bought it and not the stage active in its year.
+
+        Args:
+            result: The plan's evaluation.
+
+        Returns:
+            Subject -> stage index -> the band that stage booked for it.
+        """
+        amounts: Dict[str, Dict[int, UncertainValue]] = {}
+        for position, entry in enumerate(result.timeline.entries):
+            if entry.category not in self.INVESTMENT_TOTAL_CATEGORIES:
+                continue
+            stage = self._result.stage_of_timeline_entry(position)
+            if stage is None:
+                continue
+            per_stage = amounts.setdefault(entry.subject, {})
+            per_stage[stage] = per_stage.get(stage, UncertainValue.exact(0.0)) + entry.amount_in_euro
+        return amounts
 
     def _service_life(self, subject: str) -> Optional[float]:
         """The service life declared for one subject, or ``None`` when the database decided it.

@@ -42,8 +42,8 @@ from hisim.energy_system.model import (
     VariantOption,
 )
 from hisim.renovisor import TRANSLATOR_VERSION
-from hisim.renovisor.apply import AppliedPackage, HousePaths
-from hisim.renovisor.economics import EconomicContextBuilder
+from hisim.renovisor.apply import AppliedPackage, HousePaths, apply
+from hisim.renovisor.economics import EconomicContextBuilder, RealizedTwin
 from hisim.renovisor.constants import (
     BatteryLaw,
     BoilerEfficiency,
@@ -910,6 +910,81 @@ class Translator:
                 does not list it, when the diff rule is broken, or when the dumped text does not
                 load. All three are exit 3.
         """
+        stages = self._run_stages(request, applied)
+        base_file_name = stages.base_file_name
+        editor = stages.editor
+        report = stages.report
+        edits = stages.edits
+
+        content_hash = request.content_hash()
+        name = self.NAME_TEMPLATE.format(hash=content_hash)
+        editor.set_document(
+            name,
+            self.DESCRIPTION_TEMPLATE.format(version=TRANSLATOR_VERSION, base=base_file_name),
+        )
+        edits.append(
+            Edit(
+                kind=EditKind.DOCUMENT,
+                location="name",
+                value=name,
+                source="the request's content hash",
+                note="the file is named after what it contains, so two identical requests are one file",
+            )
+        )
+        model = editor.build()
+        text = dump_energy_system(model)
+        file_name = f"{name}{BaseFiles.SUFFIX}"
+        report.energy_system_file = file_name
+        report.set_measures([line.to_json() for line in applied.measures])
+        # The economic context is built from the *edited* model, because its envelope subjects are
+        # sized in square metres of the building the run will actually simulate; the equipment the
+        # house already has is sized from the twin of the house before the package.
+        plan_twin = RealizedTwin.of(model)
+        built = EconomicContextBuilder(
+            request,
+            applied,
+            _building_config(model),
+            generator_component=BaseFiles.generator_component(base_file_name),
+            heating_reference_temperature_in_celsius=_design_temperature(model),
+            baseline_twin=plan_twin if not request.measures else RealizedTwin.of(self._baseline_model(request)),
+            plan_twin=plan_twin,
+        ).build()
+        report.set_subjects(built.subjects)
+        report.set_unpriced_subjects(built.unpriced_subjects)
+        for path, value, note in built.defaults:
+            if not report.has(path):
+                report.defaulted(path, value, note)
+        for path, value, note in built.approximations:
+            if not report.has(path):
+                report.approximated(path, note, value=value)
+        translated = TranslatedSystem(
+            model=model,
+            base_file_name=base_file_name,
+            file_name=file_name,
+            yaml_text=text,
+            edits=tuple(edits),
+            report=report,
+            economic_context=built.context,
+        )
+        translated.assert_only_permitted_edits(stages.base)
+        self._self_check(text, file_name)
+        report.assert_complete(request.document)
+        return translated
+
+    def _run_stages(self, request: Request, applied: AppliedPackage) -> "_Stages":
+        """Select the twin one house runs and write the house into it, reporting every leaf.
+
+        The part of :meth:`translate` that decides the energy system, shared with
+        :meth:`_baseline_model`: everything after it -- the document name, the economic context,
+        the self-checks -- is about the one file a calculation writes.
+
+        Args:
+            request: The validated request.
+            applied: The house to write, with or without its package.
+
+        Returns:
+            The recorded twin, the editor holding the written house, the report and the edit log.
+        """
         house = House.from_dict(applied.house)
         raw = applied.house
         generator = house.heating.type_of_system
@@ -948,57 +1023,26 @@ class Translator:
         _comfort(state)
         _devices(state)
         _unmodelled(state)
+        return _Stages(base=base, base_file_name=base_file_name, editor=editor, report=report, edits=edits)
 
-        content_hash = request.content_hash()
-        name = self.NAME_TEMPLATE.format(hash=content_hash)
-        editor.set_document(
-            name,
-            self.DESCRIPTION_TEMPLATE.format(version=TRANSLATOR_VERSION, base=base_file_name),
-        )
-        edits.append(
-            Edit(
-                kind=EditKind.DOCUMENT,
-                location="name",
-                value=name,
-                source="the request's content hash",
-                note="the file is named after what it contains, so two identical requests are one file",
-            )
-        )
-        model = editor.build()
-        text = dump_energy_system(model)
-        file_name = f"{name}{BaseFiles.SUFFIX}"
-        report.energy_system_file = file_name
-        report.set_measures([line.to_json() for line in applied.measures])
-        # The economic context is built from the *edited* model, because its envelope subjects are
-        # sized in square metres of the building the run will actually simulate.
-        built = EconomicContextBuilder(
-            request,
-            applied,
-            _building_config(model),
-            generator_component=BaseFiles.generator_component(base_file_name),
-            heating_reference_temperature_in_celsius=_design_temperature(model),
-        ).build()
-        report.set_subjects(built.subjects)
-        report.set_unpriced_subjects(built.unpriced_subjects)
-        for path, value, note in built.defaults:
-            if not report.has(path):
-                report.defaulted(path, value, note)
-        for path, value, note in built.approximations:
-            if not report.has(path):
-                report.approximated(path, note, value=value)
-        translated = TranslatedSystem(
-            model=model,
-            base_file_name=base_file_name,
-            file_name=file_name,
-            yaml_text=text,
-            edits=tuple(edits),
-            report=report,
-            economic_context=built.context,
-        )
-        translated.assert_only_permitted_edits(base)
-        self._self_check(text, file_name)
-        report.assert_complete(request.document)
-        return translated
+    def _baseline_model(self, request: Request) -> EnergySystemFile:
+        """The twin of the request's house as it stands, before any measure of its package.
+
+        The equipment the house already has -- its buffer, its cylinder, its emitters, its meters
+        -- is registered at the size this twin gives it, which is not the plan twin's: a heat
+        pump's twin buffers at fifty litres per kilowatt, an oil boiler's at twenty, and insulation
+        shrinks the load every generator is sized from. It is the same twin the reference stage of
+        a plan runs, written by the same stages, so the two stages register one and the same
+        equipment. Nothing of it reaches the file or the report this calculation writes.
+
+        Args:
+            request: The validated request, whose ``house`` is written without its measures.
+
+        Returns:
+            The edited energy-system document of the unrenovated house.
+        """
+        original = apply(request.document["house"], (), self._whitelist)
+        return self._run_stages(request, original).editor.build()
 
     def _cost_blocks(self, request: Request, house: Mapping[str, Any], report: MappingReport) -> None:
         """Report every ``measures[i].cost`` block: used on an envelope measure, listed on any other.
@@ -1099,6 +1143,25 @@ def _design_temperature(model: EnergySystemFile) -> Optional[float]:
 
 
 @dataclass
+class _Stages:
+    """What :meth:`Translator._run_stages` leaves behind: the twin chosen and the house written.
+
+    Args:
+        base: The recorded twin as it was loaded, for the diff rule.
+        base_file_name: Its file name.
+        editor: The working copy the stages wrote the house into.
+        report: The mapping report the stages filled in.
+        edits: The log of changes the stages made.
+    """
+
+    base: EnergySystemFile
+    base_file_name: str
+    editor: SystemEditor
+    report: MappingReport
+    edits: List[Edit]
+
+
+@dataclass
 class _TranslationState:
     """Everything one translation carries between its seven stages.
 
@@ -1123,7 +1186,7 @@ class _TranslationState:
     house: House
     raw: Mapping[str, Any]
     base_file_name: str
-    editor: "SystemEditor"
+    editor: SystemEditor
     report: MappingReport
     edits: List[Edit]
     whitelist: Whitelist

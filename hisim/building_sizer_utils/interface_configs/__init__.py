@@ -124,7 +124,7 @@ run configuration in-process and round-tripping it through the JSON contract::
     >>> restored = ModularHouseholdConfig.from_json(serialized)
 
 For on-disk exchange, :func:`~hisim.building_sizer_utils.interface_configs.modular_household_config.write_config`
-writes a ``ModularHouseholdConfig`` to ``modular_example_config.json`` and
+writes a ``ModularHouseholdConfig`` to a caller-supplied path and
 :func:`~hisim.building_sizer_utils.interface_configs.modular_household_config.read_in_configs`
 reads one back from a caller-supplied path.  A ``system_setups/*_building_sizer.py``
 entry point then consumes the restored config to wire and run the matching

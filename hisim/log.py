@@ -9,7 +9,6 @@ from enum import IntEnum
 from pathlib import Path
 
 LOGGING_DEFAULT_LEVEL: int = 3
-LOGGING_DEFAULT_PATH: str = r"../logs/"
 
 
 class LogPrio(IntEnum):
@@ -44,13 +43,19 @@ class Logger:
     in a kernel. Every time a simulation is started, the logger has to be set up for that
     simulation using the setup() function. Every time a simulation ends, it should be reset with
     the reset() function.
+
+    Until setup() names the run's result directory, messages are printed and buffered, and written
+    nowhere: setup() writes the buffer into the result directory. The logger used to write them to
+    ``../logs/`` relative to whatever the working directory was, which put a log file beside the
+    repository (or anywhere else) on every run -- a stray write the calculation's write guard
+    (``hisim.write_guard``) refuses.
     """
 
     # --------------------------------------------------------------------------------------------
     # ----- member variables ---------------------------------------------------------------------
     # --------------------------------------------------------------------------------------------
 
-    logging_path: str = LOGGING_DEFAULT_PATH
+    logging_path: str | None = None
     logging_level: int = LOGGING_DEFAULT_LEVEL
     before_result_dir_created: bool = True
     log_buffer: str = ""
@@ -69,13 +74,6 @@ class Logger:
         # safety checks
         if not self.before_result_dir_created:
             print("WARNING! Logging seems to be already initialized.")
-        # delete parts of file if it becomes too large
-        if self.before_result_dir_created:
-            for filename in ["hisim_simulation", "profiling_timeuse"]:
-                try:
-                    self.file_thanos(filename)
-                except:
-                    pass
         # set path and make folder if it does not exist
         self.logging_path = logging_path
         if not Path(logging_path).exists():
@@ -101,24 +99,11 @@ class Logger:
         This is necessary because the logger gets initialized only once per kernel, when
         log.py is first imported.
         """
-        self.logging_path: str = LOGGING_DEFAULT_PATH
+        self.logging_path = None
         self.logging_level: int = LOGGING_DEFAULT_LEVEL
         self.before_result_dir_created: bool = True
         self.log_buffer: str = ""
         self.profile_buffer: str = ""
-
-    def file_thanos(self, filename: str) -> None:
-        """Checks the size of a default logfile and halves it if it is too large."""
-        file_path = str(Path(LOGGING_DEFAULT_PATH) / (filename + ".log"))
-        if not Path(file_path).exists():
-            return
-        with open(file_path, "rb") as file:
-            num_lines = sum(1 for line in file)
-        if num_lines > 10000:
-            with open(file_path, "r", encoding="utf-8") as file:
-                lines = file.readlines()
-            with open(file_path, "w", encoding="utf-8") as file:
-                file.writelines(lines[-5000:])
 
     # --------------------------------------------------------------------------------------------
     # ----- logger class actual logging function -------------------------------------------------
@@ -131,12 +116,19 @@ class Logger:
         If the parameter logging_message_path is not provided, the instance attribute
         self.logging_path, which is set during the Logger setup, is used.
         """
-        if logging_message_path is None:
-            logging_message_path = self.logging_path
         if prio > self.logging_level:
             return
         if not use_profile_file:
             print(str(LogPrio.get_prio_string(prio)) + ":" + message)
+        if logging_message_path is None:
+            logging_message_path = self.logging_path
+        if logging_message_path is None:
+            # No result directory yet: keep the message for setup() to write there.
+            if use_profile_file:
+                self.profile_buffer += message + "\n"
+            else:
+                self.log_buffer += message + "\n"
+            return
         # if logging path doesn't exist: create directory
         if not Path(logging_message_path).exists():
             Path(logging_message_path).mkdir(parents=True, exist_ok=True)
@@ -149,9 +141,6 @@ class Logger:
         except Exception:
             print(f"{filename} could not be appended. "
                 "This might happen when too many simultaneous simulations are running.")
-        # if result directory and therefore actual log file not yet created: buffer logs
-        if self.before_result_dir_created:
-            self.log_buffer += message + "\n"
 
 
 # --------------------------------------------------------------------------------------------

@@ -42,9 +42,31 @@ path verification (below).
 | `problems.json` | only on exit 2: every fault of the request, by path and code |
 | `translator_error.json` | only on exit 3: what the translator could not map |
 
-Nothing is written outside `--out` except the cache directory `--cache-dir` names, which is
-shared state rather than output. `run` and `translate` also take `--base-files`, the directory
-of recorded energy-system files to translate against; it defaults to `energy_systems/`.
+Nothing is written outside `--out` except the cache directories (`--cache-dir`, or the ordered
+list in `HISIM_CACHE_DIRECTORIES`), which are shared state rather than output. `run` and
+`translate` also take `--base-files`, the directory of recorded energy-system files to translate
+against; it defaults to `energy_systems/`.
+
+**The job directory is disposable.** `--out` is the calculation's result directory, and it holds
+nothing a later calculation needs: every cache entry -- weather series, occupancy profiles, solar
+gains, the LoadProfileGenerator's working copy while it computes -- lives in the cache directories.
+The backend copies the artifacts it wants out of `--out` and then deletes the directory whole. Give
+every job its own fresh `--out`; a worker process that runs several calculations starts each one
+with a fresh result path and a fresh logger (`hisim/calculation_scope.py`), so nothing of the
+previous job leaks into the next.
+
+This is enforced, not only promised. Every calculation runs under a write guard
+(`hisim/write_guard.py`, an audit hook): a write anywhere but `--out` and the cache directories --
+the repository, `hisim/inputs`, the working directory, the home directory, `/tmp`, the installed
+packages -- fails the calculation with exit 5, and the one-line error names the path and the line
+that wrote it. `HISIM_WRITE_GUARD=collect` lets the run finish and then lists every stray write at
+once; there is no switch that turns the guard off. Temporary files a library creates during the
+run land in the result directory (`tempfile.tempdir` points there once it exists), and when
+`MPLCONFIGDIR` is unset matplotlib's configuration and font cache go to `matplotlib/` in the first
+cache directory instead of `~/.config` and `~/.cache`. The LoadProfileGenerator binaries live in the
+cache directory too (`pylpg/<release>/` below it, e.g. `pylpg/LPG10.10.0/LPG_linux/`): the first
+calculation that needs them downloads them there, so an image that bakes them into its seed or its
+cache volume saves that download, and nothing is ever written into the installed `pylpg` package.
 
 ## Exit codes
 

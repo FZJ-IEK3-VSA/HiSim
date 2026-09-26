@@ -1,5 +1,7 @@
 """Module for visualizing the entire system as a flow chart."""
 
+import shutil
+import subprocess  # nosec B404 -- runs Graphviz's dot with a fixed argument list, no shell
 from collections import defaultdict
 from pathlib import Path
 from typing import List
@@ -154,14 +156,48 @@ class SystemChart:
                 with_results=with_results,
             )
             fullpath = Path(self.ppdt.simulation_parameters.result_directory) / filename
-            # pydot generates the write_<format> methods at runtime, so neither pylint nor mypy sees them.
-            graph.write_png(fullpath)  # type: ignore[attr-defined]  # noqa: no-member
+            self.render_png(graph, fullpath)
         except Exception as exc:  # noqa
             log.error(
                 f"Failed to generate network charts. Probably Graphviz is missing on your system. The python error was: {exc}"
             )
             system_chart_entry = None
         return system_chart_entry
+
+    @staticmethod
+    def render_png(graph: pydot.Dot, fullpath: Path) -> None:
+        """Render *graph* to a PNG at *fullpath* by running Graphviz's ``dot`` directly.
+
+        pydot's ``write_png`` writes the graph to a temporary file first, through a ``tempfile``
+        module it vendors with its own ``tempdir``: the calculation's redirect of the standard
+        library's temporary directory into the result directory (``hisim.write_guard``) does not
+        reach it, so every chart was a write into the system temporary directory. Handing the graph
+        to ``dot`` on its standard input and letting ``dot`` write the PNG to its final path leaves
+        nothing to put anywhere else. The one thing pydot's route does that this one does not is
+        copying the graph's ``shape_files`` beside the temporary file; the system chart uses none.
+
+        Args:
+            graph: The assembled graph, from :meth:`_build_graph`.
+            fullpath: Where the PNG goes, in the result directory.
+
+        Raises:
+            FileNotFoundError: When Graphviz's ``dot`` is not on ``PATH``.
+            RuntimeError: When ``dot`` fails; the message carries what it printed on stderr.
+        """
+        dot_executable = shutil.which("dot")
+        if dot_executable is None:
+            raise FileNotFoundError("Graphviz's 'dot' executable was not found on PATH")
+        completed = subprocess.run(  # nosec B603 -- a fixed argument list, no shell
+            [dot_executable, "-Tpng", "-o", str(fullpath)],
+            input=graph.to_string().encode("utf-8"),
+            capture_output=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            stderr = completed.stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(
+                f"Graphviz's dot failed with exit code {completed.returncode} writing '{fullpath}': {stderr}"
+            )
 
     def _build_graph(
         self,

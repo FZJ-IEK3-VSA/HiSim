@@ -71,7 +71,6 @@ def test_basic_household_without_simu_params(monkeypatch: pytest.MonkeyPatch) ->
         """Return a short simulation for this test while still exercising the no-params call path."""
         simulation_parameters = cls.one_day_only(year=year, seconds_per_timestep=max(seconds_per_timestep, 60 * 60))
         simulation_parameters.result_directory = TestingUtils.get_result_directory()
-        shutil.rmtree(simulation_parameters.result_directory, ignore_errors=True)
         captured_result_directory.append(simulation_parameters.result_directory)
         return simulation_parameters
 
@@ -80,6 +79,10 @@ def test_basic_household_without_simu_params(monkeypatch: pytest.MonkeyPatch) ->
         "full_year_with_only_plots",
         classmethod(fast_default_parameters),
     )
+    # A previous run's directory is cleared here, before the calculation starts: inside
+    # hisim_main.main the write guard allows nothing but the run's own directories, and the
+    # factory above runs before this one is admitted.
+    shutil.rmtree(TestingUtils.get_result_directory(), ignore_errors=True)
     simulation_parameters = None
     # hisim_main.main runs the simulation for its side effects and returns None.
     hisim_main.main(BASIC_HOUSEHOLD_PATH, simulation_parameters)

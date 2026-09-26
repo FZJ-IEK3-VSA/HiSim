@@ -521,6 +521,54 @@ class TestTheEquipmentTheHouseAlreadyHas:
                 split = sum(stage["investment_in_euro"][slot] for stage in row["investment_by_stage"])
                 assert split == pytest.approx(row["investment_in_euro"][slot], abs=0.01), (row["subject"], slot)
 
+    def test_the_hot_water_lagging_has_its_unpriced_row(self, document) -> None:
+        """The measure the plan bought is on the cost list, flagged and explained (renovisorissues #58)."""
+        rows = {row["subject"]: row for row in document["plan"]["by_subject"]}
+        row = rows["hot_water_tank_and_pipe_insulation"]
+        assert row["measure_id"] == "hot_water_tank_and_pipe_insulation"
+        assert row["stage"] == 1
+        assert row["unpriced"] is True
+        assert "hisim-5j3h" in row["note"] and "renovisorissues #39" in row["note"]
+        assert row["service_life_years"] is None and row["installation_year"] is None
+        reference = {row["subject"] for row in document["reference"]["by_subject"]}
+        assert "hot_water_tank_and_pipe_insulation" not in reference
+
+    def test_every_measure_a_stage_carries_out_has_a_row(self, document) -> None:
+        """What the document refuses to be written without, checked on the written file."""
+        named = {row["measure_id"] for row in document["plan"]["by_subject"]}
+        for stage in document["stages"]:
+            assert set(stage["measures"]) <= named, stage["label"]
+
+    def test_the_cylinder_states_the_life_and_the_year_its_replacement_follows_from(self, document) -> None:
+        """Why the kept cylinder is replaced in year 2, in published numbers (renovisorissues #58).
+
+        The mockup states ``heating.installation_year`` 2008, which dates the cylinder too, and the
+        cost database gives a domestic hot-water storage 20 years. The engine ages a kept asset at
+        the price basis year, so its replacement falls 2008 + 20 - 2026 = 2 years into the horizon.
+        """
+        for variant in ("reference", "plan"):
+            row = {row["subject"]: row for row in document[variant]["by_subject"]}["DHWStorage"]
+            assert (row["service_life_years"], row["service_life_origin"]) == (20.0, "cost_database"), variant
+            assert (row["installation_year"], row["installation_year_origin"]) == (2008, "request"), variant
+            basis = document["parameters"]["price_basis_year"]
+            due = row["installation_year"] + row["service_life_years"] - basis
+            assert row["replacement_years"][0] == round(due) == 2, variant
+
+    def test_the_meters_are_dated_at_mid_life(self, document) -> None:
+        """The request dates no meter, so the translator's mid-life year stands, and the row says so."""
+        row = {row["subject"]: row for row in document["reference"]["by_subject"]}["ElectricityMeter"]
+        assert row["installation_year_origin"] == "mid_life_default"
+        basis = document["parameters"]["price_basis_year"]
+        assert row["installation_year"] == basis - round(row["service_life_years"] / 2)
+
+    def test_what_the_package_buys_is_installed_in_its_stages_year(self, document) -> None:
+        """The heat pump is bought by the package stage, which starts in the simulation year."""
+        rows = {row["subject"]: row for row in document["plan"]["by_subject"]}
+        heat_pump = rows["MoreAdvancedHeatPumpHPLib"]
+        assert heat_pump["installation_year"] == document["parameters"]["weather_year"]
+        assert heat_pump["installation_year_origin"] == "stage"
+        assert heat_pump["service_life_origin"] == "cost_database"
+
 
 #: The measures of the co-installation cases: the mockup's own two heating measures.
 HEAT_PUMP = {"id": "heating_system", "options": {"type_of_system": "air_source_heat_pump"}}

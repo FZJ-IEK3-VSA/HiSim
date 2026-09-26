@@ -692,6 +692,98 @@ class TestTheStageMeasuresComeFromTheReport:
         assert StagedCli.MEASURES_KEY in MappingReport().to_json()
 
 
+class TestAMeasureWithoutAPricedSubject:
+    """A stage's setting or unpriced measure reaches ``by_subject`` through its report (#58)."""
+
+    MEASURE = "change_room_temperature"
+    NOTE = "a setting, not a purchase"
+
+    def _report(self, workspace: Path, declared: bool) -> None:
+        """Let the envelope stage also change the set point, declared costless or not."""
+        from hisim.renovisor.report import MappingReport
+
+        path = workspace / "envelope" / StagedCli.MAPPING_REPORT_FILE_NAME
+        report = json.loads(path.read_text(encoding="utf-8"))
+        report[MappingReport.MEASURES_FIELD] = [
+            {"id": "external_insulation", "status": "used"},
+            {"id": self.MEASURE, "status": "used"},
+        ]
+        # A current-shape report either way: the keys are there, and say the measure or do not.
+        report[MappingReport.COSTLESS_SUBJECTS_FIELD] = []
+        report[MappingReport.SUBJECT_NOTES_FIELD] = {}
+        if declared:
+            report[MappingReport.SUBJECTS_FIELD][self.MEASURE] = self.MEASURE
+            report[MappingReport.COSTLESS_SUBJECTS_FIELD] = [self.MEASURE]
+            report[MappingReport.SUBJECT_NOTES_FIELD] = {self.MEASURE: self.NOTE}
+        path.write_text(json.dumps(report), encoding="utf-8")
+
+    def test_a_declared_setting_gets_its_zero_row_and_note(self, workspace):
+        """The report's ``costless_subjects`` and ``subject_notes`` reach the row."""
+        self._report(workspace, declared=True)
+        out = workspace / "economics_result.json"
+        assert main(_arguments(workspace, out)) == 0
+        rows = {row["subject"]: row for row in json.loads(out.read_text(encoding="utf-8"))["plan"]["by_subject"]}
+        row = rows[self.MEASURE]
+        assert (row["measure_id"], row["stage"], row["unpriced"], row["note"]) == (self.MEASURE, 1, False, self.NOTE)
+
+    def test_an_undeclared_one_is_an_engine_failure_and_writes_nothing(self, workspace, capsys):
+        """Exit 3: a current report that gives the measure no subject leaves it off the cost."""
+        self._report(workspace, declared=False)
+        out = workspace / "economics_result.json"
+        assert main(_arguments(workspace, out)) == StagedCli.ENGINE_FAILED
+        assert self.MEASURE in capsys.readouterr().err
+        assert not out.exists()
+
+    def test_an_old_report_is_completed_from_the_translators_declarations(self, workspace):
+        """A cached job's report from before #58 carries neither key; the declarations stand in."""
+        from hisim.renovisor.economics import MeasureSubjects  # pylint: disable=import-outside-toplevel
+        from hisim.renovisor.report import MappingReport  # pylint: disable=import-outside-toplevel
+
+        lagging = "hot_water_tank_and_pipe_insulation"
+        path = workspace / "envelope" / StagedCli.MAPPING_REPORT_FILE_NAME
+        report = json.loads(path.read_text(encoding="utf-8"))
+        report[MappingReport.MEASURES_FIELD] = [
+            {"id": "external_insulation", "status": "used"},
+            {"id": lagging, "status": "approximated"},
+            {"id": self.MEASURE, "status": "used"},
+        ]
+        assert MappingReport.COSTLESS_SUBJECTS_FIELD not in report
+        assert MappingReport.SUBJECT_NOTES_FIELD not in report
+        path.write_text(json.dumps(report), encoding="utf-8")
+
+        out = workspace / "economics_result.json"
+        assert main(_arguments(workspace, out)) == 0
+        rows = {row["subject"]: row for row in json.loads(out.read_text(encoding="utf-8"))["plan"]["by_subject"]}
+        setting, lagged = rows[self.MEASURE], rows[lagging]
+        assert (setting["measure_id"], setting["unpriced"]) == (self.MEASURE, False)
+        assert setting["note"] == MeasureSubjects.COSTLESS[self.MEASURE]
+        assert (lagged["measure_id"], lagged["unpriced"]) == (lagging, True)
+        assert lagged["note"] == MeasureSubjects.UNPRICED[lagging]
+        assert rows[SyntheticPlan.ENVELOPE_SUBJECT]["unpriced"] is True
+
+    def test_an_old_report_with_an_undeclared_measure_is_still_refused(self, workspace, capsys):
+        """The fallback covers the declared measures only; anything else is still exit 3."""
+        from hisim.renovisor.report import MappingReport  # pylint: disable=import-outside-toplevel
+
+        path = workspace / "envelope" / StagedCli.MAPPING_REPORT_FILE_NAME
+        report = json.loads(path.read_text(encoding="utf-8"))
+        report[MappingReport.MEASURES_FIELD] = [{"id": "battery_system", "status": "approximated"}]
+        path.write_text(json.dumps(report), encoding="utf-8")
+        out = workspace / "economics_result.json"
+        assert main(_arguments(workspace, out)) == StagedCli.ENGINE_FAILED
+        assert "battery_system" in capsys.readouterr().err
+        assert not out.exists()
+
+    def test_the_reader_takes_the_two_keys_from_the_writer(self) -> None:
+        """One spelling for both processes, as for the subjects and unpriced keys."""
+        from hisim.renovisor.report import MappingReport
+
+        written = MappingReport().to_json()
+        assert StagedCli.COSTLESS_KEY == MappingReport.COSTLESS_SUBJECTS_FIELD
+        assert StagedCli.NOTES_KEY == MappingReport.SUBJECT_NOTES_FIELD
+        assert {StagedCli.COSTLESS_KEY, StagedCli.NOTES_KEY} <= set(written)
+
+
 class TestTheCatalogueIsNamedInTheDocument:
     """``parameters.subsidy_catalog`` identifies a catalogue, not just a country (step 12 §4)."""
 

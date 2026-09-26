@@ -19,7 +19,7 @@
   "properties": {
     "schema_version": {
       "const": 5,
-      "description": "5 since 2026-09-26 (renovisorissues #57), a breaking change: parameters.simulation_year is renamed parameters.weather_year (the year of the weather the stages were simulated with; it dates nothing), parameters carries the required plan_start_year (the calendar year of the plan's year 0, or null), and every annual[].calendar_year is plan_start_year + year, null when plan_start_year is null, no longer simulation_year + year. 4 since 2026-09-26: parameters.escalation.energy states the per-carrier rate actually used for every carrier a stage bills and every carrier the plan named, no longer only the stated ones, and parameters carries the required energy_prices (the year-1 prices used, the working price all-in with carbon) and origins (where each came from) (renovisorissues #52). 3 since 2026-09-26: every by_subject row carries the required investment_by_stage, the subject's investment split by the stage that bought it (renovisorissues #48, hisim-fig7). 2 since 2026-09-24: a subsidies[] row the plan awarded states amount_by_year_in_euro and an amount (hisim-cyc.5), and totals and comparison carry the headline monthly_equivalent_cost_in_euro / monthly_equivalent_cost_delta_in_euro (hisim-cyc.6)."
+      "description": "5 since 2026-09-26 (renovisorissues #57), a breaking change: parameters.simulation_year is renamed parameters.weather_year (the year of the weather the stages were simulated with; it dates nothing), parameters carries the required plan_start_year (the calendar year of the plan's year 0, or null), and every annual[].calendar_year is plan_start_year + year, null when plan_start_year is null, no longer simulation_year + year. Also in 5: every by_subject row carries the required service_life_origin, installation_year, installation_year_origin and note, service_life_years states the lifetime the engine used whether the cost database or the request gave it, and every measure a stage carries out has a by_subject row, a zero one of its own for a measure the engine prices no subject for (renovisorissues #58). 4 since 2026-09-26: parameters.escalation.energy states the per-carrier rate actually used for every carrier a stage bills and every carrier the plan named, no longer only the stated ones, and parameters carries the required energy_prices (the year-1 prices used, the working price all-in with carbon) and origins (where each came from) (renovisorissues #52). 3 since 2026-09-26: every by_subject row carries the required investment_by_stage, the subject's investment split by the stage that bought it (renovisorissues #48, hisim-fig7). 2 since 2026-09-24: a subsidies[] row the plan awarded states amount_by_year_in_euro and an amount (hisim-cyc.5), and totals and comparison carry the headline monthly_equivalent_cost_in_euro / monthly_equivalent_cost_delta_in_euro (hisim-cyc.6)."
     },
     "engine": {
       "type": "object",
@@ -354,7 +354,11 @@
               "maintenance_in_euro",
               "residual_value_in_euro",
               "service_life_years",
-              "replacement_years"
+              "service_life_origin",
+              "installation_year",
+              "installation_year_origin",
+              "replacement_years",
+              "note"
             ],
             "properties": {
               "subject": {"type": "string"},
@@ -385,8 +389,27 @@
               "replacements_in_euro": {"$ref": "#/$defs/band"},
               "maintenance_in_euro": {"$ref": "#/$defs/band"},
               "residual_value_in_euro": {"$ref": "#/$defs/band"},
-              "service_life_years": {"type": ["number", "null"]},
-              "replacement_years": {"type": "array", "items": {"type": "integer"}}
+              "service_life_years": {
+                "type": ["number", "null"],
+                "description": "The service life the engine priced the subject with, in years. Null exactly when service_life_origin is: a carrier row, or a row of a measure the engine prices no subject for (a setting, a measure HiSim holds no price for)."
+              },
+              "service_life_origin": {
+                "enum": ["request", "cost_database", null],
+                "description": "Where service_life_years came from: a lifetime the calculation's inputs state (request) or the cost database's entry for the asset class at the price basis year (cost_database)."
+              },
+              "installation_year": {
+                "type": ["integer", "null"],
+                "description": "The calendar year the subject counts as installed in: for equipment the house already had and keeps, the existing-asset register's year, from which the engine schedules its replacements; for a subject a stage bought, simulation_year + that stage's from_year. Null exactly when service_life_years is."
+              },
+              "installation_year_origin": {
+                "enum": ["request", "mid_life_default", "construction_year_default", "stage", null],
+                "description": "Where installation_year came from: the request states it (request); an undated device assumed at mid-life, price_basis_year - round(service_life / 2), never before the construction year (mid_life_default); an undated envelope element taking the construction year (construction_year_default); the start of the stage that bought it (stage). Null when installation_year is, or when the register did not say."
+              },
+              "replacement_years": {"type": "array", "items": {"type": "integer"}},
+              "note": {
+                "type": ["string", "null"],
+                "description": "Why the row has no price (unpriced) or costs nothing (a setting, not a purchase); null otherwise."
+              }
             }
           }
         },

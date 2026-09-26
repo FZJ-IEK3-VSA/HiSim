@@ -21,7 +21,7 @@ import pytest
 from hisim.economics.carriers import EnergyCarrier, revenue_subject
 from hisim.economics.parameters import EconomicParameters, StatedEnergyPrice
 from hisim.economics.staged import StagedEvaluator
-from hisim.economics.staged_document import CostGroup, CostGroups, StagedDocument
+from hisim.economics.staged_document import CostGroup, CostGroups, MeasureWithoutRowError, StagedDocument
 from hisim.economics.staged_parameters import StagedParameters
 from hisim.economics.subsidies import PayoutKind
 from hisim.economics.timeline import CostCategory
@@ -270,7 +270,13 @@ class TestTheDocumentShape:
         )
         path = tmp_path / StagedDocument.FILE_NAME
         StagedDocument(
-            result, parameters, perspective, measure_ids={SyntheticPlan.BOILER_SUBJECT: "heating_system"}
+            result,
+            parameters,
+            perspective,
+            measure_ids={
+                SyntheticPlan.BOILER_SUBJECT: "heating_system",
+                SyntheticPlan.ENVELOPE_SUBJECT: "external_insulation",
+            },
         ).write(path)
         written = json.loads(path.read_text(encoding="utf-8"))
 
@@ -447,7 +453,7 @@ class TestTheDocumentShape:
         assert commit is None or isinstance(commit, str) and commit.strip() == commit
 
     def test_the_document_states_schema_version_five(self, document):
-        """Version 5: ``weather_year`` and ``plan_start_year`` replace ``simulation_year`` (#57).
+        """Version 5: ``weather_year`` and ``plan_start_year`` (#57), and every row's life and age (#58).
 
         A literal for the same reason as the economics version above. Version 2 (2026-09-24) is
         the format with hisim-cyc.5's awarded-row rules and hisim-cyc.6's required monthly keys;
@@ -455,10 +461,12 @@ class TestTheDocumentShape:
         ``by_subject`` row; version 4 (2026-09-26, renovisorissues #52) changes what
         ``parameters.escalation.energy`` means — every carrier priced, not only the stated ones —
         and requires ``parameters.energy_prices`` and ``parameters.origins``; version 5
-        (2026-09-26, renovisorissues #57) renames ``parameters.simulation_year`` to
+        (2026-09-26, renovisorissues #57 and #58) renames ``parameters.simulation_year`` to
         ``weather_year``, requires ``parameters.plan_start_year`` and dates ``annual[]`` from it
-        alone. A document of that shape stating an older version would tell a consumer it could
-        skip what the later versions require.
+        alone, and requires ``service_life_origin``, ``installation_year``,
+        ``installation_year_origin`` and ``note`` on every ``by_subject`` row. A document of that
+        shape stating an older version would tell a consumer it could skip what the later versions
+        require.
         """
         import jsonschema
 
@@ -501,6 +509,142 @@ class TestTheParametersBlock:
         renamed["parameters"]["simulation_year"] = renamed["parameters"].pop("weather_year")
         with pytest.raises(jsonschema.ValidationError):
             StagedDocument.validate(renamed)
+
+
+class TestLifeAndAge:
+    """Every row says how long its subject lasts and how old it is (renovisorissues #58).
+
+    A reader cannot follow a replacement in year 2 without the lifetime and the installation
+    year the engine scheduled it from, and without knowing whether each was stated or assumed.
+    """
+
+    def test_every_device_row_states_the_life_the_engine_used(self, document):
+        """The synthetic subjects override their lifetime, so the origin is the request's."""
+        for variant in ("reference", "plan"):
+            for row in document[variant]["by_subject"]:
+                if row["kind"] == "carrier":
+                    continue
+                assert row["service_life_years"] == SyntheticPlan.LIFETIME_IN_YEARS, row["subject"]
+                assert row["service_life_origin"] == "request", row["subject"]
+
+    def test_a_carrier_row_has_no_life_and_no_age(self, document):
+        """A carrier is billed, not installed: all four fields are null."""
+        carriers = [row for row in document["plan"]["by_subject"] if row["kind"] == "carrier"]
+        assert carriers
+        for row in carriers:
+            assert row["service_life_years"] is None
+            assert row["service_life_origin"] is None
+            assert row["installation_year"] is None
+            assert row["installation_year_origin"] is None
+
+    def test_a_kept_asset_states_its_register_year(self, document):
+        """The reference keeps the boiler of the house, installed in the register's year.
+
+        The synthetic register states no origin for the year, which is what a register written
+        before the field existed says, and the document repeats it as null rather than guessing.
+        """
+        rows = {row["subject"]: row for row in document["reference"]["by_subject"]}
+        boiler = rows[SyntheticPlan.BOILER_SUBJECT]
+        assert boiler["installation_year"] == SyntheticPlan.INVENTORY_INSTALLATION_YEAR
+        assert boiler["installation_year_origin"] is None
+
+    def test_a_kept_assets_replacement_follows_from_its_published_life_and_year(self, document):
+        """Installation year + life, counted from the price basis year, is its replacement year.
+
+        The engine ages a kept asset at the price basis year (``calculators/context_resolution``),
+        so that, and not ``simulation_year``, is the year the relative replacement year counts
+        from; the published numbers are enough to reproduce it.
+        """
+        boiler = {row["subject"]: row for row in document["reference"]["by_subject"]}[SyntheticPlan.BOILER_SUBJECT]
+        basis = document["parameters"]["price_basis_year"]
+        due = boiler["installation_year"] + boiler["service_life_years"] - basis
+        assert boiler["replacement_years"][0] == max(1, round(due))
+
+    def test_a_subject_a_stage_bought_is_installed_in_that_stages_year(self, document):
+        """The facade is insulated in year 0 and the heat pump in year 4 of a 2024 plan."""
+        rows = {row["subject"]: row for row in document["plan"]["by_subject"]}
+        simulation_year = document["parameters"]["weather_year"]
+        envelope = rows[SyntheticPlan.ENVELOPE_SUBJECT]
+        heat_pump = rows[SyntheticPlan.HEAT_PUMP_SUBJECT]
+        assert (envelope["installation_year"], envelope["installation_year_origin"]) == (simulation_year, "stage")
+        assert (heat_pump["installation_year"], heat_pump["installation_year_origin"]) == (
+            simulation_year + 4,
+            "stage",
+        )
+
+    def test_a_row_with_a_price_carries_no_note(self, document):
+        """``note`` explains a missing price or a free measure; a priced row has nothing to explain."""
+        rows = {row["subject"]: row for row in document["plan"]["by_subject"]}
+        assert rows[SyntheticPlan.HEAT_PUMP_SUBJECT]["note"] is None
+
+
+class TestEveryMeasureHasARow:
+    """A measure a stage carries out is on ``by_subject`` even when nothing is bought for it (#58)."""
+
+    COSTLESS = "change_room_temperature"
+    UNPRICED = "hot_water_tank_and_pipe_insulation"
+    COSTLESS_NOTE = "a setting, not a purchase"
+    UNPRICED_NOTE = "HiSim holds no price for it"
+
+    def _write(self, database, parameters, path: Path, declared: bool = True) -> Dict[str, Any]:
+        """Price baseline -> envelope stage whose measures include the two subject-less ones."""
+        perspective = brownfield_perspective()
+        envelope = replace(
+            envelope_stage(0), measures=("external_insulation", self.UNPRICED, self.COSTLESS)
+        )
+        result = StagedEvaluator(database).evaluate([baseline_stage(), envelope], parameters, perspective)
+        measure_ids = {SyntheticPlan.ENVELOPE_SUBJECT: "external_insulation"}
+        if declared:
+            measure_ids.update({self.COSTLESS: self.COSTLESS, self.UNPRICED: self.UNPRICED})
+        written: Dict[str, Any] = StagedDocument(
+            result,
+            parameters,
+            perspective,
+            measure_ids=measure_ids,
+            unpriced_subjects=[self.UNPRICED] if declared else [],
+            costless_subjects=[self.COSTLESS] if declared else [],
+            subject_notes={self.COSTLESS: self.COSTLESS_NOTE, self.UNPRICED: self.UNPRICED_NOTE} if declared else {},
+        ).write(path)
+        return written
+
+    def test_a_costless_measure_is_a_real_zero_with_its_note(self, database, parameters, tmp_path):
+        """A setting is priced at nothing, which is not the same statement as an unknown price."""
+        document = self._write(database, parameters, tmp_path / "measures.json")
+        row = {row["subject"]: row for row in document["plan"]["by_subject"]}[self.COSTLESS]
+        zero = {"min": 0.0, "best": 0.0, "max": 0.0}
+        assert row["measure_id"] == self.COSTLESS
+        assert row["stage"] == 1
+        assert row["unpriced"] is False
+        assert row["note"] == self.COSTLESS_NOTE
+        assert row["investment_in_euro"] == zero and row["npv_in_euro"] == zero
+        assert row["investment_by_stage"] == [{"stage": 1, "investment_in_euro": zero}]
+        assert row["service_life_years"] is None and row["installation_year"] is None
+        assert row["replacement_years"] == []
+
+    def test_an_unpriced_measure_is_flagged_with_its_note(self, database, parameters, tmp_path):
+        """The hot-water lagging has no price anywhere, and its row says so instead of vanishing."""
+        document = self._write(database, parameters, tmp_path / "measures.json")
+        row = {row["subject"]: row for row in document["plan"]["by_subject"]}[self.UNPRICED]
+        assert row["unpriced"] is True
+        assert row["note"] == self.UNPRICED_NOTE
+        assert row["service_life_origin"] is None and row["installation_year_origin"] is None
+
+    def test_the_rows_change_no_sum(self, database, parameters, tmp_path):
+        """Zero rows keep ``by_subject`` summing to the NPV; the reference gets none of them."""
+        document = self._write(database, parameters, tmp_path / "measures.json")
+        for variant in ("reference", "plan"):
+            evaluation = document[variant]
+            total = sum(row["npv_in_euro"]["best"] for row in evaluation["by_subject"])
+            assert total == pytest.approx(evaluation["totals"]["npv_in_euro"]["best"], abs=0.01)
+        reference = {row["subject"] for row in document["reference"]["by_subject"]}
+        assert not reference & {self.COSTLESS, self.UNPRICED}
+
+    def test_a_measure_without_a_row_is_refused_before_the_file_exists(self, database, parameters, tmp_path):
+        """A measure nothing stands for would disappear from the cost; the document is not written."""
+        path = tmp_path / "undeclared.json"
+        with pytest.raises(MeasureWithoutRowError, match=self.COSTLESS):
+            self._write(database, parameters, path, declared=False)
+        assert not path.exists()
 
 
 class TestFinancing:

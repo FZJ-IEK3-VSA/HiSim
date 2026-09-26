@@ -89,6 +89,19 @@ class SubsidyReconciliationError(ValueError):
     """
 
 
+class MeasureWithoutRowError(ValueError):
+    """A measure a stage carries out has no ``by_subject`` row in the document.
+
+    Raised by :meth:`StagedDocument.assert_every_measure_has_row` before the file is written
+    (renovisorissues #58). ``by_subject`` is what the frontend draws "what the work costs" from, so
+    a measure the plan bought and no row names disappears from it without a trace. Every measure
+    the translator acts on either creates a cost subject or is declared costless or unpriced with
+    a reason in its mapping report (``hisim.renovisor.economics.MeasureSubjects``); a measure that
+    is neither is a translator or engine bug, or a mapping report written before the declaration
+    existed, which a re-translation of the stage fixes.
+    """
+
+
 class CostGroup(str, enum.Enum):
     """The eight stacks every chart of E-spec §5 draws, in the order they are drawn in.
 
@@ -254,10 +267,19 @@ class StagedDocument:
         measure_ids: Cost subject -> the catalogue measure that created it, from the translator's
             ``mapping_report.json`` ``subjects`` map. A subject absent from the mapping belongs to
             the baseline and is stamped ``null``.
+            ``None`` -- a document built by hand without the map -- stamps no measure on any row
+            and skips :meth:`assert_every_measure_has_row`, which has nothing to check against.
         unpriced_subjects: Subjects present in the plan with no price behind them — an envelope
-            measure whose request carried no ``cost`` block. They are flagged rather than hidden,
-            so the document says what it does not know (step 10 §1).
+            measure whose request carried no ``cost`` block, or a measure HiSim holds no price
+            for. They are flagged rather than hidden, so the document says what it does not know
+            (step 10 §1).
         cost_provenance: Name of the provenance file beside the document, for ``provenance``.
+        costless_subjects: Subjects of a measure that costs nothing to carry out -- a setting,
+            not a purchase. With the measure-only subjects of ``unpriced_subjects`` they are the
+            subjects the engine prices no cost facts for, and each gets a zero row of its own
+            (renovisorissues #58).
+        subject_notes: Subject -> the sentence its row's ``note`` carries: why an unpriced
+            subject has no price, why a costless one costs nothing.
     """
 
     #: Version of this document format. Bumped when a consumer would have to change.
@@ -300,6 +322,8 @@ class StagedDocument:
         measure_ids: Optional[Mapping[str, Optional[str]]] = None,
         unpriced_subjects: Iterable[str] = (),
         cost_provenance: str = "cost_provenance.json",
+        costless_subjects: Iterable[str] = (),
+        subject_notes: Optional[Mapping[str, str]] = None,
     ) -> None:
         """Store the plan and its context; nothing is built until :meth:`to_json`.
 
@@ -318,7 +342,10 @@ class StagedDocument:
         self._parameters = parameters
         self._perspective = perspective
         self._measure_ids: Dict[str, Optional[str]] = dict(measure_ids or {})
+        self._has_measure_map = measure_ids is not None
         self._unpriced: Set[str] = set(unpriced_subjects)
+        self._costless: Set[str] = set(costless_subjects)
+        self._notes: Dict[str, str] = dict(subject_notes or {})
         self._catalog_id = subsidy_catalog_id
         self._cost_provenance = cost_provenance
 
@@ -371,11 +398,14 @@ class StagedDocument:
             BandOrderError: If any band in the document is not ``min <= best <= max``.
             SubsidyReconciliationError: If an evaluation books support that its ``subsidies[]``
                 rows do not award.
+            MeasureWithoutRowError: If a measure a stage carries out has no ``by_subject`` row.
         """
         document = self.to_json()
         self.validate(document)
         self.assert_bands_ordered(document)
         self.assert_subsidies_reconciled(document)
+        if self._has_measure_map:
+            self.assert_every_measure_has_row(document)
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -525,6 +555,38 @@ class StagedDocument:
                             f"book {in_rows} in that year; the document would draw a credit its table "
                             "does not grant."
                         )
+
+    @classmethod
+    def assert_every_measure_has_row(cls, document: Mapping[str, Any]) -> None:
+        """Raise unless every measure a stage carries out has a ``by_subject`` row naming it.
+
+        The plan carries out every measure of every stage's ``measures``, the reference those of
+        ``stages[0]``; each must be the ``measure_id`` of at least one row of that evaluation's
+        ``by_subject`` (renovisorissues #58). Only a document built with the translator's measure
+        map is checked (:meth:`write`): without it no row names a measure.
+
+        Args:
+            document: The finished document.
+
+        Raises:
+            MeasureWithoutRowError: Naming the evaluation and the measures without a row.
+        """
+        stages = document["stages"]
+        carried_out = {
+            "reference": [measure for stage in stages[:1] for measure in stage["measures"]],
+            "plan": [measure for stage in stages for measure in stage["measures"]],
+        }
+        for variant, measures in carried_out.items():
+            named = {row["measure_id"] for row in document[variant]["by_subject"]}
+            missing = sorted({measure for measure in measures if measure not in named})
+            if missing:
+                raise MeasureWithoutRowError(
+                    f"{variant}.by_subject has no row for {missing}, which a stage carries out. Every "
+                    "measure the translator acts on creates a cost subject or is declared costless or "
+                    "unpriced in its mapping report (costless_subjects, unpriced_subjects); a report "
+                    "that does neither is a translator bug, or was written before the declaration "
+                    "existed and the stage must be translated again."
+                )
 
     # ------------------------------------------------------------------ header blocks
 
@@ -683,6 +745,19 @@ class StagedDocument:
         out (``stages[0].measures``, normally none): the measure map is read over every stage's
         mapping report, and a buffer the plan's heating_system replaces is, in the reference, the
         house's own vessel.
+
+        ``service_life_years`` is the lifetime the engine priced the subject with and
+        ``service_life_origin`` where it came from (:class:`~hisim.economics.staged.LifeOrigin`);
+        ``installation_year`` is the calendar year it counts as installed in -- a kept asset's
+        register year, from which its replacements are scheduled, or the start of the stage that
+        bought it -- and ``installation_year_origin`` where that came from
+        (:class:`~hisim.economics.facts.InstallationYearOrigin`). All four are ``null`` on a
+        carrier row and on a measure-only row, which have no lifetime (renovisorissues #58).
+        ``note`` says why a row has no price or costs nothing, and is ``null`` otherwise.
+
+        A measure the engine prices no subject for -- a setting, or one HiSim holds no price for
+        -- still gets a row, a zero one of its own (:meth:`_measure_only_rows`), so every measure a
+        stage carries out is on this list (:meth:`assert_every_measure_has_row`).
         """
         rows: List[Dict[str, Any]] = []
         replacements = self._replacement_years(result)
@@ -720,8 +795,89 @@ class StagedDocument:
                     "residual_value_in_euro": self._band(
                         categories.get(CostCategory.RESIDUAL_VALUE, UncertainValue.exact(0.0))
                     ),
-                    "service_life_years": self._service_life(subject),
+                    **self._life_fields(subject, staged),
                     "replacement_years": replacements.get(subject, []),
+                    "note": self._notes.get(subject),
+                }
+            )
+        rows.extend(self._measure_only_rows(result, staged))
+        return sorted(rows, key=lambda row: row["subject"])
+
+    #: The four lifetime and age fields of a row whose subject has no lifetime.
+    NO_LIFE: ClassVar[Dict[str, None]] = {
+        "service_life_years": None,
+        "service_life_origin": None,
+        "installation_year": None,
+        "installation_year_origin": None,
+    }
+
+    def _life_fields(self, subject: str, staged: bool) -> Dict[str, Any]:
+        """The four lifetime and age fields of one row, ``null`` where the subject has no lifetime."""
+        life = self._result.life_of(subject, staged)
+        if life is None:
+            return dict(self.NO_LIFE)
+        return {
+            "service_life_years": life.service_life_years,
+            "service_life_origin": life.service_life_origin.value,
+            "installation_year": life.installation_year,
+            "installation_year_origin": (
+                life.installation_year_origin.value if life.installation_year_origin is not None else None
+            ),
+        }
+
+    def _measure_only_rows(self, result: LifecycleCostResult, staged: bool) -> List[Dict[str, Any]]:
+        """One zero row per measure the engine prices no subject for, in the stage that carries it out.
+
+        The subject is the measure id, as an envelope measure's is, and it comes from the mapping
+        report's ``costless_subjects`` (priced zero: a setting, not a purchase) or its
+        ``unpriced_subjects`` (flagged: HiSim holds no price). A subject the engine does price has
+        its breakdown row instead and gets none here, and so does one any stage has cost facts for:
+        if the engine lost such a subject's row, :meth:`assert_every_measure_has_row` says so.
+        Every band is an exact zero, so every sum the document states is unchanged; lifetime and
+        age are ``null``: nothing was installed that ages. On the plan the row's ``stage`` is the
+        first stage carrying the measure out and ``investment_by_stage`` states that stage's zero,
+        as an unpriced envelope row does; on the reference a row exists only for a measure
+        ``stages[0]`` itself carries out.
+
+        Args:
+            result: The evaluation the rows go into.
+            staged: Whether it is the plan.
+
+        Returns:
+            The rows, unsorted.
+        """
+        zero = self._band(UncertainValue.exact(0.0))
+        rows: List[Dict[str, Any]] = []
+        stages = self._result.stages if staged else self._result.stages[:1]
+        priced = {facts.subject for stage in self._result.stages for facts in stage.inputs.cost_facts}
+        for subject in sorted(self._costless | self._unpriced):
+            measure_id = self._measure_ids.get(subject)
+            if measure_id is None or subject in priced or subject in result.component_breakdowns:
+                continue
+            carried_out = [index for index, stage in enumerate(stages) if measure_id in stage.measures]
+            if not carried_out:
+                continue
+            stage = carried_out[0] if staged else None
+            rows.append(
+                {
+                    "subject": subject,
+                    "kind": SubjectKindNames.COMPONENT,
+                    "asset_class": None,
+                    "measure_id": measure_id,
+                    "stage": stage,
+                    "unpriced": subject in self._unpriced,
+                    "npv_in_euro": zero,
+                    "investment_in_euro": zero,
+                    "investment_by_stage": (
+                        [{"stage": stage, "investment_in_euro": zero}] if stage is not None else []
+                    ),
+                    "subsidy_in_euro": zero,
+                    "replacements_in_euro": zero,
+                    "maintenance_in_euro": zero,
+                    "residual_value_in_euro": zero,
+                    **self.NO_LIFE,
+                    "replacement_years": [],
+                    "note": self._notes.get(subject),
                 }
             )
         return rows
@@ -751,19 +907,6 @@ class StagedDocument:
             per_stage = amounts.setdefault(entry.subject, {})
             per_stage[stage] = per_stage.get(stage, UncertainValue.exact(0.0)) + entry.amount_in_euro
         return amounts
-
-    def _service_life(self, subject: str) -> Optional[float]:
-        """The service life declared for one subject, or ``None`` when the database decided it.
-
-        Only an explicit ``lifetime_override_in_years`` is published: the database's own lifetime
-        is a property of the price data rather than of this plan, and the document has no way of
-        saying which entry it came from. A reader who needs it runs ``explain``.
-        """
-        for stage in self._result.stages:
-            for facts in stage.inputs.cost_facts:
-                if facts.subject == subject and facts.facts.lifetime_override_in_years is not None:
-                    return float(facts.facts.lifetime_override_in_years)
-        return None
 
     @staticmethod
     def _replacement_years(result: LifecycleCostResult) -> Dict[str, List[int]]:

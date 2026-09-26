@@ -138,12 +138,19 @@ document's assumptions back in unchanged:
 ```
 
 Every key is optional: `horizon_years`, `interest_rate`, `country`, `price_basis_year`,
-`perspective_id`, `subsidy_mode` (`full` | `none`), `financing` (`{"kind": "cash"}` or
+`plan_start_year`, `perspective_id`, `subsidy_mode` (`full` | `none`), `financing` (`{"kind": "cash"}` or
 `{"kind": "loan", "financed_share"?, "nominal_interest_rate"?, "term_in_years"?}`), `escalation`
 (`{"general"?, "investment"?, "feed_in"?, "energy"?: {<carrier>: rate}}`; a rate for
 `ELECTRICITY_FEED_IN` is refused, since the feed-in remuneration never escalates at a carrier
 rate), `energy_prices`, and the three that are accepted and ignored because they describe the run
-rather than state an assumption, `simulation_year`, `subsidy_catalog` and `origins`.
+rather than state an assumption, `weather_year`, `subsidy_catalog` and `origins`.
+
+`plan_start_year` (a calendar year, 1900–2100) is the year the plan starts in, the reader's own
+"now". Every `annual[].calendar_year` of the result is `plan_start_year + year`, and `null` when
+the block states none: the document never dates a plan from its weather. `weather_year` is the year
+of the weather the stages were simulated with (`simulation_year` up to schema version 4; the
+rename is why the document is version 5, renovisorissues #57). A block that states no
+`price_basis_year` over stages that state none either is priced at `plan_start_year`.
 
 `energy_prices` states what the household pays in year 1, per carrier (`ELECTRICITY`,
 `NATURAL_GAS`, `HEATING_OIL`, `PELLETS`, `WOOD_CHIPS`, `DISTRICT_HEATING`, `HYDROGEN`, `DIESEL`, and
@@ -175,7 +182,8 @@ evaluation (`lifecycle_costs.json`) or, for a stage directory that holds only th
 mapping report, from the `country` and `price_basis_year` keys `economic_inputs.json` carries — so
 a value here is only checked against theirs and is refused when it differs; stages that state
 neither anywhere over a file that states neither is a refusal too, never a silently substituted
-`"DE"` and never a basis year re-derived from the simulation year. What the file does not name stays what the stages were priced
+`"DE"` and never a basis year re-derived from the weather year (a stated `plan_start_year` is then
+the basis year). What the file does not name stays what the stages were priced
 under. A `--perspective` flag must agree with a `perspective_id` in the file. The subsidy
 catalogue needs no flag: `--subsidy-catalog` wins where it is given, and otherwise the shipped
 `hisim/subsidy_catalog` directory is used when it holds `<COUNTRY>.json`, exactly as a translated

@@ -203,6 +203,8 @@ when unstated), and `annual[].calendar_year` counts from it alone. A block that 
 `price_basis_year` over stages that state none either is priced at `plan_start_year` — only when
 one is stated, and clamped to the earliest year the country's device data covers; `origins` then
 says `"price_basis_year": "plan_start_year"`.
+The plan's year 0 is `plan_start_year`, else the price basis year: the house's own equipment is aged
+at it, and what a stage buys counts as installed in year 0 + the stage's `from_year`.
 
 `energy_prices` states what the household pays in year 1, per carrier (`ELECTRICITY`,
 `NATURAL_GAS`, `HEATING_OIL`, `PELLETS`, `WOOD_CHIPS`, `DISTRICT_HEATING`, `HYDROGEN`, `DIESEL`, and

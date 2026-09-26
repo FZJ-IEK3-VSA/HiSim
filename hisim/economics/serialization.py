@@ -48,6 +48,7 @@ from hisim.economics.facts import (
     ComponentCostFacts,
     ExistingAsset,
     ExistingAssetRegister,
+    InstallationYearOrigin,
 )
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.provenance import ProvenanceLedger
@@ -230,6 +231,9 @@ def asset_to_json(asset: ExistingAsset) -> dict:
         "energy_carrier": asset.energy_carrier.value if asset.energy_carrier else None,
         "replaced_by_asset_classes": [asset_class.name for asset_class in asset.replaced_by_asset_classes],
         "anyway_share": asset.anyway_share,
+        "installation_year_origin": (
+            asset.installation_year_origin.value if asset.installation_year_origin is not None else None
+        ),
     }
 
 
@@ -253,6 +257,12 @@ def asset_from_json(item: dict) -> ExistingAsset:
         # Absent in a register written before the Sowieso share existed, which means the
         # implicit full like-for-like credit the field now makes explicit.
         anyway_share=item.get("anyway_share", 1.0),
+        # Absent in a register written before the result document published where a year came from.
+        installation_year_origin=(
+            InstallationYearOrigin(item["installation_year_origin"])
+            if item.get("installation_year_origin")
+            else None
+        ),
     )
 
 

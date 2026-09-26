@@ -43,7 +43,7 @@ from hisim.energy_system.model import (
 )
 from hisim.renovisor import TRANSLATOR_VERSION
 from hisim.renovisor.apply import AppliedPackage, HousePaths, SelectsNothing, apply
-from hisim.renovisor.economics import EconomicContextBuilder, RealizedTwin
+from hisim.renovisor.economics import EconomicContextBuilder, MeasureSubjects, RealizedTwin
 from hisim.renovisor.constants import (
     BatteryLaw,
     BoilerEfficiency,
@@ -949,8 +949,12 @@ class Translator:
             baseline_twin=plan_twin if not request.measures else RealizedTwin.of(self._baseline_model(request)),
             plan_twin=plan_twin,
         ).build()
+        # Every measure the package acts on stands for a cost subject, or the result document would
+        # have no row for it (renovisorissues #58).
+        MeasureSubjects.assert_every_measure_has_subject(applied, built)
         report.set_subjects(built.subjects)
         report.set_unpriced_subjects(built.unpriced_subjects)
+        report.set_costless_subjects(built.costless_subjects, built.subject_notes)
         for path, value, note in built.defaults:
             if not report.has(path):
                 report.defaulted(path, value, note)

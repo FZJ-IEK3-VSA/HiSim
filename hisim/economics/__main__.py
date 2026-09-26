@@ -137,13 +137,19 @@ from hisim.economics.serialization import (
     read_stored_price_basis_year,
 )
 from hisim.economics.staged import Stage, StagedEngineError, StagedEvaluationError, StagedEvaluator
-from hisim.economics.staged_document import BandOrderError, StagedDocument, SubsidyReconciliationError
+from hisim.economics.staged_document import (
+    BandOrderError,
+    MeasureWithoutRowError,
+    StagedDocument,
+    SubsidyReconciliationError,
+)
 from hisim.economics.staged_parameters import (
     ParameterKeys,
     ParameterProblem,
     ParameterProblemCodes,
     StagedParameters,
 )
+from hisim.renovisor.economics import MeasureSubjects
 from hisim.renovisor.report import MappingReport
 from hisim.renovisor.request import CatalogueTable
 from hisim.economics.subsidies import SubsidyCatalog
@@ -666,6 +672,23 @@ def _print_plot_skips(plots: "PlotsWritten") -> None:
         print(f"Chart not drawn: {line}")
 
 
+@dataclass(frozen=True)
+class StageMapping:
+    """What the stages' mapping reports say about the cost subjects, merged over the plan.
+
+    Attributes:
+        measure_ids: Cost subject -> the catalogue measure that created it.
+        unpriced: The subjects with no price behind them.
+        costless: The subjects of a measure that costs nothing to carry out.
+        notes: Subject -> the sentence its ``by_subject`` row carries as ``note``.
+    """
+
+    measure_ids: Dict[str, Optional[str]]
+    unpriced: List[str]
+    costless: List[str]
+    notes: Dict[str, str]
+
+
 class StagedCli:
     """Everything the ``staged`` subcommand decides, in one place (E-spec §6, step 10 §5).
 
@@ -746,6 +769,12 @@ class StagedCli:
 
     #: Its key holding the subjects the translator could not price.
     UNPRICED_KEY: ClassVar[str] = MappingReport.UNPRICED_SUBJECTS_FIELD
+
+    #: Its key holding the subjects of measures that cost nothing to carry out.
+    COSTLESS_KEY: ClassVar[str] = MappingReport.COSTLESS_SUBJECTS_FIELD
+
+    #: Its key holding the sentence a subject's row carries as its ``note``.
+    NOTES_KEY: ClassVar[str] = MappingReport.SUBJECT_NOTES_FIELD
 
     #: Its key holding the measure lines, taken from the writer for the same reason.
     MEASURES_KEY: ClassVar[str] = MappingReport.MEASURES_FIELD
@@ -904,14 +933,15 @@ class StagedCli:
         return None
 
     @classmethod
-    def read_mapping(
-        cls, directories: List[str], arguments: Optional[List[str]] = None
-    ) -> Tuple[Dict[str, Optional[str]], List[str]]:
-        """The subject-to-measure map and the unpriced subjects, over every stage directory.
+    def read_mapping(cls, directories: List[str], arguments: Optional[List[str]] = None) -> "StageMapping":
+        """The subject-to-measure map and the subjects without a price, over every stage directory.
 
         Every stage directory must carry the translator's ``mapping_report.json``, in itself or
         beside it: its ``subjects`` map says which catalogue measure created which cost subject
         and its ``unpriced_subjects`` list says which of them the request carried no price for.
+        Its ``costless_subjects`` and ``subject_notes`` (renovisorissues #58) say which subjects
+        stand for a measure that costs nothing, and why a row has no price or costs nothing; a
+        report written before they existed has neither, and reads as empty.
         Later stages win over earlier ones, because a subject a later stage re-declares is the
         later stage's.
 
@@ -927,7 +957,7 @@ class StagedCli:
                 directories themselves when the caller does not pass them.
 
         Returns:
-            ``(measure ids by subject, unpriced subjects)``.
+            The :class:`StageMapping`.
 
         Raises:
             StagedEvaluationError: Naming the first directory with no report, which the CLI turns
@@ -936,6 +966,8 @@ class StagedCli:
         spelled = arguments if arguments is not None else directories
         measures: Dict[str, Optional[str]] = {}
         unpriced: List[str] = []
+        costless: List[str] = []
+        notes: Dict[str, str] = {}
         for index, directory in enumerate(directories):
             path = cls.mapping_report_path(directory)
             if path is None:
@@ -956,7 +988,58 @@ class StagedCli:
             for subject in report.get(cls.UNPRICED_KEY) or []:
                 if subject not in unpriced:
                     unpriced.append(subject)
-        return measures, unpriced
+            for subject in report.get(cls.COSTLESS_KEY) or []:
+                if subject not in costless:
+                    costless.append(subject)
+            stated_notes = report.get(cls.NOTES_KEY)
+            if isinstance(stated_notes, dict):
+                notes.update(stated_notes)
+            if cls.COSTLESS_KEY not in report or cls.NOTES_KEY not in report:
+                cls._declared_from_translator(report, measures, unpriced, costless, notes)
+        return StageMapping(measure_ids=measures, unpriced=unpriced, costless=costless, notes=notes)
+
+    @classmethod
+    def _declared_from_translator(
+        cls,
+        report: Mapping[str, Any],
+        measures: Dict[str, Optional[str]],
+        unpriced: List[str],
+        costless: List[str],
+        notes: Dict[str, str],
+    ) -> None:
+        """Fill in what a mapping report written before renovisorissues #58 does not say.
+
+        Such a report has no ``costless_subjects`` and no ``subject_notes``, and no subject for a
+        measure the engine prices nothing for, so a cached job that changed the set point or lagged
+        the cylinder would have no row for it and be refused. The translator's own declarations
+        (:class:`~hisim.renovisor.economics.MeasureSubjects`) are what a re-translation would write,
+        so they stand in (owner decision of 2026-09-26): for every declared measure the stage acts
+        on, the measure-named subject, its unpriced or costless flag and its note. A measure that is
+        neither declared nor has a subject stays without a row, and the document still refuses it.
+
+        Args:
+            report: One stage's mapping report, as read.
+            measures: The subject-to-measure map being merged; extended in place.
+            unpriced: The unpriced subjects being merged; extended in place.
+            costless: The costless subjects being merged; extended in place.
+            notes: The notes being merged; extended in place.
+        """
+        acted_on = [
+            str(entry.get("id"))
+            for entry in report.get(cls.MEASURES_KEY) or ()
+            if isinstance(entry, dict) and entry.get("status") in cls.STAGE_MEASURE_STATUSES
+        ]
+        for measure_id in acted_on:
+            if measure_id in MeasureSubjects.COSTLESS:
+                flagged, note = costless, MeasureSubjects.COSTLESS[measure_id]
+            elif measure_id in MeasureSubjects.UNPRICED:
+                flagged, note = unpriced, MeasureSubjects.UNPRICED[measure_id]
+            else:
+                continue
+            measures.setdefault(measure_id, measure_id)
+            if measure_id not in flagged:
+                flagged.append(measure_id)
+            notes.setdefault(measure_id, note)
 
     @classmethod
     def mapping_report_path(cls, directory: str) -> Optional[str]:
@@ -1323,7 +1406,7 @@ def _cmd_staged(args: argparse.Namespace) -> int:
         result = StagedEvaluator(database).evaluate(
             stages, parameters, perspective, catalog, plan_start_year=parsed.plan_start_year
         )
-        measures, unpriced = StagedCli.read_mapping(directories, args.stage)
+        mapping = StagedCli.read_mapping(directories, args.stage)
     except StagedEvaluationError as error:
         path = StagedCli.write_problems(args.out, error)
         print(f"{error} (problems written to {path})", file=sys.stderr)
@@ -1337,13 +1420,15 @@ def _cmd_staged(args: argparse.Namespace) -> int:
         result=result,
         parameters=parameters,
         perspective=perspective,
-        measure_ids=measures,
-        unpriced_subjects=unpriced,
+        measure_ids=mapping.measure_ids,
+        unpriced_subjects=mapping.unpriced,
         cost_provenance=ExportFileNames.PROVENANCE_FILE_NAME,
+        costless_subjects=mapping.costless,
+        subject_notes=mapping.notes,
     )
     try:
         document.write(Path(args.out))
-    except (SubsidyReconciliationError, BandOrderError) as error:
+    except (SubsidyReconciliationError, BandOrderError, MeasureWithoutRowError) as error:
         # Both are ValueErrors, which `main` would report as a mistyped invocation (exit 2). They
         # are engine bugs by their own definition, and write() refuses before the file exists.
         print(str(error), file=sys.stderr)

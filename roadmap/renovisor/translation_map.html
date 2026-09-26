@@ -723,8 +723,15 @@ variants:
     &quot;MoreAdvancedHeatPumpHPLib&quot;: &quot;heating_system&quot;,
     &quot;PVSystem&quot;: &quot;photovoltaic_system&quot;,
     &quot;SimpleHotWaterStorage&quot;: &quot;heating_system&quot;,
-    &quot;external_insulation&quot;: &quot;external_insulation&quot;
+    &quot;external_insulation&quot;: &quot;external_insulation&quot;,
+    &quot;hot_water_tank_and_pipe_insulation&quot;: &quot;hot_water_tank_and_pipe_insulation&quot;
   },
-  &quot;unpriced_subjects&quot;: []
+  &quot;unpriced_subjects&quot;: [
+    &quot;hot_water_tank_and_pipe_insulation&quot;
+  ],
+  &quot;costless_subjects&quot;: [],
+  &quot;subject_notes&quot;: {
+    &quot;hot_water_tank_and_pipe_insulation&quot;: &quot;HiSim holds no price for lagging a hot-water cylinder and its pipes, and the request&#x27;s cost block cannot carry one yet (HiSim hisim-5j3h, renovisorissues #39), so the measure is in the plan unpriced: its investment is unknown, not zero&quot;
+  }
 }</pre>
 </body></html>

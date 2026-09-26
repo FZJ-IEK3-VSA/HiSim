@@ -130,7 +130,7 @@ filterable by category and state), `DIR/probes/*.html` (one probe's path: stage 
 before-and-after tables, stage 2 as the mapping report's status line for each changed leaf beside
 the status the capability document announces — with the refusal's problems or the translation's
 full traceback where there is no line; stages 4–5 read "not run (tier 2)") and `DIR/logs/` (HiSim's
-own log of the run, which the logger would otherwise write to `../logs` of the working directory).
+own log of the run; the logger buffers what it is told until a directory is named, and this is it).
 It exits **4** when the report lists a failure — a settable leaf, enum value, range end, measure or
 option value of the request schema or the catalogue that no probe changes (`missing_probe`), a
 stage-1 diff that is not the probe's change (`request_diff`), a single-change probe's status below

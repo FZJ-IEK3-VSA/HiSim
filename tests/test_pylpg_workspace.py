@@ -13,6 +13,7 @@ and -- with the download replaced by a fake -- where the binaries are installed,
 are ``base`` rather than ``utsp``.
 """
 
+import ast
 import inspect
 import pathlib
 import re
@@ -664,3 +665,43 @@ def test_installing_and_starting_under_the_write_guard_is_no_stray_write(
         ResultPathProviderSingleton.reset()
     assert pathlib.Path(executor.calculation_src_directory).is_relative_to(PylpgWorkspace.work_root(str(cache)))
     assert pathlib.Path(executor.working_directory).is_relative_to(cache)
+
+
+def _attributes_the_constructor_sets(constructor: Any) -> set:
+    """The ``self.<name>`` targets assigned anywhere in *constructor*, read from its source."""
+    tree = ast.parse(inspect.cleandoc("\n" + inspect.getsource(constructor)))
+    names = set()
+    for node in ast.walk(tree):
+        targets: List[ast.expr] = []
+        if isinstance(node, ast.Assign):
+            targets = list(node.targets)
+        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+            targets = [node.target]
+        for target in targets:
+            if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == "self":
+                names.add(target.attr)
+    return names
+
+
+@pytest.mark.base
+def test_the_executor_carries_every_attribute_pylpgs_constructor_sets(
+    tmp_path: Any, fake_download: _FakeDownload
+) -> None:
+    """``start_executor`` bypasses ``LPGExecutor.__init__``; a pylpg that adds constructor state must fail here.
+
+    The constructor's assignments are read from pylpg's own source (nothing is constructed, installed
+    or written into the package), so an upgrade whose ``__init__`` sets an attribute the hand-built
+    executor lacks -- which a later method would then miss with an ``AttributeError`` mid-run -- is
+    caught by name.
+    """
+    del fake_download
+    cache = str(tmp_path / "cache")
+    PylpgWorkspace.install_binaries_if_missing(cache)
+    index = PylpgWorkspace.calculation_index(434343, 0)
+    executor = PylpgWorkspace.start_executor(index, cache)
+    expected = _attributes_the_constructor_sets(lpg_execution.LPGExecutor.__init__)
+    assert expected, "pylpg's constructor sets no attribute at all: the source reader is broken"
+    assert expected == set(vars(executor)), (
+        f"LPGExecutor.__init__ sets {sorted(expected)}, the executor start_executor builds carries "
+        f"{sorted(vars(executor))}; update PylpgWorkspace.start_executor"
+    )

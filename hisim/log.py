@@ -82,12 +82,13 @@ class Logger:
         for filename, buffer in [["hisim_simulation", self.log_buffer],
                                  ["profiling_timeuse", self.profile_buffer]]:
             file_path = str(Path(logging_path) / (filename + ".log"))
+            # OSError only: a write guard's StrayWriteError (hisim.write_guard) must reach the
+            # calculation at the write that strayed, not be printed away here.
             try:
                 with open(file_path, "a", encoding="utf-8") as filestream:
                     filestream.write(buffer)
-            except Exception:
-                print(filename + ".log could not be appended. "
-                    "This might happen when too many simultaneous simulations are running.")
+            except OSError as error:
+                print(f"The log file {file_path} could not be appended: {error}")
         # turn off buffering and clear buffers
         self.before_result_dir_created = False
         self.log_buffer = ""
@@ -135,12 +136,12 @@ class Logger:
         # log to file if possible
         filename = "profiling_timeuse.log" if use_profile_file else "hisim_simulation.log"
         file_path = str(Path(logging_message_path) / filename)
+        # OSError only, as in setup(): a StrayWriteError propagates from the write that strayed.
         try:
             with open(file_path, "a", encoding="utf-8") as filestream:
                 filestream.write(message + "\n")
-        except Exception:
-            print(f"{filename} could not be appended. "
-                "This might happen when too many simultaneous simulations are running.")
+        except OSError as error:
+            print(f"The log file {file_path} could not be appended: {error}")
 
 
 # --------------------------------------------------------------------------------------------

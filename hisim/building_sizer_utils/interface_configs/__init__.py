@@ -54,8 +54,8 @@ Modules
 * :mod:`hisim.building_sizer_utils.interface_configs.modular_household_config` --
   :class:`~hisim.building_sizer_utils.interface_configs.modular_household_config.ModularHouseholdConfig`
   bundles an archetype and an energy-system config into a single
-  simulation-ready, JSON-serialisable configuration, plus the ``write_config``,
-  ``read_in_configs`` and ``get_hash`` helpers.
+  simulation-ready, JSON-serialisable configuration, plus the ``read_in_configs``
+  and ``get_hash`` helpers.
 
 * :mod:`hisim.building_sizer_utils.interface_configs.kpi_config` --
   :class:`~hisim.building_sizer_utils.interface_configs.kpi_config.KPIConfig`
@@ -123,10 +123,10 @@ run configuration in-process and round-tripping it through the JSON contract::
     >>> serialized = household.to_json()  # JSON contract for the Building Sizer
     >>> restored = ModularHouseholdConfig.from_json(serialized)
 
-For on-disk exchange, :func:`~hisim.building_sizer_utils.interface_configs.modular_household_config.write_config`
-writes a ``ModularHouseholdConfig`` to a caller-supplied path and
+For on-disk exchange, the optimiser writes ``household.to_json()`` to a file of its
+choosing and
 :func:`~hisim.building_sizer_utils.interface_configs.modular_household_config.read_in_configs`
-reads one back from a caller-supplied path.  A ``system_setups/*_building_sizer.py``
+reads it back from that path.  A ``system_setups/*_building_sizer.py``
 entry point then consumes the restored config to wire and run the matching
 simulation, after which post-processing writes the resulting
 :class:`~hisim.building_sizer_utils.interface_configs.kpi_config.KPIConfig`

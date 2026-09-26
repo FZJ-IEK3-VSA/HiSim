@@ -117,14 +117,22 @@ Each `.py` file contains a `setup_function(sim, sim_params)` that instantiates c
 Every calculation -- `hisim_main` (both modes), `run_energy_system`, the RenoVisor run, the economics
 CLI -- runs inside `CalculationScope.open`: a fresh result directory from `ResultPathProviderSingleton`
 (reset at the end of every calculation; flat/deep directories are created exclusively, so two runs in
-the same second get two), and a `sys.addaudithook` write guard that fails the run on any write outside
-that result directory and the cache directories (`SimulationParameters.cache_locations()`,
-`HISIM_CACHE_DIR`). The result directory holds nothing a later run needs and may be deleted whole.
-Never write to the repository, `hisim/inputs`, the CWD, `~` or `/tmp` from run code; route caches
-through `hisim.caching`. `HISIM_WRITE_GUARD=collect` lists all stray writes at the end instead of
-raising at the first. The static half: `semgrep --config .semgrep/ --error hisim/` (CI job `semgrep`
-in `quality.yml`) flags direct file writes outside the sanctioned writer modules listed in
-`.semgrep/file_writes.yml`.
+the same second get two; a second simulator claiming its own directory in one calculation is refused),
+and a `sys.addaudithook` write guard that fails the run on any write outside the directories of the
+calculation's registry, `CalculationDirectories`. The scope creates the registry; the result path
+provider registers the result directory as it creates or adopts it, the simulator and
+`CacheLocations` register the cache directories (`SimulationParameters.cache_locations()`, the
+`HISIM_CACHE_DIRECTORIES` a container sets, `HISIM_CACHE_DIR`, `HISIM_CACHE_SHARED_DIR`); outside a
+calculation registering does nothing. The guard computes what it allows from the registry, and the
+library redirects follow it (`tempfile.tempdir` -> result directory, `MPLCONFIGDIR` -> first writable
+cache directory, else the result directory). The result directory holds nothing a later run needs and may be
+deleted whole. Never write to the repository, `hisim/inputs`, the CWD, `~` or `/tmp` from run code;
+route caches through `hisim.caching`. The one exception under `hisim/inputs` is the default cache
+`hisim/inputs/cache`, used when no cache directory is configured (containers set
+`HISIM_CACHE_DIRECTORIES`); a result directory under `hisim/inputs` is refused. `HISIM_WRITE_GUARD=collect`
+lists all stray writes at the end instead of raising at the first. The static half:
+`semgrep --config .semgrep/ --error hisim/` (CI job `semgrep` in `quality.yml`) flags direct file writes
+outside the sanctioned writer modules listed in `.semgrep/file_writes.yml`.
 
 ### loadtypes.py
 Central registry of enums: `LoadTypes`, `Units`, `ComponentType`, `InandOutputType`, `Locations`, `BuildingCodes`, etc. All component I/O declarations reference these enums — never use raw strings for load types or units.

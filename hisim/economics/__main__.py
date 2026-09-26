@@ -4,7 +4,7 @@ Usage::
 
     python -m hisim.economics evaluate <results_dir> [--scenarios scenarios.json]
     python -m hisim.economics explain <results_dir> --value "<perspective>/<field-path>"
-    python -m hisim.economics staged --stage <dir>:<from_year>:<label>[:<job_id>] ... --out <file>
+    python -m hisim.economics staged --stage <dir>:<from_year>:<label>[:<job_id>] ... --out <dir>/<file>
     python -m hisim.economics validate
 
 **Why a CLI exists at all.** Three of these four commands are only possible because the evaluator
@@ -42,7 +42,7 @@ the same thing in each, the flag taking precedence over the path stored in the p
   stored numbers, and says so on stdout. Exit 2 when there is nothing to report or the two
   directories share no perspective.
 - ``staged --stage <dir>:<from_year>:<label>[:<job_id>] ... [--parameters F] [--perspective ID]
-  [--subsidy-catalog DIR] --out <file>`` — prices a renovation plan spread over several years out
+  [--subsidy-catalog DIR] --out <dir>/<file>`` — prices a renovation plan spread over several years out
   of finished jobs' stored inputs into `economics_result.json` (E-spec §3, §6), and writes
   `cost_provenance.json` beside it: the one ledger the reference, every stage and the spliced plan
   recorded into, in an ordinary run's format under the plan's perspective id. Its
@@ -680,6 +680,10 @@ class StagedCli:
     cost subject, D7). The difference matters because a 2 is something the caller can fix by
     sending a different plan and a 3 is not. There is no exit 2 without the file: an unreadable
     ``--parameters`` file is a refusal like any other rather than a traceback (shared todo B29).
+    The one exception is an ``--out`` without a directory (a bare file name): the document and its
+    ``problems.json`` go to ``--out``'s directory, which is the command's result directory, and the
+    working directory is not one (``hisim.calculation_scope``). It is refused with exit 2 and the
+    reason on standard error, since there is nowhere to write the file.
 
     Its ``--parameters`` file is the document's own ``parameters`` block
     (:class:`~hisim.economics.staged_parameters.StagedParameters`), not an
@@ -692,7 +696,7 @@ class StagedCli:
 
         python -m hisim.economics staged \
             --stage jobs/base:0:baseline --stage jobs/pkg:0:"stage 1":job-7 \
-            --parameters economics.json --out economics_result.json
+            --parameters economics.json --out results/economics_result.json
     """
 
     #: How a ``--stage`` argument is spelled, for the help text and for the error messages.
@@ -719,6 +723,25 @@ class StagedCli:
 
     #: Exit code for a plan the evaluator refuses.
     PLAN_REFUSED: ClassVar[int] = 2
+
+    @staticmethod
+    def out_directory(out: str) -> Optional[str]:
+        """The directory ``--out`` names, absolute, or ``None`` for a bare file name.
+
+        The document, its ledger and a refusal's ``problems.json`` all land there, and it is the
+        directory the command's calculation may write in. A bare file name would make it the
+        working directory, which is nobody's result directory, so it names none.
+        """
+        if not os.path.dirname(str(out)):
+            return None
+        return os.path.dirname(os.path.abspath(str(out)))
+
+    #: What standard error says for an ``--out`` without a directory.
+    BARE_OUT_MESSAGE: ClassVar[str] = (
+        "--out {out!r} names no directory; give the document a directory of its own, e.g. "
+        "--out results/{out}, so the result, its ledger and a problems.json have somewhere to go "
+        "that is not the working directory."
+    )
 
     #: Exit code for an engine failure — a subject nothing can price, a data file that will not
     #: load. A different code from the plan refusal because the caller cannot fix it by asking a
@@ -1378,12 +1401,13 @@ def _cmd_validate(_args: argparse.Namespace) -> int:
 def _output_directory(args: argparse.Namespace) -> Optional[str]:
     """Return the directory a subcommand writes into, or ``None`` when it writes nowhere.
 
-    ``staged`` writes its document and, on a refusal, ``problems.json`` beside ``--out``; the three
-    commands that take a result directory write into it. A result directory that does not exist is
-    not created here: the command reports it as the bad invocation it is.
+    ``staged`` writes its document and, on a refusal, ``problems.json`` beside ``--out`` (a bare
+    file name names no directory, and ``staged`` refuses it); the three commands that take a result
+    directory write into it. A result directory that does not exist is not created here: the
+    command reports it as the bad invocation it is.
     """
     if args.command == "staged":
-        return os.path.dirname(os.path.abspath(str(args.out)))
+        return StagedCli.out_directory(args.out)
     results_dir = getattr(args, "results_dir", None)
     if results_dir and os.path.isdir(results_dir):
         return str(results_dir)
@@ -1487,6 +1511,11 @@ def main(argv=None) -> int:
     validate_parser.set_defaults(func=_cmd_validate)
 
     args = parser.parse_args(argv)
+    if args.command == "staged" and StagedCli.out_directory(args.out) is None:
+        # Refused before the calculation opens, and without a problems.json: the refusal is exactly
+        # that there is no directory to write one to (StagedCli.out_directory).
+        print(StagedCli.BARE_OUT_MESSAGE.format(out=args.out), file=sys.stderr)
+        return StagedCli.PLAN_REFUSED
     try:
         # One calculation, as a simulation run is one (hisim.calculation_scope): whatever the
         # command writes has to land in the directory it was pointed at -- the result directory it

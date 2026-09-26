@@ -9,7 +9,7 @@ the capability probe set (:class:`hisim.renovisor.capabilities.ProbeSet`)::
 
 writes ``report.json``, ``index.html`` (the matrix, one row per probe, columns ``req | map | sys``)
 and one page per probe, and HiSim's own log (:mod:`hisim.log`, which a component the translation
-builds may write to) under ``logs/`` beside them rather than in the working directory's ``../logs``.
+builds may write to) under ``logs/`` beside them: the logger buffers until a directory is named.
 The exit code is :attr:`VerifyExitCode.PASSED` or, when anything under ``failures`` is listed,
 :attr:`VerifyExitCode.FAILED`; findings ("no effect", and a pair's conditional status below the
 announced one until ``hisim-5dfc``) never fail it.
@@ -86,10 +86,10 @@ def verify(out: Path, base_files_directory: Optional[Path] = None) -> VerifyExit
 def hisim_log_in(directory: Path) -> Iterator[None]:
     """Point HiSim's process-wide logger at *directory* for the duration, then put it back.
 
-    :mod:`hisim.log` writes to ``../logs`` relative to the working directory until
-    :meth:`~hisim.log.Logger.setup` names a directory, which a simulation does and a translation
-    does not; a probe whose translation builds a component that logs (the load-profile connector
-    of a battery probe) would otherwise write there, and raise where that is not writable.
+    :mod:`hisim.log` buffers its messages in memory until :meth:`~hisim.log.Logger.setup` names
+    a result directory, which a simulation does and a translation does not; the messages of a
+    probe whose translation builds a component that logs (the load-profile connector of a battery
+    probe) would otherwise stay in that buffer and land in whichever run next names a directory.
     ``setup`` is the supported way to name the directory. The logger is one object per process,
     so its state is restored afterwards, whatever it was.
 

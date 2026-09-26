@@ -12,11 +12,9 @@ and the ``get_default_config_for_household_*`` classmethods provide ready-made
 presets per heating system. The
 :class:`~hisim.building_sizer_utils.interface_configs.kpi_config.KPIForRatingInOptimization`
 enum lists the KPIs that the Building Sizer may select as its optimization
-objective. The module-level helpers
-:func:`~hisim.building_sizer_utils.interface_configs.modular_household_config.write_config`
-and
+objective. The module-level helper
 :func:`~hisim.building_sizer_utils.interface_configs.modular_household_config.read_in_configs`
-serialise a configuration to and from JSON, and
+reads a configuration from JSON, and
 :meth:`~hisim.building_sizer_utils.interface_configs.modular_household_config.ModularHouseholdConfig.get_hash`
 provides a stable hash for caching and deduplication.
 

@@ -47,10 +47,9 @@ dataclass-based configuration modules:
   :class:`~hisim.system_setup_configuration.SystemSetupConfigBase`, gaining
   JSON-serialisation support.  Convenience classmethods such as
   :meth:`~hisim.building_sizer_utils.interface_configs.modular_household_config.ModularHouseholdConfig.get_default_config_for_household_gas`
-  pair a specific heating system with a default archetype.  Module-level
-  helpers :func:`~hisim.building_sizer_utils.interface_configs.modular_household_config.write_config`
-  and :func:`~hisim.building_sizer_utils.interface_configs.modular_household_config.read_in_configs`
-  serialise and deserialise the configuration to / from JSON, and
+  pair a specific heating system with a default archetype.  The module-level
+  helper :func:`~hisim.building_sizer_utils.interface_configs.modular_household_config.read_in_configs`
+  deserialises the configuration from JSON, and
   :meth:`~hisim.building_sizer_utils.interface_configs.modular_household_config.ModularHouseholdConfig.get_hash`
   provides a stable hash for caching and deduplication.
 

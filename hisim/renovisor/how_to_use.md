@@ -58,6 +58,30 @@ of recorded energy-system files to translate against; it defaults to `energy_sys
 The last line on standard error for 3 and 5 is one line, which the backend shows as the job's
 error message.
 
+## The envelope
+
+The house is one TABULA row (`hisim/renovisor/tabula.py`): its country, typology and age band
+come from `location.country`, `building.building_type` and `building.construction_year`, and its
+refurbishment variant — the code's last three digits — from `building.retrofit_status`:
+`unrenovated` → `001`, `usual_refurb` → `002`, `advanced_refurb` → `003`, absent → `001`. A band
+without the wanted variant (the newest Irish, Dutch and Belgian bands have no `002`) takes `001`, reported
+`approximated` with the missing variant and every band without it named; since a request cannot know
+which band it lands in, the capability document announces `usual_refurb` `approximated` everywhere. An
+expert `tabula_building_code` skips the derivation; its variant stands when `retrofit_status` is absent
+(a variant none of the three statuses selects, such as `011`, is reported as it is, with a note saying
+so), and a stated status that names another variant is refused (`tabula.variant_conflict`).
+
+Every element's `u_value_in_watt_per_m2_per_kelvin` is optional. A stated one is written to
+`Building.config.<element>_u_value_in_watt_per_m2_per_kelvin` and fixes the element's transmission
+adjustment factor (floor 0.5, others 1). A missing one leaves that field unset, so the `Building`
+keeps the row's area-weighted U-value and adjustment factor (for a row whose door U-value is `0`,
+its estimated door); the report calls it `defaulted` and names the value and the row. An
+insulation measure on such an element starts from the row's U-value (§4.3's `U_existing`), and the
+arithmetic note says so; the written U-value then switches the adjustment factor from the row's
+`b_Transmission` to the fixed one, and the note names both numbers. The variant is its whole row: the `Building` also reads the row's air
+infiltration and thermal-bridge surcharge, so `retrofit_status` changes the house even when every
+U-value is stated, and the `house.building.retrofit_status` line names both numbers.
+
 ## Path verification, tier 1
 
 `verify` answers, for every probe of the capability probe set, whether a setting reaches the right
@@ -109,7 +133,8 @@ directory as the artifact **`path-verification-report`**.
 ## The one rule worth knowing
 
 **Fail loudly, except for what is written down.** An unknown key, an unknown value, a value out
-of range, a measure named twice, a country with no TABULA typology, a `measures[i].cost` price
+of range, a measure named twice, a country with no TABULA typology, a `tabula_building_code` whose
+variant contradicts the stated `retrofit_status`, a `measures[i].cost` price
 band whose cheap end is above its expensive end or whose prices are negative: each is a refusal
 (exit 2) naming every problem at once. A feature the translator has not implemented is a **note**
 in the mapping report and the calculation runs — but only if it is an entry of

@@ -23,6 +23,7 @@ from hisim.renovisor.vocabulary import (
     HeatGenerator,
     HotWaterSupply,
     ReportStatus,
+    RetrofitStatus,
     RoofShape,
     SolarThermalSupplies,
     TemperatureControl,
@@ -87,6 +88,7 @@ class TestTheCatalogueIsTheVocabulary:
         [
             (Country, ("location", "properties", "country")),
             (BuildingType, ("building", "properties", "building_type")),
+            (RetrofitStatus, ("building", "properties", "retrofit_status")),
             (RoofShape, ("roof", "properties", "shape")),
             (AirTightness, ("ventilation", "properties", "air_tightness")),
             (WhiteAppliances, ("appliances", "properties", "white_appliances")),

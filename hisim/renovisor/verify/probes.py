@@ -14,7 +14,7 @@ gas boiler into a heat pump. So the base is chosen per kind (:meth:`ProbeBases.n
 kind       base
 ========== =============================================================================
 anchor     none: it is the root every other base descends from
-bare       the anchor; the change is the optional blocks and the roof shape it removes
+bare       the anchor; the change is the optional blocks, the roof shape and the U-values it removes
 block      the anchor; the change is the block it adds
 measure    the anchor; the change is the measure switched on with its required options
 option     the probe ``measure:<id>``, the smallest package carrying the measure, so the

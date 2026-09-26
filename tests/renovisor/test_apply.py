@@ -20,7 +20,8 @@ from hisim.renovisor.capabilities import ProbeSet
 from hisim.renovisor.constants import BatteryLaw, LayerDefaults, OpeningUValues
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.request import CatalogueTable, Measure, Request
-from hisim.renovisor.vocabulary import ReportStatus
+from hisim.renovisor.tabula import ArchetypeEnvelope
+from hisim.renovisor.vocabulary import ReportStatus, ThermalElement
 from hisim.renovisor.whitelist import TranslatorError, Whitelist
 
 
@@ -191,6 +192,31 @@ class TestEveryRowOfTheTable:
 @pytest.mark.base
 class TestInsulationLayers:
     """Layers stack in list order, defaults are reported, and the arithmetic is the composer's."""
+
+    def test_a_layer_on_an_element_without_a_u_value_starts_from_the_archetype(self) -> None:
+        """§4.3: ``U_existing`` is the TABULA row's when the request leaves the U-value out."""
+        house = anchor_house()
+        del house["building"]["facade"]["u_value_in_watt_per_m2_per_kelvin"]
+        archetype = ArchetypeEnvelope.of("IE.N.SFH.05.Gen.ReEx.001.002", 140)
+        entry = ProbeSet.package("external_insulation")
+
+        applied = apply(house, measures_of(entry), whitelist(), archetype=archetype)
+
+        layer = applied.layers[0]
+        expected = 1 / (1 / archetype.u_value(ThermalElement.FACADE) + layer.thickness_in_mm / 1000
+                        / layer.material.thermal_conductivity_w_mk)
+        assert applied.house["building"]["facade"]["u_value_in_watt_per_m2_per_kelvin"] == pytest.approx(expected)
+        assert "not in the request: TABULA IE.N.SFH.05.Gen.ReEx.001.002" in str(
+            applied.element_note(ThermalElement.FACADE)
+        )
+
+    def test_a_layer_on_an_element_without_a_u_value_and_no_archetype_is_a_translator_error(self) -> None:
+        """Without a row to start from there is no arithmetic, and guessing one would be silent."""
+        house = anchor_house()
+        del house["building"]["facade"]["u_value_in_watt_per_m2_per_kelvin"]
+
+        with pytest.raises(TranslatorError, match="no TABULA archetype"):
+            apply(house, measures_of(ProbeSet.package("external_insulation")), whitelist())
 
     def test_two_measures_on_one_element_stack(self) -> None:
         """External insulation then cavity fill is one wall with two layers, not two answers."""

@@ -41,6 +41,7 @@ from hisim.renovisor.report import ReportError
 from hisim.renovisor.request import Request, RequestError
 from hisim.renovisor.result import ResultBuilder
 from hisim.renovisor.simulation import EconomicSetup, Period, SimulationSetup
+from hisim.renovisor.tabula import ArchetypeEnvelope
 from hisim.renovisor.translate import TranslatedSystem, Translator
 from hisim.renovisor.whitelist import TranslatorError, Whitelist
 from hisim.simulationparameters import SimulationParameters
@@ -314,7 +315,9 @@ class Calculation:
         document = RequestFile.read(self._request_path)
         request = Request.parse(document)
         whitelist = Whitelist.load()
-        applied = apply(request.document["house"], request.measures, whitelist)
+        applied = apply(
+            request.document["house"], request.measures, whitelist, archetype=ArchetypeEnvelope.for_request(request)
+        )
         translated = Translator(self._base_files, whitelist).translate(request, applied)
         return request, applied, translated
 

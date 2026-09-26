@@ -316,6 +316,37 @@ class BuildingInformation:
         return float(self.buildingdata_ref["U_Actual_Roof_1"].values[0])
 
     @property
+    def door_u_value_origin(self) -> str:
+        """Where the door's U-value came from: configured, the TABULA row, or the estimate for a door the row lacks.
+
+        Set by :py:meth:`get_building_heat_transfer_parameters`; the RenoVisor translator names it
+        in the mapping report for a door whose U-value it leaves to the archetype.
+        """
+        return self._door_u_value_origin
+
+    @property
+    def air_infiltration_rate_per_hour(self) -> float:
+        """Air infiltration rate [1/h] of the TABULA row (``n_air_infiltration``).
+
+        The ventilation conductance adds it to the row's use-related air exchange rate.
+        """
+        return float(self.buildingdata_ref["n_air_infiltration"].values[0])
+
+    @property
+    def thermal_bridging_surcharge_in_watt_per_m2_per_kelvin(self) -> float:
+        """Thermal-bridging surcharge delta_U [W/(m2 K)] the building uses.
+
+        The TABULA row's ``delta_U_ThermalBridging``, or
+        :py:attr:`THERMAL_BRIDGING_DELTA_U_WHEN_TABULA_IS_ZERO_IN_WATT_PER_M2_PER_KELVIN` for a
+        row that reports 0 (findings log entry 6). The thermal-bridging conductance is this
+        surcharge times the total envelope area.
+        """
+        delta_u_thermalbridging_from_tabula = self.buildingdata_ref["delta_U_ThermalBridging"].values[0]
+        if delta_u_thermalbridging_from_tabula == 0:
+            return self.THERMAL_BRIDGING_DELTA_U_WHEN_TABULA_IS_ZERO_IN_WATT_PER_M2_PER_KELVIN
+        return float(delta_u_thermalbridging_from_tabula)
+
+    @property
     def door_report_lines(self) -> List[str]:
         """The door's area and U-value, each with where it came from, for the Building's report.
 
@@ -867,13 +898,7 @@ class BuildingInformation:
         explicit local value instead; whether the 0.1 W/(m2 K) surcharge is good physics
         is a design-review question, not changed here.
         """
-        delta_u_thermalbridging_from_tabula = self.buildingdata_ref["delta_U_ThermalBridging"].values[0]
-        if delta_u_thermalbridging_from_tabula == 0:
-            delta_u_thermalbridging = self.THERMAL_BRIDGING_DELTA_U_WHEN_TABULA_IS_ZERO_IN_WATT_PER_M2_PER_KELVIN
-        else:
-            delta_u_thermalbridging = float(delta_u_thermalbridging_from_tabula)
-
-        return delta_u_thermalbridging * self.building_total_area_in_m2
+        return self.thermal_bridging_surcharge_in_watt_per_m2_per_kelvin * self.building_total_area_in_m2
 
     def _ventilation_conductance_in_watt_per_kelvin(self) -> float:
         """Return the ventilation heat-transfer conductance of the building [W/K].
@@ -887,7 +912,7 @@ class BuildingInformation:
             self.HEAT_CAPACITY_OF_AIR_PER_VOLUME_IN_WATT_HOUR_PER_M3_PER_KELVIN
             * (
                 float(self.buildingdata_ref["n_air_use"].values[0])
-                + float(self.buildingdata_ref["n_air_infiltration"].values[0])
+                + self.air_infiltration_rate_per_hour
             )
             * float(self.buildingdata_ref["h_room"].values[0])
             * self.scaled_conditioned_floor_area_in_m2

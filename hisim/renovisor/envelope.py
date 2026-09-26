@@ -5,9 +5,10 @@ Series resistance and nothing else (§4.3 of the calculation-request specificati
     R_added = thickness_in_mm / 1000 / material.thermal_conductivity_w_mk
     U_new   = 1 / (1 / U_existing + R_added)
 
-``U_existing`` is always the request's own element U-value: under rule 5 the frontend derives it
-from its country pack, so TABULA's U-value is never the base state and the archetype contributes
-geometry, ventilation and thermal mass only. Layers stack in the order the measures added them,
+``U_existing`` is the request's own element U-value, or, when the request leaves it out, the
+U-value of the TABULA row of the variant ``building.retrofit_status`` selects -- as the
+``Building`` computes it, the area-weighted average of the row's sub-elements (§4.3). The note
+then names that origin. Layers stack in the order the measures added them,
 so a facade that gets external insulation and then cavity fill is one wall with two layers rather
 than two competing answers.
 
@@ -23,7 +24,7 @@ line, wrapped here after the colon::
     1/(1/1.1 + 0.12/0.0355) = 0.2331 W/(m2K)
 """
 
-from typing import ClassVar, Iterable, Sequence, Tuple
+from typing import ClassVar, Iterable, Optional, Sequence, Tuple
 
 
 class UValueComposer:
@@ -96,6 +97,7 @@ class LayerNote:
         existing_u_value_in_watt_per_m2_per_kelvin: float,
         layers: Sequence[Tuple[str, float, str, float]],
         composed_u_value_in_watt_per_m2_per_kelvin: float,
+        origin: Optional[str] = None,
     ) -> str:
         """Return the note for one composed element.
 
@@ -104,6 +106,8 @@ class LayerNote:
             layers: One ``(measure id, thickness in mm, material id, conductivity)`` per layer,
                 in the order they were applied.
             composed_u_value_in_watt_per_m2_per_kelvin: Where it ended up.
+            origin: Where the starting value came from, when the request did not state it; it is
+                put in brackets after the value.
 
         Returns:
             The sentence, with the whole division written out.
@@ -116,8 +120,11 @@ class LayerNote:
             f"{thickness / UValueComposer.MM_PER_M:g}/{conductivity:g}"
             for _, thickness, _, conductivity in layers
         )
+        start = f"{existing_u_value_in_watt_per_m2_per_kelvin:g} W/(m2K)"
+        if origin is not None:
+            start = f"{start} ({origin})"
         return (
-            f"{existing_u_value_in_watt_per_m2_per_kelvin:g} W/(m2K) + {described}: "
+            f"{start} + {described}: "
             f"1/(1/{existing_u_value_in_watt_per_m2_per_kelvin:g} + {arithmetic}) = "
             f"{composed_u_value_in_watt_per_m2_per_kelvin:.4g} W/(m2K)"
         )

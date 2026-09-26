@@ -1,8 +1,9 @@
 """The vendored copies of the RenoVisor contract that this HiSim speaks.
 
 The contract lives in two repositories. ``measures.yaml`` (the catalogue of renovation measures)
-comes from ``climatemedia/renovisor-api-contract``, which is co-owned by the RenoVisor teams and
-holds only contract files at its root. ``calculation-request.schema.json`` (the request
+and ``materials.yaml`` (the material database the catalogue's ``material`` options are generated
+from) come from ``climatemedia/renovisor-api-contract``, which is co-owned by the RenoVisor teams
+and holds only contract files at its root. ``calculation-request.schema.json`` (the request
 the translator validates against), ``calculation-request.mockup-1.yaml`` (the worked example every
 probe set anchors on) and ``measure-capabilities.openapi.yaml`` (the shape of the capability
 document the translator generates) come from ``specs/`` of the ``renovisorissues`` project on
@@ -10,12 +11,13 @@ jugit, where the shared specifications live since 2026-09-23 beside the packages
 package holds a copy of each, together with ``PINNED.yaml``, which records the repository, the
 commit and the content hash every copy had when it was taken.
 
-The contract's material database, ``materials.yaml``, is deliberately not among them. The
-translator reads no material data at run time: rule 5 of the contract has the request carry a
-material's physical properties and its ``asp_id`` as provenance only. The check that every
-``material`` option value of ``measures.yaml`` resolves to exactly one material row therefore
-belongs with both files in the contract repository, rather than in a HiSim copy of a file nothing
-here reads (owner decision 2026-09-20).
+The translator still reads no material data at run time: rule 5 of the contract has the request
+carry a material's physical properties and its ``asp_id`` as provenance only, so
+``materials.yaml`` is read by the capability probe set alone, which sends real rows of it
+(:class:`hisim.renovisor.capabilities.MaterialRows`) rather than inventing materials. It was dropped
+on 2026-09-20 as a file nothing read and vendored again on 2026-09-26 for exactly that use (owner
+decision, hisim-8mjc). The check that every ``material`` option value of ``measures.yaml`` resolves
+to exactly one material row stays with both files in the contract repository.
 
 Why copies and not a dependency: the decision of 2026-09-15 (``roadmap/renovisor/challenges.md``,
 Q28) was "vendored copy for now"; where the master version of the contract lives is still to be
@@ -35,6 +37,7 @@ Reading the copies::
 
     from hisim.renovisor.contract import ContractFiles
     catalogue = ContractFiles.measures()          # parsed measures.yaml
+    materials = ContractFiles.materials()         # parsed materials.yaml
     schema = ContractFiles.request_schema()       # parsed calculation-request.schema.json
     mockup = ContractFiles.request_mockup()       # parsed calculation-request.mockup-1.yaml
     shape = ContractFiles.capabilities_schema()   # parsed measure-capabilities.openapi.yaml
@@ -68,8 +71,9 @@ class ContractFiles:
     #: The directory holding the vendored copies: the directory of this module.
     DIRECTORY: ClassVar[Path] = Path(__file__).resolve().parent
 
-    #: File names of the four vendored contract files and the pin record.
+    #: File names of the five vendored contract files and the pin record.
     MEASURES_FILENAME: ClassVar[str] = "measures.yaml"
+    MATERIALS_FILENAME: ClassVar[str] = "materials.yaml"
     REQUEST_SCHEMA_FILENAME: ClassVar[str] = "calculation-request.schema.json"
     REQUEST_MOCKUP_FILENAME: ClassVar[str] = "calculation-request.mockup-1.yaml"
     CAPABILITIES_SCHEMA_FILENAME: ClassVar[str] = "measure-capabilities.openapi.yaml"
@@ -98,6 +102,16 @@ class ContractFiles:
     def measures(cls) -> Dict[str, Any]:
         """Return the parsed ``measures.yaml``; its ``measures`` key holds the catalogue list."""
         return cast(Dict[str, Any], cls._load(cls.MEASURES_FILENAME))
+
+    @classmethod
+    def materials(cls) -> Dict[str, Any]:
+        """Return the parsed ``materials.yaml``; its ``materials`` key holds the material rows.
+
+        Only the capability probe set reads it (:class:`hisim.renovisor.capabilities.MaterialRows`);
+        the translator reads no catalogue (rule 5). A spread is a ``{min, max}`` mapping, and an
+        open end is ``max: .inf``, which ``yaml.safe_load`` reads as ``float("inf")``.
+        """
+        return cast(Dict[str, Any], cls._load(cls.MATERIALS_FILENAME))
 
     @classmethod
     def pinned(cls) -> Dict[str, Any]:

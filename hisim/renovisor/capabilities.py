@@ -36,6 +36,7 @@ provenance -- generated from the same two tables the payload is built from. Its 
 
 import copy
 import json
+import math
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -380,6 +381,129 @@ class FieldShape(str, Enum):
     FREE = "free"
 
 
+class MaterialRows:
+    """The request's material object, derived from a real row of the vendored ``materials.yaml``.
+
+    The rule is the frontend's, written in ``specs/calculation-request.md`` §4.3 (last paragraph, at
+    renovisorissues@cc54813): the material object is filled from the ``materials.yaml`` row named by
+    the option's ``asp_id``, scalars verbatim, a ``{min, max}`` range as its midpoint, and an
+    open-ended range (``max: .inf``) has no midpoint, so the property is omitted. The properties are
+    those of the request schema's ``$defs.material``, whose names are the file's verbatim; a property
+    the row does not state is omitted as well. A row without a finite conductivity, the one property
+    the schema requires beside ``asp_id``, has no material object.
+
+    Applied to the ``eps_rigid_board`` row it reproduces the vendored mockup's material exactly
+    (density 11-30 -> 20.5, lifespan 40-75 -> 57.5, the rest verbatim), which
+    ``tests/renovisor/test_capabilities.py`` holds it to.
+
+    For the probe set only (owner decision 2026-09-26, hisim-8mjc): the translator reads no catalogue
+    (rule 5), and a request's material is whatever the frontend sent.
+    """
+
+    #: The request schema's definition of the material object.
+    DEFINITION: ClassVar[str] = "material"
+
+    #: The row's id, which the object carries as provenance.
+    ID: ClassVar[str] = "asp_id"
+
+    #: The property the schema requires beside the id.
+    CONDUCTIVITY: ClassVar[str] = "thermal_conductivity_w_mk"
+
+    @classmethod
+    def properties(cls, schema: Optional[Mapping[str, Any]] = None) -> Tuple[str, ...]:
+        """Return the physical properties the object carries, in the schema's order."""
+        definition = (schema if schema is not None else ContractFiles.request_schema())["$defs"][cls.DEFINITION]
+        return tuple(name for name in definition["properties"] if name != cls.ID)
+
+    @classmethod
+    def rows(cls, materials: Optional[Mapping[str, Any]] = None) -> List[Mapping[str, Any]]:
+        """Return the rows of ``materials.yaml`` in file order; the vendored file when omitted."""
+        return list((materials if materials is not None else ContractFiles.materials())["materials"])
+
+    @classmethod
+    def row(cls, asp_id: str, materials: Optional[Mapping[str, Any]] = None) -> Mapping[str, Any]:
+        """Return the row with one ``asp_id``.
+
+        Raises:
+            KeyError: When no row has it.
+        """
+        for row in cls.rows(materials):
+            if row.get(cls.ID) == asp_id:
+                return row
+        raise KeyError(f"{ContractFiles.MATERIALS_FILENAME} has no row {asp_id!r}")
+
+    @classmethod
+    def material_object(
+        cls, row: Mapping[str, Any], schema: Optional[Mapping[str, Any]] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Return the material object a request sends for one row, or ``None`` when it can send none.
+
+        Args:
+            row: One row of ``materials.yaml``.
+            schema: The request schema; the vendored one when omitted.
+
+        Returns:
+            ``asp_id`` and every property the rule gives a number, in the schema's order; ``None``
+            when the conductivity is not among them.
+
+        Raises:
+            ValueError: When a property is neither a number nor a ``{min, max}`` range of numbers.
+        """
+        material: Dict[str, Any] = {cls.ID: row[cls.ID]}
+        for name in cls.properties(schema):
+            if name in row:
+                value = cls.value(row[name], f"{row[cls.ID]}.{name}")
+                if value is not None:
+                    material[name] = value
+        return material if cls.CONDUCTIVITY in material else None
+
+    @classmethod
+    def value(cls, raw: Any, where: str) -> Optional[float]:
+        """Return one property's number: a scalar verbatim, a range's midpoint, ``None`` for an open range.
+
+        Raises:
+            ValueError: When *raw* is neither a finite number nor a ``{min, max}`` mapping of numbers;
+                *where* names the row and property.
+        """
+        if isinstance(raw, Mapping):
+            ends = (raw.get("min"), raw.get("max"))
+            if set(raw) != {"min", "max"} or not all(cls._is_number(end) for end in ends):
+                raise ValueError(f"{where} is a range {dict(raw)!r}, not {{min, max}} of numbers")
+            low, high = cast(Tuple[float, float], ends)
+            return (low + high) / 2 if math.isfinite(low) and math.isfinite(high) else None
+        if cls._is_number(raw) and math.isfinite(raw):
+            return cast(float, raw)
+        raise ValueError(f"{where} is {raw!r}, neither a finite number nor a {{min, max}} range")
+
+    @staticmethod
+    def _is_number(value: Any) -> bool:
+        """Return whether *value* is an int or a float and not a boolean."""
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+    @classmethod
+    def alternative(cls, measure_id: str, base: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+        """Return a second real material for one measure, or ``None`` when the file has none.
+
+        It is the first row in file order -- the order the catalogue's reverse lookup lists a
+        measure's ``material`` values in -- whose ``measures`` name the measure, which yields a
+        material object, and whose conductivity differs from *base*'s, so a probe that sends it in
+        place of *base* changes the element's U-value. File order rather than, say, the most
+        different conductivity, because it depends on nothing but the rows' order and picks an
+        ordinary material rather than the file's outlier.
+
+        Args:
+            measure_id: A catalogue id whose ``material`` option is probed.
+            base: The material object the probe's base sends.
+        """
+        for row in cls.rows():
+            if measure_id not in (row.get("measures") or []):
+                continue
+            material = cls.material_object(row)
+            if material is not None and material[cls.CONDUCTIVITY] != base.get(cls.CONDUCTIVITY):
+                return material
+        return None
+
+
 class ProbeSet:
     """The probes the capability document is aggregated from, as data.
 
@@ -397,8 +521,8 @@ class ProbeSet:
     read from the request schema when the document is built (:class:`RequestSchemaBounds`).
     """
 
-    #: The mockup measure whose ``material`` option is the row every material probe sends
-    #: (:meth:`material`).
+    #: The mockup measure whose ``material`` option is the row every probe carries as its material
+    #: (:meth:`material`); a probe of a ``material`` option sends a second real row instead.
     MATERIAL_MEASURE: ClassVar[str] = "external_insulation"
 
     #: What a field probe has to change first so that the field is legal at all: a rated SCOP is
@@ -738,13 +862,15 @@ class ProbeSet:
 
     @classmethod
     def material(cls, mockup: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
-        """Return the material object every probe of a ``material`` option sends.
+        """Return the material object every probe carries where it does not probe the material itself.
 
         It is the vendored mockup's own row -- the ``material`` option of its
         :attr:`MATERIAL_MEASURE` measure -- so no material id and no conductivity is invented
         here: rule 5 makes the catalogue's class names ("EPS", "Mineral wool") the frontend's
-        business, and the translator only ever sees properties. The mockup is read on every call,
-        as :class:`ContractFiles` reads everything, so a re-vendored row is probed at once.
+        business, and the translator only ever sees properties. It is what ``measure:<id>`` and an
+        ``added_insulation`` layer send; the probe of a ``material`` option sends a second real row
+        of ``materials.yaml`` in its place (:meth:`MaterialRows.alternative`). The mockup is read on
+        every call, as :class:`ContractFiles` reads everything, so a re-vendored row is probed at once.
 
         Args:
             mockup: The request to take the row from; the vendored mockup when omitted.
@@ -1062,9 +1188,15 @@ class ProbeSet:
 
     @classmethod
     def _option_values(cls, measure_id: str, option: OptionSpec) -> Tuple[Any, ...]:
-        """Return the values one option is probed with: its list, its two points, or both booleans."""
+        """Return the values one option is probed with: its list, its two points, or both booleans.
+
+        A ``material`` option is probed with one material: the second real row
+        :meth:`MaterialRows.alternative` finds for the measure, so the probe changes the material its
+        base (:meth:`material`) carries; the base's own row where the file offers no second one.
+        """
         if option.value_type is ValueType.MATERIAL:
-            return (cls.material(),)
+            base = cls.material()
+            return (MaterialRows.alternative(measure_id, base) or base,)
         if option.values:
             return tuple(option.values)
         if option.value_type is ValueType.BOOLEAN:

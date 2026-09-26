@@ -6,6 +6,7 @@ that the harness tells a probe that works from one that does not. The broken cas
 the translator or the probe on purpose, one at a time.
 """
 
+import dataclasses
 import json
 from pathlib import Path
 from typing import Any, Dict, Sequence
@@ -207,9 +208,15 @@ class TestTheThreeStages:
         assert [issue.code for issue in report.failures()] == ["request_diff"]
 
     def test_a_probe_identical_to_its_base_fails_stage_one_and_stops_there(self) -> None:
-        """The material option is only ever sent as the mockup's row, which its measure probe already sends."""
-        material = next(
+        """The material probe as it was until hisim-8mjc: the mockup's row, which its measure probe already sends.
+
+        It replaces the set's material probe by name, so no sibling sends another material either.
+        """
+        real = next(
             probe for probe in ProbeSet.build() if probe.name.startswith("option:external_insulation.material=")
+        )
+        material = dataclasses.replace(
+            real, measures=[ProbeSet.package("external_insulation")], value=ProbeSet.material()
         )
         report = VerificationRunner().run([material])
         verdict = report.verdicts[0]
@@ -219,6 +226,25 @@ class TestTheThreeStages:
         assert verdict.cells[Stage.MAPPING] is CellState.NOT_RUN
         assert verdict.cells[Stage.SYSTEM] is CellState.NOT_RUN
         assert [issue.code for issue in report.failures()] == ["request_diff"]
+
+    def test_a_material_probe_changes_the_material_and_the_elements_u_value(self) -> None:
+        """hisim-8mjc: a second real row, so stage 1 is the material alone and stage 3 the facade U-value."""
+        material = next(
+            probe for probe in ProbeSet.build() if probe.name.startswith("option:external_insulation.material=")
+        )
+        report = VerificationRunner().run([material])
+        verdict = report.verdicts[0]
+        option = "measures[id=external_insulation].options.material"
+
+        assert verdict.stage_one and all(RequestLeaves.is_under(change.path, option) for change in verdict.stage_one)
+        assert verdict.stray == ()
+        assert all(verdict.cells[stage] is CellState.AS_EXPECTED for stage in Stage)
+        u_value = next(
+            change for change in verdict.stage_three
+            if change.path == "Building.config.facade_u_value_in_watt_per_m2_per_kelvin"
+        )
+        assert u_value.after > u_value.before  # wood fibre conducts more than EPS
+        assert not report.failures()
 
 
 @pytest.mark.base

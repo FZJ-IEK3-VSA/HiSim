@@ -141,8 +141,9 @@ of the path verification (`hisim/renovisor/verify/`): every capability probe tra
 its base (request, mapping report, energy system), written as `report.json` + an HTML matrix; it exits 4 when
 the report lists a failure. CI uploads it as the artifact `path-verification-report`.
 
-Layers: `contract/` (vendored measure catalogue, request schema, worked mockup and capability-document
-schema, each pinned to a commit in `PINNED.yaml`; refresh with
+Layers: `contract/` (vendored measure catalogue, material database `materials.yaml` (read by the capability
+probes only), request schema, worked mockup and capability-document schema, each pinned to a commit in
+`PINNED.yaml`; refresh with
 `python -m hisim.renovisor.contract.refresh <contract checkout> --specs <renovisorissues clone>` (`--specs` is
 required; `--specs ''` keeps the spec copies and their pins); the shared
 specs live in `specs/` of https://jugit.fz-juelich.de/iek-3/groups/urbanmodels/renovisorissues), `vocabulary.py` (closed enums

@@ -26,6 +26,7 @@ from hisim.renovisor.capabilities import (
     Aggregation,
     CapabilityDocument,
     FieldShape,
+    MaterialRows,
     MeasureStatus,
     NoteAggregation,
     Observation,
@@ -87,7 +88,7 @@ class TestTheProbeSet:
         assert anchor["house"]["heating"]["type_of_system"] == "conventional_gas_heating"
 
     def test_the_probe_material_is_the_mockups_external_insulation_row(self) -> None:
-        """No material is typed twice: a re-vendored mockup row is the row every probe sends."""
+        """No material is typed twice: a re-vendored mockup row is the row every measure probe carries."""
         mockup = ContractFiles.request_mockup()
         row = next(measure for measure in mockup["measures"] if measure["id"] == "external_insulation")
         expected = row["options"][CatalogueTable.MATERIAL]
@@ -105,6 +106,52 @@ class TestTheProbeSet:
 
         with pytest.raises(ValueError, match="calculation-request.mockup-1.yaml carries no 'external_insulation'"):
             ProbeSet.material(mockup)
+
+    def test_the_probe_material_is_the_rule_applied_to_its_materials_yaml_row(self) -> None:
+        """calculation-request.md §4.3 applied to eps_rigid_board gives the mockup's object, key order included."""
+        derived = MaterialRows.material_object(MaterialRows.row(ProbeSet.material()["asp_id"]))
+
+        assert derived == ProbeSet.material()
+        assert list(derived or {}) == list(ProbeSet.material())
+
+    def test_every_material_probe_sends_a_second_real_row_for_its_measure(self) -> None:
+        """hisim-8mjc: the row is one the measure's reverse lookup names, with another conductivity."""
+        base = ProbeSet.material()
+        probed = {
+            str(probe.subject).split(".", maxsplit=1)[0]: probe.value
+            for probe in ProbeSet.build()
+            if probe.kind is ProbeKind.OPTION and str(probe.subject).endswith(f".{CatalogueTable.MATERIAL}")
+        }
+        with_material = [
+            measure_id for measure_id in CatalogueTable.ids() if CatalogueTable.material_option(measure_id)
+        ]
+
+        assert sorted(probed) == sorted(with_material)
+        for measure_id, material in probed.items():
+            row = MaterialRows.row(material["asp_id"])
+            assert measure_id in row["measures"]
+            assert material == MaterialRows.material_object(row)
+            assert material["thermal_conductivity_w_mk"] != base["thermal_conductivity_w_mk"]
+
+    def test_a_range_is_its_midpoint_and_an_open_range_is_omitted(self) -> None:
+        """Scalars verbatim, ``{min, max}`` as the midpoint, ``max: .inf`` left out (§4.3)."""
+        row = {
+            "asp_id": "probe_row",
+            "thermal_conductivity_w_mk": 0.04,
+            "density_kg_m3": {"min": 10, "max": 30},
+            "lifespan_years": {"min": 50, "max": float("inf")},
+            "measures": ["external_insulation"],
+        }
+
+        assert MaterialRows.material_object(row) == {
+            "asp_id": "probe_row", "thermal_conductivity_w_mk": 0.04, "density_kg_m3": 20.0,
+        }
+
+    def test_a_row_without_a_conductivity_has_no_object_and_a_text_value_is_refused(self) -> None:
+        """The schema requires the conductivity; anything but a number or a range fails by name."""
+        assert MaterialRows.material_object({"asp_id": "no_lambda", "heat_capacity_j_kgk": 1000}) is None
+        with pytest.raises(ValueError, match="text_row.thermal_conductivity_w_mk"):
+            MaterialRows.material_object({"asp_id": "text_row", "thermal_conductivity_w_mk": "0.04"})
 
     def test_the_bare_baseline_carries_no_optional_block_at_all(self) -> None:
         """The request the defect of c02bc801 was never exercised by, now probed every time."""

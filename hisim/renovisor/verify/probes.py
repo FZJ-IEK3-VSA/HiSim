@@ -33,9 +33,10 @@ on an anchor that is detached, the first value of an option that ``measure:<id>`
 the diff would be empty, and the probe is measured from its **sibling** instead: the first probe
 of the same kind and subject that sends a different value from the same natural base. The change
 is then the probe's own path with the sibling's value on the left (``semi_detached_sfh ->
-detached_sfh``), which is still one change. A probe with no such sibling -- the ``material``
-option, which the probe set only ever sends as the mockup's one row -- keeps its natural base,
-and its empty diff is reported as what it is.
+detached_sfh``), which is still one change. A probe with no such sibling keeps its natural base,
+and its empty diff is reported as what it is. The ``material`` option is not such a probe any more:
+it sends a second real row of ``materials.yaml`` (``MaterialRows.alternative``) where its base
+carries the mockup's, so its change is the material object, conductivity and all.
 
 Every base is a request, cached by hash like any other (:mod:`hisim.renovisor.verify.runner`), so
 a probe whose base is another probe costs that probe nothing, and a base is named after the probe

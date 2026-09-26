@@ -8,21 +8,28 @@ was still using. These tests pin the replacement rule -- distinct base indices g
 of directories, an occupied directory stops the run by name, and a run releases what it claimed
 whether it succeeded or failed -- and the pool a parallel driver hands those base indices out from.
 
-None of them touch pylpg or start a calculation; they exercise arithmetic and one filesystem check,
-which is why they are ``base`` rather than ``utsp``.
+None of them start a calculation or download anything; they exercise arithmetic, filesystem checks
+and -- with the download replaced by a fake -- where the binaries are installed, which is why they
+are ``base`` rather than ``utsp``.
 """
 
+import inspect
 import pathlib
+import re
 from typing import Any, ClassVar, List, Optional
 
 import pytest
+from pylpg import lpg_execution
 
+from hisim.calculation_scope import CalculationScope
 from hisim.components.pylpg_workspace import (
     LocalLpgCalculationFailedError,
     LpgBaseIndexPool,
     PylpgWorkingDirectoryInUseError,
     PylpgWorkspace,
 )
+from hisim.result_path_provider import ResultPathProviderSingleton
+from hisim.write_guard import GuardMode
 
 __authors__ = "Noah Pflugradt"
 __copyright__ = "Copyright 2021-2026, FZJ-IEK-3 "
@@ -90,13 +97,13 @@ def test_a_request_wider_than_the_stride_is_refused() -> None:
 
 
 @pytest.mark.base
-def test_claiming_a_free_directory_returns_a_path_that_does_not_exist_yet() -> None:
+def test_claiming_a_free_directory_returns_a_path_that_does_not_exist_yet(tmp_path: Any) -> None:
     """A claim on a free index yields the path pylpg will create, and creates nothing itself.
 
     The claim is a check, not a reservation: ``pylpg`` makes the directory when it starts, and
     creating it here would make the very next claim of the same index fail.
     """
-    directory = PylpgWorkspace.claim(PylpgWorkspace.calculation_index(987654321, 0))
+    directory = PylpgWorkspace.claim(PylpgWorkspace.calculation_index(987654321, 0), pathlib.Path(tmp_path))
     assert not directory.exists()
     assert directory.name.startswith("C")
 
@@ -120,7 +127,7 @@ def test_claiming_an_occupied_directory_fails_and_names_the_index(monkeypatch: p
     working_directory_in_tmp(occupied_index).mkdir()
 
     with pytest.raises(PylpgWorkingDirectoryInUseError) as failure:
-        PylpgWorkspace.claim(occupied_index)
+        PylpgWorkspace.claim(occupied_index, pathlib.Path(tmp_path))
 
     assert str(occupied_index) in str(failure.value)
     assert PylpgWorkspace.INDEX_ENVIRONMENT_VARIABLE in str(failure.value)
@@ -147,7 +154,7 @@ def test_release_removes_the_directories_a_run_claimed(monkeypatch: pytest.Monke
     working_directory_in_tmp(claimed[0]).mkdir()
     (working_directory_in_tmp(claimed[0]) / "results").mkdir()
 
-    PylpgWorkspace.release(claimed)
+    PylpgWorkspace.release(claimed, pathlib.Path(tmp_path))
 
     assert not working_directory_in_tmp(claimed[0]).exists()
     assert not working_directory_in_tmp(claimed[1]).exists()
@@ -549,3 +556,111 @@ def test_the_child_environment_is_a_copy() -> None:
     LpgBaseIndexPool.child_environment(3, original)
 
     assert original == {"HOME": "/somewhere"}
+
+
+class _FakeDownload:
+    """Stands in for ``LPGExecutor.retrieve_lpg_binaries``: records where it was asked to extract.
+
+    It lays out what the real download extracts -- ``<path>/LPG_linux/simengine2`` beside a database --
+    so the rest of the install runs against the real filesystem without reaching the network.
+    """
+
+    def __init__(self) -> None:
+        self.paths: List[pathlib.Path] = []
+
+    def __call__(self, path: Any) -> None:
+        self.paths.append(pathlib.Path(path))
+        folder = pathlib.Path(path) / PylpgWorkspace.binary_folder_name()
+        folder.mkdir(parents=True)
+        (folder / PylpgWorkspace.binary_path("/").name).write_bytes(b"#!/bin/sh\n")
+        (folder / "profilegenerator.db3").write_bytes(b"db")
+
+
+@pytest.fixture(name="fake_download")
+def fixture_fake_download(monkeypatch: pytest.MonkeyPatch) -> _FakeDownload:
+    """Replace the download with :class:`_FakeDownload`."""
+    # The release is read from the real method's source, so it is learnt before the method is replaced.
+    PylpgWorkspace.lpg_release()
+    download = _FakeDownload()
+    monkeypatch.setattr(lpg_execution.LPGExecutor, "retrieve_lpg_binaries", staticmethod(download))
+    return download
+
+
+@pytest.mark.base
+def test_the_release_is_read_from_the_url_pylpg_downloads() -> None:
+    """The directory is versioned by the release pylpg's download URL names, e.g. ``LPG10.10.0``."""
+    release = PylpgWorkspace.lpg_release()
+    assert re.fullmatch(r"LPG\d+(\.\d+)+", release), release
+    source = inspect.getsource(lpg_execution.LPGExecutor.retrieve_lpg_binaries)
+    assert f"/{release}_" in source
+
+
+@pytest.mark.base
+def test_the_binaries_live_below_the_cache_directory_not_in_the_package(tmp_path: Any) -> None:
+    """``binary_path`` is ``<cache>/pylpg/<release>/LPG_linux/simengine2``, nowhere near site-packages."""
+    executable = PylpgWorkspace.binary_path(str(tmp_path))
+    package_directory = pathlib.Path(lpg_execution.__file__).parent.absolute()
+    assert executable.is_relative_to(tmp_path / "pylpg" / PylpgWorkspace.lpg_release())
+    assert executable.parent.name in ("LPG_linux", "LPG_win")
+    assert not executable.is_relative_to(package_directory)
+
+
+@pytest.mark.base
+def test_the_install_writes_only_below_the_cache_and_happens_once(
+    tmp_path: Any, fake_download: _FakeDownload
+) -> None:
+    """The download extracts into a staging directory below the cache, which is renamed into place and gone."""
+    cache = tmp_path / "cache"
+
+    executable = PylpgWorkspace.install_binaries_if_missing(str(cache))
+    again = PylpgWorkspace.install_binaries_if_missing(str(cache))
+
+    assert executable == again == PylpgWorkspace.binary_path(str(cache))
+    assert executable.is_file()
+    assert len(fake_download.paths) == 1, "an installed executable must not be downloaded again"
+    assert fake_download.paths[0].is_relative_to(cache / "pylpg")
+    assert sorted(path.name for path in (cache / "pylpg").iterdir()) == [PylpgWorkspace.lpg_release()], (
+        "the staging directory must be gone"
+    )
+    assert [path.name for path in tmp_path.iterdir()] == ["cache"]
+
+
+@pytest.mark.base
+def test_a_download_that_leaves_no_executable_installs_nothing(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A broken download fails by name and leaves neither an installation nor a staging directory."""
+    PylpgWorkspace.lpg_release()
+    monkeypatch.setattr(lpg_execution.LPGExecutor, "retrieve_lpg_binaries", staticmethod(lambda path: None))
+    with pytest.raises(RuntimeError, match="left no executable"):
+        PylpgWorkspace.install_binaries_if_missing(str(tmp_path))
+    assert not PylpgWorkspace.binary_path(str(tmp_path)).exists()
+    assert not list((tmp_path / "pylpg").iterdir())
+
+
+@pytest.mark.base
+def test_installing_and_starting_under_the_write_guard_is_no_stray_write(
+    tmp_path: Any, fake_download: _FakeDownload
+) -> None:
+    """A fresh environment installs the binaries during its first calculation; the guard must admit it.
+
+    CI failed every local-LPG run on a fresh runner with ``StrayWriteError: os.mkdir of
+    '.../site-packages/pylpg/LPG_linux'``, because the install went into the package. Below the
+    calculation's cache directory, the install and the executor's copy of the toolchain are both
+    allowed writes.
+    """
+    del fake_download
+    cache = tmp_path / "cache"
+    ResultPathProviderSingleton.reset()
+    try:
+        with CalculationScope.open(
+            "lpg", run_directory=tmp_path / "run", cache_directories=[str(cache)], mode=GuardMode.ENFORCE
+        ) as guard:
+            PylpgWorkspace.install_binaries_if_missing(str(cache))
+            index = PylpgWorkspace.calculation_index(424242, 0)
+            PylpgWorkspace.claim(index, PylpgWorkspace.work_root(str(cache)))
+            executor = PylpgWorkspace.start_executor(index, str(cache))
+            PylpgWorkspace.release([index], PylpgWorkspace.work_root(str(cache)))
+            assert not guard.stray_writes
+    finally:
+        ResultPathProviderSingleton.reset()
+    assert pathlib.Path(executor.calculation_src_directory).is_relative_to(PylpgWorkspace.work_root(str(cache)))
+    assert pathlib.Path(executor.working_directory).is_relative_to(cache)

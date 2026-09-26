@@ -54,9 +54,12 @@ interpreter or a library on its own account. The guard does not allow them; it r
   first ``tempfile.gettempdir()`` of a process creates and deletes a file there) is made before the
   guard switches on, because it is not the calculation's and leaves nothing behind.
 
-Subprocesses are outside the hook's reach: a child process writes without an audit event. The one
-HiSim starts during a calculation is the local LoadProfileGenerator, which computes in the pylpg
-package directory by pylpg's own design (see :mod:`hisim.components.pylpg_workspace`).
+Subprocesses are outside the hook's reach: a child process writes without an audit event. HiSim
+starts two during a calculation, and both are pointed at the calculation's directories: the local
+LoadProfileGenerator, which computes in its own directory below the cache directory, next to the
+binaries it is copied from (see :mod:`hisim.components.pylpg_workspace`), and Graphviz's ``dot``,
+which writes the system chart straight into the result directory
+(:meth:`hisim.postprocessing.system_chart.SystemChart.render_png`).
 
 **Threads.** The active guard is a :class:`contextvars.ContextVar`, so a thread started inside a
 calculation starts without it (Python does not copy the context into a new thread unless asked to).

@@ -86,7 +86,7 @@ def test_local_lpg_failure_propagates_instead_of_swapping_the_household(
     # The connector builds its executor through the workspace, which computes below the cache
     # directory instead of inside the installed package (hisim-epc.23); that is the seam to break.
     monkeypatch.setattr(PylpgWorkspace, "start_executor", classmethod(raise_instead_of_executing))
-    monkeypatch.setattr(PylpgWorkspace, "install_binaries_if_missing", classmethod(lambda cls: None))
+    monkeypatch.setattr(PylpgWorkspace, "install_binaries_if_missing", classmethod(lambda cls, cache_directory: None))
     config = build_connector_config(lpg_connector.LpgDataAcquisitionMode.USE_LOCAL_LPG, str(tmp_path))
     simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
 

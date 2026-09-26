@@ -63,9 +63,10 @@ that wrote it. `HISIM_WRITE_GUARD=collect` lets the run finish and then lists ev
 once; there is no switch that turns the guard off. Temporary files a library creates during the
 run land in the result directory (`tempfile.tempdir` points there once it exists), and when
 `MPLCONFIGDIR` is unset matplotlib's configuration and font cache go to `matplotlib/` in the first
-cache directory instead of `~/.config` and `~/.cache`. The LoadProfileGenerator binaries must be
-installed in the image before the first calculation (a missing installation is a write into the
-installed `pylpg` package, which the guard refuses).
+cache directory instead of `~/.config` and `~/.cache`. The LoadProfileGenerator binaries live in the
+cache directory too (`pylpg/<release>/` below it, e.g. `pylpg/LPG10.10.0/LPG_linux/`): the first
+calculation that needs them downloads them there, so an image that bakes them into its seed or its
+cache volume saves that download, and nothing is ever written into the installed `pylpg` package.
 
 ## Exit codes
 

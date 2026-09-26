@@ -11,8 +11,11 @@ first deleted the directory the other was still using.
 Since hisim-epc.23 (the write guard, ``hisim.write_guard``) HiSim no longer lets it: the calculation
 directories live below the calculation's cache directory (:meth:`PylpgWorkspace.work_root`) and
 :meth:`PylpgWorkspace.start_executor` builds the executor there, so a calculation writes nothing into
-the installed package. The one write left there is the binaries' installation when they are missing,
-which belongs to setting up the environment rather than to a calculation.
+the installed package. The binaries the calculations are copied from live in the cache directory as
+well (:meth:`PylpgWorkspace.binary_root`, versioned by the LoadProfileGenerator release pylpg
+downloads), and :meth:`PylpgWorkspace.install_binaries_if_missing` installs them there. Nothing in
+HiSim reads or writes the ``pylpg`` package directory any more; an installation an older HiSim left
+there is ignored.
 
 This module owns the index arithmetic and the directory lifecycle instead, so the connector does not
 have to. The default index comes from the process, which removes the shared constant; the directory
@@ -22,15 +25,17 @@ alternative is two runs silently interleaving in one folder. See ``roadmap/pylpg
 and F4.
 
 A script that runs several HiSim processes in parallel must give each process a different base index,
-otherwise two of them compute in the same ``pylpg/C<index>`` directory. :class:`LpgBaseIndexPool` hands
+otherwise two of them compute in the same ``C<index>`` directory. :class:`LpgBaseIndexPool` hands
 those indices out and takes them back. It lives in this module so that the pool and
 :meth:`PylpgWorkspace.default_base_index` share one definition of the environment variable's name.
 """
 
 import contextlib
+import inspect
 import os
 import pathlib
 import queue
+import re
 import shutil
 import socket
 import sys
@@ -51,7 +56,7 @@ __status__ = "development"
 
 
 class PylpgWorkingDirectoryInUseError(RuntimeError):
-    """Raised when the ``pylpg/C<index>`` directory a run needs is already on disk.
+    """Raised when the ``C<index>`` working directory a run needs is already on disk.
 
     It is a distinct type rather than a bare ``RuntimeError`` so that a caller which genuinely wants
     to wait, retry or pick another index can tell this apart from a failure of the calculation
@@ -150,10 +155,13 @@ class PylpgWorkspace:
         repeatedly at all, which is the real answer.
 
 
-        The lock is held on the pylpg package directory, the installation it guards, so every
-        process in one virtual environment contends for the same one. On a platform without
-        ``fcntl`` the lock is skipped rather than emulated: the race needs concurrent processes in
-        one environment, which is what CI and the parallel regenerator do on Linux.
+        The lock is held on the pylpg package directory, so every process in one virtual environment
+        contends for the same one. The directory is only opened for reading: the binaries themselves
+        live below the cache directory (:meth:`binary_root`), and nothing is written into the package.
+        On a platform without ``fcntl`` the lock is skipped rather than emulated: the race needs
+        concurrent processes in one environment, which is what CI and the parallel regenerator do on
+        Linux. Processes of different environments sharing one cache directory are not serialised by
+        it; :meth:`install_binaries_if_missing` is atomic on its own for them.
 
         The lock is not reentrant. ``flock`` associates a lock with an open file description, so a
         second acquisition from the same process on a new descriptor blocks against the first and
@@ -168,7 +176,8 @@ class PylpgWorkspace:
             return
         # The lock is taken on the package directory itself, opened read-only: a lock file would
         # have to be created in the installed package, which a calculation must not write to
-        # (hisim.write_guard). flock works on a directory descriptor as on any other.
+        # (hisim.write_guard). flock works on a directory descriptor as on any other. Only the
+        # directory's identity is used; nothing in it is read or written.
         descriptor = os.open(package_directory, os.O_RDONLY)
         try:
             fcntl.flock(descriptor, fcntl.LOCK_EX)
@@ -179,48 +188,159 @@ class PylpgWorkspace:
         finally:
             os.close(descriptor)
 
-    @classmethod
-    def binary_path(cls) -> pathlib.Path:
-        """Returns the LoadProfileGenerator executable's path, the way ``LPGExecutor`` derives it.
+    #: The subdirectory of a cache directory the LoadProfileGenerator binaries are installed in.
+    BINARY_DIRECTORY_NAME: ClassVar[str] = "pylpg"
 
-        Duplicating the derivation is unwelcome and unavoidable: ``LPGExecutor`` computes it in
-        ``__init__`` and exposes it nowhere a caller can reach before constructing one, and
-        constructing one is the very thing that must not happen before the lock is held.
-        """
-        package_directory = pathlib.Path(lpg_execution.__file__).parent.absolute()
-        if sys.platform.startswith("win"):
-            return package_directory / "LPG_win" / "simengine2.exe"
-        return package_directory / "LPG_linux" / "simengine2"
+    #: How the release is spelled in the download URL of ``LPGExecutor.retrieve_lpg_binaries``, e.g.
+    #: ``https://www.loadprofilegenerator.de/setup/LPG10.10.0_linux.zip``.
+    RELEASE_IN_DOWNLOAD_URL: ClassVar["re.Pattern[str]"] = re.compile(r"/(LPG\d+(?:\.\d+)+)_[A-Za-z]+\.zip")
+
+    _release: ClassVar[Optional[str]] = None
 
     @classmethod
-    def install_binaries_if_missing(cls) -> None:
-        """Installs the LoadProfileGenerator binaries once, under a lock, before any run needs them.
+    def lpg_release(cls) -> str:
+        """Returns the LoadProfileGenerator release pylpg downloads, e.g. ``LPG10.10.0``.
 
-        The binaries are not shipped with pylpg. ``LPGExecutor.__init__`` checks whether the
-        executable is on disk and, if it is not, downloads a zip and extracts it over the shared
-        package directory. That check and that write are not atomic with respect to each other, so
-        several processes starting together in a fresh environment -- four regenerator workers on a
-        clean CI container, say -- all see it missing and all extract into the same directory. The
-        first to finish begins executing the file the others are still writing, and the kernel
-        refuses that with ``ETXTBSY``: "Text file busy". The loser's calculation dies, produces no
-        results, and is then reported as a missing json file, because pylpg does not check the
-        return code of the binary it ran.
+        pylpg exposes the release nowhere but in the URLs hard-coded inside
+        ``LPGExecutor.retrieve_lpg_binaries``, and the distribution carries no version metadata to
+        fall back on. The release is therefore read out of that method's source, once per process.
+        Deriving it rather than restating it as a constant means a pylpg upgrade that downloads a
+        different release installs into a directory of its own name, next to the old one, instead of
+        being filed under a name it does not have -- a restated constant would go stale silently,
+        and a stale name in a cache that outlives the upgrade is exactly the mix-up the version in
+        the path exists to prevent.
 
-        Doing the check and the install inside :meth:`exclusive_generator_access` makes them atomic
-        with respect to every other process. The first installs while the others wait; by the time
-        they look, the executable is there and pylpg's own check inside ``LPGExecutor``
-        short-circuits without writing anything. **The caller must already hold that lock**; this
-        method takes none, because it runs inside a calculation that holds it for its whole length.
+        Returns:
+            str: The release, as the URL spells it: every URL in the method must name the same one.
 
-        This is the half of Fault B that F3 did not address. F3 gave each process its own ``C<index>``
-        working directory; the installation those directories are copied from is still one shared
-        thing, and this is the guard for it. See roadmap/pylpg_flakiness.md.
+        Raises:
+            RuntimeError: When the source is unavailable or names no release, or more than one.
         """
-        if cls.binary_path().is_file():
-            return
-        log.information("Installing the LoadProfileGenerator binaries under an exclusive lock.")
-        package_directory = pathlib.Path(lpg_execution.__file__).parent.absolute()
-        lpg_execution.LPGExecutor.retrieve_lpg_binaries(package_directory)
+        if cls._release is not None:
+            return cls._release
+        try:
+            source = inspect.getsource(lpg_execution.LPGExecutor.retrieve_lpg_binaries)
+        except (OSError, TypeError) as error:
+            raise RuntimeError(
+                "Cannot read pylpg's LPGExecutor.retrieve_lpg_binaries to learn which LoadProfileGenerator "
+                f"release it downloads, which names the directory the binaries are installed in: {error}"
+            ) from error
+        releases = set(cls.RELEASE_IN_DOWNLOAD_URL.findall(source))
+        if len(releases) != 1:
+            raise RuntimeError(
+                "pylpg's LPGExecutor.retrieve_lpg_binaries was expected to download exactly one "
+                f"LoadProfileGenerator release, but its URLs name {sorted(releases) or 'none'}; "
+                "PylpgWorkspace.RELEASE_IN_DOWNLOAD_URL no longer matches the pylpg installed."
+            )
+        cls._release = releases.pop()
+        return cls._release
+
+    @classmethod
+    def binary_root(cls, cache_directory: str) -> pathlib.Path:
+        """Returns the directory the LoadProfileGenerator binaries are installed in, below a cache directory.
+
+        ``<cache_directory>/pylpg/<release>``, with ``LPG_linux`` (or ``LPG_win``) below it, the
+        layout ``LPGExecutor.retrieve_lpg_binaries`` extracts into the directory it is given.
+
+        The binaries used to live in the installed pylpg package, where pylpg puts them. A
+        calculation may not write there (``hisim.write_guard``), and a fresh environment -- every CI
+        runner -- has to install them during its first calculation, so they live where a calculation
+        may write and where the next one finds them again: the cache directory. There they also
+        travel with the cache (a CI cache restore, a container's cache volume) instead of being
+        downloaded once per virtual environment. The release in the path keeps two pylpg versions
+        that share one cache apart.
+
+        Args:
+            cache_directory: The calculation's cache write directory.
+
+        Returns:
+            pathlib.Path: ``<cache_directory>/pylpg/<release>``.
+        """
+        return pathlib.Path(cache_directory) / cls.BINARY_DIRECTORY_NAME / cls.lpg_release()
+
+    @staticmethod
+    def binary_folder_name() -> str:
+        """Returns the folder ``retrieve_lpg_binaries`` extracts into on this platform."""
+        return "LPG_win" if sys.platform.startswith("win") else "LPG_linux"
+
+    @classmethod
+    def binary_path(cls, cache_directory: str) -> pathlib.Path:
+        """Returns the LoadProfileGenerator executable's path below a cache directory.
+
+        The executable's name is the one ``LPGExecutor.__init__`` expects, restated because the
+        executor exposes it nowhere a caller can reach before constructing one, and constructing one
+        is the very thing :meth:`start_executor` avoids.
+
+        Args:
+            cache_directory: The calculation's cache write directory.
+
+        Returns:
+            pathlib.Path: ``<binary_root>/LPG_linux/simengine2`` (``LPG_win/simengine2.exe`` on Windows).
+        """
+        executable = "simengine2.exe" if sys.platform.startswith("win") else "simengine2"
+        return cls.binary_root(cache_directory) / cls.binary_folder_name() / executable
+
+    @classmethod
+    def install_binaries_if_missing(cls, cache_directory: str) -> pathlib.Path:
+        """Installs the LoadProfileGenerator binaries below the cache directory, once, before any run needs them.
+
+        The binaries are not shipped with pylpg; pylpg downloads a zip on first use. HiSim installs
+        them itself, into :meth:`binary_root`, never into the pylpg package directory, and an
+        installation an older HiSim or pylpg itself left in the package directory is neither read
+        nor removed.
+
+        The install has to be atomic with respect to every other process, because the check and the
+        write are separate steps: several processes starting together in a fresh environment -- four
+        regenerator workers on a clean CI container, say -- all see the executable missing, and
+        extracting into one directory while the first to finish is already executing the file the
+        others are still writing is refused by the kernel with ``ETXTBSY``, "Text file busy" (Fault B,
+        roadmap/pylpg_flakiness.md §4a). Two things make it so:
+
+        * the caller holds :meth:`exclusive_generator_access`, which serialises the processes of one
+          virtual environment. **The caller must already hold that lock**; this method takes none,
+          because it runs inside a calculation that holds it for its whole length;
+        * the zip is extracted into a staging directory of this process beside the installation and
+          moved into place with one ``rename``, which fails when another process got there first. So
+          two environments that share one cache directory -- two containers on one cache volume,
+          which the lock does not reach -- cannot write into one installation either, and a download
+          that dies halfway leaves no half-installation that would pass the check next time.
+
+        Args:
+            cache_directory: The calculation's cache write directory, which the write guard admits.
+
+        Returns:
+            pathlib.Path: The executable, installed now or earlier.
+
+        Raises:
+            RuntimeError: When the download ran but left no executable.
+        """
+        executable = cls.binary_path(cache_directory)
+        if executable.is_file():
+            return executable
+        root = cls.binary_root(cache_directory)
+        log.information(f"Installing the LoadProfileGenerator binaries into '{root}' under an exclusive lock.")
+        staging = root.parent / f".{root.name}.{socket.gethostname()}.{os.getpid()}.partial"
+        if staging.exists():
+            shutil.rmtree(staging)
+        staging.mkdir(parents=True)
+        try:
+            lpg_execution.LPGExecutor.retrieve_lpg_binaries(staging)
+            staged_executable = staging / executable.parent.name / executable.name
+            if not staged_executable.is_file():
+                raise RuntimeError(
+                    f"Downloading the LoadProfileGenerator binaries left no executable at '{staged_executable}'."
+                )
+            root.mkdir(parents=True, exist_ok=True)
+            try:
+                os.rename(staging / executable.parent.name, executable.parent)
+            except OSError:
+                # Another process sharing the cache directory installed them in the meantime: its
+                # installation is the same release, so this one is discarded with the staging.
+                if not executable.is_file():
+                    raise
+        finally:
+            shutil.rmtree(staging, ignore_errors=True)
+        return executable
 
     #: The fragments of a generator log that mark a failure worth trying again. Only sqlite's busy
     #: error qualifies: it is the one failure that is about timing rather than about the request.
@@ -433,58 +553,60 @@ class PylpgWorkspace:
         return pathlib.Path(cache_directory) / cls.WORK_DIRECTORY_NAME / socket.gethostname()
 
     @classmethod
-    def start_executor(cls, calculation_index: int, root: pathlib.Path) -> "lpg_execution.LPGExecutor":
-        """Builds a pylpg executor that computes in ``root/C<index>`` instead of inside the package.
+    def start_executor(cls, calculation_index: int, cache_directory: str) -> "lpg_execution.LPGExecutor":
+        """Builds a pylpg executor that computes in the cache directory instead of inside the package.
 
-        ``LPGExecutor.__init__`` hard-codes its calculation directory below the installed package and
-        copies the toolchain there. This does what that constructor does -- minus the binary
-        installation, which :meth:`install_binaries_if_missing` has done under the lock -- with the
-        calculation directory below *root*, and then points the executor at its own copy of the
+        ``LPGExecutor.__init__`` hard-codes both its binaries and its calculation directory below the
+        installed package and copies the one into the other. This does what that constructor does --
+        minus the binary installation, which :meth:`install_binaries_if_missing` has done under the
+        lock -- with the binaries taken from :meth:`binary_root` and the calculation directory
+        ``C<index>`` below :meth:`work_root`, and then points the executor at its own copy of the
         binary (:meth:`run_the_copy_not_the_original`).
+
+        ``working_directory`` is set to the binary root rather than to the package, so no attribute
+        of the executor names the package directory. None of the executor's methods HiSim calls reads
+        it: ``make_default_lpg_settings`` names the database in the calculation directory,
+        ``execute_lpg_binaries`` runs the binary with the calculation directory as its working
+        directory, and the connector reads the results from there itself.
 
         Args:
             calculation_index: The claimed index.
-            root: Where the calculation directories live, from :meth:`work_root`.
+            cache_directory: The calculation's cache write directory, holding both the binaries and
+                the calculation directories.
 
         Returns:
             The executor, its toolchain copied into its calculation directory.
         """
         executor = lpg_execution.LPGExecutor.__new__(lpg_execution.LPGExecutor)
-        executor.working_directory = pathlib.Path(lpg_execution.__file__).parent.absolute()
-        source = cls.binary_path()
+        executor.working_directory = cls.binary_root(cache_directory)
+        source = cls.binary_path(cache_directory)
         executor.calculation_src_directory = source.parent
         executor.simengine_src_filename = source.name
-        executor.calculation_directory = cls.working_directory(calculation_index, root)
+        executor.calculation_directory = cls.working_directory(calculation_index, cls.work_root(cache_directory))
         executor.calculation_directory.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(executor.calculation_src_directory, executor.calculation_directory)
         cls.run_the_copy_not_the_original(executor)
         return executor
 
     @staticmethod
-    def working_directory(calculation_index: int, root: Optional[pathlib.Path] = None) -> pathlib.Path:
-        """Returns the directory ``pylpg`` will compute in for the given calculation index.
+    def working_directory(calculation_index: int, root: pathlib.Path) -> pathlib.Path:
+        """Returns the directory a calculation with the given index computes in.
 
-        The path is reconstructed the way ``LPGExecutor.__init__`` builds it, from the location of
-        the installed ``pylpg`` package, because the library exposes it nowhere else. That coupling
-        is unpleasant and is the reason the fix is an index scheme rather than a temporary directory:
-        writing into an installed package is the underlying mistake, and the index only rations the
-        damage until ``pylpg`` allows the working directory to be chosen.
+        ``LPGExecutor.__init__`` would put it below the installed ``pylpg`` package; HiSim puts it
+        below *root*, a directory of the cache (:meth:`work_root`), because writing into an installed
+        package is the underlying mistake and a calculation may not do it (``hisim.write_guard``).
 
         Args:
             calculation_index: the index a ``pylpg`` calculation will run under.
-            root: where the calculation directories live (:meth:`work_root`); the installed package,
-                as ``LPGExecutor`` itself would use, when omitted.
+            root: where the calculation directories live (:meth:`work_root`).
 
         Returns:
             pathlib.Path: the absolute path of that calculation's directory.
         """
-        if root is not None:
-            return pathlib.Path(root) / f"C{calculation_index}"
-        pylpg_package_directory = pathlib.Path(lpg_execution.__file__).parent.absolute()
-        return pylpg_package_directory / f"C{calculation_index}"
+        return pathlib.Path(root) / f"C{calculation_index}"
 
     @classmethod
-    def claim(cls, calculation_index: int, root: Optional[pathlib.Path] = None) -> pathlib.Path:
+    def claim(cls, calculation_index: int, root: pathlib.Path) -> pathlib.Path:
         """Reserves the working directory for a calculation, failing if something already holds it.
 
         The check has to happen before ``pylpg`` is invoked, because ``LPGExecutor`` clears whatever
@@ -515,7 +637,7 @@ class PylpgWorkspace:
         return directory
 
     @classmethod
-    def release(cls, calculation_indices: List[int], root: Optional[pathlib.Path] = None) -> None:
+    def release(cls, calculation_indices: List[int], root: pathlib.Path) -> None:
         """Deletes the working directories of the given calculation indices, ignoring what is gone.
 
         Cleanup used to be driven by the result folder the calculation returned, which only exists
@@ -547,10 +669,10 @@ class PylpgWorkspace:
 class LpgBaseIndexPool:
     """A fixed set of local-LPG base indices that parallel workers borrow one at a time.
 
-    Background: pylpg computes each LoadProfileGenerator request inside a directory named
-    ``pylpg/C<index>``. The *base index* is the number a HiSim process derives that name from
-    (see :meth:`PylpgWorkspace.calculation_index`). Two processes with the same base index write
-    into the same directory and corrupt each other's results.
+    Background: each local LoadProfileGenerator request computes inside a directory named
+    ``C<index>`` (below :meth:`PylpgWorkspace.work_root`). The *base index* is the number a HiSim
+    process derives that name from (see :meth:`PylpgWorkspace.calculation_index`). Two processes with
+    the same base index write into the same directory and corrupt each other's results.
 
     A driver that runs N worker threads, each of which starts one HiSim subprocess after
     another, needs one index per worker. Numbering the subprocesses would not work, because

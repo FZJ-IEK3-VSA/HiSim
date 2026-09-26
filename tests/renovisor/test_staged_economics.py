@@ -252,6 +252,23 @@ class TestTheEndToEndDocument:
         amount = awarded["IE_SEAI_HEAT_PUMP_UNIT_HOUSE"]["amount_in_euro"]
         assert amount["best"] == pytest.approx(-6500.0)
 
+    def test_no_row_asks_what_the_house_heats_with(self, document) -> None:
+        """The request states it, so the heat-pump schemes decide on it (renovisorissues #50).
+
+        The mockup's gas boiler is replaced by a heat pump, which is what SEAI's renewable heat
+        bonus pays 4,000 EUR for; before the subsidy context carried the existing heating, the row
+        was undetermined and asked for the boiler's class and carrier.
+        """
+        rows = document["plan"]["subsidies"]
+        asked = {name for row in rows for name in row["open_questions"]}
+        assert not {name for name in asked if name.startswith("building.existing_heating.")}, sorted(asked)
+        awarded = {
+            (row["scheme"], row["measure_id"]): row for row in rows if row["status"] == "awarded"
+        }
+        assert ("IE_SEAI_RENEWABLE_HEAT_BONUS", "heating_system") in awarded, sorted(awarded)
+        amount = awarded[("IE_SEAI_RENEWABLE_HEAT_BONUS", "heating_system")]["amount_in_euro"]
+        assert amount["best"] == pytest.approx(-4000.0)
+
     def test_the_solar_pv_grant_is_the_tiered_formula_on_the_arrays_cost_facts_size(self, runs, document) -> None:
         """hisim-cyc.3 through the production wiring: the grant prices the size the stage extracted.
 

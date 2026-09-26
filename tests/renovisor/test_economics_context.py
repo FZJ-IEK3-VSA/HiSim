@@ -12,19 +12,33 @@ milliseconds, and nothing else.
 """
 
 import copy
+import json
 import os
 from typing import Any, Dict, Optional
 
 import pytest
 
 from hisim.economics.carriers import EnergyCarrier
-from hisim.economics.facts import ExistingAssetRegister
+from hisim.economics.facts import ComponentCostFacts, ExistingAssetRegister
+from hisim.economics.serialization import subsidy_context_from_json, subsidy_context_to_json
+from hisim.economics.timeline import CostCategory
+from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.renovisor.apply import MeasureRegistry, apply
 from hisim.renovisor.constants import AnywayShareByPlacement, Placement
 from hisim.renovisor.contract import ContractFiles
-from hisim.economics.subsidies import ApplicantActor, ApplicantProfile, DwellingType, SubsidyCatalog
+from hisim.economics.subsidies import (
+    ApplicantActor,
+    ApplicantProfile,
+    DwellingType,
+    EligibilityStatus,
+    MeasureForSubsidy,
+    SchemeAssessment,
+    SubsidyCatalog,
+    SubsidyContext,
+    assess_schemes,
+)
 from hisim.renovisor.economics import (
     DeviceAssets,
     DwellingTypes,
@@ -498,6 +512,105 @@ class TestTheSubsidyContext:
         paths = {path: note for path, _value, note in built.approximations}
         assert EconomicContextBuilder.DWELLING_TYPE_PATH in paths
         assert "approximated" in paths[EconomicContextBuilder.DWELLING_TYPE_PATH]
+
+
+#: The starting generators the existing-heating cases run over: what each one is in the register
+#: and in the subsidy context, and whether Ireland's two heat-pump schemes that ask about it pay.
+STARTING_GENERATORS = [
+    (HeatGenerator.CONVENTIONAL_OIL_HEATING, ComponentType.OIL_HEATER, EnergyCarrier.HEATING_OIL, True),
+    (HeatGenerator.CONVENTIONAL_GAS_HEATING, ComponentType.GAS_HEATER, EnergyCarrier.NATURAL_GAS, True),
+    (HeatGenerator.AIR_SOURCE_HEAT_PUMP, ComponentType.HEAT_PUMP, EnergyCarrier.ELECTRICITY, False),
+]
+
+#: Ireland's heat-pump schemes that condition on the heating being replaced (renovisorissues #50).
+EXISTING_HEATING_SCHEMES = ("IE_SEAI_HEAT_PUMP_CENTRAL_HEATING_HOUSE", "IE_SEAI_RENEWABLE_HEAT_BONUS")
+
+
+def _with_generator(generator: HeatGenerator) -> Dict[str, Any]:
+    """The mockup, heated by ``generator`` before its package installs an air-source heat pump."""
+    document = _mockup()
+    document["house"]["heating"]["type_of_system"] = generator.value
+    return document
+
+
+def _heat_pump_assessments(context: SubsidyContext) -> Dict[str, SchemeAssessment]:
+    """Ireland's verdicts on the mockup's heat pump and its low-temperature radiators, by scheme.
+
+    The two measures are the candidates the two schemes of :data:`EXISTING_HEATING_SCHEMES` apply
+    to: the renewable heat bonus to a replacing heat pump, the central-heating grant to the heat
+    distribution system installed beside it. The costs are round numbers, since only the
+    eligibility half of the assessment is under test.
+    """
+    catalog = SubsidyCatalog.load("IE")
+    measures = [
+        (ComponentType.HEAT_PUMP, Units.KILOWATT, "REPLACE"),
+        (ComponentType.HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR, Units.SQUARE_METER, "INSTALL"),
+    ]
+    assessments: Dict[str, SchemeAssessment] = {}
+    for asset_class, size_unit, kind in measures:
+        measure = MeasureForSubsidy(
+            subject=asset_class.value,
+            facts=ComponentCostFacts(asset_class=asset_class, size=10.0, size_unit=size_unit),
+            measure_kind=kind,
+            cost_by_category={CostCategory.INVESTMENT: UncertainValue.exact(10000.0)},
+        )
+        for assessment in assess_schemes(catalog, measure, context, year=2026):
+            assessments[assessment.scheme.id] = assessment
+    return assessments
+
+
+class TestTheExistingHeating:
+    """The generator the package replaces answers the subsidy questions about it (renovisorissues #50).
+
+    The request states what heats the house in ``house.heating.type_of_system``; the register
+    already knew it, and the subsidy context now carries the same entry, so the heat-pump grants
+    that ask what is being replaced no longer come back undetermined.
+    """
+
+    @pytest.mark.parametrize("generator, asset_class, carrier, _pays", STARTING_GENERATORS)
+    def test_the_context_carries_the_original_generator(
+        self, generator: HeatGenerator, asset_class: ComponentType, carrier: EnergyCarrier, _pays: bool
+    ) -> None:
+        """The heating the house has before the package, not the heat pump the package installs."""
+        context = _built(_with_generator(generator)).context
+        existing = context.subsidy_context.building.existing_heating
+
+        assert existing is not None
+        assert existing.asset_class is asset_class
+        assert existing.energy_carrier is carrier
+        assert existing.replaced_by_asset_classes == [ComponentType.HEAT_PUMP]
+
+    def test_it_is_the_registers_own_entry_built_once(self) -> None:
+        """One entry, so one approximation line for its size rather than two that could disagree."""
+        built = _built(_with_generator(HeatGenerator.CONVENTIONAL_OIL_HEATING))
+        existing = built.context.subsidy_context.building.existing_heating
+
+        assert existing is built.context.existing_assets.find(ComponentType.OIL_HEATER)
+        paths = [path for path, _value, _note in built.approximations]
+        assert paths.count(EconomicContextBuilder.GENERATOR_SIZE_PATH) == 1
+
+    def test_it_survives_the_economic_inputs_round_trip(self) -> None:
+        """The staged evaluator reads the context back out of ``economic_inputs.json``."""
+        context = _built(_with_generator(HeatGenerator.CONVENTIONAL_OIL_HEATING)).context.subsidy_context
+
+        reloaded = subsidy_context_from_json(json.loads(json.dumps(subsidy_context_to_json(context))))
+
+        assert reloaded.building.existing_heating is not None
+        assert reloaded.building.existing_heating == context.building.existing_heating
+
+    @pytest.mark.parametrize("generator, _asset_class, _carrier, pays", STARTING_GENERATORS)
+    def test_the_irish_heat_pump_schemes_no_longer_ask_about_it(
+        self, generator: HeatGenerator, _asset_class: ComponentType, _carrier: EnergyCarrier, pays: bool
+    ) -> None:
+        """A fossil boiler makes both schemes eligible, a heat pump rules both out; neither is a question."""
+        context = _built(_with_generator(generator)).context.subsidy_context
+        assessments = _heat_pump_assessments(context)
+
+        expected = EligibilityStatus.ELIGIBLE if pays else EligibilityStatus.INELIGIBLE
+        for scheme_id in EXISTING_HEATING_SCHEMES:
+            assert assessments[scheme_id].status is expected, scheme_id
+        asked = {name for assessment in assessments.values() for name in assessment.missing_fields}
+        assert not {name for name in asked if name.startswith("building.existing_heating.")}
 
 
 class TestTheTechnicalAttributes:

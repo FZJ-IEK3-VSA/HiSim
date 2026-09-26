@@ -606,12 +606,13 @@ class EconomicContextBuilder:
             The :class:`EconomicContextResult`.
         """
         result = EconomicContextResult(context=EconomicContext())
-        register = ExistingAssetRegister(assets=self._register_assets(result))
+        existing_heating = self._generator_asset(result)
+        register = ExistingAssetRegister(assets=self._register_assets(result, existing_heating))
         facts = self._envelope_cost_facts(result)
         living_area = self._living_area(result)
         result.context = EconomicContext(
             existing_assets=register,
-            subsidy_context=self._subsidy_context(result),
+            subsidy_context=self._subsidy_context(result, existing_heating),
             extra_cost_facts=facts,
             technical_attributes_by_subject=self._technical_attributes(facts),
             living_area_in_m2=living_area,
@@ -721,15 +722,23 @@ class EconomicContextBuilder:
 
     # ------------------------------------------------------------------ the register
 
-    def _register_assets(self, result: EconomicContextResult) -> List[ExistingAsset]:
+    def _register_assets(self, result: EconomicContextResult, generator: ExistingAsset) -> List[ExistingAsset]:
         """Everything that was already in the building, with what replaces it.
 
         Three groups in one list, in the order a reader of the register would expect them: the
         heat generator, the devices of :class:`DeviceAssets`, and the five envelope elements. Each
         carries the year it was installed — the request's own when it states one, the building's
         construction year otherwise — and the asset classes of the measures that supersede it.
+
+        Args:
+            result: The result being assembled, for the defaulted and approximated lines.
+            generator: The existing heat generator of :meth:`_generator_asset`, built once by
+                :meth:`build` because the subsidy context carries the same entry.
+
+        Returns:
+            The register's entries.
         """
-        assets = [self._generator_asset(result)]
+        assets = [generator]
         assets.extend(self._device_assets(result))
         assets.extend(self._envelope_assets(result))
         return [asset for asset in assets if asset is not None]
@@ -1103,7 +1112,7 @@ class EconomicContextBuilder:
                 return element
         return EnvelopeAssets.UNIT_REPLACEMENTS.get(subject)
 
-    def _subsidy_context(self, result: EconomicContextResult) -> SubsidyContext:
+    def _subsidy_context(self, result: EconomicContextResult, existing_heating: ExistingAsset) -> SubsidyContext:
         """Who is applying and what the building is, for the eligibility conditions.
 
         The applicant half comes from the request's ``applicant`` block (E-spec §7), which the
@@ -1124,8 +1133,15 @@ class EconomicContextBuilder:
         read. A band that could only be approximated is recorded on ``result.approximations``, so
         the mapping report says so.
 
+        The building's existing heating is the generator the request's *original* house states --
+        the one the package replaces -- and it is the register's own entry, not a second one built
+        from the same table: the heat-pump grants ask what it is and what it burns
+        (``building.existing_heating.asset_class`` and ``.energy_carrier``), and the request has
+        already answered both through ``house.heating.type_of_system`` (renovisorissues #50).
+
         Args:
             result: The result being assembled, for the approximation the band may carry.
+            existing_heating: The existing heat generator of :meth:`_generator_asset`.
 
         Returns:
             The context the eligibility conditions resolve against.
@@ -1151,6 +1167,7 @@ class EconomicContextBuilder:
                 dwelling_type=dwelling_type,
                 heated_floor_area_in_m2=self._floor_area(),
                 residential_floor_area_in_m2=self._floor_area(),
+                existing_heating=existing_heating,
             ),
         )
 

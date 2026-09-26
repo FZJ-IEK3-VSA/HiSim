@@ -8,6 +8,12 @@ the constant ``1``, which meant every local-LPG process in one virtual environme
 same ``pylpg/C1`` directory: two at once corrupted each other's sqlite files, and whichever finished
 first deleted the directory the other was still using.
 
+Since hisim-epc.23 (the write guard, ``hisim.write_guard``) HiSim no longer lets it: the calculation
+directories live below the calculation's cache directory (:meth:`PylpgWorkspace.work_root`) and
+:meth:`PylpgWorkspace.start_executor` builds the executor there, so a calculation writes nothing into
+the installed package. The one write left there is the binaries' installation when they are missing,
+which belongs to setting up the environment rather than to a calculation.
+
 This module owns the index arithmetic and the directory lifecycle instead, so the connector does not
 have to. The default index comes from the process, which removes the shared constant; the directory
 is claimed before it is created and released once the attempt ends, whether it succeeded or not; and
@@ -26,6 +32,7 @@ import os
 import pathlib
 import queue
 import shutil
+import socket
 import sys
 import time
 from typing import ClassVar, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
@@ -119,8 +126,6 @@ class PylpgWorkspace:
             return
         executor.calculation_src_directory = pathlib.Path(executor.calculation_directory)
 
-    BINARY_INSTALL_LOCK_NAME: ClassVar[str] = ".hisim-lpg-install.lock"
-
     @classmethod
     @contextlib.contextmanager
     def exclusive_generator_access(cls) -> Iterator[None]:
@@ -145,8 +150,8 @@ class PylpgWorkspace:
         repeatedly at all, which is the real answer.
 
 
-        The lock file sits in the pylpg package directory, beside the installation it guards, so
-        every process in one virtual environment contends for the same one. On a platform without
+        The lock is held on the pylpg package directory, the installation it guards, so every
+        process in one virtual environment contends for the same one. On a platform without
         ``fcntl`` the lock is skipped rather than emulated: the race needs concurrent processes in
         one environment, which is what CI and the parallel regenerator do on Linux.
 
@@ -161,12 +166,18 @@ class PylpgWorkspace:
         except ImportError:
             yield
             return
-        with open(package_directory / cls.BINARY_INSTALL_LOCK_NAME, "w", encoding="utf-8") as lock_file:
-            fcntl.flock(lock_file, fcntl.LOCK_EX)
+        # The lock is taken on the package directory itself, opened read-only: a lock file would
+        # have to be created in the installed package, which a calculation must not write to
+        # (hisim.write_guard). flock works on a directory descriptor as on any other.
+        descriptor = os.open(package_directory, os.O_RDONLY)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
             try:
                 yield
             finally:
-                fcntl.flock(lock_file, fcntl.LOCK_UN)
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(descriptor)
 
     @classmethod
     def binary_path(cls) -> pathlib.Path:
@@ -399,8 +410,58 @@ class PylpgWorkspace:
             )
         return base_index * cls.HOUSEHOLDS_PER_BASE_INDEX + household_ordinal
 
+    #: The subdirectory of a cache directory the local calculations compute in.
+    WORK_DIRECTORY_NAME: ClassVar[str] = "pylpg_work"
+
+    @classmethod
+    def work_root(cls, cache_directory: str) -> pathlib.Path:
+        """Returns the directory this machine's local calculations compute in, below a cache directory.
+
+        A calculation must not write into the installed ``pylpg`` package (``hisim.write_guard``), and
+        the connector builds its profile while the setup is still constructing components, before the
+        run's result directory exists; the cache directory is the one writable location a
+        calculation has at that point. The host name keeps two containers that share one cache volume
+        apart, because their process ids -- and with them the calculation indices -- can coincide. The
+        calculation's own ``C<index>`` directory is deleted by :meth:`release` when it ends.
+
+        Args:
+            cache_directory: The calculation's cache write directory.
+
+        Returns:
+            pathlib.Path: ``<cache_directory>/pylpg_work/<host name>``.
+        """
+        return pathlib.Path(cache_directory) / cls.WORK_DIRECTORY_NAME / socket.gethostname()
+
+    @classmethod
+    def start_executor(cls, calculation_index: int, root: pathlib.Path) -> "lpg_execution.LPGExecutor":
+        """Builds a pylpg executor that computes in ``root/C<index>`` instead of inside the package.
+
+        ``LPGExecutor.__init__`` hard-codes its calculation directory below the installed package and
+        copies the toolchain there. This does what that constructor does -- minus the binary
+        installation, which :meth:`install_binaries_if_missing` has done under the lock -- with the
+        calculation directory below *root*, and then points the executor at its own copy of the
+        binary (:meth:`run_the_copy_not_the_original`).
+
+        Args:
+            calculation_index: The claimed index.
+            root: Where the calculation directories live, from :meth:`work_root`.
+
+        Returns:
+            The executor, its toolchain copied into its calculation directory.
+        """
+        executor = lpg_execution.LPGExecutor.__new__(lpg_execution.LPGExecutor)
+        executor.working_directory = pathlib.Path(lpg_execution.__file__).parent.absolute()
+        source = cls.binary_path()
+        executor.calculation_src_directory = source.parent
+        executor.simengine_src_filename = source.name
+        executor.calculation_directory = cls.working_directory(calculation_index, root)
+        executor.calculation_directory.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(executor.calculation_src_directory, executor.calculation_directory)
+        cls.run_the_copy_not_the_original(executor)
+        return executor
+
     @staticmethod
-    def working_directory(calculation_index: int) -> pathlib.Path:
+    def working_directory(calculation_index: int, root: Optional[pathlib.Path] = None) -> pathlib.Path:
         """Returns the directory ``pylpg`` will compute in for the given calculation index.
 
         The path is reconstructed the way ``LPGExecutor.__init__`` builds it, from the location of
@@ -411,15 +472,19 @@ class PylpgWorkspace:
 
         Args:
             calculation_index: the index a ``pylpg`` calculation will run under.
+            root: where the calculation directories live (:meth:`work_root`); the installed package,
+                as ``LPGExecutor`` itself would use, when omitted.
 
         Returns:
             pathlib.Path: the absolute path of that calculation's directory.
         """
+        if root is not None:
+            return pathlib.Path(root) / f"C{calculation_index}"
         pylpg_package_directory = pathlib.Path(lpg_execution.__file__).parent.absolute()
         return pylpg_package_directory / f"C{calculation_index}"
 
     @classmethod
-    def claim(cls, calculation_index: int) -> pathlib.Path:
+    def claim(cls, calculation_index: int, root: Optional[pathlib.Path] = None) -> pathlib.Path:
         """Reserves the working directory for a calculation, failing if something already holds it.
 
         The check has to happen before ``pylpg`` is invoked, because ``LPGExecutor`` clears whatever
@@ -430,6 +495,7 @@ class PylpgWorkspace:
 
         Args:
             calculation_index: the index the calculation will run under.
+            root: where the calculation directories live; see :meth:`working_directory`.
 
         Returns:
             pathlib.Path: the claimed directory, which does not exist yet and which ``pylpg`` will
@@ -438,7 +504,7 @@ class PylpgWorkspace:
         Raises:
             PylpgWorkingDirectoryInUseError: if the directory is already on disk.
         """
-        directory = cls.working_directory(calculation_index)
+        directory = cls.working_directory(calculation_index, root)
         if directory.exists():
             raise PylpgWorkingDirectoryInUseError(
                 f"The local LPG working directory for calculation index {calculation_index} already "
@@ -449,7 +515,7 @@ class PylpgWorkspace:
         return directory
 
     @classmethod
-    def release(cls, calculation_indices: List[int]) -> None:
+    def release(cls, calculation_indices: List[int], root: Optional[pathlib.Path] = None) -> None:
         """Deletes the working directories of the given calculation indices, ignoring what is gone.
 
         Cleanup used to be driven by the result folder the calculation returned, which only exists
@@ -466,9 +532,10 @@ class PylpgWorkspace:
         Args:
             calculation_indices: the indices this run claimed; ones whose directory is already gone
                 are skipped silently.
+            root: where the calculation directories live; see :meth:`working_directory`.
         """
         for calculation_index in calculation_indices:
-            directory = cls.working_directory(calculation_index)
+            directory = cls.working_directory(calculation_index, root)
             try:
                 if directory.exists():
                     shutil.rmtree(directory)

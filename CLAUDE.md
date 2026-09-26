@@ -113,6 +113,19 @@ Each `.py` file contains a `setup_function(sim, sim_params)` that instantiates c
 ### Post-processing (`hisim/postprocessing/`)
 `PostProcessor` is invoked after simulation. Behavior is controlled by `PostProcessingOptions` flags set on `SimulationParameters`. Key options: `COMPUTE_KPIS`, `PLOT_LINE`, `EXPORT_TO_CSV`, `GENERATE_PDF_REPORT`, `MAKE_RESULT_JSON_FOR_WEBTOOL`. KPI computation lives in `postprocessing/kpi_computation/`. Results land in a `results/` subdirectory next to the scenario file.
 
+### Where a run may write (`hisim/write_guard.py`, `hisim/calculation_scope.py`)
+Every calculation -- `hisim_main` (both modes), `run_energy_system`, the RenoVisor run, the economics
+CLI -- runs inside `CalculationScope.open`: a fresh result directory from `ResultPathProviderSingleton`
+(reset at the end of every calculation; flat/deep directories are created exclusively, so two runs in
+the same second get two), and a `sys.addaudithook` write guard that fails the run on any write outside
+that result directory and the cache directories (`SimulationParameters.cache_locations()`,
+`HISIM_CACHE_DIR`). The result directory holds nothing a later run needs and may be deleted whole.
+Never write to the repository, `hisim/inputs`, the CWD, `~` or `/tmp` from run code; route caches
+through `hisim.caching`. `HISIM_WRITE_GUARD=collect` lists all stray writes at the end instead of
+raising at the first. The static half: `semgrep --config .semgrep/ --error hisim/` (CI job `semgrep`
+in `quality.yml`) flags direct file writes outside the sanctioned writer modules listed in
+`.semgrep/file_writes.yml`.
+
 ### loadtypes.py
 Central registry of enums: `LoadTypes`, `Units`, `ComponentType`, `InandOutputType`, `Locations`, `BuildingCodes`, etc. All component I/O declarations reference these enums — never use raw strings for load types or units.
 

@@ -98,6 +98,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 
+from hisim.calculation_scope import CalculationScope
 from hisim.economics.calculators.energy import StatedPriceError
 from hisim.economics.database import CostDatabase, CostDataError
 from hisim.economics.evaluator import (
@@ -1374,6 +1375,21 @@ def _cmd_validate(_args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+def _output_directory(args: argparse.Namespace) -> Optional[str]:
+    """Return the directory a subcommand writes into, or ``None`` when it writes nowhere.
+
+    ``staged`` writes its document and, on a refusal, ``problems.json`` beside ``--out``; the three
+    commands that take a result directory write into it. A result directory that does not exist is
+    not created here: the command reports it as the bad invocation it is.
+    """
+    if args.command == "staged":
+        return os.path.dirname(os.path.abspath(str(args.out)))
+    results_dir = getattr(args, "results_dir", None)
+    if results_dir and os.path.isdir(results_dir):
+        return str(results_dir)
+    return None
+
+
 def main(argv=None) -> int:
     """Entry point.
 
@@ -1472,7 +1488,11 @@ def main(argv=None) -> int:
 
     args = parser.parse_args(argv)
     try:
-        return int(args.func(args))
+        # One calculation, as a simulation run is one (hisim.calculation_scope): whatever the
+        # command writes has to land in the directory it was pointed at -- the result directory it
+        # re-prices, or the directory of the staged plan's --out -- or in the cache directories.
+        with CalculationScope.open(label=f"hisim.economics {args.command}", run_directory=_output_directory(args)):
+            return int(args.func(args))
     except UnresolvableSubjectsError as err:
         # D7 (cost-spec-v2 §8): evaluate/explain/report all refuse to produce partial cost
         # results; the same message the bridge logs goes to stderr with a non-zero exit code.

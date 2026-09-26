@@ -112,7 +112,8 @@ def test_claiming_an_occupied_directory_fails_and_names_the_index(monkeypatch: p
     """
     occupied_index = PylpgWorkspace.calculation_index(555, 0)
 
-    def working_directory_in_tmp(calculation_index: int) -> pathlib.Path:
+    def working_directory_in_tmp(calculation_index: int, root: Any = None) -> pathlib.Path:
+        del root
         return pathlib.Path(tmp_path) / f"C{calculation_index}"
 
     monkeypatch.setattr(PylpgWorkspace, "working_directory", staticmethod(working_directory_in_tmp))
@@ -137,7 +138,8 @@ def test_release_removes_the_directories_a_run_claimed(monkeypatch: pytest.Monke
     runs in a ``finally`` where an exception would mask the real failure.
     """
 
-    def working_directory_in_tmp(calculation_index: int) -> pathlib.Path:
+    def working_directory_in_tmp(calculation_index: int, root: Any = None) -> pathlib.Path:
+        del root
         return pathlib.Path(tmp_path) / f"C{calculation_index}"
 
     monkeypatch.setattr(PylpgWorkspace, "working_directory", staticmethod(working_directory_in_tmp))

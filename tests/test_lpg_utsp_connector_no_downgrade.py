@@ -83,7 +83,9 @@ def test_local_lpg_failure_propagates_instead_of_swapping_the_household(
     def raise_instead_of_executing(*_args: Any, **_kwargs: Any) -> Any:
         raise UnreachableProfileSourceError("pylpg is not available in this test")
 
-    monkeypatch.setattr(lpg_connector.lpg_execution, "LPGExecutor", raise_instead_of_executing)
+    # The connector builds its executor through the workspace, which computes below the cache
+    # directory instead of inside the installed package (hisim-epc.23); that is the seam to break.
+    monkeypatch.setattr(PylpgWorkspace, "start_executor", classmethod(raise_instead_of_executing))
     monkeypatch.setattr(PylpgWorkspace, "install_binaries_if_missing", classmethod(lambda cls: None))
     config = build_connector_config(lpg_connector.LpgDataAcquisitionMode.USE_LOCAL_LPG, str(tmp_path))
     simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)

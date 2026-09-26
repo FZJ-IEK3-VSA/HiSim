@@ -136,7 +136,10 @@ a reader can feed a document's assumptions back in unchanged. Every key is optio
 document is `plan_start_year + year`, and `null` when the plan states none — never the weather
 year, which the document publishes as `weather_year` (`simulation_year` up to schema version 4;
 renovisorissues #57). With neither the stages nor the file stating a `price_basis_year`, a stated
-`plan_start_year` is the price basis year. `escalation.energy` names a
+`plan_start_year` is the price basis year. The plan's year 0 is `plan_start_year`, else the price
+basis year: every asset the house already has is aged at it (its replacements, the book value a
+measure writes off), and a subject a stage buys counts as installed in year 0 + the stage's
+`from_year`, which is its published `installation_year` (hisim-dutz, hisim-nl6j). `escalation.energy` names a
 per-carrier rate (`ELECTRICITY_FEED_IN` is refused: its remuneration is fixed for 20 years and
 then follows `escalation.feed_in`). `energy_prices` states what the household pays in year 1
 (renovisorissues #52), per carrier —

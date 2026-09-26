@@ -577,17 +577,25 @@ class EconomicEvaluator:
         cost_database: CostDatabase,
         parameters: EconomicParameters,
         subsidy_catalog: Optional[SubsidyCatalog] = None,
+        plan_year_zero: Optional[int] = None,
     ) -> None:
         """The catalog is optional: without one no subsidy is booked (the §10.1 flat shim is retired).
 
-        All three arguments are held as given and never modified, so an evaluator is a cheap,
+        All arguments are held as given and never modified, so an evaluator is a cheap,
         reusable handle over one dataset and one parameter set. `scenarios.evaluate_cube` relies
         on that and constructs a fresh evaluator per scenario cell, over the overlaid copy of the
         database that the scenario asked for (§4.6).
+
+        `plan_year_zero` is the calendar year of year 0 of the timeline, the year every kept or
+        replaced register asset is aged at (`ageing_reference_year`). Only the staged evaluator
+        states it: a plan's year 0 is its `plan_start_year`, else its price basis year
+        (hisim-dutz, hisim-nl6j). `None`, every other path, ages at the price basis year exactly
+        as before.
         """
         self.database = cost_database
         self.parameters = parameters
         self.subsidy_catalog = subsidy_catalog
+        self.plan_year_zero = plan_year_zero
 
     # ------------------------------------------------------------------ rate resolution
 
@@ -620,6 +628,16 @@ class EconomicEvaluator:
         a single evaluation can never mix price levels.
         """
         return effective_price_basis_year(self.parameters, self.database, inputs.simulation_year)
+
+    def ageing_reference_year(self, inputs: EvaluationInputs) -> int:
+        """The calendar year of year 0, at which every register asset's age is measured.
+
+        `plan_year_zero` when the evaluator was given one (a staged plan), else the price basis
+        year. Prices are always read at the price basis year; only ages move with this year.
+        """
+        if self.plan_year_zero is not None:
+            return self.plan_year_zero
+        return self.price_basis_year(inputs)
 
     def effective_parameters(self, inputs: EvaluationInputs) -> EconomicParameters:
         """The parameters as actually used, with the resolved price basis year filled in.
@@ -806,6 +824,7 @@ class EconomicEvaluator:
         """
         params = self.parameters
         price_basis_year = self.price_basis_year(inputs)
+        ageing_reference_year = self.ageing_reference_year(inputs)
         horizon = params.observation_period_in_years
         timeline = CashFlowTimeline()
         co2_result = LifecycleCo2Result(operational_co2_by_year_in_kg=[0.0] * (horizon + 1))
@@ -839,6 +858,7 @@ class EconomicEvaluator:
                 database=self.database,
                 parameters=params,
                 price_basis_year=price_basis_year,
+                ageing_reference_year=ageing_reference_year,
             )
             gross = costing.gross_investment
             subject = costing.subject
@@ -886,6 +906,7 @@ class EconomicEvaluator:
                     parameters=params,
                     price_basis_year=price_basis_year,
                     ledger=ledger,
+                    ageing_reference_year=ageing_reference_year,
                 )
                 sunk_cost = sunk_cost + replaced_outcome.sunk_cost
                 if replaced_outcome.credit_entry is not None:

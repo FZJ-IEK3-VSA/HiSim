@@ -198,6 +198,50 @@ class TestThePlanStartYear:
         assert document["parameters"]["weather_year"] == SimulationSetup.YEAR
         assert all(row["calendar_year"] is None for row in document["plan"]["annual"])
 
+    def test_the_cylinder_is_due_in_its_calendar_year(self, dated_document) -> None:
+        """Start year = basis year: the cylinder (2008, 20 years) is due in year 2, dated 2028.
+
+        hisim-nl6j's "done when": installation_year + service_life_years - (year-0 calendar year)
+        is the published replacement year, and that year's calendar_year is 2008 + 20.
+        """
+        assert dated_document["parameters"]["plan_start_year"] == dated_document["parameters"]["price_basis_year"]
+        for variant in ("reference", "plan"):
+            row = {row["subject"]: row for row in dated_document[variant]["by_subject"]}["DHWStorage"]
+            due = row["replacement_years"][0]
+            assert due == row["installation_year"] + row["service_life_years"] - self.START == 2, variant
+            calendar = dated_document[variant]["annual"][due]["calendar_year"]
+            assert calendar == row["installation_year"] + row["service_life_years"] == 2028, variant
+
+    def test_a_later_start_ages_the_house_at_the_start_year(self, runs, document) -> None:
+        """Start year = basis + 3: kept equipment falls due 3 plan years earlier, in the same calendar year.
+
+        Plan year 0 is the start year (hisim-nl6j), while prices stay at the basis year 2026. The
+        meters (mid-life 2018, 16 years, due 2034) move from year 8 to year 5, and 2029 + 5 = 2034.
+        The cylinder (2008 + 20 = 2028) would fall 2 - 3 = -1: it is overdue at year 0 and the
+        engine replaces an overdue kept asset in year 1 (``max(1, ...)``), dated 2030.
+        """
+        directory, baseline, package = runs
+        basis = document["parameters"]["price_basis_year"]
+        start = basis + 3
+        path = directory / "economics_later.json"
+        path.write_text(json.dumps({**STAGED_PARAMETERS, "plan_start_year": start}), encoding="utf-8")
+        later = _price(
+            [f"{baseline}:0:baseline", f"{package}:0:package"], path, directory / "later" / StagedDocument.FILE_NAME
+        )
+        assert later["parameters"]["price_basis_year"] == basis
+        for variant in ("reference", "plan"):
+            before = {row["subject"]: row for row in document[variant]["by_subject"]}
+            after = {row["subject"]: row for row in later[variant]["by_subject"]}
+            meter = after["ElectricityMeter"]
+            assert meter["replacement_years"][0] == before["ElectricityMeter"]["replacement_years"][0] - 3, variant
+            due = meter["replacement_years"][0]
+            assert later[variant]["annual"][due]["calendar_year"] == meter["installation_year"] + round(
+                meter["service_life_years"]
+            ), variant
+            assert after["DHWStorage"]["replacement_years"][0] == 1, variant
+        package_heat_pump = {row["subject"]: row for row in later["plan"]["by_subject"]}["MoreAdvancedHeatPumpHPLib"]
+        assert package_heat_pump["installation_year"] == start
+
     def test_it_dates_the_money_and_does_not_change_it(self, dated_document, document) -> None:
         """The stages state their price basis year, so the start year cannot re-base them."""
         assert dated_document["parameters"]["price_basis_year"] == document["parameters"]["price_basis_year"]
@@ -562,10 +606,16 @@ class TestTheEquipmentTheHouseAlreadyHas:
         assert row["installation_year"] == basis - round(row["service_life_years"] / 2)
 
     def test_what_the_package_buys_is_installed_in_its_stages_year(self, document) -> None:
-        """The heat pump is bought by the package stage, which starts in the simulation year."""
+        """The heat pump is bought by the package stage, which starts in the plan's year 0.
+
+        The block states no ``plan_start_year``, so year 0 is the price basis year (hisim-dutz):
+        2026 + from_year 0. Until then it was the weather year, 2019, seven years before the year
+        the engine ages everything else at.
+        """
         rows = {row["subject"]: row for row in document["plan"]["by_subject"]}
         heat_pump = rows["MoreAdvancedHeatPumpHPLib"]
-        assert heat_pump["installation_year"] == document["parameters"]["weather_year"]
+        assert document["parameters"]["weather_year"] != document["parameters"]["price_basis_year"]
+        assert heat_pump["installation_year"] == document["parameters"]["price_basis_year"]
         assert heat_pump["installation_year_origin"] == "stage"
         assert heat_pump["service_life_origin"] == "cost_database"
 

@@ -150,7 +150,9 @@ rather than state an assumption, `weather_year`, `subsidy_catalog` and `origins`
 the block states none: the document never dates a plan from its weather. `weather_year` is the year
 of the weather the stages were simulated with (`simulation_year` up to schema version 4; the
 rename is why the document is version 5, renovisorissues #57). A block that states no
-`price_basis_year` over stages that state none either is priced at `plan_start_year`.
+`price_basis_year` over stages that state none either is priced at `plan_start_year`. The plan's year 0
+is `plan_start_year`, else the price basis year: the house's own equipment is aged at it, and what a
+stage buys counts as installed in year 0 + the stage's `from_year`.
 
 `energy_prices` states what the household pays in year 1, per carrier (`ELECTRICITY`,
 `NATURAL_GAS`, `HEATING_OIL`, `PELLETS`, `WOOD_CHIPS`, `DISTRICT_HEATING`, `HYDROGEN`, `DIESEL`, and

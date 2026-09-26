@@ -750,7 +750,9 @@ class StagedDocument:
         ``service_life_origin`` where it came from (:class:`~hisim.economics.staged.LifeOrigin`);
         ``installation_year`` is the calendar year it counts as installed in -- a kept asset's
         register year, from which its replacements are scheduled, or the start of the stage that
-        bought it -- and ``installation_year_origin`` where that came from
+        bought it, plan year 0 + its ``from_year`` (plan year 0 is ``plan_start_year``, else the
+        price basis year: :meth:`~hisim.economics.staged.StagedEvaluator.plan_year_zero`) -- and
+        ``installation_year_origin`` where that came from
         (:class:`~hisim.economics.facts.InstallationYearOrigin`). All four are ``null`` on a
         carrier row and on a measure-only row, which have no lifetime (renovisorissues #58).
         ``note`` says why a row has no price or costs nothing, and is ``null`` otherwise.

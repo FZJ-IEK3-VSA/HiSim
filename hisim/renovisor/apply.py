@@ -183,6 +183,44 @@ class MeasureLine:
         return row
 
 
+class SelectsNothing:
+    """The sentences of the values that agree with what every twin simulates, and select nothing.
+
+    ``used`` means the translator wrote or selected something from a value. Some values name
+    exactly what every twin already simulates -- the generator making the hot water, the collector
+    feeding only the hot-water storage -- while every other value of the same leaf is on the list
+    and runs the same twin. Such a value changes nothing, so it is ``approximated`` with a sentence
+    saying what HiSim simulates whatever the request states (hisim-7hq9, hisim-l56w). The house
+    paths and the measure options carry the same sentence, which is why it lives here; none of
+    them says "modelled as", because the run simulates what was asked and is no substitution.
+    """
+
+    #: ``hot_water.supply`` / ``hot_water_system.supply`` = ``together_with_heating_system``.
+    HOT_WATER_TOGETHER: ClassVar[str] = (
+        "every twin makes the hot water on the generator that heats the rooms, which is what this "
+        "value states; the value selects nothing"
+    )
+
+    #: ``separate_heat_pump`` on a heat-pump house: a stand-in, so it does say "modelled as".
+    HOT_WATER_SEPARATE_HEAT_PUMP: ClassVar[str] = (
+        "modelled as the space-heating heat pump making the hot water too; HiSim has no separate "
+        "domestic-hot-water heat pump"
+    )
+
+    #: ``solar_thermal_system.supplies`` = ``dhw_only``, on the house and on the measure.
+    SOLAR_THERMAL_DHW_ONLY: ClassVar[str] = (
+        "every solar-thermal twin feeds the collector into the hot-water storage only, which is "
+        "what this value states; the value selects nothing"
+    )
+
+    @classmethod
+    def hot_water_supply(cls, supply: Any) -> str:
+        """Return the sentence of one hot-water supply the list does not carry."""
+        if supply == "separate_heat_pump":
+            return cls.HOT_WATER_SEPARATE_HEAT_PUMP
+        return cls.HOT_WATER_TOGETHER
+
+
 class Effects:
     """The closed set of things a measure may do to a house, and the log of what it did.
 
@@ -705,7 +743,9 @@ class MeasureRegistry:
         """Change how domestic hot water is made."""
         supply = context.option("supply")
         context.effects.set("hot_water.supply", supply)
-        context.record("supply", ReportStatus.USED)
+        # Every twin makes the hot water on its generator, so no value selects anything; the two
+        # the translator has no component for are narrowed to the list's entries afterwards.
+        context.record("supply", ReportStatus.APPROXIMATED, SelectsNothing.hot_water_supply(supply))
         context.target("the generator's with_domestic_hot_water_preparation")
 
     @classmethod
@@ -852,7 +892,8 @@ class MeasureRegistry:
         block: Dict[str, Any] = dict(existing) if isinstance(existing, Mapping) else {}
         block["supplies"] = context.option("supplies")
         context.effects.replace_block(HousePaths.SOLAR_THERMAL, block)
-        context.record("supplies", ReportStatus.USED)
+        # dhw_only is what every solar-thermal twin wires; dhw_and_space_heating is on the list.
+        context.record("supplies", ReportStatus.APPROXIMATED, SelectsNothing.SOLAR_THERMAL_DHW_ONLY)
         context.target("groups.solar_thermal.enabled")
 
     @classmethod

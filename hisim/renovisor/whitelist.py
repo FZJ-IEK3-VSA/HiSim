@@ -20,6 +20,11 @@ Where two entries match one item, the more specific wins: an exact path beats a 
 path beats a shorter one, and among equals the one with more conditions wins. That is what lets
 the two ``house.hot_water.supply`` entries divide the three supply values between them without
 either of them having to know about the other.
+
+Every entry also says what becomes of it, with exactly one of two keys (hisim-bc02): ``tracked``
+names the bead -- or the beads -- whose work would let the entry be deleted, and ``deliberate``
+gives the reason HiSim is not meant to act on the item at all. The loader refuses an entry with
+neither or with both, so an omission can no longer be written down without an owner or a reason.
 """
 
 import re
@@ -190,7 +195,8 @@ class WhitelistEntry:
         note: The sentence the mapping report and the capability document carry, verbatim.
         excepted: The values that *are* implemented and therefore do not match this entry.
         when: The condition on the renovated house, or ``None``.
-        tracked: The issue that would let the entry be deleted, or ``None``.
+        tracked: The beads whose work would let the entry be deleted; empty when it is deliberate.
+        deliberate: Why HiSim is not meant to act on the item, or ``None`` when it is tracked.
     """
 
     kind: ItemKind
@@ -198,7 +204,8 @@ class WhitelistEntry:
     note: str
     excepted: Tuple[str, ...] = ()
     when: Optional[Condition] = None
-    tracked: Optional[str] = None
+    tracked: Tuple[str, ...] = ()
+    deliberate: Optional[str] = None
 
     def key(self) -> str:
         """Return the identity of this entry, which a test uses to say which probe hit it."""
@@ -244,6 +251,9 @@ class Whitelist:
     #: The list itself, beside this module.
     PATH: ClassVar[Path] = Path(__file__).resolve().parent / "not_implemented_yet.yaml"
 
+    #: What a ``tracked`` value must look like: a bead id of this repository, e.g. ``hisim-4g9.6``.
+    BEAD_ID: ClassVar["re.Pattern[str]"] = re.compile(r"^hisim-[0-9a-z]+(\.[0-9]+)*$")
+
     def __init__(self, entries: Sequence[WhitelistEntry]) -> None:
         """Store the entries in file order and start an empty record of which ones were used."""
         self._entries = tuple(entries)
@@ -261,7 +271,8 @@ class Whitelist:
 
         Raises:
             TranslatorError: When an entry is neither a ``path`` nor a ``measure`` entry, has no
-                ``note``, or carries a ``when`` the condition grammar cannot read.
+                ``note``, carries a ``when`` the condition grammar cannot read, or carries neither
+                or both of ``tracked`` and ``deliberate`` (or a ``tracked`` that is no bead id).
         """
         with (path or cls.PATH).open(encoding="utf-8") as handle:
             raw = yaml.safe_load(handle) or []
@@ -288,15 +299,55 @@ class Whitelist:
                 f"not_implemented_yet.yaml entry {index} ({item}) carries no note",
                 "the note is the sentence users read; an entry without one cannot be published",
             )
-        tracked = row.get("tracked")
+        tracked, deliberate = cls._fate(row, index, item)
         return WhitelistEntry(
             kind=kind,
             item=item,
             note=str(note),
             excepted=tuple(str(value) for value in (row.get("except") or ())),
             when=Condition.parse(str(row["when"])) if row.get("when") else None,
-            tracked=None if tracked is None else str(tracked),
+            tracked=tracked,
+            deliberate=deliberate,
         )
+
+    @classmethod
+    def _fate(cls, row: Mapping[str, Any], index: int, item: str) -> Tuple[Tuple[str, ...], Optional[str]]:
+        """Return an entry's beads and its reason, refusing an entry with neither or with both.
+
+        Args:
+            row: The entry as the file spells it.
+            index: Its position, for the message.
+            item: Its path or measure item, for the message.
+
+        Returns:
+            ``(tracked, deliberate)``: the bead ids (one or a list in the file) and ``None``, or
+            ``()`` and the reason.
+
+        Raises:
+            TranslatorError: When the entry carries neither key or both, or a ``tracked`` value
+                that is not a bead id.
+        """
+        raw_tracked = row.get("tracked")
+        raw_deliberate = row.get("deliberate")
+        if bool(raw_tracked) == bool(raw_deliberate):
+            raise TranslatorError(
+                f"not_implemented_yet.yaml entry {index} ({item}) must carry exactly one of "
+                "'tracked' and 'deliberate'",
+                "'tracked' names the bead that would let the entry be deleted; 'deliberate' says "
+                "why HiSim is not meant to act on the item (hisim-bc02)",
+            )
+        if raw_deliberate:
+            return (), str(raw_deliberate)
+        values = raw_tracked if isinstance(raw_tracked, list) else [raw_tracked]
+        tracked = tuple(str(value) for value in values)
+        wrong = [value for value in tracked if not cls.BEAD_ID.match(value)]
+        if wrong:
+            raise TranslatorError(
+                f"not_implemented_yet.yaml entry {index} ({item}) tracks something that is not a "
+                f"bead id: {', '.join(wrong)}",
+                "a document that motivated the entry belongs in a comment; 'tracked' names beads",
+            )
+        return tracked, None
 
     def entries(self) -> Tuple[WhitelistEntry, ...]:
         """Return every entry, in file order."""

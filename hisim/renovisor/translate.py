@@ -42,7 +42,7 @@ from hisim.energy_system.model import (
     VariantOption,
 )
 from hisim.renovisor import TRANSLATOR_VERSION
-from hisim.renovisor.apply import AppliedPackage, HousePaths, apply
+from hisim.renovisor.apply import AppliedPackage, HousePaths, SelectsNothing, apply
 from hisim.renovisor.economics import EconomicContextBuilder, RealizedTwin
 from hisim.renovisor.constants import (
     BatteryLaw,
@@ -1749,13 +1749,12 @@ def _efficiency(state: _TranslationState, generator: HeatGenerator, heating: Any
 def _hot_water(state: _TranslationState) -> None:
     """Write the hot-water storage, and report how the water is made.
 
-    Every twin already prepares domestic hot water on its own generator, so
-    ``together_with_heating_system`` -- and ``separate_heat_pump`` on a heat-pump house, which
-    is the same machine -- is ``used`` without anything being written. The other combinations
-    have no component and are on the list.
+    Every twin prepares domestic hot water on its own generator whatever the request says, so no
+    supply selects anything: ``together_with_heating_system`` is what the twin simulates and
+    ``separate_heat_pump`` on a heat-pump house is modelled as that same machine, both
+    ``approximated`` (hisim-7hq9). The other combinations have no component and are on the list.
     """
     hot_water = state.house.hot_water
-    generator = state.house.heating.type_of_system
     component = BaseFiles.generator_component(state.base_file_name)
     if hot_water is None or hot_water.supply is None:
         state.report.defaulted(
@@ -1774,15 +1773,11 @@ def _hot_water(state: _TranslationState) -> None:
             "house.hot_water.supply", entry.note, value=hot_water.supply.value
         )
     else:
-        state.report.used(
+        state.report.approximated(
             "house.hot_water.supply",
-            Targets.describe(component, Targets.DOMESTIC_HOT_WATER),
+            SelectsNothing.hot_water_supply(hot_water.supply.value),
+            target=Targets.describe(component, Targets.DOMESTIC_HOT_WATER),
             value=hot_water.supply.value,
-            note=(
-                "the twin's generator already prepares the domestic hot water"
-                if generator not in BaseFiles.HEAT_PUMPS
-                else "the heat pump prepares the domestic hot water itself"
-            ),
         )
     _hot_water_storage(state, hot_water)
 
@@ -1819,55 +1814,62 @@ def _hot_water_storage(state: _TranslationState, hot_water: Any) -> None:
         )
 
 
+class FixedInTheBuilding:
+    """The comfort values that agree with what the ``Building`` simulates, and select nothing.
+
+    The ``Building`` reads its air-change rate from the TABULA row and holds one constant set
+    point, whatever the request says about ventilation, airtightness or control. The one value of
+    each leaf that the list does not carry describes exactly that, and writes nothing, so it is
+    ``approximated`` with the sentence below rather than ``used`` (hisim-7hq9); the other values
+    are on the list. As in :class:`hisim.renovisor.apply.SelectsNothing`, no sentence says
+    "modelled as": the run simulates what was asked.
+    """
+
+    #: path -> (the target the line names, the sentence it carries).
+    LINES: ClassVar[Dict[str, Tuple[str, str]]] = {
+        "house.ventilation.type_of_system": (
+            "Building (the TABULA row's air-change rate)",
+            "the Building takes its air-change rate from the TABULA row whatever the ventilation; "
+            "natural ventilation is what that rate describes, and the value selects nothing",
+        ),
+        "house.ventilation.air_tightness": (
+            "Building (the TABULA row's air-change rate)",
+            "the Building takes its air-change rate from the TABULA row whatever the airtightness; "
+            "the as-built envelope is what that rate describes, and the value selects nothing",
+        ),
+        "house.temperature_control.type_of_system": (
+            "Building (the constant set point)",
+            "the Building holds one constant set point whatever the control; a plain thermostat "
+            "is what that describes, and the value selects nothing",
+        ),
+    }
+
+
 def _comfort(state: _TranslationState) -> None:
     """Report ventilation, the heating control, air conditioning and the appliances.
 
     None of the four reaches a twin in the MVP. Ventilation and airtightness have no ``Building``
     parameter at all; the night-setback and air-conditioner groups the frontend side's spec
     wanted are base-file work that starts after the MVP runs (decision D-D). The values that
-    *are* implemented -- natural ventilation, the as-built envelope, traditional thermostats --
-    are ``used``, because they describe exactly what the twin already simulates.
+    describe what the twin simulates anyway -- natural ventilation, the as-built envelope,
+    traditional thermostats -- are ``approximated`` (:class:`FixedInTheBuilding`); the rest are
+    on the list.
     """
-    if state.present("house.ventilation.type_of_system"):
-        value = state.house.ventilation_type.value if state.house.ventilation_type else None
-        entry = state.whitelist.match(Unmapped("house.ventilation.type_of_system", value), state.raw)
-        if entry is None:
-            state.report.used(
-                "house.ventilation.type_of_system",
-                "Building (the TABULA row's air-change rate)",
-                value=value,
-                note="natural ventilation is what the archetype's air-change rate already describes",
-            )
-        else:
-            state.report.not_implemented_yet("house.ventilation.type_of_system", entry.note, value=value)
-    if state.present("house.ventilation.air_tightness"):
-        value = state.house.air_tightness.value if state.house.air_tightness else None
-        entry = state.whitelist.match(Unmapped("house.ventilation.air_tightness", value), state.raw)
-        if entry is None:
-            state.report.used(
-                "house.ventilation.air_tightness",
-                "Building (the TABULA row's infiltration)",
-                value=value,
-                note="the as-built envelope is what the archetype already describes",
-            )
-        else:
-            state.report.not_implemented_yet("house.ventilation.air_tightness", entry.note, value=value)
-    if state.present("house.temperature_control.type_of_system"):
-        value = state.house.temperature_control.value if state.house.temperature_control else None
-        entry = state.whitelist.match(
-            Unmapped("house.temperature_control.type_of_system", value), state.raw
-        )
-        if entry is None:
-            state.report.used(
-                "house.temperature_control.type_of_system",
-                "Building (the constant set point)",
-                value=value,
-                note="a plain thermostat is what a constant set point already describes",
-            )
-        else:
-            state.report.not_implemented_yet(
-                "house.temperature_control.type_of_system", entry.note, value=value
-            )
+    comfort_values = (
+        ("house.ventilation.type_of_system", state.house.ventilation_type),
+        ("house.ventilation.air_tightness", state.house.air_tightness),
+        ("house.temperature_control.type_of_system", state.house.temperature_control),
+    )
+    for path, member in comfort_values:
+        if not state.present(path):
+            continue
+        value = member.value if member else None
+        entry = state.whitelist.match(Unmapped(path, value), state.raw)
+        if entry is not None:
+            state.report.not_implemented_yet(path, entry.note, value=value)
+            continue
+        target, note = FixedInTheBuilding.LINES[path]
+        state.report.approximated(path, note, target=target, value=value)
     if state.present("house.air_conditioning"):
         # The whole block is on the list, so every leaf the request carries in it -- the power and
         # the unit's installation_year (shared schema of 2026-09-25) -- is reported at its own path
@@ -2040,17 +2042,34 @@ def _battery(state: _TranslationState) -> None:
         state.report.defaulted(path, power, note=rule, target=target)
 
 
+#: The sentence of ``collector_type = flat_plate``, the preset every solar-thermal twin records.
+FLAT_PLATE_NOTE = (
+    "every solar-thermal twin records the flat-plate collector preset, which is what this value "
+    "states; the value selects nothing"
+)
+
+
 def _solar_thermal(state: _TranslationState) -> None:
-    """Write the collector when the twin wires one, and report it when the twin does not."""
+    """Write the collector when the twin wires one, and report it when the twin does not.
+
+    Both solar-thermal twins wire the collector into the hot-water storage, with the flat-plate
+    preset, and no twin has a variant that feeds the space-heating buffer or an evacuated-tube
+    preset (hisim-l56w). So ``supplies`` and ``collector_type`` select nothing: the value that
+    agrees with the twin is ``approximated``, the other is on the list.
+    """
     collector = state.house.solar_thermal_system
     if collector is None:
         return
     if not BaseFiles.has_solar_thermal_wiring(state.house.heating.type_of_system):
         state.listed("house.solar_thermal_system", None)
         return
-    for name, value in (
-        ("supplies", collector.supplies.value),
-        ("collector_type", collector.collector_type.value if collector.collector_type else None),
+    for name, value, note in (
+        ("supplies", collector.supplies.value, SelectsNothing.SOLAR_THERMAL_DHW_ONLY),
+        (
+            "collector_type",
+            collector.collector_type.value if collector.collector_type else None,
+            FLAT_PLATE_NOTE,
+        ),
     ):
         path = f"house.solar_thermal_system.{name}"
         if not state.present(path) and name != "supplies":
@@ -2059,11 +2078,11 @@ def _solar_thermal(state: _TranslationState) -> None:
         if entry is not None:
             state.report.not_implemented_yet(path, entry.note, value=value)
         else:
-            state.report.used(
+            state.report.approximated(
                 path,
-                f"{Targets.SOLAR_THERMAL} (the twin's recorded wiring and preset)",
+                note,
+                target=f"{Targets.SOLAR_THERMAL} (the twin's recorded wiring and preset)",
                 value=value,
-                note="the collector feeds the hot-water storage, which is what the twin wires",
             )
     if collector.area_m2 is not None:
         state.write(Targets.SOLAR_THERMAL, Targets.COLLECTOR_AREA, collector.area_m2,

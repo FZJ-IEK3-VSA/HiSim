@@ -41,9 +41,10 @@ from __future__ import annotations
 import csv
 import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from hisim.economics import views
+from hisim.economics.provenance import ProvenanceLedger
 from hisim.economics.results import EvaluationMatrix, HeatCostNaming, VariantComparison
 from hisim.economics.timeline import Actor, discount_factor
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
@@ -63,6 +64,9 @@ class ExportFileNames:
     COMPONENT_COSTS_CSV_FILE_NAME = "component_costs.csv"
     CASH_FLOW_TIMELINE_FILE_NAME = "cash_flow_timeline.csv"
     LIFECYCLE_KPIS_FILE_NAME = "lifecycle_kpis.json"
+    #: The ledger file. The same name as `serialization.SerializationFileNames.PROVENANCE_FILE_NAME`,
+    #: which reads it back; it is written by an ordinary run and by the staged evaluator alike.
+    PROVENANCE_FILE_NAME = "cost_provenance.json"
 
 
 def write_lifecycle_costs_json(matrix: EvaluationMatrix, result_directory: str) -> str:
@@ -246,13 +250,38 @@ def write_provenance_ledger(matrix: EvaluationMatrix, result_directory: str) -> 
         The path written, or None when no perspective carried a ledger (in which case no file is
         created at all, so a reader can tell "no provenance recorded" from "empty provenance").
     """
-    payload = {}
-    for perspective, result in matrix.results.items():
-        if result.ledger is not None:
-            payload[perspective] = result.ledger.to_json()
-    if not payload:
+    return write_provenance_ledgers(
+        {
+            perspective: result.ledger
+            for perspective, result in matrix.results.items()
+            if result.ledger is not None
+        },
+        result_directory,
+    )
+
+
+def write_provenance_ledgers(
+    ledgers: Mapping[str, ProvenanceLedger], result_directory: str
+) -> Optional[str]:
+    """`cost_provenance.json` from ledgers keyed by perspective id — the file's one format.
+
+    Shared by an ordinary run (`write_provenance_ledger`, one ledger per evaluated perspective) and
+    by the staged evaluator's CLI, which writes the one ledger its reference, every stage and the
+    spliced plan recorded into, under the plan's perspective id. One writer is what keeps a staged
+    job's file readable by everything that reads an ordinary run's
+    (`serialization.read_results`, `ProvenanceLedger.from_json`).
+
+    Args:
+        ledgers: Perspective id -> the ledger the ids of that perspective's entries point into.
+        result_directory: Where the file goes; it must exist.
+
+    Returns:
+        The path written, or None when there is no ledger at all (no file is created).
+    """
+    if not ledgers:
         return None
-    path = os.path.join(result_directory, "cost_provenance.json")
+    payload = {perspective: ledger.to_json() for perspective, ledger in ledgers.items()}
+    path = os.path.join(result_directory, ExportFileNames.PROVENANCE_FILE_NAME)
     with open(path, "w", encoding="utf-8") as file:
         json.dump(payload, file, indent=2)
     return path

@@ -43,7 +43,9 @@ the same thing in each, the flag taking precedence over the path stored in the p
   directories share no perspective.
 - ``staged --stage <dir>:<from_year>:<label>[:<job_id>] ... [--parameters F] [--perspective ID]
   [--subsidy-catalog DIR] --out <file>`` — prices a renovation plan spread over several years out
-  of finished jobs' stored inputs into `economics_result.json` (E-spec §3, §6). Its
+  of finished jobs' stored inputs into `economics_result.json` (E-spec §3, §6), and writes
+  `cost_provenance.json` beside it: the one ledger the reference, every stage and the spliced plan
+  recorded into, in an ordinary run's format under the plan's perspective id. Its
   ``--parameters`` file is **not** an `EconomicParameters` record: it is the document's own
   `parameters` block, so a reader can feed a document's assumptions back in unchanged. Every key
   is optional — `horizon_years`, `interest_rate`, `country`, `price_basis_year`, `perspective_id`,
@@ -102,10 +104,12 @@ from hisim.economics.evaluator import (
     require_resolvable_subjects,
 )
 from hisim.economics.exports import (
+    ExportFileNames,
     write_cash_flow_timeline,
     write_component_costs,
     write_lifecycle_costs_json,
     write_provenance_ledger,
+    write_provenance_ledgers,
 )
 from hisim.economics.input_audit import InputAuditReport, read_input_audit, write_input_audit
 from hisim.economics.parameters import EconomicParameters
@@ -1264,7 +1268,11 @@ def _cmd_staged(args: argparse.Namespace) -> int:
     The whole subcommand, and the only place its three exit codes are decided. It reads each
     ``--stage`` argument's directory, resolves the assumptions, the perspective and the optional
     subsidy catalogue, prices the plan with :class:`~hisim.economics.staged.StagedEvaluator` and
-    writes the document of E-spec §3, validated against its schema before the first byte lands.
+    writes the document of E-spec §3, validated against its schema before the first byte lands,
+    then the plan's provenance ledger as ``cost_provenance.json`` in the same directory — an
+    artifact of every economics job (``economics-backend-spec.md`` §2.3), and the file the
+    document's ``provenance.cost_provenance`` names. It is written only once the document is, so
+    a document refused by its own schema leaves neither file behind.
 
     Returns:
         0 on success, 2 for a refused plan (with a ``problems.json`` beside ``--out``), 3 for an
@@ -1320,6 +1328,7 @@ def _cmd_staged(args: argparse.Namespace) -> int:
         perspective=perspective,
         measure_ids=measures,
         unpriced_subjects=unpriced,
+        cost_provenance=ExportFileNames.PROVENANCE_FILE_NAME,
     )
     try:
         document.write(Path(args.out))
@@ -1328,6 +1337,11 @@ def _cmd_staged(args: argparse.Namespace) -> int:
         # are engine bugs by their own definition, and write() refuses before the file exists.
         print(str(error), file=sys.stderr)
         return StagedCli.ENGINE_FAILED
+    # `write` created the directory; the ledger goes beside the document it explains.
+    ledger = result.ledger
+    write_provenance_ledgers(
+        {perspective.id: ledger} if ledger is not None else {}, os.path.dirname(os.path.abspath(args.out))
+    )
     print(f"Wrote {args.out} for {len(stages)} stages under perspective {perspective.id}.")
     return 0
 

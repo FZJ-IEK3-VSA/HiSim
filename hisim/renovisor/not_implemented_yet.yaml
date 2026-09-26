@@ -120,14 +120,12 @@
 - path: house.heating.seasonal_efficiency_in_percent
   when: heating.type_of_system == air_source_heat_pump
   note: The heat pump follows its hplib model curve.
-  deliberate: A heat pump's efficiency is its EN 14825 SCOP pair, which calibrates the hplib model; a
-    seasonal efficiency in percent is a boiler's figure.
+  tracked: hisim-f79l
 
 - path: house.heat_distribution.type_of_system
   when: heating.type_of_system == electric_heating
   note: Electric heating has no heat distribution system.
-  deliberate: Direct electric heaters sit in the rooms; there is no water circuit for an emitter
-    type to describe.
+  tracked: hisim-mgsn
 
 # The emitter itself is modelled -- HiSim has a LOW_TEMPERATURE_RADIATOR member -- but the cost
 # database has no row for it, and an unpriced subject aborts the whole lifecycle evaluation
@@ -245,22 +243,20 @@
     heating (floor heating), the heat pump's other low-temperature emitter.
   tracked: hisim-epc.1
 
-# A measure's asset is new. The lifecycle evaluation installs it in the simulated year, and a request
-# is one package with no later stage a different year could name, so these five are deliberate.
+# A measure's installation_year is dropped today. The catalogue describes existing equipment as a
+# stage-0 occurrence of its measure, so the year should date the register row of the asset the
+# measure describes (hisim-9mma, owner decision 2026-09-26; the frontend is asked how it uses them).
 - measure: heating_system.installation_year
   note: No HiSim parameter for the age of a new generator.
-  deliberate: A measure's asset is new and installed in the simulated year; a one-package request
-    has no later stage for another year to name.
+  tracked: hisim-9mma
 
 - measure: ventilation_system.installation_year
   note: No HiSim parameter for the age of a new ventilation system.
-  deliberate: A measure's asset is new and installed in the simulated year; a one-package request
-    has no later stage for another year to name.
+  tracked: hisim-9mma
 
 - measure: photovoltaic_system.installation_year
   note: No HiSim parameter for the age of a new array.
-  deliberate: A measure's asset is new and installed in the simulated year; a one-package request
-    has no later stage for another year to name.
+  tracked: hisim-9mma
 
 # Contract 882a8c1 gave the measure the array's own figures; power, azimuth and tilt reach PVSystem,
 # the annual shading loss has no counterpart there (the PV model computes an unshaded array). The
@@ -271,13 +267,11 @@
 
 - measure: battery_system.installation_year
   note: No HiSim parameter for the age of a new battery.
-  deliberate: A measure's asset is new and installed in the simulated year; a one-package request
-    has no later stage for another year to name.
+  tracked: hisim-9mma
 
 - measure: solar_thermal_system.installation_year
   note: No HiSim parameter for the age of a new collector.
-  deliberate: A measure's asset is new and installed in the simulated year; a one-package request
-    has no later stage for another year to name.
+  tracked: hisim-9mma
 
 - measure: window_replacement.frame_material
   note: No frame parameter on Building; the U-value carries the whole window.

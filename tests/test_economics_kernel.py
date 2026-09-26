@@ -9,7 +9,7 @@ from typing import Any, Dict
 
 import pytest
 
-from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.carriers import EnergyCarrier, bill_subjects, revenue_subject
 from hisim.economics.facts import (
     BillingDeterminants,
     ComponentCostFacts,
@@ -536,3 +536,30 @@ class TestFactValidation:
         register = ExistingAssetRegister(assets=[asset])
         assert register.find(ComponentType.GAS_HEATER) is asset
         assert register.find(ComponentType.HEAT_PUMP) is None
+
+
+class TestRevenueSubject:
+    """`carriers.revenue_subject`: the one statement of where a carrier's sold energy is booked."""
+
+    def test_electricity_revenue_is_booked_under_the_feed_in_subject(self):
+        """Exported electricity is priced by, and booked under, ``ELECTRICITY_FEED_IN``."""
+        assert revenue_subject(EnergyCarrier.ELECTRICITY) == EnergyCarrier.ELECTRICITY_FEED_IN.value
+        assert revenue_subject("ELECTRICITY") == "ELECTRICITY_FEED_IN"
+
+    @pytest.mark.parametrize(
+        "carrier", [carrier for carrier in EnergyCarrier if carrier is not EnergyCarrier.ELECTRICITY]
+    )
+    def test_every_other_carrier_books_its_revenue_under_itself(self, carrier):
+        """A heat or gas contract with a feed-in credit books it under its own carrier."""
+        assert revenue_subject(carrier) == carrier.value
+        assert bill_subjects(carrier) == frozenset({carrier.value})
+
+    def test_the_electricity_bill_spans_both_subjects(self):
+        """The bill a view reads back gathers the purchase and the feed-in subject."""
+        assert bill_subjects("ELECTRICITY") == frozenset({"ELECTRICITY", "ELECTRICITY_FEED_IN"})
+        assert bill_subjects(EnergyCarrier.ELECTRICITY) == bill_subjects("ELECTRICITY")
+
+    def test_an_unknown_subject_names_itself(self):
+        """A key no carrier spells (an archived result, a test double) is its own subject."""
+        assert revenue_subject("SOMETHING_ELSE") == "SOMETHING_ELSE"
+        assert bill_subjects("SOMETHING_ELSE") == frozenset({"SOMETHING_ELSE"})

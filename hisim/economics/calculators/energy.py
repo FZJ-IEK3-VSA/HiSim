@@ -42,7 +42,7 @@ from hisim.economics.calculators.annualization import (
     check_simulated_period_fraction,
 )
 from hisim.economics.calculators.escalation import carrier_escalation_rate, escalate, escalation_factor
-from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.carriers import EnergyCarrier, revenue_subject
 from hisim.economics.database import CostDatabase, EnergyPriceEntry
 from hisim.economics.facts import BillingDeterminants
 from hisim.economics.parameters import EconomicParameters
@@ -328,9 +328,7 @@ def build_energy_flows(
                         year=projection_year,
                         amount_in_euro=feed_in.scale(feed_escalation),
                         category=CostCategory.FEED_IN_REVENUE,
-                        subject=EnergyCarrier.ELECTRICITY_FEED_IN.value
-                        if carrier == EnergyCarrier.ELECTRICITY
-                        else carrier.value,
+                        subject=revenue_subject(carrier),
                         subject_kind=SubjectKind.CARRIER,
                         provenance_ids=provenance_ids,
                     )

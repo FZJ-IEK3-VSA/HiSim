@@ -63,7 +63,7 @@ from typing import (
 from hisim.economics.calculators.aggregation import TimelineAggregation
 from hisim.economics.calculators.financing_application import FinancingConstants
 from hisim.economics.calculators.subsidy_application import nominal_support_from_entries
-from hisim.economics.carriers import EnergyCarrier, EnergyFlowRole
+from hisim.economics.carriers import EnergyCarrier, EnergyFlowRole, bill_subjects
 from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.numerics import bisect_root
 from hisim.economics.results import (
@@ -568,25 +568,25 @@ class CarrierYearOneBill:
     annual_quantity_in_kwh: float
     #: `total_excluding_feed_in_in_euro / annual_quantity_in_kwh`, 0.0 for an unbilled carrier.
     effective_price_in_euro_per_kwh: float
-    #: The carrier's own year-1 flows as a band (feed-in excluded — a different subject).
+    #: The carrier's own year-1 flows as a band (feed-in revenue excluded, whichever subject of
+    #: `carriers.bill_subjects` it is booked under).
     year_one_band_in_euro: UncertainValue
 
 
 def carrier_year_one_bills(result: LifecycleCostResult) -> Dict[str, CarrierYearOneBill]:
     """Year-1 bill decomposition per carrier with the implied effective price (§8).
 
-    The feed-in subject is folded into the electricity bill's category map — that is where the
-    report has always shown it — but never into `total_excluding_feed_in_in_euro`, the numerator
-    of the price, nor into the band: a credit is not part of what a kWh costs.
+    The revenue subject (`carriers.bill_subjects`, the feed-in one for electricity) is folded into
+    the carrier's category map — that is where the report has always shown it — but never into
+    `total_excluding_feed_in_in_euro`, the numerator of the price, nor into the band: a credit is
+    not part of what a kWh costs.
 
     Replaces `reporting.py:1166-1192`.
     """
     bills: Dict[str, CarrierYearOneBill] = {}
     entries = [entry for entry in result.scoped_timeline().entries if entry.year == 1]
     for carrier, quantities in result.annual_energy_quantities_by_carrier.items():
-        subjects = {carrier}
-        if carrier == EnergyCarrier.ELECTRICITY.value:
-            subjects.add(EnergyCarrier.ELECTRICITY_FEED_IN.value)
+        subjects = bill_subjects(carrier)
         by_category: Dict[CostCategory, float] = {}
         for entry in entries:
             if entry.subject in subjects:
@@ -598,7 +598,9 @@ def carrier_year_one_bills(result: LifecycleCostResult) -> Dict[str, CarrierYear
         )
         quantity = quantities.bought_in_kwh
         band = UncertainValue.sum(
-            entry.amount_in_euro for entry in entries if entry.subject == carrier
+            entry.amount_in_euro
+            for entry in entries
+            if entry.subject in subjects and entry.category != CostCategory.FEED_IN_REVENUE
         )
         bills[carrier] = CarrierYearOneBill(
             carrier=carrier,

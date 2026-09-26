@@ -91,6 +91,14 @@ class SyntheticPlan:
     #: The synthetic electricity price, in euro per kWh, written into the database.
     ELECTRICITY_PRICE_IN_EURO_PER_KWH = 0.30
 
+    #: The synthetic feed-in remuneration band, in euro per kWh: ``(min, best, max)``. A band
+    #: rather than one figure, so a test can see that the revenue is mirrored (§3.9).
+    FEED_IN_RATE_IN_EURO_PER_KWH = (0.06, 0.08, 0.10)
+
+    #: Electricity a selling stage feeds into the grid per year, in kWh. Every stage sells nothing
+    #: unless a test asks for this.
+    SOLD_ELECTRICITY_IN_KWH = 1500.0
+
     #: Subject name of the baseline generator.
     BOILER_SUBJECT = "GenericBoiler"
 
@@ -117,7 +125,7 @@ class SyntheticPlan:
 
 
 def write_database(directory: str, heat_pump_legacy_flat_subsidy_share: float = 0.0) -> CostDatabase:
-    """Write a cost database that prices nothing but one electricity carrier.
+    """Write a cost database that prices nothing but electricity, bought and fed in.
 
     Args:
         directory: A directory the three JSON files are written into; normally a ``tmp_path``.
@@ -128,8 +136,10 @@ def write_database(directory: str, heat_pump_legacy_flat_subsidy_share: float = 
             subject overrides them.
 
     Returns:
-        The loaded database, with one source, one electricity price entry for
+        The loaded database, with one source, one electricity and one feed-in price entry for
         :attr:`SyntheticPlan.COUNTRY` and no device entries unless a legacy share was asked for.
+        The feed-in rate books nothing for a stage that sells nothing, which is every stage but
+        the one a test builds with ``electricity_sold_in_kwh``.
     """
     os.makedirs(directory, exist_ok=True)
     sources = {
@@ -156,8 +166,24 @@ def write_database(directory: str, heat_pump_legacy_flat_subsidy_share: float = 
                 "tax_and_levy_share": 0.0,
                 "quantity_unit": "kWh",
                 "source_ids": ["src_staged_test"],
-                "notes": "The only price the synthetic database carries.",
-            }
+                "notes": "The only purchase price the synthetic database carries.",
+            },
+            {
+                "carrier": "ELECTRICITY_FEED_IN",
+                "year": SyntheticPlan.YEAR,
+                "working_price_in_euro_per_kwh": {
+                    "min": SyntheticPlan.FEED_IN_RATE_IN_EURO_PER_KWH[0],
+                    "best_estimate": SyntheticPlan.FEED_IN_RATE_IN_EURO_PER_KWH[1],
+                    "max": SyntheticPlan.FEED_IN_RATE_IN_EURO_PER_KWH[2],
+                },
+                "standing_charge_in_euro_per_year": 0.0,
+                "emission_factor_in_kg_per_kwh": 0.0,
+                "co2_price_exposure": 0.0,
+                "tax_and_levy_share": 0.0,
+                "quantity_unit": "kWh",
+                "source_ids": ["src_staged_test"],
+                "notes": "The feed-in remuneration a selling stage is credited at.",
+            },
         ]
     }
     with open(f"{directory}/sources.json", "w", encoding="utf-8") as handle:
@@ -370,6 +396,7 @@ def state_inputs(
     subjects: List[Tuple[str, ComponentType, float, float]],
     electricity_in_kwh: float,
     register: Optional[ExistingAssetRegister] = None,
+    electricity_sold_in_kwh: float = 0.0,
 ) -> EvaluationInputs:
     """One simulated state as the evaluator sees it, with one electricity meter.
 
@@ -379,6 +406,7 @@ def state_inputs(
             full year here, so the annualization divisor is one.
         register: The existing-asset register the state was simulated with; the house inventory
             when omitted.
+        electricity_sold_in_kwh: What the state's meter fed into the grid over the same period.
 
     Returns:
         The evaluation inputs.
@@ -394,6 +422,7 @@ def state_inputs(
             BillingDeterminants(
                 carrier=EnergyCarrier.ELECTRICITY,
                 energy_bought_in_kwh=electricity_in_kwh,
+                energy_sold_in_kwh=electricity_sold_in_kwh,
             )
         ],
         existing_assets=register if register is not None else inventory_register(),
@@ -454,11 +483,12 @@ def envelope_stage(from_year: int) -> Stage:
     )
 
 
-def heat_pump_stage(from_year: int) -> Stage:
+def heat_pump_stage(from_year: int, electricity_sold_in_kwh: float = 0.0) -> Stage:
     """A stage that replaces the boiler with a heat pump and keeps the insulation.
 
     Args:
         from_year: The year the heat pump is installed.
+        electricity_sold_in_kwh: What the stage feeds into the grid per year; nothing by default.
 
     Returns:
         The stage, whose cost facts are the envelope measure carried over plus the heat pump.
@@ -480,6 +510,7 @@ def heat_pump_stage(from_year: int) -> Stage:
                 ),
             ],
             SyntheticPlan.RENOVATED_ELECTRICITY_IN_KWH,
+            electricity_sold_in_kwh=electricity_sold_in_kwh,
         ),
         from_year=from_year,
         label="stage 2",

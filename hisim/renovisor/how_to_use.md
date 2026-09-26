@@ -139,9 +139,37 @@ document's assumptions back in unchanged:
 
 Every key is optional: `horizon_years`, `interest_rate`, `country`, `price_basis_year`,
 `perspective_id`, `subsidy_mode` (`full` | `none`), `financing` (`{"kind": "cash"}` or
-`{"kind": "loan", "financed_share"?, "nominal_interest_rate"?, "term_in_years"?}`), `escalation`,
-and the two that are accepted and ignored because they describe the run rather than state an
-assumption, `simulation_year` and `subsidy_catalog`. **The country and the price basis year come
+`{"kind": "loan", "financed_share"?, "nominal_interest_rate"?, "term_in_years"?}`), `escalation`
+(`{"general"?, "investment"?, "feed_in"?, "energy"?: {<carrier>: rate}}`; a rate for
+`ELECTRICITY_FEED_IN` is refused, since the feed-in remuneration never escalates at a carrier
+rate), `energy_prices`, and the three that are accepted and ignored because they describe the run
+rather than state an assumption, `simulation_year`, `subsidy_catalog` and `origins`.
+
+`energy_prices` states what the household pays in year 1, per carrier (`ELECTRICITY`,
+`NATURAL_GAS`, `HEATING_OIL`, `PELLETS`, `WOOD_CHIPS`, `DISTRICT_HEATING`, `HYDROGEN`, `DIESEL`, and
+`ELECTRICITY_FEED_IN` for the feed-in rate):
+
+```json
+"energy_prices": {
+  "NATURAL_GAS": { "working_price_in_euro_per_kwh": { "min": 0.12, "best": 0.14, "max": 0.17 },
+                   "standing_charge_in_euro_per_year": 110 },
+  "ELECTRICITY_FEED_IN": { "working_price_in_euro_per_kwh": 0.15 }
+}
+```
+
+Each value is a number or a band; either field may be left out and keeps the database's value.
+The working price is the **all-in** price, carbon included: where the engine books a carbon price
+separately (Irish gas, oil and district heating), it takes the year-1 carbon price off the stated
+price, so year 1 costs exactly what was stated and later years follow the working price's
+escalation plus the CO2 path; a stated price below that carbon price is refused. The standing
+charge replaces the fixed annual charge and escalates with `general`; the feed-in price is the
+electricity contract's fixed rate for 20 years (no standing charge for it). Out of bounds (working
+price not in (0, 2] EUR/kWh, feed-in not in [0, 1], standing charge not in [0, 5000] EUR/a), an
+unknown carrier or a carrier some stage bills under an explicit tariff contract is a refusal
+naming the path (`parameters.energy_prices.<CARRIER>…`). The result document's `parameters` block
+echoes the rates and the (all-in) prices actually used for every carrier a stage bills or the plan
+named, and `origins` says whether each was `stated` or came from the `database`, the
+`country_default` escalation file or the `general` rate. **The country and the price basis year come
 from the stages** — they are the ones their jobs were priced with, read from a stage's stored
 evaluation (`lifecycle_costs.json`) or, for a stage directory that holds only the extract and the
 mapping report, from the `country` and `price_basis_year` keys `economic_inputs.json` carries — so

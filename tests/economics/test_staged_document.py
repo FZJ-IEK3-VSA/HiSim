@@ -12,17 +12,20 @@ whose only price is one the fixture wrote.
 """
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Dict
 
 import pytest
 
-from hisim.economics.carriers import revenue_subject
-from hisim.economics.parameters import EconomicParameters
+from hisim.economics.carriers import EnergyCarrier, revenue_subject
+from hisim.economics.parameters import EconomicParameters, StatedEnergyPrice
 from hisim.economics.staged import StagedEvaluator
 from hisim.economics.staged_document import CostGroup, CostGroups, StagedDocument
+from hisim.economics.staged_parameters import StagedParameters
 from hisim.economics.subsidies import PayoutKind
 from hisim.economics.timeline import CostCategory
+from hisim.economics.uncertainty import UncertainValue
 from hisim.economics.views import carrier_year_one_bills
 from hisim.loadtypes import ComponentType
 
@@ -421,20 +424,23 @@ class TestTheDocumentShape:
         commit = document["engine"]["hisim_commit"]
         assert commit is None or isinstance(commit, str) and commit.strip() == commit
 
-    def test_the_document_states_schema_version_three(self, document):
-        """Version 3: every by_subject row states its investment by stage.
+    def test_the_document_states_schema_version_four(self, document):
+        """Version 4: the parameters block echoes the energy rates and prices used, with origins.
 
         A literal for the same reason as the economics version above. Version 2 (2026-09-24) is
         the format with hisim-cyc.5's awarded-row rules and hisim-cyc.6's required monthly keys;
         version 3 (2026-09-26, hisim-fig7) adds the required ``investment_by_stage`` of every
-        ``by_subject`` row. A document of that shape stating 1 or 2 would tell a consumer it could
-        skip what the later versions require.
+        ``by_subject`` row; version 4 (2026-09-26, renovisorissues #52) changes what
+        ``parameters.escalation.energy`` means — every carrier priced, not only the stated ones —
+        and requires ``parameters.energy_prices`` and ``parameters.origins``. A document of that
+        shape stating an older version would tell a consumer it could skip what the later
+        versions require.
         """
         import jsonschema
 
-        assert document["schema_version"] == 3
+        assert document["schema_version"] == 4
         StagedDocument.validate(document)
-        for older in (1, 2):
+        for older in (1, 2, 3):
             with pytest.raises(jsonschema.ValidationError):
                 StagedDocument.validate({**document, "schema_version": older})
 
@@ -1020,3 +1026,103 @@ class TestTheFeedInRevenueReachesTheElectricityRow:
         """A row with revenue still matches the shipped schema."""
         _, document = selling
         StagedDocument.validate(document)
+
+
+class TestTheEnergyEcho:
+    """``parameters`` states the energy rates and prices the plan used, and where each came from (#52).
+
+    Schema version 4: ``escalation.energy`` and ``energy_prices`` are the values actually used for
+    every carrier a stage bills and every carrier the plan named, the working price all-in, and
+    ``origins`` says which were stated and which came from the database or a default.
+    """
+
+    @staticmethod
+    def _document(database, parameters, tmp_path, name: str) -> Dict[str, Any]:
+        """The written document of the synthetic three-stage plan under ``parameters``."""
+        perspective = brownfield_perspective()
+        result = StagedEvaluator(database).evaluate(
+            [baseline_stage(), envelope_stage(0), heat_pump_stage(4)], parameters, perspective
+        )
+        path = tmp_path / f"{name}.json"
+        StagedDocument(result, parameters, perspective).write(path)
+        document: Dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+        return document
+
+    def test_unstated_values_are_echoed_with_their_database_and_general_origins(self, document):
+        """Nothing stated: the database's prices, the general rate, and the origins that say so."""
+        block = document["parameters"]
+        price = SyntheticPlan.ELECTRICITY_PRICE_IN_EURO_PER_KWH
+        low, best, high = SyntheticPlan.FEED_IN_RATE_IN_EURO_PER_KWH
+        assert block["escalation"]["energy"] == {"ELECTRICITY": 0.02}
+        assert block["energy_prices"] == {
+            "ELECTRICITY": {
+                "working_price_in_euro_per_kwh": {"min": price, "best": price, "max": price},
+                "standing_charge_in_euro_per_year": {"min": 0.0, "best": 0.0, "max": 0.0},
+            },
+            "ELECTRICITY_FEED_IN": {"working_price_in_euro_per_kwh": {"min": low, "best": best, "max": high}},
+        }
+        assert block["origins"] == {
+            "escalation": {"energy": {"ELECTRICITY": "general"}},
+            "energy_prices": {
+                "ELECTRICITY": {
+                    "working_price_in_euro_per_kwh": "database",
+                    "standing_charge_in_euro_per_year": "database",
+                },
+                "ELECTRICITY_FEED_IN": {"working_price_in_euro_per_kwh": "database"},
+            },
+        }
+
+    def test_stated_values_and_named_carriers_are_echoed_as_stated(self, database, parameters, tmp_path):
+        """A stated price says ``stated``; a rate named for a carrier nobody bills is echoed too."""
+        stated = replace(
+            parameters,
+            energy_price_escalation_rates={EnergyCarrier.PELLETS: 0.01},
+            energy_prices={
+                EnergyCarrier.ELECTRICITY: StatedEnergyPrice(
+                    working_price_in_euro_per_kwh=UncertainValue(best_estimate=0.27, minimum=0.25, maximum=0.3)
+                ),
+                EnergyCarrier.ELECTRICITY_FEED_IN: StatedEnergyPrice(UncertainValue.exact(0.11)),
+            },
+        )
+        block = self._document(database, stated, tmp_path, "stated")["parameters"]
+        assert block["escalation"]["energy"] == {"ELECTRICITY": 0.02, "PELLETS": 0.01}
+        assert block["energy_prices"]["ELECTRICITY"]["working_price_in_euro_per_kwh"] == {
+            "min": 0.25,
+            "best": 0.27,
+            "max": 0.3,
+        }
+        assert block["energy_prices"]["ELECTRICITY_FEED_IN"] == {
+            "working_price_in_euro_per_kwh": {"min": 0.11, "best": 0.11, "max": 0.11}
+        }
+        assert block["origins"]["escalation"]["energy"] == {"ELECTRICITY": "general", "PELLETS": "stated"}
+        assert block["origins"]["energy_prices"]["ELECTRICITY"] == {
+            "working_price_in_euro_per_kwh": "stated",
+            "standing_charge_in_euro_per_year": "database",
+        }
+
+    def test_the_echoed_block_fed_back_reproduces_the_run(self, database, parameters, tmp_path, document):
+        """Parsed back over the same stages, the block prices the same figures, now all stated."""
+        parsed = StagedParameters.from_mapping(document["parameters"], parameters)
+        assert not parsed.problems
+        assert parsed.parameters is not None
+        second = self._document(database, parsed.parameters, tmp_path, "second")
+        for variant in ("reference", "plan"):
+            assert second[variant]["totals"] == document[variant]["totals"]
+        assert second["comparison"] == document["comparison"]
+        without_origins = {key: value for key, value in second["parameters"].items() if key != "origins"}
+        assert without_origins == {key: value for key, value in document["parameters"].items() if key != "origins"}
+        assert second["parameters"]["origins"]["escalation"]["energy"] == {"ELECTRICITY": "stated"}
+
+    def test_the_schema_requires_the_echo(self, document):
+        """A version-4 document without ``energy_prices`` or ``origins`` does not validate."""
+        import jsonschema
+
+        for key in ("energy_prices", "origins"):
+            broken = json.loads(json.dumps(document))
+            broken["parameters"].pop(key)
+            with pytest.raises(jsonschema.ValidationError):
+                StagedDocument.validate(broken)
+        broken = json.loads(json.dumps(document))
+        broken["parameters"]["origins"]["escalation"]["energy"]["ELECTRICITY"] = "configuration"
+        with pytest.raises(jsonschema.ValidationError):
+            StagedDocument.validate(broken)

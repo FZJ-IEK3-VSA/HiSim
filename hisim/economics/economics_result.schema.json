@@ -18,8 +18,8 @@
   ],
   "properties": {
     "schema_version": {
-      "const": 3,
-      "description": "3 since 2026-09-26: every by_subject row carries the required investment_by_stage, the subject's investment split by the stage that bought it (renovisorissues #48, hisim-fig7). 2 since 2026-09-24: a subsidies[] row the plan awarded states amount_by_year_in_euro and an amount (hisim-cyc.5), and totals and comparison carry the headline monthly_equivalent_cost_in_euro / monthly_equivalent_cost_delta_in_euro (hisim-cyc.6)."
+      "const": 4,
+      "description": "4 since 2026-09-26: parameters.escalation.energy states the per-carrier rate actually used for every carrier a stage bills and every carrier the plan named, no longer only the stated ones, and parameters carries the required energy_prices (the year-1 prices used, the working price all-in with carbon) and origins (where each came from) (renovisorissues #52). 3 since 2026-09-26: every by_subject row carries the required investment_by_stage, the subject's investment split by the stage that bought it (renovisorissues #48, hisim-fig7). 2 since 2026-09-24: a subsidies[] row the plan awarded states amount_by_year_in_euro and an amount (hisim-cyc.5), and totals and comparison carry the headline monthly_equivalent_cost_in_euro / monthly_equivalent_cost_delta_in_euro (hisim-cyc.6)."
     },
     "engine": {
       "type": "object",
@@ -44,7 +44,9 @@
         "subsidy_mode",
         "financing",
         "escalation",
-        "subsidy_catalog"
+        "energy_prices",
+        "subsidy_catalog",
+        "origins"
       ],
       "properties": {
         "horizon_years": {"type": "integer", "minimum": 1},
@@ -76,12 +78,62 @@
             "general": {"type": "number"},
             "investment": {"type": "number"},
             "feed_in": {"type": "number"},
-            "energy": {"type": "object", "additionalProperties": {"type": "number"}}
+            "energy": {
+              "type": "object",
+              "description": "The per-carrier energy price escalation rate each carrier was priced with, for every carrier a stage bills and every carrier the plan named; origins.escalation.energy says where each came from. As an input of `staged --parameters` a rate here is stated; ELECTRICITY_FEED_IN is refused, its remuneration follows feed_in.",
+              "propertyNames": {"enum": ["ELECTRICITY", "ELECTRICITY_FEED_IN", "NATURAL_GAS", "HEATING_OIL", "PELLETS", "WOOD_CHIPS", "DISTRICT_HEATING", "HYDROGEN", "DIESEL"]},
+              "additionalProperties": {"type": "number"}
+            }
+          }
+        },
+        "energy_prices": {
+          "type": "object",
+          "description": "The year-1 price terms each carrier was priced with, for every carrier a stage bills at a flat price and every carrier the plan named; the working price is all-in (carbon included), for ELECTRICITY_FEED_IN it is the feed-in rate. As an input of `staged --parameters` each value may also be a bare number.",
+          "propertyNames": {"enum": ["ELECTRICITY", "ELECTRICITY_FEED_IN", "NATURAL_GAS", "HEATING_OIL", "PELLETS", "WOOD_CHIPS", "DISTRICT_HEATING", "HYDROGEN", "DIESEL"]},
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "working_price_in_euro_per_kwh": {"$ref": "#/$defs/band"},
+              "standing_charge_in_euro_per_year": {"$ref": "#/$defs/band"}
+            },
+            "additionalProperties": false
           }
         },
         "subsidy_catalog": {
           "type": ["string", "null"],
           "description": "The catalogue in force (country and snapshot date), or null when none was loaded. Documentation of what produced this document: it is accepted and ignored as an input of `staged --parameters`, where the catalogue comes from the shipped directory or `--subsidy-catalog`."
+        },
+        "origins": {
+          "type": "object",
+          "description": "Where each echoed per-carrier rate and price came from. Documentation of the run: accepted and ignored as an input of `staged --parameters`.",
+          "required": ["escalation", "energy_prices"],
+          "properties": {
+            "escalation": {
+              "type": "object",
+              "required": ["energy"],
+              "properties": {
+                "energy": {
+                  "type": "object",
+                  "propertyNames": {"enum": ["ELECTRICITY", "ELECTRICITY_FEED_IN", "NATURAL_GAS", "HEATING_OIL", "PELLETS", "WOOD_CHIPS", "DISTRICT_HEATING", "HYDROGEN", "DIESEL"]},
+                  "additionalProperties": {"enum": ["stated", "country_default", "general"]}
+                }
+              },
+              "additionalProperties": false
+            },
+            "energy_prices": {
+              "type": "object",
+              "propertyNames": {"enum": ["ELECTRICITY", "ELECTRICITY_FEED_IN", "NATURAL_GAS", "HEATING_OIL", "PELLETS", "WOOD_CHIPS", "DISTRICT_HEATING", "HYDROGEN", "DIESEL"]},
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "working_price_in_euro_per_kwh": {"enum": ["stated", "database"]},
+                  "standing_charge_in_euro_per_year": {"enum": ["stated", "database"]}
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
         }
       }
     },

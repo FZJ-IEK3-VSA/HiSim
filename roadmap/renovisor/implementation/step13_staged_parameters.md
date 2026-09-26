@@ -31,7 +31,9 @@ tests `@pytest.mark.base`; run new test files once from `tests/` as CI does. **I
    | `perspective_id` (string) | the perspective evaluated, default `brownfield_net` | the `--perspective` choice; the flag, when given, must agree or the run is refused |
    | `subsidy_mode` (`full` \| `none`) | whether the catalogue is applied | `apply_subsidies` (`full` → true, `none` → false); `undetermined` never becomes zero either way |
    | `financing` (`{kind: cash}` or `{kind: loan, financed_share?, nominal_interest_rate?, term_in_years?}`) | cash or one annuity loan per stage | overrides the perspective's `FinancingPlan` (cash → no plan; loan → `FinancingPlan(...)` with the given fields, engine defaults for the rest) |
-   | `escalation` (`{general?, investment?, feed_in?, energy?: {<carrier>: rate}}`) | escalation rates | the corresponding `EconomicParameters` fields |
+   | `escalation` (`{general?, investment?, feed_in?, energy?: {<carrier>: rate}}`) | escalation rates; `energy.ELECTRICITY_FEED_IN` is refused (never read) since 2026-09-26 | the corresponding `EconomicParameters` fields |
+   | `energy_prices` (`{<carrier>: {working_price_in_euro_per_kwh?, standing_charge_in_euro_per_year?}}`, each a number or `{min, best, max}`; `ELECTRICITY_FEED_IN` working price only) — added 2026-09-26, renovisorissues #52 | the year-1 price terms, working price all-in (carbon included); bounds (0, 2] EUR/kWh, feed-in [0, 1], standing charge [0, 5000] EUR/a | `EconomicParameters.energy_prices` |
+   | `origins` | ignored on input (the document's statement of where each echoed rate and price came from) — added 2026-09-26 | — |
    | `subsidy_catalog` (string or null) | ignored on input except as documentation of what produced the document; the catalogue comes from the shipped directory or `--subsidy-catalog` | — |
    | `simulation_year` | ignored on input (it is a fact of the stages) | — |
 

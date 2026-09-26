@@ -17,11 +17,91 @@ what makes a full factorial sweep a matter of milliseconds per cell.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, fields
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, ClassVar, Dict, Mapping, Optional
 
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.timeline import discount_factor
+from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType
+
+
+@dataclass(frozen=True)
+class StatedEnergyPrice:
+    """The year-1 price terms a plan states for one carrier, in place of the database's.
+
+    A RenoVisor household knows what it pays for gas or electricity today better than any national
+    average, so a staged plan may state those terms (renovisorissues #52). Each field is optional
+    and replaces only its own half of the flat contract generated from the price entry
+    (`calculators/energy.py`); a field left `None` keeps the database's value.
+
+    **What the working price means.** It is the *all-in* year-1 price the reader pays per kWh,
+    carbon included. For a carrier whose price entry declares `co2_price_exposure > 0` the engine
+    books the carbon price as a separate component read off the CO2 price path, so it subtracts
+    that component's year-1 value (exposure x emission factor x CO2 price at the price basis year)
+    from the stated price and bills the rest as the working price: year 1 then costs exactly the
+    stated price, and later years follow the working price's escalation plus the CO2 path. For
+    `ELECTRICITY_FEED_IN` the working price is the feed-in remuneration per kWh sold, which sets
+    the electricity contract's fixed feed-in rate; a feed-in carrier has no standing charge.
+
+    The standing charge replaces the fixed annual charge and escalates with the general rate, as
+    the database's does.
+
+    Args:
+        working_price_in_euro_per_kwh: The all-in year-1 working price, or None to keep the
+            database's.
+        standing_charge_in_euro_per_year: The fixed annual charge, or None to keep the database's.
+    """
+
+    #: The JSON key of the working price, in `EconomicParameters.to_dict` and in a plan's block.
+    WORKING_PRICE_KEY: ClassVar[str] = "working_price_in_euro_per_kwh"
+
+    #: The JSON key of the standing charge.
+    STANDING_CHARGE_KEY: ClassVar[str] = "standing_charge_in_euro_per_year"
+
+    working_price_in_euro_per_kwh: Optional[UncertainValue] = None
+    standing_charge_in_euro_per_year: Optional[UncertainValue] = None
+
+    def to_json(self) -> Dict[str, Any]:
+        """The stated terms as `economic_inputs.json`-style JSON, one key per stated field.
+
+        Returns:
+            ``{"working_price_in_euro_per_kwh"?: …, "standing_charge_in_euro_per_year"?: …}``, each
+            value written by `UncertainValue.to_json` (a bare number for an exact figure).
+        """
+        raw: Dict[str, Any] = {}
+        if self.working_price_in_euro_per_kwh is not None:
+            raw[self.WORKING_PRICE_KEY] = self.working_price_in_euro_per_kwh.to_json()
+        if self.standing_charge_in_euro_per_year is not None:
+            raw[self.STANDING_CHARGE_KEY] = self.standing_charge_in_euro_per_year.to_json()
+        return raw
+
+    @classmethod
+    def from_json(cls, raw: Any, context: str) -> "StatedEnergyPrice":
+        """The inverse of :meth:`to_json`.
+
+        Args:
+            raw: The mapping :meth:`to_json` wrote.
+            context: Where it stood, for the error message.
+
+        Returns:
+            The stated terms.
+
+        Raises:
+            ValueError: If `raw` is not a mapping, carries a key other than the two fields, or a
+                value is not a number or a band.
+        """
+        if not isinstance(raw, Mapping):
+            raise ValueError(f"{context} must be a mapping of stated price terms, got {raw!r}.")
+        unknown = sorted(set(raw) - {cls.WORKING_PRICE_KEY, cls.STANDING_CHARGE_KEY})
+        if unknown:
+            raise ValueError(
+                f"{context} states {', '.join(unknown)}; a stated price has only "
+                f"{cls.WORKING_PRICE_KEY} and {cls.STANDING_CHARGE_KEY}."
+            )
+        return cls(
+            working_price_in_euro_per_kwh=UncertainValue.optional_from_json(raw.get(cls.WORKING_PRICE_KEY)),
+            standing_charge_in_euro_per_year=UncertainValue.optional_from_json(raw.get(cls.STANDING_CHARGE_KEY)),
+        )
 
 
 @dataclass
@@ -78,6 +158,10 @@ class EconomicParameters:
     anyway_threshold_years: float = 2.0
     # Opt-in for rebilling a load profile under a tariff it was not simulated with (§4.6).
     allow_counterfactual_billing: bool = False
+    # Year-1 price terms a plan states per carrier in place of the database's (renovisorissues
+    # #52); a carrier absent here is priced from `energy_prices_<COUNTRY>.json`. See
+    # `StatedEnergyPrice` for what the working price means (all-in, carbon included).
+    energy_prices: Dict[EnergyCarrier, StatedEnergyPrice] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Basic sanity validation.
@@ -88,13 +172,24 @@ class EconomicParameters:
         is legitimate input or is caught later by the data loaders with a far more informative
         message.
 
+        The one structural rule of the stated prices is checked here too, because no reading of it
+        is meaningful: the feed-in carrier is a remuneration per kWh sold and has no standing
+        charge to state.
+
         Raises:
-            ValueError: If the observation period is below 1 year or the interest rate is <= -1.0.
+            ValueError: If the observation period is below 1 year, the interest rate is <= -1.0,
+                or a standing charge is stated for `ELECTRICITY_FEED_IN`.
         """
         if self.observation_period_in_years < 1:
             raise ValueError("observation_period_in_years must be >= 1.")
         if self.interest_rate <= -1.0:
             raise ValueError("interest_rate must be > -100 %.")
+        feed_in = self.energy_prices.get(EnergyCarrier.ELECTRICITY_FEED_IN)
+        if feed_in is not None and feed_in.standing_charge_in_euro_per_year is not None:
+            raise ValueError(
+                "energy_prices states a standing charge for ELECTRICITY_FEED_IN; the feed-in "
+                "carrier is a remuneration per kWh sold and has none."
+            )
 
     def discount_factor(self, year: int) -> float:
         """1 / (1 + i)^year at these parameters' interest rate.
@@ -132,9 +227,13 @@ class EconomicParameters:
         two rate dicts stay `EnergyCarrier` and `ComponentType` *members* here, not strings. Both
         enums derive from `str`, so `json.dump` writes each key as its enum *value* ("HeatPump",
         not "HEAT_PUMP") — which is the spelling `from_dict` has to read back, and the reason that
-        method accepts the member name as well.
+        method accepts the member name as well. The stated energy prices are written through
+        `StatedEnergyPrice.to_json`, since `asdict` would spell their bands in field names that
+        `UncertainValue.from_json` does not read.
         """
-        return asdict(self)
+        raw = asdict(self)
+        raw["energy_prices"] = {carrier: stated.to_json() for carrier, stated in self.energy_prices.items()}
+        return raw
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "EconomicParameters":
@@ -189,6 +288,20 @@ class EconomicParameters:
                 )
             values[key] = {
                 cls._enum_key(enum_class, member, key): float(rate) for member, rate in rates.items()
+            }
+        if "energy_prices" in values:
+            stated = values["energy_prices"]
+            if not isinstance(stated, dict):
+                raise ValueError(
+                    f"economic parameter 'energy_prices' must be a mapping of EnergyCarrier to stated "
+                    f"price terms, got {stated!r}. Omit the key to price every carrier from the "
+                    "database."
+                )
+            values["energy_prices"] = {
+                cls._enum_key(EnergyCarrier, carrier, "energy_prices"): StatedEnergyPrice.from_json(
+                    terms, f"energy_prices.{carrier}"
+                )
+                for carrier, terms in stated.items()
             }
         return cls(**values)
 

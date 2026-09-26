@@ -259,7 +259,7 @@ class StagedDocument:
     """
 
     #: Version of this document format. Bumped when a consumer would have to change.
-    SCHEMA_VERSION: ClassVar[int] = 3
+    SCHEMA_VERSION: ClassVar[int] = 4
 
     #: The one currency the engine prices in.
     CURRENCY: ClassVar[str] = "EUR"
@@ -552,6 +552,7 @@ class StagedDocument:
             perspective=self._perspective,
             simulation_year=self._result.plan.simulation_year,
             subsidy_catalog=self._catalog_id,
+            energy=self._result.energy_echo,
         )
 
     def _stages(self) -> List[Dict[str, Any]]:

@@ -10,13 +10,14 @@ The CLI's own behaviour (exit codes, ``problems.json``, the written document) is
 ``test_staged_cli.py``; this file is the parser and the two directions of the key table.
 """
 
+from dataclasses import replace
 from typing import Any, Dict, List
 
 import pytest
 
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.financing import FinancingPlan
-from hisim.economics.parameters import EconomicParameters
+from hisim.economics.parameters import EconomicParameters, StatedEnergyPrice
 from hisim.economics.perspectives import (
     InstallationContext,
     Perspective,
@@ -30,6 +31,7 @@ from hisim.economics.staged_parameters import (
     StagedParameters,
     SubsidyModeName,
 )
+from hisim.economics.uncertainty import UncertainValue
 
 pytestmark = pytest.mark.base
 
@@ -492,3 +494,222 @@ class TestTheDocumentBlock:
             )
             == block
         )
+
+
+class TestTheEnergyPrices:
+    """``energy_prices``: the year-1 terms a plan states per carrier (renovisorissues #52)."""
+
+    @staticmethod
+    def _parse(block: Dict[str, Any]) -> StagedParameters:
+        """Parse one ``energy_prices`` block over the stored assumptions."""
+        return StagedParameters.from_mapping({ParameterKeys.ENERGY_PRICES: block}, _stored())
+
+    def test_a_number_and_a_band_both_state_a_price(self):
+        """A bare number is exact; a band is the document's own ``{min, best, max}``."""
+        parsed = self._parse(
+            {
+                "ELECTRICITY": {
+                    "working_price_in_euro_per_kwh": {"min": 0.28, "best": 0.31, "max": 0.35},
+                    "standing_charge_in_euro_per_year": 180,
+                },
+                "ELECTRICITY_FEED_IN": {"working_price_in_euro_per_kwh": 0.0},
+            }
+        )
+        assert not parsed.problems
+        assert parsed.parameters is not None
+        stated = parsed.parameters.energy_prices
+        assert stated[EnergyCarrier.ELECTRICITY] == StatedEnergyPrice(
+            working_price_in_euro_per_kwh=UncertainValue(best_estimate=0.31, minimum=0.28, maximum=0.35),
+            standing_charge_in_euro_per_year=UncertainValue.exact(180.0),
+        )
+        assert stated[EnergyCarrier.ELECTRICITY_FEED_IN] == StatedEnergyPrice(
+            working_price_in_euro_per_kwh=UncertainValue.exact(0.0)
+        )
+
+    def test_one_field_may_be_stated_alone(self):
+        """The other keeps the database's value, so it is simply absent here."""
+        parsed = self._parse({"NATURAL_GAS": {"standing_charge_in_euro_per_year": 0}})
+        assert not parsed.problems
+        assert parsed.parameters is not None
+        assert parsed.parameters.energy_prices == {
+            EnergyCarrier.NATURAL_GAS: StatedEnergyPrice(standing_charge_in_euro_per_year=UncertainValue.exact(0.0))
+        }
+
+    def test_a_file_without_the_block_keeps_the_stages_stated_prices(self):
+        """What the file does not state is what the stages were priced under, as for every key."""
+        stored = replace(
+            _stored(),
+            energy_prices={EnergyCarrier.PELLETS: StatedEnergyPrice(UncertainValue.exact(0.07))},
+        )
+        parsed = StagedParameters.from_mapping({}, stored)
+        assert parsed.parameters == stored
+
+    @pytest.mark.parametrize(
+        "carrier, key, value",
+        [
+            ("ELECTRICITY", "working_price_in_euro_per_kwh", 0),
+            ("ELECTRICITY", "working_price_in_euro_per_kwh", 2.5),
+            ("HEATING_OIL", "working_price_in_euro_per_kwh", -0.1),
+            ("ELECTRICITY", "standing_charge_in_euro_per_year", -1),
+            ("ELECTRICITY", "standing_charge_in_euro_per_year", 5000.5),
+            ("ELECTRICITY_FEED_IN", "working_price_in_euro_per_kwh", -0.01),
+            ("ELECTRICITY_FEED_IN", "working_price_in_euro_per_kwh", 1.5),
+            ("ELECTRICITY", "working_price_in_euro_per_kwh", True),
+            ("ELECTRICITY", "working_price_in_euro_per_kwh", "0.30"),
+            ("ELECTRICITY", "working_price_in_euro_per_kwh", {"min": 0.3, "best": 0.2, "max": 0.4}),
+            ("ELECTRICITY", "working_price_in_euro_per_kwh", {"min": 0.3, "best": 0.35}),
+            ("ELECTRICITY", "working_price_in_euro_per_kwh", {"min": 0.0, "best": 0.3, "max": 0.4}),
+        ],
+    )
+    def test_a_value_outside_its_bounds_is_refused_at_its_own_path(self, carrier, key, value):
+        """Typo guards: a price in cents, per MWh, negative, unordered or not a number at all."""
+        parsed = self._parse({carrier: {key: value}})
+        assert _codes(parsed) == [f"parameters.energy_prices.{carrier}.{key}.invalid"]
+        assert parsed.problems[0].path == f"parameters.energy_prices.{carrier}.{key}"
+        assert parsed.parameters is None
+
+    def test_the_bounds_themselves_are_accepted(self):
+        """2 EUR/kWh, 1 EUR/kWh of feed-in and 5,000 EUR/a are the largest values, not refusals."""
+        parsed = self._parse(
+            {
+                "HYDROGEN": {"working_price_in_euro_per_kwh": 2, "standing_charge_in_euro_per_year": 5000},
+                "ELECTRICITY_FEED_IN": {"working_price_in_euro_per_kwh": 1},
+            }
+        )
+        assert not parsed.problems
+
+    def test_an_unknown_carrier_is_refused_with_the_carriers_that_exist(self):
+        """A misspelled carrier would otherwise price nothing, silently."""
+        parsed = self._parse({"COAL": {"working_price_in_euro_per_kwh": 0.05}})
+        assert _codes(parsed) == ["parameters.energy_prices.unknown_key"]
+        assert parsed.problems[0].path == "parameters.energy_prices.COAL"
+        assert EnergyCarrier.ELECTRICITY_FEED_IN.value in (parsed.problems[0].accepted or ())
+
+    def test_an_unknown_term_is_refused_with_the_two_that_exist(self):
+        """``grid_fee`` is not a term a plan states."""
+        parsed = self._parse({"ELECTRICITY": {"grid_fee": 0.1}})
+        assert _codes(parsed) == ["parameters.energy_prices.ELECTRICITY.unknown_key"]
+        assert parsed.problems[0].accepted == ParameterKeys.ACCEPTED_ENERGY_PRICE
+
+    def test_a_standing_charge_for_the_feed_in_carrier_is_refused(self):
+        """Feed-in is a remuneration per kWh sold; the charge belongs to the electricity contract."""
+        parsed = self._parse(
+            {
+                "ELECTRICITY_FEED_IN": {
+                    "working_price_in_euro_per_kwh": 0.08,
+                    "standing_charge_in_euro_per_year": 50,
+                }
+            }
+        )
+        assert _codes(parsed) == [
+            "parameters.energy_prices.ELECTRICITY_FEED_IN.standing_charge_in_euro_per_year.invalid"
+        ]
+
+    def test_a_carrier_stating_nothing_is_refused(self):
+        """An empty object would bill under a stated contract that states nothing."""
+        parsed = self._parse({"ELECTRICITY": {}})
+        assert _codes(parsed) == ["parameters.energy_prices.ELECTRICITY.missing"]
+
+    def test_a_carrier_that_is_not_an_object_is_refused(self):
+        """``{"ELECTRICITY": 0.3}`` does not say which term 0.3 is."""
+        parsed = self._parse({"ELECTRICITY": 0.3})
+        assert _codes(parsed) == ["parameters.energy_prices.ELECTRICITY.invalid"]
+
+    def test_a_feed_in_escalation_rate_is_refused_because_it_is_never_read(self):
+        """The remuneration is fixed, then follows ``escalation.feed_in``; a carrier rate says nothing."""
+        parsed = StagedParameters.from_mapping(
+            {ParameterKeys.ESCALATION: {"energy": {"ELECTRICITY_FEED_IN": 0.01, "ELECTRICITY": 0.03}}},
+            _stored(),
+        )
+        assert _codes(parsed) == ["parameters.escalation.energy.ELECTRICITY_FEED_IN.invalid"]
+
+    def test_origins_are_accepted_and_ignored(self):
+        """A document's own ``origins`` describe its run; read back they change nothing."""
+        stored = _stored()
+        parsed = StagedParameters.from_mapping(
+            {
+                ParameterKeys.ORIGINS: {
+                    "escalation": {"energy": {"ELECTRICITY": "country_default"}},
+                    "energy_prices": {"ELECTRICITY": {"working_price_in_euro_per_kwh": "database"}},
+                }
+            },
+            stored,
+        )
+        assert not parsed.problems
+        assert parsed.parameters == stored
+
+    def test_every_fault_of_the_block_is_reported_at_once(self):
+        """Four faults in two carriers, four rows."""
+        parsed = self._parse(
+            {
+                "COAL": {},
+                "ELECTRICITY": {"working_price_in_euro_per_kwh": 30, "standing_charge_in_euro_per_year": -5},
+                "ELECTRICITY_FEED_IN": {"standing_charge_in_euro_per_year": 1},
+            }
+        )
+        assert sorted(_codes(parsed)) == sorted(
+            [
+                "parameters.energy_prices.unknown_key",
+                "parameters.energy_prices.ELECTRICITY.working_price_in_euro_per_kwh.invalid",
+                "parameters.energy_prices.ELECTRICITY.standing_charge_in_euro_per_year.invalid",
+                "parameters.energy_prices.ELECTRICITY_FEED_IN.standing_charge_in_euro_per_year.invalid",
+            ]
+        )
+
+
+class TestTheEnergyEchoWithoutAPricedPlan:
+    """The block of parameters alone echoes what they state, and reads back unchanged."""
+
+    @staticmethod
+    def _stated() -> EconomicParameters:
+        """Stored assumptions stating a rate and three price terms."""
+        return replace(
+            _stored(),
+            energy_price_escalation_rates={EnergyCarrier.NATURAL_GAS: 0.04},
+            energy_prices={
+                EnergyCarrier.NATURAL_GAS: StatedEnergyPrice(
+                    working_price_in_euro_per_kwh=UncertainValue(best_estimate=0.12, minimum=0.1, maximum=0.15),
+                    standing_charge_in_euro_per_year=UncertainValue.exact(95.0),
+                ),
+                EnergyCarrier.ELECTRICITY_FEED_IN: StatedEnergyPrice(UncertainValue.exact(0.09)),
+            },
+        )
+
+    def _block(self) -> Dict[str, Any]:
+        """The document block of the stated assumptions."""
+        return StagedParameters.to_document_block(
+            parameters=self._stated(),
+            perspective=Perspective(id="brownfield_net", installation_context=InstallationContext.BROWNFIELD),
+            simulation_year=2021,
+            subsidy_catalog=None,
+        )
+
+    def test_it_states_the_stated_terms_as_bands_with_their_origins(self):
+        """Every stated field, as a band, and every origin ``stated``."""
+        block = self._block()
+        assert block[ParameterKeys.ESCALATION]["energy"] == {"NATURAL_GAS": 0.04}
+        assert block[ParameterKeys.ENERGY_PRICES] == {
+            "ELECTRICITY_FEED_IN": {"working_price_in_euro_per_kwh": {"min": 0.09, "best": 0.09, "max": 0.09}},
+            "NATURAL_GAS": {
+                "working_price_in_euro_per_kwh": {"min": 0.1, "best": 0.12, "max": 0.15},
+                "standing_charge_in_euro_per_year": {"min": 95.0, "best": 95.0, "max": 95.0},
+            },
+        }
+        assert block[ParameterKeys.ORIGINS] == {
+            "escalation": {"energy": {"NATURAL_GAS": "stated"}},
+            "energy_prices": {
+                "ELECTRICITY_FEED_IN": {"working_price_in_euro_per_kwh": "stated"},
+                "NATURAL_GAS": {
+                    "working_price_in_euro_per_kwh": "stated",
+                    "standing_charge_in_euro_per_year": "stated",
+                },
+            },
+        }
+
+    def test_the_block_reads_back_to_the_same_parameters(self):
+        """Bands come back as bands, and ``origins`` is ignored."""
+        parsed = StagedParameters.from_mapping(self._block(), _stored())
+        assert not parsed.problems
+        assert parsed.parameters is not None
+        assert parsed.parameters.energy_prices == self._stated().energy_prices
+        assert parsed.parameters.energy_price_escalation_rates == {EnergyCarrier.NATURAL_GAS: 0.04}

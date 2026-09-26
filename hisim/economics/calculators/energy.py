@@ -34,8 +34,8 @@ Realizes: cost_spec.md §3.5 (price entries, emission factors, CO2 exposure), §
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from dataclasses import dataclass, field, replace
+from typing import ClassVar, Dict, List, Optional, Tuple
 
 from hisim.economics.calculators.annualization import (
     annualize_billing_determinants,
@@ -45,7 +45,7 @@ from hisim.economics.calculators.escalation import carrier_escalation_rate, esca
 from hisim.economics.carriers import EnergyCarrier, revenue_subject
 from hisim.economics.database import CostDatabase, EnergyPriceEntry
 from hisim.economics.facts import BillingDeterminants
-from hisim.economics.parameters import EconomicParameters
+from hisim.economics.parameters import EconomicParameters, StatedEnergyPrice
 from hisim.economics.provenance import ParameterOrigin, ParameterProvenance, ProvenanceLedger
 from hisim.economics.tariffs import (
     FeedIn,
@@ -108,6 +108,98 @@ class EnergyFlowResult:
     tariffs_applied: List[TariffContract] = field(default_factory=list)
 
 
+class StatedPriceError(ValueError):
+    """A stated energy price the engine cannot bill as stated (renovisorissues #52).
+
+    Raised for the two conditions under which a price stated in `EconomicParameters.energy_prices`
+    has no honest reading: an all-in working price below the carbon price the engine books on top
+    of the working price in year 1, and a stated price for a carrier the run bills under an
+    explicit contract, whose price signal may have driven the simulation. The staged evaluator
+    checks both before it prices anything and reports them as ``problems.json`` rows; this error
+    is the calculator's own guard for every other caller.
+    """
+
+
+class StatedPrices:
+    """The vocabulary of a stated price inside the energy calculator, in one place.
+
+    Everything the calculator writes about a price a plan stated — the contract id it bills under,
+    the provenance record it cites, the feed-in duration — is named here, so the staged evaluator,
+    the document echo and the tests read the same strings the calculator writes.
+    """
+
+    #: Infix of the id of a contract whose terms a plan stated; distinct from
+    #: `TariffContract.DEFAULT_ID_INFIX`, so a stated contract is never taken for a generated one.
+    STATED_ID_INFIX: ClassVar[str] = "_STATED_"
+
+    #: What a stated price's provenance record says it is, and where it came from.
+    DETAIL: ClassVar[str] = "stated in the economics plan (parameters.energy_prices)"
+
+    #: The pseudo-source a stated price cites: there is no registry entry behind a household's
+    #: own bill, and `inline:` is the convention for exactly that (W2.4).
+    SOURCE_ID: ClassVar[str] = f"inline:{DETAIL}"
+
+    #: The dotted parameter path a stated field is recorded under in the provenance ledger.
+    PARAMETER_PATH: ClassVar[str] = "parameters.energy_prices.{carrier}.{field}"
+
+    #: How long a feed-in rate is held nominally fixed, stated or from the database (EEG
+    #: convention, §8.5).
+    FEED_IN_DURATION_IN_YEARS: ClassVar[int] = 20
+
+    #: Tolerance of the "not below the year-1 carbon price" check, in EUR/kWh: a price echoed by a
+    #: document and fed back in is the database's plus the carbon price, which may differ from it
+    #: in the last bit.
+    TOLERANCE_IN_EURO_PER_KWH: ClassVar[float] = 1e-12
+
+    @classmethod
+    def contract_id(cls, country: str, carrier: EnergyCarrier, year: int) -> str:
+        """The id of the contract a carrier with stated terms is billed under.
+
+        Args:
+            country: The country the plan is priced for.
+            carrier: The carrier the contract bills.
+            year: The price entry's year the unstated terms come from.
+
+        Returns:
+            ``"<country>_STATED_<carrier>_<year>"``.
+        """
+        return f"{country}{cls.STATED_ID_INFIX}{carrier.value}_{year}"
+
+    @classmethod
+    def parameter(cls, carrier: EnergyCarrier, field_name: str) -> str:
+        """The provenance parameter path of one stated field of one carrier."""
+        return cls.PARAMETER_PATH.format(carrier=carrier.value, field=field_name)
+
+    @classmethod
+    def stated_for(
+        cls, carrier: EnergyCarrier, parameters: EconomicParameters
+    ) -> Tuple[Optional[StatedEnergyPrice], Optional[StatedEnergyPrice]]:
+        """The terms a plan states for one carrier's contract: its own and, for electricity, feed-in.
+
+        Args:
+            carrier: The carrier whose contract is being built.
+            parameters: The run's parameters.
+
+        Returns:
+            ``(the carrier's stated terms or None, the stated feed-in terms or None)``; the second
+            is only ever set for `ELECTRICITY`, the carrier whose contract carries the feed-in rate.
+            Terms that state nothing are None, so they never mint a stated contract.
+        """
+
+        def stated(terms: Optional[StatedEnergyPrice]) -> Optional[StatedEnergyPrice]:
+            if terms is None or terms == StatedEnergyPrice():
+                return None
+            return terms
+
+        own = stated(parameters.energy_prices.get(carrier))
+        feed_in = (
+            stated(parameters.energy_prices.get(EnergyCarrier.ELECTRICITY_FEED_IN))
+            if carrier == EnergyCarrier.ELECTRICITY
+            else None
+        )
+        return own, feed_in
+
+
 def contract_from_price_entry(entry: EnergyPriceEntry, country: str) -> TariffContract:
     """The default flat contract generated from a §3.5 energy price entry (behavioral no-op).
 
@@ -152,9 +244,153 @@ def default_contract(
         contract.feed_in = FeedIn(
             kind=FeedInKind.FIXED_TARIFF,
             rate_in_euro_per_kwh=feed_in_entry.working_price_in_euro_per_kwh,
-            duration_in_years=20,
+            duration_in_years=StatedPrices.FEED_IN_DURATION_IN_YEARS,
         )
     return contract
+
+
+def year_one_co2_price_per_kwh(
+    entry: EnergyPriceEntry, parameters: EconomicParameters, database: CostDatabase, price_basis_year: int
+) -> float:
+    """The carbon price the calculator books on top of one kWh's working price in year 1, in EUR/kWh.
+
+    The per-kWh form of the ``ENERGY_CO2_PRICE`` component of :func:`build_energy_flows`: exposure
+    times emission factor times the CO2 price of the price basis year, which is the year the path
+    is read at for projection year 1. Zero when the entry declares no exposure or the run prices
+    no carbon (``co2_price_scenario: "none"``). A stated all-in working price is this plus the
+    working price the contract bills (`StatedEnergyPrice`).
+
+    Args:
+        entry: The carrier's price entry at the price basis year.
+        parameters: The run's parameters, for the country and the CO2 price scenario.
+        database: The cost database, for the CO2 price path.
+        price_basis_year: The economic "today".
+
+    Returns:
+        The year-1 carbon price per kWh bought.
+    """
+    if entry.co2_price_exposure <= 0:
+        return 0.0
+    path = database.get_co2_price_path(parameters.country, parameters.co2_price_scenario)
+    if path is None:
+        return 0.0
+    return entry.co2_price_exposure * entry.emission_factor_in_kg_per_kwh * path.price(price_basis_year) / 1000.0
+
+
+def with_stated_terms(
+    contract: TariffContract,
+    entry: EnergyPriceEntry,
+    parameters: EconomicParameters,
+    co2_per_kwh: float,
+) -> TariffContract:
+    """The default contract of one carrier with the terms a plan stated put in place.
+
+    The whole reading of `EconomicParameters.energy_prices` (renovisorissues #52): a stated
+    working price is the all-in year-1 price, so the year-1 carbon price the calculator books
+    separately is taken off it and the rest is billed as the working price; a stated standing
+    charge replaces the fixed annual charge; a stated ``ELECTRICITY_FEED_IN`` price becomes the
+    electricity contract's fixed feed-in rate for the usual 20 years. Every unstated term is the
+    database's, as :func:`default_contract` built it. A contract with anything stated gets its own
+    id and is no longer a generated default, so the assumptions table does not cite a database
+    entry for a household's own bill.
+
+    Args:
+        contract: The carrier's default contract, from :func:`default_contract`.
+        entry: The carrier's price entry at the price basis year.
+        parameters: The run's parameters, holding the stated terms.
+        co2_per_kwh: :func:`year_one_co2_price_per_kwh` of the entry.
+
+    Returns:
+        The contract to bill under; the one given when nothing is stated for its carrier.
+
+    Raises:
+        StatedPriceError: If a stated working price is below the year-1 carbon price, which would
+            leave a negative working price.
+    """
+    carrier = contract.carrier
+    own, feed_in = StatedPrices.stated_for(carrier, parameters)
+    if own is None and feed_in is None:
+        return contract
+    supply = contract.supply
+    standing = contract.standing_charge_in_euro_per_year
+    if own is not None and own.working_price_in_euro_per_kwh is not None:
+        stated = own.working_price_in_euro_per_kwh
+        if stated.minimum < co2_per_kwh - StatedPrices.TOLERANCE_IN_EURO_PER_KWH:
+            raise StatedPriceError(
+                f"the stated all-in working price of {carrier.value} ({stated.minimum:.6g} EUR/kWh at "
+                f"its lowest) is below the year-1 carbon price of {co2_per_kwh:.6g} EUR/kWh the engine "
+                "books on top of the working price, so no working price would be left."
+            )
+        working = stated if not co2_per_kwh else stated - UncertainValue.exact(co2_per_kwh)
+        supply = replace(supply, working_price_in_euro_per_kwh=working)
+    if own is not None and own.standing_charge_in_euro_per_year is not None:
+        standing = own.standing_charge_in_euro_per_year
+    remuneration = contract.feed_in
+    if feed_in is not None and feed_in.working_price_in_euro_per_kwh is not None:
+        remuneration = FeedIn(
+            kind=FeedInKind.FIXED_TARIFF,
+            rate_in_euro_per_kwh=feed_in.working_price_in_euro_per_kwh,
+            duration_in_years=StatedPrices.FEED_IN_DURATION_IN_YEARS,
+        )
+    return replace(
+        contract,
+        id=StatedPrices.contract_id(parameters.country, carrier, entry.year),
+        supply=supply,
+        standing_charge_in_euro_per_year=standing,
+        feed_in=remuneration,
+        source_ids=tuple(contract.source_ids) + (StatedPrices.SOURCE_ID,),
+        is_default_contract=False,
+    )
+
+
+def priced_contract(
+    carrier: EnergyCarrier, year: int, database: CostDatabase, parameters: EconomicParameters
+) -> TariffContract:
+    """The contract a carrier without an explicit one is billed under: the default, stated terms in place.
+
+    Args:
+        carrier: The carrier to price.
+        year: The price basis year.
+        database: The cost database.
+        parameters: The run's parameters, holding the country and any stated terms.
+
+    Returns:
+        :func:`with_stated_terms` of :func:`default_contract`.
+
+    Raises:
+        StatedPriceError: See :func:`with_stated_terms`.
+    """
+    entry = database.get_energy_price(carrier, year, parameters.country)
+    contract = default_contract(carrier, year, database, parameters.country)
+    return with_stated_terms(
+        contract, entry, parameters, year_one_co2_price_per_kwh(entry, parameters, database, year)
+    )
+
+
+def _stated_record(
+    ledger: ProvenanceLedger, carrier: EnergyCarrier, field_name: str, value: UncertainValue, detail: str
+) -> int:
+    """Record one stated field as a REQUEST-origin provenance record, returning its id.
+
+    Args:
+        ledger: The evaluation's provenance ledger.
+        carrier: The carrier the field was stated for.
+        field_name: The stated field.
+        value: The value as the plan stated it.
+        detail: What the record says about it.
+
+    Returns:
+        The interned record id.
+    """
+    return ledger.record(
+        ParameterProvenance(
+            parameter=StatedPrices.parameter(carrier, field_name),
+            value=value,
+            origin=ParameterOrigin.REQUEST,
+            source_ids=(StatedPrices.SOURCE_ID,),
+            detail=detail,
+        )
+    )
 
 
 def build_energy_flows(
@@ -221,16 +457,46 @@ def build_energy_flows(
     for determinants in billing:
         carrier = determinants.carrier
         annualized = annualize_billing_determinants(determinants, fraction)
-        contract = tariff_contracts.get(carrier) or default_contract(
-            carrier, year, database, params.country
-        )
+        own_terms, feed_in_terms = StatedPrices.stated_for(carrier, params)
+        explicit = tariff_contracts.get(carrier)
+        if explicit is not None and (own_terms is not None or feed_in_terms is not None):
+            raise StatedPriceError(
+                f"{carrier.value} is billed under the explicit contract {explicit.id!r}, and a "
+                "price stated in parameters.energy_prices cannot replace its terms: the "
+                "contract's price signal may have driven the simulation."
+            )
+        stated_working = own_terms.working_price_in_euro_per_kwh if own_terms is not None else None
+        stated_standing = own_terms.standing_charge_in_euro_per_year if own_terms is not None else None
+        stated_feed_in = feed_in_terms.working_price_in_euro_per_kwh if feed_in_terms is not None else None
         # W2.1: one call resolves the price entry and records the provenance of the field this
-        # bill is priced from; the two used to be separate steps a calculator could get wrong.
+        # bill is priced from; the two used to be separate steps a calculator could get wrong. A
+        # working price the plan stated is recorded as the plan's instead (#52), so the database's
+        # figure, which bills nothing then, is not cited.
         resolved_price = database.resolve_energy_price(
-            carrier, year, params.country, ledger, ("working_price_in_euro_per_kwh",)
+            carrier,
+            year,
+            params.country,
+            ledger,
+            ("working_price_in_euro_per_kwh",) if stated_working is None else (),
         )
         price_entry = resolved_price.entry
-        price_provenance = resolved_price.provenance_id("working_price_in_euro_per_kwh")
+        co2_per_kwh = year_one_co2_price_per_kwh(price_entry, params, database, year)
+        contract = explicit or with_stated_terms(
+            default_contract(carrier, year, database, params.country), price_entry, params, co2_per_kwh
+        )
+        if stated_working is None:
+            price_provenance = resolved_price.provenance_id("working_price_in_euro_per_kwh")
+        else:
+            detail = StatedPrices.DETAIL + "; the all-in year-1 price"
+            if co2_per_kwh:
+                detail += (
+                    f", less the year-1 CO2 price of {co2_per_kwh:.6g} EUR/kWh booked separately, is "
+                    f"billed as a working price of "
+                    f"{contract.supply.working_price_in_euro_per_kwh.best_estimate:.6g} EUR/kWh"
+                )
+            price_provenance = _stated_record(
+                ledger, carrier, StatedEnergyPrice.WORKING_PRICE_KEY, stated_working, detail
+            )
         energy_provenance = ledger.record(
             ParameterProvenance(
                 parameter=f"simulation.{carrier.value}.energy_bought",
@@ -239,7 +505,34 @@ def build_energy_flows(
                 detail=f"annualized from simulated fraction {fraction:.4f}",
             )
         )
-        provenance_ids = (price_provenance, energy_provenance)
+        provenance_ids: Tuple[int, ...] = (price_provenance, energy_provenance)
+        standing_provenance_ids = provenance_ids
+        if stated_standing is not None:
+            standing_provenance_ids = (
+                _stated_record(
+                    ledger,
+                    carrier,
+                    StatedEnergyPrice.STANDING_CHARGE_KEY,
+                    stated_standing,
+                    StatedPrices.DETAIL + "; replaces the fixed annual charge",
+                ),
+            )
+        elif stated_working is not None:
+            standing_provenance_ids = (
+                database.provenance_for_price(price_entry, ledger, StatedEnergyPrice.STANDING_CHARGE_KEY),
+            )
+        feed_in_provenance_ids = provenance_ids
+        if stated_feed_in is not None:
+            feed_in_provenance_ids = (
+                _stated_record(
+                    ledger,
+                    EnergyCarrier.ELECTRICITY_FEED_IN,
+                    StatedEnergyPrice.WORKING_PRICE_KEY,
+                    stated_feed_in,
+                    StatedPrices.DETAIL + "; the fixed feed-in rate of the electricity contract",
+                ),
+                energy_provenance,
+            )
         bill = apply_tariff(annualized, contract)
 
         if macro:
@@ -299,7 +592,7 @@ def build_energy_flows(
                         category=CostCategory.ENERGY_STANDING,
                         subject=carrier.value,
                         subject_kind=SubjectKind.CARRIER,
-                        provenance_ids=provenance_ids,
+                        provenance_ids=standing_provenance_ids,
                     )
                 )
             capacity = bill.by_category.get(CostCategory.ENERGY_CAPACITY_CHARGE)
@@ -330,7 +623,7 @@ def build_energy_flows(
                         category=CostCategory.FEED_IN_REVENUE,
                         subject=revenue_subject(carrier),
                         subject_kind=SubjectKind.CARRIER,
-                        provenance_ids=provenance_ids,
+                        provenance_ids=feed_in_provenance_ids,
                     )
                 )
             # Explicit CO2 price component (§3.5): exposure share of emissions.

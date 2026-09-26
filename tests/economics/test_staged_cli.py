@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from hisim.economics.__main__ import StagedCli, main
+from hisim.economics.calculators.energy import StatedPrices
 from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import effective_price_basis_year
 from hisim.economics.exports import ExportFileNames
@@ -793,10 +794,26 @@ class TestTheParameterBlockTheBackendSends:
         assert ParameterKeys.HORIZON_YEARS in problem["accepted"]
 
     def test_the_documents_own_block_is_a_legal_input_file(self, workspace):
-        """A reader can feed a document's assumptions back in and get the same run."""
+        """A reader can feed a document's assumptions back in and get the same run.
+
+        Every echoed rate and price is *stated* once it is fed back (renovisorissues #52), so the
+        second document's ``origins`` say so, and every figure is the first run's.
+        """
         first = self._run(workspace, self.BACKEND_EXAMPLE, "first")
         second = self._run(workspace, first["parameters"], "second")
-        assert second["parameters"] == first["parameters"]
+        origins = ParameterKeys.ORIGINS
+        assert {key: value for key, value in second["parameters"].items() if key != origins} == {
+            key: value for key, value in first["parameters"].items() if key != origins
+        }
+        assert second["parameters"][origins]["escalation"]["energy"] == {"ELECTRICITY": "stated"}
+        assert {
+            origin
+            for fields in second["parameters"][origins]["energy_prices"].values()
+            for origin in fields.values()
+        } == {"stated"}
+        for variant in ("reference", "plan"):
+            assert second[variant]["totals"] == first[variant]["totals"]
+        assert second["comparison"] == first["comparison"]
 
 
 class TestTheCountryComesFromTheStages:
@@ -1263,3 +1280,110 @@ class TestTheShippedCatalogueIsTheDefault:
             assert (from_translator is None) == (from_engine is None)
             if from_engine is not None:
                 assert str(from_translator) == from_engine
+
+
+class TestStatedEnergyPricesEndToEnd:
+    """``energy_prices`` through the whole subcommand (renovisorissues #52).
+
+    The workspace's stages are Irish but priced against the synthetic database, which carries
+    electricity and its feed-in rate and nothing else, so the prices stated here are the only
+    ones that differ from the database's.
+    """
+
+    BLOCK: Dict[str, Any] = {
+        "energy_prices": {
+            "ELECTRICITY": {
+                "working_price_in_euro_per_kwh": {"min": 0.24, "best": 0.26, "max": 0.29},
+                "standing_charge_in_euro_per_year": 140,
+            },
+            "ELECTRICITY_FEED_IN": {"working_price_in_euro_per_kwh": 0.1},
+        },
+        "escalation": {"energy": {"ELECTRICITY": 0.035}},
+    }
+
+    @staticmethod
+    def _run(workspace: Path, block: Any, name: str) -> int:
+        """Price the three-stage plan under one parameter block, returning the exit code."""
+        parameters_path = workspace / f"{name}.parameters.json"
+        parameters_path.write_text(json.dumps(block), encoding="utf-8")
+        arguments = _arguments(workspace, workspace / name / "economics_result.json")
+        arguments[arguments.index("--parameters") + 1] = str(parameters_path)
+        return main(arguments)
+
+    @staticmethod
+    def _problem_codes(workspace: Path, name: str) -> List[str]:
+        """The codes of the ``problems.json`` a refused run wrote."""
+        path = workspace / name / StagedCli.PROBLEMS_FILE_NAME
+        return [row["code"] for row in json.loads(path.read_text(encoding="utf-8"))["problems"]]
+
+    def test_the_document_echoes_what_was_stated_and_what_was_used(self, workspace):
+        """Stated terms and rate say ``stated``; the document validates as version 4."""
+        assert self._run(workspace, self.BLOCK, "stated") == 0
+        document = json.loads((workspace / "stated" / "economics_result.json").read_text(encoding="utf-8"))
+        StagedDocument.validate(document)
+        block = document["parameters"]
+        assert block["energy_prices"] == {
+            "ELECTRICITY": {
+                "working_price_in_euro_per_kwh": {"min": 0.24, "best": 0.26, "max": 0.29},
+                "standing_charge_in_euro_per_year": {"min": 140.0, "best": 140.0, "max": 140.0},
+            },
+            "ELECTRICITY_FEED_IN": {"working_price_in_euro_per_kwh": {"min": 0.1, "best": 0.1, "max": 0.1}},
+        }
+        assert block["escalation"]["energy"] == {"ELECTRICITY": 0.035}
+        assert block["origins"]["escalation"]["energy"] == {"ELECTRICITY": "stated"}
+        assert {
+            origin for fields in block["origins"]["energy_prices"].values() for origin in fields.values()
+        } == {"stated"}
+        electricity = [row for row in document["plan"]["energy_year1"] if row["carrier"] == "ELECTRICITY"]
+        assert electricity, "the plan bills electricity in year 1"
+
+    def test_the_written_ledger_cites_the_stated_prices_as_request_records(self, workspace):
+        """``cost_provenance.json`` names the plan's statement, not a database row, for each term."""
+        assert self._run(workspace, self.BLOCK, "ledger") == 0
+        stored = json.loads(
+            (workspace / "ledger" / ExportFileNames.PROVENANCE_FILE_NAME).read_text(encoding="utf-8")
+        )
+        ledger = ProvenanceLedger.from_json(stored["brownfield_gross"])
+        stated = {record.parameter: record for record in ledger.records if record.origin.value == "REQUEST"}
+        assert set(stated) == {
+            "parameters.energy_prices.ELECTRICITY.working_price_in_euro_per_kwh",
+            "parameters.energy_prices.ELECTRICITY.standing_charge_in_euro_per_year",
+            "parameters.energy_prices.ELECTRICITY_FEED_IN.working_price_in_euro_per_kwh",
+        }
+        record = stated["parameters.energy_prices.ELECTRICITY.working_price_in_euro_per_kwh"]
+        assert record.source_ids == (StatedPrices.SOURCE_ID,)
+        assert record.detail is not None and record.detail.startswith(StatedPrices.DETAIL)
+        assert not any(
+            record.parameter.endswith(".ELECTRICITY@2024.working_price_in_euro_per_kwh") for record in ledger.records
+        )
+
+    def test_a_refused_block_names_every_fault_in_problems_json(self, workspace):
+        """Four parser faults are four rows, exit 2 and no document.
+
+        An unknown carrier, a price out of bounds, a feed-in standing charge and a feed-in
+        escalation rate.
+        """
+        block = {
+            "energy_prices": {
+                "COAL": {"working_price_in_euro_per_kwh": 0.05},
+                "ELECTRICITY": {"working_price_in_euro_per_kwh": 26},
+                "ELECTRICITY_FEED_IN": {"working_price_in_euro_per_kwh": 0.1, "standing_charge_in_euro_per_year": 5},
+            },
+            "escalation": {"energy": {"ELECTRICITY_FEED_IN": 0.01}},
+        }
+        assert self._run(workspace, block, "refused") == StagedCli.PLAN_REFUSED
+        assert not (workspace / "refused" / "economics_result.json").exists()
+        assert sorted(self._problem_codes(workspace, "refused")) == sorted(
+            [
+                "parameters.energy_prices.unknown_key",
+                "parameters.energy_prices.ELECTRICITY.working_price_in_euro_per_kwh.invalid",
+                "parameters.energy_prices.ELECTRICITY_FEED_IN.standing_charge_in_euro_per_year.invalid",
+                "parameters.escalation.energy.ELECTRICITY_FEED_IN.invalid",
+            ]
+        )
+
+    def test_a_carrier_the_database_cannot_price_is_refused_by_the_evaluator(self, workspace):
+        """The synthetic database has no gas row: exit 2 with the evaluator's own row."""
+        block = {"energy_prices": {"NATURAL_GAS": {"working_price_in_euro_per_kwh": 0.12}}}
+        assert self._run(workspace, block, "no_row") == StagedCli.PLAN_REFUSED
+        assert self._problem_codes(workspace, "no_row") == ["parameters.energy_prices.NATURAL_GAS.invalid"]

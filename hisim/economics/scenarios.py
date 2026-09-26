@@ -87,6 +87,9 @@ class ScenarioLimits:
             "a whole-dataset swap is a run-level choice — sweep individual datapoints via overlays",
         "country":
             "a country change invalidates the simulated physics context and is a variant, not an economic scenario",
+        "energy_prices":
+            "a stated price is a plan's own year-1 bill, not an assumption to vary — sweep the price "
+            "datapoints via energy_prices_<COUNTRY> overlays",
     }
 
 

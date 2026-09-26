@@ -14,15 +14,21 @@ inputs instead of being compared against another run of the same engine.
 """
 
 from dataclasses import replace
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import pytest
 
+from hisim.economics.calculators.energy import StatedPriceError, StatedPrices
+from hisim.economics.carriers import EnergyCarrier, revenue_subject
+from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import EconomicEvaluator
-from hisim.economics.facts import ExistingAsset, ExistingAssetRegister
-from hisim.economics.parameters import EconomicParameters
+from hisim.economics.facts import BillingDeterminants, ExistingAsset, ExistingAssetRegister
+from hisim.economics.parameters import EconomicParameters, StatedEnergyPrice
 from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
+from hisim.economics.provenance import ParameterOrigin
 from hisim.economics.staged import Stage, StagedEvaluationError, StagedEvaluator
+from hisim.economics.staged_parameters import EchoOrigin
+from hisim.economics.tariffs import SupplyKind, TariffContract, TariffSupply
 from hisim.economics.timeline import Actor, CostCategory
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
@@ -856,3 +862,362 @@ class TestOnePlanOneLedger:
         ]
         # The electricity price is read by every stage, and all of them cite the same id for it.
         assert shared and all(set(shared) & cited for cited in cited_by_stage)
+
+
+def _by_year(result, subject: str, *categories: CostCategory) -> Dict[int, UncertainValue]:
+    """One subject's entries of the given categories, summed per year, on one result's timeline."""
+    totals: Dict[int, UncertainValue] = {}
+    for entry in result.timeline.entries:
+        if entry.subject == subject and entry.category in categories:
+            totals[entry.year] = totals.get(entry.year, UncertainValue.exact(0.0)) + entry.amount_in_euro
+    return totals
+
+
+def _close(left: UncertainValue, right: UncertainValue) -> bool:
+    """Slot-wise equality up to float noise."""
+    return all(
+        abs(a - b) <= 1e-9 * max(1.0, abs(b))
+        for a, b in zip(
+            (left.minimum, left.best_estimate, left.maximum), (right.minimum, right.best_estimate, right.maximum)
+        )
+    )
+
+
+def _problem_codes(error: StagedEvaluationError) -> List[str]:
+    """The codes of the ``problems.json`` rows a refusal carries."""
+    return [row["code"] for row in error.problems]
+
+
+class TestStatedEnergyPrices:
+    """``EconomicParameters.energy_prices`` bills year 1 at the stated price (renovisorissues #52).
+
+    The synthetic database prices electricity at 0.30 EUR/kWh with no carbon exposure, so a stated
+    price is the whole year-1 working price here; the Irish cases below use the shipped database,
+    whose gas and oil rows book their carbon price separately.
+    """
+
+    #: The stated all-in electricity working price, as a band.
+    WORKING = UncertainValue(best_estimate=0.25, minimum=0.2, maximum=0.3)
+
+    #: The stated standing charge.
+    STANDING = UncertainValue.exact(150.0)
+
+    #: The electricity escalation rate the cases state, distinct from the general rate.
+    RATE = 0.05
+
+    @pytest.fixture(name="stated")
+    def fixture_stated(self, parameters) -> EconomicParameters:
+        """The synthetic assumptions with a stated electricity price and rate."""
+        return replace(
+            parameters,
+            energy_price_escalation_rates={EnergyCarrier.ELECTRICITY: self.RATE},
+            energy_prices={
+                EnergyCarrier.ELECTRICITY: StatedEnergyPrice(
+                    working_price_in_euro_per_kwh=self.WORKING, standing_charge_in_euro_per_year=self.STANDING
+                )
+            },
+        )
+
+    @pytest.fixture(name="result")
+    def fixture_result(self, database, stated):
+        """The baseline against the envelope stage from year 0, under the stated price."""
+        return StagedEvaluator(database).evaluate(
+            [baseline_stage(), envelope_stage(0)], stated, brownfield_perspective()
+        )
+
+    def test_year_one_costs_the_kwh_times_the_stated_price_in_reference_and_plan(self, result):
+        """Both evaluations bill the stated band, each for its own consumption."""
+        for evaluation, kwh in (
+            (result.reference, SyntheticPlan.BASELINE_ELECTRICITY_IN_KWH),
+            (result.plan, SyntheticPlan.RENOVATED_ELECTRICITY_IN_KWH),
+        ):
+            working = _by_year(evaluation, "ELECTRICITY", CostCategory.ENERGY_WORKING)
+            assert _close(working[1], self.WORKING.scale(kwh))
+
+    def test_the_working_price_escalates_at_the_carrier_rate_from_year_two(self, result):
+        """Year t costs the stated price times ``(1 + rate)^(t - 1)``."""
+        working = _by_year(result.plan, "ELECTRICITY", CostCategory.ENERGY_WORKING)
+        kwh = SyntheticPlan.RENOVATED_ELECTRICITY_IN_KWH
+        for year in (2, 5, SyntheticPlan.HORIZON):
+            assert _close(working[year], self.WORKING.scale(kwh * (1 + self.RATE) ** (year - 1)))
+
+    def test_the_standing_charge_replaces_the_databases_and_escalates_with_general(self, result, stated):
+        """The synthetic database charges nothing; the stated 150 EUR/a is billed and escalated."""
+        standing = _by_year(result.plan, "ELECTRICITY", CostCategory.ENERGY_STANDING)
+        general = stated.general_price_escalation_rate
+        assert _close(standing[1], self.STANDING)
+        assert _close(standing[4], self.STANDING.scale((1 + general) ** 3))
+
+    def test_the_contract_billed_is_a_stated_one_with_its_own_id(self, result):
+        """The assumptions table does not cite a database entry for the household's own bill."""
+        for evaluation in result.per_stage:
+            tariff = evaluation.assumptions.tariffs["ELECTRICITY"]
+            assert tariff.contract_id == StatedPrices.contract_id(
+                SyntheticPlan.COUNTRY, EnergyCarrier.ELECTRICITY, SyntheticPlan.YEAR
+            )
+            assert not tariff.is_default_contract
+            assert StatedPrices.SOURCE_ID in tariff.source_ids
+
+    def test_the_stated_fields_are_request_records_in_the_ledger(self, result):
+        """The working and the standing entries cite the plan's statement, not the database row."""
+        ledger = result.ledger
+        assert ledger is not None
+        for category, field_name, value in (
+            (CostCategory.ENERGY_WORKING, "working_price_in_euro_per_kwh", self.WORKING),
+            (CostCategory.ENERGY_STANDING, "standing_charge_in_euro_per_year", self.STANDING),
+        ):
+            entry = next(
+                entry
+                for entry in result.plan.timeline.entries
+                if entry.subject == "ELECTRICITY" and entry.category is category
+            )
+            record = ledger.get(entry.provenance_ids[0])
+            assert record.origin is ParameterOrigin.REQUEST
+            assert record.parameter == f"parameters.energy_prices.ELECTRICITY.{field_name}"
+            assert record.value == value
+            assert record.source_ids == (StatedPrices.SOURCE_ID,)
+        assert not any(
+            record.parameter.endswith("ELECTRICITY@2024.working_price_in_euro_per_kwh") for record in ledger.records
+        ), "the database's working price billed nothing and is not cited"
+
+    def test_the_echo_states_the_prices_and_rates_used_with_their_origins(self, result):
+        """Stated terms say ``stated``; the feed-in rate nobody stated is the database's."""
+        echo = result.energy_echo
+        assert echo is not None
+        assert echo.rates == {EnergyCarrier.ELECTRICITY: (self.RATE, EchoOrigin.STATED)}
+        electricity = echo.prices[EnergyCarrier.ELECTRICITY]
+        assert electricity.working_price_in_euro_per_kwh == self.WORKING
+        assert electricity.working_price_origin is EchoOrigin.STATED
+        assert electricity.standing_charge_origin is EchoOrigin.STATED
+        feed_in = echo.prices[EnergyCarrier.ELECTRICITY_FEED_IN]
+        low, best, high = SyntheticPlan.FEED_IN_RATE_IN_EURO_PER_KWH
+        assert feed_in.working_price_in_euro_per_kwh == UncertainValue(best_estimate=best, minimum=low, maximum=high)
+        assert feed_in.working_price_origin is EchoOrigin.DATABASE
+
+    def test_a_stated_feed_in_rate_is_the_revenue_per_kwh_sold_for_twenty_years(self, database, parameters):
+        """The electricity contract pays the stated rate, nominally fixed over the whole horizon."""
+        rate = 0.12
+        stated = replace(
+            parameters,
+            energy_prices={EnergyCarrier.ELECTRICITY_FEED_IN: StatedEnergyPrice(UncertainValue.exact(rate))},
+        )
+        sold = SyntheticPlan.SOLD_ELECTRICITY_IN_KWH
+        result = StagedEvaluator(database).evaluate(
+            [baseline_stage(), heat_pump_stage(0, electricity_sold_in_kwh=sold)], stated, brownfield_perspective()
+        )
+        revenue = _by_year(result.plan, revenue_subject(EnergyCarrier.ELECTRICITY), CostCategory.FEED_IN_REVENUE)
+        assert sorted(revenue) == list(range(1, SyntheticPlan.HORIZON + 1))
+        for amount in revenue.values():
+            assert _close(amount, UncertainValue.exact(-sold * rate))
+        entry = next(entry for entry in result.plan.timeline.entries if entry.category is CostCategory.FEED_IN_REVENUE)
+        record = result.ledger.get(entry.provenance_ids[0])
+        assert record.origin is ParameterOrigin.REQUEST
+        assert record.parameter == "parameters.energy_prices.ELECTRICITY_FEED_IN.working_price_in_euro_per_kwh"
+        assert result.energy_echo.prices[EnergyCarrier.ELECTRICITY_FEED_IN].working_price_origin is EchoOrigin.STATED
+
+    def test_nothing_stated_bills_exactly_as_before(self, database, parameters):
+        """An empty block is the database's contract, entry for entry, with its default id."""
+        stages = [baseline_stage(), envelope_stage(0)]
+        plain = StagedEvaluator(database).evaluate(stages, parameters, brownfield_perspective())
+        assert plain.per_stage[0].assumptions.tariffs["ELECTRICITY"].is_default_contract
+        echo = plain.energy_echo
+        assert echo.prices[EnergyCarrier.ELECTRICITY].working_price_origin is EchoOrigin.DATABASE
+        assert echo.rates[EnergyCarrier.ELECTRICITY] == (parameters.general_price_escalation_rate, EchoOrigin.GENERAL)
+
+    def test_a_carrier_without_a_price_entry_is_refused(self, database, parameters):
+        """The synthetic country prices no gas: the stated price would have no emission factor."""
+        stated = replace(
+            parameters,
+            energy_prices={EnergyCarrier.NATURAL_GAS: StatedEnergyPrice(UncertainValue.exact(0.1))},
+        )
+        with pytest.raises(StagedEvaluationError) as caught:
+            StagedEvaluator(database).evaluate([baseline_stage()], stated, brownfield_perspective())
+        assert _problem_codes(caught.value) == ["parameters.energy_prices.NATURAL_GAS.invalid"]
+
+    def test_a_stated_price_under_an_explicit_contract_is_refused(self, database, parameters):
+        """The contract's price signal may have driven the simulation; its terms stay the contract's."""
+        contract = TariffContract(
+            id="synthetic_dynamic_tariff",
+            carrier=EnergyCarrier.ELECTRICITY,
+            country=SyntheticPlan.COUNTRY,
+            region=None,
+            valid_from_year=SyntheticPlan.YEAR,
+            supply=TariffSupply(kind=SupplyKind.FLAT, working_price_in_euro_per_kwh=UncertainValue.exact(0.3)),
+            standing_charge_in_euro_per_year=UncertainValue.exact(0.0),
+            source_ids=("src_staged_test",),
+        )
+        envelope = envelope_stage(0)
+        contracted = replace(
+            envelope, inputs=replace(envelope.inputs, tariff_contracts={EnergyCarrier.ELECTRICITY: contract})
+        )
+        stated = replace(
+            parameters,
+            energy_prices={
+                EnergyCarrier.ELECTRICITY: StatedEnergyPrice(
+                    standing_charge_in_euro_per_year=UncertainValue.exact(1.0)
+                ),
+                EnergyCarrier.ELECTRICITY_FEED_IN: StatedEnergyPrice(UncertainValue.exact(0.1)),
+            },
+        )
+        with pytest.raises(StagedEvaluationError) as caught:
+            StagedEvaluator(database).evaluate([baseline_stage(), contracted], stated, brownfield_perspective())
+        assert _problem_codes(caught.value) == [
+            "parameters.energy_prices.ELECTRICITY.mismatch",
+            "parameters.energy_prices.ELECTRICITY_FEED_IN.mismatch",
+        ]
+        assert "synthetic_dynamic_tariff" in caught.value.problems[0]["message"]
+
+    def test_the_calculator_refuses_the_same_on_its_own(self, database, parameters):
+        """A plain evaluation, which has no problems document, refuses too."""
+        contract = TariffContract(
+            id="synthetic_dynamic_tariff",
+            carrier=EnergyCarrier.ELECTRICITY,
+            country=SyntheticPlan.COUNTRY,
+            region=None,
+            valid_from_year=SyntheticPlan.YEAR,
+            supply=TariffSupply(kind=SupplyKind.FLAT, working_price_in_euro_per_kwh=UncertainValue.exact(0.3)),
+            standing_charge_in_euro_per_year=UncertainValue.exact(0.0),
+            source_ids=("src_staged_test",),
+        )
+        inputs = replace(baseline_stage().inputs, tariff_contracts={EnergyCarrier.ELECTRICITY: contract})
+        stated = replace(
+            parameters,
+            energy_prices={EnergyCarrier.ELECTRICITY: StatedEnergyPrice(UncertainValue.exact(0.2))},
+        )
+        with pytest.raises(StatedPriceError, match="explicit contract"):
+            EconomicEvaluator(database, stated).evaluate(inputs, brownfield_perspective())
+
+
+class TestStatedPricesAgainstTheCarbonPath:
+    """Irish gas and oil book their carbon price separately; the stated price is all-in (#52).
+
+    Priced against the shipped database, whose ``NATURAL_GAS`` and ``HEATING_OIL`` rows of Ireland
+    declare a carbon exposure of 1, so the year-1 bill is the working price *plus* the carbon price
+    read off the ``central`` path. Every synthetic subject is an override, so no shipped device
+    price reaches these cases.
+    """
+
+    #: Gas and oil bought per year, in kWh.
+    GAS_IN_KWH = 12000.0
+    OIL_IN_KWH = 5000.0
+
+    #: The stated all-in prices.
+    GAS_PRICE = 0.15
+    OIL_PRICE = UncertainValue(best_estimate=0.13, minimum=0.11, maximum=0.16)
+
+    #: The Irish price basis year of the shipped data.
+    YEAR = 2026
+
+    @pytest.fixture(name="shipped", scope="class")
+    def fixture_shipped(self) -> CostDatabase:
+        """The shipped cost database."""
+        return CostDatabase()
+
+    @pytest.fixture(name="irish")
+    def fixture_irish(self) -> EconomicParameters:
+        """Irish assumptions with the central carbon path."""
+        return EconomicParameters(
+            observation_period_in_years=SyntheticPlan.HORIZON,
+            interest_rate=SyntheticPlan.INTEREST_RATE,
+            country="IE",
+            price_basis_year=self.YEAR,
+            co2_price_scenario="central",
+            apply_subsidies=False,
+        )
+
+    def _stage(self) -> Stage:
+        """The baseline burning gas and oil instead of buying electricity."""
+        stage = baseline_stage()
+        return replace(
+            stage,
+            inputs=replace(
+                stage.inputs,
+                billing=[
+                    BillingDeterminants(carrier=EnergyCarrier.NATURAL_GAS, energy_bought_in_kwh=self.GAS_IN_KWH),
+                    BillingDeterminants(carrier=EnergyCarrier.HEATING_OIL, energy_bought_in_kwh=self.OIL_IN_KWH),
+                ],
+            ),
+        )
+
+    def _co2_per_kwh(self, shipped: CostDatabase, carrier: EnergyCarrier, year: int) -> float:
+        """The carbon price per kWh the engine books for one carrier in one calendar year."""
+        entry = shipped.get_energy_price(carrier, self.YEAR, "IE")
+        path = shipped.get_co2_price_path("IE", "central")
+        assert path is not None and entry.co2_price_exposure > 0
+        return entry.co2_price_exposure * entry.emission_factor_in_kg_per_kwh * path.price(year) / 1000.0
+
+    def test_year_one_costs_exactly_the_stated_all_in_price(self, shipped, irish):
+        """Working price plus carbon price in year 1 is the kWh times the stated price."""
+        stated = replace(
+            irish,
+            energy_prices={
+                EnergyCarrier.NATURAL_GAS: StatedEnergyPrice(UncertainValue.exact(self.GAS_PRICE)),
+                EnergyCarrier.HEATING_OIL: StatedEnergyPrice(self.OIL_PRICE),
+            },
+        )
+        result = StagedEvaluator(shipped).evaluate([self._stage()], stated, brownfield_perspective())
+        both = (CostCategory.ENERGY_WORKING, CostCategory.ENERGY_CO2_PRICE)
+        gas = _by_year(result.plan, "NATURAL_GAS", *both)
+        oil = _by_year(result.plan, "HEATING_OIL", *both)
+        assert _close(gas[1], UncertainValue.exact(self.GAS_IN_KWH * self.GAS_PRICE))
+        assert _close(oil[1], self.OIL_PRICE.scale(self.OIL_IN_KWH))
+
+    def test_later_years_escalate_the_working_price_and_follow_the_carbon_path(self, shipped, irish):
+        """Year 3 is 2028: the ex-carbon price escalated twice, plus 2028's carbon price."""
+        stated = replace(
+            irish, energy_prices={EnergyCarrier.NATURAL_GAS: StatedEnergyPrice(UncertainValue.exact(self.GAS_PRICE))}
+        )
+        result = StagedEvaluator(shipped).evaluate([self._stage()], stated, brownfield_perspective())
+        rate = EconomicEvaluator(shipped, stated).carrier_escalation_rate(EnergyCarrier.NATURAL_GAS)
+        carbon_today = self._co2_per_kwh(shipped, EnergyCarrier.NATURAL_GAS, self.YEAR)
+        working = _by_year(result.plan, "NATURAL_GAS", CostCategory.ENERGY_WORKING)
+        carbon = _by_year(result.plan, "NATURAL_GAS", CostCategory.ENERGY_CO2_PRICE)
+        carbon_2028 = self._co2_per_kwh(shipped, EnergyCarrier.NATURAL_GAS, 2028)
+        expected = self.GAS_IN_KWH * (self.GAS_PRICE - carbon_today) * (1 + rate) ** 2
+        assert _close(working[3], UncertainValue.exact(expected))
+        assert _close(carbon[3], UncertainValue.exact(self.GAS_IN_KWH * carbon_2028))
+        assert self._co2_per_kwh(shipped, EnergyCarrier.NATURAL_GAS, 2028) > carbon_today, "the path must move"
+
+    def test_the_echo_states_the_database_price_all_in(self, shipped, irish):
+        """Unstated gas is echoed as the database's working price plus the year-1 carbon price."""
+        result = StagedEvaluator(shipped).evaluate([self._stage()], irish, brownfield_perspective())
+        echo = result.energy_echo
+        entry = shipped.get_energy_price(EnergyCarrier.NATURAL_GAS, self.YEAR, "IE")
+        carbon = self._co2_per_kwh(shipped, EnergyCarrier.NATURAL_GAS, self.YEAR)
+        gas = echo.prices[EnergyCarrier.NATURAL_GAS]
+        all_in = entry.working_price_in_euro_per_kwh + UncertainValue.exact(carbon)
+        assert _close(gas.working_price_in_euro_per_kwh, all_in)
+        assert gas.working_price_origin is EchoOrigin.DATABASE
+        assert gas.standing_charge_in_euro_per_year == entry.standing_charge_in_euro_per_year
+        assert echo.rates[EnergyCarrier.NATURAL_GAS][1] is EchoOrigin.COUNTRY_DEFAULT
+        assert EnergyCarrier.ELECTRICITY not in echo.prices, "no stage bills electricity and the plan names none"
+
+    def test_feeding_the_echo_back_prices_the_same_plan(self, shipped, irish):
+        """The database's all-in price, stated, gives the same year-1 bill and the same NPV."""
+        first = StagedEvaluator(shipped).evaluate([self._stage()], irish, brownfield_perspective())
+        echo = first.energy_echo
+        stated = replace(
+            irish,
+            energy_price_escalation_rates={carrier: rate for carrier, (rate, _origin) in echo.rates.items()},
+            energy_prices={
+                carrier: StatedEnergyPrice(price.working_price_in_euro_per_kwh, price.standing_charge_in_euro_per_year)
+                for carrier, price in echo.prices.items()
+            },
+        )
+        second = StagedEvaluator(shipped).evaluate([self._stage()], stated, brownfield_perspective())
+        assert _close(second.plan.total_npv_in_euro, first.plan.total_npv_in_euro)
+        assert {price.working_price_origin for price in second.energy_echo.prices.values()} == {EchoOrigin.STATED}
+
+    def test_a_stated_price_below_the_year_one_carbon_price_is_refused(self, shipped, irish):
+        """No working price would be left: the refusal names the carbon price it fell below."""
+        carbon = self._co2_per_kwh(shipped, EnergyCarrier.NATURAL_GAS, self.YEAR)
+        stated = replace(
+            irish,
+            energy_prices={EnergyCarrier.NATURAL_GAS: StatedEnergyPrice(UncertainValue.exact(carbon / 2))},
+        )
+        with pytest.raises(StagedEvaluationError) as caught:
+            StagedEvaluator(shipped).evaluate([self._stage()], stated, brownfield_perspective())
+        assert _problem_codes(caught.value) == [
+            "parameters.energy_prices.NATURAL_GAS.working_price_in_euro_per_kwh.invalid"
+        ]
+        assert f"{carbon:.6g}" in caught.value.problems[0]["message"]

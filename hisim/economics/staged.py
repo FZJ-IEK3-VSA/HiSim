@@ -42,6 +42,12 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple
 
 from hisim.economics.calculators.aggregation import aggregate_timeline
+from hisim.economics.calculators.energy import (
+    StatedPrices,
+    priced_contract,
+    year_one_co2_price_per_kwh,
+)
+from hisim.economics.calculators.escalation import resolve_carrier_escalation_rate
 from hisim.economics.calculators.investment import InvestmentDating
 from hisim.economics.calculators.reserve import replacement_reserve_amount
 from hisim.economics.carriers import EnergyCarrier
@@ -55,10 +61,21 @@ from hisim.economics.results import (
     LifecycleCo2Result,
     LifecycleCostResult,
     ReferenceAreas,
+    ResolvedRate,
+    TariffAssumption,
     VariantComparison,
     compare,
 )
+from hisim.economics.staged_parameters import (
+    EchoedPrice,
+    EchoOrigin,
+    EnergyEcho,
+    ParameterKeys,
+    ParameterProblem,
+    ParameterProblemCodes,
+)
 from hisim.economics.subsidies import SubsidyCatalog
+from hisim.economics.tariffs import FeedInKind
 from hisim.economics.timeline import CashFlowEntry, CashFlowTimeline, CostCategory
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType
@@ -95,6 +112,16 @@ class StagedEvaluationError(Exception):
         """Store the message and, for a parameter refusal, the per-key problem rows."""
         super().__init__(message)
         self.problems: Tuple[Mapping[str, Any], ...] = tuple(problems)
+
+
+class StagedEngineError(RuntimeError):
+    """The engine contradicted itself while pricing a plan: never the caller's fault.
+
+    Raised when the stages of one plan, priced under one parameter set against one database,
+    resolve a carrier's escalation rate or tariff differently — which the engine's own construction
+    rules out, so a disagreement is a defect to report rather than a plan to refuse. The CLI turns
+    it into exit code 3.
+    """
 
 
 class StagedCategories:
@@ -279,6 +306,11 @@ class StagedResult:
             and therefore with ``subsidy_mode: NONE``. Recorded by :meth:`StagedEvaluator.evaluate`
             rather than supplied beside the result, so a document cannot name a catalogue the
             figures were not priced with.
+        energy_echo: The per-carrier escalation rates and year-1 prices the plan was priced with,
+            for every carrier a stage bills and every carrier the plan named, with their origins
+            (renovisorissues #52). Resolved by :meth:`StagedEvaluator.evaluate` for the same reason
+            as the catalogue id; ``None`` for a result assembled by hand, whose document then
+            echoes only what its parameters state.
     """
 
     reference: LifecycleCostResult
@@ -290,6 +322,7 @@ class StagedResult:
     active_stage_by_year: Tuple[int, ...] = field(default_factory=tuple)
     stage_by_entry: Tuple[int, ...] = field(default_factory=tuple)
     subsidy_catalog_id: Optional[str] = None
+    energy_echo: Optional[EnergyEcho] = None
 
     @property
     def ledger(self) -> Optional[ProvenanceLedger]:
@@ -452,6 +485,8 @@ class StagedEvaluator:
         parameters, perspective = self.priced_under(parameters, perspective, catalog)
         self._validate(ordered, parameters)
         evaluator = EconomicEvaluator(self.database, parameters, catalog)
+        price_basis_year = evaluator.price_basis_year(ordered[0].inputs)
+        self._validate_stated_prices(ordered, parameters, price_basis_year)
         active_by_year = self._active_by_year(ordered, parameters.observation_period_in_years)
 
         # One ledger for the whole plan: the spliced timeline carries entries of every stage, and
@@ -485,6 +520,7 @@ class StagedEvaluator:
             active_stage_by_year=active_by_year,
             stage_by_entry=spliced.stage_by_entry,
             subsidy_catalog_id=self.catalog_id(catalog, parameters.country),
+            energy_echo=self._energy_echo(ordered, tuple(per_stage), parameters, price_basis_year),
         )
 
     #: How a catalogue is named in the document: the country it applies to and the date the
@@ -647,6 +683,235 @@ class StagedEvaluator:
                             reference=reference,
                         )
                     )
+
+    # ------------------------------------------------------------------ stated energy prices (#52)
+
+    #: Message of the refusal raised when a stated energy price cannot be priced as stated.
+    STATED_PRICES_MESSAGE = (
+        "the energy prices this plan states cannot be priced as stated: {count} problem(s), each "
+        "named in the problems document."
+    )
+
+    #: The label prefix of a per-carrier rate in `EconomicAssumptions.escalation_rates`.
+    ENERGY_RATE_PREFIX = "energy:"
+
+    def _validate_stated_prices(
+        self, stages: Tuple[Stage, ...], parameters: EconomicParameters, price_basis_year: int
+    ) -> None:
+        """Refuse stated energy prices the engine could only bill by reading them differently (#52).
+
+        The checks the parameter parser cannot make, because they need the stages and the
+        database: a price stated for a carrier some stage bills under an explicit contract (the
+        contract's price signal may have driven that stage's simulation, so replacing its terms
+        afterwards would price a load the tariff did not produce), a carrier the country has no
+        price entry for (its emission factor, carbon exposure and tax share still come from one),
+        and an all-in working price below the year-1 carbon price booked on top of the working
+        price, which would leave a negative one. Every fault is reported at once, as
+        ``problems.json`` rows in the parameter block's own codes.
+
+        Args:
+            stages: The plan as given.
+            parameters: The assumptions, holding the stated prices.
+            price_basis_year: The economic "today" the year-1 carbon price is read at.
+
+        Raises:
+            StagedEvaluationError: Carrying one row per offending carrier or field.
+        """
+        if not parameters.energy_prices:
+            return
+        root = f"{ParameterKeys.ROOT_PATH}.{ParameterKeys.ENERGY_PRICES}"
+        problems: Dict[str, ParameterProblem] = {}
+
+        def refuse(path: str, code: str, message: str) -> None:
+            problems.setdefault(path, ParameterProblem(path=path, code=code.format(path=path), message=message))
+
+        for index, stage in enumerate(stages):
+            for carrier, contract in stage.inputs.tariff_contracts.items():
+                if contract.is_default_contract:
+                    continue
+                own, feed_in = StatedPrices.stated_for(carrier, parameters)
+                for stated, named in ((own, carrier), (feed_in, EnergyCarrier.ELECTRICITY_FEED_IN)):
+                    if stated is not None:
+                        refuse(
+                            f"{root}.{named.value}",
+                            ParameterProblemCodes.MISMATCH,
+                            f"stages[{index}] ({stage.label!r}) bills {carrier.value} under the explicit "
+                            f"contract {contract.id!r}, whose price signal may have driven its "
+                            "simulation; its terms cannot be replaced by a stated price.",
+                        )
+        for carrier, stated in parameters.energy_prices.items():
+            if carrier == EnergyCarrier.ELECTRICITY_FEED_IN:
+                continue  # a rate on the electricity contract, needing no price entry of its own
+            if not self.database.has_energy_price(carrier, parameters.country):
+                refuse(
+                    f"{root}.{carrier.value}",
+                    ParameterProblemCodes.INVALID,
+                    f"the cost database has no {carrier.value} price entry for {parameters.country}; a "
+                    "stated price replaces the entry's prices, but its emission factor, carbon "
+                    "exposure and tax share still come from it.",
+                )
+                continue
+            working = stated.working_price_in_euro_per_kwh
+            if working is None:
+                continue
+            entry = self.database.get_energy_price(carrier, price_basis_year, parameters.country)
+            co2_per_kwh = year_one_co2_price_per_kwh(entry, parameters, self.database, price_basis_year)
+            if working.minimum < co2_per_kwh - StatedPrices.TOLERANCE_IN_EURO_PER_KWH:
+                refuse(
+                    f"{root}.{carrier.value}.{ParameterKeys.PRICE_WORKING}",
+                    ParameterProblemCodes.INVALID,
+                    f"the stated all-in working price ({working.minimum:.6g} EUR/kWh at its lowest) is "
+                    f"below the year-1 carbon price of {co2_per_kwh:.6g} EUR/kWh the engine books on "
+                    f"top of the {carrier.value} working price ({entry.co2_price_exposure:g} exposure x "
+                    f"{entry.emission_factor_in_kg_per_kwh:.6g} kg/kWh x the "
+                    f"{parameters.co2_price_scenario!r} CO2 price of {price_basis_year}).",
+                )
+        if problems:
+            rows = [problem.to_json() for problem in problems.values()]
+            raise StagedEvaluationError(self.STATED_PRICES_MESSAGE.format(count=len(rows)), rows)
+
+    def _energy_echo(
+        self,
+        stages: Tuple[Stage, ...],
+        per_stage: Tuple[LifecycleCostResult, ...],
+        parameters: EconomicParameters,
+        price_basis_year: int,
+    ) -> EnergyEcho:
+        """The per-carrier rates and year-1 prices the plan was priced with, and their origins (#52, E1).
+
+        The rates of the carriers the stages bill are the union of the stages' own resolved
+        assumptions, which must agree — every stage is priced under one parameter set against one
+        database, so a disagreement is an engine defect (:class:`StagedEngineError`). A carrier the
+        plan named but no stage bills is resolved through the same fallback chain. Prices are the
+        contract each carrier is billed under
+        (:func:`~hisim.economics.calculators.energy.priced_contract`), checked against the stages'
+        billed tariffs, with the working price stated all-in: the database's working price plus the
+        year-1 carbon price booked beside it, or the stated price as it was stated. The feed-in rate
+        is echoed as ``ELECTRICITY_FEED_IN`` whenever the electricity contract pays one. A carrier
+        billed under an explicit contract has no flat price a plan could state, and is left out of
+        the prices.
+
+        Args:
+            stages: The plan as given.
+            per_stage: Each stage's own evaluation.
+            parameters: The assumptions the plan was priced under.
+            price_basis_year: The economic "today".
+
+        Returns:
+            The echo, keyed by carrier in carrier order.
+
+        Raises:
+            StagedEngineError: If two stages resolved one carrier's rate or tariff differently, or
+                the contract rebuilt here is not the one the stages billed.
+        """
+        billed_rates: Dict[EnergyCarrier, ResolvedRate] = {}
+        billed_tariffs: Dict[EnergyCarrier, TariffAssumption] = {}
+        for index, result in enumerate(per_stage):
+            if result.assumptions is None:
+                continue
+            for label, rate in result.assumptions.escalation_rates.items():
+                if label.startswith(self.ENERGY_RATE_PREFIX):
+                    carrier = EnergyCarrier(label[len(self.ENERGY_RATE_PREFIX):])
+                    self._agreed(billed_rates, carrier, rate, index, "escalation rate")
+            for value, tariff in result.assumptions.tariffs.items():
+                self._agreed(billed_tariffs, EnergyCarrier(value), tariff, index, "tariff")
+        feed_in = EnergyCarrier.ELECTRICITY_FEED_IN
+        named = set(parameters.energy_price_escalation_rates) | set(parameters.energy_prices)
+        rates: Dict[EnergyCarrier, Tuple[float, EchoOrigin]] = {}
+        for carrier in sorted((set(billed_rates) | named) - {feed_in}, key=lambda member: member.value):
+            resolved = billed_rates.get(carrier) or resolve_carrier_escalation_rate(
+                carrier, parameters, self.database
+            )
+            rates[carrier] = (resolved.rate, EchoOrigin.of_rate(resolved.origin))
+        explicit = {
+            carrier
+            for stage in stages
+            for carrier, contract in stage.inputs.tariff_contracts.items()
+            if not contract.is_default_contract
+        }
+        prices: Dict[EnergyCarrier, EchoedPrice] = {}
+        for carrier in ((set(billed_tariffs) - explicit) | set(parameters.energy_prices)) - {feed_in}:
+            prices[carrier] = self._echoed_price(carrier, billed_tariffs.get(carrier), parameters, price_basis_year)
+        stated_feed_in = parameters.energy_prices.get(feed_in)
+        if stated_feed_in is not None:
+            prices[feed_in] = EchoedPrice(
+                working_price_in_euro_per_kwh=stated_feed_in.working_price_in_euro_per_kwh,
+                working_price_origin=EchoOrigin.STATED,
+            )
+        elif EnergyCarrier.ELECTRICITY in prices:
+            contract = priced_contract(EnergyCarrier.ELECTRICITY, price_basis_year, self.database, parameters)
+            if contract.feed_in.kind == FeedInKind.FIXED_TARIFF:
+                prices[feed_in] = EchoedPrice(
+                    working_price_in_euro_per_kwh=contract.feed_in.rate_in_euro_per_kwh,
+                    working_price_origin=EchoOrigin.DATABASE,
+                )
+        return EnergyEcho(rates=rates, prices=dict(sorted(prices.items(), key=lambda item: item[0].value)))
+
+    def _echoed_price(
+        self,
+        carrier: EnergyCarrier,
+        billed: Optional[TariffAssumption],
+        parameters: EconomicParameters,
+        price_basis_year: int,
+    ) -> EchoedPrice:
+        """One carrier's year-1 price terms as the plan was priced with them, the working price all-in.
+
+        Args:
+            carrier: A carrier other than the feed-in one.
+            billed: The tariff the stages billed it under, or None when no stage bills it.
+            parameters: The assumptions.
+            price_basis_year: The economic "today".
+
+        Returns:
+            The echoed terms.
+
+        Raises:
+            StagedEngineError: If the contract rebuilt here is not the one the stages billed.
+        """
+        contract = priced_contract(carrier, price_basis_year, self.database, parameters)
+        if billed is not None and TariffAssumption.from_contract(contract) != billed:
+            raise StagedEngineError(
+                f"the stages billed {carrier.value} under {billed.contract_id!r}, but the plan's "
+                f"parameters price it under {contract.id!r} with different terms."
+            )
+        stated = parameters.energy_prices.get(carrier)
+        stated_working = stated.working_price_in_euro_per_kwh if stated is not None else None
+        stated_standing = stated.standing_charge_in_euro_per_year if stated is not None else None
+        if stated_working is not None:
+            working = stated_working
+        else:
+            entry = self.database.get_energy_price(carrier, price_basis_year, parameters.country)
+            co2_per_kwh = year_one_co2_price_per_kwh(entry, parameters, self.database, price_basis_year)
+            working = contract.supply.working_price_in_euro_per_kwh
+            if co2_per_kwh:
+                working = working + UncertainValue.exact(co2_per_kwh)
+        return EchoedPrice(
+            working_price_in_euro_per_kwh=working,
+            working_price_origin=EchoOrigin.STATED if stated_working is not None else EchoOrigin.DATABASE,
+            standing_charge_in_euro_per_year=contract.standing_charge_in_euro_per_year,
+            standing_charge_origin=EchoOrigin.STATED if stated_standing is not None else EchoOrigin.DATABASE,
+        )
+
+    @staticmethod
+    def _agreed(found: Dict[EnergyCarrier, Any], carrier: EnergyCarrier, value: Any, index: int, what: str) -> None:
+        """Record one stage's resolution of one carrier, refusing a second stage that disagrees.
+
+        Args:
+            found: Carrier -> the resolution recorded so far; written in place.
+            carrier: The carrier.
+            value: This stage's resolution.
+            index: This stage's index, for the message.
+            what: What was resolved, for the message.
+
+        Raises:
+            StagedEngineError: If an earlier stage resolved the carrier differently.
+        """
+        earlier = found.setdefault(carrier, value)
+        if earlier != value:
+            raise StagedEngineError(
+                f"stages[{index}] resolved the {what} of {carrier.value} as {value!r}, an earlier stage "
+                f"as {earlier!r}; one plan is priced under one set of assumptions."
+            )
 
     # ------------------------------------------------------------------ per-stage inputs
 

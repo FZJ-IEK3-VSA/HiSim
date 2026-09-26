@@ -41,8 +41,10 @@ from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.financing import FinancingPlan
-from hisim.economics.parameters import EconomicParameters
+from hisim.economics.parameters import EconomicParameters, StatedEnergyPrice
 from hisim.economics.perspectives import Perspective, SubsidyMode, SubsidyModeKind
+from hisim.economics.results import RateOrigin
+from hisim.economics.uncertainty import UncertainValue
 
 
 class ParameterKeys:
@@ -84,6 +86,13 @@ class ParameterKeys:
     #: The escalation rates, as a nested block.
     ESCALATION: ClassVar[str] = "escalation"
 
+    #: The year-1 price terms stated per carrier, as a nested block (renovisorissues #52).
+    ENERGY_PRICES: ClassVar[str] = "energy_prices"
+
+    #: Where each echoed energy rate and price came from. Written by a document, accepted and
+    #: ignored on input: it describes the run, it is not an assumption a caller may state.
+    ORIGINS: ClassVar[str] = "origins"
+
     #: Which catalogue produced a document. Accepted and ignored on input (see the class docstring
     #: of :class:`StagedParameters`): the catalogue comes from the shipped directory or from
     #: ``--subsidy-catalog``.
@@ -104,6 +113,16 @@ class ParameterKeys:
 
     #: Per-carrier energy price escalation, inside :attr:`ESCALATION`.
     ESCALATION_ENERGY: ClassVar[str] = "energy"
+
+    #: The all-in year-1 working price in EUR/kWh, inside one carrier of :attr:`ENERGY_PRICES`;
+    #: for ``ELECTRICITY_FEED_IN`` the feed-in remuneration per kWh sold.
+    PRICE_WORKING: ClassVar[str] = StatedEnergyPrice.WORKING_PRICE_KEY
+
+    #: The fixed annual charge in EUR/a, inside one carrier of :attr:`ENERGY_PRICES`.
+    PRICE_STANDING: ClassVar[str] = StatedEnergyPrice.STANDING_CHARGE_KEY
+
+    #: The three keys of a price band, in the document's spelling.
+    BAND_KEYS: ClassVar[Tuple[str, ...]] = ("min", "best", "max")
 
     #: Cash or loan, inside :attr:`FINANCING`.
     FINANCING_KIND: ClassVar[str] = "kind"
@@ -128,7 +147,9 @@ class ParameterKeys:
         SUBSIDY_MODE,
         FINANCING,
         ESCALATION,
+        ENERGY_PRICES,
         SUBSIDY_CATALOG,
+        ORIGINS,
     )
 
     #: Every key the :attr:`ESCALATION` block accepts.
@@ -138,6 +159,9 @@ class ParameterKeys:
         ESCALATION_FEED_IN,
         ESCALATION_ENERGY,
     )
+
+    #: Every key one carrier of the :attr:`ENERGY_PRICES` block accepts.
+    ACCEPTED_ENERGY_PRICE: ClassVar[Tuple[str, ...]] = (PRICE_WORKING, PRICE_STANDING)
 
     #: Every key the :attr:`FINANCING` block accepts; the three loan fields are meaningless for a
     #: cash purchase and are refused there.
@@ -150,6 +174,151 @@ class ParameterKeys:
 
     #: The dotted path the top-level block is reported under in ``problems.json``.
     ROOT_PATH: ClassVar[str] = "parameters"
+
+
+class StatedPriceBounds:
+    """The ranges a stated energy price must lie in: typo guards, not market limits (#52).
+
+    Each bound is wide enough for any bill a household in the shipped countries could show and
+    narrow enough to catch the three typos that matter — a price in cents rather than euros, a
+    price per MWh, a monthly charge typed as an annual one the wrong way round. A value outside is
+    refused as ``parameters.energy_prices.<CARRIER>.<field>.invalid``.
+
+    Example::
+
+        StatedPriceBounds.WORKING_PRICE_MAXIMUM_IN_EURO_PER_KWH == 2.0
+    """
+
+    #: A working price is strictly positive: a free purchase is not a price anyone pays.
+    WORKING_PRICE_ABOVE_IN_EURO_PER_KWH: ClassVar[float] = 0.0
+
+    #: And at most 2 EUR/kWh, several times the dearest retail price in the shipped data.
+    WORKING_PRICE_MAXIMUM_IN_EURO_PER_KWH: ClassVar[float] = 2.0
+
+    #: A feed-in rate may be zero (export unpaid) but not negative.
+    FEED_IN_MINIMUM_IN_EURO_PER_KWH: ClassVar[float] = 0.0
+
+    #: And at most 1 EUR/kWh.
+    FEED_IN_MAXIMUM_IN_EURO_PER_KWH: ClassVar[float] = 1.0
+
+    #: A standing charge may be zero but not negative.
+    STANDING_CHARGE_MINIMUM_IN_EURO_PER_YEAR: ClassVar[float] = 0.0
+
+    #: And at most 5,000 EUR a year.
+    STANDING_CHARGE_MAXIMUM_IN_EURO_PER_YEAR: ClassVar[float] = 5000.0
+
+
+class EchoOrigin(enum.Enum):
+    """Where an echoed energy rate or price came from, as ``parameters.origins`` spells it.
+
+    Two vocabularies share the enum because they share the first word. A per-carrier escalation
+    rate is ``stated`` (the plan's assumptions name it), ``country_default`` (the country's
+    ``escalation_defaults_<COUNTRY>.json``) or ``general`` (the general escalation rate); a price
+    field is ``stated`` or ``database`` (the price entry at the price basis year).
+
+    Example::
+
+        EchoOrigin.of_rate(RateOrigin.COUNTRY_DEFAULTS) is EchoOrigin.COUNTRY_DEFAULT
+    """
+
+    STATED = "stated"
+    COUNTRY_DEFAULT = "country_default"
+    GENERAL = "general"
+    DATABASE = "database"
+
+    @classmethod
+    def of_rate(cls, origin: RateOrigin) -> "EchoOrigin":
+        """The echo spelling of one step of the escalation fallback chain.
+
+        Args:
+            origin: The step that produced the rate.
+
+        Returns:
+            ``STATED`` for a configured rate, ``COUNTRY_DEFAULT`` for the defaults file, ``GENERAL``
+            for the general-rate fallback.
+        """
+        return {
+            RateOrigin.CONFIGURATION: cls.STATED,
+            RateOrigin.COUNTRY_DEFAULTS: cls.COUNTRY_DEFAULT,
+            RateOrigin.GENERAL_FALLBACK: cls.GENERAL,
+        }[origin]
+
+
+@dataclass(frozen=True)
+class EchoedPrice:
+    """The year-1 price terms one carrier was priced at, as the document echoes them.
+
+    Args:
+        working_price_in_euro_per_kwh: The all-in year-1 working price (carbon included), or for
+            ``ELECTRICITY_FEED_IN`` the feed-in rate; None when the echo does not know it.
+        working_price_origin: Where it came from.
+        standing_charge_in_euro_per_year: The fixed annual charge; None for the feed-in carrier and
+            when the echo does not know it.
+        standing_charge_origin: Where it came from.
+    """
+
+    working_price_in_euro_per_kwh: Optional[UncertainValue] = None
+    working_price_origin: Optional[EchoOrigin] = None
+    standing_charge_in_euro_per_year: Optional[UncertainValue] = None
+    standing_charge_origin: Optional[EchoOrigin] = None
+
+    def fields(self) -> List[Tuple[str, UncertainValue, EchoOrigin]]:
+        """The known fields, as ``(key, value, origin)`` in the order the document writes them."""
+        known: List[Tuple[str, UncertainValue, EchoOrigin]] = []
+        for key, value, origin in (
+            (ParameterKeys.PRICE_WORKING, self.working_price_in_euro_per_kwh, self.working_price_origin),
+            (ParameterKeys.PRICE_STANDING, self.standing_charge_in_euro_per_year, self.standing_charge_origin),
+        ):
+            if value is not None and origin is not None:
+                known.append((key, value, origin))
+        return known
+
+
+@dataclass(frozen=True)
+class EnergyEcho:
+    """The per-carrier escalation rates and year-1 prices a plan was priced with (#52, E1).
+
+    What ``parameters.escalation.energy``, ``parameters.energy_prices`` and ``parameters.origins``
+    publish: the values *actually used*, for every carrier a stage bills and every carrier the
+    plan named, and where each one came from. The staged evaluator resolves it against the cost
+    database (:meth:`~hisim.economics.staged.StagedEvaluator.evaluate`); :meth:`stated_only` is the
+    fallback for a caller holding parameters but no priced plan, which echoes what was stated.
+
+    Args:
+        rates: Carrier -> ``(nominal annual rate, origin)``.
+        prices: Carrier -> the echoed price terms.
+    """
+
+    rates: Mapping[EnergyCarrier, Tuple[float, EchoOrigin]]
+    prices: Mapping[EnergyCarrier, EchoedPrice]
+
+    @classmethod
+    def stated_only(cls, parameters: EconomicParameters) -> "EnergyEcho":
+        """The echo of what the parameters state, with no database to resolve the rest.
+
+        Args:
+            parameters: The assumptions.
+
+        Returns:
+            The stated per-carrier rates and the stated price fields, every one ``stated``.
+        """
+        prices: Dict[EnergyCarrier, EchoedPrice] = {}
+        for carrier, stated in parameters.energy_prices.items():
+            working = stated.working_price_in_euro_per_kwh
+            standing = stated.standing_charge_in_euro_per_year
+            prices[carrier] = EchoedPrice(
+                working_price_in_euro_per_kwh=working,
+                working_price_origin=EchoOrigin.STATED if working is not None else None,
+                standing_charge_in_euro_per_year=standing,
+                standing_charge_origin=EchoOrigin.STATED if standing is not None else None,
+            )
+        return cls(
+            rates={
+                carrier: (rate, EchoOrigin.STATED)
+                for carrier, rate in parameters.energy_price_escalation_rates.items()
+            },
+            prices=prices,
+        )
 
 
 class SubsidyModeName(enum.Enum):
@@ -422,6 +591,55 @@ class ParameterReader:
             return None
         return float(value)
 
+    def band(
+        self,
+        key: str,
+        above: Optional[float] = None,
+        at_least: Optional[float] = None,
+        at_most: Optional[float] = None,
+    ) -> Optional[UncertainValue]:
+        """One amount stated as a number or as a band ``{min, best, max}``; None when absent or refused.
+
+        A band is the document's own spelling of an amount, so a price echoed by a document reads
+        back here unchanged. Every slot is held to the same bounds as a bare number, and the slots
+        must be ordered: a band whose cheap end is dearer than its expensive end says nothing.
+
+        Args:
+            key: The key name.
+            above: An exclusive lower bound, or None.
+            at_least: An inclusive lower bound, or None.
+            at_most: An inclusive upper bound, or None.
+
+        Returns:
+            The amount, exact for a bare number, or None.
+        """
+        if key not in self.raw:
+            return None
+        value = self.raw[key]
+        if isinstance(value, Mapping):
+            if set(value) != set(ParameterKeys.BAND_KEYS):
+                self.refuse(
+                    key,
+                    ParameterProblemCodes.INVALID,
+                    f"{value!r} is not a band: a band states exactly min, best and max.",
+                    accepted=ParameterKeys.BAND_KEYS,
+                )
+                return None
+            slots = ParameterReader(value, self.path_of(key), ParameterKeys.BAND_KEYS, [])
+            numbers = [slots.number(slot, above, at_least, at_most) for slot in ParameterKeys.BAND_KEYS]
+            if slots.problems:
+                self.refuse(key, ParameterProblemCodes.INVALID, " ".join(
+                    f"{problem.path.rsplit('.', 1)[-1]}: {problem.message}" for problem in slots.problems
+                ))
+                return None
+            low, best, high = (float(number) for number in numbers if number is not None)
+            if not low <= best <= high:
+                self.refuse(key, ParameterProblemCodes.INVALID, f"{value!r} is not ordered min <= best <= max.")
+                return None
+            return UncertainValue(best_estimate=best, minimum=low, maximum=high)
+        number = self.number(key, above, at_least, at_most)
+        return UncertainValue.exact(number) if number is not None else None
+
     def text(self, key: str) -> Optional[str]:
         """One string value, or None when the key is absent or its value is refused.
 
@@ -474,11 +692,12 @@ class StagedParameters:
     non-empty — a refused file produces no half-built assumption set — and the CLI turns the
     problem list into ``problems.json`` with exit 2.
 
-    Accepted keys are :class:`ParameterKeys`; two of them are accepted and ignored.
-    :attr:`ParameterKeys.SIMULATION_YEAR` is a fact of the stages rather than an assumption, and
+    Accepted keys are :class:`ParameterKeys`; three of them are accepted and ignored.
+    :attr:`ParameterKeys.SIMULATION_YEAR` is a fact of the stages rather than an assumption,
     :attr:`ParameterKeys.SUBSIDY_CATALOG` documents which catalogue produced a document while the
-    catalogue actually used comes from the shipped directory or from ``--subsidy-catalog``. Both
-    are accepted so that a document's own ``parameters`` block is a legal input file.
+    catalogue actually used comes from the shipped directory or from ``--subsidy-catalog``, and
+    :attr:`ParameterKeys.ORIGINS` says where a document's echoed rates and prices came from. All
+    three are accepted so that a document's own ``parameters`` block is a legal input file.
 
     Example::
 
@@ -570,6 +789,7 @@ class StagedParameters:
             reader, cls._stages_price_basis_year(stored, stored_price_basis_year), overrides
         )
         cls._read_escalation(reader, problems, overrides)
+        cls._read_energy_prices(reader, problems, overrides)
         perspective_id = reader.text(ParameterKeys.PERSPECTIVE_ID)
         subsidy_mode = cls._read_subsidy_mode(reader)
         financing_given, financing = cls._read_financing(reader, problems)
@@ -920,10 +1140,120 @@ class StagedParameters:
         for spelling in by_carrier:
             if spelling not in {member.value for member in EnergyCarrier}:
                 continue  # already refused as an unknown key, with the carriers that exist
+            if spelling == EnergyCarrier.ELECTRICITY_FEED_IN.value:
+                # The per-carrier table is read for what a carrier *costs*; the feed-in
+                # remuneration escalates with `escalation.feed_in` once its fixed period is over,
+                # so a rate here would be accepted and never read (#52).
+                energy.refuse(
+                    spelling,
+                    ParameterProblemCodes.INVALID,
+                    "the feed-in remuneration is never escalated at a per-carrier rate: it is held "
+                    "fixed for its contract period and then follows `escalation.feed_in`.",
+                )
+                continue
             rate = energy.number(spelling, above=-1.0)
             if rate is not None:
                 rates[EnergyCarrier(spelling)] = rate
         overrides["energy_price_escalation_rates"] = rates
+
+    @classmethod
+    def _read_energy_prices(
+        cls, reader: ParameterReader, problems: List[ParameterProblem], overrides: Dict[str, Any]
+    ) -> None:
+        """Read the ``energy_prices`` block onto ``EconomicParameters.energy_prices`` (#52).
+
+        One entry per carrier, keyed by the :class:`~hisim.economics.carriers.EnergyCarrier`
+        value, stating the all-in year-1 ``working_price_in_euro_per_kwh`` and/or the
+        ``standing_charge_in_euro_per_year``; each a number or a band ``{min, best, max}``, within
+        :class:`StatedPriceBounds`. ``ELECTRICITY_FEED_IN`` states a working price only — the
+        feed-in rate. A block that is present replaces the stages' own stated prices as a whole,
+        exactly as ``escalation.energy`` replaces their per-carrier rates.
+
+        Args:
+            reader: The top-level block's reader.
+            problems: The shared problem list, for the nested blocks' own readers.
+            overrides: The engine-field overrides being assembled; written in place.
+        """
+        if not reader.has(ParameterKeys.ENERGY_PRICES):
+            return
+        raw = reader.block(ParameterKeys.ENERGY_PRICES)
+        if raw is None:
+            return
+        by_carrier = ParameterReader(
+            raw,
+            reader.path_of(ParameterKeys.ENERGY_PRICES),
+            tuple(member.value for member in EnergyCarrier),
+            problems,
+            noun="energy carrier",
+        )
+        by_carrier.refuse_unknown_keys()
+        stated: Dict[EnergyCarrier, StatedEnergyPrice] = {}
+        for spelling in raw:
+            if spelling not in {member.value for member in EnergyCarrier}:
+                continue  # already refused as an unknown key, with the carriers that exist
+            carrier = EnergyCarrier(spelling)
+            terms = by_carrier.block(spelling)
+            if terms is None:
+                continue
+            read = cls._read_carrier_price(
+                carrier, ParameterReader(terms, by_carrier.path_of(spelling), ParameterKeys.ACCEPTED_ENERGY_PRICE,
+                                         problems, noun="stated price term")
+            )
+            if read is not None:
+                stated[carrier] = read
+        overrides["energy_prices"] = stated
+
+    @classmethod
+    def _read_carrier_price(cls, carrier: EnergyCarrier, terms: ParameterReader) -> Optional[StatedEnergyPrice]:
+        """Read one carrier's stated price terms, within :class:`StatedPriceBounds`.
+
+        Args:
+            carrier: The carrier the terms are stated for.
+            terms: The carrier's own reader.
+
+        Returns:
+            The stated terms, or None when one of them was refused or none was stated.
+        """
+        before = len(terms.problems)
+        terms.refuse_unknown_keys()
+        feed_in = carrier == EnergyCarrier.ELECTRICITY_FEED_IN
+        if feed_in:
+            working = terms.band(
+                ParameterKeys.PRICE_WORKING,
+                at_least=StatedPriceBounds.FEED_IN_MINIMUM_IN_EURO_PER_KWH,
+                at_most=StatedPriceBounds.FEED_IN_MAXIMUM_IN_EURO_PER_KWH,
+            )
+            standing = None
+            if terms.has(ParameterKeys.PRICE_STANDING):
+                terms.refuse(
+                    ParameterKeys.PRICE_STANDING,
+                    ParameterProblemCodes.INVALID,
+                    "the feed-in carrier is a remuneration per kWh sold and has no standing charge; "
+                    "state it for ELECTRICITY, whose contract the feed-in rate belongs to.",
+                )
+        else:
+            working = terms.band(
+                ParameterKeys.PRICE_WORKING,
+                above=StatedPriceBounds.WORKING_PRICE_ABOVE_IN_EURO_PER_KWH,
+                at_most=StatedPriceBounds.WORKING_PRICE_MAXIMUM_IN_EURO_PER_KWH,
+            )
+            standing = terms.band(
+                ParameterKeys.PRICE_STANDING,
+                at_least=StatedPriceBounds.STANDING_CHARGE_MINIMUM_IN_EURO_PER_YEAR,
+                at_most=StatedPriceBounds.STANDING_CHARGE_MAXIMUM_IN_EURO_PER_YEAR,
+            )
+        if len(terms.problems) > before:
+            return None
+        if working is None and standing is None:
+            terms.refuse(
+                "",
+                ParameterProblemCodes.MISSING,
+                "a carrier in energy_prices states at least one price; leave the carrier out to "
+                "price it from the database.",
+                accepted=(ParameterKeys.PRICE_WORKING,) if feed_in else ParameterKeys.ACCEPTED_ENERGY_PRICE,
+            )
+            return None
+        return StatedEnergyPrice(working_price_in_euro_per_kwh=working, standing_charge_in_euro_per_year=standing)
 
     @classmethod
     def reconciled_perspective_id(
@@ -1040,24 +1370,37 @@ class StagedParameters:
         perspective: Perspective,
         simulation_year: Optional[int],
         subsidy_catalog: Optional[str],
+        energy: Optional[EnergyEcho] = None,
     ) -> Dict[str, Any]:
         """The ``parameters`` block ``economics_result.json`` publishes.
 
         The output half of the one table of keys: every key here is one
         :meth:`from_mapping` accepts, so a reader can copy this block out of a document, hand it
-        back as ``--parameters`` over the same stages, and get the same run. The two keys that are
-        statements about the stages rather than assumptions — ``simulation_year`` and
-        ``subsidy_catalog`` — are published for the reader and ignored when read back.
+        back as ``--parameters`` over the same stages, and get the same run. The three keys that
+        are statements about the run rather than assumptions — ``simulation_year``,
+        ``subsidy_catalog`` and ``origins`` — are published for the reader and ignored when read
+        back.
+
+        ``escalation.energy`` and ``energy_prices`` state the per-carrier rates and year-1 prices
+        the plan was *priced with* (renovisorissues #52, schema version 4): for every carrier a
+        stage bills and every carrier the plan named, stated or not, with ``origins`` saying which
+        was which. Fed back in, every one of them is then stated, so the second run prices the same
+        numbers and its ``origins`` say ``stated`` throughout.
 
         Args:
             parameters: The engine record the plan was priced with.
             perspective: The perspective it was priced under, after any override was applied.
             simulation_year: The calendar year of the stages' simulations, or None.
             subsidy_catalog: The catalogue id in force, or None when the plan ran with none.
+            energy: The rates and prices the plan was priced with, as the staged evaluator resolved
+                them; None echoes only what ``parameters`` states (:meth:`EnergyEcho.stated_only`).
 
         Returns:
             The block, with the keys in the order the document writes them.
         """
+        echo = energy if energy is not None else EnergyEcho.stated_only(parameters)
+        rates = sorted(echo.rates.items(), key=lambda item: item[0].value)
+        prices = sorted(echo.prices.items(), key=lambda item: item[0].value)
         return {
             ParameterKeys.HORIZON_YEARS: parameters.observation_period_in_years,
             ParameterKeys.INTEREST_RATE: parameters.interest_rate,
@@ -1071,12 +1414,27 @@ class StagedParameters:
                 ParameterKeys.ESCALATION_GENERAL: parameters.general_price_escalation_rate,
                 ParameterKeys.ESCALATION_INVESTMENT: parameters.investment_price_escalation_rate,
                 ParameterKeys.ESCALATION_FEED_IN: parameters.feed_in_escalation_rate,
-                ParameterKeys.ESCALATION_ENERGY: {
-                    carrier.value: rate
-                    for carrier, rate in sorted(
-                        parameters.energy_price_escalation_rates.items(), key=lambda item: item[0].value
-                    )
-                },
+                ParameterKeys.ESCALATION_ENERGY: {carrier.value: rate for carrier, (rate, _origin) in rates},
+            },
+            ParameterKeys.ENERGY_PRICES: {
+                carrier.value: {key: cls._band_of(value) for key, value, _origin in price.fields()}
+                for carrier, price in prices
             },
             ParameterKeys.SUBSIDY_CATALOG: subsidy_catalog,
+            ParameterKeys.ORIGINS: {
+                ParameterKeys.ESCALATION: {
+                    ParameterKeys.ESCALATION_ENERGY: {
+                        carrier.value: origin.value for carrier, (_rate, origin) in rates
+                    }
+                },
+                ParameterKeys.ENERGY_PRICES: {
+                    carrier.value: {key: origin.value for key, _value, origin in price.fields()}
+                    for carrier, price in prices
+                },
+            },
         }
+
+    @staticmethod
+    def _band_of(value: UncertainValue) -> Dict[str, float]:
+        """One amount as the document writes a band, and as :meth:`ParameterReader.band` reads it."""
+        return {"min": value.minimum, "best": value.best_estimate, "max": value.maximum}

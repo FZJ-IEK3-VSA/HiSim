@@ -50,9 +50,11 @@ the same thing in each, the flag taking precedence over the path stored in the p
   `parameters` block, so a reader can feed a document's assumptions back in unchanged. Every key
   is optional — `horizon_years`, `interest_rate`, `country`, `price_basis_year`, `perspective_id`,
   `subsidy_mode` (`full`/`none`), `financing` (`{"kind": "cash"}` or `{"kind": "loan", …}`),
-  `escalation`, and the two that are accepted and ignored, `simulation_year` and
-  `subsidy_catalog`. **The country and the price basis year are the stages'**: both are written
-  into every stage's `economic_inputs.json` as facts of the run, a value in the file is only
+  `escalation`, `energy_prices` (the year-1 price terms per carrier, the working price all-in with
+  carbon included; renovisorissues #52), and the three that are accepted and ignored,
+  `simulation_year`, `subsidy_catalog` and `origins`. **The country and the price basis year are
+  the stages'**: both are written into every stage's `economic_inputs.json` as facts of the run,
+  a value in the file is only
   checked against them, and stages that state neither over a file that states neither is a refusal
   rather than a silent `"DE"` or a basis year re-derived from the simulation year. Everything the
   block does not name stays what the stages were priced under. The subsidy catalogue is resolved
@@ -96,6 +98,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 
+from hisim.economics.calculators.energy import StatedPriceError
 from hisim.economics.database import CostDatabase, CostDataError
 from hisim.economics.evaluator import (
     EconomicEvaluator,
@@ -129,7 +132,7 @@ from hisim.economics.serialization import (
     read_stored_parameters,
     read_stored_price_basis_year,
 )
-from hisim.economics.staged import Stage, StagedEvaluationError, StagedEvaluator
+from hisim.economics.staged import Stage, StagedEngineError, StagedEvaluationError, StagedEvaluator
 from hisim.economics.staged_document import BandOrderError, StagedDocument, SubsidyReconciliationError
 from hisim.economics.staged_parameters import (
     ParameterKeys,
@@ -1319,7 +1322,9 @@ def _cmd_staged(args: argparse.Namespace) -> int:
         path = StagedCli.write_problems(args.out, error)
         print(f"{error} (problems written to {path})", file=sys.stderr)
         return StagedCli.PLAN_REFUSED
-    except (UnresolvableSubjectsError, CostDataError) as error:
+    except (UnresolvableSubjectsError, CostDataError, StagedEngineError, StatedPriceError) as error:
+        # A stated price the evaluator's own checks let through and the calculator then refused
+        # (`StatedPriceError`) is the engine disagreeing with itself, like a `StagedEngineError`.
         print(str(error), file=sys.stderr)
         return StagedCli.ENGINE_FAILED
     document = StagedDocument(
@@ -1439,8 +1444,9 @@ def main(argv=None) -> int:
             + '. Example: {"horizon_years": 20, "interest_rate": 0.03, "perspective_id": '
             + '"brownfield_net", "financing": {"kind": "cash"}, "subsidy_mode": "full"}. The '
             + "country comes from the stages; a `country` here is only checked against theirs. "
-            + "The price basis year likewise. `simulation_year` and `subsidy_catalog` are "
-            + "accepted and ignored."
+            + "The price basis year likewise. `energy_prices` states year-1 prices per carrier "
+            + "(working price all-in, carbon included). `simulation_year`, `subsidy_catalog` and "
+            + "`origins` are accepted and ignored."
         ),
     )
     staged_parser.add_argument(

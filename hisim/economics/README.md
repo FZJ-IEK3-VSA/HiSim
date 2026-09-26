@@ -130,8 +130,27 @@ a reader can feed a document's assumptions back in unchanged. Every key is optio
  "financing": {"kind": "cash"}, "subsidy_mode": "full"}
 ```
 
-— plus `country`, `price_basis_year`, `escalation`, and `simulation_year` and `subsidy_catalog`,
-which are accepted and ignored. **The country and the price basis year come from the stages.**
+— plus `country`, `price_basis_year`, `escalation`, `energy_prices`, and `simulation_year`,
+`subsidy_catalog` and `origins`, which are accepted and ignored. `escalation.energy` names a
+per-carrier rate (`ELECTRICITY_FEED_IN` is refused: its remuneration is fixed for 20 years and
+then follows `escalation.feed_in`). `energy_prices` states what the household pays in year 1
+(renovisorissues #52), per carrier —
+`{"ELECTRICITY": {"working_price_in_euro_per_kwh": 0.31, "standing_charge_in_euro_per_year": 180},
+"ELECTRICITY_FEED_IN": {"working_price_in_euro_per_kwh": 0.08}}`, each value a number or a band
+`{min, best, max}` (bounds: working price > 0 and ≤ 2 EUR/kWh, feed-in 0–1 EUR/kWh, standing charge
+0–5000 EUR/a). The working price is **all-in**, carbon included: for a carrier whose price entry
+books a carbon price separately (`co2_price_exposure > 0`: in the shipped data Ireland's gas,
+oil and district heating, and Germany's from its 2026 rows on) the engine subtracts the year-1 carbon price and keeps the CO2 path for later years, so
+year 1 costs exactly the stated price, and a stated price below that carbon price is refused.
+From year 2 the working price escalates at the carrier's rate, the standing charge (which replaces
+the fixed annual charge) at `general`; the feed-in price is the electricity contract's fixed rate
+for 20 years. The plan's reference and every stage are priced with it; a carrier some stage bills
+under an explicit contract cannot be given a stated price. The provenance ledger records each
+stated term as a `REQUEST` record, "stated in the economics plan (parameters.energy_prices)".
+The document echoes the rates and prices *actually used* — for every carrier a stage bills and
+every carrier the plan named, prices all-in — and says in `origins` where each came from (rates:
+`stated` | `country_default` | `general`; prices: `stated` | `database`), so its block fed back
+reproduces the run. **The country and the price basis year come from the stages.**
 Each stage job states both twice — in the parameters its evaluation was stored with
 (`lifecycle_costs.json`) and in its extract (`economic_inputs.json`, where `write_inputs` puts
 them because they are facts of the run, not assumptions: the country decides which price data

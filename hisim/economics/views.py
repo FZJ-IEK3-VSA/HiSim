@@ -5375,6 +5375,9 @@ class ScenarioValueKinds:
         "grid_fee_escalation_rate": AssumptionKinds.PERCENT,
         "anyway_threshold_years": AssumptionKinds.YEARS,
         "allow_counterfactual_billing": AssumptionKinds.PLAIN,
+        # Per-carrier price terms in two units; not sweepable (`scenarios.ScenarioLimits`), so no
+        # scenario row ever prints one, and the kind only completes the table.
+        "energy_prices": AssumptionKinds.PLAIN,
     }
     #: Leaf names of *data-file* paths whose value is a fraction of one and reads as a percentage.
     PERCENT_LEAVES = ("co2_price_exposure", "tax_and_levy_share", "energy_related_cost_share")

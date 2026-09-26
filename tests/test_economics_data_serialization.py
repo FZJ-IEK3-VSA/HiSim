@@ -14,7 +14,7 @@ from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs, SubjectCostFacts
 from hisim.economics.facts import BillingDeterminants, ComponentCostFacts, ExistingAsset
-from hisim.economics.parameters import EconomicParameters
+from hisim.economics.parameters import EconomicParameters, StatedEnergyPrice
 from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
 from hisim.economics.results import compare
 from hisim.economics.uncertainty import Slot, UncertainValue
@@ -1053,4 +1053,64 @@ class TestTheResultRecordsRefuseWhatTheyCannotVouchFor:
                 {"annual_energy_attribution_by_subject_in_kwh": {"PVSystem": {"PV_GENERATION": -5.0}}},
                 "annual_energy_attribution_by_subject_in_kwh",
                 "LifecycleCostResult.annual_energy_attribution_by_subject_in_kwh",
+            )
+
+
+class TestStatedEnergyPricesSerialize:
+    """`EconomicParameters.energy_prices` survives `lifecycle_costs.json` (renovisorissues #52)."""
+
+    @staticmethod
+    def _stated() -> EconomicParameters:
+        """Parameters stating a banded working price, a standing charge and a feed-in rate."""
+        return EconomicParameters(
+            country="IE",
+            energy_prices={
+                EnergyCarrier.NATURAL_GAS: StatedEnergyPrice(
+                    working_price_in_euro_per_kwh=UncertainValue(best_estimate=0.12, minimum=0.1, maximum=0.15),
+                    standing_charge_in_euro_per_year=UncertainValue.exact(95.0),
+                ),
+                EnergyCarrier.ELECTRICITY_FEED_IN: StatedEnergyPrice(UncertainValue.exact(0.09)),
+            },
+        )
+
+    def test_the_record_round_trips_through_json(self):
+        """`to_dict` -> JSON -> `from_dict` gives the same record, bands included."""
+        import json
+
+        parameters = self._stated()
+        raw = json.loads(json.dumps(parameters.to_dict()))
+        assert raw["energy_prices"] == {
+            "NATURAL_GAS": {
+                "working_price_in_euro_per_kwh": {"min": 0.1, "best_estimate": 0.12, "max": 0.15},
+                "standing_charge_in_euro_per_year": 95.0,
+            },
+            "ELECTRICITY_FEED_IN": {"working_price_in_euro_per_kwh": 0.09},
+        }
+        assert EconomicParameters.from_dict(raw) == parameters
+
+    def test_a_record_written_before_the_field_existed_states_no_prices(self):
+        """An archived `lifecycle_costs.json` has no key, and prices every carrier from the database."""
+        raw = EconomicParameters().to_dict()
+        del raw["energy_prices"]
+        assert EconomicParameters.from_dict(raw).energy_prices == {}
+
+    def test_a_null_block_and_an_unknown_term_are_refused(self):
+        """Null is not "no stated prices", and a term the record does not have is a typo."""
+        raw = EconomicParameters().to_dict()
+        with pytest.raises(ValueError, match="energy_prices"):
+            EconomicParameters.from_dict({**raw, "energy_prices": None})
+        with pytest.raises(ValueError, match="grid_fee"):
+            EconomicParameters.from_dict({**raw, "energy_prices": {"ELECTRICITY": {"grid_fee": 0.1}}})
+        with pytest.raises(ValueError, match="COAL"):
+            EconomicParameters.from_dict({**raw, "energy_prices": {"COAL": {"working_price_in_euro_per_kwh": 0.1}}})
+
+    def test_a_standing_charge_for_feed_in_is_refused_by_the_record_itself(self):
+        """The one structural rule is the record's, whoever builds it."""
+        with pytest.raises(ValueError, match="ELECTRICITY_FEED_IN"):
+            EconomicParameters(
+                energy_prices={
+                    EnergyCarrier.ELECTRICITY_FEED_IN: StatedEnergyPrice(
+                        standing_charge_in_euro_per_year=UncertainValue.exact(10.0)
+                    )
+                }
             )

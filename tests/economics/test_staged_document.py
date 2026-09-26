@@ -421,19 +421,22 @@ class TestTheDocumentShape:
         commit = document["engine"]["hisim_commit"]
         assert commit is None or isinstance(commit, str) and commit.strip() == commit
 
-    def test_the_document_states_schema_version_two(self, document):
-        """Version 2: awarded subsidy rows state their amount by year, and the monthly headline.
+    def test_the_document_states_schema_version_three(self, document):
+        """Version 3: every by_subject row states its investment by stage.
 
-        A literal for the same reason as the economics version above. Version 2 is the format
-        with hisim-cyc.5's awarded-row rules and hisim-cyc.6's required monthly keys, and a
-        document of that shape stating 1 would tell a consumer it could skip both.
+        A literal for the same reason as the economics version above. Version 2 (2026-09-24) is
+        the format with hisim-cyc.5's awarded-row rules and hisim-cyc.6's required monthly keys;
+        version 3 (2026-09-26, hisim-fig7) adds the required ``investment_by_stage`` of every
+        ``by_subject`` row. A document of that shape stating 1 or 2 would tell a consumer it could
+        skip what the later versions require.
         """
         import jsonschema
 
-        assert document["schema_version"] == 2
+        assert document["schema_version"] == 3
         StagedDocument.validate(document)
-        with pytest.raises(jsonschema.ValidationError):
-            StagedDocument.validate({**document, "schema_version": 1})
+        for older in (1, 2):
+            with pytest.raises(jsonschema.ValidationError):
+                StagedDocument.validate({**document, "schema_version": older})
 
 
 class TestTheParametersBlock:

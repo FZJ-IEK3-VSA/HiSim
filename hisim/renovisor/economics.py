@@ -302,8 +302,10 @@ class TwinEquipment:
     Owner decisions of 2026-09-26: ``heating_system`` replaces the buffer like-for-like as part of
     the new heating and keeps the cylinder, the emitters and the meters; ``heating_installation``
     replaces the emitters and ``hot_water_system`` the cylinder, each the same way. The buffer,
-    the cylinder and the emitters are as old as the heating, the meters and the controller as old
-    as the building (the controller goes with the battery it runs, which has a year of its own).
+    the cylinder and the emitters take ``house.heating.installation_year`` and the controller
+    ``house.battery.installation_year`` (it goes with the battery it runs) when the request states
+    it. The meters have no block that dates them. Every row without a stated year is at mid-life
+    (:class:`UnknownAge`, for its own asset class), never before the construction year.
     """
 
     @dataclass(frozen=True)
@@ -314,8 +316,9 @@ class TwinEquipment:
             component_class: The HiSim component class name, which is also the key of
                 :attr:`~hisim.economics.adapter.FactsExtractors.BY_CLASS_NAME` its facts come from.
             measure_id: The catalogue measure that replaces it, or ``None`` when no measure does.
-            dated_by: The ``house`` block whose ``installation_year`` it shares, or ``None`` for
-                the building's construction year.
+            dated_by: The ``house`` block whose ``installation_year`` it shares when the request
+                states one, or ``None`` when no block dates it; either way an unstated year is the
+                :class:`UnknownAge` mid-life year.
         """
 
         component_class: str

@@ -259,7 +259,7 @@ class StagedDocument:
     """
 
     #: Version of this document format. Bumped when a consumer would have to change.
-    SCHEMA_VERSION: ClassVar[int] = 2
+    SCHEMA_VERSION: ClassVar[int] = 3
 
     #: The one currency the engine prices in.
     CURRENCY: ClassVar[str] = "EUR"

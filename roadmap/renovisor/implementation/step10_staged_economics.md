@@ -120,6 +120,10 @@ report's `subjects` map (§4).
 > `subsidies[]` rows state `amount_by_year_in_euro` and an amount (hisim-cyc.5), and `totals` /
 > `comparison` carry the required `monthly_equivalent_cost_in_euro` /
 > `monthly_equivalent_cost_delta_in_euro` (hisim-cyc.6).
+>
+> **Note (2026-09-26, hisim-fig7).** The document is at `schema_version: 3` since: every
+> `by_subject` row carries the required `investment_by_stage`, the subject's investment split by
+> the stage that bought it (renovisorissues #48); `investment_in_euro` stays the year-0 investment.
 
 ## 4. Translator integration (`hisim/renovisor/`, E-spec §4)
 
